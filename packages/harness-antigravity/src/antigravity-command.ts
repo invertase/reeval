@@ -1,7 +1,8 @@
 import type { HarnessV1PermissionMode } from '@ai-sdk/harness'
 import { shellQuote } from '@ai-sdk/harness/utils'
 
-export type AntigravityEffort = 'low' | 'medium' | 'high' | 'max'
+/** Values `agy --effort` takes; the CLI names them, not a shared enum. */
+export type AntigravityEffort = string
 
 export type AntigravityCommandOptions = {
   cli: string

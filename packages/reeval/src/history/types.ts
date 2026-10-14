@@ -142,6 +142,17 @@ export type AttemptRecord = {
    * recorded them.
    */
   servedModels: string[] | null
+  /**
+   * The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`);
+   * null when the factory left it unset. Fast is not this.
+   */
+  effort: string | null
+  /**
+   * The reasoning effort the harness's API said it ran at, from `servedModels` /
+   * each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those
+   * labels name none. Fast (`[fast=true]`) is not this.
+   */
+  servedEffort: string | null
   outcome: Outcome
   error: AttemptError | null
   durationMs: number
@@ -267,6 +278,11 @@ export type CellRecord = Cell & {
   harnessKind: string
   /** The configured harness model, when it has one. */
   model: string | null
+  /**
+   * The reasoning effort the harness factory asked for; null when it left it unset.
+   * Fast is not this.
+   */
+  effort: string | null
   /** How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval. */
   gate: CellGate
   /** Environment keys the variant replaced on the control's (or a child on its parent's). */
@@ -399,9 +415,9 @@ export type Stack = {
   /** Exact versions of the packages that run and grade the agent. */
   packages: Record<string, string>
   /**
-   * Each harness: its configured `model`, and `resolvedModels`, what it reported serving across
-   * the run's turns with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5`
-   * without `params`); empty when it reports none.
+   * Each harness: its configured `model` and requested `effort`, `resolvedModels` (what it
+   * reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort
+   * suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.
    */
   harnesses: Array<{
     id: string
@@ -409,11 +425,21 @@ export type Stack = {
     /** The configured model, when the harness has one. */
     model: string | null
     /**
+     * The reasoning effort the harness factory asked for; null when it left it unset.
+     * Fast is not this.
+     */
+    effort: string | null
+    /**
      * The models the harness reported serving, across every turn in the run, with the variant it
      * resolved (`composer-2.5[fast=true]` for `composer-2.5` with no `params`); empty when it
      * reports none.
      */
     resolvedModels: string[]
+    /**
+     * Reasoning-effort suffixes those served models named (`medium` from
+     * `gpt-5.6-luna[effort=medium]`); empty when they name none. Fast is not this.
+     */
+    resolvedEffort: string[]
   }>
   /**
    * The run's judge: the config's, with what the profile's `judge` and `defaults.judge` set over it.

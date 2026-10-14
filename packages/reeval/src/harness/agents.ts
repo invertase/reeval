@@ -400,6 +400,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
         ...(descriptor.kind === 'cursor' && descriptor.params
           ? { modelParams: descriptor.params }
           : {}),
+        ...(descriptor.kind === 'cursor' && descriptor.effort ? { effort: descriptor.effort } : {}),
         requireCredentialBrokering: true,
       }),
   },
@@ -421,10 +422,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
       },
     ],
     mcpServers: claudeMcpServers,
-    adapter: async ({ auth, mcpServers }) =>
+    adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@ai-sdk/harness-claude-code')).createClaudeCode({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
+        // The factory takes the CLI's value as a string; the adapter types a closed set.
+        ...(descriptor.kind === 'claude-code' && descriptor.effort
+          ? { effort: descriptor.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+          : {}),
         env: {
           // The CLI refuses to skip permissions as root (docker({ root: true })) unless told it's
           // in a sandbox.
@@ -452,10 +457,13 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
     servedModel: geminiServedModel,
     mcpServers: antigravityMcpServers,
-    adapter: async ({ auth, mcpServers }) =>
+    adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-antigravity')).createAntigravity({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
+        ...(descriptor.kind === 'antigravity' && descriptor.effort
+          ? { effort: descriptor.effort }
+          : {}),
         // reeval's Docker sandbox always brokers; a sandbox that can't must not get the key.
         requireCredentialBrokering: true,
       }),
@@ -477,6 +485,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
         auth,
         model: descriptor.model,
         vars: opencodeVars(descriptor.model),
+        ...(descriptor.kind === 'opencode' && descriptor.effort
+          ? { effort: descriptor.effort }
+          : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, OpenCodeMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
@@ -495,6 +506,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
         // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
         auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
         model: descriptor.model,
+        ...(descriptor.kind === 'goose' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
@@ -510,10 +522,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: piMcpServers,
-    adapter: async ({ auth, mcpServers }) =>
+    adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-pi')).createPi({
         // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
         auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+        ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
@@ -529,9 +542,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     modelResponses: OPENAI_ENDPOINTS,
     servedModel: openaiServedModel,
     mcpServers: codexMcpServers,
-    adapter: async ({ auth, mcpServers }) =>
+    adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-codex')).createCodex({
         auth,
+        ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),

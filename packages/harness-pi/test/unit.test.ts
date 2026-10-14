@@ -64,6 +64,19 @@ test("with MCP servers, the turn loads pi's built-in mcp extension and no other"
   assert.match(command, / --approve --no-extensions -e builtin:mcp --provider google /)
 })
 
+test('effort is --thinking', () => {
+  const command = buildPiCommand({
+    cli: '/h/pi',
+    workDir: '/w',
+    promptFile: '/d/p.txt',
+    model: 'gemini-3.8-flash',
+    sessionId: 'abc',
+    sessionDir: '/s',
+    thinking: 'high',
+  })
+  assert.match(command, / --model 'gemini-3\.8-flash' --thinking 'high' --session-id /)
+})
+
 test('env and header values are escaped so pi reads them literally', () => {
   assert.equal(escapePiConfigValue('plain'), 'plain')
   assert.equal(escapePiConfigValue('$HOME'), '$$HOME')

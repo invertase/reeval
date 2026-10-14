@@ -20,8 +20,12 @@ export default defineConfig({
   A Gemini model id, such as `gemini-3.8-flash`, without a provider. Required: Goose won't start a session without one.
 </Property>
 
+<Property name="effort" type="string" optional>
+  Reasoning effort as `GOOSE_THINKING_EFFORT`: `off`, `low`, `medium`, `high` or `max`. The CLI's name is thinking; the factory field is `effort`.
+</Property>
+
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `goose:<model>`.
+  The harness's id in cell keys, filters and the record. Default `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>

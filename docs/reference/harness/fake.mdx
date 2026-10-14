@@ -61,7 +61,11 @@ npx reeval run --config reeval.fake.config.ts
 </Property>
 
 <Property name="servedModel" type="string" optional>
-  The model the agent reports serving each turn, as a real harness reports its resolved variant (`composer-2.5[fast=true]`). It lands in each turn's `model` and the stack's `resolvedModels`. Unset, the agent reports none.
+  The model the agent reports serving each turn, as a real harness reports its resolved variant (`composer-2.5[fast=true]`). It lands in each turn's `model` and the stack's `resolvedModels`. Unset, the agent reports none. A suffix such as `[effort=medium]` is the served reasoning effort.
+</Property>
+
+<Property name="effort" type="string" optional>
+  Requested reasoning effort, recorded on the cell as `effort`. Use `servedModel` for what the turn reports. Fast is not this.
 </Property>
 
 <Property name="tools" type="Array<{ tool, input, output, ok? }>" optional>

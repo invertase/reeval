@@ -109,6 +109,7 @@
 | `pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers | ✓ 7 | ✓ 1 | ● 3 | ● 4 | — |
 | `codex()`: Codex in the sandbox (`codex exec --json`) on a brokered OpenAI key, with per-turn tokens, and the served model and effort from the gateway | ✓ 7 | ✓ 1 | ● 3 | ● 4 | — |
 | `cursor()`: Cursor through its TypeScript SDK, one runner per session | ✓ 4 | ✓ 1 | ● 2 | ● 2 | — |
+| `effort` on each harness factory: default id, requested vs served | ✓ 6 | ✓ 1 | ● 1 | ● 1 | — |
 | Token usage and the served model, per turn and totalled, from any harness | ✓ 2 | — | — | — | ◐ 3 (2 without a canary) |
 | Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 12 | — | — | — | ◐ 3 (1 without a canary) |
 | `fakeHarness({ script })` and `layout` | ✓ 2 | — | ● 2 | ● 2 | — |

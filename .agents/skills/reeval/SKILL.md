@@ -55,21 +55,22 @@ export default defineConfig({
 
 Without an `environment`, the attempt uses the cascaded `sandbox` option, else implicit Docker (reeval's image: Node 22, git, pnpm, the agent CLI). `defineConfig({ sandbox })` is the default machine when the resolved env omits `sandbox`; it is not an environment. A named env is a total override: no skills, files or sandbox inherit from the config environment. `.extend()` keeps the parent env's sandbox when the child omits it. A fake config puts `sandbox: fakeSandbox()` on `defineConfig` so `plain` / skill variants run without Docker. Do not put `fakeSandbox()` on `plain` itself: real Cursor runs need Docker.
 
-- Harnesses (`reeval/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
-  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant; unset ones take Cursor's default, which
+- Harnesses (`reeval/harness`): `cursor({ model, params?, effort? })` (`CURSOR_API_KEY`;
+  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant, including Fast;
+  `effort` maps onto the catalog param `Cursor.models.list()` names for that model, not Fast; unset params take Cursor's default, which
   the record shows as `composer-2.5[fast=true]`, so pin them for reproducible evals),
-  `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
-  `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
-  `gemini-3.8-flash-medium`), `opencode({ model })` (OpenCode 2 on any brokerable provider: the model is
+  `claudeCode({ model, effort? })` (`ANTHROPIC_API_KEY`, model required; `effort` is the Agent SDK `/effort` control),
+  `antigravity({ model, effort? })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
+  `gemini-3.8-flash-medium`; `effort` is `agy --effort`), `opencode({ model, effort? })` (OpenCode 2 on any brokerable provider: the model is
   `<provider>/<model>`, e.g. `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5`,
   `openrouter/…`, and needs only that provider's key, e.g. `ANTHROPIC_API_KEY`; `amazon-bedrock/…`
   takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local
   providers are refused at plan time; no `mcp.sse`; web search via Exa,
   whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
-  and `pi({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
-  `gemini-3.8-flash`; neither takes `mcp.sse`),
-  `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.6-luna`; no `mcp.sse`) and
-  `fakeHarness(…)`. A list runs each harness as its own cell.
+  and `pi({ model, effort? })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
+  `gemini-3.8-flash`; neither takes `mcp.sse`; Goose `effort` is `GOOSE_THINKING_EFFORT`, pi's is `--thinking`),
+  `codex({ model, effort? })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.6-luna`; no `mcp.sse`; `effort` is `model_reasoning_effort`) and
+  `fakeHarness(…)`. A list runs each harness as its own cell. `effort` is the same field name on every factory; values are whatever that CLI takes (no shared enum). The default harness id includes `[effort=<value>]` when it is set. The record stores requested `effort` and served `servedEffort`. Fast is not effort. `reeval query effort` is still the tool-call, time and token metric.
   Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
   harness's own endpoints. Cursor, Claude Code, Antigravity, OpenCode, pi and Codex report tokens, which reeval records
   per turn, attempt and run (no prices); Goose's ACP usage is only the last model call, so it records none for Goose.

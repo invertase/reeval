@@ -14,6 +14,7 @@ export {
   GOOSE_WORKSPACE_SKILLS_DIR,
   type GooseHarnessSettings,
   gooseConfig,
+  gooseEnv,
 } from './goose-harness.ts'
 export { GooseStreamTranslator } from './goose-stream.ts'
 export { GOOSE_BUILTIN_TOOLS, type GooseBuiltinTools } from './goose-tools.ts'

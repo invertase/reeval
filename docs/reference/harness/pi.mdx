@@ -20,8 +20,12 @@ export default defineConfig({
   A Gemini model id, such as `gemini-3.8-flash`, without a provider. Required.
 </Property>
 
+<Property name="effort" type="string" optional>
+  Reasoning effort, passed as pi's `--thinking` (the CLI's name): `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.
+</Property>
+
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `pi:<model>`.
+  The harness's id in cell keys, filters and the record. Default `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>

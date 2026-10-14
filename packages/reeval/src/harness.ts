@@ -12,10 +12,22 @@ import type {
   PiHarnessDescriptor,
 } from './types.ts'
 
+/** `effort` is the value that CLI takes; there is no shared enum. Fast is not this. */
+function checkEffort(factory: string, effort: unknown): void {
+  if (effort === undefined) return
+  if (typeof effort !== 'string' || !effort.trim()) {
+    throw new UsageError(
+      `${factory}({ effort }) is the value that CLI takes, e.g. ${factory}({ effort: 'high' }) (got ${JSON.stringify(effort)})`,
+    )
+  }
+}
+
 /**
  * Cursor's agent through the Cursor TypeScript SDK, in the sandbox. `model` is required (the SDK
  * has no default for local agents); `params` sets model parameters such as `{ fast: 'false' }`.
- * `id` names the cell; it defaults to `cursor:<model>`.
+ * `effort` maps onto the catalog param `Cursor.models.list()` names for this model, not Fast.
+ * `id` names the cell; it defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]`
+ * when `effort` is set.
  */
 export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHarnessDescriptor => {
   if (typeof options?.model !== 'string' || !options.model) {
@@ -31,12 +43,15 @@ export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHa
       `cursor({ params }) maps parameter ids to string values, e.g. { fast: 'false' } (got ${JSON.stringify(options.params)})`,
     )
   }
+  checkEffort('cursor', options.effort)
   return { kind: 'cursor', ...options }
 }
 
 /**
- * The Claude Code CLI. `model` is required, since the CLI's default changes under you. `id`
- * names the cell; it defaults to `claude-code:<model>`.
+ * The Claude Code CLI. `model` is required, since the CLI's default changes under you. `effort`
+ * is the Agent SDK `/effort` control (`low`, `medium`, `high`, `xhigh`, `max`). `id` names the
+ * cell; it defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when
+ * `effort` is set.
  */
 export const claudeCode = (
   options: Omit<ClaudeCodeHarnessDescriptor, 'kind'>,
@@ -46,12 +61,15 @@ export const claudeCode = (
       "claudeCode() needs a model, e.g. claudeCode({ model: 'claude-sonnet-5' })",
     )
   }
+  checkEffort('claudeCode', options.effort)
   return { kind: 'claude-code', ...options }
 }
 
 /**
  * The Antigravity CLI, with a Gemini API key. `model` is required, since the CLI's default
- * changes under you. `id` names the cell; it defaults to `antigravity:<model>`.
+ * changes under you. `effort` is `agy --effort` (`low`, `medium`, `high`, `max`). `id` names
+ * the cell; it defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]`
+ * when `effort` is set.
  */
 export const antigravity = (
   options: Omit<AntigravityHarnessDescriptor, 'kind'>,
@@ -61,20 +79,23 @@ export const antigravity = (
       "antigravity() needs a model, e.g. antigravity({ model: 'gemini-3.8-flash-medium' })",
     )
   }
+  checkEffort('antigravity', options.effort)
   return { kind: 'antigravity', ...options }
 }
 
 /**
  * OpenCode, on the model's provider: `model` is OpenCode's `<provider>/<model>`, such as
  * `google/gemini-3.8-flash` or `anthropic/claude-haiku-4-5`, and only that provider's key is
- * needed and brokered. A provider whose key reeval can't broker is refused, saying why. `id` names
- * the cell; it defaults to `opencode:<model>`, the part after the last `/`.
+ * needed and brokered. A provider whose key reeval can't broker is refused, saying why. `effort`
+ * is that provider's thinking option. `id` names the cell; it defaults to `opencode:<model>`,
+ * the part after the last `/`, or `opencode:<model>[effort=<value>]` when `effort` is set.
  */
 export const opencode = (
   options: Omit<OpenCodeHarnessDescriptor, 'kind'>,
 ): OpenCodeHarnessDescriptor => {
   const why = opencodeModelError(options?.model)
   if (why) throw new UsageError(`opencode(): ${why}`)
+  checkEffort('opencode', options.effort)
   return { kind: 'opencode', ...options }
 }
 
@@ -89,7 +110,8 @@ export function opencodeModelError(model: unknown): string | undefined {
 
 /**
  * Goose, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google`
- * provider. `id` names the cell; it defaults to `goose:<model>`.
+ * provider. `effort` is `GOOSE_THINKING_EFFORT`. `id` names the cell; it defaults to
+ * `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.
  */
 export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarnessDescriptor => {
   if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
@@ -97,12 +119,14 @@ export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarne
       `goose() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. goose({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
     )
   }
+  checkEffort('goose', options.effort)
   return { kind: 'goose', ...options }
 }
 
 /**
  * pi, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google` provider.
- * `id` names the cell; it defaults to `pi:<model>`.
+ * `effort` is pi's `--thinking` flag. `id` names the cell; it defaults to `pi:<model>`, or
+ * `pi:<model>[effort=<value>]` when `effort` is set.
  */
 export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescriptor => {
   if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
@@ -110,13 +134,15 @@ export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescrip
       `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
     )
   }
+  checkEffort('pi', options.effort)
   return { kind: 'pi', ...options }
 }
 
 /**
  * OpenAI's Codex CLI, with an OpenAI API key: `model` is an OpenAI model id, e.g. `gpt-5.6-luna`,
- * required since the CLI's default changes under you. `id` names the cell; it defaults to
- * `codex:<model>`.
+ * required since the CLI's default changes under you. `effort` is `model_reasoning_effort`. `id`
+ * names the cell; it defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when
+ * `effort` is set.
  */
 export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarnessDescriptor => {
   if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
@@ -124,6 +150,7 @@ export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarne
       `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got ${JSON.stringify(options?.model)})`,
     )
   }
+  checkEffort('codex', options.effort)
   return { kind: 'codex', ...options }
 }
 
@@ -169,6 +196,7 @@ export const fakeHarness = (options: Omit<FakeHarnessDescriptor, 'kind'> = {}) =
       `fakeHarness({ layout }) is one of ${LAYOUTS.map((l) => `'${l}'`).join(', ')} (got ${JSON.stringify(options.layout)})`,
     )
   }
+  checkEffort('fakeHarness', options.effort)
   return { kind: 'fake', ...options } satisfies FakeHarnessDescriptor
 }
 

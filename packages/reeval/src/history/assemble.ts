@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { environmentSandbox, NO_ENVIRONMENT } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
+import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effort.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
@@ -302,7 +303,10 @@ class Seen {
   readonly resolvedJudges = new Set<string>()
   readonly images = new Map<string, Stack['images'][number]>()
   readonly environments = new Map<string, EnvironmentRecord>()
-  readonly harnesses = new Map<string, Omit<Stack['harnesses'][number], 'resolvedModels'>>()
+  readonly harnesses = new Map<
+    string,
+    Omit<Stack['harnesses'][number], 'resolvedModels' | 'resolvedEffort'>
+  >()
   readonly resolvedHarnesses = new Map<string, Set<string>>()
   /** Registry digests found by the preflight, by image id. */
   readonly digests: Map<string, string[]>
@@ -326,7 +330,12 @@ class Seen {
     }
     if (e.attempt) {
       const h = e.attempt.harness
-      this.harnesses.set(cell.harness, { id: cell.harness, kind: h.kind, model: harnessModel(h) })
+      this.harnesses.set(cell.harness, {
+        id: cell.harness,
+        kind: h.kind,
+        model: harnessModel(h),
+        effort: harnessEffort(h) ?? null,
+      })
     }
     const resolved = this.resolvedHarnesses.get(cell.harness) ?? new Set<string>()
     for (const t of record?.turns ?? []) if (t.model) resolved.add(t.model)
@@ -396,6 +405,7 @@ function cellOf(
       environmentDigest: null,
       harnessKind: harness?.kind ?? 'unknown',
       model: harness ? harnessModel(harness) : null,
+      effort: harness ? (harnessEffort(harness) ?? null) : null,
       gate,
       overrides: [],
       runs: 0,
@@ -574,6 +584,12 @@ async function addAttempt(
     context,
     egress: record?.egress ?? null,
     servedModels: record?.servedModels ?? null,
+    effort: e.attempt ? (harnessEffort(e.attempt.harness) ?? null) : null,
+    servedEffort:
+      servedEffortOf([
+        ...(record?.servedModels ?? []),
+        ...(record?.turns ?? []).map((t) => t.model),
+      ]) ?? null,
     outcome,
     error,
     durationMs: e.durationMs,
@@ -808,7 +824,14 @@ function stackOf(
     images: [...seen.images.values()].sort(byName((i) => i.ref)),
     packages,
     harnesses: [...seen.harnesses.values()]
-      .map((h) => ({ ...h, resolvedModels: [...(seen.resolvedHarnesses.get(h.id) ?? [])].sort() }))
+      .map((h) => {
+        const resolvedModels = [...(seen.resolvedHarnesses.get(h.id) ?? [])].sort()
+        return {
+          ...h,
+          resolvedModels,
+          resolvedEffort: resolvedEffortOf(resolvedModels),
+        }
+      })
       .sort(byName((h) => h.id)),
     judge: {
       model: judgeModel,

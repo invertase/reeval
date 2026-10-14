@@ -24,8 +24,12 @@ export default defineConfig({
   OpenCode's model id, `<provider>/<model>`, such as `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5` or `openrouter/anthropic/claude-haiku-4.5`. The provider, before the first `/`, picks the key: only that provider's key is needed and brokered. A bare id with no provider, or a provider reeval can't broker ([below](#refused-providers)), exits 2 at plan time. Required.
 </Property>
 
+<Property name="effort" type="string" optional>
+  Reasoning effort for that provider: `options.reasoningEffort` on OpenAI, `options.thinking` on Anthropic. Values are whatever that provider takes (`high`, or a token budget).
+</Property>
+
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `opencode:<model>`, with the model's last segment: `opencode:claude-haiku-4-5`. Two cells whose models end the same, on different providers, need an `id` each.
+  The harness's id in cell keys, filters and the record. Default `opencode:<model>`, with the model's last segment: `opencode:claude-haiku-4-5`, or `opencode:<model>[effort=<value>]` when `effort` is set. Two cells whose models end the same, on different providers, need an `id` each.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>

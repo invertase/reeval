@@ -61,9 +61,21 @@ export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as co
  * `opencode.json(c)`: a key both set is reeval's, objects merge (MCP servers by name), and permission
  * rules append to the eval's.
  */
+/** Provider thinking option: Anthropic's `thinking`, everyone else's `reasoningEffort`. */
+export function openCodeEffortOptions(model: string, effort: string) {
+  const parts = splitModel(model)
+  return parts?.provider === 'anthropic' ? { thinking: effort } : { reasoningEffort: effort }
+}
+
 export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
   const servers = Object.entries(options.mcpServers ?? {})
-  const provider = options.model ? splitModel(options.model)?.provider : undefined
+  const parts = options.model ? splitModel(options.model) : undefined
+  const provider = parts?.provider
+  const modelId = parts?.model
+  const effortOptions =
+    options.model && options.effort
+      ? openCodeEffortOptions(options.model, options.effort)
+      : undefined
   return {
     update: 'disable',
     share: 'disabled',
@@ -74,7 +86,18 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
     ...(options.model ? { agents: { title: { model: options.model } } } : {}),
     // HTTP rather than a Responses WebSocket (OpenCode's default for OpenAI and xAI): the gateway
     // reads the model that served each call from its HTTP response.
-    ...(provider ? { providers: { [provider]: { settings: { transport: 'http' } } } } : {}),
+    ...(provider
+      ? {
+          providers: {
+            [provider]: {
+              settings: { transport: 'http' },
+              ...(effortOptions && modelId
+                ? { models: { [modelId]: { options: effortOptions } } }
+                : {}),
+            },
+          },
+        }
+      : {}),
     ...(servers.length
       ? {
           mcp: {
@@ -90,6 +113,8 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
 export type OpenCodeConfigOptions = {
   model?: string
   mcpServers?: OpenCodeHarnessSettings['mcpServers']
+  /** Reasoning effort: `options.reasoningEffort` or Anthropic's `options.thinking`. */
+  effort?: string
 }
 
 /**
@@ -136,6 +161,11 @@ export type OpenCodeHarnessSettings = {
   readonly mcpServers?: Record<string, OpenCodeMcpServer>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
+  /**
+   * Reasoning effort for the model's provider: `options.reasoningEffort` (OpenAI) or
+   * `options.thinking` (Anthropic). Values are whatever that provider takes.
+   */
+  readonly effort?: string
 }
 
 /**

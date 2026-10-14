@@ -226,6 +226,16 @@
         "durationMs": {
           "type": "number"
         },
+        "effort": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "egress": {
           "anyOf": [
             {
@@ -308,6 +318,16 @@
             },
             {
               "type": "number"
+            }
+          ]
+        },
+        "servedEffort": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
             }
           ]
         },
@@ -431,6 +451,7 @@
         "checks",
         "context",
         "durationMs",
+        "effort",
         "egress",
         "env",
         "error",
@@ -442,6 +463,7 @@
         "n",
         "outcome",
         "seq",
+        "servedEffort",
         "servedModels",
         "startedAt",
         "timings",
@@ -468,6 +490,16 @@
     "CellRecord": {
       "type": "object",
       "properties": {
+        "effort": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "environment": {
           "type": "string"
         },
@@ -557,6 +589,7 @@
         }
       },
       "required": [
+        "effort",
         "environment",
         "environmentDigest",
         "fail",
@@ -1914,6 +1947,16 @@
           "items": {
             "type": "object",
             "properties": {
+              "effort": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
               "id": {
                 "type": "string"
               },
@@ -1930,6 +1973,12 @@
                   }
                 ]
               },
+              "resolvedEffort": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "resolvedModels": {
                 "type": "array",
                 "items": {
@@ -1937,7 +1986,7 @@
                 }
               }
             },
-            "required": ["id", "kind", "model", "resolvedModels"]
+            "required": ["effort", "id", "kind", "model", "resolvedEffort", "resolvedModels"]
           }
         },
         "images": {

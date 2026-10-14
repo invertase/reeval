@@ -73,6 +73,11 @@ export type CodexHarnessSettings = {
   readonly mcpServers?: Record<string, Record<string, unknown>>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
+  /**
+   * Reasoning effort as Codex's `model_reasoning_effort` (`low`, `medium`, `high`, `xhigh`,
+   * `max`, `ultra`, …). Written into `config.toml`.
+   */
+  readonly effort?: string
 }
 
 const lifecycleData = z.object({ threadId: z.string().optional() })
@@ -117,9 +122,11 @@ function toml(value: TomlValue): string {
  */
 export function buildCodexConfig(options: {
   mcpServers?: Record<string, Record<string, unknown>>
+  effort?: string
 }): string {
   const config: Record<string, TomlValue> = {
     ...CODEX_QUIET_CONFIG,
+    ...(options.effort ? { model_reasoning_effort: options.effort } : {}),
     model_provider: CODEX_PROVIDER_ID,
     model_providers: {
       [CODEX_PROVIDER_ID]: {
@@ -233,7 +240,10 @@ async function startSession(
   })
   await sandbox.writeTextFile({
     path: posix.join(home, CODEX_HOME_DIR, 'config.toml'),
-    content: buildCodexConfig(settings.mcpServers ? { mcpServers: settings.mcpServers } : {}),
+    content: buildCodexConfig({
+      ...(settings.mcpServers ? { mcpServers: settings.mcpServers } : {}),
+      ...(settings.effort ? { effort: settings.effort } : {}),
+    }),
     abortSignal,
   })
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)

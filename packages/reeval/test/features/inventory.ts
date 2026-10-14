@@ -1051,6 +1051,21 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.effort',
+    area: 'Harnesses',
+    name: '`effort` on each harness factory: default id, requested vs served',
+    fixtures: ['harness/effort-requested-and-served'],
+    plan: ['effort/effort'],
+    tests: [
+      harness('effort is the value that CLI takes, folded into the default id'),
+      cursorAdapter('harness', 'effort maps onto the catalog param, not Fast'),
+      piAdapter('unit', 'effort is --thinking'),
+      codexAdapter('unit', 'effort is model_reasoning_effort in the config'),
+      gooseAdapter('unit', 'effort is GOOSE_THINKING_EFFORT'),
+      opencodeAdapter('unit', "effort is that provider's thinking option"),
+    ],
+  },
+  {
     id: 'harness.usage',
     area: 'Harnesses',
     name: 'Token usage and the served model, per turn and totalled, from any harness',

@@ -63,6 +63,7 @@ import {
   opencodeVars,
   type ServedModel,
 } from '../src/harness/agents.ts'
+import { effortFromModelLabel, harnessEffort, servedEffortOf } from '../src/harness/effort.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
 import {
@@ -746,6 +747,60 @@ describe('the Codex harness', () => {
         ['old.txt', 'delete'],
       ],
     )
+  })
+})
+
+describe('harness effort', () => {
+  test('effort is the value that CLI takes, folded into the default id', () => {
+    assert.equal(
+      harnessId(claudeCode({ model: 'claude-sonnet-5', effort: 'high' })),
+      'claude-code:claude-sonnet-5[effort=high]',
+    )
+    assert.equal(
+      harnessId(claudeCode({ model: 'claude-sonnet-5', effort: 'low' })),
+      'claude-code:claude-sonnet-5[effort=low]',
+    )
+    assert.equal(
+      harnessId(cursor({ model: 'grok-4.7', effort: 'high', params: { fast: 'true' } })),
+      'cursor:grok-4.7[effort=high]',
+    )
+    assert.equal(harnessId(cursor({ model: 'composer-2.5' })), 'cursor:composer-2.5')
+    assert.equal(
+      harnessId(pi({ model: 'gemini-3.8-flash', effort: 'xhigh' })),
+      'pi:gemini-3.8-flash[effort=xhigh]',
+    )
+    assert.equal(
+      harnessId(codex({ model: 'gpt-5.6-luna', effort: 'ultra' })),
+      'codex:gpt-5.6-luna[effort=ultra]',
+    )
+    assert.equal(
+      harnessId(goose({ model: 'gemini-3.8-flash', effort: 'off' })),
+      'goose:gemini-3.8-flash[effort=off]',
+    )
+    assert.equal(
+      harnessId(antigravity({ model: 'gemini-3.8-flash', effort: 'max' })),
+      'antigravity:gemini-3.8-flash[effort=max]',
+    )
+    assert.equal(
+      harnessId(opencode({ model: 'openai/gpt-5.4-mini', effort: 'high' })),
+      'opencode:gpt-5.4-mini[effort=high]',
+    )
+    assert.equal(harnessId(fakeHarness({ effort: 'high' })), 'fake[effort=high]')
+    assert.equal(harnessId(fakeHarness({ effort: 'high', id: 'fake' })), 'fake')
+    assert.throws(
+      () => claudeCode({ model: 'claude-sonnet-5', effort: '' }),
+      /claudeCode\(\{ effort \}\) is the value that CLI takes/,
+    )
+    assert.throws(
+      () => cursor({ model: 'composer-2.5', effort: 3 as never }),
+      /cursor\(\{ effort \}\) is the value that CLI takes/,
+    )
+    assert.equal(harnessEffort(claudeCode({ model: 'claude-sonnet-5', effort: 'high' })), 'high')
+    assert.equal(harnessEffort(cursor({ model: 'composer-2.5' })), undefined)
+    assert.equal(effortFromModelLabel('gpt-5.6-luna[effort=medium]'), 'medium')
+    assert.equal(effortFromModelLabel('composer-2.5[fast=true]'), undefined)
+    assert.equal(effortFromModelLabel('grok-4.7[reasoning_effort=high,fast=true]'), 'high')
+    assert.equal(servedEffortOf(['composer-2.5[fast=true]', 'gpt-5.6-luna[effort=low]']), 'low')
   })
 })
 

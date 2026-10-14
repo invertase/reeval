@@ -1319,6 +1319,22 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/effort-requested-and-served',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /expected 'fake-1\[effort=medium\]' to be 'fake-1\[effort=high\]'/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      const cell = run.evals.find((e) => e.name === 'lands')?.cells[0]
+      const harness = run.stack.harnesses[0]
+      assert.equal(cell?.effort, 'high')
+      assert.equal(attempt?.effort, 'high')
+      assert.equal(attempt?.servedEffort, 'medium')
+      assert.equal(harness?.effort, 'high')
+      assert.deepEqual(harness?.resolvedEffort, ['medium'])
+    },
+  },
+  {
     dir: 'harness/turn-aborted-on-timeout',
     tiers: ['fake', 'docker', 'real'],
     env: 'plain',

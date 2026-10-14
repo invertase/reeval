@@ -31,7 +31,12 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'run-record': [
     { path: 'plan.sandboxWarnings', empty: () => [] },
     { path: 'stack.harnesses[].resolvedModels', empty: () => [] },
+    { path: 'stack.harnesses[].effort', empty: () => null },
+    { path: 'stack.harnesses[].resolvedEffort', empty: () => [] },
     { path: 'evals[].todo', empty: () => false },
+    { path: 'evals[].cells[].effort', empty: () => null },
+    { path: 'evals[].attempts[].effort', empty: () => null },
+    { path: 'evals[].attempts[].servedEffort', empty: () => null },
   ],
   'transcript-line': [],
   analysis: [],

@@ -99,6 +99,49 @@ describe('createCursorSdk', () => {
     assert.deepEqual(await model({}, 'gpt-5.2'), { id: 'gpt-5.2' }, 'no variants, no params')
   })
 
+  test('effort maps onto the catalog param, not Fast', async () => {
+    const catalog = [
+      {
+        id: 'grok-4.7',
+        parameters: [
+          { id: 'reasoning_effort', values: [{ value: 'low' }, { value: 'high' }] },
+          { id: 'fast', values: [{ value: 'false' }, { value: 'true' }] },
+        ],
+        variants: [
+          {
+            params: [
+              { id: 'reasoning_effort', value: 'high' },
+              { id: 'fast', value: 'true' },
+            ],
+            isDefault: true,
+          },
+        ],
+      },
+      {
+        id: 'composer-2.5',
+        parameters: [{ id: 'fast', values: [{ value: 'false' }, { value: 'true' }] }],
+        variants: [{ params: [{ id: 'fast', value: 'true' }], isDefault: true }],
+      },
+    ]
+    const model = async (settings: Parameters<typeof createCursorSdk>[0], id: string) => {
+      const sandbox = fakeSandbox({ turns: [{ stdout: fixture('tools-mcp-skills.ndjson') }] })
+      const session = await start(sandbox, { modelCatalog: catalog, ...settings })
+      await runTurn(session, 'go', { model: id })
+      return turnConfig(sandbox, 1).model
+    }
+    assert.deepEqual(await model({ effort: 'low', modelParams: { fast: 'true' } }, 'grok-4.7'), {
+      id: 'grok-4.7',
+      params: [
+        { id: 'fast', value: 'true' },
+        { id: 'reasoning_effort', value: 'low' },
+      ],
+    })
+    await assert.rejects(
+      model({ effort: 'high' }, 'composer-2.5'),
+      /no effort parameter for composer-2.5.*Fast is params\.fast/,
+    )
+  })
+
   test('fail-closed: requireCredentialBrokering refuses a sandbox that cannot broker', async () => {
     const sandbox = fakeSandbox({ broker: false })
     await assert.rejects(

@@ -74,6 +74,10 @@ export type PiHarnessSettings = {
   readonly mcpServers?: Record<string, PiMcpServer>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
+  /**
+   * Reasoning effort, passed as `--thinking` (pi's name). Values are whatever that flag takes.
+   */
+  readonly effort?: string
 }
 
 /**
@@ -164,6 +168,7 @@ export function buildPiCommand(options: {
   sessionId: string
   sessionDir: string
   mcp?: boolean
+  thinking?: string
 }): string {
   return [
     `cd ${shellQuote(options.workDir)} &&`,
@@ -171,6 +176,7 @@ export function buildPiCommand(options: {
     ...(options.mcp ? ['-e builtin:mcp'] : []),
     '--provider google',
     ...(options.model ? [`--model ${shellQuote(options.model)}`] : []),
+    ...(options.thinking ? [`--thinking ${shellQuote(options.thinking)}`] : []),
     `--session-id ${shellQuote(options.sessionId)} --session-dir ${shellQuote(options.sessionDir)}`,
     `-- "$(cat ${shellQuote(options.promptFile)})"`,
   ].join(' ')
@@ -292,6 +298,7 @@ async function startSession(
         sessionId: piSession,
         sessionDir: posix.join(home, PI_AGENT_DIR, 'sessions'),
         mcp,
+        ...(settings.effort ? { thinking: settings.effort } : {}),
       })
       const translator = new PiStreamTranslator({
         mcpServers: Object.keys(settings.mcpServers ?? {}),

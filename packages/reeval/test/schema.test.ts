@@ -256,7 +256,10 @@ describe('read defaults', () => {
     }
     fillDefaults('run-record', record)
     assert.deepEqual(record.plan, { sandboxWarnings: [] })
-    assert.deepEqual(record.stack.harnesses, [{ resolvedModels: [] }, { resolvedModels: ['m'] }])
+    assert.deepEqual(record.stack.harnesses, [
+      { resolvedModels: [], effort: null, resolvedEffort: [] },
+      { resolvedModels: ['m'], effort: null, resolvedEffort: [] },
+    ])
     assert.deepEqual(record.evals, [{ todo: true }, { todo: false }])
   })
 

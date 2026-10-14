@@ -47,6 +47,7 @@ export const cases: PlanCase[] = [
   { dir: 'pi', name: 'pi', args: [] },
   { dir: 'codex', name: 'codex', args: [] },
   { dir: 'cursor', name: 'cursor', args: [] },
+  { dir: 'effort', name: 'effort', args: [] },
   { dir: 'secrets', name: 'brokered', args: [] },
   { dir: 'egress', name: 'cascade', args: [] },
   {

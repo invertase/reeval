@@ -83,6 +83,19 @@ export type GooseHarnessSettings = {
   readonly mcpServers?: Record<string, Record<string, unknown>>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
+  /**
+   * Reasoning effort as `GOOSE_THINKING_EFFORT` (`off`, `low`, `medium`, `high`, `max`, …).
+   */
+  readonly effort?: string
+}
+
+/** Goose's process env: quiet flags, the model, and thinking effort when set. */
+export function gooseEnv(settings: Pick<GooseHarnessSettings, 'model' | 'effort'>) {
+  return {
+    ...GOOSE_QUIET_ENV,
+    GOOSE_MODEL: settings.model,
+    ...(settings.effort ? { GOOSE_THINKING_EFFORT: settings.effort } : {}),
+  }
 }
 
 /**
@@ -107,7 +120,7 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     executable: 'goose',
     args: ['acp'],
     auth: settings.auth,
-    env: { ...GOOSE_QUIET_ENV, GOOSE_MODEL: settings.model },
+    env: gooseEnv(settings),
     credentialEnv: [GOOSE_CREDENTIAL_ENV],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[GOOSE_CREDENTIAL_ENV]

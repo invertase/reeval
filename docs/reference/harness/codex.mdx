@@ -20,8 +20,12 @@ export default defineConfig({
   An OpenAI model id that runs on the Responses API, such as `gpt-5.6-luna`, without a provider. Required: Codex's own default changes between releases.
 </Property>
 
+<Property name="effort" type="string" optional>
+  Reasoning effort as Codex's `model_reasoning_effort`: `low`, `medium`, `high`, `xhigh`, `max` or `ultra`, depending on the model. The record keeps this requested value next to the served `[effort=…]` suffix.
+</Property>
+
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `codex:<model>`.
+  The harness's id in cell keys, filters and the record. Default `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>

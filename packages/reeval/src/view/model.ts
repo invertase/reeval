@@ -124,7 +124,9 @@ export const formatPercent = (rate: number | null) =>
 export function harnessLabel(h: RunRecord['stack']['harnesses'][number]): string {
   const parts = [
     ...(h.model ? [`model ${h.model}`] : []),
+    ...(h.effort ? [`effort ${h.effort}`] : []),
     ...(h.resolvedModels.length ? [`served ${h.resolvedModels.join(', ')}`] : []),
+    ...(h.resolvedEffort.length ? [`served effort ${h.resolvedEffort.join(', ')}`] : []),
   ]
   return parts.length ? `${h.id} (${parts.join(', ')})` : h.id
 }
