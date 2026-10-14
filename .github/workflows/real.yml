@@ -112,7 +112,7 @@ jobs:
         run: |
           [ -f "$REEVAL_REAL_LEDGER" ] && { echo '### Real attempts reserved'; echo; echo '```'; cat "$REEVAL_REAL_LEDGER"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
       - if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reeval-runs-${{ github.run_id }}
           path: examples/hello/.reeval/runs
