@@ -121,6 +121,8 @@ function engine() {
     console.error(`\nengine coverage: the tests failed (exit ${tests.status})`)
     return tests.status ?? 1
   }
+  // c8 remaps every raw file in memory; prune first so hundreds of process dumps don't OOM.
+  prune(join(dir, 'raw'))
   const c8 = spawnSync(
     'pnpm',
     [
