@@ -41,6 +41,7 @@ import type {
   HarnessEdit,
   InstallStep,
   JudgeOptions,
+  PairFactor,
   PinnableKey,
   PlannedEgress,
   PlannedQuestion,
@@ -96,9 +97,12 @@ export function checkGate(value: unknown, where: string): void {
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
 const GATES: CompareGate[] = ['variants', 'all', 'none']
-const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'questions']
-const QUESTION_KEYS = ['question', 'model']
+const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'questions', 'across']
+const QUESTION_KEYS = ['question', 'model', 'across']
 const QUESTION_EXAMPLE = `questions: ['Which handles state more cleanly?']`
+const PAIR_FACTORS: PairFactor[] = ['environment', 'harness']
+const ACROSS_HINT = `'environment' (vary the environment, same harness) or 'harness' (vary the harness, same environment)`
+const ACROSS_MEAN = ' Did you mean "across"? It is the factor you vary: across: \'environment\'.'
 
 const ID = /^[A-Za-z0-9._:@+-]+$/
 
@@ -167,21 +171,27 @@ function checkQuestion(item: unknown, where: string): string {
   }
   if (typeof item !== 'object' || item === null || Array.isArray(item)) {
     throw new UsageError(
-      `compare.questions in ${where} takes strings or { question, model? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
+      `compare.questions in ${where} takes strings or { question, model?, across? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
     )
   }
   const unknown = Object.keys(item).filter((k) => !QUESTION_KEYS.includes(k))
   if (unknown.length) {
+    const hint = unknown.some((k) => k === 'cut' || k === 'cuts') ? ACROSS_MEAN : ''
     throw new UsageError(
-      `compare.questions in ${where} takes { question, model? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).`,
+      `compare.questions in ${where} takes { question, model?, across? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).${hint}`,
     )
   }
-  const { question, model } = item as { question?: unknown; model?: unknown }
+  const { question, model, across } = item as {
+    question?: unknown
+    model?: unknown
+    across?: unknown
+  }
   if (typeof question !== 'string' || !question.trim()) {
     throw new UsageError(
       `compare.questions in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`,
     )
   }
+  if (across !== undefined) checkAcross(across, where, question)
   if (model !== undefined) {
     if (typeof model !== 'string' || checkModelString(model)) {
       throw new UsageError(
@@ -214,6 +224,34 @@ function checkQuestions(value: unknown, where: string): void {
   if (dupe) throw new UsageError(`compare.questions in ${where} asks "${dupe}" twice`)
 }
 
+function checkAcross(value: unknown, where: string, question: string): void {
+  if (PAIR_FACTORS.includes(value as PairFactor)) return
+  throw new UsageError(
+    `compare.questions "${question}" in ${where}: across is ${ACROSS_HINT} (got ${describe(value)}). Leave it out to vary both.`,
+  )
+}
+
+function checkAcrosses(value: unknown, where: string): void {
+  const list = Array.isArray(value) ? value : [value]
+  if (list.length === 0) {
+    throw new UsageError(
+      `compare.across in ${where} is ${ACROSS_HINT}, or a list of those (got ${describe(value)}). Leave it out to vary both.`,
+    )
+  }
+  const seen = new Set<string>()
+  for (const item of list) {
+    if (!PAIR_FACTORS.includes(item as PairFactor)) {
+      throw new UsageError(
+        `compare.across in ${where} is ${ACROSS_HINT}, or a list of those (got ${describe(item)}).`,
+      )
+    }
+    if (seen.has(item as string)) {
+      throw new UsageError(`compare.across in ${where} lists "${item}" twice`)
+    }
+    seen.add(item as string)
+  }
+}
+
 function checkCompare(value: unknown, where: string): void {
   if (Array.isArray(value)) {
     throw new UsageError(
@@ -223,25 +261,31 @@ function checkCompare(value: unknown, where: string): void {
   const spec = value as { baseline?: unknown; variants?: unknown }
   if (typeof value !== 'object' || value === null || !Array.isArray(spec.variants)) {
     throw new UsageError(
-      `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions? }.`,
+      `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions?, across? }.`,
     )
   }
   for (const key of Object.keys(value)) {
     if (!COMPARE_KEYS.includes(key)) {
       const hint =
-        key === 'question' ? `. Did you mean "questions"? It's a list: ${QUESTION_EXAMPLE}.` : ''
+        key === 'question'
+          ? `. Did you mean "questions"? It's a list: ${QUESTION_EXAMPLE}.`
+          : key === 'cut' || key === 'cuts'
+            ? `.${ACROSS_MEAN}`
+            : ''
       throw new UsageError(`Unknown compare option "${key}" in ${where}${hint}`)
     }
   }
-  const { baseline, variants, gate, minLift, harness, questions } = spec as {
+  const { baseline, variants, gate, minLift, harness, questions, across } = spec as {
     baseline?: unknown
     variants: unknown[]
     gate?: unknown
     minLift?: unknown
     harness?: unknown
     questions?: unknown
+    across?: unknown
   }
   if (questions !== undefined) checkQuestions(questions, where)
+  if (across !== undefined) checkAcrosses(across, where)
   if (baseline !== undefined && !isEnvironment(baseline)) {
     throw new UsageError(
       `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(baseline)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environment as the control.`,
@@ -501,12 +545,32 @@ export type NormalizedCompare = {
   questions: PlannedQuestion[]
 }
 
-const plannedQuestions = (value: CompareOptions['questions']): PlannedQuestion[] =>
-  (value ?? []).map((q) =>
-    typeof q === 'string'
-      ? { question: q }
-      : { question: q.question, ...(q.model !== undefined ? { model: q.model } : {}) },
-  )
+/** A question's own `across`, else the one `compare.across` names when it names exactly one. */
+const plannedAcross = (
+  own: PairFactor | undefined,
+  compare: PairFactor | PairFactor[] | undefined,
+): PairFactor | undefined => {
+  if (own) return own
+  const list = compare === undefined ? undefined : Array.isArray(compare) ? compare : [compare]
+  return list?.length === 1 ? list[0] : undefined
+}
+
+const plannedQuestions = (
+  value: CompareOptions['questions'],
+  compareAcross?: PairFactor | PairFactor[],
+): PlannedQuestion[] =>
+  (value ?? []).map((q) => {
+    if (typeof q === 'string') {
+      const across = plannedAcross(undefined, compareAcross)
+      return across ? { question: q, across } : { question: q }
+    }
+    const across = plannedAcross(q.across, compareAcross)
+    return {
+      question: q.question,
+      ...(q.model !== undefined ? { model: q.model } : {}),
+      ...(across ? { across } : {}),
+    }
+  })
 
 export type Resolved = {
   harness: HarnessDescriptor[]
@@ -542,7 +606,7 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
       ? { harness: value.harness.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
       : {}),
     of: value.variants.length,
-    questions: plannedQuestions(value.questions),
+    questions: plannedQuestions(value.questions, value.across),
   }
 }
 

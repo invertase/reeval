@@ -775,18 +775,32 @@ export type CompareOptions<E = Environment> = {
    * win rates and never change pass, fail or the exit code.
    */
   questions?: CompareQuestion[]
+  /**
+   * The factor every question varies when pairing, when a question does not name its own
+   * `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of
+   * both, or omitted, asks both pair kinds.
+   */
+  across?: PairFactor | PairFactor[]
 }
 
 /**
  * A question for pairwise judgement: its text, or the text and the `'provider/model'` that
  * answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model.
+ * `across` is the factor it varies when pairing; without it (and without a one-factor
+ * `compare.across`) both pair kinds run.
  */
-export type CompareQuestion = string | { question: string; model?: string }
+export type CompareQuestion = string | { question: string; model?: string; across?: PairFactor }
 
-/** A compare question as planned: its text, and the model it names itself, if any. */
-export type PlannedQuestion = { question: string; model?: string }
+/**
+ * A compare question as planned: its text, the model it names itself, if any, and the one
+ * factor it varies when it doesn't ask both pair kinds.
+ */
+export type PlannedQuestion = { question: string; model?: string; across?: PairFactor }
 
-/** Which pairs a vote is over: two arms on one harness, or two harnesses on one arm. */
+/** A matrix factor a compare question varies when pairing; the others are held. */
+export type PairFactor = 'environment' | 'harness'
+
+/** Which pairs a vote is over: two environments on one harness, or two harnesses on one environment. */
 export type CompareCut = 'within' | 'across'
 
 /** One judgement of one pair of attempts, in one order. */

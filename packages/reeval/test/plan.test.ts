@@ -30,6 +30,7 @@ export const cases: PlanCase[] = [
     args: ['--profile', 'off', 'evals/questions.eval.ts'],
   },
   { dir: 'compare', name: 'questions-group', args: ['evals/questions-group.eval.ts'] },
+  { dir: 'compare', name: 'questions-across', args: ['evals/questions-across.eval.ts'] },
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },

@@ -941,6 +941,9 @@
     "PlannedQuestion": {
       "type": "object",
       "properties": {
+        "across": {
+          "enum": ["environment", "harness"]
+        },
         "model": {
           "type": "string"
         },

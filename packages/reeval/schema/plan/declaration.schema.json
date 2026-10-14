@@ -151,6 +151,9 @@
         {
           "type": "object",
           "properties": {
+            "across": {
+              "enum": ["environment", "harness"]
+            },
             "model": {
               "type": "string"
             },
@@ -542,6 +545,19 @@
             "compare": {
               "type": "object",
               "properties": {
+                "across": {
+                  "anyOf": [
+                    {
+                      "enum": ["environment", "harness"]
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/PairFactor"
+                      }
+                    }
+                  ]
+                },
                 "baseline": {
                   "$ref": "#/$defs/EnvironmentData"
                 },
@@ -790,6 +806,19 @@
             "compare": {
               "type": "object",
               "properties": {
+                "across": {
+                  "anyOf": [
+                    {
+                      "enum": ["environment", "harness"]
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/PairFactor"
+                      }
+                    }
+                  ]
+                },
                 "gate": {
                   "enum": ["all", "none", "variants"]
                 },
@@ -1699,6 +1728,9 @@
         }
       },
       "required": ["kind", "model"]
+    },
+    "PairFactor": {
+      "enum": ["environment", "harness"]
     },
     "PiHarnessDescriptor": {
       "type": "object",

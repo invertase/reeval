@@ -54,6 +54,9 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `compare: false can't be set in evaluate("e")` | Omit `compare`, or pass `{ baseline, variants }`. A profile uses `limit.compare: false`. |
 | `compare.questions in evaluate("e") is an empty list. …` | Ask at least one question, or leave `questions` out. A single value instead of a list, an empty string, an entry without its `question` and the same question twice are refused too. |
 | `Unknown compare option "question" in evaluate("e"). Did you mean "questions"? …` | Rename it to `questions` and pass a list: `questions: ['Which is cleaner?']`. |
+| `Unknown compare option "cut" in evaluate("e"). Did you mean "across"? …` | Use `across: 'environment'` or `across: 'harness'` on `compare` or on the question. `cuts` is refused the same way. |
+| `compare.questions "Which?" in evaluate("e"): across is 'environment' …` | Use `'environment'` or `'harness'`, or leave `across` out to vary both. |
+| `compare.across in evaluate("e") is 'environment' …` | Pass `across: 'environment'`, `across: 'harness'`, or a list of those. An empty list and a repeated value are refused too. |
 | `compare.questions "Which?" in evaluate("e") names typesafe-ai/jev-1.13.0, an evaluation model: …` | Give the question a language model, e.g. `'google/gemini-3.8-flash'`. A model without a provider prefix is refused too. |
 | `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. The hint names `from` for a base image string and `install` for a list of steps. |
 | `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (c) => { … })`. |
