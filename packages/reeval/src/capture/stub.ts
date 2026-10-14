@@ -16,7 +16,9 @@ function chunk(type: string, data: Buffer): Buffer {
 /** A valid 1×1 PNG whose bytes are unique for `(name, port, path, viewport)`. */
 export function stubPng(name: string, port: number, path: string, viewport: Viewport): Buffer {
   const digest = createHash('sha256')
-    .update(`${name}\0${port}\0${path}\0${viewport.width}x${viewport.height}`)
+    .update(
+      `${name}\0${port}\0${path}\0${viewport === 'full-page' ? 'full-page' : `${viewport.width}x${viewport.height}`}`,
+    )
     .digest()
   const ihdr = Buffer.alloc(13)
   ihdr.writeUInt32BE(1, 0)

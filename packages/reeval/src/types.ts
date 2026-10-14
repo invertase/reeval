@@ -51,18 +51,44 @@ export type WebEventType = 'web-search' | 'web-fetch'
 
 export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 
-/** CSS pixels for `c.capture()`. Default 1280×720 when the call and cascade omit it. */
-export type Viewport = { width: number; height: number }
+/** Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`. */
+export type CaptureWindow = { width: number; height: number }
 
 /**
- * When `c.capture()` takes the PNG. `'load'` is `window` load (`Page.loadEventFired`).
- * `'idle'` is Chromium `Page.lifecycleEvent` `networkAlmostIdle`.
+ * Author camera. `{ width, height }` is the live window and the saved PNG.
+ * `'full-page'` keeps the default window and saves with `captureBeyondViewport`.
+ */
+export type Viewport = CaptureWindow | 'full-page'
+
+/**
+ * Chromium look-ready events. `'load'` is `window` load (`Page.loadEventFired`).
+ * `'idle'` is `Page.lifecycleEvent` `networkAlmostIdle`.
  */
 export type CaptureWait = 'load' | 'idle'
 
+/** Same shape at top-level `wait` and `{ wait }` between instructions. */
+export type Wait = CaptureWait | { ms: number }
+
+export type CaptureInstruction = string | { wait: Wait }
+
+export type CaptureUseAction =
+  | { type: 'click'; x: number; y: number }
+  | { type: 'type'; text: string }
+  | { type: 'key'; key: 'Tab' | 'Enter' }
+  | { type: 'scroll'; x: number; y: number; dy: number }
+  | { type: 'drag'; x: number; y: number; toX: number; toY: number }
+  | { type: 'hover'; x: number; y: number }
+  | { type: 'done' }
+
+/** One list per instruction string. Tests; never downloads a model. */
+export type CaptureUseScript = CaptureUseAction[][]
+
+/** Vision driver for `instructions`. Cascades like `question`. */
+export type CaptureUse = { model: string } | { fake: CaptureUseScript }
+
 /**
  * Camera defaults for `c.capture()`. Cascades config → profile defaults → group → eval,
- * shallow-merged. `viewport` on a level replaces the whole object. `port` is not an option:
+ * shallow-merged. `viewport` on a level replaces the whole value. `port` is not an option:
  * pass it as the first argument to `c.capture`.
  */
 export type CaptureOptions = {
@@ -71,6 +97,8 @@ export type CaptureOptions = {
   timeout?: Duration
   /** `false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. */
   browser?: boolean
+  /** Vision driver; required when `c.capture` has `instructions` (except the fake stub). */
+  use?: CaptureUse
 }
 
 /** A background process started by `c.exec(..., { background: true })` or `c.serve`. */
@@ -88,6 +116,7 @@ export type Capture = {
   port: number
   /** Path on the app, as passed in. */
   path: string
+  /** What the author asked, including `'full-page'`. */
   viewport: Viewport
   /** `artifacts/<name>.png` under the attempt directory. */
   file: { path: string; sha256: string; bytes: number }
@@ -96,15 +125,19 @@ export type Capture = {
 /**
  * Optional camera and path for `c.capture(port | ServeHandle, options?)`.
  * `port` is the first argument, not a field here. Default `path` is `/`;
- * default `name` is derived from the path.
+ * default `name` is derived from the path. `wait` and `instructions` are call-only.
  */
 export type CaptureCall = {
   name?: string
   path?: string
   viewport?: Viewport
   timeout?: Duration
-  /** When to shoot. Default `'load'`. `'idle'` waits for Chromium `networkAlmostIdle`. */
-  wait?: CaptureWait
+  /** Look-ready once, before the first model shot or the saved PNG. Default `'load'`. */
+  wait?: Wait
+  /** Journey: goal strings and `{ wait }` beats. */
+  instructions?: CaptureInstruction[]
+  /** Overrides cascaded `capture.use` for this call. */
+  use?: CaptureUse
 }
 
 export type FileChange = { path: string; status: 'added' | 'modified' | 'deleted' }
@@ -241,6 +274,7 @@ export type AttemptContext = {
   /**
    * Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`.
    * First argument is the container port or a `ServeHandle` from `c.serve`.
+   * `instructions` runs a vision journey on that same tab first.
    * Needs a sandbox, same as `c.exec`.
    */
   capture(target: number | ServeHandle, options?: CaptureCall): Promise<Capture>
@@ -881,7 +915,7 @@ type EvalOptionFields = {
    */
   egress?: EgressPolicy
   judge?: JudgeOptions
-  /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` replaces the whole object. */
+  /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `use` replace the value. */
   capture?: CaptureOptions
   /** Per attempt. */
   timeout?: Duration
@@ -1331,8 +1365,32 @@ export type EvalRecord = {
     mediaType: 'image/png'
     sha256: string
     bytes: number
-    capture: { port: number; path: string; viewport: Viewport }
+    capture: CaptureArtifactMeta
   }>
+  /**
+   * Tokens the capture vision loop used. Infrastructure only: never harness
+   * `usage`, effort, compare or lift.
+   */
+  captureUse?: CaptureUseSpend
+}
+
+/** How a saved PNG was produced. Persist the live window, not the string `'full-page'`. */
+export type CaptureArtifactMeta = {
+  port: number
+  path: string
+  viewport?: CaptureWindow
+  /** Saved PNG used `captureBeyondViewport`. */
+  fullPage?: boolean
+  /** Goal strings only; wait beats omitted. */
+  instructions?: string[]
+  use?: { model: string; moves: number }
+}
+
+/** Attempt-level capture vision spend; not harness usage. */
+export type CaptureUseSpend = {
+  model: string
+  moves: number
+  usage: TokenUsage | null
 }
 
 /** Which environment ran as the control, so the studio can show it. */

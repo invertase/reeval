@@ -11,8 +11,10 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CaptureWait, Viewport } from '../types.ts'
+import type { CaptureUseAction, CaptureWait, CaptureWindow, Wait } from '../types.ts'
 import { unzip } from './zip.ts'
+
+const isMs = (wait: Wait): wait is { ms: number } => typeof wait === 'object' && wait !== null
 
 export type CdpClient = {
   on(method: string, fn: (p: unknown) => void): void
@@ -26,6 +28,166 @@ export function captureWaitLabel(wait: CaptureWait): 'load' | 'networkAlmostIdle
 
 export function captureWaitTimeout(wait: CaptureWait): Error {
   return new Error(`c.capture() timed out waiting for ${captureWaitLabel(wait)}`)
+}
+
+export function waitTimeout(wait: Wait, detail?: string): Error {
+  if (isMs(wait)) {
+    return new Error(`c.capture() timed out${detail ? ` on ${detail}` : ''} waiting ${wait.ms}ms`)
+  }
+  return captureWaitTimeout(wait)
+}
+
+export async function waitForPage(
+  cdp: CdpClient,
+  wait: Wait,
+  timeoutMs: number,
+  nav?: { loaderId?: string },
+): Promise<void> {
+  if (isMs(wait)) {
+    if (timeoutMs <= 0) throw waitTimeout(wait)
+    const ms = Math.min(wait.ms, timeoutMs)
+    await new Promise<void>((resolve) => setTimeout(resolve, ms))
+    return
+  }
+  const page = listenForCaptureWait(cdp, wait)
+  page.arm()
+  await page.ready(nav, timeoutMs)
+}
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+
+/** Map a full-page click onto the live window, scrolling with the wheel if needed. */
+export function mapPagePoint(
+  x: number,
+  y: number,
+  window: CaptureWindow,
+  page: { width: number; height: number } | undefined,
+  scrollY: number,
+): { x: number; y: number; scrollY: number; dy: number } {
+  const maxY = Math.max(0, (page?.height ?? window.height) - window.height)
+  const target = y >= window.height || y < 0 ? clamp(y - window.height / 2, 0, maxY) : scrollY
+  const nextY = clamp(target, 0, maxY)
+  return {
+    x: clamp(x, 0, window.width - 1),
+    y: clamp(y - nextY, 0, window.height - 1),
+    scrollY: nextY,
+    dy: nextY - scrollY,
+  }
+}
+
+export async function dispatchInput(
+  cdp: CdpClient,
+  action: CaptureUseAction,
+  window: CaptureWindow,
+  page?: { width: number; height: number },
+  scrollY = 0,
+): Promise<number> {
+  if (action.type === 'done') return scrollY
+  if (action.type === 'type') {
+    await cdp.send('Input.insertText', { text: action.text })
+    return scrollY
+  }
+  if (action.type === 'key') {
+    const key = action.key
+    const vk = key === 'Tab' ? 9 : 13
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key,
+      code: key,
+      windowsVirtualKeyCode: vk,
+    })
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key,
+      code: key,
+      windowsVirtualKeyCode: vk,
+    })
+    return scrollY
+  }
+  if (action.type === 'scroll') {
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      x: action.x,
+      y: action.y,
+      deltaX: 0,
+      deltaY: action.dy,
+    })
+    return scrollY + action.dy
+  }
+  const mapped = mapPagePoint(
+    action.type === 'drag' ? action.x : action.x,
+    action.type === 'drag' ? action.y : action.y,
+    window,
+    page,
+    scrollY,
+  )
+  if (mapped.dy !== 0) {
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      x: window.width / 2,
+      y: window.height / 2,
+      deltaX: 0,
+      deltaY: mapped.dy,
+    })
+  }
+  const at = { x: mapped.x, y: mapped.y }
+  if (action.type === 'hover') {
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...at })
+    return mapped.scrollY
+  }
+  if (action.type === 'click') {
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...at, button: 'left' })
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      ...at,
+      button: 'left',
+      clickCount: 1,
+    })
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      ...at,
+      button: 'left',
+      clickCount: 1,
+    })
+    return mapped.scrollY
+  }
+  const end = mapPagePoint(action.toX, action.toY, window, page, mapped.scrollY)
+  if (end.dy !== 0) {
+    await cdp.send('Input.dispatchMouseEvent', {
+      type: 'mouseWheel',
+      x: window.width / 2,
+      y: window.height / 2,
+      deltaX: 0,
+      deltaY: end.dy,
+    })
+  }
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: at.x,
+    y: at.y,
+    button: 'left',
+  })
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mousePressed',
+    x: at.x,
+    y: at.y,
+    button: 'left',
+    clickCount: 1,
+  })
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: end.x,
+    y: end.y,
+    button: 'left',
+  })
+  await cdp.send('Input.dispatchMouseEvent', {
+    type: 'mouseReleased',
+    x: end.x,
+    y: end.y,
+    button: 'left',
+    clickCount: 1,
+  })
+  return end.scrollY
 }
 
 function lifecycleParams(msg: unknown): { name?: string; loaderId?: string } {
@@ -379,14 +541,22 @@ async function disposeChrome(child: ChildProcess, userData: string): Promise<voi
   removeChromeProfile(userData)
 }
 
-/** Navigate `url` and return a PNG from `Page.captureScreenshot`. */
-export async function screenshotWithChrome(
+export type ChromeSession = {
+  cdp: CdpClient
+  window: CaptureWindow
+  navigate(url: string): Promise<{ loaderId?: string } | undefined>
+  wait(wait: Wait, timeoutMs: number, nav?: { loaderId?: string }): Promise<void>
+  screenshot(fullPage: boolean): Promise<Buffer>
+  dispatch(action: CaptureUseAction, page?: { width: number; height: number }): Promise<void>
+}
+
+/** One Chrome process, one tab. `fn` must not keep the session after it returns. */
+export async function withChrome<T>(
   bin: string,
-  url: string,
-  viewport: Viewport,
+  window: CaptureWindow,
   timeoutMs: number,
-  wait: CaptureWait = 'load',
-): Promise<Buffer> {
+  fn: (session: ChromeSession) => Promise<T>,
+): Promise<T> {
   const userData = mkdtempSync(join(tmpdir(), `reeval-chrome-${process.pid}-`))
   const child = spawn(
     bin,
@@ -397,7 +567,7 @@ export async function screenshotWithChrome(
       '--disable-dev-shm-usage',
       '--hide-scrollbars',
       '--remote-allow-origins=*',
-      `--window-size=${viewport.width},${viewport.height}`,
+      `--window-size=${window.width},${window.height}`,
       `--user-data-dir=${userData}`,
       '--remote-debugging-port=0',
       'about:blank',
@@ -411,29 +581,78 @@ export async function screenshotWithChrome(
       await cdp.send('Page.enable')
       await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true })
       await cdp.send('Emulation.setDeviceMetricsOverride', {
-        width: viewport.width,
-        height: viewport.height,
+        width: window.width,
+        height: window.height,
         deviceScaleFactor: 1,
         mobile: false,
       })
-      const page = listenForCaptureWait(cdp, wait)
-      page.arm()
-      const nav = (await cdp.send('Page.navigate', { url })) as
-        | { loaderId?: string; errorText?: string }
-        | undefined
-      if (nav?.errorText) {
-        throw new Error(`c.capture() navigation failed: ${nav.errorText}`)
+      let scrollY = 0
+      const session: ChromeSession = {
+        cdp,
+        window,
+        async navigate(url) {
+          scrollY = 0
+          const nav = (await cdp.send('Page.navigate', { url })) as
+            | { loaderId?: string; errorText?: string }
+            | undefined
+          if (nav?.errorText) {
+            throw new Error(`c.capture() navigation failed: ${nav.errorText}`)
+          }
+          return nav
+        },
+        wait(wait, waitMs, nav) {
+          return waitForPage(cdp, wait, waitMs, nav)
+        },
+        async screenshot(fullPage) {
+          const shot = (await cdp.send('Page.captureScreenshot', {
+            format: 'png',
+            captureBeyondViewport: fullPage,
+          })) as { data?: string }
+          if (!shot.data) throw new Error('Page.captureScreenshot returned no data')
+          return Buffer.from(shot.data, 'base64')
+        },
+        async dispatch(action, page) {
+          scrollY = await dispatchInput(cdp, action, window, page, scrollY)
+        },
       }
-      await page.ready(nav, timeoutMs)
-      const shot = (await cdp.send('Page.captureScreenshot', { format: 'png' })) as {
-        data?: string
-      }
-      if (!shot.data) throw new Error('Page.captureScreenshot returned no data')
-      return Buffer.from(shot.data, 'base64')
+      return await fn(session)
     } finally {
       cdp.close()
     }
   } finally {
     await disposeChrome(child, userData)
   }
+}
+
+/** Arm the wait, then navigate, then wait. `arm` is before `Page.navigate`. */
+export async function navigateAndWait(
+  session: ChromeSession,
+  url: string,
+  wait: Wait,
+  timeoutMs: number,
+): Promise<void> {
+  if (isMs(wait)) {
+    const nav = await session.navigate(url)
+    await session.wait(wait, timeoutMs, nav)
+    return
+  }
+  const page = listenForCaptureWait(session.cdp, wait)
+  page.arm()
+  const nav = await session.navigate(url)
+  await page.ready(nav, timeoutMs)
+}
+
+/** Navigate `url` and return a PNG from `Page.captureScreenshot`. */
+export async function screenshotWithChrome(
+  bin: string,
+  url: string,
+  viewport: CaptureWindow,
+  timeoutMs: number,
+  wait: Wait = 'load',
+  fullPage = false,
+): Promise<Buffer> {
+  return withChrome(bin, viewport, timeoutMs, async (session) => {
+    await navigateAndWait(session, url, wait, timeoutMs)
+    return session.screenshot(fullPage)
+  })
 }

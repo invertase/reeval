@@ -15,8 +15,12 @@ test('resolveCaptureCall passes wait idle and defaults to load', () => {
     name: 'root',
     path: '/',
     viewport,
+    window: viewport,
+    fullPage: false,
     timeoutMs: 60_000,
     wait: 'idle',
+    instructions: [],
+    use: undefined,
   })
 })
 
@@ -27,7 +31,10 @@ test('resolveCaptureWait defaults to load and rejects anything else', () => {
   assert.throws(
     () => resolveCaptureWait('networkIdle' as never),
     (error: Error) => {
-      assert.equal(error.message, `c.capture() wait is 'load' or 'idle' (got "networkIdle")`)
+      assert.equal(
+        error.message,
+        `c.capture() wait is 'load', 'idle' or { ms } (got "networkIdle")`,
+      )
       return true
     },
   )

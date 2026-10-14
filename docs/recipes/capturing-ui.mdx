@@ -62,6 +62,38 @@ evaluate('landing page', async (c) => {
 })
 ```
 
+## After a journey
+
+`instructions` is a list of goals and waits. Each string is a vision loop on
+the same host Chrome tab: the model sees an ephemeral full-page shot and
+returns click / type / key / scroll / drag / hover. Handlers send Chrome
+`Input` events. There are no selectors.
+
+```ts
+const server = await c.serve(
+  'npm run dev -- --port $PORT --host 127.0.0.1',
+)
+await c.capture(server, {
+  name: 'after-submit',
+  wait: 'idle',
+  instructions: [
+    'Fill in the sign-in form and submit',
+    { wait: 'idle' },
+    'Click forgot password',
+  ],
+  viewport: 'full-page',
+})
+```
+
+Top-level `wait` runs once, before the first model shot. `{ wait }` between
+strings is the authored beat. `viewport: 'full-page'` keeps the default
+window and saves a tall PNG. Typed secrets are plain text: they can appear
+in the PNG and in debug.
+
+Set `capture.use.model` (cascades like `question`) or rely on the analysis
+model when it accepts images. Tests use `use: { fake: [/* one list per
+string */] }`.
+
 ## After load
 
 Client-rendered pages often fetch after `window` `load`. `wait: 'idle'` holds

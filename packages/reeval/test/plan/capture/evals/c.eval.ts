@@ -14,3 +14,5 @@ evaluate(
 evaluate('no camera defaults', async () => {})
 
 evaluate('browser off', { capture: { browser: false } }, async () => {})
+
+evaluate('full page', { capture: { viewport: 'full-page' } }, async () => {})

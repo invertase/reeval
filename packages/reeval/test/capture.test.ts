@@ -31,6 +31,7 @@ test('stub PNG bytes are unique for the capture key', () => {
   assert.notDeepEqual(a, stubPng('home', 4173, '/', viewport))
   assert.notDeepEqual(a, stubPng('home', 5173, '/login', viewport))
   assert.notDeepEqual(a, stubPng('home', 5173, '/', { width: 390, height: 844 }))
+  assert.notDeepEqual(a, stubPng('home', 5173, '/', 'full-page'))
   assert.equal(a.subarray(0, 8).toString('hex'), '89504e470d0a1a0a')
 })
 
@@ -80,8 +81,12 @@ test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
       name: 'home',
       path: '/login',
       viewport: { width: 390, height: 844 },
+      window: { width: 390, height: 844 },
+      fullPage: false,
       timeoutMs: 30_000,
       wait: 'load',
+      instructions: [],
+      use: undefined,
     },
   )
   assert.deepEqual(resolveCaptureCall(9, undefined, {}), {
@@ -89,9 +94,41 @@ test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
     name: 'root',
     path: '/',
     viewport,
+    window: viewport,
+    fullPage: false,
     timeoutMs: 60_000,
     wait: 'load',
+    instructions: [],
+    use: undefined,
   })
+})
+
+test('resolveCaptureCall accepts full-page and a wait beat', () => {
+  assert.deepEqual(
+    resolveCaptureCall(
+      9,
+      {
+        name: 'after-submit',
+        viewport: 'full-page',
+        wait: { ms: 3000 },
+        instructions: ['Fill in the form', { wait: 'idle' }, 'Click forgot password'],
+        use: { fake: [[{ type: 'done' }]] },
+      },
+      {},
+    ),
+    {
+      port: 9,
+      name: 'after-submit',
+      path: '/',
+      viewport: 'full-page',
+      window: viewport,
+      fullPage: true,
+      timeoutMs: 60_000,
+      wait: { ms: 3000 },
+      instructions: ['Fill in the form', { wait: 'idle' }, 'Click forgot password'],
+      use: { fake: [[{ type: 'done' }]] },
+    },
+  )
 })
 
 test('nameFromPath slugs the path', () => {

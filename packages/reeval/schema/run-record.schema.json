@@ -16,11 +16,32 @@
         "capture": {
           "type": "object",
           "properties": {
+            "fullPage": {
+              "type": "boolean"
+            },
+            "instructions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "path": {
               "type": "string"
             },
             "port": {
               "type": "number"
+            },
+            "use": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string"
+                },
+                "moves": {
+                  "type": "number"
+                }
+              },
+              "required": ["model", "moves"]
             },
             "viewport": {
               "type": "object",
@@ -131,6 +152,28 @@
             }
           },
           "required": ["fileEdits", "reasoningMs", "tools", "webFetches", "webSearches"]
+        },
+        "captureUse": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "moves": {
+              "type": "number"
+            },
+            "usage": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TokenUsage"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": ["model", "moves", "usage"]
         },
         "cell": {
           "type": "string"

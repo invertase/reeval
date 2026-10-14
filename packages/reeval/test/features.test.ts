@@ -1576,6 +1576,81 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'ui/capture-use',
+    tiers: ['fake'],
+    env: 'ui',
+    canary: /expected 'artifacts\/after-submit\.png' to be 'artifacts\/wrong\.png'/,
+    record: ({ run, runDir }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.ok(art, 'files.artifacts names the PNG')
+      assert.match(art.path, /artifacts\/after-submit\.png$/)
+      assert.deepEqual(art.capture?.instructions, ['Fill in the sign-in form and submit'])
+      const bytes = readFileSync(join(runDir, art.path))
+      const viewport = art.capture?.viewport ?? { width: 1280, height: 720 }
+      const port = art.capture?.port ?? 0
+      assert.deepEqual(bytes, stubPng('after-submit', port, '/', viewport))
+    },
+  },
+  {
+    dir: 'ui/capture-full-page',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected 'full-page' to deeply equal \{ width: 1280, height: 720 \}/,
+    record: ({ run, runDir, tier }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.ok(art, 'files.artifacts names the PNG')
+      assert.equal(art.capture?.fullPage, true)
+      assert.deepEqual(art.capture?.viewport, { width: 1280, height: 720 })
+      const bytes = readFileSync(join(runDir, art.path))
+      const port = art.capture?.port ?? 0
+      if (tier === 'fake') {
+        assert.deepEqual(bytes, stubPng('tall', port, '/', 'full-page'))
+      } else {
+        assert.ok(pngSize(bytes).height > 720)
+      }
+    },
+  },
+  {
+    dir: 'ui/capture-use-click',
+    tiers: ['docker'],
+    env: 'ui',
+    canary: /expected 'no' to be 'yes'/,
+    record: ({ run }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.ok(art)
+      assert.equal(art.capture?.use?.model, 'fake')
+      assert.ok((art.capture?.use?.moves ?? 0) >= 1)
+    },
+  },
+  {
+    dir: 'ui/capture-use-wait',
+    tiers: ['docker'],
+    env: 'ui',
+    canary: /expected 'no' to be 'yes'/,
+    record: ({ run }) => {
+      assert.deepEqual(landed(run)?.files.artifacts?.[0]?.capture?.instructions, [
+        'Click go',
+        'Click the mark',
+      ])
+    },
+  },
+  {
+    dir: 'ui/capture-use-timeout',
+    tiers: ['docker'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message: /c\.capture\(\) timed out on "never done"/,
+      },
+    },
+    canary: /expected 'c\.capture\(\) timed out on "never don…' to be 'still loading'/,
+    record: ({ run }) => {
+      assert.equal(landed(run)?.files.artifacts, undefined)
+    },
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',

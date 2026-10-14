@@ -128,10 +128,13 @@ group('hello', () => {
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `c.exec(cmd, { background: true })`
   starts it without waiting and returns `{ kill() }`. `await c.serve(cmd, port?)` is that plus a
-  port (`PORT` / `$PORT` on a bash string). `await c.capture(port | server, { name?, path?, wait? })`
-  screenshots the tunneled port into `artifacts/<name>.png`. The first argument is the
-  container port or a `ServeHandle`; default `path` is `/`, default `name` comes from the path.
-  `wait: 'idle'` holds for Chromium `networkAlmostIdle`; default `'load'` (`window` load).
+  port (`PORT` / `$PORT` on a bash string). `await c.capture(port | server, { name?, path?,
+  wait?, instructions?, viewport? })` screenshots the tunneled port into
+  `artifacts/<name>.png`. The first argument is the container port or a `ServeHandle`;
+  default `path` is `/`, default `name` comes from the path. `wait` is once, before the
+  first model shot or the saved PNG (`'load'`, `'idle'`, or `{ ms }`). `instructions` is
+  a journey of goal strings and `{ wait }` beats — no selectors; the model clicks
+  pixels. `viewport: 'full-page'` is the saved shot (default window + tall PNG).
   The same `timeout` is the budget: if the event never arrives the capture fails and there
   is no PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
   `await c.readFile(path)` the text or `null` (`~/` for home). `await c.sandbox()` starts the
@@ -174,7 +177,8 @@ group('hello', () => {
 or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or
 a function), `sandbox` (the default machine when the resolved env omits one), `environment` (one),
 `runs`, `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `capture`
-(shallow-merged camera defaults: viewport, timeout, browser; viewport replaces the object;
+(shallow-merged camera defaults: viewport, timeout, browser, use; viewport replaces the
+value; `'full-page'` is legal; `use` is the vision model, cascading like `question`;
 port is not an option), `timeout`, `tags`,
 `pin`. `compare` goes only on groups and evals. A named env is a total override of the config
 environment. Options are plain objects, never functions. Unknown keys are errors with a hint

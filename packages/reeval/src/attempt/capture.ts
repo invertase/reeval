@@ -1,19 +1,33 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { providerModel } from '../analysis/model.ts'
 import {
   allocatePort,
   cacheLabel,
   ensureChrome,
+  instructionGoals,
   pageUrl,
   pollHttp,
+  type ResolvedCaptureCall,
   refusedBrowser,
   resolveCaptureCall,
-  screenshotWithChrome,
-  stubPng,
+  withChrome,
 } from '../capture/index.ts'
+import { stubPng } from '../capture/stub.ts'
+import { captureUseSpend, runJourney } from '../capture/use.ts'
+import { getRunContext } from '../engine/runtime.ts'
 import { sha256 } from '../ids.ts'
+import { judgeRoute } from '../judge/index.ts'
 import { cacheDir } from '../root.ts'
-import type { BackgroundHandle, Capture, CaptureCall, CaptureWait, ServeHandle } from '../types.ts'
+import type {
+  BackgroundHandle,
+  Capture,
+  CaptureArtifactMeta,
+  CaptureCall,
+  CaptureUse,
+  ServeHandle,
+} from '../types.ts'
+import { addUsage } from '../usage.ts'
 import { asCheck, requireSandbox } from './checks.ts'
 import type { Attempt } from './state.ts'
 
@@ -24,7 +38,32 @@ export type CaptureArtifact = {
   mediaType: 'image/png'
   sha256: string
   bytes: number
-  capture: { port: number; path: string; viewport: { width: number; height: number } }
+  capture: CaptureArtifactMeta
+}
+
+const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
+
+function defaultCaptureUse(): CaptureUse | undefined {
+  try {
+    const { config } = getRunContext()
+    const analysis = config.analysis.model
+    if (typeof analysis === 'string' && !isEvaluationModel(analysis)) return { model: analysis }
+    const judge = config.judge.model
+    if (typeof judge === 'string' && !isEvaluationModel(judge)) return { model: judge }
+  } catch {
+    return undefined
+  }
+}
+
+function resolveUse(resolved: ResolvedCaptureCall, fakeSandbox: boolean): CaptureUse | undefined {
+  if (resolved.use) return resolved.use
+  if (!resolved.instructions.length) return undefined
+  const fallback = defaultCaptureUse()
+  if (fallback) return fallback
+  if (fakeSandbox) return undefined
+  throw new Error(
+    'c.capture() instructions need capture.use (a vision model or { fake }). Set capture.use.model, or analysis.model to a language model that accepts images.',
+  )
 }
 
 /** Starts `command` without waiting for exit. Teardown kills it if the eval didn't. */
@@ -99,22 +138,31 @@ export async function capturePage(
   } catch {
     throw new Error(`nothing listening on port ${resolved.port}`)
   }
+  const fake = a.spec.sandbox.kind === 'fake'
+  const use = resolveUse(resolved, fake)
   a.captureNames.add(resolved.name)
-  const png =
-    a.spec.sandbox.kind === 'fake'
-      ? stubPng(resolved.name, resolved.port, resolved.path, resolved.viewport)
-      : await shot(
-          a,
-          pageUrl(origin, resolved.path),
-          resolved.viewport,
-          resolved.timeoutMs,
-          resolved.wait,
-        )
+  const started = Date.now()
+  const remaining = () => Math.max(0, resolved.timeoutMs - (Date.now() - started))
+  let moves = 0
+  const png = fake
+    ? stubPng(resolved.name, resolved.port, resolved.path, resolved.viewport)
+    : await shot(a, pageUrl(origin, resolved.path), { ...resolved, use }, remaining, (n) => {
+        moves = n
+      })
   const digest = sha256(png)
   const file = {
     path: `artifacts/${resolved.name}.png`,
     sha256: digest,
     bytes: png.length,
+  }
+  const goals = instructionGoals(resolved.instructions)
+  const capture: CaptureArtifactMeta = {
+    port: resolved.port,
+    path: resolved.path,
+    viewport: resolved.window,
+    ...(resolved.fullPage ? { fullPage: true } : {}),
+    ...(goals.length ? { instructions: goals } : {}),
+    ...(use ? { use: { model: 'model' in use ? use.model : 'fake', moves } } : {}),
   }
   a.record.artifacts = a.record.artifacts ?? []
   a.record.artifacts.push({
@@ -122,7 +170,7 @@ export async function capturePage(
     mediaType: 'image/png',
     sha256: digest,
     bytes: png.length,
-    capture: { port: resolved.port, path: resolved.path, viewport: resolved.viewport },
+    capture,
   })
   a.artifactBlobs.set(resolved.name, png)
   return {
@@ -137,9 +185,9 @@ export async function capturePage(
 async function shot(
   a: Attempt,
   url: string,
-  viewport: { width: number; height: number },
-  timeoutMs: number,
-  wait: CaptureWait,
+  resolved: ResolvedCaptureCall & { use?: CaptureUse },
+  remaining: () => number,
+  onMoves: (n: number) => void,
 ): Promise<Buffer> {
   const cache = cacheDir()
   const bin = await ensureChrome(cache, {
@@ -147,7 +195,36 @@ async function shot(
     signal: a.signal,
     onProgress: (p) => a.report({ kind: 'browser-download', ...p }),
   })
-  return screenshotWithChrome(bin, url, viewport, timeoutMs, wait)
+  return withChrome(bin, resolved.window, remaining(), async (session) => {
+    const result = await runJourney(session, url, {
+      wait: resolved.wait,
+      timeoutMs: remaining(),
+      fullPage: resolved.fullPage,
+      instructions: resolved.instructions,
+      use: resolved.use,
+      remaining,
+      loadModel: async (name) => {
+        const route = judgeRoute(name)
+        return providerModel({
+          name,
+          route: route.kind === 'direct' ? 'direct' : 'gateway',
+        })
+      },
+    })
+    onMoves(result.moves)
+    const spend = captureUseSpend(result)
+    if (spend) {
+      const prev = a.record.captureUse
+      a.record.captureUse = prev
+        ? {
+            model: spend.model,
+            moves: prev.moves + spend.moves,
+            usage: addUsage(prev.usage, spend.usage),
+          }
+        : spend
+    }
+    return result.png
+  })
 }
 
 /** Writes PNG sidecars next to the staging eval JSON so redact never sees the bytes. */
