@@ -1,0 +1,19 @@
+no profile · 3 evals · 12 cells · 12 attempts
+evals/questions-across.eval.ts › environment only                          a/base/docker     control          ungated  ×1
+                                                                           a/skilled/docker  variant skilled  gated    ×1
+                                                                           b/base/docker     control          ungated  ×1
+                                                                           b/skilled/docker  variant skilled  gated    ×1
+                                                                           question: Which handles state more cleanly? · environment · 2 pairs · no language model
+evals/questions-across.eval.ts › harness from compare.across               a/base/docker     control          ungated  ×1
+                                                                           a/skilled/docker  variant skilled  gated    ×1
+                                                                           b/base/docker     control          ungated  ×1
+                                                                           b/skilled/docker  variant skilled  gated    ×1
+                                                                           question: Which agent is clearer? · harness · 2 pairs · no language model
+evals/questions-across.eval.ts › question across overrides compare.across  a/base/docker     control          ungated  ×1
+                                                                           a/skilled/docker  variant skilled  gated    ×1
+                                                                           b/base/docker     control          ungated  ×1
+                                                                           b/skilled/docker  variant skilled  gated    ×1
+                                                                           question: Which follows the house style more closely? · environment · 2 pairs · no language model
+excluded: —
+image docker · 3 evals
+  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)

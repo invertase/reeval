@@ -1,7 +1,7 @@
 // Pairs for compare questions, as pure data: which attempts are judged against which, the order
 // each is shown in, and how the blinded picks map back to names and win rates. A run's staging
 // records and recorded runs both feed it.
-import type { CompareAnswer, CompareCut, FakeVote, PairVote } from '../types.ts'
+import type { CompareAnswer, CompareCut, FakeVote, PairFactor, PairVote } from '../types.ts'
 
 /** One attempt, as a compare question sees it. */
 export type PairAttempt = {
@@ -50,13 +50,27 @@ function combinations<T>(items: T[]): Array<[T, T]> {
 /** Distinct values in first-seen order. */
 const distinct = (values: string[]) => [...new Set(values)]
 
+/** Both pair kinds, in the order `pairsOf` builds them. */
+export const ALL_CUTS: CompareCut[] = ['within', 'across']
+
 /**
- * The pairs to judge. Within a harness, for each run, every two arms; across harnesses, for each
- * arm and run, every two harnesses. Attempts that failed their deterministic checks are left out
- * (they still count in the pass rate), so a pair missing a side isn't judged. The control arm
- * comes first, then arms and harnesses in the order they first appear.
+ * The pair kinds a question asks: `environment` varies the environment and holds the harness
+ * (`within`); `harness` varies the harness and holds the environment (`across`). Unset, both.
  */
-export function pairsOf(attempts: PairAttempt[]): Pair[] {
+export const acrossOf = (across?: PairFactor): CompareCut[] => {
+  if (across === 'environment') return ['within']
+  if (across === 'harness') return ['across']
+  return ALL_CUTS
+}
+
+/**
+ * The pairs to judge. Within a harness, for each run, every two environments; across harnesses,
+ * for each environment and run, every two harnesses. Attempts that failed their deterministic
+ * checks are left out (they still count in the pass rate), so a pair missing a side isn't
+ * judged. The control environment comes first, then environments and harnesses in the order they
+ * first appear. `kinds` keeps one pair kind; omitted or empty, both run.
+ */
+export function pairsOf(attempts: PairAttempt[], kinds?: readonly CompareCut[]): Pair[] {
   const eligible = attempts.filter((a) => a.checksPassed)
   const find = (harness: string, arm: string, run: number) =>
     eligible.find((a) => a.harness === harness && a.arm === arm && a.run === run)
@@ -66,26 +80,48 @@ export function pairsOf(attempts: PairAttempt[]): Pair[] {
     ...attempts.map((a) => a.arm),
   ])
   const runs = [...new Set(attempts.map((a) => a.run))].sort((x, y) => x - y)
+  const want = new Set(kinds?.length ? kinds : ALL_CUTS)
   const pairs: Pair[] = []
-  for (const harness of harnesses) {
-    for (const run of runs) {
-      for (const [x, y] of combinations(arms)) {
-        const a = find(harness, x, run)
-        const b = find(harness, y, run)
-        if (a && b) pairs.push({ cut: 'within', harness, run, a, b })
+  if (want.has('within')) {
+    for (const harness of harnesses) {
+      for (const run of runs) {
+        for (const [x, y] of combinations(arms)) {
+          const a = find(harness, x, run)
+          const b = find(harness, y, run)
+          if (a && b) pairs.push({ cut: 'within', harness, run, a, b })
+        }
       }
     }
   }
-  for (const arm of arms) {
-    for (const run of runs) {
-      for (const [x, y] of combinations(harnesses)) {
-        const a = find(x, arm, run)
-        const b = find(y, arm, run)
-        if (a && b) pairs.push({ cut: 'across', arm, run, a, b })
+  if (want.has('across')) {
+    for (const arm of arms) {
+      for (const run of runs) {
+        for (const [x, y] of combinations(harnesses)) {
+          const a = find(x, arm, run)
+          const b = find(y, arm, run)
+          if (a && b) pairs.push({ cut: 'across', arm, run, a, b })
+        }
       }
     }
   }
   return pairs
+}
+
+/** Optimistic pair sides from planned attempts: every check is assumed to pass. */
+export function plannedSides(
+  attempts: Array<{
+    cell: { harness: string; environment: string; role: string }
+    n: number
+  }>,
+): PairAttempt[] {
+  return attempts.map((a) => ({
+    harness: a.cell.harness,
+    arm: a.cell.environment,
+    run: a.n,
+    diff: '',
+    checksPassed: true,
+    control: a.cell.role === 'control',
+  }))
 }
 
 /** The two sides in the order the model sees them: `a` first, or `b` first when swapped. */
