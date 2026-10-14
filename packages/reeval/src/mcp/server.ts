@@ -27,7 +27,7 @@ export const DEFAULT_LINES = 200
 const VIEW_ROWS: Record<string, string> = {
   lift: 'variant cell per run: its control, both sides’ pass counts, lift points and the 95% interval (lo, hi), within_noise',
   effort:
-    'cell per run: attempts, median tool calls and agent seconds; for a variant, the ratios to its control, p-values and a verdict',
+    'cell per run: attempts, median tool calls, agent seconds and tokens; for a variant, the ratios to its control, p-values and verdicts (tokens omitted when either side reported no usage)',
   factor_effects:
     'factor contrast (environment, harness, model) by evidence tier, with pass-rate and effort verdicts',
   skill_reads:

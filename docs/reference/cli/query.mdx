@@ -61,7 +61,7 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | View | One row per |
 |---|---|
 | `lift` | Variant cell per run: its control, both sides' counts, points, the 95% interval (`lo`, `hi`), `within_noise`, `min_lift` |
-| `effort` | Cell per run: attempts, median and quartiles of tool calls and agent seconds; for a variant, its control's medians, the ratios, the exact Mann–Whitney p-values and a verdict |
+| `effort` | Cell per run: attempts, median and quartiles of tool calls, agent seconds and tokens; for a variant, its control's medians, the ratios, the exact Mann–Whitney p-values and verdicts. `tokens_verdict` is null when either side reported no usage |
 | `factor_effects` | One factor's contrast (`environment`, `harness`, `model`) by evidence tier (`controlled`, `pooled`, `observed`, `not_measured`), with pass-rate and effort verdicts |
 | `skill_reads` | Attempt and skill its environment placed: the transcript line of its first read (a path under `skills/<name>/`, or a `skill` / `load_skill` call), and how many |
 | `flaky_cells` | Cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (`flaky` from 6 counted attempts) and a likely cause (`infra`, `judge`, `agent`) |

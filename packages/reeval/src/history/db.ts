@@ -16,7 +16,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 3
+const DB_VERSION = 4
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -140,7 +140,7 @@ CREATE VIEW flaky_cells AS SELECT * FROM flaky_m;
 -- paths, and noise = 1 when only agent runtime state changed (not a real change).
 CREATE VIEW drift AS SELECT * FROM drift_m;
 
--- Tool calls and agent time per cell, and a variant's against its control in the same run.
+-- Tool calls, agent time and tokens per cell, and a variant's against its control in the same run.
 CREATE VIEW effort AS SELECT * FROM effort_m;
 
 -- What a factor (environment, harness, model) did, by evidence tier: controlled (one run),

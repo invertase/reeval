@@ -1327,10 +1327,15 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'effort',
     area: 'Records and studio',
-    name: 'Effort (tool calls, agent time) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio',
+    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio',
     tests: [
       analysis('the rank test is exact'),
+      analysis('tokens join the rank test when both sides reported usage'),
+      analysis('a side with no usage omits the token metric, not insufficient'),
+      analysis('tokens still verdict among cells that reported usage when another cell did not'),
       analysis('reeval run, summary.md and reeval compare show each variant cell'),
+      analysis('reeval query effort verdicts tokens when usage is present'),
+      analysis('the prompt and rules say missing usage omits tokens'),
       unit('effort under 10s reads in tenths, so a ratio matches its times'),
     ],
   },

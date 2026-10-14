@@ -105,7 +105,7 @@ One control attempt failed, so both skills show +50 pts, and neither is distingu
 
 ## Effort next to lift
 
-Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. From a real run of Cursor and Antigravity at `--runs 2`:
+Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. When both sides reported usage, tokens join that line with the same rank test. From a real run of Cursor and Antigravity at `--runs 2`:
 
 ```text
      ✓ greets in the house style                    4/8 · 100% gated  8 attempts
@@ -117,7 +117,9 @@ Pass rate can't tell a skill that makes the agent four times cheaper from no ski
            effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
 ```
 
-The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure (agent time gets its own verdict in `reeval query effort`). Effort never fails a run.
+The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure (agent time and tokens each get their own verdict in `reeval query effort`). Effort never fails a run, and reeval prices no models.
+
+Attempts that reported no usage (Goose, or any cell without `usage`) drop out of the token sample only. If either side then has no token sample, the token metric is omitted: no token line, and not `insufficient`. A Goose cell in the same study does not blank tokens on Cursor cells. `insufficient` is statistical only (too few attempts).
 
 | Verdict | Printed | When |
 |---|---|---|

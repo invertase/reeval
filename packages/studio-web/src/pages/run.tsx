@@ -321,11 +321,12 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
   )
 }
 
-/** Median tool calls and agent time; for a variant, against its control with the test's verdict. */
+/** Median tool calls, agent time and tokens; for a variant, against its control with the test's verdict. */
 function Effort({ row }: { row: CellRow }) {
   if (!row.effort) return <span className="text-muted-foreground">–</span>
   const vs = row.effortVsControl
   const effect = vs && (vs.verdict === 'fewer' || vs.verdict === 'more')
+  const tokensEffect = vs && (vs.tokensVerdict === 'fewer' || vs.tokensVerdict === 'more')
   return (
     <div className="tabular text-xs">
       <div>{effortSummary(row.effort)}</div>
@@ -338,6 +339,22 @@ function Effort({ row }: { row: CellRow }) {
           title={vs.toolsP !== null ? `exact rank test p = ${vs.toolsP.toFixed(3)}` : undefined}
         >
           tools {formatRatio(vs.toolsRatio)} vs control · {VERDICT_TEXT[vs.verdict]('tool calls')}
+        </div>
+      ) : null}
+      {vs?.tokensVerdict ? (
+        <div
+          className={cn(
+            'text-[11px]',
+            tokensEffect
+              ? vs.tokensVerdict === 'fewer'
+                ? 'text-pass'
+                : 'text-fail'
+              : 'text-muted-foreground',
+          )}
+          title={vs.tokensP !== null ? `exact rank test p = ${vs.tokensP.toFixed(3)}` : undefined}
+        >
+          tokens {formatRatio(vs.tokensRatio)} vs control ·{' '}
+          {VERDICT_TEXT[vs.tokensVerdict]('tokens')}
         </div>
       ) : null}
     </div>

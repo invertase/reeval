@@ -284,8 +284,11 @@ group(
   difference is `not comparable: the eval changed`, not an effect, and mixed counts such as
   `6/10 vs 8/9` are not a results line. The summary also prints
   **effort** under each variant (median tool
-  calls and agent time vs the control's), which often shows a skill's effect before pass rates
-  do: `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
+  calls, agent time and, when both sides reported usage, tokens vs the control's), which often
+  shows a skill's effect before pass rates do:
+  `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
+  A cell without usage (Goose) is left out of the token sample only; if either side then
+  has none, the token metric is omitted, not `insufficient`.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
 - With `runs > 1`, a cell passes only if every counted attempt passes, unless
