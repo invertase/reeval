@@ -1645,7 +1645,7 @@ export const features: Feature[] = [
         message: /c\.capture\(\) timed out on "never done"/,
       },
     },
-    canary: /expected 'c\.capture\(\) timed out on "never don…' to be 'still loading'/,
+    canary: /expected 'c\.capture\(\) timed out on "never done"' to be 'still loading'/,
     record: ({ run }) => {
       assert.equal(landed(run)?.files.artifacts, undefined)
     },
