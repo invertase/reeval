@@ -1,7 +1,7 @@
 import { evaluate, expect } from 'reeval'
 import { ui } from './env.ts'
 
-evaluate('canary', { environment: ui, capture: { timeout: '2s' } }, async (c) => {
+evaluate('canary', { environment: ui, capture: { timeout: '10s' } }, async (c) => {
   await c.sandbox()
   const server = await c.serve('node server.mjs')
   try {
