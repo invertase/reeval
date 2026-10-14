@@ -208,6 +208,8 @@ export type EvalEntry = {
   /**
    * The compare's questions, answered after its attempts by pairwise votes, one per question;
    * unset without any. They annotate: `outcome` and `passRate` never depend on them.
+   * `reeval analyze` includes each answer in the digest (rates by cut, votes, ties,
+   * a failed call).
    */
   answers?: CompareAnswer[]
 }
