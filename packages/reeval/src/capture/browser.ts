@@ -11,8 +11,77 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Viewport } from '../types.ts'
+import type { CaptureWait, Viewport } from '../types.ts'
 import { unzip } from './zip.ts'
+
+export type CdpClient = {
+  on(method: string, fn: (p: unknown) => void): void
+  send(method: string, params?: Record<string, unknown>): Promise<unknown>
+}
+
+/** The CDP event `'idle'` waits for; `'load'` is `Page.loadEventFired`. */
+export function captureWaitLabel(wait: CaptureWait): 'load' | 'networkAlmostIdle' {
+  return wait === 'idle' ? 'networkAlmostIdle' : 'load'
+}
+
+export function captureWaitTimeout(wait: CaptureWait): Error {
+  return new Error(`c.capture() timed out waiting for ${captureWaitLabel(wait)}`)
+}
+
+function lifecycleParams(msg: unknown): { name?: string; loaderId?: string } {
+  const body = msg as {
+    params?: { name?: string; loaderId?: string }
+    name?: string
+    loaderId?: string
+  }
+  return body.params ?? body
+}
+
+/**
+ * Arms after `Page.enable` so about:blank's events cannot resolve the wait.
+ * Call `arm` immediately before `Page.navigate`.
+ */
+export function listenForCaptureWait(
+  cdp: Pick<CdpClient, 'on'>,
+  wait: CaptureWait,
+): {
+  arm(): void
+  ready(nav: { loaderId?: string } | undefined, timeoutMs: number): Promise<void>
+} {
+  const method = wait === 'idle' ? 'Page.lifecycleEvent' : 'Page.loadEventFired'
+  const pending: unknown[] = []
+  let deliver: ((msg: unknown) => void) | undefined
+  let started = false
+  cdp.on(method, (msg) => {
+    if (!started) return
+    if (deliver) deliver(msg)
+    else pending.push(msg)
+  })
+  const matches = (msg: unknown, loaderId?: string) => {
+    if (wait === 'load') return true
+    const params = lifecycleParams(msg)
+    if (params.name !== 'networkAlmostIdle') return false
+    return !loaderId || params.loaderId === loaderId
+  }
+  return {
+    arm() {
+      started = true
+    },
+    ready(nav, timeoutMs) {
+      return new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(captureWaitTimeout(wait)), timeoutMs)
+        const finish = () => {
+          clearTimeout(timer)
+          resolve()
+        }
+        deliver = (msg) => {
+          if (matches(msg, nav?.loaderId)) finish()
+        }
+        if (pending.some((msg) => matches(msg, nav?.loaderId))) finish()
+      })
+    },
+  }
+}
 
 /** Pinned Chrome for Testing `chrome-headless-shell` build. */
 export const CHROME_VERSION = '140.0.7339.185'
@@ -316,6 +385,7 @@ export async function screenshotWithChrome(
   url: string,
   viewport: Viewport,
   timeoutMs: number,
+  wait: CaptureWait = 'load',
 ): Promise<Buffer> {
   const userData = mkdtempSync(join(tmpdir(), `reeval-chrome-${process.pid}-`))
   const child = spawn(
@@ -339,22 +409,22 @@ export async function screenshotWithChrome(
     const cdp = await cdpConnect(await pageDebuggerUrl(port, timeoutMs), timeoutMs)
     try {
       await cdp.send('Page.enable')
+      await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true })
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: viewport.width,
         height: viewport.height,
         deviceScaleFactor: 1,
         mobile: false,
       })
-      const loaded = new Promise<void>((resolve) => {
-        cdp.on('Page.loadEventFired', () => resolve())
-      })
-      await cdp.send('Page.navigate', { url })
-      await Promise.race([
-        loaded,
-        new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error('page load timed out')), timeoutMs),
-        ),
-      ])
+      const page = listenForCaptureWait(cdp, wait)
+      page.arm()
+      const nav = (await cdp.send('Page.navigate', { url })) as
+        | { loaderId?: string; errorText?: string }
+        | undefined
+      if (nav?.errorText) {
+        throw new Error(`c.capture() navigation failed: ${nav.errorText}`)
+      }
+      await page.ready(nav, timeoutMs)
       const shot = (await cdp.send('Page.captureScreenshot', { format: 'png' })) as {
         data?: string
       }

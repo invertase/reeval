@@ -55,6 +55,12 @@ export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 export type Viewport = { width: number; height: number }
 
 /**
+ * When `c.capture()` takes the PNG. `'load'` is `window` load (`Page.loadEventFired`).
+ * `'idle'` is Chromium `Page.lifecycleEvent` `networkAlmostIdle`.
+ */
+export type CaptureWait = 'load' | 'idle'
+
+/**
  * Camera defaults for `c.capture()`. Cascades config → profile defaults → group → eval,
  * shallow-merged. `viewport` on a level replaces the whole object. `port` is not an option:
  * pass it as the first argument to `c.capture`.
@@ -97,6 +103,8 @@ export type CaptureCall = {
   path?: string
   viewport?: Viewport
   timeout?: Duration
+  /** When to shoot. Default `'load'`. `'idle'` waits for Chromium `networkAlmostIdle`. */
+  wait?: CaptureWait
 }
 
 export type FileChange = { path: string; status: 'added' | 'modified' | 'deleted' }

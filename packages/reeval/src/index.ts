@@ -18,6 +18,7 @@ export type {
   Capture,
   CaptureCall,
   CaptureOptions,
+  CaptureWait,
   Cell,
   CellRole,
   CompareAnswer,

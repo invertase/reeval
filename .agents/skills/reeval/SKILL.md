@@ -128,10 +128,12 @@ group('hello', () => {
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `c.exec(cmd, { background: true })`
   starts it without waiting and returns `{ kill() }`. `await c.serve(cmd, port?)` is that plus a
-  port (`PORT` / `$PORT` on a bash string). `await c.capture(port | server, { name?, path? })`
+  port (`PORT` / `$PORT` on a bash string). `await c.capture(port | server, { name?, path?, wait? })`
   screenshots the tunneled port into `artifacts/<name>.png`. The first argument is the
   container port or a `ServeHandle`; default `path` is `/`, default `name` comes from the path.
-  `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
+  `wait: 'idle'` holds for Chromium `networkAlmostIdle`; default `'load'` (`window` load).
+  The same `timeout` is the budget: if the event never arrives the capture fails and there
+  is no PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
   `await c.readFile(path)` the text or `null` (`~/` for home). `await c.sandbox()` starts the
   sandbox without a turn, to check what the environment set up. `c.attempt.cell.role` is
   `'control'` or `'variant'`.

@@ -3,14 +3,24 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseDuration } from '../duration.ts'
 import { cacheDir } from '../root.ts'
-import type { CaptureCall, CaptureOptions, Duration, ServeHandle, Viewport } from '../types.ts'
+import type {
+  CaptureCall,
+  CaptureOptions,
+  CaptureWait,
+  Duration,
+  ServeHandle,
+  Viewport,
+} from '../types.ts'
 
 export type { DownloadProgress, DownloadReporter } from './browser.ts'
 export {
   CHROME_NAME,
   CHROME_VERSION,
+  captureWaitLabel,
+  captureWaitTimeout,
   chromeBinaryPath,
   ensureChrome,
+  listenForCaptureWait,
   pickPageDebuggerUrl,
   removeChromeProfile,
   screenshotWithChrome,
@@ -25,6 +35,15 @@ export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 720 }
 export const DEFAULT_TIMEOUT: Duration = '60s'
 
 export const CAPTURE_NAME = /^[a-z0-9_-]+$/
+
+export const CAPTURE_WAITS = ['load', 'idle'] as const
+
+/** `'load'` when the call omits `wait`. Anything else must be `'load'` or `'idle'`. */
+export function resolveCaptureWait(wait: CaptureCall['wait']): CaptureWait {
+  if (wait === undefined) return 'load'
+  if ((CAPTURE_WAITS as readonly string[]).includes(wait)) return wait
+  throw new Error(`c.capture() wait is 'load' or 'idle' (got ${JSON.stringify(wait)})`)
+}
 
 /** `~/.cache/reeval` when that's the resolved dir; otherwise the absolute path. */
 export function cacheLabel(dir = cacheDir()): string {
@@ -85,7 +104,14 @@ export function resolveCaptureCall(
   target: number | ServeHandle,
   call: CaptureCall | undefined,
   cascade: CaptureOptions,
-): { port: number; name: string; path: string; viewport: Viewport; timeoutMs: number } {
+): {
+  port: number
+  name: string
+  path: string
+  viewport: Viewport
+  timeoutMs: number
+  wait: CaptureWait
+} {
   if (call && Object.hasOwn(call, 'port')) {
     throw new Error('c.capture() takes the port as the first argument, not in the options')
   }
@@ -99,6 +125,7 @@ export function resolveCaptureCall(
     path,
     viewport: call?.viewport ?? cascade.viewport ?? DEFAULT_VIEWPORT,
     timeoutMs: parseDuration(call?.timeout ?? cascade.timeout ?? DEFAULT_TIMEOUT),
+    wait: resolveCaptureWait(call?.wait),
   }
 }
 
