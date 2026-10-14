@@ -1,5 +1,5 @@
 import type { JudgeRetry } from '../history/types.ts'
-import type { FakeJudgeModel, JSONValue, JudgeModel, JudgeOptions, Verdict } from '../types.ts'
+import type { FakeJudgeModel, JudgeModel, JudgeOptions, JudgeState, Verdict } from '../types.ts'
 import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
 
 /** The judge the docs recommend, pinned so a model update never silently moves scores. */
@@ -16,7 +16,7 @@ export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string }> = {
 
 export type JudgeRoute = { kind: 'direct'; provider: string; pkg: string } | { kind: 'gateway' }
 
-export type JudgeState = { [key: string]: JSONValue }
+export type { JudgeState } from '../types.ts'
 
 export const isFakeJudge = (m: unknown): m is FakeJudgeModel =>
   typeof m === 'object' && m !== null && (m as FakeJudgeModel).kind === 'fake-judge'

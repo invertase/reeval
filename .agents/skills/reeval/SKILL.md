@@ -144,14 +144,16 @@ group('hello', () => {
   `await c.readFile(path)` the text or `null` (`~/` for home). `await c.sandbox()` starts the
   sandbox without a turn, to check what the environment set up. `c.attempt.cell.role` is
   `'control'` or `'variant'`.
-- `await c.judge(question, { threshold?, model?, on?, include?, files? })`: the judge sees the
+- `await c.judge(question, { threshold?, model?, on?, include?, files?, artifacts? })`: the judge sees the
   prompt, the final message, the changed files and the diff, not what the agent ran. The diff
   leaves out dependencies, build output (`dist/`, `.next/`, top-level `build/` and `out/`),
   lockfiles, `*.map`, `*.tsbuildinfo` and minified files. `include: ['src/', '!**/*.test.ts']`
   (gitignore-style, last match wins) narrows the diff; `files: ['README.md']` shows files whole,
-  changed or not. Both work as `judge` defaults in the config, a group or an eval. Prefer
-  deterministic checks for what can be checked; use the judge for quality, with plain yes/no
-  questions that don't name one specific way of doing it.
+  changed or not. Both work as `judge` defaults in the config, a group or an eval. `artifacts`
+  is call-only: a `c.capture()` handle or its name, sent as a file part. Ask about facts in the
+  picture, not whether it "looks great". A provider that cannot take files fails that call.
+  Prefer deterministic checks for what can be checked; use the judge for quality, with plain
+  yes/no questions that don't name one specific way of doing it.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
   runs a build otherwise fills the judge's diff with its output. Jev takes 32k tokens of state and
   question. A judge call's provider error keeps the provider's wording and adds the input's

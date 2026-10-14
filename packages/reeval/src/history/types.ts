@@ -8,6 +8,7 @@ import type {
   EnvironmentRecord,
   EvalCompareMeta,
   FileChange,
+  JudgeArtifactRef,
   Outcome,
   PhaseTimings,
   SandboxWarning,
@@ -98,6 +99,8 @@ export type JudgementRecord = {
   key: string
   /** Transient provider errors retried before this verdict, with the backoff before each retry. */
   retries?: JudgeRetry[]
+  /** Captures this call sent the judge as file parts, when any. */
+  artifacts?: JudgeArtifactRef[]
 }
 
 export type AttemptFiles = {

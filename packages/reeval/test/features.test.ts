@@ -274,7 +274,11 @@ const judgeInputOf = (run: RunRecord, runDir: string, name = 'lands') => {
   const path = run.evals.find((e) => e.name === name)?.attempts[0]?.files.judgeInput?.path
   assert.ok(path, `${name} recorded its judge input`)
   const [input] = JSON.parse(readFileSync(join(runDir, path), 'utf8'))
-  return input as { state: Record<string, unknown>; dropped?: string[] }
+  return input as {
+    state: Record<string, unknown>
+    dropped?: string[]
+    artifacts?: Array<{ name: string; path: string; mediaType: string; bytes: number }>
+  }
 }
 
 export const features: Feature[] = [
@@ -1452,6 +1456,22 @@ export const features: Feature[] = [
       const { state } = judgeInputOf(run, runDir)
       assert.deepEqual(Object.keys(state.contents as object), ['README.md', 'src/app.ts'])
       assert.doesNotMatch(String(state.diff), /export const app/, 'shown in full, not in the diff')
+    },
+  },
+  {
+    dir: 'judge/artifacts',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected 'image\/png' to be 'image\/jpeg'/,
+    record: ({ run, runDir }) => {
+      const input = judgeInputOf(run, runDir)
+      assert.equal(input.artifacts?.[0]?.name, 'form')
+      assert.equal(input.artifacts?.[0]?.mediaType, 'image/png')
+      assert.equal(input.artifacts?.[0]?.path, 'artifacts/form.png')
+      assert.ok(input.artifacts?.[0]?.bytes, 'ref names the PNG size')
+      assert.doesNotMatch(JSON.stringify(input.state), /"type":"file"/)
+      const judged = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.judgements[0]
+      assert.equal(judged?.artifacts?.[0]?.name, 'form')
     },
   },
   {

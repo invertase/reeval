@@ -1,5 +1,5 @@
 // `reeval/judge`: judge helpers and types. Models are `'provider/model'` strings or AI SDK
-// evaluation model objects, e.g. `openai.evaluationModel('…')`.
+// decision model objects, e.g. `openai.decisionModel('…')`.
 import type { FakeAnalysisModel, FakeJudgeModel } from './types.ts'
 
 /**
@@ -43,9 +43,11 @@ export type {
   FakeJudgeModel,
   FakeNoteInput,
   FakeVote,
+  JudgeArtifactRef,
   JudgeCallOptions,
   JudgeFailure,
   JudgeModel,
   JudgeOptions,
+  JudgeState,
   Verdict,
 } from './types.ts'

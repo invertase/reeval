@@ -158,7 +158,8 @@ test("the packed package installs with Yarn Berry's Plug'n'Play and runs reeval"
   )
   await writeFile(
     join(app, '.yarnrc.yml'),
-    'nodeLinker: pnp\nenableGlobalCache: false\nenableTelemetry: false\n',
+    // Yarn 4.18's default 1-day age gate would refuse a pin published today.
+    'nodeLinker: pnp\nenableGlobalCache: false\nenableTelemetry: false\nnpmMinimalAgeGate: 0\n',
   )
   const added = berry(app, ['add', `${pkg}@file:../${tarball}`])
   assert.equal(added.status, 0, added.stdout + added.stderr)

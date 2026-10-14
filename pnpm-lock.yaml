@@ -153,12 +153,15 @@ importers:
       '@ai-sdk/harness-acp':
         specifier: 1.0.87
         version: 1.0.87(zod@4.6.5)
+      '@ai-sdk/provider':
+        specifier: 4.0.27
+        version: 4.0.27
       '@ai-sdk/provider-utils':
-        specifier: 5.0.58
-        version: 5.0.58(zod@4.6.5)
+        specifier: 5.0.59
+        version: 5.0.59(zod@4.6.5)
       '@ai-sdk/typesafe-ai':
-        specifier: 3.0.17
-        version: 3.0.17(zod@4.6.5)
+        specifier: 3.0.18
+        version: 3.0.18(zod@4.6.5)
       '@hono/node-server':
         specifier: 2.1.3
         version: 2.1.3(hono@4.13.13)
@@ -172,8 +175,8 @@ importers:
         specifier: 5.0.2
         version: 5.0.2
       ai:
-        specifier: 7.0.137
-        version: 7.0.137(zod@4.6.5)
+        specifier: 7.0.140
+        version: 7.0.140(zod@4.6.5)
       commander:
         specifier: 15.0.0
         version: 15.0.0
@@ -340,6 +343,12 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/gateway@4.0.113':
+    resolution: {integrity: sha512-fYov5+sH1A20/eN1PaL5z8bZ9RUq0CcL9yAsAhCHz/qUCKliDOg9HXjNYzOUlH6o21lIrp/aKQc8QLGkEEZGlQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/google@4.0.93':
     resolution: {integrity: sha512-hubOUxbG2W7oD3acdCxxnrQ84NlnLqfzcHe9uWMmwkglHxq/rwsbjloPhvebeQlcQ2G0gaX+akDF1Ddm/fNAnQ==}
     engines: {node: '>=22'}
@@ -374,12 +383,22 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.59':
+    resolution: {integrity: sha512-eaXBTkguxBFzS+KvxGRsbdkX9A7+R1g/C4jWx9mup0oSs3Cx5Mb427/byGpD2XL8SnMYT9O8LmXBmrgo+N3TJw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.26':
     resolution: {integrity: sha512-BZ443uBEq6HuMA+Z4b7Hpm65GpZSo7pWqnYqpf/7tAO3C48JbtvAhOE2JnODFj+jodsZzfRHkAyQb64xuD2tZQ==}
     engines: {node: '>=22'}
 
-  '@ai-sdk/typesafe-ai@3.0.17':
-    resolution: {integrity: sha512-kmAZXRB1bAwdqBpCbCXGAVe3QjNyNnNv5F2dvtgz3ZTOK/7wf9qOYTC8LTnn25AHnNQfJNzwAjGQ5XhfHMHiGw==}
+  '@ai-sdk/provider@4.0.27':
+    resolution: {integrity: sha512-TtWwm6SxFiPomlMIbTQa+yhJte+w4/oCsW+wJrJzMC3MqHpAY9e5dJF1Y4HxyKt3W2Csac0KiI76Ckio11TFYw==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/typesafe-ai@3.0.18':
+    resolution: {integrity: sha512-pUBBtnLc8T6im7KKAHZmGaMZK6jbdLYl8LnPUDJN6XRoocZ3Sl5a7Zx+gqyCCKIxeU1m2vSYPLWyoiCqcbDD+w==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -1922,6 +1941,12 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  ai@7.0.140:
+    resolution: {integrity: sha512-GHWqpUcY7EsRHc7jC99SqzpgabExb9w7anxDYa5N79AIVsGavIZFxZKhVQ/SORkuXFkPO4FG8cCSweaGutvwSw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   ansi-regex@6.3.0:
     resolution: {integrity: sha512-WpDfL7NO6j7tH88IDBNVdUJxDh9nmCteAVW9dsep846XdwF4naCBK+/tGLX3KJgcpgMRXCFlTM2hKGoK9FsdrQ==}
     engines: {node: '>=12'}
@@ -2776,6 +2801,13 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.6.5
 
+  '@ai-sdk/gateway@4.0.113(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.27
+      '@ai-sdk/provider-utils': 5.0.59(zod@4.6.5)
+      '@vercel/oidc': 3.2.0
+      zod: 4.6.5
+
   '@ai-sdk/google@4.0.93(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.26
@@ -2821,14 +2853,27 @@ snapshots:
       undici: 7.29.1
       zod: 4.6.5
 
+  '@ai-sdk/provider-utils@5.0.59(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.27
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.1
+      undici: 7.29.1
+      zod: 4.6.5
+
   '@ai-sdk/provider@4.0.26':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/typesafe-ai@3.0.17(zod@4.6.5)':
+  '@ai-sdk/provider@4.0.27':
     dependencies:
-      '@ai-sdk/provider': 4.0.26
-      '@ai-sdk/provider-utils': 5.0.58(zod@4.6.5)
+      json-schema: 0.4.0
+
+  '@ai-sdk/typesafe-ai@3.0.18(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.27
+      '@ai-sdk/provider-utils': 5.0.59(zod@4.6.5)
       zod: 4.6.5
 
   '@bcoe/v8-coverage@1.0.2': {}
@@ -4113,6 +4158,13 @@ snapshots:
       '@ai-sdk/gateway': 4.0.110(zod@4.6.5)
       '@ai-sdk/provider': 4.0.26
       '@ai-sdk/provider-utils': 5.0.58(zod@4.6.5)
+      zod: 4.6.5
+
+  ai@7.0.140(zod@4.6.5):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.113(zod@4.6.5)
+      '@ai-sdk/provider': 4.0.27
+      '@ai-sdk/provider-utils': 5.0.59(zod@4.6.5)
       zod: 4.6.5
 
   ansi-regex@6.3.0: {}

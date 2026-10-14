@@ -41,7 +41,7 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session.
 </Property>
 
 <Property name="judge" type="(question: string, options?: JudgeCallOptions) => Promise<Verdict>">
-  Asks the judge a yes/no question about the latest turn: its task, final message, changed files and diff. `options` takes `model`, `threshold`, `providerOptions` and `maxConcurrent` for this call, and `on`: a `Turn` or any JSON value to grade instead. Without a turn it throws `c.judge() has no turn to grade: call c.send() first`. See [Judges](/reference/judges).
+  Asks the judge a yes/no question about the latest turn: its task, final message, changed files and diff. `options` takes `model`, `threshold`, `providerOptions` and `maxConcurrent` for this call, `on` (a `Turn` or any JSON value to grade instead), and `artifacts` (capture handles or names, sent as file parts). Without a turn it throws `c.judge() has no turn to grade: call c.send() first`. See [Judges](/reference/judges).
 </Property>
 
 <Property name="sandbox" type="() => Promise<{ exec, readFile }>">
@@ -135,6 +135,7 @@ A fake run printing `c.attempt` shows:
 | `question` | `string` | The question asked |
 | `model` | `string` | The model setting, as written |
 | `resolvedModel` | `string` | The model that answered, when the provider says |
+| `artifacts` | `JudgeArtifactRef[]` | Captures this call sent as file parts, when any |
 
 A `Verdict` doesn't fail the eval on its own: pass it to `expect(…).toPass()`.
 

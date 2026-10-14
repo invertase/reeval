@@ -23,8 +23,8 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
 
 `judge` is accepted in `reeval.config.ts`, profile `judge` and `defaults.judge`, groups, evals, and as the second argument of `c.judge()`. It merges field by field, the most specific level winning: the call, then the eval, then its groups, then the profile, then the config.
 
-<Property name="model" type="string | FakeJudgeModel | EvaluationModel" optional>
-  `"provider/model"`, such as `typesafe-ai/jev-1.13.0` (reeval's recommended judge) or `google/gemini-3.8-flash`. `fakeJudge()` for tests. Groups, evals and calls also accept an AI SDK evaluation model object. There's no default: `c.judge()` without a model fails.
+<Property name="model" type="string | FakeJudgeModel | DecisionModel" optional>
+  `"provider/model"`, such as `typesafe-ai/jev-1.13.0` (reeval's recommended judge) or `google/gemini-3.8-flash`. `fakeJudge()` for tests. Groups, evals and calls also accept an AI SDK decision model object. There's no default: `c.judge()` without a model fails.
 </Property>
 
 <Property name="threshold" type="number" optional>
@@ -47,7 +47,11 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   Workspace files the judge sees whole, as they are when you call `c.judge()`, whether or not the agent changed them. They go in the state's `contents`, keyed by path, `null` for a missing file. A path in both `files` and the diff appears once, in `contents`. Works with `include`.
 </Property>
 
-`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff).
+`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
+
+<Property name="artifacts" type="Array<Capture | string>" optional>
+  Captures this call sends the judge. A handle from `c.capture()` or that capture's `name`. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
+</Property>
 
 ## What the judge sees
 
@@ -58,7 +62,7 @@ const verdict = await c.judge('Does sign-in handle a wrong password?', {
 })
 ```
 
-The judge gets a JSON state and your question. The score is the model's probability that the answer is yes.
+The judge gets a JSON state and your question. With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
 
 | State field | What it holds |
 |---|---|
@@ -67,6 +71,7 @@ The judge gets a JSON state and your question. The score is the model's probabil
 | `files` | The changed files, `status path`, filtered by `include`; dependency and build directories as one line each |
 | `diff` | The diff since the eval started, filtered by `include`, without the paths in `files` |
 | `contents` | With `files`: each file whole, keyed by path |
+| file parts | With `artifacts`: each capture as `{ type: 'file', mediaType: 'image/png', data }` |
 
 The diff leaves out what nobody wrote by hand, each file or directory replaced by a `[reeval: dropped …]` marker. To show one anyway, name it in `files`.
 
@@ -178,6 +183,8 @@ analysis: {
 | An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
 | A bad `include` or `files` | `judge.include must be a list of non-empty strings (got "src/") in group("g")`; on a call, `c.judge() include must be a list of non-empty strings (got "src/")` |
+| A bad `artifacts` | `c.judge() artifacts must be a list of capture handles or names (got "form")` |
+| An unknown capture name | `c.judge() artifacts names a capture this attempt doesn't have: "form"` |
 | A score function in the config | `config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.` |
 | The provider refuses the input | The provider's message, then `The judge's input was ~29k tokens (estimated): diff 28k, of which …`, as a failed call |
 | No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.` |

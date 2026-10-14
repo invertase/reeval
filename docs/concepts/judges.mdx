@@ -114,7 +114,7 @@ The judge sees four things: the latest turn's prompt as `task`, the agent's fina
 | Changed files, dependency and build folders collapsed | The transcript: commands it ran, tool calls, web fetches |
 | The diff since the eval started, without build output, lockfiles, source maps and minified files | Your checks and their output |
 
-So the judge can't tell whether the agent ran the tests; check that with `c.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message.
+So the judge can't tell whether the agent ran the tests; check that with `c.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message. `{ artifacts: [image] }` adds a `c.capture()` PNG as a file part; ask about facts in the picture, not whether it "looks great".
 
 ## Narrow what the judge sees
 

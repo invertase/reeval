@@ -203,18 +203,46 @@ export type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue }
 
+/** JSON fields the judge sees for the turn: task, output, files, diff, optional contents. */
+export type JudgeJsonState = { [key: string]: JSONValue }
+
+/** A capture sent to `experimental_decide` as a file part. */
+export type JudgeFilePart = {
+  type: 'file'
+  mediaType: string
+  data: Uint8Array
+}
+
+/**
+ * What `experimental_decide` (and a fake judge) receive: a JSON object when the call has no
+ * captures, or an ordered list of one JSON part plus each capture's file part.
+ */
+export type JudgeState =
+  | JudgeJsonState
+  | Array<{ type: 'json'; value: JudgeJsonState } | JudgeFilePart>
+
+/** A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`. */
+export type JudgeArtifactRef = {
+  name: string
+  /** `artifacts/<name>.png` under the attempt directory. */
+  path: string
+  sha256: string
+  bytes: number
+  mediaType: 'image/png'
+}
+
 /**
  * A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a
  * function of the state the judge would see works per group, eval or call, not in the config.
  */
 export type FakeJudgeModel = {
   kind: 'fake-judge'
-  score: number | ((state: { [key: string]: JSONValue }) => number)
+  score: number | ((state: JudgeState) => number)
 }
 
 /**
  * `'provider/model'` (e.g. `'typesafe-ai/jev-1.13.0'`, `'google/gemini-3.8-flash'`), an AI SDK
- * evaluation model object (per group, eval or call only), or a fake judge.
+ * decision model object (per group, eval or call only), or a fake judge.
  */
 export type JudgeModel = string | FakeJudgeModel | { readonly specificationVersion: string }
 
@@ -238,6 +266,11 @@ export type JudgeOptions = {
 export type JudgeCallOptions = JudgeOptions & {
   /** What to grade instead of the latest turn: another turn, or a value used as the output. */
   on?: Turn | JSONValue
+  /**
+   * Captures this call sends the judge as file parts. A `c.capture()` handle or its name.
+   * Call-only: the bytes are on this attempt. The provider that cannot take files fails the call.
+   */
+  artifacts?: Array<Capture | string>
 }
 
 export type Verdict = {
@@ -249,6 +282,8 @@ export type Verdict = {
   model: string
   /** The model id the provider says served the call, when it reports one. */
   resolvedModel?: string
+  /** Captures this call sent the judge as file parts, when any. */
+  artifacts?: JudgeArtifactRef[]
 }
 
 /**
@@ -264,7 +299,10 @@ export type JudgeFailure = Omit<Verdict, 'verdict' | 'score' | 'resolvedModel'> 
 export type AttemptContext = {
   /** Sends the next turn of this eval's agent session, starting the sandbox on first use. */
   send(prompt: string): Promise<Turn>
-  /** Asks the judge a yes/no question about the latest turn (or `options.on`). */
+  /**
+   * Asks the judge a yes/no question about the latest turn (or `options.on`).
+   * `options.artifacts` is a list of `c.capture()` handles or names.
+   */
   judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   exec(command: string): Promise<ExecResult>
   exec(command: string, options: { background: true }): Promise<BackgroundHandle>
@@ -1356,6 +1394,8 @@ export type JudgeInput = {
   question: string
   model: string
   state: { [key: string]: JSONValue }
+  /** Captures sent as file parts; refs only, never the PNG bytes. */
+  artifacts?: JudgeArtifactRef[]
   /** What the state leaves out and why, e.g. `dist/ (3 files): build output`. */
   dropped?: string[]
   error?: string

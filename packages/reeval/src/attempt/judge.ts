@@ -1,6 +1,13 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { getRunContext } from '../engine/runtime.ts'
-import { badJudgeList, type JudgeState, judgeModelName, runJudge } from '../judge/index.ts'
+import {
+  artifactRefsOf,
+  badJudgeArtifacts,
+  decideState,
+  filePartsOf,
+  resolveJudgeArtifacts,
+} from '../judge/artifacts.ts'
+import { badJudgeList, judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { isApiError, type RetriedError } from '../judge/retry.ts'
 import { withInputSize } from '../judge/size.ts'
@@ -11,6 +18,7 @@ import type {
   JSONValue,
   JudgeFailure,
   JudgeInput,
+  JudgeJsonState,
   JudgeOptions,
   Turn,
 } from '../types.ts'
@@ -34,13 +42,13 @@ async function judgeState(
   output: JSONValue,
   { include, files }: Pick<JudgeOptions, 'include' | 'files'>,
   readFile: (path: string) => Promise<string | null>,
-): Promise<{ state: JudgeState; dropped: string[] }> {
+): Promise<{ state: JudgeJsonState; dropped: string[] }> {
   const inFull = files?.length ? files : undefined
   const shown = judgeDiff(turn.diff, {
     ...(include ? { include } : {}),
     ...(inFull ? { inFull: new Set(inFull.map(workspacePath)) } : {}),
   })
-  const state: JudgeState = { task: turn.prompt, output, files: shown.files, diff: shown.patch }
+  const state: JudgeJsonState = { task: turn.prompt, output, files: shown.files, diff: shown.patch }
   if (inFull) {
     const contents: { [path: string]: string | null } = {}
     for (const path of inFull) contents[workspacePath(path)] = await readFile(path)
@@ -75,6 +83,8 @@ export function judgeCaller(
     const bad = badJudgeList(call)
     if (bad)
       throw new Error(`c.judge() ${bad.key} must be a list of non-empty strings (got ${bad.got})`)
+    const badArts = badJudgeArtifacts(call.artifacts)
+    if (badArts) throw new Error(`c.judge() artifacts ${badArts}`)
     const subject = isTurn(on) ? on : a.turns.at(-1)
     if (!subject) throw new Error('c.judge() has no turn to grade: call c.send() first')
     const options = { ...a.spec.judge, ...call }
@@ -86,11 +96,15 @@ export function judgeCaller(
     const { include, files, maxConcurrent, ...judgeOptions } = options
     const output = on === undefined || isTurn(on) ? subject.text : on
     const { state, dropped } = await judgeState(subject, output, { include, files }, readFile)
+    const resolved = resolveJudgeArtifacts(call.artifacts, a.artifactBlobs)
+    const refs = artifactRefsOf(resolved)
+    const decide = decideState(state, filePartsOf(resolved))
     const name = judgeModelName(model)
     const input: JudgeInput = {
       question,
       model: name,
       state,
+      ...(refs.length ? { artifacts: refs } : {}),
       ...(dropped.length ? { dropped } : {}),
     }
     a.record.judgeInputs?.push(input)
@@ -124,6 +138,7 @@ export function judgeCaller(
         question,
         model: name,
         error: message,
+        ...(refs.length ? { artifacts: refs } : {}),
       }
     }
 
@@ -132,11 +147,13 @@ export function judgeCaller(
       const { verdict, retries } = await a.timed('judgeMs', () =>
         withLease(
           maxConcurrent ? { [`judge:${provider}`]: maxConcurrent } : {},
-          () => runJudge(question, state, { ...judgeOptions, model, threshold: atLeast }, a.signal),
+          () =>
+            runJudge(question, decide, { ...judgeOptions, model, threshold: atLeast }, a.signal),
           a.signal,
         ),
       )
-      a.record.judgements.push(retries.length ? { ...verdict, retries } : verdict)
+      const recorded = refs.length ? { ...verdict, artifacts: refs } : verdict
+      a.record.judgements.push(retries.length ? { ...recorded, retries } : recorded)
       const { score } = verdict
       debugLog(
         'judge',
@@ -151,7 +168,7 @@ export function judgeCaller(
         threshold: verdict.threshold,
         ms: ms(),
       })
-      return verdict
+      return recorded
     } catch (error) {
       if (a.signal.aborted) {
         a.judgeErrored = true
