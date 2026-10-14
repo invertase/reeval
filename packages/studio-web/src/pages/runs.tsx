@@ -30,7 +30,7 @@ import { headersQuery, useLiveRuns, useStudio } from '@/lib/data'
 import { formatDate, plural, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-const route = getRouteApi('/')
+const route = getRouteApi('/runs')
 
 function Who({ entry }: { entry: HistoryEntry }) {
   if (entry.ci) {
@@ -62,7 +62,7 @@ function Who({ entry }: { entry: HistoryEntry }) {
 
 function Filters({ hasScratch }: { hasScratch: boolean }) {
   const search = route.useSearch()
-  const navigate = useNavigate({ from: '/' })
+  const navigate = useNavigate({ from: '/runs' })
   const set = (patch: Partial<typeof search>) =>
     navigate({ search: (s) => ({ ...s, ...patch }), replace: true })
   const Seg = ({ value, label }: { value: typeof search.status; label: string }) => (

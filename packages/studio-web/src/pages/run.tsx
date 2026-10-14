@@ -72,6 +72,23 @@ function Meta({ icon: Icon, children }: { icon: typeof Clock; children: React.Re
   )
 }
 
+export function RunMeta({ record }: { record: RunRecord }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+      <Meta icon={GitCommitHorizontal}>
+        <span className="font-mono text-xs">{shortSha(record.git?.sha)}</span>
+        {record.git?.dirty ? <span className="text-infra">· dirty</span> : null}
+      </Meta>
+      {record.git?.branch ? <Meta icon={GitBranch}>{record.git.branch}</Meta> : null}
+      <Meta icon={User}>
+        {record.runner.kind === 'ci' ? `CI · ${record.runner.provider}` : record.author}
+      </Meta>
+      <Meta icon={Clock}>{formatDuration(record.durationMs)}</Meta>
+      {record.cost.usage ? <Meta icon={Coins}>{formatUsage(record.cost.usage)} tokens</Meta> : null}
+    </div>
+  )
+}
+
 export function RunHeader({ record, children }: { record: RunRecord; children?: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -85,19 +102,8 @@ export function RunHeader({ record, children }: { record: RunRecord; children?: 
             </Badge>
           ) : null}
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-          <Meta icon={GitCommitHorizontal}>
-            <span className="font-mono text-xs">{shortSha(record.git?.sha)}</span>
-            {record.git?.dirty ? <span className="text-infra">· dirty</span> : null}
-          </Meta>
-          {record.git?.branch ? <Meta icon={GitBranch}>{record.git.branch}</Meta> : null}
-          <Meta icon={User}>
-            {record.runner.kind === 'ci' ? `CI · ${record.runner.provider}` : record.author}
-          </Meta>
-          <Meta icon={Clock}>{formatDuration(record.durationMs)}</Meta>
-          {record.cost.usage ? (
-            <Meta icon={Coins}>{formatUsage(record.cost.usage)} tokens</Meta>
-          ) : null}
+        <div className="mt-2">
+          <RunMeta record={record} />
         </div>
       </div>
       {children}
@@ -214,7 +220,15 @@ function pruneFailed(nodes: TreeNode[]): TreeNode[] {
   })
 }
 
-function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slug: string }) {
+export function CellsTable({
+  rows,
+  runId,
+  slug,
+}: {
+  rows: CellRow[]
+  runId: string
+  slug: string
+}) {
   const showLift = rows.some((r) => r.lift !== null)
   const showEffort = rows.some((r) => r.effort !== null)
   const showUsage = rows.some((r) => r.usage)
@@ -422,61 +436,19 @@ function Questions({ rows }: { rows: AnswerRow[] }) {
   )
 }
 
-function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
+export function EvalRunBody({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   const rows = cellRows(entry)
   const matrix = isMatrix(entry)
   const answers = answerRows(entry)
   const standingRates = !matrix && rows[0]?.judgeRates.length ? rows[0].judgeRates : []
   return (
     <div className="space-y-5">
-      <div>
-        <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-          {[entry.file, ...entry.group].join(' › ')}
-        </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-          <h2 className="text-lg font-semibold tracking-tight">{entry.name}</h2>
-          <OutcomeBadge outcome={entry.outcome} label={entry.todo ? 'Todo' : undefined} />
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link to="/evals/$slug" params={{ slug: entry.slug }}>
-              <History /> History
-            </Link>
-          </Button>
-          {entry.tags.map((t) => (
-            <Badge key={t} variant="secondary">
-              #{t}
-            </Badge>
-          ))}
-          {entry.compare ? (
-            <Badge
-              variant="outline"
-              className="font-mono text-[11px]"
-              title={
-                entry.compare.from === 'environment'
-                  ? "No compare.baseline: the eval's environment is the control"
-                  : entry.compare.from === 'empty'
-                    ? 'No compare.baseline or environment: the control is an empty environment'
-                    : undefined
-              }
-            >
-              baseline {entry.compare.baseline}
-            </Badge>
-          ) : null}
-        </div>
-      </div>
-
-      {matrix ? (
-        <section className="space-y-2">
-          <h3 className="text-sm font-medium">Cells</h3>
-          <CellsTable rows={rows} runId={record.runId} slug={entry.slug} />
-        </section>
+      {rows.length ? (
+        <CellsTable rows={rows} runId={record.runId} slug={entry.slug} />
       ) : standingRates.length ? (
         <JudgeRates rates={standingRates} />
       ) : null}
-
       {answers.length ? <Questions rows={answers} /> : null}
-
       <section className="space-y-2">
         <h3 className="text-sm font-medium">{plural(entry.attempts.length, 'attempt')}</h3>
         <div className="divide-y overflow-hidden rounded-lg border">
@@ -547,6 +519,50 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   )
 }
 
+function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+          {[entry.file, ...entry.group].join(' › ')}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
+          <h2 className="text-lg font-semibold tracking-tight">{entry.name}</h2>
+          <OutcomeBadge outcome={entry.outcome} label={entry.todo ? 'Todo' : undefined} />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/evals/$slug" params={{ slug: entry.slug }}>
+              <History /> History
+            </Link>
+          </Button>
+          {entry.tags.map((t) => (
+            <Badge key={t} variant="secondary">
+              #{t}
+            </Badge>
+          ))}
+          {entry.compare ? (
+            <Badge
+              variant="outline"
+              className="font-mono text-[11px]"
+              title={
+                entry.compare.from === 'environment'
+                  ? "No compare.baseline: the eval's environment is the control"
+                  : entry.compare.from === 'empty'
+                    ? 'No compare.baseline or environment: the control is an empty environment'
+                    : undefined
+              }
+            >
+              baseline {entry.compare.baseline}
+            </Badge>
+          ) : null}
+        </div>
+      </div>
+      <EvalRunBody record={record} entry={entry} />
+    </div>
+  )
+}
+
 export function RunPage() {
   const { runId } = route.useParams()
   const search = route.useSearch()
@@ -583,7 +599,7 @@ export function RunPage() {
   return (
     <div className="space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link to="/" className="hover:text-foreground">
+        <Link to="/runs" className="hover:text-foreground">
           Runs
         </Link>
         <ChevronRight className="size-3.5" />

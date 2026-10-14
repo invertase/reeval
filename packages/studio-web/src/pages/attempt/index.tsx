@@ -115,7 +115,7 @@ export function AttemptPage() {
   return (
     <div className="space-y-6">
       <nav className="flex min-w-0 flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
-        <Link to="/" className="hover:text-foreground">
+        <Link to="/runs" className="hover:text-foreground">
           Runs
         </Link>
         <ChevronRight className="size-3.5" />
