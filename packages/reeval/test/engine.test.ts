@@ -1282,7 +1282,14 @@ evaluate('huge diff', async (c) => {
     const { run, read } = readRun(p.dir)
     assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.model, served)
     assert.deepEqual(run.stack.harnesses, [
-      { id: 'fake', kind: 'fake', model: null, resolvedModels: [served] },
+      {
+        id: 'fake',
+        kind: 'fake',
+        model: null,
+        effort: null,
+        resolvedModels: [served],
+        resolvedEffort: [],
+      },
     ])
     assert.match(
       read('summary.md'),
