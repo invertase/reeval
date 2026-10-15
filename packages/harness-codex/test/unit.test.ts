@@ -64,7 +64,6 @@ test("the config turns off analytics and plugins, and uses reeval's HTTP provide
   assert.equal(
     config,
     [
-      '"check_for_update_on_startup" = false',
       '"analytics" = { "enabled" = false }',
       '"features" = { "plugins" = false }',
       '"model_provider" = "openai-http"',

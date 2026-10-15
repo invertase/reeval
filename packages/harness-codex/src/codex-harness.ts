@@ -60,7 +60,6 @@ export const CODEX_ENDPOINTS = [
  * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use.
  */
 export const CODEX_QUIET_CONFIG = {
-  check_for_update_on_startup: false,
   analytics: { enabled: false },
   features: { plugins: false },
 } as const
