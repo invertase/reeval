@@ -29,6 +29,8 @@ export type TranscriptEvent = EventTime &
         query: string
         /** How many sources the harness says it used; Cursor sends no URLs or titles. */
         references: number | null
+        /** Whether the search succeeded. Absent means it did. */
+        ok?: boolean
         durationMs: number | null
       }
     | { type: 'web-fetch'; toolCallId: string; url: string; ok: boolean; durationMs: number | null }

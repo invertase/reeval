@@ -175,7 +175,8 @@ group('hello', () => {
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
   `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw
-  `HarnessCapabilityError` when `turn.unreported` lists web events), plus Vitest's.
+  `HarnessCapabilityError` when `turn.unreported` lists web events; a refused
+  search is still a `web-search` with `ok: false`), plus Vitest's.
 
 ## Options and the cascade
 

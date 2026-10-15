@@ -205,7 +205,7 @@ expect(turn).toHaveFetched(url?)
 </Property>
 
 <Property name="query / url" type="string | RegExp" optional>
-  A substring or a RegExp matched against each `web-search` event's `query`, or each `web-fetch` event's `url`, in the turn's transcript. Without it, any search or fetch passes.
+  A substring or a RegExp matched against each `web-search` event's `query`, or each `web-fetch` event's `url`, in the turn's transcript. Without it, any search or fetch passes. A refused search (`ok: false`) still matches: the agent tried.
 </Property>
 
 A real Cursor run:

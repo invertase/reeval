@@ -179,7 +179,7 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
     case 'web-search':
       return (
         <div className="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm">
-          <Search className="size-4 text-muted-foreground" />
+          <Search className={cn('size-4 text-muted-foreground', e.ok === false && 'text-fail')} />
           <span className="text-muted-foreground">Searched</span>
           <span className="min-w-0 truncate">“{e.query}”</span>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">

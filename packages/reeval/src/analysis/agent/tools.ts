@@ -64,7 +64,7 @@ export function stepOf(event: TranscriptEvent): string | null {
     case 'file-edit':
       return `edit (${event.kind}): ${event.path}`
     case 'web-search':
-      return `web-search: ${clip(event.query, 120)}`
+      return `web-search: ${clip(event.query, 120)}${event.ok === false ? ' (failed)' : ''}`
     case 'web-fetch':
       return `web-fetch: ${event.url}${event.ok ? '' : ' (failed)'}`
     case 'error':

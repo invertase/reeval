@@ -143,40 +143,6 @@
             "ok": {
               "type": "boolean"
             },
-            "toolCallId": {
-              "type": "string"
-            },
-            "ts": {
-              "type": "string"
-            },
-            "turn": {
-              "type": "number"
-            },
-            "type": {
-              "const": "web-fetch"
-            },
-            "url": {
-              "type": "string"
-            }
-          },
-          "required": ["atMs", "durationMs", "ok", "toolCallId", "ts", "turn", "type", "url"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "atMs": {
-              "type": "number"
-            },
-            "durationMs": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
             "query": {
               "type": "string"
             },
@@ -213,6 +179,43 @@
             "turn",
             "type"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "web-fetch"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": ["atMs", "durationMs", "ok", "toolCallId", "ts", "turn", "type", "url"]
         },
         {
           "type": "object",
