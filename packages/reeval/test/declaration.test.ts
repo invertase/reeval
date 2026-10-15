@@ -119,6 +119,27 @@ test('a tree through JSON, declared again, plans the same tests as the calls', a
   )
 })
 
+test('replaying a tree with compare: false is refused like evaluate', async () => {
+  await assert.rejects(
+    () =>
+      collected(tempDir('false-compare'), () =>
+        declareTree(
+          [
+            {
+              type: 'eval',
+              name: 'e',
+              mode: 'run',
+              options: { compare: false } as never,
+              body: 'b1',
+            },
+          ],
+          () => async () => {},
+        ),
+      ),
+    /compare: false can't be set in evaluate\("e"\)/,
+  )
+})
+
 test('planEval is pure: the same declaration and context give the same tests, gate as data', () => {
   const run = runIn(tempDir('pure'))
   const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 3 }
