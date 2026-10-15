@@ -58,7 +58,6 @@ function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: bo
   for (const h of record.stack.harnesses) out.add(`harness ${h.kind}`)
   if (hasAnalysis) out.add('saved analysis')
   if (!('sandboxWarnings' in (raw.plan as object))) out.add('before plan.sandboxWarnings')
-  // Sandboxes ran as `es` in /es/workspace until the rename; those paths are opaque strings now.
   if (JSON.stringify(raw).includes('/es/workspace/')) out.add('before the reeval sandbox user')
   return [...out]
 }

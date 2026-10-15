@@ -388,9 +388,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       fields: ['accessToken', 'refreshToken'],
       hosts: ['cursor.sh', '*.cursor.sh'],
     },
-    // The SDK drops web search and fetch calls from its stream (they run on
-    // Cursor's backend, so the egress log doesn't see them either). The runner recovers them from
-    // the stored conversation, and names the tools it couldn't recover for a turn.
+    // Web search and fetch: CURSOR_SDK_RECOVERED_TOOLS.
     unreported: cursorUnreported,
     mcpServers: cursorMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>

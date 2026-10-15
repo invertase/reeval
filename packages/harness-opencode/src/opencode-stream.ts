@@ -42,13 +42,13 @@ const searchResults = (text: string) =>
  *   `content`, and `harness-acp` passes on its `rawOutput`, `{ metadata }`. A web search's also
  *   lists its `references`, `{ title, url }`.
  * - A call it couldn't name (`acp_tool_<id>`) is named from OpenCode's first `tool_call` update,
- *   whose `name` (2.0.26) or title is the tool's name: `shell` (its later titles are the
- *   command), `patch` (an `edit`), or `<server>_<tool>` for an MCP tool, named
- *   `mcp__<server>__<tool>`. 2.0.26 also sends `tool_call.name`, which `harness-acp` can pass
- *   through as `<server>_<tool>`; that is remapped the same way.
+ *   whose `name` or title is the tool's name: `shell` (its later titles are the command),
+ *   `patch` (an `edit`), or `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
+ *   `harness-acp` can pass `tool_call.name` through as `<server>_<tool>`; that is remapped
+ *   the same way.
  * - The `finish` part's usage is left as `@ai-sdk/harness-acp` mapped it from
- *   `PromptResponse.usage`. OpenCode #52467 reports the whole turn; `usage_update.used` is still
- *   the last step's context size, so it is not used here.
+ *   `PromptResponse.usage` (the whole turn). `usage_update.used` is the last step's
+ *   context size, so it is not used here.
  */
 export class OpenCodeStreamTranslator {
   private readonly titles = new Map<string, string>()
@@ -73,7 +73,7 @@ export class OpenCodeStreamTranslator {
         const name = this.nameFor(this.titles.get(id))
         if (name) out = { ...out, toolName: name }
       } else {
-        // 2.0.26's tool_call.name: harness-acp passes `<server>_<tool>` through.
+        // harness-acp passes `<server>_<tool>` through.
         const name = this.nameFor(part.toolName)
         if (name?.startsWith('mcp__')) out = { ...out, toolName: name }
       }

@@ -211,10 +211,10 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
     )
   })
 
-  test('flaky: one failure in 4 comparable attempts is insufficient, not flaky (the old view said flaky)', async () => {
+  test('flaky: one failure in 4 comparable attempts is insufficient, not flaky', async () => {
     const p = await historyProject('facts-flaky', 'dogfood')
     const old = await query(p.dir, 'SELECT eval_key, key FROM cells WHERE pass > 0 AND fail > 0')
-    assert.equal(old.length, 1, 'the old flaky_cells rule flags the fix-config control')
+    assert.equal(old.length, 1, 'one mixed cell is in cells')
     const flaky = await query(p.dir, 'SELECT * FROM flaky_cells')
     assert.deepEqual(
       flaky.map((f) => [f.cell_key, f.runs, f.pass, f.counted, f.verdict, f.cause]),
@@ -224,7 +224,7 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
     assert.deepEqual([flaky[0]?.lo, flaky[0]?.hi], [0.301, 0.954])
   })
 
-  test('drift: only Cursor runtime state changed, so it is noise (the old view blamed context)', async () => {
+  test('drift: only Cursor runtime state changed, so it is noise', async () => {
     const p = await historyProject('facts-drift', 'dogfood')
     const drift = await query(p.dir, 'SELECT * FROM drift')
     assert.equal(drift.length, 9, 'every cell drifted')

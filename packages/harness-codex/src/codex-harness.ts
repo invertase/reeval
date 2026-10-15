@@ -187,8 +187,8 @@ export function buildCodexCommand(options: {
 /**
  * OpenAI's Codex CLI (`codex exec --json`) as an AI SDK harness, in the sandbox: one process per
  * turn, resumed by thread id, its NDJSON translated into harness stream parts with each turn's
- * tokens, reasoning included. `@ai-sdk/harness-codex` reports neither those nor Codex's native
- * events, and needs a newer `@ai-sdk/harness` than reeval runs.
+ * tokens, reasoning included. `@ai-sdk/harness-codex` needs a newer `@ai-sdk/harness` than
+ * reeval runs.
  */
 export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuiltinTools> {
   const key = isHarnessAuthenticationEnvironment(settings.auth)

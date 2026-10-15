@@ -7,7 +7,7 @@ import { PiStreamTranslator } from '../src/pi-stream.ts'
 const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/${name}.ndjson`, import.meta.url), 'utf8').split('\n')
 
-/** A pi 0.87.1 turn through the translator, raw parts dropped. */
+/** A turn through the translator, raw parts dropped. */
 function translate(lines: string[], exitCode = 0) {
   const t = new PiStreamTranslator()
   const parts = [...lines.flatMap((l) => t.push(l)), ...t.end({ exitCode })]

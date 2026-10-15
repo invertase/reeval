@@ -535,9 +535,7 @@ async function disposeChrome(child: ChildProcess, userData: string): Promise<voi
   try {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
     await waitForExit(child, 1_000)
-  } catch {
-    // already gone
-  }
+  } catch {}
   removeChromeProfile(userData)
 }
 

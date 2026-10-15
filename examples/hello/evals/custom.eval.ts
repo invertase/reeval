@@ -1,7 +1,6 @@
 import { evaluate, expect, group } from 'reeval'
 import { genkit } from './environments.ts'
 
-// Each prompt and judge question is unchanged.
 // The apps the agent builds call Gemini, so the genkit environment puts the key in the sandbox
 // (redacted in records).
 group('genkit apps', { environment: genkit }, () => {

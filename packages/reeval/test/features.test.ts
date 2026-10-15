@@ -1082,7 +1082,7 @@ export const features: Feature[] = [
         JSON.stringify(attempt?.egress),
       )
       // The agent sometimes also hits registry.npmjs.org; that is curiosity, not a
-      // missing brokered host (https://github.com/invertase/reeval/actions/runs/37112905972).
+      // missing brokered host.
       assert.deepEqual(
         (attempt?.egress?.blocked ?? []).filter((h) => h.host === 'api.anthropic.com'),
         [],
@@ -1349,8 +1349,8 @@ export const features: Feature[] = [
     canary: /expected 'completed' to be 'aborted'/,
     record: ({ run }) => assert.equal(landed(run)?.turns[0]?.status, 'aborted'),
     // Lands waits a 4s eval timeout; the canary waits the 10s fake delay. Windows
-    // CI runs four fixtures at once, and that pair has exceeded the default 50s
-    // runCli bound while still making progress (main CI #210).
+    // CI runs four fixtures at once, so this pair needs more than the default 50s
+    // runCli bound.
     timeoutMs: { fake: 180_000 },
   },
   {
