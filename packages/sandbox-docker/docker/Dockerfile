@@ -8,8 +8,11 @@ RUN apt-get update \
 
 # npm before 11.6 (node:22 ships 10.9) can crash resolving circular peer sets ("reading
 # 'edgesOut'", npm/cli#8261), so evals' installs get a fixed npm. The harness bridge installs its
-# dependencies with pnpm.
-RUN npm install --global npm@11.20.0 && npm install --global pnpm@10.33.3
+# dependencies with pnpm. Versions come from `reeval image build` (`NPM_VERSION` / `PNPM_VERSION`).
+ARG NPM_VERSION
+ARG PNPM_VERSION
+RUN test -n "$NPM_VERSION" && test -n "$PNPM_VERSION" \
+  && npm install --global "npm@${NPM_VERSION}" && npm install --global "pnpm@${PNPM_VERSION}"
 
 # The agent, setup steps and checks run as `reeval` (SANDBOX_USER in src/image.ts); image builds stay
 # root.
