@@ -363,7 +363,7 @@ export type SelectableEval = {
  * Why `line` isn't a valid reeval command line, or null when it is. It may chain `reeval` commands with
  * `&&` or `;` and start with `npx` or `pnpm`; `reeval query <name>` must name a view or table in
  * `tables`, when given; `reeval run` and `reeval image build` must select at least one of `evals`, when
- * given, with their filters and `--tag`s.
+ * given, with their filters (`reeval run` also with `--tag`s).
  */
 export function checkCommand(
   line: string,

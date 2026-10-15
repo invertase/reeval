@@ -184,7 +184,7 @@ To give pull requests a base, commit runs to `evals/.history` on your main branc
 ## Variations
 
 - **Gate on the run too:** drop the `set +e` lines so any failing eval fails the check, whatever the base did.
-- **Only some evals:** `npx reeval run --profile pr --tag smoke` or a filter such as `npx reeval run hello`; `reeval image build` takes the same filters.
+- **Only some evals:** `npx reeval run --profile pr --tag smoke` or a filter such as `npx reeval run hello`. `reeval image build` takes the same path and name filters (`npx reeval image build hello`), not `--tag`.
 - **More harnesses:** add their keys as secrets and env entries; reeval checks only the keys of the harnesses the profile keeps.
 - **A fixed base:** `npx reeval compare <base-run> latest --md` compares with a named run instead of the nearest ancestor.
 - **Pin actions by SHA:** reeval's own workflows pin `actions/checkout`, `actions/cache` and `actions/upload-artifact` to commit SHAs with the version in a comment.

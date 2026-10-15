@@ -530,6 +530,7 @@ describe('reeval CLI spec', () => {
       ['npx reeval compare r1 r2 --include-efficiency', /--include-efficiency isn't a reeval flag/],
       ['reeval eval fix-config --debug-judge', /reeval eval isn't a reeval command/],
       ['reeval run --eval scaffold', /--eval isn't an option of reeval run/],
+      ['reeval image build --tag smoke', /--tag isn't an option of reeval image build/],
       ['reeval query efficiency', /no view or table named efficiency/],
       ['reeval show latest --md --json extra', /takes at most 1 argument/],
       ['reeval run --runs', /--runs needs a value/],
