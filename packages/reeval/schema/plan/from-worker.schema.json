@@ -243,7 +243,7 @@
       "type": "object",
       "properties": {
         "effort": {
-          "type": "string"
+          "enum": ["high", "low", "max", "medium", "xhigh"]
         },
         "id": {
           "type": "string"
