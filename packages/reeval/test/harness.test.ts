@@ -794,6 +794,10 @@ describe('harness effort', () => {
       /claudeCode\(\{ effort \}\) is the value that CLI takes/,
     )
     assert.throws(
+      () => claudeCode({ model: 'claude-sonnet-5', effort: 'nope' }),
+      /claudeCode\(\{ effort \}\) must be low, medium, high, xhigh or max/,
+    )
+    assert.throws(
       () => cursor({ model: 'composer-2.5', effort: 3 as never }),
       /cursor\(\{ effort \}\) is the value that CLI takes/,
     )

@@ -3,6 +3,7 @@ import { resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
 import { UsageError } from './errors.ts'
 import type {
   AntigravityHarnessDescriptor,
+  ClaudeCodeEffort,
   ClaudeCodeHarnessDescriptor,
   CodexHarnessDescriptor,
   CursorHarnessDescriptor,
@@ -11,6 +12,12 @@ import type {
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,
 } from './types.ts'
+
+const CLAUDE_CODE_EFFORTS: readonly ClaudeCodeEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
+function isClaudeCodeEffort(value: string): value is ClaudeCodeEffort {
+  return (CLAUDE_CODE_EFFORTS as readonly string[]).includes(value)
+}
 
 /** `effort` is the value that CLI takes; there is no shared enum. Fast is not this. */
 function checkEffort(factory: string, effort: unknown): void {
@@ -54,7 +61,7 @@ export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHa
  * `effort` is set.
  */
 export const claudeCode = (
-  options: Omit<ClaudeCodeHarnessDescriptor, 'kind'>,
+  options: Omit<ClaudeCodeHarnessDescriptor, 'kind' | 'effort'> & { effort?: string },
 ): ClaudeCodeHarnessDescriptor => {
   if (typeof options?.model !== 'string' || !options.model) {
     throw new UsageError(
@@ -62,7 +69,14 @@ export const claudeCode = (
     )
   }
   checkEffort('claudeCode', options.effort)
-  return { kind: 'claude-code', ...options }
+  const { effort, ...rest } = options
+  if (effort === undefined) return { kind: 'claude-code', ...rest }
+  if (!isClaudeCodeEffort(effort)) {
+    throw new UsageError(
+      `claudeCode({ effort }) must be low, medium, high, xhigh or max (got ${JSON.stringify(effort)})`,
+    )
+  }
+  return { kind: 'claude-code', ...rest, effort }
 }
 
 /**
@@ -203,6 +217,7 @@ export const fakeHarness = (options: Omit<FakeHarnessDescriptor, 'kind'> = {}) =
 export type {
   AgentHarnessDescriptor,
   AntigravityHarnessDescriptor,
+  ClaudeCodeEffort,
   ClaudeCodeHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,

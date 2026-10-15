@@ -23,8 +23,8 @@ export default defineConfig({
   A model id or alias the `claude` CLI accepts, such as `claude-sonnet-5` or `sonnet`. Required, since the CLI's default changes under you.
 </Property>
 
-<Property name="effort" type="string" optional>
-  Reasoning effort the Agent SDK `/effort` control takes: `low`, `medium`, `high`, `xhigh` (Extra in the UI) or `max`. Adaptive thinking stays on.
+<Property name="effort" type="'low' | 'medium' | 'high' | 'xhigh' | 'max'" optional>
+  Reasoning effort the Agent SDK `/effort` control takes: `low`, `medium`, `high`, `xhigh` (Extra in the UI) or `max`. Adaptive thinking stays on. A value outside that set is refused.
 </Property>
 
 <Property name="id" type="string" optional>

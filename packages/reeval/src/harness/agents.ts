@@ -425,7 +425,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
         auth,
         ...(mcpServers ? { mcpServers } : {}),
         ...(descriptor.kind === 'claude-code' && descriptor.effort
-          ? { effort: descriptor.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
+          ? { effort: descriptor.effort }
           : {}),
         env: {
           // The CLI refuses to skip permissions as root (docker({ root: true })) unless told it's

@@ -432,16 +432,19 @@ export type CursorHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
+/** Reasoning effort the Claude Code Agent SDK `/effort` control takes. */
+export type ClaudeCodeEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
 /** Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`. */
 export type ClaudeCodeHarnessDescriptor = {
   kind: 'claude-code'
   /** A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`. */
   model: string
   /**
-   * Reasoning effort the Agent SDK `/effort` control takes, e.g. `low`, `medium`, `high`,
+   * Reasoning effort the Agent SDK `/effort` control takes: `low`, `medium`, `high`,
    * `xhigh` (Extra in the UI) or `max`.
    */
-  effort?: string
+  effort?: ClaudeCodeEffort
   /** Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most Claude Code attempts at once, across the run, e.g. for the account's rate limits. */
