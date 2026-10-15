@@ -74,7 +74,12 @@ export const inventory: InventoryFeature[] = [
     id: 'config.mistakes',
     area: 'Config and selection',
     name: 'Config and option mistakes exit 2 with the fix',
-    tests: [options('common mistakes'), engine('usage errors exit 2')],
+    tests: [
+      options('common mistakes'),
+      engine('usage errors exit 2'),
+      'reeval/test/cli.test.ts › run and image build without a config file exit 2',
+      unit('requireConfig refuses a missing file with the config names doctor lists'),
+    ],
   },
   {
     id: 'config.dotenv',

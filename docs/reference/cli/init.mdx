@@ -3,7 +3,7 @@ title: reeval init
 description: Scaffold a project with a config, a passing eval, profiles and .gitignore entries.
 ---
 
-`reeval init` sets up reeval in the current directory, or in the directory you name. It asks which agent to configure, then writes a project whose eval passes on the fake agent straight away.
+`reeval init` sets up reeval in the current directory, or in the directory you name. It asks which agent to configure, then writes a project whose eval passes on the fake agent straight away. `reeval run` and `reeval image build` need that config file: with none found they exit 2 and point here.
 
 ```bash
 npx reeval init

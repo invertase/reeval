@@ -374,6 +374,14 @@ evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'
   })
 
   test('usage errors exit 2', async () => {
+    const bare = await project('no-config', {})
+    const noConfig = await runCli(bare.dir)
+    assert.equal(noConfig.code, 2)
+    assert.match(
+      noConfig.stderr,
+      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs\) here or above\. Run reeval init\.\n$/,
+    )
+
     const empty = await project('empty', { 'reeval.config.ts': fakeConfig() })
     const none = await runCli(empty.dir)
     assert.equal(none.code, 2)
@@ -382,7 +390,9 @@ evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'
       /No eval files match evals\/\*\*\/\*\.eval\.ts \(config\.include\) in \S*empty\S*\. Name eval files to match it, or set include in reeval\.config\.ts\./,
     )
 
-    assert.equal((await runCli(empty.dir, ['run', '--config', 'missing.ts'])).code, 2)
+    const missing = await runCli(empty.dir, ['run', '--config', 'missing.ts'])
+    assert.equal(missing.code, 2)
+    assert.match(missing.stderr, /^reeval: Config file not found: missing\.ts\n$/)
     assert.equal((await runCli(empty.dir, ['bogus'])).code, 2)
     assert.equal((await runCli(empty.dir, ['--help'])).code, 0)
 

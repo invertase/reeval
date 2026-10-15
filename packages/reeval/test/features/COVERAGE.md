@@ -16,7 +16,7 @@
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
 | `defineConfig` (object or function) and its defaults | ✓ 1 | ✓ 1 | — | — | — |
-| Config and option mistakes exit 2 with the fix | ✓ 2 | — | — | — | — |
+| Config and option mistakes exit 2 with the fix | ✓ 4 | — | — | — | — |
 | `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — |
 | Finding the nearest `reeval.config.*` upward from the current directory; `--config` wins | ✓ 3 | — | ● 1 | ● 1 | — |
 | `harness` lists × `runs`, and `--runs` | ✓ 2 | ✓ 2 | — | — | — |

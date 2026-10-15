@@ -17,7 +17,7 @@ export default defineConfig(({ ci, secret }) => ({
 }))
 ```
 
-Without a config file, every key takes its default. The option keys (`harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `timeout`) are the start of the cascade described on [Options](/reference/options); this page covers what's specific to the config. `sandbox` is the default machine when the resolved environment omits one; it is not an environment.
+An omitted key takes its default. The option keys (`harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `timeout`) are the start of the cascade described on [Options](/reference/options); this page covers what's specific to the config. `sandbox` is the default machine when the resolved environment omits one; it is not an environment.
 
 ## Loading
 
@@ -39,7 +39,7 @@ Without `--config`, `reeval` looks in the current directory, then in each parent
 | `reeval run` in `packages/app/src/lib` | `packages/app/reeval.config.mjs` |
 | `reeval run --config ../reeval.claude.config.ts` | that file, relative to the current directory |
 
-`--config` always wins, and names like `reeval.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`). With no config found, every key takes its default and the current directory is the project root.
+`--config` always wins, and names like `reeval.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`). `reeval run` and `reeval image build` also fail when no config is found (`No reeval.config.ts … here or above. Run reeval init.`). Other commands then use each key's default in the current directory.
 
 The config's directory is the project root, wherever you run `reeval`. `include` globs, helper paths (`skill.local`, `file`), `.env.local` and `.env`, `.reeval/` (scratch runs, debug data, `history.db`), the history folder and `reeval studio build`'s default `studio-dist/` all resolve against it. So every command behaves the same from a subdirectory as from the root. Env file precedence: the shell, then `.env.local`, then `.env`.
 
@@ -195,6 +195,7 @@ reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 | `analysis.agent` with no language model | `config.analysis.agent needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in reeval.config.ts …, or turn agent off.` |
 | A missing default profile | `defaultProfile names "pr", which isn't in profiles (none)` |
 | A `Promise` from the callback | `The defineConfig callback in reeval.config.ts returned a Promise. …` |
+| No `reeval.config.*` here or above | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs) here or above. Run reeval init.` |
 
 More messages, with fixes, are on [Errors](/reference/errors).
 
