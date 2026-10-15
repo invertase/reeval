@@ -111,7 +111,7 @@
 | `cursor()`: Cursor through its TypeScript SDK, one runner per session | ✓ 4 | ✓ 1 | ● 2 | ● 2 | — |
 | `effort` on each harness factory: default id, requested vs served | ✓ 6 | ✓ 1 | ● 1 | ● 1 | — |
 | Token usage and the served model, per turn and totalled, from any harness | ✓ 2 | — | — | — | ◐ 3 (2 without a canary) |
-| Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 12 | — | — | — | ◐ 3 (1 without a canary) |
+| Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 16 | — | — | — | ◐ 3 (1 without a canary) |
 | `fakeHarness({ script })` and `layout` | ✓ 2 | — | ● 2 | ● 2 | — |
 | A turn the timeout cuts off is recorded as `aborted` | ✓ 1 | — | ● 1 | ● 1 | ● 1 |
 | Transcripts, normalised per harness | ✓ 4 | — | — | — | ● 1 |
