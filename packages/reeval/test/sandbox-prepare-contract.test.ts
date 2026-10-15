@@ -123,7 +123,6 @@ const dockerRow: Row = {
       case 'transient':
         return { kind: 'docker', from: `registry.invalid.example:5000/es/none-${n}:1` }
       case 'flaky':
-        // Docker's retry of a real flaky registry isn't reproducible; the scripted row covers it.
         return run('echo ok')
       case 'broken':
         return run('echo broken && exit 5')

@@ -2,7 +2,6 @@
 // (`--log-order`, `--log-prefix`, `--output-logs`) and its CI detection.
 import { UsageError } from '../config.ts'
 
-/** `live` redraws a block on a TTY; `plain` appends lines; `agent` prints failures only. */
 export type UiMode = 'live' | 'plain' | 'agent'
 /** `stream` prints every line as it happens; `grouped` prints each attempt as one block. */
 export type LogOrder = 'stream' | 'grouped'
@@ -11,7 +10,6 @@ export type LogPrefix = 'task' | 'none'
 export type OutputLogs = 'full' | 'errors-only' | 'none'
 
 export type OutputOptions = {
-  /** What was asked for; `live` renders as `plain` until the live renderer lands. */
   requested: UiMode
   mode: Exclude<UiMode, 'live'>
   logOrder: LogOrder

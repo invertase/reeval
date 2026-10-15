@@ -84,7 +84,6 @@ const BOOTSTRAPS: Record<
   opencode: {
     name: 'OpenCode',
     cli: 'opencode',
-    // The bootstrap only installs the CLI; the key and model are never used.
     adapter: async () =>
       (await import('@reeval/harness-opencode')).createOpenCode({
         auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
@@ -94,7 +93,6 @@ const BOOTSTRAPS: Record<
   goose: {
     name: 'Goose',
     cli: 'goose',
-    // The bootstrap only installs the CLI; the key and model are never used.
     adapter: async () =>
       (await import('@reeval/harness-goose')).createGoose({
         auth: { GOOGLE_API_KEY: 'unused' },
@@ -104,14 +102,12 @@ const BOOTSTRAPS: Record<
   pi: {
     name: 'pi',
     cli: 'pi',
-    // The bootstrap only installs the CLI; the key is never used.
     adapter: async () =>
       (await import('@reeval/harness-pi')).createPi({ auth: { GEMINI_API_KEY: 'unused' } }),
   },
   codex: {
     name: 'Codex',
     cli: 'codex',
-    // The bootstrap only installs the CLI; the key is never used.
     adapter: async () =>
       (await import('@reeval/harness-codex')).createCodex({
         auth: { OPENAI_API_KEY: 'unused' },

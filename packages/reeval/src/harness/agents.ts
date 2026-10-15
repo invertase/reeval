@@ -424,7 +424,6 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@ai-sdk/harness-claude-code')).createClaudeCode({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
-        // The factory takes the CLI's value as a string; the adapter types a closed set.
         ...(descriptor.kind === 'claude-code' && descriptor.effort
           ? { effort: descriptor.effort as 'low' | 'medium' | 'high' | 'xhigh' | 'max' }
           : {}),

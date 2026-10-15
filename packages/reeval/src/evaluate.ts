@@ -232,7 +232,6 @@ export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string
 function optionsFrom(data: EvalOptionsData): EvalOptions {
   const { environment, compare, ...rest } = data
   const asEnv = (env: EnvironmentData) => environmentFrom(env)
-  // A declaration may still carry `compare: false`. Keep it so checkOptions rejects it.
   if ((compare as unknown) === false) {
     return {
       ...rest,
@@ -249,8 +248,6 @@ function optionsFrom(data: EvalOptionsData): EvalOptions {
         variants: compare.variants.map(asEnv),
       },
     }
-    // Without a baseline, `environment` is the control. With one, invalid data may set both:
-    // keep `environment` so checkOptions names both keys.
     return (
       environment === undefined ? revived : { ...revived, environment: asEnv(environment) }
     ) as EvalOptions
