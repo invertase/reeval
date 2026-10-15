@@ -1309,6 +1309,11 @@ describe('common mistakes', () => {
       /claudeCode\(\) needs a model, e\.g\. claudeCode\(\{ model: 'claude-sonnet-5' \}\)/,
     ],
     [
+      'Claude Code effort outside the adapter set',
+      `evaluate('e', { harness: (await import('reeval/harness')).claudeCode({ model: 'claude-sonnet-5', effort: 'nope' }) }, async () => {})`,
+      /claudeCode\(\{ effort \}\) must be low, medium, high, xhigh or max \(got "nope"\)/,
+    ],
+    [
       'Antigravity without a model',
       `evaluate('e', { harness: (await import('reeval/harness')).antigravity({} as never) }, async () => {})`,
       /antigravity\(\) needs a model, e\.g\. antigravity\(\{ model: 'gemini-3\.8-flash-medium' \}\)/,
