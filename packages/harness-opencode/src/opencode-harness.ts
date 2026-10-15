@@ -178,12 +178,11 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
 /**
  * OpenCode (`opencode acp`) as an AI SDK harness, on any provider whose key it sends in a header
  * on known hosts: the model's provider (`anthropic/claude-haiku-4-5` runs on `anthropic`) picks
- * the key, and only that key is used and brokered. `@ai-sdk/harness-opencode` brokers only a few
- * providers' keys and OpenCode 1's, so this is reeval's own thin config over `@ai-sdk/harness-acp`.
+ * the key, and only that key is used and brokered.
  *
  * OpenCode ignores its config's `model` over ACP (a session starts on its own default), so each
  * turn sets the session's `model` config option. `@ai-sdk/harness-acp` maps
- * `PromptResponse.usage` onto the `finish` part; OpenCode #52467 reports the whole turn
+ * `PromptResponse.usage` onto the `finish` part (the whole turn)
  * (see {@link OpenCodeStreamTranslator}).
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {

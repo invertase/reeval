@@ -100,10 +100,6 @@ export function contextTaker(a: Attempt) {
 
 const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/implementation\/home\//
 
-/**
- * Paths older Cursor records may still list as context. No current harness writes session
- * state into the paths reeval records.
- */
 const RETIRED_RUNTIME_STATE = new Set([
   '.cursor/cli-config.json',
   '.cursor/skills-cursor/.sync-manifest.json',

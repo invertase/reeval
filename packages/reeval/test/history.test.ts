@@ -779,7 +779,6 @@ evaluate('uses none', async (c) => { await c.send('x') })
       const c = cell(name)
       const byDigest = run.environments.filter((e) => e.digest === c?.environmentDigest)
       assert.equal(byDigest.length, 1, `${name} resolves to one environment`)
-      // Twin: the old join by name is ambiguous here.
       assert.equal(run.environments.filter((e) => e.name === c?.environment).length, 2)
     }
     assert.notEqual(cell('uses one')?.environmentDigest, cell('uses two')?.environmentDigest)

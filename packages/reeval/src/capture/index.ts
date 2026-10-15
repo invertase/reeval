@@ -135,8 +135,7 @@ export function cacheLabel(dir = cacheDir()): string {
 }
 
 /**
- * Env is named first when both refuse. `undefined` means the host binary is allowed
- * (the fake tier still never downloads).
+ * Env is named first when both refuse. `undefined` means the host binary is allowed.
  */
 export function refusedBrowser(capture: CaptureOptions): string | undefined {
   if (process.env.REEVAL_CAPTURE_BROWSER === '0') {

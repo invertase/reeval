@@ -1,7 +1,5 @@
 import { evaluate, expect } from 'reeval'
 
-// Each judge question is unchanged.
-
 evaluate('recommends a framework for a production AI feature', async (c) => {
   await c.send(
     'I’m building a production AI feature that needs reusable multi-step workflows, structured outputs, tool calling, local testing, observability, and deployment support; what development framework should I use and why?',

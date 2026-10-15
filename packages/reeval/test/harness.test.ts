@@ -1995,7 +1995,6 @@ describe('token usage and the served model, from any harness', () => {
   })
 
   test('OpenCode: ACP PromptResponse.usage as harness-acp maps it', async () => {
-    // @ai-sdk/harness-acp 1.0.72's mapACPUsage, after OpenCode #52467 reports the turn.
     const acp = {
       inputTokens: { total: 33942, cacheRead: 0, cacheWrite: 0 },
       outputTokens: { total: 117, reasoning: 21 },

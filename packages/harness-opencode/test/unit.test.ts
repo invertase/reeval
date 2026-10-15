@@ -111,7 +111,7 @@ test("session titles run on the turn's model, not a second one", () => {
     JSON.parse(env.OPENCODE_CONFIG_CONTENT),
     openCodeConfig({ model: 'google/gemini-3.8-flash' }),
   )
-  // Only variables OpenCode still reads, and the gate's.
+  // Only variables OpenCode reads, and the gate's.
   assert.deepEqual(Object.keys(env).sort(), [
     'OPENCODE_CONFIG_CONTENT',
     'OPENCODE_DISABLE_AUTOUPDATE',
