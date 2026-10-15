@@ -183,11 +183,11 @@ export type AttemptRecord = {
    */
   captureUse?: { model: string; moves: number; usage: TokenUsage | null }
   timings: PhaseTimings
-  /** Counts from the transcript, so a run's shape is visible without reading it. */
+  /** Counts from the transcript, so a run's shape is visible without reading it. `webSearches` includes refused searches. */
   activity: {
     tools: number
     fileEdits: number
-    /** Null when a turn with none couldn't report them (`unreported`), not a count of 0 that isn't one. */
+    /** Every `web-search` event, including refused ones. Null when a turn with none couldn't report them (`unreported`). */
     webSearches: number | null
     webFetches: number | null
     reasoningMs: number

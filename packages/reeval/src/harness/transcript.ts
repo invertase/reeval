@@ -280,7 +280,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
       }
       return
     }
-    if (name === 'webSearch' && !failed) {
+    if (name === 'webSearch') {
       out.push({
         at: call.ms,
         event: {
@@ -288,7 +288,8 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
           type: 'web-search',
           toolCallId: id,
           query: str(input.searchTerm) || str(input.query),
-          references: searchReferences(output),
+          references: failed ? null : searchReferences(output),
+          ok: !failed,
         },
       })
       return
@@ -388,17 +389,46 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
   }
   // Calls still open when the turn ended (aborted, or the harness never reported a result).
   for (const [id, call] of pending) {
+    const name = toolName(call.part)
+    const input = record(call.part.input)
+    const base = { ...stamp(call.ms), durationMs: null }
+    if (name === 'webSearch') {
+      out.push({
+        at: call.ms,
+        event: {
+          ...base,
+          type: 'web-search',
+          toolCallId: id,
+          query: str(input.searchTerm) || str(input.query),
+          references: null,
+          ok: false,
+        },
+      })
+      continue
+    }
+    if (name === 'webFetch' || name === 'WebFetch') {
+      out.push({
+        at: call.ms,
+        event: {
+          ...base,
+          type: 'web-fetch',
+          toolCallId: id,
+          url: str(input.url),
+          ok: false,
+        },
+      })
+      continue
+    }
     out.push({
       at: call.ms,
       event: {
-        ...stamp(call.ms),
+        ...base,
         type: 'tool',
         toolCallId: id,
-        tool: toolName(call.part),
+        tool: name,
         input: call.part.input,
         output: null,
         ok: false,
-        durationMs: null,
       },
     })
   }

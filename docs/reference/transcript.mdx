@@ -71,8 +71,8 @@ evals/.history/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
   Any other tool call, merged with its result: the harness's tool name (`bash`, `glob`, `mcp__docs__search`), its input and output as the harness reports them, and whether it succeeded.
 </Property>
 
-<Property name="web-search" type="{ toolCallId, query, references }">
-  A web search. `references` is how many sources the harness says it used, or `null`.
+<Property name="web-search" type="{ toolCallId, query, references, ok? }">
+  A web search. `references` is how many sources the harness says it used, or `null`. `ok` is whether it succeeded; a refused search (egress 403, a tool error) is still a `web-search` with `ok: false`. Absent `ok` means it succeeded.
 </Property>
 
 <Property name="web-fetch" type="{ toolCallId, url, ok }">

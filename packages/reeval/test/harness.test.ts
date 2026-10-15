@@ -9,6 +9,7 @@ import type {
 } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
 import {
+  ANTIGRAVITY_BUILTIN_TOOLS,
   ANTIGRAVITY_HOME_SKILLS_DIR,
   ANTIGRAVITY_WORKSPACE_RULES_FILE,
   ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
@@ -43,6 +44,7 @@ import {
 } from '@reeval/harness-opencode'
 import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@reeval/harness-pi'
 import { applyTransformations, hostAllowed, onEndpoint } from '@reeval/sandbox-docker'
+import { calledTool, fetched, searched } from '../src/assert.ts'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
@@ -1510,16 +1512,16 @@ describe('Claude Code transcripts', () => {
     assert.deepEqual(
       events.map((e) =>
         e.type === 'web-search'
-          ? [e.type, e.query, e.references]
+          ? [e.type, e.query, e.references, e.ok]
           : e.type === 'web-fetch'
             ? [e.type, e.url, e.ok]
             : [e.type],
       ),
       [
-        ['web-search', 'node test runner', 2],
+        ['web-search', 'node test runner', 2, true],
         ['web-fetch', 'https://nodejs.org/api/test.html', true],
         ['web-fetch', 'https://example.com/missing', false],
-        ['web-search', 'cursor search', 3],
+        ['web-search', 'cursor search', 3, true],
       ],
     )
   })
@@ -1567,7 +1569,7 @@ describe('Antigravity transcripts', () => {
         e.type === 'file-edit'
           ? [e.type, e.path, e.kind]
           : e.type === 'web-search'
-            ? [e.type, e.query]
+            ? [e.type, e.query, e.ok]
             : e.type === 'web-fetch'
               ? [e.type, e.url, e.ok]
               : e.type === 'tool'
@@ -1578,7 +1580,7 @@ describe('Antigravity transcripts', () => {
         ['file-edit', '/reeval/workspace/a.txt', 'modify'],
         ['file-edit', '/reeval/workspace/a.txt', 'modify'],
         ['tool', 'bash', 'hi\nthere\n', true],
-        ['web-search', 'antigravity cli'],
+        ['web-search', 'antigravity cli', true],
         ['web-fetch', 'https://example.com', true],
         ['tool', 'read', 'stat /nope.txt: no such file', false],
       ],
@@ -1607,6 +1609,134 @@ describe('a failed tool call keeps its error', () => {
     assert.deepEqual(failed(new Error('boom')), [['boom', false]])
     assert.deepEqual(failed('stat: no such file'), [['stat: no such file', false]])
     assert.deepEqual(failed({ code: 13 }), [['{"code":13}', false]])
+  })
+})
+
+describe('a refused webSearch is a web-search event', () => {
+  const call = (id: string, toolName: string, input: unknown) => ({
+    ms: 10,
+    part: { type: 'tool-call' as const, toolCallId: id, toolName, input },
+  })
+  const ok = (id: string, output: unknown) => ({
+    ms: 20,
+    part: { type: 'tool-result' as const, toolCallId: id, output },
+  })
+  const err = (id: string, error: unknown) => ({
+    ms: 20,
+    part: { type: 'tool-error' as const, toolCallId: id, error },
+  })
+  const activity = (events: ReturnType<typeof normaliseStream>) => ({
+    tools: events.filter((e) => e.type === 'tool').length,
+    webSearches: events.filter((e) => e.type === 'web-search').length,
+    webFetches: events.filter((e) => e.type === 'web-fetch').length,
+  })
+  const turnOf = (events: ReturnType<typeof normaliseStream>) => ({
+    transcript: events,
+    unreported: [] as Array<'web-search' | 'web-fetch'>,
+  })
+
+  test('a tool-error search is web-search with ok: false, not a generic tool', () => {
+    const events = normaliseStream(
+      [call('s', 'webSearch', { query: 'firebase ui web' }), err('s', '403 Forbidden')],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) =>
+        e.type === 'web-search'
+          ? [e.type, e.query, e.references, e.ok]
+          : e.type === 'tool'
+            ? [e.type, e.tool, e.ok]
+            : [e.type],
+      ),
+      [['web-search', 'firebase ui web', null, false]],
+    )
+    assert.deepEqual(activity(events), { tools: 0, webSearches: 1, webFetches: 0 })
+    const turn = turnOf(events)
+    assert.equal(searched(turn).pass, true)
+    assert.equal(searched(turn, 'firebase').pass, true)
+    assert.equal(calledTool(turn, 'webSearch').pass, false)
+  })
+
+  test('a tool-error fetch stays web-fetch with ok: false', () => {
+    const events = normaliseStream(
+      [call('f', 'webFetch', { url: 'https://example.com' }), err('f', '403 Forbidden')],
+      0,
+    )
+    assert.deepEqual(
+      events.flatMap((e) => (e.type === 'web-fetch' ? [[e.url, e.ok]] : [])),
+      [['https://example.com', false]],
+    )
+    assert.equal(fetched(turnOf(events)).pass, true)
+  })
+
+  test('a successful search still has ok: true and its references', () => {
+    const events = normaliseStream(
+      [call('s', 'webSearch', { query: 'firebase ui web' }), ok('s', { referenceCount: 2 })],
+      0,
+    )
+    assert.deepEqual(
+      events.flatMap((e) => (e.type === 'web-search' ? [[e.query, e.references, e.ok]] : [])),
+      [['firebase ui web', 2, true]],
+    )
+  })
+
+  test('a pending search (no result) is web-search with ok: false', () => {
+    const events = normaliseStream([call('s', 'webSearch', { query: 'firebase ui web' })], 0)
+    assert.deepEqual(
+      events.flatMap((e) => (e.type === 'web-search' ? [[e.query, e.references, e.ok]] : [])),
+      [['firebase ui web', null, false]],
+    )
+    assert.deepEqual(activity(events), { tools: 0, webSearches: 1, webFetches: 0 })
+    assert.equal(searched(turnOf(events), /firebase/).pass, true)
+  })
+
+  test('a pending fetch is web-fetch with ok: false', () => {
+    const events = normaliseStream([call('f', 'webFetch', { url: 'https://example.com' })], 0)
+    assert.deepEqual(
+      events.flatMap((e) => (e.type === 'web-fetch' ? [[e.url, e.ok]] : [])),
+      [['https://example.com', false]],
+    )
+  })
+
+  test("Antigravity's isError webSearch becomes a web-search event through HarnessAgent", async () => {
+    const parts: HarnessV1StreamPart[] = [
+      { type: 'stream-start' },
+      {
+        type: 'tool-call',
+        toolCallId: 'agy-1',
+        toolName: 'webSearch',
+        input: JSON.stringify({ query: 'firebase ui web' }),
+        providerExecuted: true,
+      },
+      {
+        type: 'tool-result',
+        toolCallId: 'agy-1',
+        toolName: 'webSearch',
+        result: "blocked by the reeval egress policy: www.google.com isn't in the allowlist",
+        isError: true,
+      },
+      {
+        type: 'finish-step',
+        finishReason: { unified: 'stop', raw: 'stop' },
+        usage: { inputTokens: 1, outputTokens: 1 },
+      },
+      {
+        type: 'finish',
+        finishReason: { unified: 'stop', raw: 'stop' },
+        totalUsage: { inputTokens: 1, outputTokens: 1 },
+      },
+    ]
+    const { stream } = await turnThrough(parts, ANTIGRAVITY_BUILTIN_TOOLS)
+    assert.ok(stream.some((s) => s.part.type === 'tool-error'))
+    const events = normaliseStream(stream, 0)
+    assert.deepEqual(
+      events.flatMap((e) =>
+        e.type === 'web-search' ? [[e.query, e.ok]] : e.type === 'tool' ? [[e.tool, e.ok]] : [],
+      ),
+      [['firebase ui web', false]],
+    )
+    assert.deepEqual(activity(events), { tools: 0, webSearches: 1, webFetches: 0 })
+    assert.equal(searched(turnOf(events), 'firebase').pass, true)
   })
 })
 
@@ -1768,11 +1898,11 @@ describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalise
     assert.deepEqual(
       events.map((e) =>
         e.type === 'web-search'
-          ? [e.type, e.query, e.references, e.atMs, e.durationMs]
+          ? [e.type, e.query, e.references, e.ok, e.atMs, e.durationMs]
           : [e.type, e.url, e.ok, e.atMs, e.durationMs],
       ),
       [
-        ['web-search', 'IANA example domain RFC 2606', 2, 461, 4042],
+        ['web-search', 'IANA example domain RFC 2606', 2, true, 461, 4042],
         ['web-fetch', 'https://httpbin.org/ip', true, 467, 1242],
       ],
     )

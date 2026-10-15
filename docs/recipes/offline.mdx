@@ -74,7 +74,7 @@ Each restricted eval lists its policy and the automatic hosts it adds.
 - **Every brokered secret's `hosts`**, so a key the agent is meant to use keeps working.
 - **Each MCP `http` or `sse` server's host.**
 
-The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, so an egress policy doesn't stop them and the egress record doesn't see them. reeval still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway.
+The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, so an egress policy doesn't stop them and the egress record doesn't see them. reeval still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway. A search the gateway refuses is still a `web-search` (`ok: false`); the matcher sees it.
 
 ## Run it and see what was blocked
 

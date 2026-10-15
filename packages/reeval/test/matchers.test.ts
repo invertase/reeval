@@ -164,4 +164,23 @@ describe('toHaveFetched and toHaveSearched', () => {
   test('accept c, every turn so far', () => {
     assert.equal(matchers.toHaveFetched({ turns: [turn()] }, 'httpbin.org').pass, true)
   })
+
+  test('pass on a refused web-search (ok: false); .not fails', () => {
+    const refused = {
+      unreported: [] as Array<'web-search' | 'web-fetch'>,
+      transcript: [
+        {
+          ...at,
+          type: 'web-search' as const,
+          toolCallId: 's',
+          query: 'firebase ui web',
+          references: null,
+          ok: false,
+        },
+      ],
+    }
+    assert.equal(matchers.toHaveSearched(refused).pass, true)
+    assert.equal(matchers.toHaveSearched(refused, 'firebase').pass, true)
+    assert.equal(matchers.toHaveSearched(refused, 'unrelated').pass, false)
+  })
 })
