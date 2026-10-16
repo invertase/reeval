@@ -181,8 +181,8 @@ group('hello', () => {
 - Make the eval trustworthy. Before a real run, run it on two fake configs: an oracle
   `fakeHarness` that does the task right (must pass) and a canary that cheats or gets it wrong
   (must fail); a canary that passes means a check isn't checking. Keep grading out of the
-  agent's reach: write hidden checks in the eval file (`c.exec('node -e …')`), which the agent
-  never sees, seed tests in `files` only when the agent should see them, and guard seeded files
+  agent's reach: place hidden tests after the turn with `c.writeFile`, so the agent never sees
+  them, seed tests in `files` only when the agent should see them, and guard seeded files
   with `expect(await c.readFile(path)).toBe(original)`. `not.toHaveEdited(path)` is not a guard:
   a read of the file trips it and a script's write slips past. When the behaviour is the
   outcome, judge the program's output, not the diff:
