@@ -20,6 +20,8 @@ import type { SandboxDescriptor } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
 
 type Case = 'ok' | 'bad-token' | 'transient' | 'flaky' | 'broken' | 'oom' | 'disk'
+/** Cases both provider rows run. `flaky` is scripted-only. */
+type SharedCase = Exclude<Case, 'bad-token' | 'flaky'>
 
 /** What a provider row gives the suite: a sandbox for each case, and how to fail its check. */
 type Row = {
@@ -27,7 +29,7 @@ type Row = {
   skip: string | false
   provider: () => SandboxProvider
   /** A sandbox that prepares, or fails, as the case says. */
-  sandbox: (c: Exclude<Case, 'bad-token'>, n?: number) => SandboxDescriptor
+  sandbox: (c: SharedCase, n?: number) => SandboxDescriptor
   /** Runs `body` while the provider's credentials or connection are bad. */
   badCredentials: <T>(body: () => Promise<T>) => Promise<T>
 }
@@ -122,9 +124,6 @@ const dockerRow: Row = {
         return run('echo ok')
       case 'transient':
         return { kind: 'docker', from: `registry.invalid.example:5000/es/none-${n}:1` }
-      case 'flaky':
-        // Docker's retry of a real flaky registry isn't reproducible; the scripted row covers it.
-        return run('echo ok')
       case 'broken':
         return run('echo broken && exit 5')
       case 'oom':
@@ -241,7 +240,7 @@ describe('sandbox prepare contract: the generic layer', () => {
     const provider = scriptedProvider(scripted.state)
     const providers = { [provider.kind]: provider }
     const targets = prepareTargets(
-      [use(scripted.row.sandbox('flaky', 9))],
+      [use({ kind: 'scripted', script: 'flaky', n: 9 } as unknown as SandboxDescriptor)],
       providers,
       () => 'flaky',
     )

@@ -29,7 +29,7 @@ import { shellQuote as q } from './process.ts'
 import { createDockerSession } from './session.ts'
 
 const PNPM_VERSION = '10.33.3'
-/** npm before 11.6 (node:22 ships 10.9) can crash on circular peer sets (npm/cli#8261); the same as docker/Dockerfile's. */
+/** npm before 11.6 (node:22 ships 10.9) can crash on circular peer sets (npm/cli#8261). */
 const NPM_VERSION = '11.20.0'
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
@@ -84,7 +84,6 @@ const BOOTSTRAPS: Record<
   opencode: {
     name: 'OpenCode',
     cli: 'opencode',
-    // The bootstrap only installs the CLI; the key and model are never used.
     adapter: async () =>
       (await import('@reeval/harness-opencode')).createOpenCode({
         auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
@@ -94,7 +93,6 @@ const BOOTSTRAPS: Record<
   goose: {
     name: 'Goose',
     cli: 'goose',
-    // The bootstrap only installs the CLI; the key and model are never used.
     adapter: async () =>
       (await import('@reeval/harness-goose')).createGoose({
         auth: { GOOGLE_API_KEY: 'unused' },
@@ -104,14 +102,12 @@ const BOOTSTRAPS: Record<
   pi: {
     name: 'pi',
     cli: 'pi',
-    // The bootstrap only installs the CLI; the key is never used.
     adapter: async () =>
       (await import('@reeval/harness-pi')).createPi({ auth: { GEMINI_API_KEY: 'unused' } }),
   },
   codex: {
     name: 'Codex',
     cli: 'codex',
-    // The bootstrap only installs the CLI; the key is never used.
     adapter: async () =>
       (await import('@reeval/harness-codex')).createCodex({
         auth: { OPENAI_API_KEY: 'unused' },
@@ -314,9 +310,24 @@ export async function buildImage(
         ],
         { input: toolchainDockerfile(pinned ?? from), signal },
       )
-    : await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', base, DOCKER_CONTEXT], {
-        signal,
-      })
+    : await docker(
+        [
+          'build',
+          '--progress',
+          'plain',
+          ...BUILT_BY,
+          '--build-arg',
+          `NPM_VERSION=${NPM_VERSION}`,
+          '--build-arg',
+          `PNPM_VERSION=${PNPM_VERSION}`,
+          '--tag',
+          base,
+          DOCKER_CONTEXT,
+        ],
+        {
+          signal,
+        },
+      )
   const output = `${build.stdout.toString('utf8')}${build.stderr}`
   options.output?.write(output)
   if (build.exitCode !== 0) {

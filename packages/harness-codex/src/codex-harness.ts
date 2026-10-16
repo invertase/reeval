@@ -57,11 +57,9 @@ export const CODEX_ENDPOINTS = [
 /**
  * Codex's defaults but for what it sends besides model requests: its analytics (to
  * `ab.chatgpt.com`), and the plugin sync (the curated list from
- * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use. The update
- * check is the TUI's, never `exec`'s; it's off in case that changes.
+ * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use.
  */
 export const CODEX_QUIET_CONFIG = {
-  check_for_update_on_startup: false,
   analytics: { enabled: false },
   features: { plugins: false },
 } as const

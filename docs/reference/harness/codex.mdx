@@ -88,7 +88,6 @@ The adapter writes `~/.codex/config.toml` with Codex's defaults but for what it 
 |---|---|
 | `analytics.enabled = false` | Analytics to `ab.chatgpt.com` |
 | `features.plugins = false` | The plugin sync from `github.com` and `chatgpt.com` |
-| `check_for_update_on_startup = false` | The update check (the TUI's; `exec` doesn't run it) |
 
 With them, a turn contacts only `api.openai.com`, so `egress: 'deny-all'` needs nothing else. Codex's web search and the pages it opens run on OpenAI's side: a restricted policy doesn't limit them, and each is a `web-search` or `web-fetch` event in the [transcript](/reference/transcript).
 

@@ -316,6 +316,27 @@ function checkCompare(value: unknown, where: string): void {
   }
 }
 
+/** `compare: false` and `environment` beside `compare.baseline` are never legal options. */
+export function refuseIllegalCompare(
+  options: { environment?: unknown; compare?: unknown },
+  where: string,
+): void {
+  if (options.compare === false) {
+    throw new UsageError(
+      `compare: false can't be set in ${where}. A profile turns compare off with limit.compare: false, which runs the baseline and strips the variants. On a group or eval, omit compare or pass compare: { baseline, variants }.`,
+    )
+  }
+  const baseline =
+    options.compare !== null && typeof options.compare === 'object' && 'baseline' in options.compare
+      ? options.compare.baseline
+      : undefined
+  if (options.environment !== undefined && baseline !== undefined) {
+    throw new UsageError(
+      `environment and compare.baseline can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment, or drop baseline to make environment the control.`,
+    )
+  }
+}
+
 /** Throws on keys that aren't options, and on values of the wrong shape, suggesting a fix. */
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
   for (const key of Object.keys(options)) {
@@ -379,17 +400,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     }
   }
   const raw = options as { environment?: unknown; compare?: unknown }
-  if (raw.compare === false) {
-    throw new UsageError(
-      `compare: false can't be set in ${where}. A profile turns compare off with limit.compare: false, which runs the baseline and strips the variants. On a group or eval, omit compare or pass compare: { baseline, variants }.`,
-    )
-  }
+  refuseIllegalCompare(raw, where)
   if (o.compare !== undefined) checkCompare(o.compare, where)
-  if (raw.environment !== undefined && o.compare?.baseline !== undefined) {
-    throw new UsageError(
-      `environment and compare.baseline can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment, or drop baseline to make environment the control.`,
-    )
-  }
   if (o.pin !== undefined) {
     const bad = Array.isArray(o.pin) ? o.pin.filter((k) => !PINNABLE.includes(k)) : [o.pin]
     if (bad.length) {

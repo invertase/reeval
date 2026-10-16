@@ -4,7 +4,7 @@ import { collectingFile, getRunContext, registerGroup, registerTest } from './en
 import { inCI } from './env.ts'
 import { environmentFrom } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { checkOptions, matchesTags } from './options.ts'
+import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { planEval } from './plan-eval.ts'
 import type {
   AttemptContext,
@@ -221,42 +221,42 @@ export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string
     if (node.type === 'todo') registerTodo(node.name)
     else if (node.type === 'group') {
       const children = node.children
-      defineGroup(node.mode)(node.name, optionsFrom(node.options), () =>
+      defineGroup(node.mode)(node.name, optionsFrom(node.options, `group("${node.name}")`), () =>
         declareTree(children, bodyFor),
       )
-    } else defineEval(node.mode)(node.name, optionsFrom(node.options), bodyFor(node.body))
+    } else
+      defineEval(node.mode)(
+        node.name,
+        optionsFrom(node.options, `evaluate("${node.name}")`),
+        bodyFor(node.body),
+      )
   }
 }
 
 /** Options from their data forms: environments become `Environment`s again. */
-function optionsFrom(data: EvalOptionsData): EvalOptions {
+function optionsFrom(data: EvalOptionsData, where: string): EvalOptions {
+  refuseIllegalCompare(data, where)
   const { environment, compare, ...rest } = data
   const asEnv = (env: EnvironmentData) => environmentFrom(env)
-  // A declaration may still carry `compare: false`. Keep it so checkOptions rejects it.
-  if ((compare as unknown) === false) {
+  if (compare === undefined) {
     return {
       ...rest,
       ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
-      compare: false,
-    } as unknown as EvalOptions
+    }
   }
-  if (compare !== undefined) {
-    const revived = {
+  if (compare.baseline !== undefined) {
+    return {
       ...rest,
       compare: {
         ...compare,
-        ...(compare.baseline !== undefined ? { baseline: asEnv(compare.baseline) } : {}),
+        baseline: asEnv(compare.baseline),
         variants: compare.variants.map(asEnv),
       },
     }
-    // Without a baseline, `environment` is the control. With one, invalid data may set both:
-    // keep `environment` so checkOptions names both keys.
-    return (
-      environment === undefined ? revived : { ...revived, environment: asEnv(environment) }
-    ) as EvalOptions
   }
   return {
     ...rest,
     ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
+    compare: { ...compare, variants: compare.variants.map(asEnv) },
   }
 }
