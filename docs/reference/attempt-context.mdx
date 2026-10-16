@@ -40,6 +40,10 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session.
   Reads a file from the sandbox: a workspace-relative path, or `~/` for the home directory. Resolves with `null` when the file doesn't exist.
 </Property>
 
+<Property name="writeFile" type="(path: string, contents: string | Uint8Array) => Promise<void>">
+  Writes a file into the sandbox as the sandbox user, creating its directories: a workspace-relative path, or `~/` for the home directory. Later turns' `diff` leaves the file out, as it does the environment's files, but shows any change made to it afterwards, even under the workspace's `.gitignore`. Use it to place a hidden test after a turn, so the agent never sees it. Each write is a line in the debug trace and nothing in the record. An absolute path or one that leaves the workspace throws. Needs a sandbox, same as `c.exec`.
+</Property>
+
 <Property name="judge" type="(question: string, options?: JudgeCallOptions) => Promise<Verdict>">
   Asks the judge a yes/no question about the latest turn: its task, final message, changed files and diff. `options` takes `model`, `threshold`, `providerOptions` and `maxConcurrent` for this call, `on` (a `Turn` or any JSON value to grade instead), and `artifacts` (capture handles or names, sent as file parts). Without a turn it throws `c.judge() has no turn to grade: call c.send() first`. See [Judges](/reference/judges).
 </Property>
@@ -112,7 +116,7 @@ A fake run printing `c.attempt` shows:
 </Property>
 
 <Property name="diff" type="{ patch: string, files: { path, status }[] }">
-  Workspace changes since the eval started, as of the end of this turn. `status` is `added`, `modified` or `deleted`. Files, rules and setup from the environment aren't part of it.
+  Workspace changes since the eval started, as of the end of this turn. `status` is `added`, `modified` or `deleted`. Files, rules and setup from the environment aren't part of it, and nor is a file `c.writeFile` placed until something changes it.
 </Property>
 
 <Property name="exec" type="(command: string) => Promise<ExecResult>">

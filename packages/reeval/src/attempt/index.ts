@@ -72,7 +72,7 @@ async function attemptBody(
     return starting
   }
   const takeContext = contextTaker(a)
-  const { exec, readFile } = createChecks(a)
+  const { exec, readFile, writeFile } = createChecks(a)
 
   const c: AttemptContext = {
     get signal() {
@@ -81,6 +81,7 @@ async function attemptBody(
     turns: a.turns,
     exec,
     readFile,
+    writeFile,
     serve: (command, port) => serveCommand(a, command, port),
     capture: (target, options) => capturePage(a, target, options),
     attempt: { id: attemptId(spec.cell.key, spec.n), cell: spec.cell, n: spec.n },

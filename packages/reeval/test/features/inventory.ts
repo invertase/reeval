@@ -596,6 +596,12 @@ export const inventory: InventoryFeature[] = [
     name: '`c.sandbox()`: checks without a turn',
     fixtures: ['env/files-home', 'skills/workspace-placement'],
   },
+  {
+    id: 'env.write-file',
+    area: 'Environments',
+    name: "`c.writeFile()`: files placed after a turn, outside later turns' diff until changed",
+    fixtures: ['sandbox/write-file', 'sandbox/write-file-edit'],
+  },
 
   // Sandbox
   {

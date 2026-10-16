@@ -1,4 +1,6 @@
+import { posix } from 'node:path'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
+import { acceptIntoSnapshot } from '../diff.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { BackgroundHandle, ExecResult } from '../types.ts'
@@ -17,7 +19,7 @@ export function requireSandbox(a: Attempt, who = 'c.exec() or c.readFile()'): Sa
 
 /**
  * `c.exec` runs with the checks' variables and secrets, each run recorded and
- * timed; `c.readFile` reads the sandbox as is.
+ * timed; `c.readFile` reads the sandbox as is; `c.writeFile` places a file the diff leaves out.
  */
 export function createChecks(a: Attempt) {
   const checkEnv = () => (a.env?.checkVars ?? {}) as Record<string, string>
@@ -60,5 +62,23 @@ export function createChecks(a: Attempt) {
     return execForeground(command)
   }
   const readFile = (path: string) => requireSandbox(a).readFile(path)
-  return { exec, readFile }
+  const writeFile = async (path: string, contents: string | Uint8Array) => {
+    const box = requireSandbox(a, 'c.writeFile()')
+    const home = path.startsWith('~/')
+    const normal = posix.normalize((home ? path.slice(2) : path).replaceAll('\\', '/'))
+    if (normal === '.' || /^([a-zA-Z]:)?\//.test(normal) || /^\.\.(\/|$)/.test(normal)) {
+      throw new Error(
+        `c.writeFile() takes a workspace-relative path or ~/…, not ${JSON.stringify(path)}`,
+      )
+    }
+    a.signal.throwIfAborted()
+    await box.writeFile(home ? `~/${normal}` : normal, contents)
+    if (!home) await acceptIntoSnapshot(box, normal, a.signal)
+    const bytes = typeof contents === 'string' ? Buffer.byteLength(contents) : contents.byteLength
+    debugLog(
+      'check',
+      `wrote ${path} (${bytes} bytes)${home ? '' : ', kept out of the diff until something changes it'}`,
+    )
+  }
+  return { exec, readFile, writeFile }
 }

@@ -161,7 +161,11 @@ group('hello', () => {
   `fakeInstructions` from `reeval/testing` and pass it as `instructions`.
   The same `timeout` is the budget: if the event never arrives the capture fails and there
   is no PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
-  `await c.readFile(path)` the text or `null` (`~/` for home). `await c.sandbox()` starts the
+  `await c.readFile(path)` the text or `null` (`~/` for home). `await c.writeFile(path, text)`
+  places a file after a turn (a hidden test the agent never saw) instead of seeding it in
+  `files`; later turns' `diff` leaves it out but shows any change the agent makes to it, even
+  under `.gitignore`. Don't place grading files with a `c.exec` heredoc: the next turn's diff
+  (and the judge) would count them as the agent's. `await c.sandbox()` starts the
   sandbox without a turn, to check what the environment set up. `c.attempt.cell.role` is
   `'control'` or `'variant'`.
 - `await c.judge(question, { threshold?, model?, on?, include?, files?, artifacts? })`: the judge sees the

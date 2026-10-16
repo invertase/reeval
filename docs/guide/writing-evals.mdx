@@ -82,6 +82,25 @@ evaluate('writes a module', async (c) => {
 
 `toHaveFile(path, pattern?)` checks a file exists and, optionally, matches a string or regular expression. `c.readFile` returns the contents, or `null` when there's no such file. Paths are relative to the workspace, or start with `~/` for the home directory.
 
+## Place hidden tests after the turn
+
+```ts title="evals/guide.eval.ts"
+const hidden = `import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { greet } from '../greet.js'
+test('greets', () => assert.equal(greet('Ada'), 'Hello, Ada!'))
+`
+
+evaluate('passes a test it never saw', async (c) => {
+  await c.send('Create greet.js exporting greet(name) → "Hello, <name>!".')
+
+  await c.writeFile('test/hidden.test.js', hidden)
+  await expect(c.exec('node --test test/hidden.test.js')).toSucceed()
+})
+```
+
+A test in the environment's `files` is there before the agent starts, so it can read it or rewrite it. `c.writeFile` places it once the turn is done. A later turn's `diff` leaves the file out, as it does the environment's files, but shows it if the agent changes it.
+
 ## Await the matchers
 
 `toHaveFile` and `toSucceed` read from the sandbox, so they return promises. Always `await` them:
