@@ -1,5 +1,6 @@
+import picomatch from 'picomatch'
 import { SKILL_LOAD_TOOLS, toolTarget } from './history/tool-target.ts'
-import type { AttemptContext, TranscriptEvent, Turn, WebEventType } from './types.ts'
+import type { AttemptContext, FileChange, TranscriptEvent, Turn, WebEventType } from './types.ts'
 
 export type Result = { pass: boolean; message: () => string }
 
@@ -234,6 +235,52 @@ export function edited(actual: unknown, path?: RegExp | string): Result {
       pass
         ? `expected no file edits${targetOf(path)}, got ${listed(seen)}`
         : `expected file edits${targetOf(path)}, got ${listed(seen)}`,
+  }
+}
+
+export type PathMatch = string | RegExp | ReadonlyArray<string | RegExp>
+
+const hasDiff = (value: unknown): value is Pick<Turn, 'diff'> =>
+  typeof value === 'object' && value !== null && Array.isArray((value as Turn).diff?.files)
+
+/** A turn's changed files, or `c`'s as of its latest turn: the diff is cumulative. */
+function changedFiles(actual: unknown): FileChange[] {
+  if (hasDiff(actual)) return actual.diff.files
+  if (isContext(actual)) return (actual.turns.at(-1) as Turn | undefined)?.diff.files ?? []
+  throw new TypeError('toHaveChanged() expects a turn from c.send(), or c')
+}
+
+/** A glob also matches every file under the directory it names, so `test` is `test/**` too. */
+const pathTest = (pattern: string | RegExp): ((path: string) => boolean) => {
+  if (pattern instanceof RegExp) return (path) => pattern.test(path)
+  const glob = pattern.replace(/^\.?\/+/, '').replace(/\/+$/, '')
+  const self = picomatch(glob, { dot: true })
+  const inside = picomatch(`${glob}/**`, { dot: true })
+  return (path) => self(path) || inside(path)
+}
+
+/** Files in the workspace diff, so every write counts: a tool's, a shell command's or a subprocess's. */
+export function changed(actual: unknown, paths?: PathMatch): Result {
+  const files = changedFiles(actual)
+  const patterns =
+    paths === undefined
+      ? []
+      : typeof paths === 'string' || paths instanceof RegExp
+        ? [paths]
+        : [...paths]
+  const tests = patterns.map(pathTest)
+  const hits = files.filter((f) => tests.length === 0 || tests.some((t) => t(f.path)))
+  const label = (list: FileChange[]) =>
+    list.length
+      ? `[${list.map((f) => `${JSON.stringify(f.path)} (${f.status})`).join(', ')}]`
+      : 'none'
+  const target = patterns.length ? ` to ${patterns.map(String).join(', ')}` : ''
+  return {
+    pass: hits.length > 0,
+    message: () =>
+      hits.length > 0
+        ? `expected no changes${target}, got ${label(hits)}`
+        : `expected changes${target}, got ${label(files)}`,
   }
 }
 

@@ -157,6 +157,7 @@ The judge answers a yes/no question about the latest turn. It sees the task, the
 |---|---|---|
 | `c.exec`, `toSucceed` | Something a command can decide | `node --test`, a build, a script's output |
 | `toHaveFile`, `c.readFile` | In the files | A config key, an import, no `require(` |
+| `toHaveChanged` | In the workspace diff | The agent left `test/**` alone |
 | `toHaveCalledSkill` / `toHaveCalledMcp` / `toHaveRun` / `toHaveEdited` | In the transcript | A skill load, an MCP call, a shell command, a file edit |
 | `c.judge` | A matter of judgement | "Does the message describe the change?" |
 

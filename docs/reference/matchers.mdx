@@ -83,6 +83,8 @@ command, not `c.exec`.
 `toHaveEdited(path?)` matches a `file-edit` whose path matches, or a tool
 whose target or output mentions the path (a shell edit). No argument: any
 `file-edit`.
+It reads the transcript, so `cat test/x` counts and a write from a
+subprocess doesn't: for anti-tamper, use [`toHaveChanged`](#tohavechanged).
 
 ```ts title="evals/activation.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -119,6 +121,52 @@ expected tool calls matching mcp__stamp__other, got ["mcp__stamp__house_stamp"]
   edits and web calls. The normaliser rewrites those to `file-edit` and
   `web-*`.
 </Warning>
+
+## toHaveChanged
+
+```ts
+expect(turnOrC).toHaveChanged(paths?)
+```
+
+<Property name="actual" type="Turn | AttemptContext">
+  A turn from `c.send()` (the workspace up to that turn), or `c` (up to its
+  latest turn; before any turn, nothing has changed). Anything else throws
+  `toHaveChanged() expects a turn from c.send(), or c`.
+</Property>
+
+<Property name="paths" type="string | RegExp | Array<string | RegExp>" optional>
+  Workspace-relative globs (`*`, `**`, `{a,b}`, dotfiles included) or
+  RegExps, matched against each changed file's path. A glob also matches
+  every file under the directory it names, so `test` is `test/**`. Without
+  it, any change passes.
+</Property>
+
+It reads `turn.diff.files`: the workspace against the snapshot taken after
+setup. That covers every write, whether a tool, a shell command or a
+subprocess made it, so it's the guard for files the agent must leave alone.
+Files the environment's `.gitignore` ignores aren't in the diff.
+
+```ts title="evals/fix-test.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('fixes greet without touching its test', async (c) => {
+  const turn = await c.send('Make the failing greet test pass.')
+  expect(c).not.toHaveChanged(['tsconfig.json', 'biome.json', 'test/**'])
+  expect(turn).toHaveChanged('src/greet.ts')
+  await expect(c.exec('npm test')).toSucceed()
+})
+```
+
+It's synchronous: no `await`. Failure messages list the files it saw, with
+their status (`added`, `modified` or `deleted`):
+
+```text
+expected no changes to test/**, got ["test/greet.test.js" (modified)]
+```
+
+```text
+expected changes to src/greet.ts, got none
+```
 
 ## toHaveFile
 

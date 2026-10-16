@@ -2,8 +2,10 @@ import {
   calledMcp,
   calledSkill,
   calledTool,
+  changed,
   edited,
   fetched,
+  type PathMatch,
   ran,
   searched,
   type ToolInputMatch,
@@ -80,6 +82,10 @@ export const matchers = {
 
   toHaveEdited(actual: unknown, path?: RegExp | string): Result {
     return edited(actual, path)
+  },
+
+  toHaveChanged(actual: unknown, paths?: PathMatch): Result {
+    return changed(actual, paths)
   },
 
   toPass(this: { isNot?: boolean } | undefined, actual: unknown): Result {

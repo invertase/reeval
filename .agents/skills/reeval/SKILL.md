@@ -202,6 +202,10 @@ group('hello', () => {
   the same on every harness (stdio; Goose, OpenCode, pi and Codex refuse
   `mcp.sse`). Use `toHaveEdited` / `toHaveSearched`, not
   `toHaveCalledTool('edit')` or `'webSearch'`.
+- Guard files the agent must leave alone with `expect(c).not.toHaveChanged(['test/**',
+  'package.json'])` (sync): it reads the workspace diff, so a shell or subprocess write counts
+  and a read doesn't. Strings are globs (a directory matches everything under it), RegExps work,
+  and a turn means up to that turn. `toHaveEdited` reads the transcript; don't use it as a guard.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
   `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw

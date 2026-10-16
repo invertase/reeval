@@ -1477,6 +1477,12 @@ export const features: Feature[] = [
     canary: /expected file edits matching other\.txt/,
   },
   {
+    dir: 'assert/changed',
+    tiers: ['fake', 'docker'],
+    env: 'seeded',
+    canary: /expected no changes to test\/\*\*, got \["test\/greet\.test\.js" \(modified\)\]/,
+  },
+  {
     dir: 'judge/files',
     tiers: ['fake'],
     env: 'readme-app',
