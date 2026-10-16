@@ -83,7 +83,7 @@
 | Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them | ✓ 4 | ✓ 2 | — | — | — |
 | Login shells keep the image's `PATH` (`/etc/profile.d/00-reeval-path.sh`) | — | — | — | ● 2 | — |
 | `docker({ memory, cpus, pids })` and their defaults | ✓ 4 | — | — | ● 1 | — |
-| `docker({ swap })`: swap on top of memory, as much as memory by default | ✓ 2 | — | — | ● 1 | — |
+| An OOM kill during an attempt is an infra error | ✓ 1 | — | — | ● 1 | — |
 | `docker({ from })` toolchain images | ✓ 2 | — | — | — | — |
 | Preflight: every sandbox prepared before any attempt; a failure fails only its cells, or stops the run from the config | ✓ 3 | — | — | — | — |
 | The sandbox provider prepare contract: check, key, prepare, classify (a scripted provider and Docker) | ✓ 6 | — | — | — | — |

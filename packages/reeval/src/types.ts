@@ -1270,8 +1270,22 @@ export type PrepareFailureRecord = {
   setBy: string[]
 }
 
-/** Why an attempt failed; `prepare` when its sandbox couldn't be prepared. */
-export type AttemptError = { kind: ErrorKind; message: string; prepare?: PrepareFailureRecord }
+/**
+ * The sandbox ran out of a resource during the attempt: `oom` is the kernel killing `kills`
+ * processes at its memory limit. The attempt is then an infra error, whatever its checks said.
+ */
+export type ResourceFailureRecord = { cause: 'oom'; kills: number }
+
+/**
+ * Why an attempt failed; `prepare` when its sandbox couldn't be prepared, `resource` when it ran
+ * out of one.
+ */
+export type AttemptError = {
+  kind: ErrorKind
+  message: string
+  prepare?: PrepareFailureRecord
+  resource?: ResourceFailureRecord
+}
 
 export type TurnRecord = Pick<
   Turn,

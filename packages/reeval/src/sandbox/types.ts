@@ -24,6 +24,12 @@ export interface Sandbox {
   servedModels?(): string[]
   /** The same, one entry per brokered request that named its model, in order. */
   servedRequests?(): string[]
+  /**
+   * When the sandbox has a memory limit: how many processes the kernel killed at it so far, and
+   * the limit and the swap on top as the eval set them (`swap` is `null` without any). `null`
+   * when it can't tell.
+   */
+  oomKills?(): Promise<{ kills: number; limit: string; swap: string | null } | null>
   /** Idempotent, never throws. */
   destroy(): Promise<void>
   /**

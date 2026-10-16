@@ -718,6 +718,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'docker.oom-is-infra',
+    area: 'Sandbox',
+    name: 'An OOM kill during an attempt is an infra error',
+    fixtures: ['sandbox/oom-is-infra'],
+    tests: [
+      sandboxDocker(
+        'confinement',
+        'oomKills counts the processes the kernel killed at the memory limit',
+      ),
+    ],
+  },
+  {
     id: 'docker.from',
     area: 'Sandbox',
     name: '`docker({ from })` toolchain images',

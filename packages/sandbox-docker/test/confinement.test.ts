@@ -180,6 +180,15 @@ describe('sandbox confinement in Docker', {
     assert.equal((await s.run({ command: allocate(16) })).stdout, 'allocated 16\n')
   })
 
+  test('oomKills counts the processes the kernel killed at the memory limit', async () => {
+    const s = await open({ limits: { memory: '128m' } })
+    // Twin: an exit 137 from a plain SIGKILL isn't an OOM kill.
+    assert.equal((await s.run({ command: 'kill -9 $$' })).exitCode, 137)
+    assert.equal(await s.oomKills(), 0)
+    assert.equal((await s.run({ command: allocate(512) })).exitCode, 137)
+    assert.equal(await s.oomKills(), 1)
+  })
+
   test('install layers put ~ in the sandbox user’s home, owned by it', async () => {
     const parent = {
       ref: DEFAULT_IMAGE,

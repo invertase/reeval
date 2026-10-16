@@ -44,6 +44,25 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
 }
 
 /**
+ * A process the kernel killed at the sandbox's memory limit makes the attempt an infra error,
+ * whatever its checks said: the limit, not the agent, decided it. Returns the error to fail it with.
+ */
+export async function recordOom(
+  a: Attempt,
+  sandbox: Sandbox | undefined,
+): Promise<InfraError | undefined> {
+  const oom = await sandbox?.oomKills?.().catch(() => null)
+  const at = oom && `the ${oom.limit} limit${oom.swap ? ` (+${oom.swap} swap)` : ''}`
+  if (oom) debugLog('teardown', `oom_kill ${oom.kills} at ${at}`)
+  if (!oom?.kills) return undefined
+  const processes = oom.kills === 1 ? '1 process' : `${oom.kills} processes`
+  const message = `out of memory: ${processes} killed at ${at}; raise docker({ memory })`
+  a.record.error = { kind: 'infra', message, resource: { cause: 'oom', kills: oom.kills } }
+  a.record.outcome = 'infra_error'
+  return new InfraError(message)
+}
+
+/**
  * The attempt's egress policy and, when its sandbox records it, what it contacted and was refused.
  * Refused hosts the harness always tries are `expectedBlocked`, summarised in one `-v` line.
  */

@@ -1,0 +1,4 @@
+$ node -e 'const b = []; for (let i = 0; i < 2048; i++) b.push(Buffer.alloc(1 << 20, 1))'
+exit 137
+--- stdout
+--- stderr

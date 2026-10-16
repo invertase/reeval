@@ -84,6 +84,9 @@
         },
         "prepare": {
           "$ref": "#/$defs/PrepareFailureRecord"
+        },
+        "resource": {
+          "$ref": "#/$defs/ResourceFailureRecord"
         }
       },
       "required": ["kind", "message"]
@@ -1492,6 +1495,18 @@
         }
       },
       "required": ["cause", "class", "log", "ref", "setBy", "stage"]
+    },
+    "ResourceFailureRecord": {
+      "type": "object",
+      "properties": {
+        "cause": {
+          "const": "oom"
+        },
+        "kills": {
+          "type": "number"
+        }
+      },
+      "required": ["cause", "kills"]
     },
     "RunnerInfo": {
       "anyOf": [

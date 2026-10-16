@@ -16,7 +16,7 @@ import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
-import { recordEgress, recordFailure, writeRecord } from './record.ts'
+import { recordEgress, recordFailure, recordOom, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
 import { turnSender } from './turns.ts'
@@ -93,6 +93,8 @@ async function attemptBody(
   }
 
   const timedOut = () => !!timer?.aborted && !testSignal.aborted
+  let failure: { error: unknown } | undefined
+  let oom: Error | undefined
   try {
     a.report({ kind: 'sandbox' })
     const where = `${id} [${attemptId(spec.cell.key, spec.n)}]`
@@ -114,8 +116,11 @@ async function attemptBody(
     }
   } catch (error) {
     recordFailure(a, error, timedOut())
-    if (timedOut()) throw new TimeoutError(`Eval timed out after ${spec.timeoutMs / 1000}s`)
-    throw error
+    failure = {
+      error: timedOut()
+        ? new TimeoutError(`Eval timed out after ${spec.timeoutMs / 1000}s`)
+        : error,
+    }
   } finally {
     // Checks the eval didn't await still use the sandbox: let them finish before teardown.
     if (!a.signal.aborted) await unawaited().catch(() => {})
@@ -129,6 +134,8 @@ async function attemptBody(
     await a.session?.close().catch(() => {})
     if (a.session) debug.log('teardown', 'harness session closed')
     recordEgress(a, sandbox)
+    // A timeout or cancel has already removed the container, so there's nothing left to read.
+    oom = a.signal.aborted ? undefined : await recordOom(a, sandbox)
     await sandbox?.destroy()
     if (sandbox) {
       debug.log(
@@ -148,4 +155,6 @@ async function attemptBody(
     setMeta(await writeRecord(a, stagingDir, id))
     await debug.finish(debug.verbosity === 2 || record.outcome !== 'pass')
   }
+  if (oom) throw oom
+  if (failure) throw failure.error
 }

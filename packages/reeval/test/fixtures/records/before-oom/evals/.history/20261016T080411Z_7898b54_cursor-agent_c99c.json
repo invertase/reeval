@@ -1,0 +1,508 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20261016T080411Z_7898b54_cursor-agent_c99c",
+  "status": "budget",
+  "startedAt": "2026-10-16T08:04:11.639Z",
+  "endedAt": "2026-10-16T08:04:13.765Z",
+  "durationMs": 2126,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "7898b54a99375d09488c92f8ea888374f439ea4c",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-10-16T08:04:11+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "5c7602959760"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.8.0",
+    "node": "22.14.0",
+    "runtime": {
+      "name": "node",
+      "version": "22.14.0"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.6",
+      "@reeval/harness-opencode": "0.2.7",
+      "@reeval/harness-goose": "0.1.2",
+      "@reeval/harness-pi": "0.2.6",
+      "@reeval/harness-cursor-sdk": "0.1.4",
+      "@ai-sdk/harness-claude-code": "1.0.152-patch.8edc594f",
+      "@reeval/harness-codex": "0.1.6",
+      "ai": "7.0.140",
+      "@ai-sdk/harness": "1.0.148",
+      "@ai-sdk/google": "4.0.93",
+      "@ai-sdk/typesafe-ai": "3.0.18"
+    },
+    "harnesses": [
+      {
+        "id": "slow",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": "fake",
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "77c8a1991e97"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "fake",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": {
+    "name": "budget",
+    "reason": "--profile",
+    "defaults": {
+      "runs": 4
+    },
+    "limit": {}
+  },
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 4,
+    "estimateMs": 4000,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "duration": "1s"
+  },
+  "config": {
+    "sandbox": "docker",
+    "environment": "fake",
+    "runs": 1,
+    "judgeModel": "fake",
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 1,
+    "configHash": "b7440f74882898e6099f4dd50eea39a890182084c967cf58769bcf81b21dbe4f"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 4,
+    "pass": 3,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 1
+  },
+  "evals": [
+    {
+      "id": "evals/slow.eval.ts › takes its time",
+      "key": "evals/slow.eval.ts › takes its time",
+      "slug": "evals-slow-eval-ts-takes-its-time-c5b2d3",
+      "file": "evals/slow.eval.ts",
+      "group": [],
+      "name": "takes its time",
+      "tags": [],
+      "fingerprint": "d98ecc7101892ccbebb543af8183f1e4dd21394794447b90f60966697d6e4958",
+      "sources": [
+        {
+          "path": "evals/slow.eval.ts",
+          "sha256": "0fb106987d3f59e0f50795c800bc1e36f5dcc7d7fc1980177140bb5c709f9490"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "slow/fake/fake",
+          "harness": "slow",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "8d4a64c1a5a919e876b667aa349697ddecd097160a4470ef0e3b6c7661d0d21d",
+          "fingerprintParts": {
+            "sources": "945abbe91dc95cdc1ef0c02139bcb1623a3810b3cb40d03ff76d95942e0df406",
+            "harness": "6e991aa1925a0acc84cb3ea7614a33fbc8e11c855a78051675988fba339b216d",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "e4d6847cb6c27e394c484af7219b8394e636185d726fc002fa19642d0bfa155a",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 4,
+          "pass": 3,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#1",
+          "id": "slow/fake/fake#1",
+          "cell": "slow/fake/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-16T08:04:12.462Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 443,
+          "turns": [
+            {
+              "prompt": "Write greet.js slowly.",
+              "status": "completed",
+              "startedAt": "2026-10-16T08:04:12.478Z",
+              "durationMs": 403,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 15,
+            "agentMs": 403,
+            "diffMs": 10,
+            "checksMs": 3,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "test -f greet.js",
+              "exitCode": 0,
+              "durationMs": 3,
+              "log": {
+                "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/1/checks/1.log",
+                "sha256": "1fc4069593866830dfb56e2441b91dfdf5a18f3135124d950998233f3ff84913",
+                "bytes": 48
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/1/transcript.jsonl",
+              "sha256": "a255c78946ba44e74f25a823b5fc49b7c7ed58dd535ac7d32664108a1ee4545d",
+              "bytes": 599
+            },
+            "diff": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/1/diff.patch",
+              "sha256": "fb3d1e9fcf6fe063a831377e2a88ddf95eba7b94c5d3b65b6db08c7a90d19656",
+              "bytes": 124
+            }
+          }
+        },
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#2",
+          "id": "slow/fake/fake#2",
+          "cell": "slow/fake/fake",
+          "n": 2,
+          "seq": 2,
+          "startedAt": "2026-10-16T08:04:12.901Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 430,
+          "turns": [
+            {
+              "prompt": "Write greet.js slowly.",
+              "status": "completed",
+              "startedAt": "2026-10-16T08:04:12.913Z",
+              "durationMs": 401,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 11,
+            "agentMs": 402,
+            "diffMs": 10,
+            "checksMs": 2,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "test -f greet.js",
+              "exitCode": 0,
+              "durationMs": 2,
+              "log": {
+                "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/2/checks/1.log",
+                "sha256": "1fc4069593866830dfb56e2441b91dfdf5a18f3135124d950998233f3ff84913",
+                "bytes": 48
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/2/transcript.jsonl",
+              "sha256": "92c969ded45f7335d8dadccddedb515b6b552ac9d21cd74e30c7fbef35c9366e",
+              "bytes": 599
+            },
+            "diff": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/2/diff.patch",
+              "sha256": "fb3d1e9fcf6fe063a831377e2a88ddf95eba7b94c5d3b65b6db08c7a90d19656",
+              "bytes": 124
+            }
+          }
+        },
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#3",
+          "id": "slow/fake/fake#3",
+          "cell": "slow/fake/fake",
+          "n": 3,
+          "seq": 3,
+          "startedAt": "2026-10-16T08:04:13.331Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 428,
+          "turns": [
+            {
+              "prompt": "Write greet.js slowly.",
+              "status": "completed",
+              "startedAt": "2026-10-16T08:04:13.342Z",
+              "durationMs": 400,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 9,
+            "agentMs": 401,
+            "diffMs": 10,
+            "checksMs": 2,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "test -f greet.js",
+              "exitCode": 0,
+              "durationMs": 2,
+              "log": {
+                "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/3/checks/1.log",
+                "sha256": "1fc4069593866830dfb56e2441b91dfdf5a18f3135124d950998233f3ff84913",
+                "bytes": 48
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/3/transcript.jsonl",
+              "sha256": "968db73fb2ea058bc5e687a4ab82858d30836c01e5cdc9e0eeac6fcfb968d718",
+              "bytes": 599
+            },
+            "diff": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/3/diff.patch",
+              "sha256": "fb3d1e9fcf6fe063a831377e2a88ddf95eba7b94c5d3b65b6db08c7a90d19656",
+              "bytes": 124
+            }
+          }
+        },
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#4",
+          "id": "slow/fake/fake#4",
+          "cell": "slow/fake/fake",
+          "n": 4,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 1303,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}

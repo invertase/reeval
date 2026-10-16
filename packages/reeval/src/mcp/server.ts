@@ -36,7 +36,8 @@ const VIEW_ROWS: Record<string, string> = {
     'cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict and a likely cause',
   drift:
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
-  failing_attempts: 'failed attempt, with its harness, model, environment skill and error',
+  failing_attempts:
+    'failed or infra-error attempt, with its harness, model, environment skill, error and OOM kills',
   eval_trend: 'eval per run: outcome, pass rate, branch, PR and fingerprint',
   verdict_flips: 'judge question per cell whose pass rate changed from its previous run',
 }

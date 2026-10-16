@@ -854,6 +854,28 @@ export const features: Feature[] = [
     canary: /expected '536870912\\n' to be '268435456\\n'/,
   },
   {
+    dir: 'sandbox/oom-is-infra',
+    tiers: ['docker'],
+    env: 'small',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message:
+          /^out of memory: \d+ process(es)? killed at the 128m limit \(\+128m swap\); raise docker\(\{ memory \}\)$/,
+      },
+    },
+    canary: /expected command to succeed, exit code 137/,
+    record: ({ run }) => {
+      const [lands, canary] = ['lands', 'canary'].map(
+        (name) => run.evals.find((e) => e.name === name)?.attempts[0]?.error,
+      )
+      assert.equal(lands?.resource?.cause, 'oom')
+      assert.ok((lands?.resource?.kills ?? 0) > 0, JSON.stringify(lands))
+      assert.equal(canary?.resource, undefined)
+    },
+  },
+  {
     dir: 'env/files-home',
     tiers: ['fake', 'docker'],
     env: 'home-files',
