@@ -173,6 +173,16 @@ Lift below minLift (1)
 
 A variant below its `minLift` fails the run with exit 1. To pass it, add runs until the interval narrows, not until the point estimate looks good.
 
+## Methods
+
+reeval uses standard methods for small samples, so its numbers can be checked against any statistics package.
+
+| Method | Used for | Source |
+|---|---|---|
+| Wilson score interval | Each side's pass rate | Wilson, E. B. (1927). *Probable inference, the law of succession, and statistical inference.* JASA 22(158) |
+| Newcombe's hybrid score interval | The 95% interval on lift | Newcombe, R. G. (1998). *Interval estimation for the difference between independent proportions.* Statistics in Medicine 17(8) |
+| Exact two-sided Mann–Whitney U test | The effort verdict | Mann, H. B. and Whitney, D. R. (1947). *On a test of whether one of two random variables is stochastically larger than the other.* Annals of Mathematical Statistics 18(1) |
+
 ## See it in the studio
 
 The run page shows each cell's role, pass rate and lift with its interval.
