@@ -21,11 +21,14 @@ import {
   evalRoot,
   findConfig,
   malformedCredentials,
+  missingConfigMessage,
   missingCredentials,
   parseDuration,
+  requireConfig,
   resolveConcurrency,
   resolveConfig,
   selectProfile,
+  UsageError,
 } from '../src/config.ts'
 import type { AttemptDebug } from '../src/debug/attempt.ts'
 import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
@@ -571,6 +574,19 @@ test('findConfig takes the nearest config at or above the directory, like Vitest
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('requireConfig refuses a missing file with the config names doctor lists and reeval init', () => {
+  const found = '/tmp/reeval.config.ts'
+  assert.equal(requireConfig(found), found)
+  assert.throws(
+    () => requireConfig(undefined),
+    (e: unknown) => e instanceof UsageError && e.message === missingConfigMessage(),
+  )
+  assert.equal(
+    missingConfigMessage(),
+    'No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs) here or above. Run reeval init.',
+  )
 })
 
 test('the history folder sits in the directory the evals live in', () => {

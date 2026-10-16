@@ -1610,6 +1610,22 @@ ${body}
     })
   }
 
+  test('no reeval.config.* here or above exits 2 with a fix', async () => {
+    const p = await project('no-config', {})
+    const missing =
+      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs\) here or above\. Run reeval init\.\n$/
+    for (const argv of [
+      ['run'],
+      ['run', '--dry-run'],
+      ['image', 'build'],
+      ['image', 'build', '--dry-run'],
+    ]) {
+      const r = await runCli(p.dir, argv)
+      assert.equal(r.code, 2, `${argv.join(' ') || 'run'}\n${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, missing, argv.join(' ') || 'run')
+    }
+  })
+
   test('config errors name the config file that was read, as typed from the current directory', async () => {
     const bad = (extra: string) =>
       config(extra).replace(
@@ -2267,10 +2283,13 @@ evaluate('tools', { tags: ['tools'], environment: defineEnvironment('tools', { s
       unknown.stderr,
       /^reeval: Unknown profile "nope"\. Profiles in reeval\.config\.ts: claude, tools\.\n$/,
     )
-    // Without a config there are no profiles, so naming one is refused as reeval run refuses it.
+    // A missing config is refused before a profile is named.
     const bare = await project('image-profile-bare', {})
     const noConfig = await runCli(bare.dir, ['image', 'build', '--dry-run', '--profile', 'x'])
     assert.equal(noConfig.code, 2, noConfig.stdout + noConfig.stderr)
-    assert.match(noConfig.stderr, /Unknown profile "x"\. reeval\.config\.ts defines no profiles\./)
+    assert.match(
+      noConfig.stderr,
+      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs\) here or above\. Run reeval init\.\n$/,
+    )
   })
 })

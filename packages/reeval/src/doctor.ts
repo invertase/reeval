@@ -7,7 +7,7 @@ import type { DockerState } from '@reeval/sandbox-docker'
 import type { Flags } from './cli-spec.ts'
 import {
   badCharacterAt,
-  CONFIG_FILES,
+  configFilesPhrase,
   configLabel,
   configPathFor,
   defaultConcurrency,
@@ -595,7 +595,7 @@ export async function doctor(
     checks.push({
       id: 'config',
       status: 'fail',
-      summary: `no ${CONFIG_FILES[0]} (or ${CONFIG_FILES.slice(1).join(', ')}) here or above`,
+      summary: `no ${configFilesPhrase()} here or above`,
       fix: 'reeval init',
     })
   } else {

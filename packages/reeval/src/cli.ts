@@ -16,6 +16,7 @@ import {
   malformedCredentials,
   missingCredentials,
   parseDuration,
+  requireConfig,
   resolveConcurrency,
   selectProfile,
   UsageError,
@@ -227,7 +228,7 @@ function verbosityOf(flags: Flags): 0 | 1 | 2 {
 /**
  * `reeval image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
  * sandboxes need; with `--dry-run`, lists them instead. `--profile` plans as `reeval run --profile`
- * does. Without a config, just reeval's image.
+ * does. Needs a config, as `reeval run` does: there is no default image.
  */
 async function imageBuildCommand(
   flags: Flags,
@@ -235,36 +236,27 @@ async function imageBuildCommand(
   filters: string[],
 ): Promise<number> {
   const { buildImages, imagePlanLines, imageTargets } = await import('./sandbox/images.ts')
-  const { docker } = await import('./sandbox.ts')
-  let root = process.cwd()
-  const { fakeHarness } = await import('./harness.ts')
-  // The fake harness runs in Cursor's image, so without a config this builds reeval's default image.
-  let uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> = [
-    { id: '', harness: fakeHarness(), sandbox: docker() },
-  ]
-  if (!configPath && flags.profile) selectProfile(await loadConfig(undefined), flags.profile)
-  if (configPath) {
-    const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
-    const ctx = await startRun(setup)
-    const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
-    root = config.root
-    const { runEngine } = await import('./engine/node.ts')
-    let planned: PlannedItem[] = []
-    await runEngine({
-      run: JSON.parse(
-        JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
-      ),
-      filters,
-      onPlan: async (collected) => {
-        if (collected.unmatched.length) throw unmatchedFilter(config, collected.unmatched)
-        planned = collected.planned.filter((p) => !p.attempt.plan.skip)
-        return false
-      },
-    })
-    uses = planned.length
+  const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
+  const ctx = await startRun(setup)
+  const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
+  const root = config.root
+  const { runEngine } = await import('./engine/node.ts')
+  let planned: PlannedItem[] = []
+  await runEngine({
+    run: JSON.parse(
+      JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
+    ),
+    filters,
+    onPlan: async (collected) => {
+      if (collected.unmatched.length) throw unmatchedFilter(config, collected.unmatched)
+      planned = collected.planned.filter((p) => !p.attempt.plan.skip)
+      return false
+    },
+  })
+  const uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> =
+    planned.length
       ? planned.map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox }))
       : config.harness.map((harness) => ({ id: '', harness, sandbox: config.sandbox }))
-  }
   const targets = imageTargets(uses)
   if (targets.length === 0) {
     console.log('No eval runs in a Docker sandbox, so there are no images to build.')
@@ -455,9 +447,10 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
       'reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.',
     )
   }
-  loadEnvFiles(configPath)
+  const path = requireConfig(configPath)
+  loadEnvFiles(path)
   const named = flags.profile ?? (process.env.REEVAL_PROFILE || undefined)
-  const config = await loadConfig(configPath, 'run', named)
+  const config = await loadConfig(path, 'run', named)
   const profile = selectProfile(config, flags.profile)
   let runs: number | undefined
   if (flags.runs !== undefined) {
@@ -491,9 +484,9 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
     json: !!flags.json,
     force: !!flags.force,
     verbosity: verbosityOf(flags),
-    configFile: configPath && configLabel(configPath),
+    configFile: configLabel(path),
     /** Named in the plan line when the project root isn't the current directory. */
-    configElsewhere: !!configPath && dirname(configPath) !== process.cwd(),
+    configElsewhere: dirname(path) !== process.cwd(),
     /** `undefined` is a new run; `''` is newest resumable; a string is a run id or prefix. */
     resume: flags.resume,
   }

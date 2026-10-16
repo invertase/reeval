@@ -390,7 +390,9 @@ the quickest way from "it failed" to what the agent did.
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
 (`reeval run skill antigravity`). Every command uses the nearest `reeval.config.*` in the current directory or
-above (paths resolve from its directory), or `--config <path>`. Exit codes: 0 pass (and
+above (paths resolve from its directory), or `--config <path>`. `reeval run` and `reeval image build`
+fail with no config (`No reeval.config.ts … here or above. Run reeval init.`); there is no hidden
+default harness or include. Exit codes: 0 pass (and
 `--dry-run`), 1 a gated failure, 2 usage/config error (including a filter that matches nothing),
 3 infra error, 130 Ctrl-C, 143 SIGTERM. Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies
 them to `evals/.history/` to commit. That folder gets a `.gitignore` that un-ignores
@@ -400,6 +402,7 @@ recorded `*.log` files; `reeval record` warns if git still ignores a file it wro
 
 | Mistake | reeval says | Fix |
 |---|---|---|
+| No `reeval.config.*` | `No reeval.config.ts … here or above. Run reeval init.` | `reeval init`, or pass `--config` |
 | `compare` in `reeval.config.ts` | `compare can't be set in reeval.config.ts` | Put it on the group or eval |
 | `environment: [a, b]` | `environment takes one environment, not a list` | `compare: { baseline: a, variants: [b] }` |
 | `compare: [b]` | `compare must be an object` | `compare: { baseline, variants: [b] }` |

@@ -90,6 +90,20 @@ export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map(
 
 const DEFAULT_CONFIG_FILE = 'reeval.config.ts'
 
+/** The names `findConfig` looks for, as doctor and the missing-config error list them. */
+export const configFilesPhrase = (): string =>
+  `${CONFIG_FILES[0]} (or ${CONFIG_FILES.slice(1).join(', ')})`
+
+/** Usage error when `findConfig()` finds nothing: same names as doctor, plus `reeval init`. */
+export const missingConfigMessage = (): string =>
+  `No ${configFilesPhrase()} here or above. Run reeval init.`
+
+/** A found config path, or the missing-config usage error. */
+export function requireConfig(path: string | undefined): string {
+  if (path === undefined) throw new UsageError(missingConfigMessage())
+  return path
+}
+
 /**
  * The nearest config file in `from` or a directory above it, up to the filesystem root, the way
  * Vitest and ESLint find theirs. A git or workspace root doesn't stop the search: a nested
@@ -114,7 +128,8 @@ export const configLabel = (path: string): string => fromCwd(path) || path
 
 /**
  * Loads the config at `path` (see `configPathFor`); its directory is the project root. Without a
- * config file, every key takes its default and the current directory is the root.
+ * path, every key takes its default and the current directory is the root. `reeval run` and
+ * `reeval image build` refuse a missing file before this.
  */
 export async function loadConfig(
   path: string | undefined,
