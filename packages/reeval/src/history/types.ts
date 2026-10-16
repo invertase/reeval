@@ -226,7 +226,7 @@ export type EvalEntry = {
   outcome: Outcome
   /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
   todo: boolean
-  /** pass / (pass + fail) over the gated cells' attempts; infra errors and skips excluded. */
+  /** pass@1, pass / (pass + fail), over the gated cells' attempts; infra errors and skips excluded. */
   passRate: number | null
   cells: CellRecord[]
   attempts: AttemptRecord[]
@@ -239,14 +239,14 @@ export type EvalEntry = {
   answers?: CompareAnswer[]
 }
 
-/** A variant cell's pass rate against the control's, on the same harness and sandbox. */
+/** A variant cell's pass@1 against the control's, on the same harness and sandbox. */
 export type Lift = {
   /** The control cell's key. */
   vs: string
   /** Passes out of counted attempts (passes and fails) on each side. */
   control: { pass: number; counted: number }
   variant: { pass: number; counted: number }
-  /** Variant pass rate minus control pass rate, from -1 to 1. */
+  /** Variant pass@1 minus control pass@1, from -1 to 1. */
   points: number
   /** 95% interval on the difference, by Newcombe's hybrid score method from two Wilson intervals. */
   interval: { lo: number; hi: number; level: 0.95; method: 'newcombe-wilson' }
@@ -295,9 +295,11 @@ export type CellRecord = Cell & {
   fail: number
   infraError: number
   skipped: number
+  /** pass@1: pass / (pass + fail); infra errors and skips excluded. */
   passRate: number | null
   /**
-   * By `gate`. `'all'` matches `{ passRate: 1 }` (infra only when nothing counted); `'none'`
+   * By `gate`. `'all'` (pass^k: every counted attempt passes) matches `{ passRate: 1 }`;
+   * `{ passRate }` is a pass@1 threshold. Infra only when nothing counted; `'none'`
    * reports the worst outcome. A variant below its `minLift` fails too.
    */
   outcome: Outcome

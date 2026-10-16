@@ -146,12 +146,12 @@ Each has an environment variable: `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_P
 
 ## The summary's eval line
 
-An eval with several attempts shows its passes over every counted attempt, then its pass rate, which counts only the gated cells:
+An eval with several attempts shows its passes over every counted attempt, then its pass@1 (passes over passes and fails), which counts only the gated cells:
 
 | Eval | Line |
 |---|---|
-| Every cell gated | `3/4  75%  4 attempts` |
-| Some cells not gated (controls under `compare.gate: 'variants'`) | `2/4 · 100% gated  4 attempts` |
+| Every cell gated | `3/4  pass@1  75%  4 attempts` |
+| Some cells not gated (controls under `compare.gate: 'variants'`) | `2/4 · pass@1 100% gated  4 attempts` |
 
 The `gated` label says the rate leaves out the ungated cells, whose failures don't fail the eval. The studio's eval history labels the rate the same way.
 

@@ -135,7 +135,7 @@ export function TallyBar({
   )
 }
 
-export function PassRate({ rate, className }: { rate: number | null; className?: string }) {
+export function Rate({ rate, className }: { rate: number | null; className?: string }) {
   const tone =
     rate === null
       ? 'text-muted-foreground'

@@ -4,7 +4,7 @@ import { FlaskConical, Search } from 'lucide-react'
 import { useMemo } from 'react'
 import { type EvalCatalogEntry, evalHistory } from 'reeval/view'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
-import { OutcomeIcon, OutcomeStrip, PassRate } from '@/components/status'
+import { OutcomeIcon, OutcomeStrip, Rate } from '@/components/status'
 import { Input } from '@/components/ui/input'
 import { headersQuery } from '@/lib/data'
 import { plural } from '@/lib/format'
@@ -110,7 +110,7 @@ export function EvalsPage() {
                             outcome: run.evals.find((x) => x.slug === e.slug)?.outcome ?? null,
                           }))}
                       />
-                      <PassRate rate={rate} className="w-10 text-right text-sm" />
+                      <Rate rate={rate} className="w-10 text-right text-sm" />
                     </div>
                   </Link>
                 )

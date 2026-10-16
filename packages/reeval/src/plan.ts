@@ -218,7 +218,7 @@ function gateHint(rows: PlanRow[]): string[] {
   const n = rows.filter((r) => !r.plan.skip && r.plan.runs > 1 && r.plan.gate === undefined).length
   if (n === 0) return []
   return [
-    `${plural(n, 'eval')} ${n === 1 ? 'runs' : 'run'} more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead`,
+    `${plural(n, 'eval')} ${n === 1 ? 'runs' : 'run'} more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead`,
   ]
 }
 

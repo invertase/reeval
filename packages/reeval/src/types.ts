@@ -980,7 +980,8 @@ export type PinnableKey = 'harness' | 'runs' | 'compare'
 
 /**
  * How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt
- * passes; `{ passRate }` passes when at least that share of its passes and fails are passes.
+ * passes (pass^k); `{ passRate }` passes when its pass@1 (passes over passes and fails) is at
+ * least that share.
  */
 export type GatePolicy = 'all' | { passRate: number }
 

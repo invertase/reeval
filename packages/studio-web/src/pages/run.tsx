@@ -44,7 +44,7 @@ import {
 } from 'reeval/view'
 import { CopyButton } from '@/components/copy-button'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
-import { Lift, OutcomeBadge, OutcomeIcon, PassRate, TallyBar } from '@/components/status'
+import { Lift, OutcomeBadge, OutcomeIcon, Rate, TallyBar } from '@/components/status'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -229,7 +229,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
             {compare ? <TableHead>Role</TableHead> : null}
             <TableHead className="hidden 2xl:table-cell">Sandbox</TableHead>
             <TableHead>Attempts</TableHead>
-            <TableHead className="text-right">Pass rate</TableHead>
+            <TableHead className="text-right">pass@1</TableHead>
             {showUsage ? <TableHead className="text-right">Tokens</TableHead> : null}
             {showLift || showEffort ? (
               <TableHead className="text-right">
@@ -285,7 +285,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                 </div>
               </TableCell>
               <TableCell className="text-right">
-                <PassRate rate={row.passRate} />
+                <Rate rate={row.passAt1} />
                 <span className="tabular ml-1.5 text-xs text-muted-foreground">
                   {row.pass}/{row.pass + row.fail}
                 </span>

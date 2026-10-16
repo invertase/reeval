@@ -99,20 +99,20 @@ reeval 0.0.1 · 2 eval files · harness cursor:composer-2.5, antigravity:gemini-
 Summary
  evals/hello.eval.ts
    greet module
-     ✓ creates a tested greet module                4/4  100%  4 attempts
-         cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
-         antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
-     ✓ adds a default name in a follow-up turn      4/4  100%  4 attempts
-         cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
-         antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
+     ✓ creates a tested greet module                4/4  pass@1 100%  4 attempts
+         cursor:composer-2.5/-/docker                    2/2  pass@1 100%   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/-/docker    2/2  pass@1 100%   gate passRate 0.5
+     ✓ adds a default name in a follow-up turn      4/4  pass@1 100%  4 attempts
+         cursor:composer-2.5/-/docker                    2/2  pass@1 100%   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/-/docker    2/2  pass@1 100%   gate passRate 0.5
  evals/skill.eval.ts
    house greeting
-     ✓ greets in the house style                    4/8 · 100% gated  8 attempts
-         cursor:composer-2.5/plain/docker                                control    0/2    0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+     ✓ greets in the house style                    4/8 · pass@1 100% gated  8 attempts
+         cursor:composer-2.5/plain/docker                                control    0/2  pass@1   0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
-         antigravity:gemini-3.8-flash-medium/plain/docker                control    0/2    0%   not gated
-         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/plain/docker                control    0/2  pass@1   0%   not gated
+         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
 …
 Attempts  12 passed · 4 missed, not gated (16 attempts, 3 evals)

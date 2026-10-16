@@ -86,13 +86,13 @@ all three agents passed every check.
 ```text
 $ reeval run evals/api.eval.ts --runs 1
 …
-   ✓ how well the api-conventions skill influences the output      3/6 · 100% gated  6 attempts
-       cursor:composer-2.5/nextjs-api/docker                    control    0/1    0%   not gated
-       cursor:composer-2.5/with-api-conventions/docker          variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
-       claude-code:claude-sonnet-5/nextjs-api/docker            control    0/1    0%   not gated
-       claude-code:claude-sonnet-5/with-api-conventions/docker  variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
-       codex:gpt-5.6-luna/nextjs-api/docker                     control    0/1    0%   not gated
-       codex:gpt-5.6-luna/with-api-conventions/docker           variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
+   ✓ how well the api-conventions skill influences the output      3/6 · pass@1 100% gated  6 attempts
+       cursor:composer-2.5/nextjs-api/docker                    control    0/1  pass@1   0%   not gated
+       cursor:composer-2.5/with-api-conventions/docker          variant    1/1  pass@1 100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
+       claude-code:claude-sonnet-5/nextjs-api/docker            control    0/1  pass@1   0%   not gated
+       claude-code:claude-sonnet-5/with-api-conventions/docker  variant    1/1  pass@1 100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
+       codex:gpt-5.6-luna/nextjs-api/docker                     control    0/1  pass@1   0%   not gated
+       codex:gpt-5.6-luna/with-api-conventions/docker           variant    1/1  pass@1 100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
        question  "Which endpoint follows our API conventions?" across: claude-code:claude-sonnet-5 2/4 (50%), codex:gpt-5.6-luna 0/4 (0%), cursor:composer-2.5 4/4 (100%) · 6 votes, 0 ties · gemini-3.8-flash
 …
 ```
@@ -187,9 +187,9 @@ group(
 $ reeval run skill --runs 2
 plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 …
-     ✓ greets in the house style      2/4 · 100% gated  4 attempts
-         cursor:composer-2.5/plain/docker                control    0/2    0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+     ✓ greets in the house style      2/4 · pass@1 100% gated  4 attempts
+         cursor:composer-2.5/plain/docker                control    0/2  pass@1   0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
            effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 ```
 
