@@ -115,7 +115,7 @@ describe('sandbox confinement in Docker', {
     assert.equal(rp.noNewPrivs, '1')
   })
 
-  test('default limits: memory with no swap, CPUs and processes', async () => {
+  test('default limits: memory with as much swap on top, CPUs and processes', async () => {
     const s = await open()
     const cpus = Math.min(DEFAULT_LIMITS.cpus, (await dockerCapacity())?.cpus ?? Infinity)
     assert.deepEqual(
@@ -127,7 +127,7 @@ describe('sandbox confinement in Docker', {
       },
       {
         memory: String(4 * 1024 ** 3),
-        swap: '0',
+        swap: String(4 * 1024 ** 3),
         cpu: `${cpus * 100_000} 100000`,
         pids: String(DEFAULT_LIMITS.pids),
       },
@@ -163,8 +163,16 @@ describe('sandbox confinement in Docker', {
     })
   })
 
+  test('swap: 0 makes memory the hard ceiling; a set swap is on top', async () => {
+    const hard = await open({ limits: { memory: '256m', swap: 0 } })
+    assert.equal(await cgroup(hard, 'memory.swap.max'), '0')
+    // Twin: a set swap lands in the same file.
+    const some = await open({ limits: { memory: '256m', swap: '64m' } })
+    assert.equal(await cgroup(some, 'memory.swap.max'), String(64 * 1024 ** 2))
+  })
+
   test('memory past the limit is killed, and the container survives it', async () => {
-    const s = await open({ limits: { memory: '128m' } })
+    const s = await open({ limits: { memory: '128m', swap: 0 } })
     const big = await s.run({ command: allocate(512) })
     assert.equal(big.exitCode, 137, `a 512 MiB allocation under 128m: ${big.stdout}`)
     assert.equal((await s.run({ command: 'echo alive' })).stdout, 'alive\n')

@@ -27,6 +27,7 @@ const DOCKER_KEYS = [
   'root',
   'capabilities',
   'memory',
+  'swap',
   'cpus',
   'pids',
 ]
@@ -44,6 +45,8 @@ const DOCKER_HINTS: Record<string, string> = {
   caps: 'capabilities',
   mem: 'memory',
   memoryLimit: 'memory',
+  memorySwap: 'swap',
+  memswap: 'swap',
   cpu: 'cpus',
   pidsLimit: 'pids',
 }
@@ -52,7 +55,7 @@ const DOCKER_HINTS: Record<string, string> = {
 const MEMORY = /^\d+(\.\d+)?[bkmg]?$/i
 
 function checkConfinement(options: DockerOptions): void {
-  const { root, capabilities, memory, cpus, pids } = options
+  const { root, capabilities, memory, swap, cpus, pids } = options
   if (root !== undefined && typeof root !== 'boolean') {
     throw new UsageError(`docker({ root }) is true or false (got ${JSON.stringify(root)})`)
   }
@@ -71,6 +74,14 @@ function checkConfinement(options: DockerOptions): void {
   ) {
     throw new UsageError(
       `docker({ memory }) takes a size such as '4g' or '512m', or bytes (got ${JSON.stringify(memory)})`,
+    )
+  }
+  if (
+    swap !== undefined &&
+    !(typeof swap === 'number' ? Number.isInteger(swap) && swap >= 0 : MEMORY.test(swap))
+  ) {
+    throw new UsageError(
+      `docker({ swap }) takes a size such as '2g' or '512m', bytes, or 0 for none (got ${JSON.stringify(swap)})`,
     )
   }
   if (cpus !== undefined && !(typeof cpus === 'number' && cpus > 0 && Number.isFinite(cpus))) {
@@ -125,8 +136,9 @@ function checkInstall(install: unknown): InstallStep[] {
  * needs either belongs in the environment's `setup`.
  *
  * At run time the agent, setup steps and checks run as the unprivileged `reeval` user with every
- * capability dropped, `no-new-privileges`, and `memory`, `cpus` and `pids` limits. `root: true`
- * opts an eval into root; `capabilities` adds specific ones back.
+ * capability dropped, `no-new-privileges`, and `memory`, `cpus` and `pids` limits, with `swap`
+ * (as much as `memory` by default) on top of `memory`. `root: true` opts an eval into root;
+ * `capabilities` adds specific ones back.
  */
 export function docker(options: DockerOptions = {}): DockerSandboxDescriptor {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {

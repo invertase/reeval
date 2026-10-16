@@ -2129,6 +2129,21 @@ describe('sandbox images', () => {
       /docker\(\{ memory \}\) takes a size such as '4g' or '512m', or bytes \(got "4GB"\)/,
     ],
     [
+      'memorySwap instead of swap',
+      `docker({ memorySwap: '8g' } as never)`,
+      /Unknown docker\(\) option "memorySwap"\. Did you mean "swap"\?/,
+    ],
+    [
+      'memswap instead of swap',
+      `docker({ memswap: '8g' } as never)`,
+      /Unknown docker\(\) option "memswap"\. Did you mean "swap"\?/,
+    ],
+    [
+      'a negative swap',
+      `docker({ swap: -1 })`,
+      /docker\(\{ swap \}\) takes a size such as '2g' or '512m', bytes, or 0 for none \(got -1\)/,
+    ],
+    [
       'zero CPUs',
       `docker({ cpus: 0 })`,
       /docker\(\{ cpus \}\) takes a number of CPUs above zero, e\.g\. 1\.5 \(got 0\)/,

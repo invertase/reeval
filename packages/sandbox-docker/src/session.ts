@@ -26,8 +26,13 @@ export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
 
 /** A container's resource limits. */
 export type SandboxLimits = {
-  /** Memory, with no swap on top, as Docker takes it: bytes, or a number with `k`, `m` or `g`. */
+  /** Memory, as Docker takes it: bytes, or a number with `b`, `k`, `m` or `g`. */
   memory: string | number
+  /**
+   * Swap the container may use on top of `memory`, in the same units; unset is as much as
+   * `memory`, and 0 makes `memory` the hard ceiling. A host without swap has none to give.
+   */
+  swap?: string | number
   /** CPUs, fractional ones allowed; capped at what the Docker host has. */
   cpus: number
   /** Processes and threads at once. */
@@ -35,6 +40,32 @@ export type SandboxLimits = {
 }
 
 export const DEFAULT_LIMITS: SandboxLimits = { memory: '4g', cpus: 2, pids: 1024 }
+
+const UNITS = { b: 1, k: 1024, m: 1024 ** 2, g: 1024 ** 3 } as const
+
+/** A Docker memory size in bytes, as Docker reads it (binary units). */
+function sizeBytes(size: string | number): number {
+  if (typeof size === 'number') return size
+  const m = /^(\d+(?:\.\d+)?)([bkmg])?$/i.exec(size.trim())
+  if (!m) throw new Error(`not a Docker memory size: ${JSON.stringify(size)}`)
+  const unit = (m[2]?.toLowerCase() ?? 'b') as keyof typeof UNITS
+  return Math.floor(Number(m[1]) * UNITS[unit])
+}
+
+/** Bytes in the largest unit that divides them evenly: `8g`, `1536m`, or plain bytes. */
+function formatSize(bytes: number): string {
+  for (const unit of ['g', 'm', 'k'] as const) {
+    if (bytes % UNITS[unit] === 0) return `${bytes / UNITS[unit]}${unit}`
+  }
+  return String(bytes)
+}
+
+/** Docker's `--memory-swap`: the total of memory and swap. */
+export function memorySwap(limits: Pick<SandboxLimits, 'memory' | 'swap'>): string {
+  const memory = sizeBytes(limits.memory)
+  const swap = limits.swap === undefined ? memory : sizeBytes(limits.swap)
+  return swap === 0 ? String(limits.memory) : formatSize(memory + swap)
+}
 
 /** What `root` adds back: what `apt-get` (and its `_apt` sandbox) and `dpkg` need as root. */
 export const ROOT_CAPABILITIES = ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETUID', 'SETGID'] as const
@@ -85,7 +116,7 @@ export async function confinementArgs(options: SessionOptions): Promise<string[]
     '--memory',
     String(limits.memory),
     '--memory-swap',
-    String(limits.memory),
+    memorySwap(limits),
     '--pids-limit',
     String(limits.pids),
     '--cpus',
