@@ -378,6 +378,8 @@ docker({ root: true })                               // opt in: apt-get at run t
 
 The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.
 `root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
+A process killed at the memory limit makes the attempt an infra error (`error.resource.cause: 'oom'`), not a
+failed check: raise `memory` for a heavy build rather than loosening the check.
 
 Put a specific machine on `defineEnvironment`, or `sandbox` on `defineConfig` / profile / group / eval as the default when the resolved env omits one. A list is an error. `npx reeval image build` builds every image the plan needs. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and 24 cannot share a cell. Environments that share an image still share one preflight build.
 

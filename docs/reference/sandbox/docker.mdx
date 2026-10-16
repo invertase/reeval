@@ -62,7 +62,7 @@ Without options, `docker()` uses reeval's sandbox image for the harness, which `
 These set what the container runs with, not what's in its image, so changing them never rebuilds one. See [Sandbox security](/guide/sandboxes#sandbox-security).
 
 <Property name="memory" type="string | number" optional>
-  The container's memory: a size such as `'4g'` or `'512m'`, or bytes. Default `'4g'`. Past it, the container pages out to [`swap`](#swap); a process that goes past both is killed with exit 137, and the container keeps running.
+  The container's memory: a size such as `'4g'` or `'512m'`, or bytes. Default `'4g'`. Past it, the container pages out to [`swap`](#swap); a process that goes past both is killed with exit 137, and the container keeps running. The attempt is then an infra error, whatever its checks said: at teardown reeval reads the container's cgroup `oom_kill` count (or Docker's `OOMKilled` without one) and records it in `error.resource`, with a message such as `out of memory: 1 process killed at the 4g limit (+4g swap); raise docker({ memory })`.
 </Property>
 
 <Property name="swap" type="string | number" optional>

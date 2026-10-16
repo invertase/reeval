@@ -164,6 +164,7 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 | `expect(…).toSucceed() wasn't awaited. …` | Write `await expect(…)`. The eval fails even when the check passes. |
 | `judge score 0.40 is below 0.8 for "…" (…)` | The judge said no. Read its input in the attempt's `judge-input.json`. |
 | `Eval timed out after 900s` | Raise `timeout`, or make the task smaller. |
+| `out of memory: 1 process killed at the 4g limit (+4g swap); raise docker({ memory })` | A process in the sandbox hit its memory limit, so the attempt is an infra error, whatever its checks said. Raise `docker({ memory })`, or give Docker more memory. |
 | `setup step 1/2 "npm ci" in environment base exited 1 after …` | Fix the setup step; its output is in the attempt's `setup.log`. An infra error. |
 | `ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate. …` | Set the key. |
 
