@@ -138,10 +138,35 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
   /** With the gateway: the hosts the sandbox contacted and was refused so far. */
   traffic?(): EgressTraffic
+  /** Processes the kernel killed at the memory limit so far; `null` when Docker can't say. */
+  oomKills(): Promise<number | null>
 }
 
 /** Set on every exec, so a kill can find the command's whole process tree in the container. */
 const EXEC_MARKER = 'REEVAL_EXEC_ID'
+
+/**
+ * The container's cgroup counts every process the kernel killed at its memory limit: cgroup v2's
+ * `memory.events` and v1's `memory.oom_control` both have an `oom_kill` line. Without either,
+ * Docker's `OOMKilled` says only whether there was one.
+ */
+export async function oomKills(id: string): Promise<number | null> {
+  const events = await docker([
+    'exec',
+    id,
+    'sh',
+    '-c',
+    'cat /sys/fs/cgroup/memory.events 2>/dev/null || cat /sys/fs/cgroup/memory/memory.oom_control',
+  ]).catch(() => null)
+  const count = events?.stdout.toString('utf8').match(/^oom_kill (\d+)$/m)?.[1]
+  if (events?.exitCode === 0 && count !== undefined) return Number(count)
+  const inspected = await docker(['inspect', '--format', '{{.State.OOMKilled}}', id]).catch(
+    () => null,
+  )
+  if (inspected?.exitCode !== 0) return null
+  const killed = inspected.stdout.toString('utf8').trim()
+  return killed === 'true' ? 1 : killed === 'false' ? 0 : null
+}
 
 /** The Docker networks a container is attached to. */
 async function networksOf(id: string): Promise<string[]> {
@@ -343,6 +368,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     },
     ...brokering,
     ...substituting,
+    oomKills: () => oomKills(id),
     run,
     async spawn(o) {
       const env = envFor(o.env)

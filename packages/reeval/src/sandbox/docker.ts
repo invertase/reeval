@@ -3,6 +3,7 @@ import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import {
   createDockerSession,
   DEFAULT_IMAGE,
+  DEFAULT_LIMITS,
   docker,
   type EgressEvent,
   imageInfo,
@@ -197,6 +198,14 @@ export async function createDockerSandbox(
         : network.writeBinaryFile({ path: resolve(path), content }),
     getPortEndpoint: async ({ port, protocol = 'http' }) =>
       network.getPortEndpoint({ port, protocol }),
+    oomKills: async () => {
+      const kills = await network.oomKills()
+      if (kills === null) return null
+      const limit = String(memory ?? DEFAULT_LIMITS.memory)
+      // Unset swap is as much as memory; any spelling of zero is none.
+      const onTop = swap === undefined ? limit : String(swap)
+      return { kills, limit, swap: /^0+(\.0+)?[bkmg]?$/i.test(onTop) ? null : onTop }
+    },
     destroy: async () => {
       await Promise.resolve(network.destroy()).catch(() => {})
     },

@@ -16,7 +16,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 4
+const DB_VERSION = 5
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -83,7 +83,7 @@ CREATE TABLE attempts (
   error_message TEXT, duration_ms INTEGER, image_id TEXT, turns INTEGER, tools INTEGER,
   file_edits INTEGER, setup_ms INTEGER, agent_ms INTEGER, checks_ms INTEGER, judge_ms INTEGER,
   last_text TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
-  cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT,
+  cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT, oom_kills INTEGER,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -163,14 +163,16 @@ CREATE VIEW skill_reads AS
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest;
 
--- Failed attempts with the cell's harness, model and each of its environment's skills.
+-- Failed attempts and infra errors (an OOM kill among them) with the cell's harness, model and
+-- each of its environment's skills.
 CREATE VIEW failing_attempts AS
   SELECT a.run_id, r.started_at, a.eval_key, a.key AS attempt_key, a.cell_key, c.harness,
-    c.model, c.environment, s.name AS skill, a.error_kind, a.error_message, a.duration_ms
+    c.model, c.environment, s.name AS skill, a.outcome, a.error_kind, a.error_message,
+    a.duration_ms, a.oom_kills
   FROM attempts a JOIN runs r USING (run_id)
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   LEFT JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest
-  WHERE a.outcome = 'fail';
+  WHERE a.outcome IN ('fail', 'infra_error');
 
 -- One eval per run: outcome and pass rate, with the branch and pull request.
 CREATE VIEW eval_trend AS
@@ -376,7 +378,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(27).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(28).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -404,6 +406,7 @@ function insertRun(
         a.usage?.cacheWrite ?? null,
         a.usage?.reasoning ?? null,
         a.turns.findLast((t) => t.model)?.model ?? null,
+        a.error?.resource?.cause === 'oom' ? a.error.resource.kills : 0,
       )
       for (const c of a.context) {
         run(

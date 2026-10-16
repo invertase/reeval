@@ -1,0 +1,264 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20261016T080425Z_nogit_cursor-agent_8zr7",
+  "status": "complete",
+  "startedAt": "2026-10-16T08:04:25.191Z",
+  "endedAt": "2026-10-16T08:04:27.865Z",
+  "durationMs": 2674,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "5c7602959760"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.8.0",
+    "node": "22.14.0",
+    "runtime": {
+      "name": "node",
+      "version": "22.14.0"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.4",
+        "id": "sha256:0fbb429cab00568e6788a2e36e9e935dbe328d1e558f9a03fcc6147907dcea7c",
+        "agentCli": "@cursor/sdk 1.0.37",
+        "base": "reeval-sandbox:cursor-0.1.4",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.6",
+      "@reeval/harness-opencode": "0.2.7",
+      "@reeval/harness-goose": "0.1.2",
+      "@reeval/harness-pi": "0.2.6",
+      "@reeval/harness-cursor-sdk": "0.1.4",
+      "@ai-sdk/harness-claude-code": "1.0.152-patch.8edc594f",
+      "@reeval/harness-codex": "0.1.6",
+      "ai": "7.0.140",
+      "@ai-sdk/harness": "1.0.148",
+      "@ai-sdk/google": "4.0.93",
+      "@ai-sdk/typesafe-ai": "3.0.18"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "52dba214af1c"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "small",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 1000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "962d5f62cb41e455930885095be6862c33b6e5dcdfa6f45a2dccd9c536b0ca26"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 0,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 1,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/build.eval.ts › builds the app",
+      "key": "evals/build.eval.ts › builds the app",
+      "slug": "evals-build-eval-ts-builds-the-app-442b04",
+      "file": "evals/build.eval.ts",
+      "group": [],
+      "name": "builds the app",
+      "tags": [],
+      "fingerprint": "e0005df0b3c8d7275367511e2e528e15b0a6e633e4152a11009496db43f3e369",
+      "sources": [
+        {
+          "path": "evals/build.eval.ts",
+          "sha256": "4d77141272fbe7689199b367418fc3adda1d3e2706e58e2987bce31cd82328d5"
+        },
+        {
+          "path": "evals/env.ts",
+          "sha256": "4fe7420381a1a0b916967678be3820f7f9bd7801df60e4ede3419a9d6a87c9f9"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": null,
+      "cells": [
+        {
+          "key": "fake/small/docker",
+          "harness": "fake",
+          "environment": "small",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "7adfa42a2030c7b749d3834e2e90e10eff53ad185ed9e057a315c0babe73241f",
+          "fingerprintParts": {
+            "sources": "aff99c25bb0a74ed2cd7c18096320035429256ba5d05610306b239c3114bc16e",
+            "harness": "667f632d8ae019ba34bc83750bc3ddd50f00312d819c7844a50c4f8d81e07ab5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:0fbb429cab00568e6788a2e36e9e935dbe328d1e558f9a03fcc6147907dcea7c",
+            "agentCli": "@cursor/sdk 1.0.37",
+            "judge": "4ad793ed5865e38fa043e72c37ce96c05518caf9279c47203189827d40bf1ea1",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/build.eval.ts › builds the app # fake/small/docker#1",
+          "id": "fake/small/docker#1",
+          "cell": "fake/small/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-16T08:04:26.091Z",
+          "imageId": "sha256:0fbb429cab00568e6788a2e36e9e935dbe328d1e558f9a03fcc6147907dcea7c",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "out of memory: 1 process killed at the 128m limit; raise docker({ memory })",
+            "resource": {
+              "cause": "oom",
+              "kills": 1
+            }
+          },
+          "durationMs": 1766,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1208,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 202,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "node -e 'const b = []; for (let i = 0; i < 2048; i++) b.push(Buffer.alloc(1 << 20, 1))'",
+              "exitCode": 137,
+              "durationMs": 202,
+              "log": {
+                "path": "evals-build-eval-ts-builds-the-app-442b04/fake-small-docker-8f9fa3/1/checks/1.log",
+                "sha256": "ea2ac7f153d7aa623818a302ed871969d7d9db7acf205936cf4a3b5454fccae2",
+                "bytes": 121
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}
