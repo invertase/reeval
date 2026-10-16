@@ -99,9 +99,9 @@ This is a real Cursor run of the same eval in `examples/hello` (`--runs 2`, no `
 Summary
  evals/skill.eval.ts
    house greeting
-     ✓ greets in the house style      2/4 · 100% gated  4 attempts
-         cursor:composer-2.5/plain/docker                control    0/2    0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+     ✓ greets in the house style      2/4 · pass@1 100% gated  4 attempts
+         cursor:composer-2.5/plain/docker                control    0/2  pass@1   0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
            effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 …
 Attempts  2 passed · 2 missed, not gated (4 attempts, 1 evals)
@@ -116,14 +116,14 @@ Without the skill, the control attempts wrote `Welcome home, Ada!` and `Welcome 
 The recipe as written, under the [fake harness](/recipes/fake-harness) (which writes the house greeting only when it has a skill):
 
 ```text
-     ✓ greets in the house style      3/6 · 100% gated  6 attempts
-         fake/plain/fake                control    0/3    0%   not gated
-         fake/with-house-greeting/fake  variant    3/3  100%   lift +100 pts (95% +21…+100, 3/3 vs 0/3) (minLift 0)   gate passRate 0.6
+     ✓ greets in the house style      3/6 · pass@1 100% gated  6 attempts
+         fake/plain/fake                control    0/3  pass@1   0%   not gated
+         fake/with-house-greeting/fake  variant    3/3  pass@1 100%   lift +100 pts (95% +21…+100, 3/3 vs 0/3) (minLift 0)   gate passRate 0.6
            effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.50): too few attempts to test
 ```
 
-- `2/4` or `3/6` counts every attempt. `100%` is the pass rate of the cells that gate, which here is only the variant.
-- `lift +100 pts` is the variant's pass rate minus the control's.
+- `2/4` or `3/6` counts every attempt. `pass@1 100%` is the share of attempts that pass in the cells that gate, which here is only the variant.
+- `lift +100 pts` is the variant's pass@1 minus the control's.
 - `95% +21…+100` is the interval on that difference. Its lower bound is above `minLift`, so the cell passes.
 - The control's misses print as `not gated`, apart from failures, so they don't change the exit code.
 - The fake agent makes no tool calls, so its `effort` line compares zeros.
@@ -147,9 +147,9 @@ npx reeval analyze
 The same eval, with an agent that already writes `Ahoy` without the skill:
 
 ```text
-     ✗ greets in the house style      6/6 · 100% gated  6 attempts
-         fake/plain/fake                control    3/3  100%
-         fake/with-house-greeting/fake  variant    3/3  100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise (minLift 0) ✗   gate passRate 0.6
+     ✗ greets in the house style      6/6 · pass@1 100% gated  6 attempts
+         fake/plain/fake                control    3/3  pass@1 100%
+         fake/with-house-greeting/fake  variant    3/3  pass@1 100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise (minLift 0) ✗   gate passRate 0.6
            effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.90): too few attempts to test
 
 Lift below minLift (1)

@@ -134,16 +134,16 @@ Two recorded runs, the second with `CI=1`. Its summary:
 ```text
  evals/compare.eval.ts
    from scratch
-     ✓ plans a skill compare                      6/6 · 100% gated  6 attempts
-         cursor:composer-2.5/-/reeval-tarball        control    2/2  100%
-         cursor:composer-2.5/reeval-weak/reeval-tarball  variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
-         cursor:composer-2.5/reeval-good/reeval-tarball  variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
+     ✓ plans a skill compare                      6/6 · pass@1 100% gated  6 attempts
+         cursor:composer-2.5/-/reeval-tarball        control    2/2  pass@1 100%
+         cursor:composer-2.5/reeval-weak/reeval-tarball  variant    2/2  pass@1 100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/reeval-good/reeval-tarball  variant    2/2  pass@1 100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
  evals/fix-config.eval.ts
    broken project
-     ✓ fixes a broken config and explains it      5/6 · 100% gated  6 attempts
-         cursor:composer-2.5/broken-project/reeval-tarball  control    1/2   50%   not gated
-         cursor:composer-2.5/reeval-weak/reeval-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
-         cursor:composer-2.5/reeval-good/reeval-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+     ✓ fixes a broken config and explains it      5/6 · pass@1 100% gated  6 attempts
+         cursor:composer-2.5/broken-project/reeval-tarball  control    1/2  pass@1  50%   not gated
+         cursor:composer-2.5/reeval-weak/reeval-tarball         variant    2/2  pass@1 100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/reeval-good/reeval-tarball         variant    2/2  pass@1 100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
 …
 Attempts  17 passed · 1 missed, not gated (18 attempts, 3 evals)
 Duration  3m 54s

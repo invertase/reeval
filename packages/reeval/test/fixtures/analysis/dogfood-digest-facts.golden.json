@@ -1,7 +1,7 @@
 [
   {
     "id": "F1",
-    "kind": "pass-rate",
+    "kind": "pass@1",
     "run": "r1",
     "eval": "compare",
     "cells": [
@@ -28,7 +28,7 @@
   },
   {
     "id": "F2",
-    "kind": "pass-rate",
+    "kind": "pass@1",
     "run": "r1",
     "eval": "fix-config",
     "cells": [
@@ -55,7 +55,7 @@
   },
   {
     "id": "F3",
-    "kind": "pass-rate",
+    "kind": "pass@1",
     "run": "r1",
     "eval": "scaffold",
     "cells": [
@@ -82,7 +82,7 @@
   },
   {
     "id": "F4",
-    "kind": "pass-rate",
+    "kind": "pass@1",
     "run": "r2",
     "eval": "compare",
     "cells": [
@@ -109,7 +109,7 @@
   },
   {
     "id": "F5",
-    "kind": "pass-rate",
+    "kind": "pass@1",
     "run": "r2",
     "eval": "fix-config",
     "cells": [
@@ -136,7 +136,7 @@
   },
   {
     "id": "F6",
-    "kind": "pass-rate",
+    "kind": "pass@1",
     "run": "r2",
     "eval": "scaffold",
     "cells": [
@@ -407,7 +407,7 @@
     "effortVerdict": "fewer",
     "consistentStrata": "3/3",
     "separatedStrata": "3/3",
-    "note": "pass rate: summed counts; effort: an effect in at least 2/3 of strata"
+    "note": "pass@1: summed counts; effort: an effect in at least 2/3 of strata"
   },
   {
     "id": "F14",
@@ -481,7 +481,7 @@
     "effortVerdict": "noise",
     "consistentStrata": "0/3",
     "separatedStrata": "0/3",
-    "note": "pass rate: summed counts; effort: an effect in at least 2/3 of strata"
+    "note": "pass@1: summed counts; effort: an effect in at least 2/3 of strata"
   },
   {
     "id": "F18",

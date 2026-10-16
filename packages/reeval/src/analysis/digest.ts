@@ -74,13 +74,13 @@ export type DigestInput = {
 }
 
 export const RULES = [
-  `Pass-rate lift is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
-  'When sources or the eval fingerprint differ across the compared runs, the pass-rate difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
+  `Lift (variant pass@1 minus control pass@1) is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
+  'When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
   'Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree.',
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
-  'An eval where every cell passes at least 95% is saturated: pass rate cannot tell cells apart there, effort can.',
+  'An eval where every cell passes at least 95% is saturated: pass@1 cannot tell cells apart there, effort can.',
   'Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check.",
 ]
@@ -212,11 +212,11 @@ export async function buildDigestKeepingDropped(
   const runList = list(runIds)
   const evalList = list([...evalKeys])
 
-  // Pass rate and lift, per run and eval, from the records.
+  // pass@1 and lift, per run and eval, from the records.
   for (const r of runs) {
     for (const e of r.record.evals) {
       if (!evalKeys.has(e.key)) continue
-      fact('pass-rate', {
+      fact('pass@1', {
         run: short.get(r.record.runId),
         eval: tagOf(e.key),
         cells: e.cells.map((c) => ({
@@ -513,7 +513,7 @@ export async function buildDigestKeepingDropped(
         eval: tagOf(e.key),
         from: 'r1',
         to: 'r2',
-        note: 'not comparable: the eval changed; the pass-rate difference is not an effect of the thing under test',
+        note: 'not comparable: the eval changed; the pass@1 difference is not an effect of the thing under test',
       })
     }
   }

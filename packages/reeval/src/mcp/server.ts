@@ -25,11 +25,11 @@ export const DEFAULT_LINES = 200
 
 /** What each view has one row per, for its tool's description. */
 const VIEW_ROWS: Record<string, string> = {
-  lift: 'variant cell per run: its control, both sides’ pass counts, lift points and the 95% interval (lo, hi), within_noise',
+  lift: 'variant cell per run: its control, both sides’ pass counts and pass@1, lift points and the 95% interval (lo, hi), within_noise',
   effort:
     'cell per run: attempts, median tool calls, agent seconds and tokens; for a variant, the ratios to its control, p-values and verdicts (tokens omitted when either side has no usage sample)',
   factor_effects:
-    'factor contrast (environment, harness, model) by evidence tier, with pass-rate and effort verdicts',
+    'factor contrast (environment, harness, model) by evidence tier, with pass@1 and effort verdicts',
   skill_reads:
     'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>/, or a skill / load_skill call), and how many',
   flaky_cells:
@@ -38,7 +38,7 @@ const VIEW_ROWS: Record<string, string> = {
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
   failing_attempts:
     'failed or infra-error attempt, with its harness, model, environment skill, error and OOM kills',
-  eval_trend: 'eval per run: outcome, pass rate, branch, PR and fingerprint',
+  eval_trend: 'eval per run: outcome, pass@1, branch, PR and fingerprint',
   verdict_flips: 'judge question per cell whose pass rate changed from its previous run',
 }
 

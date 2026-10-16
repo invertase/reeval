@@ -16,7 +16,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 5
+const DB_VERSION = 6
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -64,7 +64,7 @@ CREATE TABLE runs (
 );
 CREATE TABLE evals (
   run_id TEXT NOT NULL, key TEXT NOT NULL, id TEXT, slug TEXT, file TEXT, groups TEXT, name TEXT,
-  tags TEXT, fingerprint TEXT, outcome TEXT, pass_rate REAL, sources TEXT,
+  tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE cells (
@@ -73,7 +73,7 @@ CREATE TABLE cells (
   sandbox TEXT, gate TEXT, gate_pass_rate REAL, fingerprint TEXT, fp_sources TEXT,
   fp_harness TEXT, fp_environment TEXT, fp_image TEXT, fp_agent_cli TEXT, fp_judge TEXT,
   fp_context TEXT, runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER,
-  skipped INTEGER, pass_rate REAL, outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL,
+  skipped INTEGER, pass_at_1 REAL, outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL,
   lift_hi REAL, within_noise INTEGER, min_lift REAL, comparable TEXT,
   PRIMARY KEY (run_id, eval_key, key)
 );
@@ -126,7 +126,8 @@ const VIEWS = `
 CREATE VIEW lift AS
   SELECT c.run_id, r.started_at, r.branch, c.eval_key, c.harness, c.model, c.variant,
     c.lift_vs AS control, c.pass AS variant_pass, c.pass + c.fail AS variant_counted,
-    k.pass AS control_pass, k.pass + k.fail AS control_counted, c.lift_points AS points,
+    k.pass AS control_pass, k.pass + k.fail AS control_counted, c.pass_at_1 AS variant_pass_at_1,
+    k.pass_at_1 AS control_pass_at_1, c.lift_points AS points,
     c.lift_lo AS lo, c.lift_hi AS hi, c.within_noise, c.min_lift, c.outcome, c.fingerprint
   FROM cells c JOIN runs r USING (run_id)
   JOIN cells k ON k.run_id = c.run_id AND k.eval_key = c.eval_key AND k.key = c.lift_vs
@@ -174,10 +175,10 @@ CREATE VIEW failing_attempts AS
   LEFT JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest
   WHERE a.outcome IN ('fail', 'infra_error');
 
--- One eval per run: outcome and pass rate, with the branch and pull request.
+-- One eval per run: outcome and pass@1, with the branch and pull request.
 CREATE VIEW eval_trend AS
   SELECT e.eval_key, r.run_id, r.started_at, r.branch, r.pr_number, r.recorded, e.outcome,
-    e.pass_rate, e.fingerprint
+    e.pass_at_1, e.fingerprint
   FROM (SELECT key AS eval_key, * FROM evals) e JOIN runs r USING (run_id);
 
 -- Each judge question's pass rate per cell per run, where it differs from that cell's last run.

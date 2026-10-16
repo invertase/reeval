@@ -47,7 +47,7 @@ CREATE TABLE factor_effects_m (
 CREATE TABLE flaky_m (
   eval_key TEXT, cell_key TEXT, fingerprint TEXT, runs INTEGER, flaky_runs INTEGER,
   first_seen TEXT, last_seen TEXT, pass INTEGER, counted INTEGER, infra_error INTEGER,
-  rate REAL, lo REAL, hi REAL, verdict TEXT, cause TEXT, min_attempts INTEGER
+  pass_at_1 REAL, lo REAL, hi REAL, verdict TEXT, cause TEXT, min_attempts INTEGER
 );
 CREATE TABLE drift_m (
   run_id TEXT, prev_run_id TEXT, eval_key TEXT, cell_key TEXT, changed TEXT,
@@ -467,7 +467,7 @@ export function deriveFacts(db: DatabaseSync): void {
       runs: null,
       ...passCols(v, c),
       ...pooledEffort(comparable.map((s) => contrastEffort(s.v.samples, s.c.samples))),
-      note: 'pass rate: summed counts; effort: an effect in at least 2/3 of strata',
+      note: 'pass@1: summed counts; effort: an effect in at least 2/3 of strata',
     })
   }
 
@@ -603,7 +603,7 @@ export function deriveFacts(db: DatabaseSync): void {
       pass,
       counted: pass + fail,
       infra_error: infra,
-      rate: round3(pass / (pass + fail)),
+      pass_at_1: round3(pass / (pass + fail)),
       lo: round3(w.low),
       hi: round3(w.high),
       verdict: pass + fail >= FLAKY_MIN_ATTEMPTS ? 'flaky' : 'insufficient',

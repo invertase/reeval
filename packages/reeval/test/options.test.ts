@@ -60,9 +60,9 @@ group('g', { runs: 2 }, () => {
     assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.eval\.ts › g › writes ok\.txt/m)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt +2\/4 +50% +4 attempts\n +good\/fake\/fake +2\/2 +100%/,
+      /✗ writes ok\.txt +2\/4 +pass@1 +50% +4 attempts\n +good\/fake\/fake +2\/2 +pass@1 100%/,
     )
-    assert.match(r.stdout, /bad\/fake\/fake +0\/2 +0%/)
+    assert.match(r.stdout, /bad\/fake\/fake +0\/2 +pass@1 +0%/)
     assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
     const thirds = await project('matrix-thirds', {
       'reeval.config.ts': config('', `fakeHarness({ id: 'one' })`),
@@ -77,7 +77,7 @@ evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal(rounded.code, 0, rounded.stdout + rounded.stderr)
     assert.match(
       rounded.stdout,
-      /✓ two of three +2\/3 +67% +3 attempts\n +one\/fake\/fake +2\/3 +67% /,
+      /✓ two of three +2\/3 +pass@1 +67% +3 attempts\n +one\/fake\/fake +2\/3 +pass@1 +67% /,
       'pass rates round to the nearest percent',
     )
     const { run, evals } = readRun(p.dir)
@@ -286,8 +286,8 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts/m)
     assert.match(r.stdout, /^\[writes#1 control\] ○ .*\(not gated\)$/m)
     assert.match(r.stdout, /^\[writes#1 skilled\] ✓ /m)
-    assert.match(r.stdout, /fake\/base\/fake +control +0\/2 +0% +not gated/)
-    assert.match(r.stdout, /fake\/skilled\/fake +variant +2\/2 +100% +lift \+100 pts/)
+    assert.match(r.stdout, /fake\/base\/fake +control +0\/2 +pass@1 +0% +not gated/)
+    assert.match(r.stdout, /fake\/skilled\/fake +variant +2\/2 +pass@1 100% +lift \+100 pts/)
     assert.match(r.stdout, /overrides: env\.MODE/)
     // A successful compare reads as one: the control's expected misses aren't failures.
     assert.doesNotMatch(r.stdout, /✗|Failures|Assertion failures|failed/)
@@ -818,7 +818,7 @@ group('rated', { gate: { passRate: 0.6 } }, () => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: \{ passRate: 0\.8 \} to gate on a pass rate instead$/m,
+      /^hint: 1 eval runs more than once with the default gate, so every attempt must pass \(pass\^k\); set gate: \{ passRate: 0\.8 \} to gate on pass@1 instead$/m,
     )
     const cells = readRun(p.dir).evals.map((e) => [
       e.name,
@@ -1913,7 +1913,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [withSkill] } }, asyn
     const r = await runCli(p.dir, ['run'], { env: { REEVAL_TEST_HOST_TOKEN: 's3cret-value-123' } })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^\[greets#1 with-skill\] ✓ evals\/e\.eval\.ts › greets/m)
-    assert.match(r.stdout, /with-skill\/fake +variant +1\/1 +100% +lift \+100 pts/)
+    assert.match(r.stdout, /with-skill\/fake +variant +1\/1 +pass@1 100% +lift \+100 pts/)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
     assert.deepEqual(Object.keys(envs).sort(), ['plain', 'with-skill'])

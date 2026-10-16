@@ -1414,7 +1414,7 @@ evaluate('asserted nothing', async () => {
     assert.equal(byName.polled?.outcome, 'pass', r.stdout)
   })
 
-  test('an eval with not-gated cells labels its pass rate gated; an all-gated one does not', async () => {
+  test('an eval with not-gated cells labels its pass@1 gated; an all-gated one does not', async () => {
     const p = await project('gated-label', {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
@@ -1439,8 +1439,8 @@ evaluate('repeated', { runs: 4 }, async (c) => {
     const r = await runCli(p.dir)
     const summary = r.stdout.slice(r.stdout.indexOf('\nSummary'))
     // The control's two failures count in 2/4, but only the gated variant's 2/2 in the rate.
-    assert.match(summary, /✓ compared +2\/4 · 100% gated {2}4 attempts\n/)
-    assert.match(summary, /✗ repeated +3\/4 +75% {2}4 attempts\n/)
+    assert.match(summary, /✓ compared +2\/4 · pass@1 100% gated {2}4 attempts\n/)
+    assert.match(summary, /✗ repeated +3\/4 +pass@1 +75% {2}4 attempts\n/)
   })
 
   test("a harness whose session never becomes ready is an infra error, once retried; its sandbox goes, other evals don't wait", async () => {

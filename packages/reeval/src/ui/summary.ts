@@ -83,8 +83,8 @@ function evalColumns(c: Colors, e: EvalEntry): string {
     const pass = e.attempts.filter((a) => a.outcome === 'pass').length
     const counted = e.attempts.filter((a) => a.outcome === 'pass' || a.outcome === 'fail').length
     const rate = hasUngatedCells(e.cells)
-      ? ` · ${pct(e.passRate).trim()} gated`
-      : `  ${pct(e.passRate)}`
+      ? ` · pass@1 ${pct(e.passRate).trim()} gated`
+      : `  pass@1 ${pct(e.passRate)}`
     return c.dim(`${`${pass}/${counted}`.padStart(7)}${rate}  ${e.attempts.length} attempts`)
   }
   if (attemptOutcome(attempt) === 'cancelled') return c.yellow('cancelled')
@@ -98,7 +98,7 @@ function evalColumns(c: Colors, e: EvalEntry): string {
   return c.dim(cols.join('  '))
 }
 
-/** Pass rate per cell for evals with several attempts; with compare, each cell's role and lift. */
+/** pass@1 per cell for evals with several attempts; with compare, each cell's role and lift. */
 function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
   if (e.attempts.length < 2) return []
   const compare = e.cells.some((cell) => cell.role === 'variant')
@@ -119,7 +119,7 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
     const tokens = formatUsage(cellUsage(e, cell.key))
     const usage = tokens ? `   ${c.dim(tokens)}` : ''
     const rows = [
-      `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  ${pct(cell.passRate)}${note}${infra}${usage}`,
+      `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  pass@1 ${pct(cell.passRate)}${note}${infra}${usage}`,
     ]
     const rates = judgeRatesLabel(cellJudgeRates(e, cell.key))
     if (rates) rows.push(`${indent}  ${c.dim(rates)}`)

@@ -14,7 +14,7 @@ history.db: 9 runs
 Views (the common questions; filter them with SQL):
   drift(run_id, prev_run_id, eval_key, cell_key, changed, changed_paths, noise, real_changed)
   effort(run_id, eval_key, cell_key, role, variant, harness, environment, n, tools_median, …)
-  eval_trend(eval_key, run_id, started_at, branch, pr_number, recorded, outcome, pass_rate, fingerprint)
+  eval_trend(eval_key, run_id, started_at, branch, pr_number, recorded, outcome, pass_at_1, fingerprint)
   factor_effects(factor, level, baseline, context, tier, run_id, eval_key, strata, runs, …)
   failing_attempts(run_id, started_at, eval_key, attempt_key, cell_key, harness, model, …)
   flaky_cells(eval_key, cell_key, fingerprint, runs, flaky_runs, first_seen, last_seen, …)

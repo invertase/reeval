@@ -38,7 +38,7 @@ The record is `kind: "es-run"`, `schemaVersion: 1`. While reeval is pre-release 
 
 ## Reading one
 
-Start at `evals[]` where `outcome != "pass"`, then its `cells[]` for pass rates, roles and lift, then each failing attempt's `error` and `judgements`. Open the files its `files` points to.
+Start at `evals[]` where `outcome != "pass"`, then its `cells[]` for pass@1 (`passRate`), roles and lift, then each failing attempt's `error` and `judgements`. Open the files its `files` points to.
 
 ```json title="evals/.history/<runId>.json (trimmed)"
 {
@@ -318,7 +318,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="passRate" type="number | null">
-  pass / (pass + fail) over the gated cells' attempts; infra errors and skips excluded.
+  pass@1, pass / (pass + fail), over the gated cells' attempts; infra errors and skips excluded.
 </Property>
 
 <Property name="cells" type="CellRecord[]"></Property>
@@ -373,17 +373,19 @@ Also has every field of `Cell`.
 
 <Property name="skipped" type="number"></Property>
 
-<Property name="passRate" type="number | null"></Property>
+<Property name="passRate" type="number | null">
+  pass@1: pass / (pass + fail); infra errors and skips excluded.
+</Property>
 
 <Property name="outcome" type="Outcome">
-  By `gate`. `'all'` matches `{ passRate: 1 }` (infra only when nothing counted); `'none'` reports the worst outcome. A variant below its `minLift` fails too.
+  By `gate`. `'all'` (pass^k: every counted attempt passes) matches `{ passRate: 1 }`; `{ passRate }` is a pass@1 threshold. Infra only when nothing counted; `'none'` reports the worst outcome. A variant below its `minLift` fails too.
 </Property>
 
 <Property name="lift" type="Lift" optional></Property>
 
 ### Lift
 
-A variant cell's pass rate against the control's, on the same harness and sandbox.
+A variant cell's pass@1 against the control's, on the same harness and sandbox.
 
 <Property name="vs" type="string">
   The control cell's key.
@@ -396,7 +398,7 @@ A variant cell's pass rate against the control's, on the same harness and sandbo
 <Property name="variant" type="{pass: number; counted: number}"></Property>
 
 <Property name="points" type="number">
-  Variant pass rate minus control pass rate, from -1 to 1.
+  Variant pass@1 minus control pass@1, from -1 to 1.
 </Property>
 
 <Property name="interval" type="{lo: number; hi: number; level: 0.95; method: 'newcombe-wilson'}">

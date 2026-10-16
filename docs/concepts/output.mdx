@@ -124,21 +124,21 @@ summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
 
 ## The summary
 
-Plain output ends with a summary: a file › group tree with each eval's outcome, duration, lowest judge score and turns. Evals with several attempts get their pass count, their pass rate (labelled `gated` when some cells, such as controls, aren't gated: see [the eval line](/reference/cli/run#the-summarys-eval-line)) and a row per cell, with its role and lift, and each variant an `effort:` line (see [effort](/concepts/lift#effort-next-to-lift)). From a real run of Cursor and Antigravity at `--runs 2`:
+Plain output ends with a summary: a file › group tree with each eval's outcome, duration, lowest judge score and turns. Evals with several attempts get their pass count, their pass@1 (labelled `gated` when some cells, such as controls, aren't gated: see [the eval line](/reference/cli/run#the-summarys-eval-line)) and a row per cell, with its role and lift, and each variant an `effort:` line (see [effort](/concepts/lift#effort-next-to-lift)). From a real run of Cursor and Antigravity at `--runs 2`:
 
 ```text
 Summary
  evals/hello.eval.ts
    greet module
-     ✓ creates a tested greet module                4/4  100%  4 attempts
-         cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
-         antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
+     ✓ creates a tested greet module                4/4  pass@1 100%  4 attempts
+         cursor:composer-2.5/-/docker                    2/2  pass@1 100%   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/-/docker    2/2  pass@1 100%   gate passRate 0.5
 …
  evals/skill.eval.ts
    house greeting
-     ✓ greets in the house style                    4/8 · 100% gated  8 attempts
-         cursor:composer-2.5/plain/docker                                control    0/2    0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+     ✓ greets in the house style                    4/8 · pass@1 100% gated  8 attempts
+         cursor:composer-2.5/plain/docker                                control    0/2  pass@1   0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
 …
 Expected misses, not gated (4)

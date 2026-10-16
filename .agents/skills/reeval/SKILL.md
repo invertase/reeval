@@ -328,22 +328,22 @@ group(
 - Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's miss
   prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent output), never under
   `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
-- **Lift** is variant pass rate minus control pass rate, with a 95% interval; with few runs it's
+- **Lift** is variant pass@1 minus control pass@1, with a 95% interval; with few runs it's
   usually "within noise". The summary still prints that interval at 1 vs 1. `reeval analyze`
   treats fewer than two counted attempts a side as `insufficient` (not measured), never a
-  results line. When the eval's sources changed across the compared runs, that pass-rate
+  results line. When the eval's sources changed across the compared runs, that pass@1
   difference is `not comparable: the eval changed`, not an effect, and mixed counts such as
   `6/10 vs 8/9` are not a results line. The summary also prints
   **effort** under each variant (median tool
   calls, agent time and, when both sides reported usage, tokens vs the control's), which often
-  shows a skill's effect before pass rates do:
+  shows a skill's effect before pass@1 does:
   `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
   A cell without usage (Goose) is left out of the token sample only; if either side then
   has none, the token metric is omitted, not `insufficient`.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
-- With `runs > 1`, a cell passes only if every counted attempt passes, unless
-  `gate: { passRate: 0.8 }`. Infra errors don't count; a cell is `infra_error`
+- With `runs > 1`, a cell passes only if every counted attempt passes (pass^k), unless
+  `gate: { passRate: 0.8 }` (a pass@1 threshold; pass@1 is passes over passes and fails). Infra errors don't count; a cell is `infra_error`
   only when nothing counted.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
   the baseline. `compare: false` on `evaluate` or `group` is an error.

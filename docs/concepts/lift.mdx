@@ -24,9 +24,9 @@ Run under the fake agent, which writes the house greeting only when it has the s
 Summary
  evals/skill.eval.ts
    house greeting
-     ✓ greets in the house style     5/10 · 100% gated  10 attempts
-         fake/plain/fake                control    0/5    0%   not gated
-         fake/with-house-greeting/fake  variant    5/5  100%   lift +100 pts (95% +39…+100, 5/5 vs 0/5) (minLift 0)   gate passRate 0.8
+     ✓ greets in the house style     5/10 · pass@1 100% gated  10 attempts
+         fake/plain/fake                control    0/5  pass@1   0%   not gated
+         fake/with-house-greeting/fake  variant    5/5  pass@1 100%   lift +100 pts (95% +39…+100, 5/5 vs 0/5) (minLift 0)   gate passRate 0.8
 …
 ```
 
@@ -46,16 +46,16 @@ A cell that doesn't gate has `gate: 'none'` in the plan and the record. Without 
 
 The `gate` option (on the config, a profile's `defaults`, a group or an eval) decides when a gating cell passes.
 
-| `gate` | A cell passes when |
-|---|---|
-| `'all'` (default) | Every counted attempt passes |
-| `{ passRate: 0.8 }` | At least 80% of its passes and fails are passes |
+| `gate` | A cell passes when | Elsewhere called |
+|---|---|---|
+| `'all'` (default) | Every counted attempt passes | pass^k |
+| `{ passRate: 0.8 }` | Its pass@1 is at least 0.8 | a pass@1 threshold |
 
-Infra errors and skipped attempts don't count either way. `'all'` gets harder to meet as `runs` grows, even for an agent that's no worse, so the plan prints a hint when an eval runs more than once with it.
+A cell's pass@1 is its passes over its passes and fails: the chance that one attempt passes. Infra errors and skipped attempts don't count either way. `'all'` gets harder to meet as `runs` grows, even for an agent that's no worse: an agent with a pass@1 of 0.85 passes all five of `runs: 5` only 0.85⁵ = 44% of the time. So the plan prints a hint when an eval runs more than once with it.
 
 ## Lift and its interval
 
-Lift is the variant's pass rate minus the control's on the same harness, in points. reeval stores it on the variant cell with a 95% interval on the difference, computed with Newcombe's method from each side's Wilson score interval.
+Lift is the variant's pass@1 minus the control's on the same harness, in points. reeval stores it on the variant cell with a 95% interval on the difference, computed with Newcombe's method from each side's Wilson score interval.
 
 ```mermaid
 flowchart LR
@@ -91,13 +91,13 @@ The interval is wide when attempts are few. These are reeval's own intervals for
 At two runs per cell only an all-or-nothing difference clears noise. `reeval analyze` treats fewer than two counted attempts a side as `insufficient` (not measured), not as a results line; the run summary still prints the interval. reeval's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
 
 ```text
-     ✓ fixes a broken config and explains it      5/6 · 100% gated  6 attempts
-         cursor:composer-2.5/broken-project/reeval-tarball  control    1/2   50%   not gated
-         cursor:composer-2.5/reeval-weak/reeval-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
-         cursor:composer-2.5/reeval-good/reeval-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+     ✓ fixes a broken config and explains it      5/6 · pass@1 100% gated  6 attempts
+         cursor:composer-2.5/broken-project/reeval-tarball  control    1/2  pass@1  50%   not gated
+         cursor:composer-2.5/reeval-weak/reeval-tarball         variant    2/2  pass@1 100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/reeval-good/reeval-tarball         variant    2/2  pass@1 100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
 ```
 
-One control attempt failed, so both skills show +50 pts, and neither is distinguishable from +0. The good skill's real effect showed up elsewhere: a median of 10 tool calls against the control's 40. Pass-rate lift only measures pass rate.
+One control attempt failed, so both skills show +50 pts, and neither is distinguishable from +0. The good skill's real effect showed up elsewhere: a median of 10 tool calls against the control's 40. Lift only measures pass@1.
 
 <Info>
   Use `reeval query lift` to see every variant cell's lift across runs, with `lo`, `hi` and `within_noise` columns.
@@ -108,12 +108,12 @@ One control attempt failed, so both skills show +50 pts, and neither is distingu
 Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. When both sides reported usage, tokens join that line with the same rank test. From a real run of Cursor and Antigravity at `--runs 2`:
 
 ```text
-     ✓ greets in the house style                    4/8 · 100% gated  8 attempts
-         cursor:composer-2.5/plain/docker                                control    0/2    0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+     ✓ greets in the house style                    4/8 · pass@1 100% gated  8 attempts
+         cursor:composer-2.5/plain/docker                                control    0/2  pass@1   0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
-         antigravity:gemini-3.8-flash-medium/plain/docker                control    0/2    0%   not gated
-         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/plain/docker                control    0/2  pass@1   0%   not gated
+         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
 ```
 
@@ -165,7 +165,7 @@ evals/skill.eval.ts › house greeting › greets in the house…   environment 
 `minLift` (points from -1 to 1) fails a variant cell whose interval's **lower bound** is below it, so it asks for confidence, not a lucky point estimate. `minLift: 0` means "confidently no worse than the control". With `minLift: 0.5` at `runs: 2`, a perfect +100 still fails:
 
 ```text
-         fake/with-house-greeting/fake  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2) (minLift 50) ✗   gate passRate 0.8
+         fake/with-house-greeting/fake  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2) (minLift 50) ✗   gate passRate 0.8
 …
 Lift below minLift (1)
  ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +100 pts (95% +7…+100, 2/2 vs 0/2): its lower bound is below minLift 50

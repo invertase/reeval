@@ -807,7 +807,7 @@ describe('reeval analyze', () => {
       cli: [],
       instructions: null,
       attempts: {},
-      facts: [{ id: 'F1', kind: 'pass-rate' }],
+      facts: [{ id: 'F1', kind: 'pass@1' }],
       evidence: [],
       dropped: [],
     }
@@ -965,7 +965,7 @@ evaluate('hello', async (c) => {
       'the run summary still prints the interval',
     )
     const { digest } = await digestOf(p.dir)
-    const pass = digest.facts.find((f) => f.kind === 'pass-rate')
+    const pass = digest.facts.find((f) => f.kind === 'pass@1')
     const variant = (
       pass?.cells as Array<{ lift?: string; verdict?: string; cell: string }> | undefined
     )?.find((c) => c.lift)
@@ -1176,7 +1176,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
     const p = await compareProject('analyze-lift-effect', 2)
     assert.equal((await runCli(p.dir)).code, 0)
     const { digest } = await digestOf(p.dir)
-    const pass = digest.facts.find((f) => f.kind === 'pass-rate')
+    const pass = digest.facts.find((f) => f.kind === 'pass@1')
     const variant = (pass?.cells as Array<{ lift?: string; verdict?: string }> | undefined)?.find(
       (c) => c.lift,
     )

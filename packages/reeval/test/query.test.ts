@@ -62,6 +62,12 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       [run.runId, 'skilled', 3, 0, variant?.lift?.points],
     )
     assert.deepEqual([lift?.lo, lift?.hi], [variant?.lift?.interval.lo, variant?.lift?.interval.hi])
+    assert.deepEqual([lift?.variant_pass_at_1, lift?.control_pass_at_1], [1, 0])
+    const cells = await query(p.dir, 'SELECT role, pass_at_1 FROM cells ORDER BY role')
+    assert.deepEqual(cells, [
+      { role: 'control', pass_at_1: 0 },
+      { role: 'variant', pass_at_1: 1 },
+    ])
 
     const failing = await query(p.dir, 'SELECT * FROM failing_attempts')
     assert.equal(failing.length, 3, 'the control fails its three attempts')
@@ -69,8 +75,8 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
 
     const trend = await query(p.dir, 'eval_trend')
     assert.deepEqual(
-      trend.map((t) => [t.eval_key, t.outcome, t.recorded]),
-      [['evals/s.eval.ts › greets', 'pass', 0]],
+      trend.map((t) => [t.eval_key, t.outcome, t.pass_at_1, t.recorded]),
+      [['evals/s.eval.ts › greets', 'pass', 1, 0]],
     )
 
     const text = await runCli(p.dir, ['query', 'SELECT key, outcome FROM evals'])
@@ -277,8 +283,8 @@ evaluate('judged', async (c) => {
 
     const [flaky] = await query(p.dir, 'flaky_cells')
     assert.deepEqual(
-      [flaky?.eval_key, flaky?.cell_key, flaky?.pass, flaky?.counted],
-      ['evals/d.eval.ts › flaky', 'fake/fake/fake', 4, 6],
+      [flaky?.eval_key, flaky?.cell_key, flaky?.pass, flaky?.counted, flaky?.pass_at_1],
+      ['evals/d.eval.ts › flaky', 'fake/fake/fake', 4, 6, 0.667],
       'grouped by fingerprint: two runs at the first, one at the second',
     )
     const flips = await query(
