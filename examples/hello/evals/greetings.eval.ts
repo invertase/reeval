@@ -8,16 +8,18 @@ const names = ['Ada', 'Grace', 'Linus', 'Margaret', 'Dennis', 'Barbara']
 
 evaluate.each(names)(
   'greets %s in the house style',
-  { compare: { baseline: plain, variants: [withHouseGreeting], minLift: 0.2 } },
+  {
+    compare: {
+      baseline: plain,
+      variants: [withHouseGreeting],
+      minLift: 0.2,
+    },
+  },
   async (c, name) => {
-    await c.send(
-      'Create greet.js exporting greet(name) that greets the person in our house greeting style. ' +
-        'Add a package.json with "type": "module". No dependencies.',
-    )
+    await c.send('Create greet.js exporting greet(name) in our house style.')
+    const check = `m.greet('${name}') === 'Ahoy, ${name}!' ? 0 : 1`
     await expect(
-      c.exec(
-        `node -e "import('./greet.js').then((m) => process.exit(m.greet('${name}') === 'Ahoy, ${name}!' ? 0 : 1))"`,
-      ),
+      c.exec(`node -e "import('./greet.js').then((m) => process.exit(${check}))"`),
     ).toSucceed()
   },
 )
