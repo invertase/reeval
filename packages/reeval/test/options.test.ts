@@ -353,7 +353,7 @@ evaluate.each(${cases}${options})(
 
     const q = await runCli(p.dir, [
       'query',
-      'select family_id, variant, pairs, verdict, outcome from family_lift',
+      'select family_id, variant, pairs, variant_pass_at_1, control_pass_at_1, verdict, outcome from family_lift',
       '--json',
     ])
     assert.equal(q.code, 0, q.stdout + q.stderr)
@@ -361,9 +361,21 @@ evaluate.each(${cases}${options})(
       family_id: 'evals/e.eval.ts › writes ok.txt for %s',
       variant: 'skilled',
       pairs: 6,
+      variant_pass_at_1: 1,
+      control_pass_at_1: 0,
       verdict: 'lift',
       outcome: 'pass',
     })
+    const rates = await runCli(p.dir, [
+      'query',
+      'select cell_key, pass, counted, pass_at_1 from families where run_id = (select max(run_id) from runs) order by cell_key',
+      '--json',
+    ])
+    assert.equal(rates.code, 0, rates.stdout + rates.stderr)
+    assert.deepEqual(JSON.parse(rates.stdout), [
+      { cell_key: 'fake/base/fake', pass: 0, counted: 6, pass_at_1: 0 },
+      { cell_key: 'fake/skilled/fake', pass: 6, counted: 6, pass_at_1: 1 },
+    ])
   })
 
   test("a pooled lift below minLift fails the run, and the family's mark", async () => {
