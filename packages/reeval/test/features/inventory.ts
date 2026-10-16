@@ -1285,6 +1285,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'assert.changed',
+    area: 'Judges and matchers',
+    name: '`toHaveChanged(paths?)`: files in the workspace diff, matched with globs',
+    fixtures: ['assert/changed'],
+    tests: [
+      'reeval/test/assert.test.ts › matches the diff with globs, directories, RegExps and lists',
+      'reeval/test/assert.test.ts › reads c as of its latest turn, and nothing before one',
+      'reeval/test/assert.test.ts › names the files it saw',
+    ],
+  },
+  {
     id: 'expect',
     area: 'Judges and matchers',
     name: "Vitest's `expect` from `@vitest/expect`: matchers, diffs, `soft`, `poll`, `assertions`",

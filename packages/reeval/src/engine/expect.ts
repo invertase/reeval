@@ -51,6 +51,7 @@ declare module '@vitest/expect' {
     toHaveCalledTool(name: string | RegExp, input?: string | RegExp | Record<string, unknown>): void
     toHaveRun(command?: RegExp | string): void
     toHaveEdited(path?: RegExp | string): void
+    toHaveChanged(paths?: string | RegExp | ReadonlyArray<string | RegExp>): void
     toPass(): void
   }
 }

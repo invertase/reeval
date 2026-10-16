@@ -8,6 +8,7 @@ import {
   calledMcp,
   calledSkill,
   calledTool,
+  changed,
   edited,
   fetched,
   ran,
@@ -191,6 +192,54 @@ describe('edited', () => {
     assert.equal(edited(file).pass, true)
     assert.equal(edited(shell, 'notes.txt').pass, true)
     assert.equal(edited(file, 'other.txt').pass, false)
+  })
+})
+
+describe('changed', () => {
+  const diffOf = (...files: Array<[string, 'added' | 'modified' | 'deleted']>) => ({
+    ...turnOf([]),
+    diff: { patch: '', files: files.map(([path, status]) => ({ path, status })) },
+  })
+  const turn = diffOf(['test/greet.test.js', 'modified'], ['src/greet.ts', 'added'])
+
+  test('matches the diff with globs, directories, RegExps and lists', () => {
+    assert.equal(changed(turn, 'test/**').pass, true)
+    assert.equal(changed(turn, 'test').pass, true)
+    assert.equal(changed(turn, './test/').pass, true)
+    assert.equal(changed(turn, 'src/greet.ts').pass, true)
+    assert.equal(changed(turn, /\.test\.js$/).pass, true)
+    assert.equal(changed(turn, ['tsconfig.json', 'src/*.ts']).pass, true)
+    assert.equal(changed(turn).pass, true)
+    assert.equal(changed(turn, 'greet.ts').pass, false)
+    assert.equal(changed(turn, ['tsconfig.json', 'biome.json']).pass, false)
+    assert.equal(changed(diffOf()).pass, false)
+  })
+
+  test('reads c as of its latest turn, and nothing before one', () => {
+    assert.equal(changed({ turns: [diffOf(), turn] }, 'test/**').pass, true)
+    assert.equal(changed({ turns: [turn, diffOf()] }, 'test/**').pass, false)
+    assert.equal(changed({ turns: [] }).pass, false)
+    expect({ turns: [turn] }).toHaveChanged('src/**')
+  })
+
+  test('names the files it saw', () => {
+    throws(
+      () => expect(turn).not.toHaveChanged('test/**'),
+      'expected no changes to test/**, got ["test/greet.test.js" (modified)]',
+    )
+    throws(
+      () => expect(turn).not.toHaveChanged(['tsconfig.json', /greet/]),
+      'expected no changes to tsconfig.json, /greet/, got ["test/greet.test.js" (modified), "src/greet.ts" (added)]',
+    )
+    throws(
+      () => expect(turn).toHaveChanged('package.json'),
+      'expected changes to package.json, got ["test/greet.test.js" (modified), "src/greet.ts" (added)]',
+    )
+    throws(() => expect(diffOf()).toHaveChanged(), 'expected changes, got none')
+    throws(
+      () => expect({} as never).toHaveChanged('x'),
+      'toHaveChanged() expects a turn from c.send(), or c',
+    )
   })
 })
 
