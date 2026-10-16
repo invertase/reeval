@@ -241,10 +241,10 @@ export function RunsPage() {
                   {timeAgo(latest.entry.startedAt)}
                 </span>
               </Stat>
-              <Stat label="Latest pass rate">
-                {formatPercent(latest.total ? latest.passed / latest.total : null)}
+              <Stat label="Latest pass@1">
+                {formatPercent(latest.counted ? latest.passed / latest.counted : null)}
                 <span className="ml-1.5 text-sm font-normal text-muted-foreground">
-                  {latest.passed}/{latest.total}
+                  {latest.passed}/{latest.counted}
                 </span>
               </Stat>
               <Stat label="Failing runs">

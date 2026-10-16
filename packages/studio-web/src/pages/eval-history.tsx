@@ -4,7 +4,7 @@ import { ChevronRight, GitBranch, SearchX } from 'lucide-react'
 import { useMemo } from 'react'
 import { evalHistory, formatDuration, hasUngatedCells, shortSha, splitEvalId } from 'reeval/view'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
-import { OutcomeIcon, OutcomeStrip, PassRate, TallyBar } from '@/components/status'
+import { OutcomeIcon, OutcomeStrip, Rate, TallyBar } from '@/components/status'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -94,7 +94,7 @@ export function EvalHistoryPage() {
               <TableHead>Run</TableHead>
               <TableHead>Commit</TableHead>
               <TableHead className="w-48">Attempts</TableHead>
-              <TableHead className="text-right">Pass rate</TableHead>
+              <TableHead className="text-right">pass@1</TableHead>
               <TableHead className="hidden text-right sm:table-cell">Run time</TableHead>
             </TableRow>
           </TableHeader>
@@ -153,7 +153,7 @@ export function EvalHistoryPage() {
                     <TallyBar className="mt-1.5" pass={pass} fail={fail} infra={infra} />
                   </TableCell>
                   <TableCell className="text-right">
-                    <PassRate rate={p.passRate} />
+                    <Rate rate={p.passAt1} />
                     {hasUngatedCells(p.cells) ? (
                       <span className="ml-1 text-xs text-muted-foreground">gated</span>
                     ) : null}

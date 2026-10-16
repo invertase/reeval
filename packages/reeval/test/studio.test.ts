@@ -668,7 +668,7 @@ describe('view-models over a real history', () => {
     })
     assert.equal(view.counts.regressed, 1)
     assert.deepEqual(
-      view.rows.map((r) => [r.status, r.basePassRate, r.headPassRate, r.baseScore, r.headScore]),
+      view.rows.map((r) => [r.status, r.basePassAt1, r.headPassAt1, r.baseScore, r.headScore]),
       [['regressed', 1, 0, 0.9, 0.2]],
     )
   })

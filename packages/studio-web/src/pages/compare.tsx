@@ -182,7 +182,7 @@ function Row({ row, head }: { row: CompareViewRow; head: string }) {
         </span>
       </TableCell>
       <TableCell className="hidden md:table-cell">
-        <Delta base={row.basePassRate} head={row.headPassRate} kind="rate" />
+        <Delta base={row.basePassAt1} head={row.headPassAt1} kind="rate" />
       </TableCell>
       <TableCell className="hidden pr-4 md:table-cell">
         <Delta base={row.baseScore} head={row.headScore} kind="score" />
@@ -228,7 +228,7 @@ export function ComparePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Compare runs</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          What flipped between two runs, with pass-rate and judge-score deltas, and each cell's lift
+          What flipped between two runs, with pass@1 and judge-score deltas, and each cell's lift
           and effort (tool calls, agent time). Uses the same rules as{' '}
           <code className="font-mono text-xs">reeval compare</code>.
         </p>
@@ -310,7 +310,7 @@ export function ComparePage() {
                       <TableHead className="w-36 pl-4">Change</TableHead>
                       <TableHead>Eval</TableHead>
                       <TableHead className="w-24">Outcome</TableHead>
-                      <TableHead className="hidden md:table-cell">Pass rate</TableHead>
+                      <TableHead className="hidden md:table-cell">pass@1</TableHead>
                       <TableHead className="hidden pr-4 md:table-cell">Judge score</TableHead>
                     </TableRow>
                   </TableHeader>

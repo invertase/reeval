@@ -240,6 +240,8 @@ export type RunRow = {
   passed: number
   /** Attempts that reached a verdict or errored; skips excluded. */
   total: number
+  /** Passes and fails, the denominator of the run's pass@1. */
+  counted: number
   /** Stack changes in the cells it shares with earlier runs, and in the judge since the previous complete run. */
   drift: StackChange[]
   /** Evals with a cell whose fingerprint changed since the last run that had that cell. */
@@ -274,6 +276,7 @@ export function runRows(entries: HistoryEntry[]): RunRow[] {
       entry,
       passed: pass,
       total: pass + fail + infraError,
+      counted: pass + fail,
       drift: base ? stackChanges(base, entry) : [],
       changedEvals,
     })
@@ -360,7 +363,8 @@ export type CellRow = {
   fail: number
   infraError: number
   skipped: number
-  passRate: number | null
+  /** pass@1: passes over passes and fails. */
+  passAt1: number | null
   outcome: Outcome
   /** A variant's lift over its control, in whole points (from the record), else null. */
   lift: number | null
@@ -395,7 +399,7 @@ export function cellRows(e: EvalEntry): CellRow[] {
     fail: cell.fail,
     infraError: cell.infraError,
     skipped: cell.skipped,
-    passRate: cell.passRate,
+    passAt1: cell.passRate,
     outcome: cell.outcome,
     lift: cell.lift ? Math.round(cell.lift.points * 100) : null,
     liftInterval: cell.lift
@@ -464,7 +468,8 @@ export const isMatrix = (e: Pick<EvalEntry, 'cells'>) =>
 export type EvalHistoryPoint = {
   run: HistoryEntry
   outcome: Outcome
-  passRate: number | null
+  /** pass@1 over the gated cells' attempts. */
+  passAt1: number | null
   cells: HistoryCell[]
   /** A cell's fingerprint differs from the last run that had that cell. */
   changed: boolean
@@ -481,7 +486,7 @@ export function evalHistory(entries: HistoryEntry[], slug: string): EvalHistoryP
     points.push({
       run,
       outcome: e.outcome,
-      passRate: e.passRate,
+      passAt1: e.passRate,
       cells: e.cells,
       changed: cellsChanged(seen, e.id, e.cells),
     })
@@ -497,9 +502,9 @@ export type CompareViewRow = {
   status: CompareStatus
   base: Outcome | null
   head: Outcome | null
-  basePassRate: number | null
-  headPassRate: number | null
-  /** See `CompareRow`: then the pass rates are over the cells both runs have too. */
+  basePassAt1: number | null
+  headPassAt1: number | null
+  /** See `CompareRow`: then pass@1 is over the cells both runs have too. */
   cells?: CompareRow['cells']
   changes?: string[]
   /** Mean judge score per run; null without judgements or without the record. */
@@ -526,8 +531,8 @@ export const COMPARE_ORDER: CompareStatus[] = [
 
 /**
  * Whether some of an eval's cells aren't gated (`gate: 'none'`, e.g. controls under
- * `compare.gate: 'variants'`). Its pass rate then covers fewer attempts than its pass count, so
- * the eval line labels the rate `gated`: `2/4 · 100% gated`.
+ * `compare.gate: 'variants'`). Its pass@1 then covers fewer attempts than its pass count, so
+ * the eval line labels it `gated`: `2/4 · pass@1 100% gated`.
  */
 export const hasUngatedCells = (cells: readonly Pick<HistoryCell, 'gate'>[]) =>
   cells.some((c) => c.gate === 'none')
@@ -544,15 +549,15 @@ export const isUngatedMiss = (
   a.error?.kind !== 'aborted' &&
   e.cells.find((c) => c.key === a.cell)?.gate === 'none'
 
-/** Passes over passes and fails in the gated cells, as an eval's `passRate` counts them. */
-function gatedPassRate(cells: HistoryCell[]): number | null {
+/** pass@1 in the gated cells, as an eval's `passRate` counts it. */
+function gatedPassAt1(cells: HistoryCell[]): number | null {
   const gated = cells.filter((c) => c.gate !== 'none')
   const pass = gated.reduce((n, c) => n + c.pass, 0)
   const counted = pass + gated.reduce((n, c) => n + c.fail, 0)
   return counted ? pass / counted : null
 }
 
-/** `reeval compare`'s classification, plus pass rates and judge-score deltas from the records. */
+/** `reeval compare`'s classification, plus pass@1 and judge-score deltas from the records. */
 export function compareView(
   base: HistoryEntry,
   head: HistoryEntry,
@@ -564,15 +569,15 @@ export function compareView(
     const baseKeys = new Set(b?.cells.map((c) => c.key))
     const shared =
       row.cells && new Set(h?.cells.filter((c) => baseKeys.has(c.key)).map((c) => c.key))
-    const passRate = (e: typeof b) => {
+    const passAt1 = (e: typeof b) => {
       if (!e) return null
-      return shared ? gatedPassRate(e.cells.filter((c) => shared.has(c.key))) : e.passRate
+      return shared ? gatedPassAt1(e.cells.filter((c) => shared.has(c.key))) : e.passRate
     }
     return {
       ...row,
       slug: h?.slug ?? b?.slug ?? null,
-      basePassRate: passRate(b),
-      headPassRate: passRate(h),
+      basePassAt1: passAt1(b),
+      headPassAt1: passAt1(h),
       baseScore: meanScore(records.base?.evals.find((e) => e.id === row.id)),
       headScore: meanScore(records.head?.evals.find((e) => e.id === row.id)),
       perCell: row.perCell ?? [],
