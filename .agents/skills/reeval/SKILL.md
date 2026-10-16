@@ -342,6 +342,16 @@ group(
   has none, the token metric is omitted, not `insufficient`.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
+- **Label each requirement** with `expect`'s second argument:
+  `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
+  is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).
+  In a compare, prefer `expect.soft` for independent requirements: a hard failure ends the
+  attempt, and the checks after it count as not run. Under each variant the summary prints
+  `checks: house greeting 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`, and
+  `Checks that don't discriminate` lists the ones that pass (or fail) on both sides. After a
+  run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict
+  LIKE 'both-%'"` and rework or drop those checks: they measure nothing about the variant.
+  Changing a label changes the eval's fingerprint.
 - With `runs > 1`, a cell passes only if every counted attempt passes (pass^k), unless
   `gate: { passRate: 0.8 }` (a pass@1 threshold; pass@1 is passes over passes and fails). Infra errors don't count; a cell is `infra_error`
   only when nothing counted.

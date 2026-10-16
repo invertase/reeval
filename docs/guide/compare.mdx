@@ -220,6 +220,48 @@ Under each variant, the effort line compares the median attempt with the control
 
 The verdict comes from a rank test on the tool calls. Two attempts against two can never reach significance, so it says `too few attempts to test`. With enough runs it says `fewer tool calls` or `more tool calls` with a p-value, or `within noise`. Tokens use the same test on the attempts that reported usage; a cell without usage is left out of that sample only, and if either side then has none the token line is omitted, not marked `insufficient`. The studio's cells table shows effort next to lift, as in the screenshot above.
 
+## Which checks made the difference
+
+```ts
+evaluate('greets in the house style', async (c) => {
+  await c.send('Create greet.js exporting greet(name) …')
+  await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)
+  await expect.soft(c, 'adds package.json')
+    .toHaveFile('package.json', /"module"/)
+  await expect(c.exec(greetAda), 'house greeting').toSucceed()
+})
+```
+
+Under each variant, the `checks:` line counts each [labelled](/reference/matchers#labels) check's passes on the variant against the control's. The checks that tell the arms apart come first:
+
+```text
+fake/plain/fake                control    0/2    0%   not gated
+fake/with-house-greeting/fake  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+  checks: house greeting 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate) · adds package.json 2/2 vs 2/2 (doesn't discriminate)
+…
+Checks that don't discriminate (2)
+ · evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake  exports greet: passes on both
+ · evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake  adds package.json: passes on both
+```
+
+A check that passes on both sides, or fails on both, measures nothing about the variant. The notice lists them but never fails the run. Rework such a check, or drop it.
+
+Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early, the later checks never run: they read `0/2 (2 not run)` and count against the control. The same verdicts are in `reeval query`'s `check_discrimination` view:
+
+```bash
+npx reeval query "SELECT label, variant_pass, control_pass, verdict
+  FROM check_discrimination"
+```
+
+```text
+label              variant_pass  control_pass  verdict
+exports greet      2             2             both-pass
+adds package.json  2             2             both-pass
+house greeting     2             0             discriminates
+```
+
+`verdict` is `discriminates` when every counted attempt passes on one side and none on the other, else `both-pass`, `both-fail` or `mixed`.
+
 ## Ask questions
 
 ```ts title="evals/questions.eval.ts"

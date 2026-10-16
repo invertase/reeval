@@ -293,6 +293,32 @@ toHaveFetched() can't check this turn: its harness doesn't report web fetches ('
 
 Cursor's SDK leaves web calls out of its stream; reeval's adapter recovers them after each turn from the agent's stored conversation, so a Cursor turn is `unreported` only when that recovery failed.
 
+## Labels
+
+```ts
+await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)
+await expect(c.exec(greetAda), 'house greeting').toSucceed()
+```
+
+`expect`'s second argument labels the check, as in Vitest: a failure reads `house greeting: expected command to succeed, exit code 1`. Every matcher call an attempt makes is recorded under `evals[].attempts[].assertions`, with its label, matcher, status (`pass`, `fail` or `error`), whether it was soft, and its message when it didn't pass.
+
+| Call | Recorded label |
+|---|---|
+| `expect(c, 'exports greet').toHaveFile(…)` | `exports greet` |
+| `expect(c).toHaveFile('greet.js')` | `toHaveFile greet.js` |
+| `expect(x).not.toBe(3)` | `not.toBe 3` |
+| `expect(c.exec(cmd)).toSucceed()` | `toSucceed <the command>` |
+| `expect(await c.judge(q)).toPass()` | `toPass <the question>` |
+| The same label twice in one attempt | `toHaveFile greet.js #2` |
+
+A label without one is the matcher and its first argument (or what it checks), cut at 60 characters. A matcher that can't answer (`HarnessCapabilityError`, or a wrong kind of `actual`) is `error`, not `fail`. A hard failure ends the attempt, so the checks after it aren't recorded on it; in a compare they count as not run.
+
+`expect.poll(…)` records one entry with its final outcome. `expect.assertions(n)`, `expect.hasAssertions()`, `expect.assert` and Chai property chains such as `.to.be.true` aren't recorded. A compare tallies each label per side: see [which checks made the difference](/guide/compare#which-checks-made-the-difference).
+
+<Info>
+  The label is part of the eval's source, so adding or changing one changes the eval's fingerprint and starts its history afresh.
+</Info>
+
 ## Related
 
 - [The attempt context](/reference/attempt-context)
