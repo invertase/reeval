@@ -22,7 +22,7 @@ Every `reeval run` goes through the same five steps. `--dry-run` stops after the
 | Eval file | Loads `group` and `evaluate` calls and resolves their options | [Options and inheritance](/concepts/options) |
 | Plan | Expands each eval into cells and attempts, and prints the plan line | [The matrix](/concepts/matrix) |
 | Attempts | Runs each attempt in its own sandbox: agent turns, then checks and the judge | [Attempt lifecycle](/concepts/attempt-lifecycle) |
-| Record | Writes each attempt's outcome, transcript, diff and timings, and each cell's pass rate and lift | [Gates and lift](/concepts/lift) |
+| Record | Writes each attempt's outcome, transcript, diff and timings, and each cell's pass@1 and lift | [Gates and lift](/concepts/lift) |
 | Studio | Shows runs, cells and attempts; `reeval compare` diffs two runs | [Fingerprints and drift](/concepts/fingerprints) |
 
 ## The vocabulary
@@ -41,10 +41,11 @@ The code, the CLI and these docs use the same words. Coming from Inspect, Harbor
 | cell | One harness × environment × sandbox of an eval, e.g. `cursor:composer-2.5/-/docker` | a factorial-design cell |
 | attempt | One run of a cell in a fresh sandbox, e.g. `cursor:composer-2.5/-/docker#1`; `runs: n` sets how many | trial (Anthropic, Harbor), epoch (Inspect), repetition |
 | run | One `reeval run`: every attempt it started, saved as one record | eval run, job (Harbor), eval log (Inspect) |
-| gate | How a cell's attempts decide its outcome | epoch reducer (Inspect), quality gate |
+| gate | How a cell's attempts decide its outcome: `'all'` (default) or `{ passRate }` | pass^k for `'all'`, a pass@1 threshold for `{ passRate }`; epoch reducer (Inspect), quality gate |
+| pass@1 | A cell's passes over its passes and fails; `pass_at_1` in `reeval query` | pass@1, success rate, resolve rate (SWE-bench) |
 | checks, judge | `expect`, `c.exec` and `c.judge` on the attempt's result | grader, verifier, scorer, evaluator |
 | transcript | `transcript.jsonl`: every message and tool call of an attempt | trajectory, trace |
-| lift | A variant's pass rate (pass@1) minus its control's, with a 95% interval | treatment effect, delta, uplift |
+| lift | A variant's pass@1 minus its control's, with a 95% interval | treatment effect, delta, uplift |
 | effort | Measured tool calls, agent time and tokens | efficiency, cost |
 
 A cell passes or fails by its [gate](/concepts/lift); an eval fails when any of its gated cells fails.
