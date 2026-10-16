@@ -59,7 +59,7 @@ function declarations() {
     })
   })
   evaluate('d', { timeout: '2m', egress: 'deny-all', environment: skill }, async () => {})
-  evaluate.for([{ n: 1 }, { n: 2 }])('case $n', async () => {})
+  evaluate.each([{ n: 1 }, { n: 2 }])('case $n', async () => {})
   evaluate.todo('later')
   group.todo('also later')
 }

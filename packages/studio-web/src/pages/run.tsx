@@ -21,11 +21,18 @@ import {
   activityLabel,
   answerRows,
   type CellRow,
+  caseLabel,
   cellRows,
   collapsedJudges,
   type EvalEntry,
   effortSummary,
   evalTree,
+  type FamilyRecord,
+  familyCases,
+  familyEffortLabel,
+  familyHeadLabel,
+  familyLiftLabel,
+  familyRateLabel,
   formatDuration,
   formatPercent,
   formatRatio,
@@ -129,6 +136,66 @@ function SandboxWarnings({ warnings }: { warnings: SandboxWarning[] }) {
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * Each pooled `evaluate.each`: its template, a mark per case (click to open that case), and its
+ * pooled pass rate or paired lift, the suite's one verdict.
+ */
+function Families({ record, onSelect }: { record: RunRecord; onSelect: (slug: string) => void }) {
+  const families: FamilyRecord[] = record.families ?? []
+  if (families.length === 0) return null
+  return (
+    <div className="space-y-3 rounded-xl border bg-card p-4" data-testid="families">
+      <h2 className="text-sm font-medium">Families</h2>
+      {families.map((f) => {
+        const cases = familyCases(f, record.evals)
+        return (
+          <div key={f.id} className="space-y-2 border-t pt-3 first-of-type:border-t-0">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <OutcomeIcon outcome={f.outcome} />
+              <span className="font-mono text-xs">{f.id}</span>
+              <span className="text-muted-foreground">{familyHeadLabel(f)}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {cases.map((e) => (
+                <button
+                  key={e.slug}
+                  type="button"
+                  onClick={() => onSelect(e.slug)}
+                  className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs hover:bg-muted"
+                >
+                  <OutcomeIcon outcome={e.outcome} className="size-3" />
+                  {caseLabel(f.name, e.name)}
+                </button>
+              ))}
+            </div>
+            <ul className="space-y-1 font-mono text-xs">
+              {f.lifts.length
+                ? f.lifts.map((l) => {
+                    const effort = familyEffortLabel(l)
+                    return (
+                      <li key={l.variant} className={cn(l.outcome === 'fail' && 'text-fail')}>
+                        <span className="text-muted-foreground">{l.variant}</span>{' '}
+                        {familyLiftLabel(l)}
+                        {l.minLift !== undefined ? ` (minLift ${Math.round(l.minLift * 100)})` : ''}
+                        {effort ? (
+                          <span className="block text-muted-foreground">effort: {effort}</span>
+                        ) : null}
+                      </li>
+                    )
+                  })
+                : f.rates.map((r) => (
+                    <li key={r.cell}>
+                      <span className="text-muted-foreground">{r.cell}</span> {familyRateLabel(r)}
+                    </li>
+                  ))}
+            </ul>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -759,6 +826,11 @@ export function RunPage() {
           skipped={skipped}
         />
       </div>
+
+      <Families
+        record={record}
+        onSelect={(slug) => navigate({ search: (s) => ({ ...s, eval: slug }), replace: true })}
+      />
 
       <Tabs
         value={search.tab ?? 'evals'}

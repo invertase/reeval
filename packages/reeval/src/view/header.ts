@@ -78,5 +78,16 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
           : {}),
       })),
     })),
+    ...(record.families?.length
+      ? {
+          families: record.families.map(({ id, name, cases, ran, outcome }) => ({
+            id,
+            name,
+            cases,
+            ran,
+            outcome,
+          })),
+        }
+      : {}),
   }
 }

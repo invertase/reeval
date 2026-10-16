@@ -5,4 +5,4 @@ group('slow things', { tags: ['slow'] }, () => {
   evaluate('bigger', { tags: ['flaky'] }, async () => {})
 })
 evaluate('quick', async () => {})
-evaluate.for([{ n: 1 }, { n: 2 }])('case $n', { tags: ['slow'] }, async () => {})
+evaluate.each([{ n: 1 }, { n: 2 }])('case $n', { tags: ['slow'] }, async () => {})

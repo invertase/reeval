@@ -32,6 +32,7 @@ test('examples/hello copied out of the repo runs on the fake harness', async () 
   assert.equal(plan.code, 0, plan.stdout + plan.stderr)
   const files = new Set(JSON.parse(plan.stdout).evals.map((e: { file: string }) => e.file))
   assert.deepEqual([...files].sort(), [
+    'evals/greetings.eval.ts',
     'evals/hello.eval.ts',
     'evals/preferences.eval.ts',
     'evals/skill.eval.ts',

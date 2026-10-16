@@ -177,9 +177,10 @@ export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'file
 export function runOutcome(run: {
   status: RunRecord['status']
   evals: ReadonlyArray<{ outcome: Outcome }>
+  families?: ReadonlyArray<{ outcome: 'pass' | 'fail' }>
 }): Outcome {
   if (run.status === 'interrupted') return 'skipped'
-  const outcomes = run.evals.map((e) => e.outcome)
+  const outcomes = [...run.evals, ...(run.families ?? [])].map((e) => e.outcome)
   if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'
   return 'pass'

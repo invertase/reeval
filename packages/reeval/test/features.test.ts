@@ -1802,6 +1802,16 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'run/each-case',
+    tiers: ['fake'],
+    env: 'each-case',
+    canary: /expected 'ahoy' to be 'hello'/,
+    record: ({ run }) => {
+      assert.equal(run.evals.find((e) => e.name === 'lands')?.family, undefined)
+      assert.equal(run.families, undefined, 'one case is not a family')
+    },
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',

@@ -85,6 +85,9 @@ export function renderPlan(plan: PlanDocument): string {
         `×${c.runs}`,
         [
           c.minLift === undefined ? '' : `minLift ${c.minLift}`,
+          i === 0 && e.family
+            ? `family ${e.family.name} case ${e.family.case + 1}/${e.family.cases}`
+            : '',
           ...(i === 0 ? e.notes : []),
           c.brokered.length ? `brokered: ${c.brokered.join('; ')}` : '',
           c.workspace

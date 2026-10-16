@@ -24,7 +24,11 @@ export type DeclaredEval = {
   options: EvalOptionsData
   /** Names the eval's body to whoever runs it. */
   body: string
+  /** Set on each case of a pooled `evaluate.each`: its template, index and the list's length. */
+  family?: DeclaredFamily
 }
+
+export type DeclaredFamily = { name: string; case: number; cases: number }
 
 /** `evaluate.todo` or `group.todo`. */
 export type DeclaredTodo = { type: 'todo'; name: string }

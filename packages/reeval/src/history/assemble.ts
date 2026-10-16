@@ -19,6 +19,7 @@ import type {
   CompareAnswer,
   EnvironmentRecord,
   EvalRecord,
+  FamilyMeta,
   FileChange,
   HarnessDescriptor,
   Outcome,
@@ -27,6 +28,7 @@ import type {
   WebEventType,
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
+import { familiesOf } from './families.ts'
 import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
@@ -356,6 +358,7 @@ class Seen {
         name: e.name,
         tags: e.attempt?.tags ?? [],
         ...(e.attempt?.plan.compare ? { compare: e.attempt.plan.compare } : {}),
+        ...(e.attempt?.family ? { family: familyOf(e.attempt.family) } : {}),
         fingerprint: '',
         sources,
         outcome: 'skipped',
@@ -369,6 +372,13 @@ class Seen {
     return entry
   }
 }
+
+const familyOf = ({ id, name, case: index, cases }: FamilyMeta): EvalEntry['family'] => ({
+  id,
+  name,
+  case: index,
+  cases,
+})
 
 const UNKNOWN_CELL: Cell = {
   key: 'unknown',
@@ -698,9 +708,10 @@ async function attemptEvidence(
 }
 
 /** Lift of a variant cell over the control on the same harness and sandbox, with its interval. */
-function liftOf(control: CellRecord, variant: CellRecord): Lift | undefined {
+function liftOf(control: CellRecord, variant: CellRecord, pooled: boolean): Lift | undefined {
   if (control.passRate === null || variant.passRate === null) return undefined
-  const minLift = minLifts.get(variant)
+  // A pooled family's minLift gates its pooled lift (`familiesOf`), not each case's.
+  const minLift = pooled ? undefined : minLifts.get(variant)
   const c = { pass: control.pass, counted: control.pass + control.fail }
   const v = { pass: variant.pass, counted: variant.pass + variant.fail }
   const { points, low, high } = liftInterval(
@@ -805,7 +816,7 @@ function rollUp(evals: EvalEntry[]): void {
         (x) => x.role === 'control' && x.harness === c.harness && x.sandbox === c.sandbox,
       )
       if (control) discrimination(control, c)
-      const lift = control && liftOf(control, c)
+      const lift = control && liftOf(control, c, entry.family !== undefined)
       if (!lift) continue
       c.lift = lift
       if (lift.minLift !== undefined && lift.interval.lo < lift.minLift && c.outcome === 'pass') {
@@ -956,7 +967,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     }
   }
   const evals = [...seen.byEval.values()]
+  for (const entry of evals) {
+    const before = input.previous?.evals.find((p) => p.id === entry.id)?.family
+    if (!entry.family && before) entry.family = before
+  }
   rollUp(evals)
+  const families = familiesOf(evals, (cell) => minLifts.get(cell))
   sequence(evals)
   for (const e of evals) {
     const answers = input.answers?.get(e.id)
@@ -1036,6 +1052,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       skipped: count('skipped'),
     },
     evals,
+    ...(families.length ? { families } : {}),
   }
   return { record, artifacts: out.files }
 }

@@ -59,6 +59,9 @@
         "egress": {
           "$ref": "#/$defs/PlannedEgress"
         },
+        "family": {
+          "$ref": "#/$defs/FamilyMeta"
+        },
         "files": {
           "type": "array",
           "items": {
@@ -768,6 +771,24 @@
           "required": ["write"]
         }
       ]
+    },
+    "FamilyMeta": {
+      "type": "object",
+      "properties": {
+        "case": {
+          "type": "number"
+        },
+        "cases": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["case", "cases", "id", "name"]
     },
     "GitWorkspace": {
       "type": "object",
