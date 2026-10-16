@@ -1,6 +1,7 @@
 import { posix } from 'node:path'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { acceptIntoSnapshot } from '../diff.ts'
+import { SUBJECT } from '../engine/runtime.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { BackgroundHandle, ExecResult } from '../types.ts'
@@ -45,21 +46,21 @@ export function createChecks(a: Attempt) {
     a.report({ kind: 'check-end', command, exitCode: r.exitCode, ms: durationMs })
     return r
   }
-  async function exec(command: string): Promise<ExecResult>
-  async function exec(command: string, options: { background: true }): Promise<BackgroundHandle>
-  async function exec(
+  function exec(command: string): Promise<ExecResult>
+  function exec(command: string, options: { background: true }): Promise<BackgroundHandle>
+  function exec(
     command: string,
     options?: { background?: boolean },
   ): Promise<ExecResult | BackgroundHandle>
-  async function exec(
+  function exec(
     command: string,
     options?: { background?: boolean },
   ): Promise<ExecResult | BackgroundHandle> {
     if (options?.background) {
-      const { startBackground } = await import('./capture.ts')
-      return startBackground(a, command)
+      return import('./capture.ts').then(({ startBackground }) => startBackground(a, command))
     }
-    return execForeground(command)
+    // Names its command in `expect(c.exec(…)).toSucceed()`'s default label.
+    return Object.defineProperty(execForeground(command), SUBJECT, { value: command })
   }
   const readFile = (path: string) => requireSandbox(a).readFile(path)
   const writeFile = async (path: string, contents: string | Uint8Array) => {

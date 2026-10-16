@@ -6,7 +6,9 @@ import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
 import type { DebugLine } from '../view/debug.ts'
 
-export { expect, extendExpect, type Matchers } from './expect.ts'
+import type { AssertionResult } from './expect.ts'
+
+export { type AssertionResult, expect, extendExpect, type Matchers, SUBJECT } from './expect.ts'
 
 export type TestHandle = {
   file: string
@@ -22,6 +24,8 @@ export type TestHandle = {
    * `expect.assertions` or `expect.hasAssertions` left.
    */
   unawaited(): Promise<Error | undefined>
+  /** The attempt's `expect` and `expect.soft` matcher calls that have settled, in call order. */
+  assertions(): AssertionResult[]
 }
 
 export type TestMode = 'run' | 'skip' | 'only' | 'todo'

@@ -3,12 +3,14 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
+  attemptAssertions,
   attemptExpectError,
   createExpect,
   type ExpectTask,
   expect,
   extendExpect,
   type Pending,
+  SUBJECT,
   unawaitedError,
   withAttemptExpect,
 } from '../src/engine/expect.ts'
@@ -148,6 +150,202 @@ describe('standalone expect', () => {
     })
     ;(expect(4) as unknown as { toBeEven(): void }).toBeEven()
     fails(() => (expect(3) as unknown as { toBeEven(): void }).toBeEven(), /expected 3 to be even/)
+  })
+})
+
+describe('assertions recorded on the attempt', () => {
+  const named = <T extends object>(value: T, subject: unknown) =>
+    Object.defineProperty(value, SUBJECT, { value: subject })
+
+  test('each matcher call is recorded in call order: its label, matcher, status and message', async () => {
+    const t = task()
+    const own = createExpect(t)
+    own(1, 'one').toBe(1)
+    own(1).not.toBe(2)
+    assert.throws(() => own(1).toBe(2), /expected 1 to be 2/)
+    own('x', '').toBe('x')
+    await own(Promise.resolve(3)).resolves.toBe(3)
+    await assert.rejects(() => own(Promise.resolve(3), 'three').resolves.toBe(4) as never)
+    own('abc').to.equal('abc').and.have.length(3)
+    own('abc').to.have.length.of.at.least(2)
+    assert.equal(typeof own([1]).to.include.name, 'string')
+    assert.equal(typeof own(1)[Symbol.toStringTag as never], 'undefined')
+    own.assertions(9)
+    assert.deepEqual(
+      attemptAssertions(t).map(({ durationMs, ...x }) => x),
+      [
+        { label: 'one', labelled: true, matcher: 'toBe', status: 'pass', soft: false },
+        { label: 'not.toBe 2', labelled: false, matcher: 'not.toBe', status: 'pass', soft: false },
+        {
+          label: 'toBe 2',
+          labelled: false,
+          matcher: 'toBe',
+          status: 'fail',
+          soft: false,
+          message: 'expected 1 to be 2 // Object.is equality',
+        },
+        { label: 'toBe x', labelled: false, matcher: 'toBe', status: 'pass', soft: false },
+        {
+          label: 'resolves.toBe 3',
+          labelled: false,
+          matcher: 'resolves.toBe',
+          status: 'pass',
+          soft: false,
+        },
+        {
+          label: 'three',
+          labelled: true,
+          matcher: 'resolves.toBe',
+          status: 'fail',
+          soft: false,
+          message: 'three: expected 3 to be 4 // Object.is equality',
+        },
+        { label: 'equal abc', labelled: false, matcher: 'equal', status: 'pass', soft: false },
+        { label: 'length 3', labelled: false, matcher: 'length', status: 'pass', soft: false },
+        { label: 'least 2', labelled: false, matcher: 'least', status: 'pass', soft: false },
+      ],
+    )
+    const timed = attemptAssertions(t).filter((x) => x.durationMs !== undefined)
+    assert.deepEqual(
+      timed.map((x) => x.label),
+      ['resolves.toBe 3', 'three'],
+      'only async matchers are timed',
+    )
+    // Canary: a label the eval gave is never replaced by the default.
+    assert.notEqual(attemptAssertions(t)[0]?.label, 'toBe 1')
+  })
+
+  test('a soft matcher records its own outcome, fails the attempt at the end and carries on', async () => {
+    const t = task()
+    const own = createExpect(t)
+    own.soft(1, 'first').toBe(2)
+    own.soft(2).toBe(2)
+    await own.soft(Promise.resolve(1), 'later').resolves.toBe(5)
+    await own.soft(Promise.resolve(1)).resolves.toBe(1)
+    own.soft(3).toBe(4)
+    assert.deepEqual(
+      attemptAssertions(t).map((x) => [x.label, x.status, x.soft]),
+      [
+        ['first', 'fail', true],
+        ['toBe 2', 'pass', true],
+        ['later', 'fail', true],
+        ['resolves.toBe 1', 'pass', true],
+        ['toBe 4', 'fail', true],
+      ],
+    )
+    assert.equal(t.result?.errors?.length, 3)
+    assert.match(attemptExpectError(own, t)?.message ?? '', /first: expected 1 to be 2/)
+  })
+
+  test("a matcher that can't answer is an error, not a failure; a thrown non-Error keeps its text", () => {
+    extendExpect({
+      toBeReported: () => {
+        throw new TypeError('toBeReported() expects a turn')
+      },
+      toBeAnswered: () => {
+        const error = new Error("the harness doesn't report it")
+        error.name = 'HarnessCapabilityError'
+        throw error
+      },
+      toThrowNull: () => {
+        throw null
+      },
+      toThrowText: () => {
+        throw 'plain text'
+      },
+    })
+    const t = task()
+    const own = createExpect(t) as unknown as (
+      value: unknown,
+    ) => Record<'toBeReported' | 'toBeAnswered' | 'toThrowNull' | 'toThrowText', () => void>
+    assert.throws(() => own(1).toBeReported(), TypeError)
+    assert.throws(() => own(1).toBeAnswered(), /doesn't report/)
+    assert.throws(() => own(1).toThrowNull())
+    assert.throws(() => own(1).toThrowText())
+    assert.deepEqual(
+      attemptAssertions(t).map((x) => [x.status, x.message]),
+      [
+        ['error', 'toBeReported() expects a turn'],
+        ['error', "the harness doesn't report it"],
+        ['fail', 'null'],
+        ['fail', 'plain text'],
+      ],
+    )
+  })
+
+  test('default labels: the first argument, or what the subject names; repeats are numbered', async () => {
+    const t = task()
+    const own = createExpect(t)
+    const long = 'x'.repeat(80)
+    own(long).toBe(long)
+    own(/a/).toEqual(/a/)
+    own({ a: 1 }).toEqual({ a: 1 })
+    own(undefined).toBe(undefined)
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    own(circular).toBe(circular)
+    own(1n).toBe(1n)
+    await own(named(Promise.resolve(1), 'npm   test\n')).resolves.toBeTruthy()
+    own(named({ ok: true }, 'Is it ok?')).toBeTruthy()
+    own(named(() => 1, 7)).toBeTruthy()
+    own(1).toBeTruthy()
+    own(null).toBeNull()
+    for (const n of [1, 2, 3]) own(n).toBeTypeOf('number')
+    assert.deepEqual(
+      attemptAssertions(t).map((x) => x.label),
+      [
+        `toBe ${'x'.repeat(55)}…`,
+        'toEqual /a/',
+        'toEqual {"a":1}',
+        'toBe undefined',
+        'toBe [object Object]',
+        'toBe 1',
+        'resolves.toBeTruthy npm test',
+        'toBeTruthy Is it ok?',
+        'toBeTruthy',
+        'toBeTruthy #2',
+        'toBeNull',
+        'toBeTypeOf number',
+        'toBeTypeOf number #2',
+        'toBeTypeOf number #3',
+      ],
+    )
+  })
+
+  test('an async matcher still running is left out until it settles', async () => {
+    const t = task()
+    const own = createExpect(t)
+    let resolve = (_: number) => {}
+    const late = own(new Promise<number>((r) => (resolve = r))).resolves.toBe(1)
+    assert.deepEqual(attemptAssertions(t), [])
+    resolve(1)
+    await late
+    assert.deepEqual(
+      attemptAssertions(t).map((x) => x.label),
+      ['resolves.toBe 1'],
+    )
+    // An expect without an attempt records nothing, and a task it never saw has nothing.
+    createExpect()(1).toBe(1)
+    assert.deepEqual(attemptAssertions(task()), [])
+  })
+
+  test('expect.poll is one entry with its final outcome, not one per try', async () => {
+    const t = task()
+    const own = createExpect(t)
+    let n = 0
+    await own.poll(() => ++n, { interval: 5, timeout: 1000 }).toBe(3)
+    await assert.rejects(
+      () =>
+        own.poll(() => 'no', { interval: 5, timeout: 30, message: 'ready' }).toBe('yes') as never,
+    )
+    assert.deepEqual(
+      attemptAssertions(t).map((x) => [x.label, x.matcher, x.status]),
+      [
+        ['poll.toBe 3', 'poll.toBe', 'pass'],
+        ['ready', 'poll.toBe', 'fail'],
+      ],
+    )
+    assert.ok((attemptAssertions(t)[0]?.durationMs ?? -1) >= 0)
   })
 })
 

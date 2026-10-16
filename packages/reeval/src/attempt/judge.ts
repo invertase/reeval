@@ -1,5 +1,5 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
-import { getRunContext } from '../engine/runtime.ts'
+import { getRunContext, SUBJECT } from '../engine/runtime.ts'
 import {
   artifactRefsOf,
   badJudgeArtifacts,
@@ -67,7 +67,7 @@ export function judgeCaller(
   a: Attempt,
   readFile: (path: string) => Promise<string | null>,
 ): AttemptContext['judge'] {
-  return async (question, { on, ...call } = {}) => {
+  const ask: AttemptContext['judge'] = async (question, { on, ...call } = {}) => {
     if (typeof question !== 'string' || !question.trim()) {
       throw new Error(
         `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
@@ -179,4 +179,7 @@ export function judgeCaller(
       return failed(isApiError(error) ? withInputSize(message, state, question) : message, retries)
     }
   }
+  // A verdict names its question in `expect(verdict).toPass()`'s default label.
+  return async (question, options) =>
+    Object.defineProperty(await ask(question, options), SUBJECT, { value: question })
 }

@@ -1441,6 +1441,26 @@ export type StartRetry = {
   waitedMs: number
 }
 
+/** One `expect` or `expect.soft` matcher call an attempt made. */
+export type AssertionRecord = {
+  /**
+   * `expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or
+   * the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.
+   */
+  label: string
+  /** The eval gave the label. */
+  labelled: boolean
+  /** `toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`. */
+  matcher: string
+  /** `error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report). */
+  status: 'pass' | 'fail' | 'error'
+  soft: boolean
+  /** Why it failed or couldn't answer, cut at 1 KB. */
+  message?: string
+  /** Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`). */
+  durationMs?: number
+}
+
 /** Full per-attempt payload, written to disk by the worker. */
 export type EvalRecord = {
   /** When the worker began the attempt (its scheduler lease), for start order across the run. */
@@ -1451,6 +1471,8 @@ export type EvalRecord = {
   /** Workspace changes over the whole eval. */
   diff: Diff | null
   checks: Array<{ command: string; durationMs: number } & ExecResult>
+  /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
+  assertions?: AssertionRecord[]
   /** With `retries` when transient provider errors were retried on the way to the verdict. */
   judgements: Array<Verdict & { retries?: JudgeRetry[] }>
   /** Session starts that didn't become ready in time and were started again. */
