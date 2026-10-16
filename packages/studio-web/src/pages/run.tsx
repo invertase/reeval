@@ -453,6 +453,73 @@ function Questions({ rows }: { rows: AnswerRow[] }) {
   )
 }
 
+const VERDICT_LABEL = {
+  discriminates: 'discriminates',
+  mixed: 'mixed',
+  'both-pass': 'passes on both',
+  'both-fail': 'fails on both',
+} as const
+
+/** Each check of a variant beside its control's: which ones told them apart. */
+function ChecksTable({ entry }: { entry: EvalEntry }) {
+  const rows = entry.cells.flatMap((cell) =>
+    (cell.checks ?? []).flatMap((k) => (k.control && k.verdict ? [{ cell, k }] : [])),
+  )
+  if (!rows.length) return null
+  const answered = (t: { pass: number; fail: number; notRun: number }) => t.pass + t.fail + t.notRun
+  return (
+    <section className="space-y-2" data-checks>
+      <h3 className="text-sm font-medium">Checks</h3>
+      <div className="overflow-hidden rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Check</TableHead>
+              <TableHead>Variant</TableHead>
+              <TableHead className="text-right">Variant</TableHead>
+              <TableHead className="text-right">Control</TableHead>
+              <TableHead>Verdict</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(({ cell, k }) => {
+              const idle = k.verdict === 'both-pass' || k.verdict === 'both-fail'
+              const control = k.control as NonNullable<typeof k.control>
+              return (
+                <TableRow
+                  key={`${cell.key}:${k.label}`}
+                  className={idle ? 'text-muted-foreground' : undefined}
+                >
+                  <TableCell className="max-w-72 truncate">{k.label}</TableCell>
+                  <TableCell className="font-mono text-xs">{cell.variant ?? cell.key}</TableCell>
+                  <TableCell className="tabular text-right">
+                    {k.pass}/{answered(k)}
+                  </TableCell>
+                  <TableCell className="tabular text-right">
+                    {control.pass}/{answered(control)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'text-[11px]',
+                        k.verdict === 'discriminates' ? 'border-pass/30 text-pass' : '',
+                      )}
+                      title={idle ? "Doesn't discriminate: the same on both sides" : undefined}
+                    >
+                      {VERDICT_LABEL[k.verdict as keyof typeof VERDICT_LABEL]}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  )
+}
+
 function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   const rows = cellRows(entry)
   const matrix = isMatrix(entry)
@@ -505,6 +572,8 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
       ) : standingRates.length ? (
         <JudgeRates rates={standingRates} />
       ) : null}
+
+      <ChecksTable entry={entry} />
 
       {answers.length ? <Questions rows={answers} /> : null}
 
