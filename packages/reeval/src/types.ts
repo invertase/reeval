@@ -324,6 +324,12 @@ export type AttemptContext = {
   /** Workspace-relative, or `~/` for the home directory; `null` when there's no such file. */
   readFile(path: string): Promise<string | null>
   /**
+   * Writes a file into the sandbox (workspace-relative, or `~/`), creating its directories.
+   * Later turns' `diff` leaves it out, as it does the environment's files, but shows any change
+   * made to it afterwards. Needs a sandbox, same as `c.exec`.
+   */
+  writeFile(path: string, contents: string | Uint8Array): Promise<void>
+  /**
    * Starts the sandbox and the agent session without a turn, for checks on what the environment
    * set up. `c.send()` starts them too; calling both starts them once.
    */

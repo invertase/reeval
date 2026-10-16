@@ -13,8 +13,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
-import type { AttemptSpec } from '../src/attempt/state.ts'
+import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
 import {
   CONFIG_FILES,
   defaultConcurrency,
@@ -31,6 +32,7 @@ import {
   UsageError,
 } from '../src/config.ts'
 import type { AttemptDebug } from '../src/debug/attempt.ts'
+import { diffSinceSnapshot, snapshot } from '../src/diff.ts'
 import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
@@ -180,6 +182,27 @@ test('the fake sandbox reads and writes ~/ paths in its home', async () => {
     assert.equal(readFileSync(join(box.home, '.config/es/hint.txt'), 'utf8'), 'from home')
     assert.equal(await box.readFile('.config/es/hint.txt'), null, 'not in the workspace')
     assert.equal((await box.exec('cat ~/.config/es/hint.txt')).stdout, 'from home')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('c.writeFile refuses absolute paths and paths that leave the workspace', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    await snapshot(box)
+    const a = { sandbox: box, signal: new AbortController().signal } as unknown as Attempt
+    const { writeFile } = createChecks(a)
+    for (const path of ['/etc/passwd', '../outside.txt', 'a/../../x', '~/../x', 'C:\\x', '.']) {
+      await assert.rejects(writeFile(path, 'x'), {
+        message: `c.writeFile() takes a workspace-relative path or ~/…, not ${JSON.stringify(path)}`,
+      })
+    }
+    await writeFile('a/./placed.txt', 'kept')
+    await writeFile('~/home.txt', 'home')
+    assert.equal(await box.readFile('a/placed.txt'), 'kept')
+    assert.equal(await box.readFile('~/home.txt'), 'home')
+    assert.deepEqual((await diffSinceSnapshot(box)).files, [])
   } finally {
     await box.destroy()
   }
