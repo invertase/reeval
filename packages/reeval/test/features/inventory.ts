@@ -51,6 +51,8 @@ const debug = (name: string) => `reeval/test/debug.test.ts › ${name}`
 const studio = (name: string) => `reeval/test/studio.test.ts › ${name}`
 const analysis = (name: string) => `reeval/test/analysis.test.ts › ${name}`
 const workspace = (name: string) => `reeval/test/workspace.test.ts › ${name}`
+const checks = (name: string) => `reeval/test/checks.test.ts › ${name}`
+const engineExpect = (name: string) => `reeval/test/engine-expect.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -1268,6 +1270,20 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/matchers.test.ts › passes on a pass verdict',
       engine('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown'),
       engine('a failure with megabytes of output prints and records a bounded tail'),
+    ],
+  },
+  {
+    id: 'assert.named-checks',
+    area: 'Judges and matchers',
+    name: "Named check results: `expect(value, 'label')`, every `expect` and `expect.soft` recorded per attempt, tallied per cell, and checks that don't discriminate in a compare",
+    fixtures: ['assert/labelled', 'compare/check-not-run'],
+    tests: [
+      engineExpect('each matcher call is recorded in call order'),
+      engineExpect('a soft matcher records its own outcome'),
+      engineExpect('default labels: the first argument'),
+      engineExpect('expect.poll is one entry with its final outcome'),
+      checks("a compare tallies each check per side and flags the ones that don't discriminate"),
+      checks('without a compare the attempts record their assertions'),
     ],
   },
   {

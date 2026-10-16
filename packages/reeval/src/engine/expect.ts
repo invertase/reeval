@@ -18,6 +18,8 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
+import { processError } from '@vitest/utils/error'
+import type { AssertionRecord } from '../types.ts'
 
 declare module '@vitest/expect' {
   interface ExpectPollOptions {
@@ -77,13 +79,185 @@ type Extra = {
   isExpectingAssertionsError: Error | null
 }
 
+export type AssertionResult = AssertionRecord
+
+/**
+ * A value that names itself in a default label when its matcher takes no argument: `c.exec`'s
+ * promise names its command, a judge verdict its question.
+ */
+export const SUBJECT = Symbol.for('reeval.subject')
+
+type Recorded = Omit<AssertionResult, 'label' | 'status'> & {
+  label: string | undefined
+  status: AssertionResult['status'] | undefined
+  args: unknown[]
+  subject: unknown
+}
+
+const recordings = new WeakMap<ExpectTask, Recorded[]>()
+
+/** Methods on an assertion that configure it or are Chai's plumbing, not checks. */
+const UNRECORDED = new Set([
+  'withContext',
+  'withTest',
+  'assert',
+  'toString',
+  'toJSON',
+  'valueOf',
+  'then',
+  'catch',
+  'finally',
+])
+
+const MESSAGE_LIMIT = 1024
+const LABEL_LIMIT = 60
+
+const clipped = (s: string, limit: number) => (s.length > limit ? `${s.slice(0, limit)}…` : s)
+
+const flag = (assertion: object, name: string): unknown => chai.util.flag(assertion, name)
+
+const subjectOf = (value: unknown): unknown =>
+  (typeof value === 'object' || typeof value === 'function') && value !== null
+    ? (value as Record<symbol, unknown>)[SUBJECT]
+    : undefined
+
+/** Can't answer either way: the harness doesn't report it, or the subject isn't one it reads. */
+const isUnanswerable = (error: unknown) =>
+  error instanceof TypeError || (error as Error | null)?.name === 'HarnessCapabilityError'
+
+/** Pushes a soft failure onto the task, as `@vitest/expect` does for `expect.soft`. */
+function softFailure(task: ExpectTask, error: unknown) {
+  task.result ??= { state: 'fail' }
+  task.result.state = 'fail'
+  task.result.errors ??= []
+  task.result.errors.push(processError(error))
+}
+
+/** Starts a record of `matcher` called on `assertion`, in call order. */
+function begin(list: Recorded[], assertion: object, name: string, args: unknown[]): Recorded {
+  const message = flag(assertion, 'message')
+  const matcher = [
+    flag(assertion, 'poll') && 'poll',
+    flag(assertion, 'promise'),
+    flag(assertion, 'negate') && 'not',
+    name,
+  ]
+    .filter(Boolean)
+    .join('.')
+  const entry: Recorded = {
+    label: typeof message === 'string' && message ? message : undefined,
+    labelled: typeof message === 'string' && message !== '',
+    matcher,
+    status: undefined,
+    soft: !!flag(assertion, 'soft'),
+    args,
+    subject: subjectOf(flag(assertion, 'object')),
+  }
+  list.push(entry)
+  return entry
+}
+
+function settle(entry: Recorded, error: unknown, startedAt?: number) {
+  entry.status = error === undefined ? 'pass' : isUnanswerable(error) ? 'error' : 'fail'
+  if (error !== undefined) {
+    const message = error instanceof Error ? error.message : String(error)
+    entry.message = clipped(message, MESSAGE_LIMIT)
+  }
+  if (startedAt !== undefined) entry.durationMs = Math.round(performance.now() - startedAt)
+}
+
+/**
+ * Wraps an assertion so each matcher called on it is recorded on the attempt. A soft matcher's
+ * failure is caught here and pushed onto the task as `@vitest/expect` would, so its outcome is
+ * known per call.
+ */
+function recording<T extends object>(target: T, list: Recorded[], task: ExpectTask): T {
+  const chained = (value: unknown) =>
+    value instanceof chai.Assertion ? recording(value, list, task) : value
+  const call = (fn: (...args: unknown[]) => unknown, name: string, args: unknown[]) => {
+    // `expect.poll` retries the matcher; it records the final outcome itself.
+    if (flag(target, 'poll')) return Reflect.apply(fn, target, args)
+    const entry = begin(list, target, name, args)
+    if (entry.soft) chai.util.flag(target, 'soft', false)
+    const startedAt = performance.now()
+    let result: unknown
+    try {
+      result = Reflect.apply(fn, target, args)
+    } catch (error) {
+      settle(entry, error)
+      if (entry.soft) return softFailure(task, error)
+      throw error
+    }
+    if (!isThenable(result)) {
+      settle(entry, undefined)
+      return chained(result)
+    }
+    return Promise.resolve(result).then(
+      (value) => {
+        settle(entry, undefined, startedAt)
+        return value
+      },
+      (error: unknown) => {
+        settle(entry, error, startedAt)
+        if (entry.soft) return softFailure(task, error)
+        throw error
+      },
+    )
+  }
+  return new Proxy(target, {
+    get(t, property) {
+      const value: unknown = Reflect.get(t, property)
+      if (typeof property === 'symbol' || UNRECORDED.has(property)) return value
+      if (typeof value !== 'function') return chained(value)
+      // A Chai chainable method (`include`, `length`) is a function with assertion properties.
+      return new Proxy(value as (...args: unknown[]) => unknown, {
+        apply: (fn, _this, args) => call(fn, property, args),
+        get: (fn, key) => chained(Reflect.get(fn, key)),
+      })
+    },
+  })
+}
+
+const shown = (value: unknown): string => {
+  if (typeof value === 'string') return value
+  if (value instanceof RegExp) return String(value)
+  try {
+    return JSON.stringify(value) ?? String(value)
+  } catch {
+    return String(value)
+  }
+}
+
+/**
+ * The attempt's matcher calls that have settled, in call order. Without a label, one is
+ * `<matcher> <first argument>` (or what the subject names); repeats get ` #2`, ` #3`.
+ */
+export function attemptAssertions(task: ExpectTask): AssertionResult[] {
+  const seen = new Map<string, number>()
+  return (recordings.get(task) ?? []).flatMap((r) => {
+    if (r.status === undefined) return []
+    const named = r.args.length ? shown(r.args[0]) : shownSubject(r.subject)
+    const base =
+      r.label ?? clipped(named === undefined ? r.matcher : `${r.matcher} ${named}`, LABEL_LIMIT)
+    const n = (seen.get(base) ?? 0) + 1
+    seen.set(base, n)
+    const { args: _args, subject: _subject, ...rest } = r
+    return [{ ...rest, label: n > 1 ? `${base} #${n}` : base, status: r.status }]
+  })
+}
+
+const shownSubject = (subject: unknown) =>
+  typeof subject === 'string' && subject ? subject.replace(/\s+/g, ' ').trim() : undefined
+
 /** An `expect` of its own for one attempt (or, without a task, the worker's). */
 export function createExpect(task?: ExpectTask): ExpectStatic {
+  const list: Recorded[] = []
+  if (task) recordings.set(task, list)
   const expect = ((value: unknown, message?: string) => {
     const { assertionCalls } = getState(expect)
     setState({ assertionCalls: assertionCalls + 1 }, expect)
-    const assertion = chai.expect(value, message) as unknown as { withTest(t: unknown): unknown }
-    return task ? assertion.withTest(task) : assertion
+    const assertion = chai.expect(value, message) as unknown as { withTest(t: unknown): object }
+    return task ? recording(assertion.withTest(task), list, task) : assertion
   }) as ExpectStatic
   Object.assign(expect, chai.expect)
   Object.assign(expect, (globalThis as Record<symbol, object>)[ASYMMETRIC_MATCHERS_OBJECT])
@@ -111,7 +285,7 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
     (expect(value, message) as unknown as { withContext(c: object): never }).withContext({
       soft: true,
     })
-  expect.poll = createPoll(expect)
+  expect.poll = createPoll(expect, task && list)
   expect.unreachable = (message) => {
     chai.assert.fail(`expected${message ? ` "${message}" ` : ' '}not to be reached`)
   }
@@ -142,7 +316,7 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
  * `expect.poll(fn).matcher()`: calls `fn` and the matcher until the matcher passes, every
  * `interval` ms, for at most `timeout` ms, then fails with the last error.
  */
-function createPoll(expect: ExpectStatic): ExpectStatic['poll'] {
+function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll'] {
   return (fn, options = {}) => {
     const { interval = 50, timeout = 1000, message } = options
     const assertion = expect(null, message) as unknown as Chai.Assertion
@@ -154,17 +328,22 @@ function createPoll(expect: ExpectStatic): ExpectStatic['poll'] {
           return matcher instanceof chai.Assertion ? proxy : matcher
         return (...args: unknown[]) => {
           const location = new Error('expect.poll')
+          const entry = list && begin(list, assertion, String(key), args)
+          const startedAt = performance.now()
           return (async () => {
             const deadline = Date.now() + timeout
             const signal = AbortSignal.timeout(timeout)
             for (;;) {
               try {
                 chai.util.flag(assertion, 'object', await fn({ signal }))
-                return await Reflect.apply(matcher, assertion, args)
+                const result = await Reflect.apply(matcher, assertion, args)
+                if (entry) settle(entry, undefined, startedAt)
+                return result
               } catch (error) {
                 if (Date.now() + interval >= deadline) {
                   if (error instanceof Error && location.stack)
                     error.stack = location.stack.replace(location.message, error.message)
+                  if (entry) settle(entry, error, startedAt)
                   throw error
                 }
                 await new Promise((resolve) => setTimeout(resolve, interval))

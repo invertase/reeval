@@ -1,4 +1,11 @@
-import { ChevronRight, ListChecks, TerminalSquare } from 'lucide-react'
+import {
+  ChevronRight,
+  CircleAlert,
+  CircleCheck,
+  CircleX,
+  ListChecks,
+  TerminalSquare,
+} from 'lucide-react'
 import { useState } from 'react'
 import { type AttemptRecord, formatDuration, type RunRecord } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
@@ -55,20 +62,71 @@ function Check({
   )
 }
 
+type Assertion = NonNullable<AttemptRecord['assertions']>[number]
+
+const STATUS_ICON = { pass: CircleCheck, fail: CircleX, error: CircleAlert } as const
+const STATUS_TONE = { pass: 'text-pass', fail: 'text-fail', error: 'text-infra' } as const
+
+/** Each `expect` the eval made, in call order, with why it failed. */
+function Assertions({ assertions }: { assertions: Assertion[] }) {
+  return (
+    <section className="space-y-2" data-assertions>
+      <h3 className="text-sm font-medium">Assertions</h3>
+      <div className="divide-y overflow-hidden rounded-lg border bg-card">
+        {assertions.map((x) => {
+          const Icon = STATUS_ICON[x.status]
+          return (
+            <div key={x.label} className="space-y-1 px-4 py-2.5">
+              <div className="flex items-center gap-3">
+                <Icon className={cn('size-4 shrink-0', STATUS_TONE[x.status])} />
+                <span className="min-w-0 flex-1 truncate text-sm">{x.label}</span>
+                {x.soft ? (
+                  <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                    soft
+                  </Badge>
+                ) : null}
+                <code className="font-mono text-xs text-muted-foreground">{x.matcher}</code>
+                {x.durationMs !== undefined ? (
+                  <span className="tabular w-14 text-right text-xs text-muted-foreground">
+                    {formatDuration(x.durationMs)}
+                  </span>
+                ) : null}
+              </div>
+              {x.message ? (
+                <pre className="ml-7 max-h-48 overflow-auto font-mono text-xs whitespace-pre-wrap text-muted-foreground">
+                  {x.message}
+                </pre>
+              ) : null}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 export function Checks({ record, attempt }: { record: RunRecord; attempt: AttemptRecord }) {
-  if (attempt.checks.length === 0) {
+  const assertions = attempt.assertions ?? []
+  if (attempt.checks.length === 0 && assertions.length === 0) {
     return (
       <EmptyState icon={ListChecks} title="No checks">
-        This eval ran no <code className="font-mono">c.exec()</code> commands.
+        This eval made no <code className="font-mono">expect</code> calls and ran no{' '}
+        <code className="font-mono">c.exec()</code> commands.
       </EmptyState>
     )
   }
   return (
-    <div className="space-y-2">
-      {attempt.checks.map((check, i) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: checks are ordered and immutable
-        <Check key={i} record={record} check={check} index={i} />
-      ))}
+    <div className="space-y-5">
+      {assertions.length ? <Assertions assertions={assertions} /> : null}
+      {attempt.checks.length ? (
+        <section className="space-y-2">
+          {assertions.length ? <h3 className="text-sm font-medium">Commands</h3> : null}
+          {attempt.checks.map((check, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: checks are ordered and immutable
+            <Check key={i} record={record} check={check} index={i} />
+          ))}
+        </section>
+      ) : null}
     </div>
   )
 }

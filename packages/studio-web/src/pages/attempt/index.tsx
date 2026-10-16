@@ -109,7 +109,11 @@ export function AttemptPage() {
   const prev = entry.attempts[index - 1]
   const next = entry.attempts[index + 1]
   const judge = attempt.judgements[0]
-  const failedChecks = attempt.checks.filter((c) => c.exitCode !== 0).length
+  const assertions = attempt.assertions ?? []
+  const checkCount = attempt.checks.length + assertions.length
+  const failedChecks =
+    attempt.checks.filter((c) => c.exitCode !== 0).length +
+    assertions.filter((x) => x.status !== 'pass').length
   const served = [...new Set(attempt.turns.flatMap((t) => (t.model ? [t.model] : [])))]
 
   return (
@@ -278,14 +282,14 @@ export function AttemptPage() {
           </TabsTrigger>
           <TabsTrigger value="checks">
             Checks
-            {attempt.checks.length ? (
+            {checkCount ? (
               <span
                 className={cn(
                   'tabular text-xs',
                   failedChecks ? 'text-fail' : 'text-muted-foreground',
                 )}
               >
-                {failedChecks ? `${failedChecks}/${attempt.checks.length}` : attempt.checks.length}
+                {failedChecks ? `${failedChecks}/${checkCount}` : checkCount}
               </span>
             ) : null}
           </TabsTrigger>

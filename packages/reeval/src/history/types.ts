@@ -1,4 +1,5 @@
 import type {
+  AssertionRecord,
   AttemptError,
   AttemptImage,
   Cell,
@@ -196,6 +197,8 @@ export type AttemptRecord = {
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
   startRetries?: StartRetry[]
   checks: Array<{ command: string; exitCode: number; durationMs: number; log?: FileRef }>
+  /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
+  assertions?: AssertionRecord[]
   /** Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`. */
   changedFiles: Array<FileChange & { count?: number }>
   files: AttemptFiles
@@ -304,7 +307,28 @@ export type CellRecord = Cell & {
    */
   outcome: Outcome
   lift?: Lift
+  /**
+   * Each check (assertion label) seen in any attempt of the eval, over this cell's counted
+   * attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
+   */
+  checks?: CellCheck[]
 }
+
+/** How often one check passed: a counted attempt that never reached it counts it `notRun`. */
+export type CheckTally = { pass: number; fail: number; error: number; notRun: number }
+
+/**
+ * One check over a cell's counted attempts. `verdict` (variant cells): `discriminates` when it
+ * passes on every counted attempt of one side and none of the other; `both-pass` or `both-fail`
+ * when it does the same on both sides, so it can't tell them apart; `mixed` otherwise.
+ */
+export type CellCheck = CheckTally & {
+  label: string
+  control?: CheckTally
+  verdict?: CheckVerdict
+}
+
+export type CheckVerdict = 'discriminates' | 'both-pass' | 'both-fail' | 'mixed'
 
 /** Counts attempts, except `evals`. */
 export type RunSummary = {

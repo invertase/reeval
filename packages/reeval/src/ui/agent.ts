@@ -2,7 +2,7 @@
 // failures (and, as MISS, ungated cells' expected misses), each with where its detail lives, in
 // a stable greppable vocabulary.
 import { sampleReasons } from '../compare/pairs.ts'
-import { answersLabel } from '../history/summary.ts'
+import { answersLabel, undiscriminating, undiscriminatingLabel } from '../history/summary.ts'
 import { sandboxWarningLine } from '../text.ts'
 import { colors } from './colors.ts'
 import type { EsEvent, EvalResult, OutputStream, Renderer } from './events.ts'
@@ -138,6 +138,9 @@ export class AgentRenderer implements Renderer {
             this.#write(`question ${entry.id}: ${answersLabel(a)}`)
             for (const reason of sampleReasons(a.votes)) this.#write(`  ${reason}`)
           }
+        }
+        for (const x of undiscriminating(e.record.evals)) {
+          this.#write(`check doesn't discriminate: ${undiscriminatingLabel(x)}`)
         }
         const s = e.record.summary
         const cancelled = failing.filter((f) => f.outcome === 'cancelled').length

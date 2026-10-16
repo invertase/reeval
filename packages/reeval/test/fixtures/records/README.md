@@ -16,6 +16,8 @@ wrote; the `reeval.config.ts` follows the config API like any other project.
 | `before-baseline-from` | The corpus project's fake-harness runs from before `evals[].compare.from` (a compare whose control came from the cascade because `baseline` was omitted) |
 | `before-oom` | The corpus project's fake-harness runs from before `evals[].attempts[].error.resource` (an OOM kill during an attempt, as an infra error) and `attempts.oom_kills` |
 | `with-oom` | The fake harness in Docker: one attempt whose process the kernel killed at its 128m memory limit, an infra error with `error.resource` |
+| `before-named-checks` | The corpus project's fake-harness runs from before `evals[].attempts[].assertions` and `evals[].cells[].checks` (each `expect`'s result, and each cell's tally of them) |
+| `with-named-checks` | The corpus project's fake-harness runs with `evals[].attempts[].assertions` and `evals[].cells[].checks`: labelled and default-labelled checks, a soft one, a compare whose variant's checks have verdicts, and cells with no counted attempts |
 | `fake-matrix` | The fake harness: a compare with lift, judges that pass and fail, a failed check, infra errors, todo and skipped evals, a budget-stopped run and a saved analysis |
 | `real-harnesses` | One tiny eval on each of the seven real harnesses in Docker (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex), with each one's transcript, tokens and served model |
 | `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/invertase/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |

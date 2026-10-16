@@ -33,6 +33,7 @@ import {
   type AttemptFiles,
   type AttemptRecord,
   type CellRecord,
+  type CheckTally,
   type ContextFile,
   type Cost,
   type EvalEntry,
@@ -684,6 +685,7 @@ async function attemptEvidence(
       : { tools: 0, fileEdits: 0, webSearches: 0, webFetches: 0, reasoningMs: 0 },
     judgements,
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
+    ...(record?.assertions?.length ? { assertions: record.assertions } : {}),
     checks: (record?.checks ?? []).map((c, i) => ({
       command: c.command,
       exitCode: c.exitCode,
@@ -717,6 +719,61 @@ function liftOf(control: CellRecord, variant: CellRecord): Lift | undefined {
 }
 
 /**
+ * Each cell's checks: every label any attempt of the eval recorded, tallied over the cell's
+ * counted attempts (pass or fail). An attempt that counted without reaching a label, because
+ * a hard `expect` before it failed, counts it `notRun`.
+ */
+function checkTallies(entry: EvalEntry): void {
+  const labels = [
+    ...new Set(entry.attempts.flatMap((a) => (a.assertions ?? []).map((x) => x.label))),
+  ]
+  if (!labels.length) return
+  for (const c of entry.cells) {
+    const counted = entry.attempts.filter(
+      (a) => a.cell === c.key && (a.outcome === 'pass' || a.outcome === 'fail'),
+    )
+    if (!counted.length) continue
+    c.checks = labels.map((label) => {
+      const tally = { label, pass: 0, fail: 0, error: 0, notRun: 0 }
+      for (const a of counted) {
+        const status = a.assertions?.find((x) => x.label === label)?.status
+        if (status === undefined) tally.notRun++
+        else tally[status]++
+      }
+      return tally
+    })
+  }
+}
+
+/** Where every counted attempt that answered a check passed it (`all`), none did, or some. */
+const sideOf = (t: CheckTally): 'all' | 'none' | 'some' | undefined => {
+  const answered = t.pass + t.fail + t.notRun
+  if (answered === 0) return undefined
+  return t.pass === answered ? 'all' : t.pass === 0 ? 'none' : 'some'
+}
+
+/** Puts the control's tally beside each of the variant's checks, with whether it discriminates. */
+function discrimination(control: CellRecord, variant: CellRecord): void {
+  for (const check of variant.checks ?? []) {
+    const k = control.checks?.find((x) => x.label === check.label)
+    if (!k) continue
+    const { label: _label, ...tally } = k
+    check.control = tally
+    const v = sideOf(check)
+    const c = sideOf(k)
+    if (v === undefined || c === undefined) continue
+    check.verdict =
+      v === 'all' && c === 'all'
+        ? 'both-pass'
+        : v === 'none' && c === 'none'
+          ? 'both-fail'
+          : (v === 'all' && c === 'none') || (v === 'none' && c === 'all')
+            ? 'discriminates'
+            : 'mixed'
+  }
+}
+
+/**
  * A cell's outcome by its gate. `'all'` matches `{ passRate: 1 }`: every counted attempt must
  * pass, and it is an infra error only when nothing counted. `'none'` takes the worst attempt.
  */
@@ -741,11 +798,13 @@ function rollUp(evals: EvalEntry[]): void {
       c.passRate = passRateOf(outcomes)
       c.outcome = cellOutcome(outcomes, c.gate)
     }
+    checkTallies(entry)
     for (const c of entry.cells) {
       if (c.role !== 'variant') continue
       const control = entry.cells.find(
         (x) => x.role === 'control' && x.harness === c.harness && x.sandbox === c.sandbox,
       )
+      if (control) discrimination(control, c)
       const lift = control && liftOf(control, c)
       if (!lift) continue
       c.lift = lift

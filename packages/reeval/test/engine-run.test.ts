@@ -249,6 +249,24 @@ describe('runTests', () => {
     assert.match(missed?.message ?? '', /wasn't awaited/)
     assert.match(soft?.message ?? '', /expected 1 to be 2/)
   })
+
+  test("each attempt's handle lists its own assertions", async () => {
+    const seen: string[][] = []
+    const body = (n: number) => async (h: TestHandle) => {
+      expect(n, `checks ${n}`).toBe(n)
+      seen[n] = h.assertions().map((x) => x.label)
+    }
+    const collected = await tests(['one', {}, body(0)], ['two', {}, body(1)])
+    const { reporter } = recorder()
+    await runTests(collected, new Set([0, 1]), {
+      file: '/f',
+      stagingDir: stagingDir(),
+      signal: new AbortController().signal,
+      reporter,
+      onReady: () => {},
+    })
+    assert.deepEqual(seen, [['checks 0'], ['checks 1']])
+  })
 })
 
 describe('console routing and error serialization', () => {

@@ -82,6 +82,7 @@ export const RULES = [
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
   'An eval where every cell passes at least 95% is saturated: pass@1 cannot tell cells apart there, effort can.',
   'Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so.',
+  'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check.",
 ]
 
@@ -578,6 +579,28 @@ export async function buildDigestKeepingDropped(
             ? { note: 'no pairs to judge: attempts that failed their checks are left out' }
             : {}),
           ...(reasons.length ? { reasons } : {}),
+        })
+      }
+    }
+  }
+
+  // Each variant cell's checks (expect labels) beside its control's, and whether each tells them apart.
+  for (const r of runs) {
+    for (const e of r.record.evals) {
+      if (!evalKeys.has(e.key)) continue
+      for (const c of e.cells) {
+        const rows = (c.checks ?? []).filter((k) => k.control && k.verdict)
+        if (!rows.length) continue
+        fact('checks', {
+          run: short.get(r.record.runId),
+          eval: tagOf(e.key),
+          cell: c.key,
+          rows: rows.map((k) => ({
+            label: clip(k.label, 80),
+            variant: `${k.pass}/${k.pass + k.fail + k.notRun}`,
+            control: `${k.control?.pass}/${(k.control?.pass ?? 0) + (k.control?.fail ?? 0) + (k.control?.notRun ?? 0)}`,
+            verdict: k.verdict,
+          })),
         })
       }
     }

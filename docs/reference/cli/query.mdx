@@ -18,7 +18,7 @@ npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE withi
 reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                               rebuilt from the records); views: lift, effort, factor_effects,
                               skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                              verdict_flips. No argument lists them
+                              verdict_flips, check_discrimination. No argument lists them
   --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
 ```
 
@@ -46,11 +46,12 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 
 | Name | Columns |
 |---|---|
+| `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
 | `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `tokens_median`, `tokens_q1`, `tokens_q3`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `control_tokens_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tokens_ratio`, `tools_p`, `agent_s_p`, `tokens_p`, `separated`, `verdict`, `time_verdict`, `tokens_verdict`, `tokens_note` |
 | `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `pass_at_1`, `fingerprint` |
 | `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `tokens_note`, `note` |
-| `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `oom_kills` |
+| `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `oom_kills`, `first_failed_check` |
 | `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `pass_at_1`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `variant_pass_at_1`, `control_pass_at_1`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
 | `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
@@ -81,8 +82,10 @@ Several views repeat a cell's key across evals in a run, so join `attempts` and 
 | Name | Columns |
 |---|---|
 | `artifacts` | `run_id`, `attempt_key`, `kind`, `path`, `sha256`, `bytes` |
+| `assertions` | `run_id`, `attempt_key`, `eval_key`, `cell_key`, `seq`, `label`, `labelled`, `matcher`, `status`, `soft`, `message`, `duration_ms` |
 | `attempt_context` | `run_id`, `attempt_key`, `path`, `sha256`, `runtime` |
 | `attempts` | `run_id`, `eval_key`, `cell_key`, `key`, `id`, `n`, `seq`, `started_at`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `image_id`, `turns`, `tools`, `file_edits`, `setup_ms`, `agent_ms`, `checks_ms`, `judge_ms`, `last_text`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `served_model`, `oom_kills`, `reasoning_effort`, `served_reasoning_effort` |
+| `cell_checks` | `run_id`, `eval_key`, `cell_key`, `label`, `pass`, `fail`, `error`, `not_run`, `control_pass`, `control_fail`, `control_error`, `control_not_run`, `verdict` |
 | `cells` | `run_id`, `eval_key`, `key`, `role`, `variant`, `harness`, `harness_kind`, `model`, `reasoning_effort`, `environment`, `environment_digest`, `sandbox`, `gate`, `gate_pass_rate`, `fingerprint`, `fp_sources`, `fp_harness`, `fp_environment`, `fp_image`, `fp_agent_cli`, `fp_judge`, `fp_context`, `runs`, `pass`, `fail`, `infra_error`, `skipped`, `pass_at_1`, `outcome`, `lift_vs`, `lift_points`, `lift_lo`, `lift_hi`, `within_noise`, `min_lift`, `comparable` |
 | `env_skills` | `run_id`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |

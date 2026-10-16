@@ -30,7 +30,11 @@ group(
         'Create greet.js exporting greet(name) that greets the person in our house greeting style. ' +
           'Add a package.json with "type": "module". No dependencies.',
       )
-      await expect(c.exec(greetAda)).toSucceed()
+      // Soft checks all run on a control that misses, so the summary can say which ones
+      // separated the variant from the control and which pass on both.
+      await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)
+      await expect.soft(c, 'adds package.json').toHaveFile('package.json', /"module"/)
+      await expect(c.exec(greetAda), 'house greeting').toSucceed()
     })
   },
 )

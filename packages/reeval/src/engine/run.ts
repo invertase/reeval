@@ -14,6 +14,7 @@ import { budgetMarker } from './budget.ts'
 import type { CollectedTest } from './collector.ts'
 import type { SerializedError } from './errors.ts'
 import {
+  attemptAssertions,
   attemptExpectError,
   createExpect,
   type ExpectTask,
@@ -148,6 +149,7 @@ async function runTest(
         progress: (progress) => reporter.progress(index, progress),
         debug: (line) => reporter.debug(index, line),
         unawaited: async () => (await unawaitedError(pending)) ?? attemptExpectError(own, task),
+        assertions: () => attemptAssertions(task),
       }),
     ),
   )

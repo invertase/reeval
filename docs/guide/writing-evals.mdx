@@ -217,6 +217,15 @@ expect(verdict).toPass()
   Checks run in the agent's container, as the same user. That suits evals of how an agent works with your tools, but it isn't a sealed verifier for adversarial benchmarks.
 </Info>
 
+## Label what you check
+
+```ts
+await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)
+await expect(c.exec('node --test'), 'tests pass').toSucceed()
+```
+
+Name each requirement with `expect`'s second argument. Every check lands in the record with its [label](/reference/matchers#labels), and a compare shows which ones [passed on both sides](/guide/compare#which-checks-made-the-difference): rework or drop those.
+
 ## Tag evals
 
 ```ts title="evals/guide.eval.ts"

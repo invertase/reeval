@@ -1,0 +1,18 @@
+[
+  {
+    "question": "Is greet.js perfect?",
+    "model": "fake",
+    "state": {
+      "task": "Write greet.js.",
+      "output": "I wrote greet.js.",
+      "files": [
+        "added greet.js",
+        "added package.json"
+      ],
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2"
+      }
+    }
+  }
+]

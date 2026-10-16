@@ -8,7 +8,7 @@ import { TimeoutError } from '../errors.ts'
 import type { HarnessSession } from '../harness/types.ts'
 import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
 import type { Sandbox } from '../sandbox/index.ts'
-import { formatDuration } from '../text.ts'
+import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
 import { capturePage, serveCommand } from './capture.ts'
 import { createChecks } from './checks.ts'
@@ -43,7 +43,7 @@ export async function runAttempt(spec: AttemptSpec, fn: EvalFn, handle: TestHand
 async function attemptBody(
   spec: AttemptSpec,
   fn: EvalFn,
-  { signal: testSignal, setMeta, progress, unawaited }: TestHandle,
+  { signal: testSignal, setMeta, progress, unawaited, assertions }: TestHandle,
   id: string,
   debug: AttemptDebug,
 ): Promise<void> {
@@ -145,6 +145,15 @@ async function attemptBody(
       )
     }
     const { record } = a
+    const checked = assertions()
+    if (checked.length) record.assertions = checked
+    for (const x of checked) {
+      const why = x.message ? ` · ${clip(x.message.split('\n')[0] ?? '', 160)}` : ''
+      debug.log(
+        'check',
+        `assert ${x.status === 'pass' ? '✓' : '✗'} ${x.label} (${x.matcher}, ${x.status})${why}`,
+      )
+    }
     const error = record.error ? ` · ${record.error.kind}: ${record.error.message}` : ''
     debug.log('teardown', `outcome ${record.outcome}${error}`)
     const rel = (path: string) => relativeFile(config.root, path) || '.'

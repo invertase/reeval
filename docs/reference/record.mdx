@@ -383,6 +383,10 @@ Also has every field of `Cell`.
 
 <Property name="lift" type="Lift" optional></Property>
 
+<Property name="checks" type="CellCheck[]" optional>
+  Each check (assertion label) seen in any attempt of the eval, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
+</Property>
+
 ### Lift
 
 A variant cell's pass@1 against the control's, on the same harness and sandbox.
@@ -522,6 +526,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef}>"></Property>
+
+<Property name="assertions" type="AssertionRecord[]" optional>
+  Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.
+</Property>
 
 <Property name="changedFiles" type="Array<FileChange &amp; {count?: number}>">
   Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`.
