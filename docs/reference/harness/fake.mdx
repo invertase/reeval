@@ -65,7 +65,7 @@ npx reeval run --config reeval.fake.config.ts
 </Property>
 
 <Property name="effort" type="string" optional>
-  Requested reasoning effort, recorded on the cell as `effort`. Use `servedModel` for what the turn reports. Fast is not this.
+  Reasoning effort to request, recorded on the cell as `effort`. Use `servedModel` for what the turn reports. Fast is not this. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
 </Property>
 
 <Property name="tools" type="Array<{ tool, input, output, ok? }>" optional>

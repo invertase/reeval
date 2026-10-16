@@ -119,6 +119,8 @@ Pass rate can't tell a skill that makes the agent four times cheaper from no ski
 
 The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure (agent time and tokens each get their own verdict in `reeval query effort`). Effort never fails a run, and reeval prices no models.
 
+**Effort** in reeval always means this measure: tool calls, agent time and tokens, read from the attempt. It's an output, never a setting. A harness factory's `effort` option, as in `codex({ effort: 'high' })`, is **reasoning effort**, an input to the model; `reeval query` has it as `reasoning_effort` on `cells` and `attempts`.
+
 Attempts that reported no usage (Goose, or any cell without `usage`) drop out of the token sample only. If either side then has no token sample, the token metric is omitted: no token line, and not `insufficient`. A Goose cell in the same study does not blank tokens on Cursor cells. `insufficient` is statistical only (too few attempts).
 
 | Verdict | Printed | When |

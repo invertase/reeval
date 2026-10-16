@@ -9,6 +9,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, test } from 'node:test'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
 import { statementCount } from '../src/query.ts'
+import { harnessLabel } from '../src/view/model.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 type Row = Record<string, unknown>
@@ -83,6 +84,39 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.equal(text.code, 0, text.stderr)
     assert.equal(text.stdout, 'key                       outcome\nevals/s.eval.ts › greets  pass\n')
     assert.match(text.stderr, /history\.db: 1 runs/)
+  })
+
+  test('reasoning effort, requested and served, is its own column; the effort view is the metric', async () => {
+    const p = await project('query-reasoning-effort', {
+      'reeval.config.ts': fakeConfig({
+        harness: "{ id: 'fake', effort: 'high', servedModel: 'fake-1[effort=medium]' }",
+      }),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.deepEqual(await one(p.dir, 'SELECT model, reasoning_effort FROM cells'), {
+      model: null,
+      reasoning_effort: 'high',
+    })
+    assert.deepEqual(
+      await one(
+        p.dir,
+        'SELECT served_model, reasoning_effort, served_reasoning_effort FROM attempts',
+      ),
+      {
+        served_model: 'fake-1[effort=medium]',
+        reasoning_effort: 'high',
+        served_reasoning_effort: 'medium',
+      },
+    )
+    const [effort] = await query(p.dir, 'effort')
+    assert.equal(effort?.n, 1)
+    assert.equal('reasoning_effort' in (effort ?? {}), false)
+    const { run } = readRun(p.dir)
+    assert.equal(
+      harnessLabel(run.stack.harnesses[0] as (typeof run.stack.harnesses)[number]),
+      'fake (reasoning effort high, served fake-1[effort=medium], served reasoning effort medium)',
+    )
   })
 
   test('with no statement it lists the views, tables and examples; --schema lists columns', async () => {

@@ -119,14 +119,14 @@ export const formatPercent = (rate: number | null) =>
 
 /**
  * A harness of the run's stack as `cursor (model composer-2.5, served composer-2.5[fast=true])`:
- * the configured model, then the variant the harness says it resolved.
+ * the configured model and reasoning effort, then what the harness says it resolved.
  */
 export function harnessLabel(h: RunRecord['stack']['harnesses'][number]): string {
   const parts = [
     ...(h.model ? [`model ${h.model}`] : []),
-    ...(h.effort ? [`effort ${h.effort}`] : []),
+    ...(h.effort ? [`reasoning effort ${h.effort}`] : []),
     ...(h.resolvedModels.length ? [`served ${h.resolvedModels.join(', ')}`] : []),
-    ...(h.resolvedEffort.length ? [`served effort ${h.resolvedEffort.join(', ')}`] : []),
+    ...(h.resolvedEffort.length ? [`served reasoning effort ${h.resolvedEffort.join(', ')}`] : []),
   ]
   return parts.length ? `${h.id} (${parts.join(', ')})` : h.id
 }
@@ -358,6 +358,8 @@ export type CellRow = {
   gated: boolean
   gate: CellRecord['gate']
   overrides: string[]
+  /** The reasoning effort the harness factory asked for; null when it left it unset. */
+  reasoningEffort: string | null
   runs: number
   pass: number
   fail: number
@@ -394,6 +396,7 @@ export function cellRows(e: EvalEntry): CellRow[] {
     gated: cell.gate !== 'none',
     gate: cell.gate,
     overrides: cell.overrides,
+    reasoningEffort: cell.effort ?? null,
     runs: cell.runs,
     pass: cell.pass,
     fail: cell.fail,

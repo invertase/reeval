@@ -16,7 +16,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 6
+const DB_VERSION = 7
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -69,10 +69,10 @@ CREATE TABLE evals (
 );
 CREATE TABLE cells (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, key TEXT NOT NULL, role TEXT, variant TEXT,
-  harness TEXT, harness_kind TEXT, model TEXT, environment TEXT, environment_digest TEXT,
-  sandbox TEXT, gate TEXT, gate_pass_rate REAL, fingerprint TEXT, fp_sources TEXT,
-  fp_harness TEXT, fp_environment TEXT, fp_image TEXT, fp_agent_cli TEXT, fp_judge TEXT,
-  fp_context TEXT, runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER,
+  harness TEXT, harness_kind TEXT, model TEXT, reasoning_effort TEXT, environment TEXT,
+  environment_digest TEXT, sandbox TEXT, gate TEXT, gate_pass_rate REAL, fingerprint TEXT,
+  fp_sources TEXT, fp_harness TEXT, fp_environment TEXT, fp_image TEXT, fp_agent_cli TEXT,
+  fp_judge TEXT, fp_context TEXT, runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER,
   skipped INTEGER, pass_at_1 REAL, outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL,
   lift_hi REAL, within_noise INTEGER, min_lift REAL, comparable TEXT,
   PRIMARY KEY (run_id, eval_key, key)
@@ -84,6 +84,7 @@ CREATE TABLE attempts (
   file_edits INTEGER, setup_ms INTEGER, agent_ms INTEGER, checks_ms INTEGER, judge_ms INTEGER,
   last_text TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
   cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT, oom_kills INTEGER,
+  reasoning_effort TEXT, served_reasoning_effort TEXT,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -339,7 +340,7 @@ function insertRun(
     for (const c of e.cells) {
       const p = c.fingerprintParts
       run(
-        `INSERT INTO cells VALUES (${Array(35).fill('?').join(', ')})`,
+        `INSERT INTO cells VALUES (${Array(36).fill('?').join(', ')})`,
         record.runId,
         e.key,
         c.key,
@@ -348,6 +349,7 @@ function insertRun(
         c.harness,
         c.harnessKind,
         c.model,
+        c.effort ?? null,
         c.environment,
         c.environmentDigest,
         c.sandbox,
@@ -379,7 +381,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(28).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(30).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -408,6 +410,8 @@ function insertRun(
         a.usage?.reasoning ?? null,
         a.turns.findLast((t) => t.model)?.model ?? null,
         a.error?.resource?.cause === 'oom' ? a.error.resource.kills : 0,
+        a.effort ?? null,
+        a.servedEffort ?? null,
       )
       for (const c of a.context) {
         run(

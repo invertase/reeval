@@ -241,7 +241,14 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
         <TableBody>
           {rows.map((row) => (
             <TableRow key={row.key} className="hover:bg-transparent">
-              <TableCell className="font-mono text-xs">{row.harness}</TableCell>
+              <TableCell className="font-mono text-xs">
+                {row.harness}
+                {row.reasoningEffort ? (
+                  <div className="mt-0.5 font-sans text-[11px] text-muted-foreground">
+                    reasoning effort: {row.reasoningEffort}
+                  </div>
+                ) : null}
+              </TableCell>
               <TableCell className="font-mono text-xs">
                 {row.environment === '-' ? (
                   <span className="text-muted-foreground">none</span>

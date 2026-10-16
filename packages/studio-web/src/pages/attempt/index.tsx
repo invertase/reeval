@@ -157,6 +157,11 @@ export function AttemptPage() {
               : ''}
             {attempt.usage ? ` · ${formatUsage(attempt.usage)} tokens` : ''}
             {served.length ? ` · served by ${served.join(', ')}` : ''}
+            {attempt.effort
+              ? ` · reasoning effort: ${attempt.effort}${attempt.servedEffort && attempt.servedEffort !== attempt.effort ? ` (served ${attempt.servedEffort})` : ''}`
+              : attempt.servedEffort
+                ? ` · served reasoning effort: ${attempt.servedEffort}`
+                : ''}
           </p>
         </div>
         {entry.attempts.length > 1 ? (

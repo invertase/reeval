@@ -27,7 +27,7 @@ With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`. The catalog names the id; reeval does not hard-code it. If the catalog lists no effort param, the attempt fails, saying so. Values are whatever that param takes.
+  Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`. The catalog names the id; reeval does not hard-code it. If the catalog lists no effort param, the attempt fails, saying so. Values are whatever that param takes. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
 </Property>
 
 <Property name="id" type="string" optional>
