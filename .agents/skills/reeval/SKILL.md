@@ -90,7 +90,7 @@ Without an `environment`, the attempt uses the cascaded `sandbox` option, else i
   and `pi({ model, effort? })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
   `gemini-3.8-flash`; neither takes `mcp.sse`; Goose `effort` is `GOOSE_THINKING_EFFORT`, pi's is `--thinking`),
   `codex({ model, effort? })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.6-luna`; no `mcp.sse`; `effort` is `model_reasoning_effort`) and
-  `fakeHarness(…)`. A list runs each harness as its own cell. `effort` is the same field name on every factory; values are whatever that CLI takes (no shared enum). The default harness id includes `[effort=<value>]` when it is set. The record stores requested `effort` and served `servedEffort`. Fast is not effort. `reeval query effort` is still the tool-call, time and token metric.
+  `fakeHarness(…)`. A list runs each harness as its own cell. `effort` is the same field name on every factory; values are whatever that CLI takes (no shared enum). The default harness id includes `[effort=<value>]` when it is set. The record stores the requested reasoning effort as `effort` and the served one as `servedEffort`. Fast is not effort. In `reeval query` they are `reasoning_effort` (`cells`, `attempts`) and `served_reasoning_effort` (`attempts`); **effort** on its own (`reeval query effort`, the summary's `effort:` line) is always the measured tool-call, time and token metric.
   Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
   harness's own endpoints. Cursor, Claude Code, Antigravity, OpenCode, pi and Codex report tokens, which reeval records
   per turn, attempt and run (no prices); Goose's ACP usage is only the last model call, so it records none for Goose.
