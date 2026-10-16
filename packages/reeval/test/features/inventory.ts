@@ -601,6 +601,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Environments',
     name: "`c.writeFile()`: files placed after a turn, outside later turns' diff until changed",
     fixtures: ['sandbox/write-file', 'sandbox/write-file-edit'],
+    tests: [unit('c.writeFile refuses absolute paths and paths that leave the workspace')],
   },
 
   // Sandbox
