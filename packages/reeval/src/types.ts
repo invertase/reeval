@@ -614,8 +614,13 @@ export type DockerSandboxDescriptor = {
   root?: boolean
   /** Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped. */
   capabilities?: string[]
-  /** The container's memory, with no swap on top: `'4g'` (default), `'512m'`, or bytes. */
+  /** The container's memory: `'4g'` (default), `'512m'`, or bytes. */
   memory?: string | number
+  /**
+   * Swap on top of `memory`, in the same units. Default: as much as `memory`; `0` makes `memory`
+   * the hard ceiling. A host without swap has none to give.
+   */
+  swap?: string | number
   /** CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's. */
   cpus?: number
   /** Processes and threads at once. Default 1024. */

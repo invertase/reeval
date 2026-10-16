@@ -189,7 +189,8 @@ The agent runs code you didn't write, so each container is locked down by defaul
 
 | Limit | Default | Option |
 |---|---|---|
-| Memory | 4 GB, with no swap on top. A process past it is killed (exit 137); the container keeps running | `memory: '8g'` |
+| Memory | 4 GB. A process past it and its swap is killed (exit 137); the container keeps running | `memory: '8g'` |
+| Swap on top of memory | As much as `memory` (4 GB), if the host has swap to give. `0` makes `memory` the hard ceiling | `swap: '2g'` |
 | CPUs | 2, or fewer if the Docker host has fewer | `cpus: 4` |
 | Processes and threads | 1024 | `pids: 4096` |
 

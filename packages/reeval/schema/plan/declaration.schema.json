@@ -430,6 +430,16 @@
         },
         "root": {
           "type": "boolean"
+        },
+        "swap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
         }
       },
       "required": ["kind"]

@@ -847,6 +847,13 @@ export const features: Feature[] = [
       /expected '4294967296\\n\d+ 100000\\n1024\\n' to be '536870912\\n100000 100000\\n256\\n'/,
   },
   {
+    dir: 'sandbox/swap',
+    tiers: ['docker'],
+    env: 'plain',
+    canaryEnv: 'doubled',
+    canary: /expected '536870912\\n' to be '268435456\\n'/,
+  },
+  {
     dir: 'env/files-home',
     tiers: ['fake', 'docker'],
     env: 'home-files',

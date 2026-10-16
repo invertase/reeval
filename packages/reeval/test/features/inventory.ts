@@ -701,10 +701,20 @@ export const inventory: InventoryFeature[] = [
     name: '`docker({ memory, cpus, pids })` and their defaults',
     fixtures: ['sandbox/limits'],
     tests: [
-      sandboxDocker('confinement', 'default limits: memory with no swap, CPUs and processes'),
+      sandboxDocker('confinement', 'default limits: memory with as much swap on top, CPUs and'),
       sandboxDocker('confinement', 'each limit is overridable, and CPUs are capped'),
       sandboxDocker('confinement', 'a fork bomb stops at the process limit'),
       sandboxDocker('confinement', 'memory past the limit is killed'),
+    ],
+  },
+  {
+    id: 'docker.swap',
+    area: 'Sandbox',
+    name: '`docker({ swap })`: swap on top of memory, as much as memory by default',
+    fixtures: ['sandbox/swap'],
+    tests: [
+      sandboxDocker('confinement', 'swap: 0 makes memory the hard ceiling'),
+      sandboxDocker('unit', '--memory-swap is memory plus swap'),
     ],
   },
   {

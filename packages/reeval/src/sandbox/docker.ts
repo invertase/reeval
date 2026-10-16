@@ -108,7 +108,7 @@ export async function createDockerSandbox(
     if (model) served.push(model)
   }
   const started = performance.now()
-  const { root, capabilities, memory, cpus, pids } = descriptor
+  const { root, capabilities, memory, swap, cpus, pids } = descriptor
   const network = await createDockerSession({
     image,
     env: options.env,
@@ -116,6 +116,7 @@ export async function createDockerSandbox(
     ...(capabilities && { capabilities }),
     limits: {
       ...(memory !== undefined && { memory }),
+      ...(swap !== undefined && { swap }),
       ...(cpus !== undefined && { cpus }),
       ...(pids !== undefined && { pids }),
     },

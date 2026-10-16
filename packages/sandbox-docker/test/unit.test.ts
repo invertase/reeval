@@ -34,6 +34,7 @@ import {
   type RequestTransformation,
 } from '../src/egress/rules.ts'
 import { DEFAULT_IMAGE, HARNESS_PACKAGES, harnessLabel, imageFor } from '../src/image.ts'
+import { memorySwap } from '../src/session.ts'
 import { type DockerCommand, onDockerCommand, traceDocker } from '../src/trace.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -96,6 +97,17 @@ test('imageInfo without a docker CLI at all is no image, not a spawn error', asy
   } finally {
     process.env.PATH = path
   }
+})
+
+test('--memory-swap is memory plus swap: as much again by default, memory alone at swap 0', () => {
+  assert.equal(memorySwap({ memory: '4g' }), '8g')
+  assert.equal(memorySwap({ memory: '4g', swap: '2g' }), '6g')
+  assert.equal(memorySwap({ memory: '4g', swap: 0 }), '4g')
+  assert.equal(memorySwap({ memory: '4g', swap: '0' }), '4g')
+  assert.equal(memorySwap({ memory: '512M', swap: '1g' }), '1536m')
+  assert.equal(memorySwap({ memory: '1.5g' }), '3g')
+  assert.equal(memorySwap({ memory: 1000, swap: 24 }), '1k')
+  assert.equal(memorySwap({ memory: 1000 }), '2000')
 })
 
 describe('request transformations', () => {
