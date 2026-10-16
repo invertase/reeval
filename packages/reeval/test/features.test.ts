@@ -69,6 +69,8 @@ type Feature = {
   canaryPass?: string[]
   /** When the check is that the attempt fails, e.g. an infra error; else it must pass. */
   lands?: Pick<EvalExpectation, 'outcome' | 'error'>
+  /** With `lands.error`, the cell environments whose attempts must pass instead. */
+  landsPass?: string[]
   /**
    * Host variables for `reeval run`, e.g. what `secret.fromEnv` reads; a function runs at test time,
    * with the copied project's directory.
@@ -937,6 +939,47 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'compare/check-not-run',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: {
+      outcome: 'pass',
+      error: { kind: 'assertion', message: /has the marker: expected file marker\.txt to exist/ },
+    },
+    landsPass: ['marked'],
+    canary: /has the marker: expected (file )?marker\.txt/,
+    record: ({ run }) => {
+      const lands = run.evals.find((e) => e.name === 'lands')
+      assert.deepEqual(
+        lands?.attempts.map((a) => a.assertions?.map((x) => x.label)),
+        [['has the marker'], ['has the marker', 'reached']],
+        'the control never reaches its second check',
+      )
+      const variant = lands?.cells.find((c) => c.role === 'variant')
+      assert.deepEqual(variant?.checks, [
+        {
+          label: 'has the marker',
+          pass: 1,
+          fail: 0,
+          error: 0,
+          notRun: 0,
+          control: { pass: 0, fail: 1, error: 0, notRun: 0 },
+          verdict: 'discriminates',
+        },
+        {
+          label: 'reached',
+          pass: 1,
+          fail: 0,
+          error: 0,
+          notRun: 0,
+          control: { pass: 0, fail: 0, error: 0, notRun: 1 },
+          verdict: 'discriminates',
+        },
+      ])
+    },
+  },
+  {
     dir: 'compare/baseline-omitted',
     tiers: ['fake', 'docker'],
     env: 'variant',
@@ -1453,6 +1496,31 @@ export const features: Feature[] = [
       ]),
   },
   {
+    dir: 'assert/labelled',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /writes the marker: expected marker\.txt to match \/nope\//,
+    record: ({ run }) => {
+      const recorded = (name: string) =>
+        run.evals
+          .find((e) => e.name === name)
+          ?.attempts[0]?.assertions?.map(({ durationMs, ...x }) => {
+            assert.equal(typeof durationMs, 'number', 'an async matcher is timed')
+            return x
+          })
+      assert.deepEqual(recorded('lands'), [
+        {
+          label: 'writes the marker',
+          labelled: true,
+          matcher: 'toHaveFile',
+          status: 'pass',
+          soft: false,
+        },
+      ])
+      assert.equal(recorded('canary')?.[0]?.status, 'fail')
+    },
+  },
+  {
     dir: 'assert/called-skill',
     tiers: ['fake'],
     env: 'plain',
@@ -1858,6 +1926,7 @@ function fixtureTests(tiers: Tier[]) {
               outcome: 'pass',
               ...f.lands,
               attempts: ids(f.cells ?? [f.env]),
+              ...(f.landsPass ? { clean: ids(f.landsPass) } : {}),
             },
             canary: {
               outcome: 'fail',

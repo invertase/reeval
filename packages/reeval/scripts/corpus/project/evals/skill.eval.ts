@@ -7,7 +7,8 @@ const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) =
 
 // Only the variant greets in the house style, so that eval's control fails its check and its
 // questions have no pairs; both arms write greet.js, so the second eval's first question has
-// votes and its second fails at the model.
+// votes and its second fails at the model. The first eval's labelled checks discriminate, or
+// pass on both sides; the second's default-labelled check passes on both.
 group(
   'house greeting',
   {
@@ -23,7 +24,8 @@ group(
   () => {
     evaluate('greets in the house style', async (c) => {
       await c.send('Write greet.js that greets in our house style.')
-      await expect(c.exec('grep -q Ahoy greet.js')).toSucceed()
+      await expect.soft(c, 'writes greet.js').toHaveFile('greet.js')
+      await expect(c.exec('grep -q Ahoy greet.js'), 'house greeting').toSucceed()
     })
     evaluate('writes a greeting', async (c) => {
       await c.send('Write greet.js that greets in our house style.')

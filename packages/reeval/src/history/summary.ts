@@ -11,7 +11,7 @@ import {
   runtimeLabel,
 } from '../view/model.ts'
 import { warnings } from './state.ts'
-import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './types.ts'
+import type { AttemptRecord, CellRecord, CheckTally, EvalEntry, RunRecord } from './types.ts'
 
 export const OUTCOME_MARK: Record<Outcome, string> = {
   pass: '✓',
@@ -55,6 +55,55 @@ export function liftLabel(lift: NonNullable<CellRecord['lift']>): string {
   return `lift ${signedPoints(lift.points)} pts (${range}, ${counts})${lift.withinNoise ? ', within noise' : ''}`
 }
 
+const answered = (t: CheckTally) => t.pass + t.fail + t.notRun
+
+const VERDICT_ORDER: Record<string, number> = { discriminates: 0, mixed: 1 }
+
+/**
+ * A variant cell's checks against its control's, those that tell them apart first:
+ * `loads the skill 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`. Empty
+ * without a control's tally.
+ */
+export function checksLabel(cell: CellRecord): string {
+  const rows = (cell.checks ?? []).filter((k) => k.control && k.verdict)
+  return rows
+    .map((k, i) => ({ k, i }))
+    .sort(
+      (a, b) =>
+        (VERDICT_ORDER[a.k.verdict ?? ''] ?? 2) - (VERDICT_ORDER[b.k.verdict ?? ''] ?? 2) ||
+        a.i - b.i,
+    )
+    .map(({ k }) => {
+      const control = k.control as CheckTally
+      const notRun = k.notRun + control.notRun
+      const notes = [
+        notRun ? `${notRun} not run` : '',
+        k.verdict === 'both-pass' || k.verdict === 'both-fail' ? "doesn't discriminate" : '',
+      ].filter(Boolean)
+      return `${k.label} ${k.pass}/${answered(k)} vs ${control.pass}/${answered(control)}${notes.length ? ` (${notes.join(', ')})` : ''}`
+    })
+    .join(' · ')
+}
+
+/** Every variant cell's checks that can't tell it from its control: they pass, or fail, on both. */
+export function undiscriminating(evals: EvalEntry[]) {
+  return evals.flatMap((entry) =>
+    entry.cells.flatMap((cell) =>
+      (cell.checks ?? [])
+        .filter((k) => k.verdict === 'both-pass' || k.verdict === 'both-fail')
+        .map((check) => ({ entry, cell, check })),
+    ),
+  )
+}
+
+/** `evals/s.eval.ts › greets  fake/skilled/fake  exports greet: passes on both`. */
+export const undiscriminatingLabel = ({
+  entry,
+  cell,
+  check,
+}: ReturnType<typeof undiscriminating>[number]) =>
+  `${entry.id}  ${cell.key}  ${check.label}: ${check.verdict === 'both-pass' ? 'passes' : 'fails'} on both`
+
 const rateText = (r: CompareAnswer['rates'][number]) =>
   `${r.name} ${r.wins}/${r.n} (${Math.round((r.wins / r.n) * 100)}%)`
 
@@ -88,6 +137,7 @@ export function cellCounts(e: EvalEntry): string {
         c.gate === 'none' ? 'not gated' : '',
         c.gate !== 'all' && c.gate !== 'none' ? `gate ${gateLabel(c.gate)}` : '',
         c.lift ? liftLabel(c.lift) : '',
+        ...[checksLabel(c)].flatMap((checks) => (checks ? [`checks ${checks}`] : [])),
         ...[cellContrast(e, c.key)].flatMap((effort) =>
           effort ? [`effort ${effortLabel(effort)}`] : [],
         ),

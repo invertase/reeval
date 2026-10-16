@@ -1,5 +1,12 @@
 import { sampleReasons } from '../compare/pairs.ts'
-import { answersLabel, gateLabel, liftLabel } from '../history/summary.ts'
+import {
+  answersLabel,
+  checksLabel,
+  gateLabel,
+  liftLabel,
+  undiscriminating,
+  undiscriminatingLabel,
+} from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
@@ -125,6 +132,8 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
     if (rates) rows.push(`${indent}  ${c.dim(rates)}`)
     const effort = cellContrast(e, cell.key)
     if (effort) rows.push(`${indent}  ${c.dim(`effort: ${effortLabel(effort)}`)}`)
+    const checks = checksLabel(cell)
+    if (checks) rows.push(`${indent}  ${c.dim(`checks: ${checks}`)}`)
     if (cell.overrides.length) {
       rows.push(`${indent}  ${c.dim(`overrides: ${cell.overrides.join(', ')}`)}`)
     }
@@ -252,6 +261,11 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
         : [],
     ),
   )
+  const idle = undiscriminating(record.evals)
+  if (idle.length) {
+    lines.push('', c.bold(`Checks that don't discriminate (${idle.length})`))
+    for (const x of idle) lines.push(` ${c.dim('·')} ${undiscriminatingLabel(x)}`)
+  }
   if (lifted.length) {
     lines.push('', c.bold(c.red(`Lift below minLift (${lifted.length})`)))
     for (const line of lifted) lines.push(` ${c.red('✗')} ${line}`)

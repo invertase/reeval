@@ -73,6 +73,33 @@
       },
       "required": ["bytes", "mediaType", "name", "path", "sha256"]
     },
+    "AssertionRecord": {
+      "type": "object",
+      "properties": {
+        "durationMs": {
+          "type": "number"
+        },
+        "label": {
+          "type": "string"
+        },
+        "labelled": {
+          "type": "boolean"
+        },
+        "matcher": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "soft": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": ["error", "fail", "pass"]
+        }
+      },
+      "required": ["label", "labelled", "matcher", "soft", "status"]
+    },
     "AttemptError": {
       "type": "object",
       "properties": {
@@ -155,6 +182,12 @@
             }
           },
           "required": ["fileEdits", "reasoningMs", "tools", "webFetches", "webSearches"]
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AssertionRecord"
+          }
         },
         "captureUse": {
           "type": "object",
@@ -474,6 +507,33 @@
         "usage"
       ]
     },
+    "CellCheck": {
+      "type": "object",
+      "properties": {
+        "control": {
+          "$ref": "#/$defs/CheckTally"
+        },
+        "error": {
+          "type": "number"
+        },
+        "fail": {
+          "type": "number"
+        },
+        "label": {
+          "type": "string"
+        },
+        "notRun": {
+          "type": "number"
+        },
+        "pass": {
+          "type": "number"
+        },
+        "verdict": {
+          "enum": ["both-fail", "both-pass", "discriminates", "mixed"]
+        }
+      },
+      "required": ["error", "fail", "label", "notRun", "pass"]
+    },
     "CellGate": {
       "anyOf": [
         {
@@ -493,6 +553,12 @@
     "CellRecord": {
       "type": "object",
       "properties": {
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CellCheck"
+          }
+        },
         "effort": {
           "anyOf": [
             {
@@ -616,6 +682,24 @@
     },
     "CellRole": {
       "enum": ["control", "variant"]
+    },
+    "CheckTally": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "number"
+        },
+        "fail": {
+          "type": "number"
+        },
+        "notRun": {
+          "type": "number"
+        },
+        "pass": {
+          "type": "number"
+        }
+      },
+      "required": ["error", "fail", "notRun", "pass"]
     },
     "CompareAnswer": {
       "type": "object",

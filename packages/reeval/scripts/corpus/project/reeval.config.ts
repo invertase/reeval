@@ -1,7 +1,8 @@
 // The project `node scripts/corpus/add.ts <name>` records into a new corpus entry: one run that
 // covers what a record can hold (a compare with lift, answered and failed questions, judges that
 // pass and fail, a failed check, an infra error, todo and skipped evals, tool calls and
-// reasoning), a run that `budget` stops, and a saved analysis.
+// reasoning, labelled and default-labelled assertions), a run that `budget` stops, and a saved
+// analysis.
 import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'

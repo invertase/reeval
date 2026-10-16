@@ -16,7 +16,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 7
+const DB_VERSION = 8
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -113,7 +113,20 @@ CREATE TABLE tool_calls (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, turn INTEGER,
   tool TEXT, target TEXT, ok INTEGER, duration_ms INTEGER
 );
+-- Every expect / expect.soft matcher call each attempt made, in call order (seq from 1).
+CREATE TABLE assertions (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL,
+  seq INTEGER NOT NULL, label TEXT NOT NULL, labelled INTEGER, matcher TEXT, status TEXT,
+  soft INTEGER, message TEXT, duration_ms INTEGER
+);
+-- Each check (assertion label) per cell over its counted attempts; on a variant, its control's too.
+CREATE TABLE cell_checks (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, label TEXT NOT NULL,
+  pass INTEGER, fail INTEGER, error INTEGER, not_run INTEGER, control_pass INTEGER,
+  control_fail INTEGER, control_error INTEGER, control_not_run INTEGER, verdict TEXT
+);
 ${DERIVED_TABLES}
+CREATE INDEX assertions_by_attempt ON assertions (run_id, attempt_key);
 CREATE INDEX cells_by_eval ON cells (eval_key, key);
 CREATE INDEX tool_calls_by_attempt ON tool_calls (run_id, attempt_key);
 CREATE INDEX context_by_attempt ON attempt_context (run_id, attempt_key);
@@ -165,16 +178,27 @@ CREATE VIEW skill_reads AS
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest;
 
--- Failed attempts and infra errors (an OOM kill among them) with the cell's harness, model and
--- each of its environment's skills.
+-- Failed attempts and infra errors (an OOM kill among them) with the cell's harness, model, each
+-- of its environment's skills and the label of the first check that failed.
 CREATE VIEW failing_attempts AS
   SELECT a.run_id, r.started_at, a.eval_key, a.key AS attempt_key, a.cell_key, c.harness,
     c.model, c.environment, s.name AS skill, a.outcome, a.error_kind, a.error_message,
-    a.duration_ms, a.oom_kills
+    a.duration_ms, a.oom_kills,
+    (SELECT x.label FROM assertions x WHERE x.run_id = a.run_id AND x.attempt_key = a.key
+      AND x.status = 'fail' ORDER BY x.seq LIMIT 1) AS first_failed_check
   FROM attempts a JOIN runs r USING (run_id)
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   LEFT JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest
   WHERE a.outcome IN ('fail', 'infra_error');
+
+-- Each check of a variant cell beside its control's: whether it tells them apart.
+CREATE VIEW check_discrimination AS
+  SELECT k.run_id, k.eval_key, c.harness, c.variant, c.key AS cell_key, k.label,
+    k.pass AS variant_pass, k.fail AS variant_fail, k.not_run AS variant_not_run,
+    k.control_pass, k.control_fail, k.control_not_run, k.verdict
+  FROM cell_checks k
+  JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key
+  WHERE c.role = 'variant' AND k.verdict IS NOT NULL;
 
 -- One eval per run: outcome and pass@1, with the branch and pull request.
 CREATE VIEW eval_trend AS
@@ -208,6 +232,7 @@ export const VIEW_NAMES = [
   'failing_attempts',
   'eval_trend',
   'verdict_flips',
+  'check_discrimination',
 ]
 
 const json = (value: unknown) => JSON.stringify(value)
@@ -378,6 +403,24 @@ function insertRun(
         c.lift?.minLift ?? null,
         comparableFingerprint(c, e.attempts),
       )
+      for (const k of c.checks ?? []) {
+        run(
+          `INSERT INTO cell_checks VALUES (${Array(13).fill('?').join(', ')})`,
+          record.runId,
+          e.key,
+          c.key,
+          k.label,
+          k.pass,
+          k.fail,
+          k.error,
+          k.notRun,
+          k.control?.pass ?? null,
+          k.control?.fail ?? null,
+          k.control?.error ?? null,
+          k.control?.notRun ?? null,
+          k.verdict ?? null,
+        )
+      }
     }
     for (const a of e.attempts) {
       run(
@@ -421,6 +464,23 @@ function insertRun(
           c.path,
           c.sha256,
           isRuntimeState(c.path) ? 1 : 0,
+        )
+      }
+      for (const [i, x] of (a.assertions ?? []).entries()) {
+        run(
+          `INSERT INTO assertions VALUES (${Array(12).fill('?').join(', ')})`,
+          record.runId,
+          a.key,
+          e.key,
+          a.cell,
+          i + 1,
+          x.label,
+          x.labelled ? 1 : 0,
+          x.matcher,
+          x.status,
+          x.soft ? 1 : 0,
+          x.message ?? null,
+          x.durationMs ?? null,
         )
       }
       const transcript = transcripts.get(a.key)
@@ -492,6 +552,8 @@ const DATA_TABLES = [
   'artifacts',
   'attempt_context',
   'tool_calls',
+  'assertions',
+  'cell_checks',
 ]
 
 function removeRun(db: DatabaseSync, runId: string): void {

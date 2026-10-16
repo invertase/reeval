@@ -37,9 +37,11 @@ const VIEW_ROWS: Record<string, string> = {
   drift:
     'run where a cell’s fingerprint changed from its previous run, what changed, and noise = 1 when only agent runtime state did',
   failing_attempts:
-    'failed or infra-error attempt, with its harness, model, environment skill, error and OOM kills',
+    'failed or infra-error attempt, with its harness, model, environment skill, error, OOM kills and first failed check',
   eval_trend: 'eval per run: outcome, pass@1, branch, PR and fingerprint',
   verdict_flips: 'judge question per cell whose pass rate changed from its previous run',
+  check_discrimination:
+    'check (expect label) per variant cell per run: its passes, failures and not-run on both sides, and whether it discriminates (both-pass and both-fail checks measure nothing)',
 }
 
 const READ_ONLY = {
@@ -341,7 +343,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Query run history with SQL',
         description:
-          "One read-only SQLite SELECT or WITH statement over .reeval/history.db, the projection of every recorded and scratch run (reeval query). Tables include runs, evals, cells, attempts, judgements, tool_calls; the views are the query_* tools. query_schema lists every table's columns.",
+          "One read-only SQLite SELECT or WITH statement over .reeval/history.db, the projection of every recorded and scratch run (reeval query). Tables include runs, evals, cells, attempts, judgements, tool_calls, assertions; the views are the query_* tools. query_schema lists every table's columns.",
         inputSchema: z.object({
           sql: z.string().describe('One SELECT or WITH statement'),
           limit: limitField(MAX_ROWS, DEFAULT_ROWS, 'rows'),
