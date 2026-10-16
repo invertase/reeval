@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.9.0](https://github.com/invertase/reeval/compare/v0.8.0...v0.9.0) (2026-10-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename evaluate.for to evaluate.each and pool results across cases ([#318](https://github.com/invertase/reeval/issues/318))
+
+### Features
+
+* add c.writeFile for files placed after the agent's turn ([#317](https://github.com/invertase/reeval/issues/317)) ([8792175](https://github.com/invertase/reeval/commit/8792175405ca0e872c70ff08ec9e707882e73441))
+* **assert:** add toHaveChanged, a matcher on the workspace diff ([#314](https://github.com/invertase/reeval/issues/314)) ([206276c](https://github.com/invertase/reeval/commit/206276c60f95b16a40f4feeeadeb80fed0a8f12a))
+* **checks:** record named check results and flag checks that don't discriminate ([#319](https://github.com/invertase/reeval/issues/319)) ([1f41ecb](https://github.com/invertase/reeval/commit/1f41ecba4794389ccee966afa476dac6046b7ce3))
+* **history:** name pass@1 in the summary, query and studio, and pass^k for gate 'all' ([#315](https://github.com/invertase/reeval/issues/315)) ([e16095b](https://github.com/invertase/reeval/commit/e16095b1bc9926fb130024b527e8bc1f2d98eb1a))
+* **query:** label the harness effort option as reasoning effort ([#316](https://github.com/invertase/reeval/issues/316)) ([0f2aa59](https://github.com/invertase/reeval/commit/0f2aa59778b6bcb10739bed90ab961256832fe06))
+* rename evaluate.for to evaluate.each and pool results across cases ([#318](https://github.com/invertase/reeval/issues/318)) ([c5679e5](https://github.com/invertase/reeval/commit/c5679e51195e9a6f2e28febd10542d831f90dfe2))
+* **sandbox:** give docker sandboxes swap headroom above the memory limit ([#310](https://github.com/invertase/reeval/issues/310)) ([937ccbe](https://github.com/invertase/reeval/commit/937ccbecf30ac149dc315cf7009e1ef358ea505f))
+* **sandbox:** make an OOM kill during an attempt an infra error ([#312](https://github.com/invertase/reeval/issues/312)) ([1473ae3](https://github.com/invertase/reeval/commit/1473ae3381395296e6c997ec741b623ee9d0a356))
+
+
+### Bug Fixes
+
+* **cli:** require a config to run ([#309](https://github.com/invertase/reeval/issues/309)) ([c5399ed](https://github.com/invertase/reeval/commit/c5399ed3728e5ea42218cb4ec0f55b3cef627abd))
+* **transcript:** record a refused web search as a web-search event ([#304](https://github.com/invertase/reeval/issues/304)) ([c08018e](https://github.com/invertase/reeval/commit/c08018e24681b8ecea7476928593c3ab8130bff1))
+
 ## [0.8.0](https://github.com/invertase/reeval/compare/v0.7.0...v0.8.0) (2026-10-14)
 
 
