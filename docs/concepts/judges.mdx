@@ -116,6 +116,29 @@ The judge sees four things: the latest turn's prompt as `task`, the agent's fina
 
 So the judge can't tell whether the agent ran the tests; check that with `c.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message. `{ artifacts: [image] }` adds a `c.capture()` PNG as a file part; ask about facts in the picture, not whether it "looks great".
 
+## Judge what the code prints
+
+```ts title="evals/hygiene.eval.ts"
+const run = await c.exec('node summary.js')
+const verdict = await c.judge('Does it say 3 orders totalling 50?', {
+  on: run.stdout,
+})
+```
+
+```text
+    "question": "Does it say 3 orders totalling 50?",
+    …
+      "task": "Write summary.js. It prints the order count and total of orders.csv.",
+      "output": "3 orders, total 50.00\n",
+      "files": [
+        "added greet.js",
+        "added summary.js"
+      ],
+…
+```
+
+The diff shows the code, not what it does. When the behaviour is the outcome, run the code and pass its output with `on`. In `judge-input.json` it replaces the final message as `output`, and the task, files and diff stay. [Make the eval trustworthy](/guide/writing-evals#make-the-eval-trustworthy) has the whole eval.
+
 ## Narrow what the judge sees
 
 ```ts title="evals/sign-in.eval.ts"
