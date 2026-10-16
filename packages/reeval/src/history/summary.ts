@@ -2,6 +2,12 @@ import { sampleReasons } from '../compare/pairs.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { CompareAnswer, Outcome } from '../types.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
+import {
+  familyEffortLabel,
+  familyHeadLabel,
+  familyLiftLabel,
+  familyRateLabel,
+} from '../view/family.ts'
 import { cellJudgeRates, cellUsage, judgeRatesLabel } from '../view/judgements.ts'
 import {
   formatUsage,
@@ -236,6 +242,26 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
   return rows
 }
 
+/** Each pooled `evaluate.each`: its cases, and its pooled rates or lifts. */
+function familySection(run: RunRecord): string[] {
+  if (!run.families?.length) return []
+  const lines = ['## Families', '', '| | Family | Pooled |', '|---|---|---|']
+  for (const f of run.families) {
+    const pooled = f.lifts.length
+      ? f.lifts.map((l) => {
+          const gate = l.minLift === undefined ? '' : ` (minLift ${Math.round(l.minLift * 100)})`
+          const effort = familyEffortLabel(l)
+          return `${l.variant} ${familyLiftLabel(l)}${gate}${effort ? `; effort ${effort}` : ''}`
+        })
+      : f.rates.map((r) => `${r.cell} ${familyRateLabel(r)}`)
+    lines.push(
+      `| ${OUTCOME_MARK[f.outcome]} | ${cell(`${f.id} (${familyHeadLabel(f)})`)} | ${cell(pooled.join(' · '))} |`,
+    )
+  }
+  lines.push('')
+  return lines
+}
+
 export function renderSummary(run: RunRecord): string {
   const lines = [
     `# reeval run ${run.runId}`,
@@ -254,6 +280,7 @@ export function renderSummary(run: RunRecord): string {
     ...warnings(run).map((w) => `> **Warning:** ${w}\n`),
     `Record: [${run.runId}.json](../${run.runId}.json) · artifacts: ${run.artifacts}`,
     '',
+    ...familySection(run),
     '## Evals',
     '',
     '| | Eval | Time or cells | Judge |',

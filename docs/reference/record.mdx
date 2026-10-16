@@ -66,6 +66,7 @@ The type definitions are in `packages/reeval/src/history/types.ts`; the environm
 | `TurnStatus` | `'completed'`, `'aborted'`, `'error'` |
 | `ArtifactLevel` | `'all'`, `'failures'`, `'none'` |
 | `RecordMode` | `'manual'`, `'ci'`, `'always'` |
+| `FamilyVerdict` | `'lift'`, `'drop'`, `'noise'`, `'insufficient'` |
 
 [//]: # (/generated:record-values)
 
@@ -132,6 +133,10 @@ An attempt's `error` is `{ kind, message, prepare?, resource? }`. `prepare` is s
 <Property name="summary" type="RunSummary"></Property>
 
 <Property name="evals" type="EvalEntry[]"></Property>
+
+<Property name="families" type="FamilyRecord[]" optional>
+  Each pooled `evaluate.each` that ran; unset when none did.
+</Property>
 
 ### GitInfo
 
@@ -329,6 +334,10 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
   The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons).
 </Property>
 
+<Property name="family" type="{id: string; name: string; case: number; cases: number}" optional>
+  Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite.
+</Property>
+
 ### CellRecord
 
 One harness and environment of an eval, and how its attempts went.
@@ -415,6 +424,164 @@ A variant cell's pass@1 against the control's, on the same harness and sandbox.
 
 <Property name="minLift" type="number" optional>
   Set when the compare has a `minLift`; the cell fails when `interval.lo` is below it.
+</Property>
+
+### FamilyRecord
+
+A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an eval.
+
+<Property name="id" type="string">
+  `file › group › … › template`.
+</Property>
+
+<Property name="file" type="string"></Property>
+
+<Property name="group" type="string[]"></Property>
+
+<Property name="name" type="string">
+  The name template, e.g. `fixes $id`.
+</Property>
+
+<Property name="cases" type="number">
+  Cases in the list.
+</Property>
+
+<Property name="ran" type="number">
+  Cases with an eval in this run; fewer when a filter or tag left some out.
+</Property>
+
+<Property name="rates" type="FamilyRate[]">
+  One per cell.
+</Property>
+
+<Property name="lifts" type="FamilyLift[]">
+  One per variant cell, with `compare`.
+</Property>
+
+<Property name="outcome" type="'pass' | 'fail'">
+  `fail` when a lift is below its `minLift`. The cases still pass or fail on their own.
+</Property>
+
+### FamilyRate
+
+One cell's pass rate over a family's cases.
+
+<Property name="cell" type="string">
+  The cell's key, the same in every case.
+</Property>
+
+<Property name="cases" type="number">
+  Cases with at least one counted attempt in this cell.
+</Property>
+
+<Property name="pass" type="number">
+  Passes and counted attempts over those cases.
+</Property>
+
+<Property name="counted" type="number"></Property>
+
+<Property name="rate" type="number">
+  The mean of the cases' pass@1; at one attempt a case, `pass / counted`.
+</Property>
+
+<Property name="interval" type="FamilyInterval"></Property>
+
+### FamilyLift
+
+A variant cell against its control over a family's cases, paired by case.
+
+<Property name="variant" type="string">
+  The variant cell's key.
+</Property>
+
+<Property name="vs" type="string">
+  The control cell's key.
+</Property>
+
+<Property name="pairs" type="number">
+  Cases with counted attempts on both sides.
+</Property>
+
+<Property name="variantRate" type="number">
+  Mean pass@1 over the paired cases on each side.
+</Property>
+
+<Property name="controlRate" type="number"></Property>
+
+<Property name="discordant" type="{variantOnly: number; controlOnly: number}" optional>
+  Set at one attempt a case and side: pairs where only one side passed.
+</Property>
+
+<Property name="points" type="number">
+  Variant minus control, from -1 to 1.
+</Property>
+
+<Property name="interval" type="FamilyInterval"></Property>
+
+<Property name="p" type="number | null">
+  McNemar's exact p (one attempt a case), else Wilcoxon signed-rank over the cases.
+</Property>
+
+<Property name="withinNoise" type="boolean">
+  The interval spans 0.
+</Property>
+
+<Property name="verdict" type="FamilyVerdict"></Property>
+
+<Property name="minLift" type="number" optional>
+  The compare's `minLift`: on a family it gates this lower bound, not each case's.
+</Property>
+
+<Property name="outcome" type="'pass' | 'fail'">
+  `fail` when `interval.lo` is below `minLift`.
+</Property>
+
+<Property name="effort" type="FamilyEffort" optional></Property>
+
+### FamilyInterval
+
+A 95% interval on a pooled rate or difference.
+
+<Property name="lo" type="number"></Property>
+
+<Property name="hi" type="number"></Property>
+
+<Property name="level" type="0.95"></Property>
+
+<Property name="method" type="'wilson' | 'newcombe-paired' | 't-cases'">
+  `wilson` / `newcombe-paired`: one counted attempt a case and side, so each case is one Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with attempts within a case never counted as independent.
+</Property>
+
+### FamilyEffort
+
+The variant's effort against the control's, paired by case.
+
+<Property name="tools" type="FamilyEffortMetric"></Property>
+
+<Property name="agentMs" type="FamilyEffortMetric"></Property>
+
+<Property name="tokens" type="FamilyEffortMetric" optional>
+  Over the cases where every counted attempt reported usage; omitted when none did.
+</Property>
+
+### FamilyEffortMetric
+
+One effort metric over a family's paired cases.
+
+<Property name="pairs" type="number">
+  Cases with a value on both sides.
+</Property>
+
+<Property name="ratio" type="number | null">
+  The median over cases of the variant's per-case median, over the control's; null at 0.
+</Property>
+
+<Property name="p" type="number | null">
+  Wilcoxon signed-rank over the per-case differences; null when every difference is 0.
+</Property>
+
+<Property name="verdict" type="'fewer' | 'more' | 'noise' | 'insufficient'">
+  `insufficient` below 6 non-zero differences, where the exact test can't reach 0.05.
 </Property>
 
 ### FingerprintParts

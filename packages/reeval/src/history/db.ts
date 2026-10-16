@@ -16,7 +16,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 8
+const DB_VERSION = 9
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -64,8 +64,25 @@ CREATE TABLE runs (
 );
 CREATE TABLE evals (
   run_id TEXT NOT NULL, key TEXT NOT NULL, id TEXT, slug TEXT, file TEXT, groups TEXT, name TEXT,
-  tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT,
+  tags TEXT, fingerprint TEXT, outcome TEXT, pass_at_1 REAL, sources TEXT, family_id TEXT,
+  case_index INTEGER,
   PRIMARY KEY (run_id, key)
+);
+-- Each pooled evaluate.each per run: its cases, and each cell's pass rate over them.
+CREATE TABLE families (
+  run_id TEXT NOT NULL, family_id TEXT NOT NULL, file TEXT, groups TEXT, name TEXT,
+  cases INTEGER, ran INTEGER, cell_key TEXT NOT NULL, cell_cases INTEGER, pass INTEGER,
+  counted INTEGER, pass_rate REAL, lo REAL, hi REAL, method TEXT, outcome TEXT,
+  PRIMARY KEY (run_id, family_id, cell_key)
+);
+CREATE TABLE family_lift_m (
+  run_id TEXT NOT NULL, family_id TEXT NOT NULL, name TEXT, harness TEXT, variant TEXT,
+  cell_key TEXT, control TEXT,
+  pairs INTEGER, variant_rate REAL, control_rate REAL, discordant_vc INTEGER,
+  discordant_cv INTEGER, points REAL, lo REAL, hi REAL, method TEXT, p REAL,
+  within_noise INTEGER, verdict TEXT, min_lift REAL, outcome TEXT, tools_ratio REAL,
+  tools_p REAL, effort_verdict TEXT, agent_s_ratio REAL, agent_s_p REAL, time_verdict TEXT,
+  tokens_ratio REAL, tokens_p REAL, tokens_verdict TEXT
 );
 CREATE TABLE cells (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, key TEXT NOT NULL, role TEXT, variant TEXT,
@@ -147,6 +164,11 @@ CREATE VIEW lift AS
   JOIN cells k ON k.run_id = c.run_id AND k.eval_key = c.eval_key AND k.key = c.lift_vs
   WHERE c.role = 'variant';
 
+-- Each variant against its control over a pooled evaluate.each's cases, paired by case, per run.
+CREATE VIEW family_lift AS
+  SELECT f.*, r.started_at, r.branch
+  FROM family_lift_m f JOIN runs r USING (run_id);
+
 -- Cells with mixed outcomes, pooled over runs whose fingerprints match once agent runtime state is
 -- left out; 'flaky' needs FLAKY_MIN_ATTEMPTS counted attempts, else 'insufficient'.
 CREATE VIEW flaky_cells AS SELECT * FROM flaky_m;
@@ -224,6 +246,7 @@ CREATE VIEW verdict_flips AS
 
 export const VIEW_NAMES = [
   'lift',
+  'family_lift',
   'effort',
   'factor_effects',
   'skill_reads',
@@ -348,7 +371,7 @@ function insertRun(
   }
   for (const e of record.evals) {
     run(
-      `INSERT INTO evals VALUES (${Array(12).fill('?').join(', ')})`,
+      `INSERT INTO evals VALUES (${Array(14).fill('?').join(', ')})`,
       record.runId,
       e.key,
       e.id,
@@ -361,6 +384,8 @@ function insertRun(
       e.outcome,
       e.passRate,
       json(e.sources),
+      e.family?.id ?? null,
+      e.family?.case ?? null,
     )
     for (const c of e.cells) {
       const p = c.fingerprintParts
@@ -539,11 +564,75 @@ function insertRun(
       })
     }
   }
+  for (const f of record.families ?? []) {
+    for (const r of f.rates) {
+      run(
+        `INSERT INTO families VALUES (${Array(16).fill('?').join(', ')})`,
+        record.runId,
+        f.id,
+        f.file,
+        json(f.group),
+        f.name,
+        f.cases,
+        f.ran,
+        r.cell,
+        r.cases,
+        r.pass,
+        r.counted,
+        r.rate,
+        r.interval.lo,
+        r.interval.hi,
+        r.interval.method,
+        f.outcome,
+      )
+    }
+    for (const l of f.lifts) {
+      const e = l.effort
+      const cell = record.evals
+        .find((x) => x.family?.id === f.id && x.cells.some((c) => c.key === l.variant))
+        ?.cells.find((c) => c.key === l.variant)
+      run(
+        `INSERT INTO family_lift_m VALUES (${Array(30).fill('?').join(', ')})`,
+        record.runId,
+        f.id,
+        f.name,
+        cell?.harness ?? null,
+        cell?.variant ?? cell?.environment ?? null,
+        l.variant,
+        l.vs,
+        l.pairs,
+        l.variantRate,
+        l.controlRate,
+        l.discordant?.variantOnly ?? null,
+        l.discordant?.controlOnly ?? null,
+        l.points,
+        l.interval.lo,
+        l.interval.hi,
+        l.interval.method,
+        l.p,
+        l.withinNoise ? 1 : 0,
+        l.verdict,
+        l.minLift ?? null,
+        l.outcome,
+        e?.tools.ratio ?? null,
+        e?.tools.p ?? null,
+        e?.tools.verdict ?? null,
+        e?.agentMs.ratio ?? null,
+        e?.agentMs.p ?? null,
+        e?.agentMs.verdict ?? null,
+        e?.tokens?.ratio ?? null,
+        e?.tokens?.p ?? null,
+        e?.tokens?.verdict ?? null,
+      )
+    }
+  }
 }
 
 const DATA_TABLES = [
   'runs',
   'evals',
+  'families',
+  'family_lift_m',
   'cells',
   'attempts',
   'judgements',
@@ -732,7 +821,7 @@ export async function openHistoryDb(
     schema() {
       const objects = db
         .prepare(
-          `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
+          `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', 'family_lift_m', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
         )
         .all() as Array<{ name: string; type: 'table' | 'view' }>
       return objects.map((o) => ({

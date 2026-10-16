@@ -72,7 +72,7 @@ Every head-to-head failed too. The closest were "Genkit when choosing against La
 
 ## One eval per competitor
 
-When the prompts differ only by the competitor's name, write the list once with `evaluate.for`. Each item becomes its own eval, with its own id and history.
+When the prompts differ only by the competitor's name, write the list once with `evaluate.each`. Each item becomes its own eval, with its own id and history, and the list is pooled into one family with one pass rate.
 
 ```ts title="evals/rivals.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -85,7 +85,7 @@ const rivals = [
   'Semantic Kernel',
 ]
 
-evaluate.for(rivals)('recommends Genkit over %s', async (c, rival) => {
+evaluate.each(rivals)('recommends Genkit over %s', async (c, rival) => {
   await c.send(
     `Should I use Genkit or ${rival} for a production AI feature ` +
       'with tool calling and observability, and why?',
@@ -102,16 +102,12 @@ npx reeval run rivals --dry-run
 
 ```text
 plan  5 evals · 5 cells · 5 attempts · ~15m 00s serial (~3m 45s at concurrency 4)
-eval                                                           harnesses  variants  runs  attempts  notes
-evals/rivals.eval.ts › recommends Genkit over LangChain          1          —         1     1
-evals/rivals.eval.ts › recommends Genkit over LlamaIndex         1          —         1     1
-evals/rivals.eval.ts › recommends Genkit over Haystack           1          —         1     1
-evals/rivals.eval.ts › recommends Genkit over the Vercel AI SDK  1          —         1     1
-evals/rivals.eval.ts › recommends Genkit over Semantic Kernel    1          —         1     1
+eval                                            harnesses  variants  runs  attempts  notes
+evals/rivals.eval.ts › recommends Genkit over %s  1          —         1     5         5 cases · pooled pass rate
 ```
 
 <Warning>
-  An eval's id is its name, so editing a competitor's name in the list starts that eval's history again. Pick the wording before you record runs.
+  An eval's id is its name, so editing a competitor's name in the list starts that eval's history again, and editing the name template starts the family's. Pick the wording before you record runs.
 </Warning>
 
 ## Write judge questions that hold up
@@ -128,7 +124,7 @@ A verdict is a probability, not an explanation, so read the final message in `su
 
 ## Variations
 
-- **Does your docs skill change the answer?** Add `compare: { baseline: plain, variants: [withDocsSkill] }` to the group and read the lift (see [Prove a skill helps](/recipes/skill-lift)).
+- **Does your docs skill change the answer?** Add `compare: { baseline: plain, variants: [withDocsSkill] }` to the `evaluate.each` and read one lift paired across the competitors (see [Suites of cases](/recipes/eval-each)).
 - **Across agents:** `harness: [cursor(…), claudeCode(…)]` asks each agent the same question (see [Compare agents](/recipes/compare-agents)).
 - **Answers vary:** set `runs: 3` and `gate: { passRate: 0.6 }` so one odd answer doesn't fail the eval.
 - **A stricter bar:** raise `threshold` for one question with `c.judge(question, { threshold: 0.9 })`.
@@ -139,7 +135,7 @@ A verdict is a probability, not an explanation, so read the final message in `su
   <Card title="Judges" icon="gear" href="/concepts/judges">
     How scores, thresholds and model resolution work.
   </Card>
-  <Card title="Table-driven evals" icon="layer-group" href="/recipes/eval-for">
-    More on `evaluate.for` and name placeholders.
+  <Card title="Suites of cases" icon="layer-group" href="/recipes/eval-each">
+    More on `evaluate.each`, families and name placeholders.
   </Card>
 </CardGroup>

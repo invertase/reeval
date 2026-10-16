@@ -141,8 +141,14 @@ group('hello', () => {
 ```
 
 - `evaluate(name, [options,] fn)` and `group(name, [options,] fn)`; also `.skip`, `.only`
-  (an error in CI), `.todo`, and `evaluate.for(cases)(name, (c, item) => …)` (`$key`, `%s`,
-  `%#` in the name). The eval id is `file › group › name`; renaming an eval restarts its history.
+  (an error in CI), `.todo`, and `evaluate.each(cases)(name, [options,] (c, item) => …)` (`$key`,
+  `%s`, `%#` in the name). The eval id is `file › group › name`; renaming an eval restarts its history.
+- `evaluate.each` with two or more cases pools them into a family (id `file › group › template`):
+  one pass rate over the cases and, with `compare`, one lift paired by case, which `minLift` gates
+  (not each case's). Prefer it to separate evals when the cases are one population: six cases at
+  `runs: 1` can reach a lift verdict where each case alone is within noise. Fewer than six
+  discordant cases reads `insufficient`. `evaluate.each(cases, { pool: false })` keeps the cases
+  independent; eval options go after the name, never beside the cases.
   A comment on an eval describes the current check (why a canary fails, which path it reads),
   not what used to be true or which product a prompt was ported from.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,

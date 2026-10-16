@@ -42,7 +42,10 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `reeval.config.ts has no default export (it exports config). Write export default defineConfig({…}).` | Export the config as the default: `export default defineConfig({ … })`. |
 | `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` | Use `ms`, `s`, `m` or `h`, or a number of milliseconds. |
 | `Invalid duration 0. A duration is more than zero: …` | A timeout or budget of zero (or less) would stop every attempt at once. Give a positive duration. |
-| `evaluate("e") is declared twice in this file. …` | Give each eval its own name. For `evaluate.for`, put `$key`, `%s` or `%#` in the name. |
+| `evaluate("e") is declared twice in this file. …` | Give each eval its own name. For `evaluate.each`, put `$key`, `%s` or `%#` in the name. |
+| `evaluate.each(cases, options) takes { pool?: boolean } (got …). Eval options such as compare go after the name: …` | Move the eval's options after the name: `evaluate.each(cases)(name, { compare }, fn)`. |
+| `evaluate.each takes an array of cases (got …)` | Pass an array: `evaluate.each([{ n: 1 }, { n: 2 }])`. |
+| `Unknown option "pool" in evaluate("x"). pool is an option of evaluate.each, beside the cases: …` | Pass `pool` to `evaluate.each(cases, { pool: false })`, not to the eval. |
 | `evaluate("x") got two functions. Options must be a plain object; …` | Options are a plain object. Put secrets in an environment or the config's `env`. |
 | `sandbox takes one sandbox, not a list (…). Different toolchains need different checks, so write a separate eval per sandbox.` | One sandbox per eval. |
 | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.` | Use `compare`. |

@@ -103,6 +103,23 @@ One control attempt failed, so both skills show +50 pts, and neither is distingu
   Use `reeval query lift` to see every variant cell's lift across runs, with `lo`, `hi` and `within_noise` columns.
 </Info>
 
+## Lift across cases
+
+An [`evaluate.each`](/recipes/eval-each) family with `compare` gets one lift per variant, paired by case: each case ran the control and the variant, so only the cases where they disagree (discordant) move it.
+
+```text
+   ✓ greets %s in the house style  6 cases · paired
+       ✓ Ada  ✓ Grace  ✓ Linus  ✓ Margaret  ✓ Dennis  ✓ Barbara
+       fake/with-house-greeting/fake  pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031) (minLift 20)
+```
+
+| Runs per cell | Interval | p | `insufficient` below |
+|---|---|---|---|
+| 1 | Newcombe's paired score interval (his method 10) | McNemar's exact test | 6 discordant cases |
+| More | A t interval over each case's pass-rate difference | Wilcoxon signed-rank | 6 cases |
+
+Six discordant cases are the fewest whose exact p can fall below 0.05 (2 · 0.5⁶ = 0.031). The verdict is `lift` or `drop` when the interval excludes 0, else `noise`. A family's effort is the same per-case pairing: the ratio of medians, with a signed-rank verdict.
+
 ## Effort next to lift
 
 Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. When both sides reported usage, tokens join that line with the same rank test. From a real run of Cursor and Antigravity at `--runs 2`:
@@ -147,6 +164,7 @@ The smallest p a rank test can give depends only on the attempt counts, so a ver
 |---|---|
 | `controlled` | Two cells in one run and eval |
 | `pooled` | The same contrast over comparable runs: attempts summed per eval, then across evals, where an effort effect needs the same verdict in at least 2/3 of them. Two source fingerprints of the same eval are not pooled |
+| `paired` | A variant against its control over a pooled `evaluate.each` family's cases in one run; `strata` is the paired cases |
 | `observed` | A cell between two runs whose fingerprint changed in one part; `confounded` when several did |
 | `not_measured` | The factor has one level |
 
@@ -173,7 +191,7 @@ Lift below minLift (1)
  ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +100 pts (95% +7…+100, 2/2 vs 0/2): its lower bound is below minLift 50
 ```
 
-A variant below its `minLift` fails the run with exit 1. To pass it, add runs until the interval narrows, not until the point estimate looks good.
+A variant below its `minLift` fails the run with exit 1. To pass it, add runs until the interval narrows, not until the point estimate looks good. On an `evaluate.each` family, `minLift` gates the pooled lift's lower bound, not each case's, so more cases narrow it too.
 
 ## Methods
 

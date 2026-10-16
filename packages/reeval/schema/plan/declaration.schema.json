@@ -312,6 +312,9 @@
         "body": {
           "type": "string"
         },
+        "family": {
+          "$ref": "#/$defs/DeclaredFamily"
+        },
         "mode": {
           "$ref": "#/$defs/DeclaredMode"
         },
@@ -326,6 +329,21 @@
         }
       },
       "required": ["body", "mode", "name", "options", "type"]
+    },
+    "DeclaredFamily": {
+      "type": "object",
+      "properties": {
+        "case": {
+          "type": "number"
+        },
+        "cases": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["case", "cases", "name"]
     },
     "DeclaredGroup": {
       "type": "object",

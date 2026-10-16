@@ -7,9 +7,23 @@ import {
   undiscriminating,
   undiscriminatingLabel,
 } from '../history/summary.ts'
-import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
+import type {
+  AttemptRecord,
+  EvalEntry,
+  FamilyRate,
+  FamilyRecord,
+  RunSummary,
+} from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
+import {
+  caseLabel,
+  familyCases,
+  familyEffortLabel,
+  familyHeadLabel,
+  familyLiftLabel,
+  familyRateLabel,
+} from '../view/family.ts'
 import {
   cellJudgeRates,
   cellUsage,
@@ -150,11 +164,70 @@ function questionRows(c: Colors, e: EvalEntry, indent: string): string[] {
   })
 }
 
-/** The run's evals as a file › group tree, one row per eval and per cell of a matrix. */
-function tree(c: Colors, evals: EvalEntry[]): string[] {
-  const rows: Array<{ indent: number; text: string; entry?: EvalEntry }> = []
+/** A family's mark: its pooled gate's and its cases' worst. */
+function familyOutcome(family: FamilyRecord, cases: EvalEntry[]): Outcome {
+  const outcomes = [family.outcome, ...cases.map(entryOutcome)]
+  for (const o of ['fail', 'infra_error', 'cancelled'] as const) if (outcomes.includes(o)) return o
+  return outcomes.every((o) => o === 'skipped') ? 'skipped' : 'pass'
+}
+
+/** The width case marks wrap at. */
+const CASE_WIDTH = 96
+
+/** A pooled family's rows under its header: its cases' marks, then each pooled rate or lift. */
+function familyRows(c: Colors, family: FamilyRecord, cases: EvalEntry[], indent: string): string[] {
+  const marks = cases.map((e) => `${mark(c, entryOutcome(e))} ${caseLabel(family.name, e.name)}`)
+  const plain = cases.map((e) => `x ${caseLabel(family.name, e.name)}`)
+  const rows: string[] = []
+  let line: string[] = []
+  let width = 0
+  marks.forEach((m, i) => {
+    const w = (plain[i] as string).length + 2
+    if (line.length && width + w > CASE_WIDTH) {
+      rows.push(`${indent}${line.join('  ')}`)
+      line = []
+      width = 0
+    }
+    line.push(m)
+    width += w
+  })
+  if (line.length) rows.push(`${indent}${line.join('  ')}`)
+  if (family.lifts.length) {
+    const keyWidth = Math.max(...family.lifts.map((l) => l.variant.length))
+    for (const lift of family.lifts) {
+      const below = lift.outcome === 'fail'
+      const gate =
+        lift.minLift !== undefined
+          ? ` (minLift ${Math.round(lift.minLift * 100)}${below ? ' ✗' : ''})`
+          : ''
+      const text = `${familyLiftLabel(lift)}${gate}`
+      rows.push(`${indent}${c.dim(lift.variant.padEnd(keyWidth))}  ${below ? c.red(text) : text}`)
+      const effort = familyEffortLabel(lift)
+      if (effort) rows.push(`${indent}  ${c.dim(`effort: ${effort}`)}`)
+    }
+  } else if (family.rates.length === 1) {
+    rows.push(`${indent}${familyRateLabel(family.rates[0] as FamilyRate)}`)
+  } else {
+    const keyWidth = Math.max(...family.rates.map((r) => r.cell.length))
+    for (const rate of family.rates) {
+      rows.push(`${indent}${c.dim(rate.cell.padEnd(keyWidth))}  ${familyRateLabel(rate)}`)
+    }
+  }
+  return rows
+}
+
+/**
+ * The run's evals as a file › group tree, one row per eval and per cell of a matrix. A pooled
+ * family is one row, its template, with its cases' marks and the pooled results under it.
+ */
+function tree(c: Colors, evals: EvalEntry[], families: FamilyRecord[] = []): string[] {
+  type Row = { indent: number; text: string; entry?: EvalEntry; family?: FamilyRecord }
+  const rows: Row[] = []
+  const shown = new Set<string>()
   let path: string[] = []
   for (const e of evals) {
+    const family = e.family && families.find((f) => f.id === e.family?.id)
+    if (family && shown.has(family.id)) continue
     const next = [e.file, ...e.group]
     let same = 0
     while (same < path.length && same < next.length && path[same] === next[same]) same++
@@ -162,16 +235,26 @@ function tree(c: Colors, evals: EvalEntry[]): string[] {
       rows.push({ indent: i, text: i === 0 ? c.bold(next[i] ?? '') : (next[i] ?? '') })
     }
     path = next
-    rows.push({ indent: next.length, text: e.name, entry: e })
+    if (family) {
+      shown.add(family.id)
+      rows.push({ indent: next.length, text: family.name, family })
+    } else rows.push({ indent: next.length, text: e.name, entry: e })
   }
   const width = Math.max(
-    ...rows.filter((r) => r.entry).map((r) => r.indent * 2 + 2 + r.text.length),
+    ...rows.filter((r) => r.entry || r.family).map((r) => r.indent * 2 + 2 + r.text.length),
   )
-  return rows.flatMap(({ indent, text, entry }) => {
+  return rows.flatMap(({ indent, text, entry, family }) => {
     const pad = '  '.repeat(indent)
+    const fill = ' '.repeat(Math.max(0, width - indent * 2 - 2 - text.length))
+    if (family) {
+      const cases = familyCases(family, evals)
+      return [
+        ` ${pad}${mark(c, familyOutcome(family, cases))} ${text}${fill}  ${c.dim(familyHeadLabel(family))}`,
+        ...familyRows(c, family, cases, ` ${pad}    `),
+      ]
+    }
     if (!entry) return [` ${pad}${text}`]
     const name = `${mark(c, entryOutcome(entry))} ${text}`
-    const fill = ' '.repeat(Math.max(0, width - indent * 2 - 2 - text.length))
     return [
       ` ${pad}${name}${fill}  ${evalColumns(c, entry)}`,
       ...cellRows(c, entry, ` ${pad}    `),
@@ -194,6 +277,14 @@ export function totals(c: Colors, s: RunSummary, cancelled = 0): string {
   return parts.length ? `${parts.join(c.dim(' · '))} ${c.dim(`(${scope})`)}` : 'no evals ran'
 }
 
+/** `1 passed · 1 failed (2)`: the families' pooled gates. */
+export function familyTotals(c: Colors, families: FamilyRecord[]): string {
+  const fail = families.filter((f) => f.outcome === 'fail').length
+  const pass = families.length - fail
+  const parts = [pass && c.green(`${pass} passed`), fail && c.red(`${fail} failed`)].filter(Boolean)
+  return `${parts.join(c.dim(' · '))} ${c.dim(`(${families.length})`)}`
+}
+
 /** Failing attempts, in run order, including expected misses. */
 export function failingAttempts(evals: EvalEntry[]) {
   return evals.flatMap((entry) =>
@@ -206,7 +297,9 @@ export function failingAttempts(evals: EvalEntry[]) {
 export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): string[] {
   const { record } = e
   const lines: string[] = []
-  if (record.evals.length) lines.push(c.bold('Summary'), ...tree(c, record.evals))
+  if (record.evals.length) {
+    lines.push(c.bold('Summary'), ...tree(c, record.evals, record.families))
+  }
 
   const all = failingAttempts(record.evals)
   const missed = all.filter(({ entry, attempt }) => isUngatedMiss(entry, attempt))
@@ -237,7 +330,21 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
   // Short on purpose: in a compare, the control missing is what the lift is measured against.
   if (missed.length) {
     lines.push('', c.bold(`Expected misses, not gated (${missed.length})`))
+    // A pooled family's misses are one line per cell: the pooled line above says what they mean.
+    const pooled = new Map<string, number>()
     for (const { entry, attempt } of missed) {
+      if (!entry.family) continue
+      const key = `${entry.family.id}\0${attempt.cell}`
+      pooled.set(key, (pooled.get(key) ?? 0) + 1)
+    }
+    for (const [key, n] of pooled) {
+      const [id, cell] = key.split('\0')
+      lines.push(
+        ` ${MISS_MARK(c)} ${id}  ${c.dim(`${n} ${n === 1 ? 'attempt' : 'attempts'} on ${cell}`)}`,
+      )
+    }
+    for (const { entry, attempt } of missed) {
+      if (entry.family) continue
       const which = entry.attempts.length > 1 ? `  ${c.dim(attempt.id)}` : ''
       const [reason] = failureLines(colors(false), resultFor(entry, attempt, e.results), {
         max: 1,
@@ -261,6 +368,14 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
         : [],
     ),
   )
+  for (const family of record.families ?? []) {
+    for (const lift of family.lifts) {
+      if (lift.outcome !== 'fail' || lift.minLift === undefined) continue
+      lifted.push(
+        `${family.id}  ${lift.variant} pooled ${familyLiftLabel(lift)}: its lower bound is below minLift ${Math.round(lift.minLift * 100)}`,
+      )
+    }
+  }
   const idle = undiscriminating(record.evals)
   if (idle.length) {
     lines.push('', c.bold(`Checks that don't discriminate (${idle.length})`))
@@ -273,8 +388,10 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
   if (record.status === 'budget') {
     lines.push('', c.yellow('Budget reached: attempts that hadn’t started were skipped'))
   }
+  lines.push('')
+  if (record.families?.length)
+    lines.push(`${c.dim('Families')}  ${familyTotals(c, record.families)}`)
   lines.push(
-    '',
     `${c.dim(label)}  ${totals(c, record.summary, cancelled)}`,
     `${c.dim('Duration')}  ${formatDuration(record.durationMs)}`,
   )

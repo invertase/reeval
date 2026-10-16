@@ -55,6 +55,26 @@ CREATE TABLE drift_m (
 );
 `
 
+const FAMILY_COLUMNS = [
+  'run_id',
+  'family_id',
+  'harness',
+  'variant',
+  'pairs',
+  'points',
+  'lo',
+  'hi',
+  'within_noise',
+  'verdict',
+  'tools_ratio',
+  'tools_p',
+  'effort_verdict',
+  'agent_s_ratio',
+  'tokens_ratio',
+  'tokens_p',
+  'tokens_verdict',
+] as const
+
 export const DERIVED = ['effort_m', 'factor_effects_m', 'flaky_m', 'drift_m']
 
 type Cell = {
@@ -468,6 +488,39 @@ export function deriveFacts(db: DatabaseSync): void {
       ...passCols(v, c),
       ...pooledEffort(comparable.map((s) => contrastEffort(s.v.samples, s.c.samples))),
       note: 'pass@1: summed counts; effort: an effect in at least 2/3 of strata',
+    })
+  }
+
+  // Paired: a pooled evaluate.each's variant against its control over the cases of one run, each
+  // case a paired sample, as its record computed it.
+  const familyLifts = db
+    .prepare(`SELECT ${FAMILY_COLUMNS.join(', ')} FROM family_lift_m`)
+    .all() as Array<Record<(typeof FAMILY_COLUMNS)[number], SQLInputValue>>
+  for (const f of familyLifts) {
+    factorRows.push({
+      factor: 'environment',
+      level: f.variant,
+      baseline: 'control',
+      context: f.harness,
+      tier: 'paired',
+      run_id: f.run_id,
+      eval_key: f.family_id,
+      strata: f.pairs,
+      runs: 1,
+      points: f.points,
+      lo: f.lo,
+      hi: f.hi,
+      within_noise: f.within_noise,
+      pass_verdict:
+        f.verdict === 'insufficient' ? 'insufficient' : f.within_noise ? 'noise' : 'effect',
+      tools_ratio: f.tools_ratio,
+      agent_s_ratio: f.agent_s_ratio,
+      tools_p: f.tools_p,
+      effort_verdict: f.effort_verdict,
+      tokens_ratio: f.tokens_ratio,
+      tokens_p: f.tokens_p,
+      tokens_verdict: f.tokens_verdict,
+      note: 'paired by case over a pooled evaluate.each: strata is the paired cases',
     })
   }
 

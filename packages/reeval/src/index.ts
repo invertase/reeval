@@ -9,8 +9,14 @@ export {
   DEFAULT_SKILL_EXCLUDE,
   defineEnvironment,
 } from './environment.ts'
-export { evaluate, group } from './evaluate.ts'
-export type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './history/types.ts'
+export { type EachOptions, evaluate, group } from './evaluate.ts'
+export type {
+  AttemptRecord,
+  CellRecord,
+  EvalEntry,
+  FamilyRecord,
+  RunRecord,
+} from './history/types.ts'
 export type {
   AttemptContext,
   BackgroundHandle,

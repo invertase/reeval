@@ -2,6 +2,7 @@
 // matrix, the egress and MCP refusals, and each attempt's gate. Pure: whoever declared the eval
 // (an eval file's `evaluate`, or a declaration tree) registers what it returns.
 import { type AttemptSpec, setupAllowance } from './attempt/index.ts'
+import type { DeclaredFamily } from './declaration.ts'
 import { parseDuration } from './duration.ts'
 import { unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
@@ -37,6 +38,8 @@ export type EvalDeclaration = {
   mode: TestMode
   groups: { name: string; options: GroupOptions }[]
   options: EvalOptions
+  /** Set on each case of a pooled `evaluate.each`. */
+  family?: DeclaredFamily
 }
 
 /** Where the eval is planned: the run, the eval file, and how many evals the file planned before it. */
@@ -115,6 +118,11 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     if (mcp) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${mcp}`)
   }
   const path = ctx.file ? relativeFile(ctx.config.root, ctx.file) : null
+  const rankFile = relativeFile(ctx.config.root, ctx.file ?? '')
+  const family = declaration.family && {
+    id: evalId(rankFile, [...groups, declaration.family.name]),
+    ...declaration.family,
+  }
   const harnessBy = resolved.sources?.harness ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
   const setByOf = (planned: PlannedAttempt) => ({
@@ -139,6 +147,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       secretVars: [],
       egress: first.egress,
       plan,
+      ...(family ? { family } : {}),
     }
     return [{ name: `${name} [${attemptId(first.cell.key, 1)}]`, mode: 'skip', attempt }]
   }
@@ -148,7 +157,6 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     const workspace = workspaceOf(planned.environment.layers)
     const files = filesOf(planned.environment.layers)
     const setBy = setByOf(planned)
-    const rankFile = relativeFile(ctx.config.root, ctx.file ?? '')
     const id = evalId(rankFile, [...groups, name])
     const key = attemptKey(id, planned.cell.key, planned.n)
     const done = ctx.completed?.includes(key)
@@ -172,6 +180,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       ...(files.length ? { files } : {}),
       plan: skip ? { ...plan, skip } : plan,
       ...(skip ? { skip } : {}),
+      ...(family ? { family } : {}),
     }
     return {
       name: `${name} [${attemptId(planned.cell.key, planned.n)}]`,

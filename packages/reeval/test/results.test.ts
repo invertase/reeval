@@ -26,7 +26,16 @@ import { traceSources } from '../src/history/sources.ts'
 import type { FingerprintParts } from '../src/history/types.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
-import { liftInterval, wilson } from '../src/stats.ts'
+import {
+  liftInterval,
+  mcnemar,
+  meanInterval,
+  PAIRED_MIN,
+  pairedLiftInterval,
+  signedRank,
+  t975,
+  wilson,
+} from '../src/stats.ts'
 import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
 import {
@@ -93,6 +102,60 @@ describe("Newcombe's interval for lift, from two Wilson intervals", () => {
     // Treating 56/70 − 48/80 as one proportion gives a different (and meaningless) interval.
     const wrong = wilson(Math.round(0.2 * 70), 70)
     assert.ok(Math.abs(wrong.low - 0.0524) > 0.01, 'the check tells the two methods apart')
+  })
+})
+
+describe("paired lift over a pooled family's cases", () => {
+  // Reference values: Newcombe (1998), "… based on paired data", table III, method 10.
+  const cases: Array<[number, number, number, number, number, number]> = [
+    [36, 12, 2, 0, 0.0569, 0.3404],
+    [20, 12, 2, 16, 0.0562, 0.3292],
+    [18, 12, 2, 18, 0.0562, 0.329],
+    [30, 0, 0, 24, -0.0358, 0.0358],
+  ]
+  for (const [both, variantOnly, controlOnly, neither, low, high] of cases) {
+    test(`Newcombe method 10: ${both}, ${variantOnly}, ${controlOnly}, ${neither} is [${low}, ${high}]`, () => {
+      const i = pairedLiftInterval({ both, variantOnly, controlOnly, neither })
+      near(
+        i.points,
+        (variantOnly - controlOnly) / (both + variantOnly + controlOnly + neither),
+        'points',
+      )
+      near(i.low, low, 'low')
+      near(i.high, high, 'high')
+    })
+  }
+
+  test('the paired interval is narrower than the independent one on the same rates', () => {
+    const paired = pairedLiftInterval({ both: 20, variantOnly: 12, controlOnly: 2, neither: 16 })
+    const independent = liftInterval({ pass: 32, n: 50 }, { pass: 22, n: 50 })
+    assert.ok(paired.high - paired.low < independent.high - independent.low)
+  })
+
+  test("McNemar's exact p is the sign test on the discordant pairs", () => {
+    near(mcnemar(12, 2), 0.0129, 'StatsDirect: 12 vs 2')
+    assert.equal(mcnemar(6, 0), 2 * 0.5 ** PAIRED_MIN, 'six discordant pairs first reach p < 0.05')
+    assert.ok(mcnemar(5, 0) > 0.05)
+    assert.equal(mcnemar(0, 0), 1)
+  })
+
+  test('the t interval over per-case differences', () => {
+    const i = meanInterval([1, 0, 1, 1, 0.5])
+    near(i.mean, 0.7, 'mean')
+    near(i.low, 0.7 - 2.776 * 0.2, 'low')
+    near(i.high, 0.7 + 2.776 * 0.2, 'high')
+    assert.equal(meanInterval([1]).low, Number.NEGATIVE_INFINITY, 'one case bounds nothing')
+    assert.equal(t975(30), 2.042)
+    near(t975(1000), 1.962, 'Cornish–Fisher above the table')
+  })
+
+  test('the signed-rank p: exact, with mid-ranks, and normal above 20', () => {
+    assert.equal(signedRank([1, 2, 3, 4, 5, 6]), 2 / 64)
+    assert.equal(signedRank([-1, -2, -3, -4, -5, -6]), 2 / 64, 'two-sided')
+    assert.equal(signedRank([0, 0]), null, 'every difference zero')
+    assert.equal(signedRank([1, -1]), 1)
+    const many = signedRank(Array.from({ length: 25 }, (_, i) => i + 1)) as number
+    assert.ok(many < 0.001, `25 positive differences: ${many}`)
   })
 })
 

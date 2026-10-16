@@ -11,7 +11,12 @@ import { fakeSandbox } from 'reeval/sandbox'
 const packageJson = '{ "type": "module" }\n'
 
 export default defineConfig({
-  include: ['evals/hello.eval.ts', 'evals/preferences.eval.ts', 'evals/skill.eval.ts'],
+  include: [
+    'evals/hello.eval.ts',
+    'evals/preferences.eval.ts',
+    'evals/skill.eval.ts',
+    'evals/greetings.eval.ts',
+  ],
   harness: fakeHarness({
     files: {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the fake agent's file content

@@ -1621,6 +1621,20 @@ export type AttemptMeta = {
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string
+  /** Set when the eval is a case of a pooled `evaluate.each`. */
+  family?: FamilyMeta
+}
+
+/** A case's place in its pooled `evaluate.each`. */
+export type FamilyMeta = {
+  /** `file › group › … › template`, like an eval id with the name template in place of the name. */
+  id: string
+  /** The name template, e.g. `fixes $id`. */
+  name: string
+  /** This case's index in the list, from 0. */
+  case: number
+  /** How many cases the list has. */
+  cases: number
 }
 
 /** Small summary carried through the engine's task metadata. */

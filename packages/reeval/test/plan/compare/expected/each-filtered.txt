@@ -1,0 +1,12 @@
+no profile · 2 evals · 8 cells · 8 attempts
+evals/each.eval.ts › pooled across grace        a/base/docker     control          ungated  ×1  family pooled across %s case 2/3
+                                                a/skilled/docker  variant skilled  gated    ×1  minLift 0.2
+                                                b/base/docker     control          ungated  ×1
+                                                b/skilled/docker  variant skilled  gated    ×1  minLift 0.2
+evals/each.eval.ts › each on its own for grace  a/base/docker     control          ungated  ×1
+                                                a/skilled/docker  variant skilled  gated    ×1
+                                                b/base/docker     control          ungated  ×1
+                                                b/skilled/docker  variant skilled  gated    ×1
+excluded: —
+image docker · 2 evals
+  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)

@@ -3,7 +3,7 @@
 // against files that really have today's shape.
 //
 //   pnpm build && pnpm --filter reeval corpus:add <name> [--note "why"]
-//     records scripts/corpus/project (the fake harness: a compare, judges, a failure, an infra
+//     records scripts/corpus/project (the fake harness: a compare, a pooled evaluate.each, judges, a failure, an infra
 //     error, todo and skipped evals, a budget-stopped run and a saved analysis) with this build
 //
 //   pnpm --filter reeval corpus:add <name> --from <project> [--from <project>…] [<runId>…] [--note "why"]
@@ -86,7 +86,7 @@ function recordRecipe(): string {
   git(dir, 'init', '-q')
   git(dir, 'add', '-A')
   git(dir, 'commit', '-qm', 'corpus recipe')
-  es(dir, ['run', 'greet', 'skill', '--record'])
+  es(dir, ['run', 'greet', 'skill', 'cases', '--record'])
   const [first] = runsIn(dir)
   git(dir, 'add', '-A')
   git(dir, 'commit', '-qm', 'first run')

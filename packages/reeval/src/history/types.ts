@@ -240,6 +240,109 @@ export type EvalEntry = {
    * (rates by cut, votes, ties, a failed call, a sample of reasons).
    */
   answers?: CompareAnswer[]
+  /** Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite. */
+  family?: { id: string; name: string; case: number; cases: number }
+}
+
+/** A 95% interval on a pooled rate or difference. */
+export type FamilyInterval = {
+  lo: number
+  hi: number
+  level: 0.95
+  /**
+   * `wilson` / `newcombe-paired`: one counted attempt a case and side, so each case is one
+   * Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with
+   * attempts within a case never counted as independent.
+   */
+  method: 'wilson' | 'newcombe-paired' | 't-cases'
+}
+
+/** One cell's pass rate over a family's cases. */
+export type FamilyRate = {
+  /** The cell's key, the same in every case. */
+  cell: string
+  /** Cases with at least one counted attempt in this cell. */
+  cases: number
+  /** Passes and counted attempts over those cases. */
+  pass: number
+  counted: number
+  /** The mean of the cases' pass@1; at one attempt a case, `pass / counted`. */
+  rate: number
+  interval: FamilyInterval
+}
+
+/**
+ * `lift` / `drop`: the interval excludes 0. `noise`: it doesn't. `insufficient`: fewer than 6
+ * discordant pairs (one attempt a case) or 6 paired cases (several), where no test can decide.
+ */
+export type FamilyVerdict = 'lift' | 'drop' | 'noise' | 'insufficient'
+
+/** One effort metric over a family's paired cases. */
+export type FamilyEffortMetric = {
+  /** Cases with a value on both sides. */
+  pairs: number
+  /** The median over cases of the variant's per-case median, over the control's; null at 0. */
+  ratio: number | null
+  /** Wilcoxon signed-rank over the per-case differences; null when every difference is 0. */
+  p: number | null
+  /** `insufficient` below 6 non-zero differences, where the exact test can't reach 0.05. */
+  verdict: 'fewer' | 'more' | 'noise' | 'insufficient'
+}
+
+/** The variant's effort against the control's, paired by case. */
+export type FamilyEffort = {
+  tools: FamilyEffortMetric
+  agentMs: FamilyEffortMetric
+  /** Over the cases where every counted attempt reported usage; omitted when none did. */
+  tokens?: FamilyEffortMetric
+}
+
+/** A variant cell against its control over a family's cases, paired by case. */
+export type FamilyLift = {
+  /** The variant cell's key. */
+  variant: string
+  /** The control cell's key. */
+  vs: string
+  /** Cases with counted attempts on both sides. */
+  pairs: number
+  /** Mean pass@1 over the paired cases on each side. */
+  variantRate: number
+  controlRate: number
+  /** Set at one attempt a case and side: pairs where only one side passed. */
+  discordant?: { variantOnly: number; controlOnly: number }
+  /** Variant minus control, from -1 to 1. */
+  points: number
+  interval: FamilyInterval
+  /** McNemar's exact p (one attempt a case), else Wilcoxon signed-rank over the cases. */
+  p: number | null
+  /** The interval spans 0. */
+  withinNoise: boolean
+  verdict: FamilyVerdict
+  /** The compare's `minLift`: on a family it gates this lower bound, not each case's. */
+  minLift?: number
+  /** `fail` when `interval.lo` is below `minLift`. */
+  outcome: 'pass' | 'fail'
+  effort?: FamilyEffort
+}
+
+/** A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an eval. */
+export type FamilyRecord = {
+  /** `file › group › … › template`. */
+  id: string
+  file: string
+  group: string[]
+  /** The name template, e.g. `fixes $id`. */
+  name: string
+  /** Cases in the list. */
+  cases: number
+  /** Cases with an eval in this run; fewer when a filter or tag left some out. */
+  ran: number
+  /** One per cell. */
+  rates: FamilyRate[]
+  /** One per variant cell, with `compare`. */
+  lifts: FamilyLift[]
+  /** `fail` when a lift is below its `minLift`. The cases still pass or fail on their own. */
+  outcome: 'pass' | 'fail'
 }
 
 /** A variant cell's pass@1 against the control's, on the same harness and sandbox. */
@@ -420,6 +523,8 @@ export type RunRecord = {
   redaction: { version: 1 }
   summary: RunSummary
   evals: EvalEntry[]
+  /** Each pooled `evaluate.each` that ran; unset when none did. */
+  families?: FamilyRecord[]
 }
 
 /** What ran and graded the agents: the machine, images, harnesses and judge. */
@@ -564,4 +669,6 @@ export type HistoryEntry = {
     passRate: number | null
     cells: HistoryCell[]
   }>
+  /** The run's pooled families; unset when none ran. */
+  families?: Array<Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'>>
 }

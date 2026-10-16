@@ -4,6 +4,7 @@
 import { sampleReasons } from '../compare/pairs.ts'
 import { answersLabel, undiscriminating, undiscriminatingLabel } from '../history/summary.ts'
 import { sandboxWarningLine } from '../text.ts'
+import { familyHeadLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { colors } from './colors.ts'
 import type { EsEvent, EvalResult, OutputStream, Renderer } from './events.ts'
 import {
@@ -141,6 +142,18 @@ export class AgentRenderer implements Renderer {
         }
         for (const x of undiscriminating(e.record.evals)) {
           this.#write(`check doesn't discriminate: ${undiscriminatingLabel(x)}`)
+        }
+        for (const family of e.record.families ?? []) {
+          const pooled = family.lifts.length
+            ? family.lifts.map((l) => {
+                const gate =
+                  l.minLift === undefined
+                    ? ''
+                    : ` (minLift ${Math.round(l.minLift * 100)}${l.outcome === 'fail' ? ', FAIL' : ''})`
+                return `${l.variant} ${familyLiftLabel(l)}${gate}`
+              })
+            : family.rates.map((r) => `${r.cell} ${familyRateLabel(r)}`)
+          this.#write(`family ${family.id}: ${familyHeadLabel(family)} · ${pooled.join(' · ')}`)
         }
         const s = e.record.summary
         const cancelled = failing.filter((f) => f.outcome === 'cancelled').length

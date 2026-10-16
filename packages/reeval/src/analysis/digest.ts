@@ -12,6 +12,7 @@ import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
+import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
 
 export type DigestFact = { id: string; kind: string } & Record<string, unknown>
@@ -77,6 +78,7 @@ export const RULES = [
   `Lift (variant pass@1 minus control pass@1) is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
   'When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
   'Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree.',
+  "A family fact is one pooled evaluate.each: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; their own pass-rate facts carry no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. A family's minLift gates the pooled lower bound.",
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
@@ -225,7 +227,7 @@ export async function buildDigestKeepingDropped(
           pass: `${c.pass}/${c.pass + c.fail}`,
           ...(c.infraError ? { infraError: c.infraError } : {}),
           gated: c.gate !== 'none',
-          ...(c.lift
+          ...(c.lift && !e.family
             ? {
                 lift: digestLift(
                   c.lift.variant.counted,
@@ -241,6 +243,28 @@ export async function buildDigestKeepingDropped(
                 ),
               }
             : {}),
+        })),
+        ...(e.family ? { family: e.family.id, case: e.family.case } : {}),
+      })
+    }
+    // A pooled evaluate.each: its cases' lift paired by case, which its cases' facts leave out.
+    for (const f of r.record.families ?? []) {
+      const member = r.record.evals.find((e) => e.family?.id === f.id && evalKeys.has(e.key))
+      if (!member) continue
+      fact('family', {
+        run: short.get(r.record.runId),
+        family: f.id,
+        cases: f.ran === f.cases ? f.cases : `${f.ran} of ${f.cases}`,
+        rates: f.rates.map((x) => ({
+          cell: cellTag(r.record.runId, member.key, x.cell),
+          passRate: familyRateLabel(x),
+        })),
+        lifts: f.lifts.map((l) => ({
+          cell: cellTag(r.record.runId, member.key, l.variant),
+          lift: familyLiftLabel(l),
+          verdict: l.verdict === 'lift' || l.verdict === 'drop' ? 'effect' : l.verdict,
+          ...(l.minLift !== undefined ? { minLift: l.minLift, gate: l.outcome } : {}),
+          ...(familyEffortLabel(l) ? { effort: familyEffortLabel(l) } : {}),
         })),
       })
     }

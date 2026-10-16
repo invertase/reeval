@@ -4,6 +4,9 @@ export type {
   AttemptRecord,
   CellRecord,
   EvalEntry,
+  FamilyLift,
+  FamilyRate,
+  FamilyRecord,
   FileRef,
   HistoryCell,
   HistoryEntry,
@@ -16,6 +19,7 @@ export * from './analysis.ts'
 export * from './compare.ts'
 export * from './debug.ts'
 export * from './effort.ts'
+export * from './family.ts'
 export { runHeader } from './header.ts'
 export * from './judgements.ts'
 export * from './live.ts'

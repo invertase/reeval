@@ -1,5 +1,11 @@
 import { runAttempt } from './attempt/index.ts'
-import type { DeclarationTree, DeclaredGroup, DeclaredMode, DeclaredNode } from './declaration.ts'
+import type {
+  DeclarationTree,
+  DeclaredFamily,
+  DeclaredGroup,
+  DeclaredMode,
+  DeclaredNode,
+} from './declaration.ts'
 import { collectingFile, getRunContext, registerGroup, registerTest } from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import { environmentFrom } from './environment.ts'
@@ -136,18 +142,26 @@ function checkUnique(where: string, groups: string[], name: string, hint: string
   declared.add(key)
 }
 
-function register(mode: DeclaredMode, name: string, own: EvalOptions, fn: EvalFn, hint = ''): void {
+function register(
+  mode: DeclaredMode,
+  name: string,
+  own: EvalOptions,
+  fn: EvalFn,
+  hint = '',
+  family?: DeclaredFamily,
+): void {
   const groups = groupStack.map((g) => g.name)
   checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint)
   const body = `b${bodies.size + 1}`
   bodies.set(body, fn)
-  declare({ type: 'eval', name, mode, options: data(own), body })
+  declare({ type: 'eval', name, mode, options: data(own), body, ...(family ? { family } : {}) })
   const tests = planEval(
     {
       name,
       mode,
       groups: groupStack.map(({ name, options }) => ({ name, options })),
       options: own,
+      ...(family ? { family } : {}),
     },
     { ...getRunContext(), file: collectingFile(), order: registered },
   )
@@ -184,19 +198,53 @@ function formatName(template: string, item: unknown, index: number): string {
     )
 }
 
-/** One eval per case: `evaluate.for(cases)('adds $a and $b', async (c, { a, b }) => …)`. */
-const evalFor =
-  <T>(cases: readonly T[]): EvaluateFn<(c: AttemptContext, item: T) => Promise<void>> =>
+/** How an `evaluate.each` treats its cases. */
+export type EachOptions = {
+  /**
+   * Pool the cases into one suite: a pass rate over them and, with `compare`, one paired lift
+   * that `minLift` gates. On by default; `false` keeps them independent evals.
+   */
+  pool?: boolean
+}
+
+function checkEachOptions(options: unknown): EachOptions {
+  if (options === undefined) return {}
+  const keys = typeof options === 'object' && options !== null ? Object.keys(options) : null
+  const pool = (options as EachOptions | null)?.pool
+  if (keys?.every((k) => k === 'pool') && (pool === undefined || typeof pool === 'boolean'))
+    return options as EachOptions
+  throw new UsageError(
+    `evaluate.each(cases, options) takes { pool?: boolean } (got ${JSON.stringify(options)}). Eval options such as compare go after the name: evaluate.each(cases)(name, { compare }, fn).`,
+  )
+}
+
+/**
+ * One eval per case, pooled into one suite:
+ * `evaluate.each(cases)('adds $a and $b', async (c, { a, b }) => …)`.
+ */
+const evalEach =
+  <T>(
+    cases: readonly T[],
+    options?: EachOptions,
+  ): EvaluateFn<(c: AttemptContext, item: T) => Promise<void>> =>
   (name: string, a?: unknown, b?: unknown) => {
+    const { pool = true } = checkEachOptions(options)
+    if (!Array.isArray(cases)) {
+      throw new UsageError(
+        `evaluate.each takes an array of cases (got ${typeof cases}), e.g. evaluate.each([{ n: 1 }, { n: 2 }])("case $n", async (c, item) => { … }).`,
+      )
+    }
     const [own, fn] = splitArgs<(c: AttemptContext, item: T) => Promise<void>>(
-      'evaluate.for',
+      'evaluate.each',
       name,
       a as EvalOptions,
       b as EvalOptions,
     )
-    const hint = ` For evaluate.for, put $key, %s or %# in the name ("${name}") so each case's name differs.`
+    const hint = ` For evaluate.each, put $key, %s or %# in the name ("${name}") so each case's name differs.`
+    const pooled = pool && cases.length >= 2
     cases.forEach((item, i) => {
-      register('run', formatName(name, item, i), own, (c) => fn(c, item), hint)
+      const family = pooled ? { name, case: i, cases: cases.length } : undefined
+      register('run', formatName(name, item, i), own, (c) => fn(c, item), hint, family)
     })
   }
 
@@ -204,12 +252,12 @@ export const evaluate: EvaluateFn & {
   skip: EvaluateFn
   only: EvaluateFn
   todo: (name: string) => void
-  for: typeof evalFor
+  each: typeof evalEach
 } = Object.assign(defineEval('run'), {
   skip: defineEval('skip'),
   only: defineEval('only'),
   todo: registerTodo,
-  for: evalFor,
+  each: evalEach,
 })
 
 /**
@@ -224,6 +272,10 @@ export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string
       defineGroup(node.mode)(node.name, optionsFrom(node.options, `group("${node.name}")`), () =>
         declareTree(children, bodyFor),
       )
+    } else if (node.family) {
+      const options = optionsFrom(node.options, `evaluate("${node.name}")`)
+      checkOnly(node.mode, 'evaluate')
+      register(node.mode, node.name, options, bodyFor(node.body), '', node.family)
     } else
       defineEval(node.mode)(
         node.name,

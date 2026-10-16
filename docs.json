@@ -116,7 +116,7 @@
         { "title": "Prove a skill helps", "href": "/recipes/skill-lift" },
         { "title": "Evaluate an MCP server", "href": "/recipes/mcp-server" },
         { "title": "Check a recommendation", "href": "/recipes/recommendation" },
-        { "title": "Table-driven evals", "href": "/recipes/eval-for" }
+        { "title": "Suites of cases", "href": "/recipes/eval-each" }
       ]
     },
     {

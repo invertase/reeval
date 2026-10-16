@@ -341,7 +341,12 @@ export function refuseIllegalCompare(
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
   for (const key of Object.keys(options)) {
     if (allowed.includes(key)) continue
-    const hint = SUGGEST[key] ? ` Did you mean "${SUGGEST[key]}"?` : ''
+    const hint =
+      key === 'pool'
+        ? ' pool is an option of evaluate.each, beside the cases: evaluate.each(cases, { pool: false }).'
+        : SUGGEST[key]
+          ? ` Did you mean "${SUGGEST[key]}"?`
+          : ''
     throw new UsageError(`Unknown option "${key}" in ${where}.${hint}`)
   }
   const o = options as EvalOptions

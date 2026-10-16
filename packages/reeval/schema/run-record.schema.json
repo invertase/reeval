@@ -1120,6 +1120,24 @@
         "compare": {
           "$ref": "#/$defs/EvalCompareMeta"
         },
+        "family": {
+          "type": "object",
+          "properties": {
+            "case": {
+              "type": "number"
+            },
+            "cases": {
+              "type": "number"
+            },
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": ["case", "cases", "id", "name"]
+        },
         "file": {
           "type": "string"
         },
@@ -1198,6 +1216,216 @@
         "tags",
         "todo"
       ]
+    },
+    "FamilyEffort": {
+      "type": "object",
+      "properties": {
+        "agentMs": {
+          "$ref": "#/$defs/FamilyEffortMetric"
+        },
+        "tokens": {
+          "$ref": "#/$defs/FamilyEffortMetric"
+        },
+        "tools": {
+          "$ref": "#/$defs/FamilyEffortMetric"
+        }
+      },
+      "required": ["agentMs", "tools"]
+    },
+    "FamilyEffortMetric": {
+      "type": "object",
+      "properties": {
+        "p": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "pairs": {
+          "type": "number"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "verdict": {
+          "enum": ["fewer", "insufficient", "more", "noise"]
+        }
+      },
+      "required": ["p", "pairs", "ratio", "verdict"]
+    },
+    "FamilyInterval": {
+      "type": "object",
+      "properties": {
+        "hi": {
+          "type": "number"
+        },
+        "level": {
+          "const": 0.95
+        },
+        "lo": {
+          "type": "number"
+        },
+        "method": {
+          "enum": ["newcombe-paired", "t-cases", "wilson"]
+        }
+      },
+      "required": ["hi", "level", "lo", "method"]
+    },
+    "FamilyLift": {
+      "type": "object",
+      "properties": {
+        "controlRate": {
+          "type": "number"
+        },
+        "discordant": {
+          "type": "object",
+          "properties": {
+            "controlOnly": {
+              "type": "number"
+            },
+            "variantOnly": {
+              "type": "number"
+            }
+          },
+          "required": ["controlOnly", "variantOnly"]
+        },
+        "effort": {
+          "$ref": "#/$defs/FamilyEffort"
+        },
+        "interval": {
+          "$ref": "#/$defs/FamilyInterval"
+        },
+        "minLift": {
+          "type": "number"
+        },
+        "outcome": {
+          "enum": ["fail", "pass"]
+        },
+        "p": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "pairs": {
+          "type": "number"
+        },
+        "points": {
+          "type": "number"
+        },
+        "variant": {
+          "type": "string"
+        },
+        "variantRate": {
+          "type": "number"
+        },
+        "verdict": {
+          "$ref": "#/$defs/FamilyVerdict"
+        },
+        "vs": {
+          "type": "string"
+        },
+        "withinNoise": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "controlRate",
+        "interval",
+        "outcome",
+        "p",
+        "pairs",
+        "points",
+        "variant",
+        "variantRate",
+        "verdict",
+        "vs",
+        "withinNoise"
+      ]
+    },
+    "FamilyRate": {
+      "type": "object",
+      "properties": {
+        "cases": {
+          "type": "number"
+        },
+        "cell": {
+          "type": "string"
+        },
+        "counted": {
+          "type": "number"
+        },
+        "interval": {
+          "$ref": "#/$defs/FamilyInterval"
+        },
+        "pass": {
+          "type": "number"
+        },
+        "rate": {
+          "type": "number"
+        }
+      },
+      "required": ["cases", "cell", "counted", "interval", "pass", "rate"]
+    },
+    "FamilyRecord": {
+      "type": "object",
+      "properties": {
+        "cases": {
+          "type": "number"
+        },
+        "file": {
+          "type": "string"
+        },
+        "group": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "lifts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FamilyLift"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "outcome": {
+          "enum": ["fail", "pass"]
+        },
+        "ran": {
+          "type": "number"
+        },
+        "rates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FamilyRate"
+          }
+        }
+      },
+      "required": ["cases", "file", "group", "id", "lifts", "name", "outcome", "ran", "rates"]
+    },
+    "FamilyVerdict": {
+      "enum": ["drop", "insufficient", "lift", "noise"]
     },
     "FileRef": {
       "type": "object",
@@ -1801,6 +2029,12 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/EvalEntry"
+          }
+        },
+        "families": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FamilyRecord"
           }
         },
         "git": {

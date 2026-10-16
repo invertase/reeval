@@ -10,6 +10,7 @@ import type {
   CellGate,
   Duration,
   EvalPlan,
+  FamilyMeta,
   HarnessDescriptor,
   PairFactor,
   PlannedEgress,
@@ -28,6 +29,8 @@ const HISTORY_RUNS = 30
 export type PlanRow = {
   id: string
   plan: EvalPlan
+  /** Set on each case of a pooled `evaluate.each`. */
+  family?: FamilyMeta
   /** Optimistic pair sides for `--dry-run`: every planned attempt is assumed to pass checks. */
   sides: PairAttempt[]
 }
@@ -119,7 +122,14 @@ export async function buildPlan(options: {
   let estimateMs = 0
   for (const { id, attempt } of planned) {
     const existing = rows.get(id)
-    if (!existing || existing.plan.skip) rows.set(id, { id, plan: attempt.plan, sides: [] })
+    if (!existing || existing.plan.skip) {
+      rows.set(id, {
+        id,
+        plan: attempt.plan,
+        sides: [],
+        ...(attempt.family ? { family: attempt.family } : {}),
+      })
+    }
     for (const w of attempt.plan.warnings) warnings.add(w)
     if (attempt.skip || attempt.plan.skip) continue
     for (const w of attempt.plan.sandboxWarnings) {
@@ -205,8 +215,16 @@ export const planQuestions = (
   }))
 
 /** `  question 1/2  Which is cleaner? · after the run · 4 pairs · google/gemini-3.8-flash` */
-function questionLines(row: PlanRow, questionModel: string | null): string[] {
-  const questions = planQuestions(row.plan.questions, row.sides, questionModel, row.plan.skip)
+function questionLines(members: PlanRow[], questionModel: string | null): string[] {
+  const [first] = members
+  if (!first) return []
+  const asked = members.map((row) =>
+    planQuestions(row.plan.questions, row.sides, questionModel, row.plan.skip),
+  )
+  const questions = (asked[0] ?? []).map((q, i) => ({
+    ...q,
+    pairs: asked.reduce((sum, list) => sum + (list[i]?.pairs ?? 0), 0),
+  }))
   return questions.map(
     (q, i) =>
       `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · after the run · ${questionPairLabel(q)} · ${q.model ?? 'needs a language model: set analysis.model'}`,
@@ -256,30 +274,51 @@ export function planLine(plan: RunPlan, config?: string, runId?: string): string
   return `plan  ${parts.join(' · ')}`
 }
 
-/** One row per eval: what it runs, and what the profile changed. */
-/** The `--dry-run` table: one row per planned eval, then one per placeholder in `todos`. */
+/**
+ * The `--dry-run` table: one row per planned eval, then one per placeholder in `todos`. A pooled
+ * family's cases are one row, under its template.
+ */
 export function planTable(plan: RunPlan, todos: readonly string[] = []): string[] {
   const header = ['eval', 'harnesses', 'variants', 'runs', 'attempts', 'notes']
-  const rows = plan.rows.map(({ id, plan: p }) => [
-    clip(id, 64),
-    String(p.harnesses),
-    p.variants === null
-      ? '—'
-      : p.variants.run === p.variants.of
-        ? String(p.variants.run)
-        : `${p.variants.run} of ${p.variants.of}`,
-    String(p.runs),
-    String(p.attempts),
-    [
-      p.skip ? `skipped: ${p.skip}` : '',
-      ...p.notes,
-      p.brokered.length ? `brokered: ${p.brokered.join('; ')}` : '',
-      p.egress.length ? `egress: ${p.egress.join('; ')}` : '',
-      p.workspaces.length ? `workspace: ${p.workspaces.join('; ')}` : '',
+  const groups: Array<{ id: string; members: PlanRow[] }> = []
+  for (const row of plan.rows) {
+    const family = row.family?.id
+    const group = family && groups.find((g) => g.id === family)
+    if (group) group.members.push(row)
+    else groups.push({ id: family ?? row.id, members: [row] })
+  }
+  const rows = groups.map(({ id, members }) => {
+    const p = (members.find((m) => !m.plan.skip) ?? (members[0] as PlanRow)).plan
+    const family = members[0]?.family
+    const live = members.filter((m) => !m.plan.skip)
+    const attempts = live.reduce((sum, m) => sum + m.plan.attempts, 0)
+    const pooled = family
+      ? [
+          `${live.length === family.cases ? family.cases : `${live.length} of ${family.cases}`} cases · ${p.variants === null ? 'pooled pass rate' : 'paired lift'}`,
+        ]
+      : []
+    return [
+      clip(id, 64),
+      String(p.harnesses),
+      p.variants === null
+        ? '—'
+        : p.variants.run === p.variants.of
+          ? String(p.variants.run)
+          : `${p.variants.run} of ${p.variants.of}`,
+      String(p.runs),
+      String(family ? attempts : p.attempts),
+      [
+        live.length === 0 && p.skip ? `skipped: ${p.skip}` : '',
+        ...pooled,
+        ...p.notes,
+        p.brokered.length ? `brokered: ${p.brokered.join('; ')}` : '',
+        p.egress.length ? `egress: ${p.egress.join('; ')}` : '',
+        p.workspaces.length ? `workspace: ${p.workspaces.join('; ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
     ]
-      .filter(Boolean)
-      .join(' · '),
-  ])
+  })
   for (const id of todos) rows.push([clip(id, 64), '—', '—', '0', '0', 'todo'])
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
   const line = (cols: string[]) =>
@@ -290,8 +329,8 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
   return [
     line(header),
     ...rows.flatMap((row, i) => {
-      const p = plan.rows[i]
-      return [line(row), ...(p ? questionLines(p, plan.questionModel) : [])]
+      const g = groups[i]
+      return [line(row), ...(g ? questionLines(g.members, plan.questionModel) : [])]
     }),
   ]
 }
@@ -321,6 +360,8 @@ export type PlanEval = {
   cells: PlanCell[]
   /** The compare's questions, answered after the run; unset without any. */
   questions?: PlanQuestion[]
+  /** Set on each case of a pooled `evaluate.each`. */
+  family?: FamilyMeta
 }
 
 /** A Docker sandbox image the plan needs, and how it's made, as `reeval image build --dry-run` lists it. */
@@ -378,6 +419,7 @@ export function planDocument(
         notes: attempt.plan.notes,
         cells: [],
         ...(questions.length ? { questions } : {}),
+        ...(attempt.family ? { family: attempt.family } : {}),
       }
       evals.set(id, e)
     }

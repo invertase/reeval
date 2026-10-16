@@ -192,7 +192,7 @@ A cell passes only when every counted attempt passes, by default: pass^k. That g
 }
 ```
 
-`minLift` is in points from -1 to 1. It fails a variant cell when the lower bound of its interval is below it, so `minLift: 0` means "confidently no worse than the control".
+`minLift` is in points from -1 to 1. It fails a variant cell when the lower bound of its interval is below it, so `minLift: 0` means "confidently no worse than the control". On an `evaluate.each`, it gates the lift pooled across the cases instead of each case's; see [Suites of cases](/recipes/eval-each).
 
 ## Read the lift
 
@@ -203,7 +203,7 @@ lift +100 pts (95% +7…+100, 2/2 vs 0/2)
 Lift is the variant's pass@1 minus the control's, on the same harness. The range is the 95% interval on that difference. When it spans 0, the summary adds `within noise`: at two runs a cell, +100 points can still be luck.
 
 <Warning>
-  Few runs give a wide interval. Here, `+7…+100` is barely clear of 0. Raise `runs` before you trust a small lift.
+  Few runs give a wide interval. Here, `+7…+100` is barely clear of 0. Raise `runs`, or pool several cases with `evaluate.each`, before you trust a small lift.
 </Warning>
 
 The studio shows the same cells, roles, lift and effort for every run (here with two agents):

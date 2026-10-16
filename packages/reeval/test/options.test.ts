@@ -167,7 +167,7 @@ group('slow things', { tags: ['slow'] }, () => {
 })
 evaluate('quick', async () => {})
 evaluate.todo('later')
-evaluate.for([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (%#)', async (c, { a, b }) => {
+evaluate.each([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (%#)', async (c, { a, b }) => {
   if (a + b !== (a === 1 ? 3 : 7)) throw new Error('bad sum')
 })
 `,
@@ -263,6 +263,162 @@ export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
   skills: [skill.local('../skills')],
 }))
 `
+
+  const each = (
+    options: string,
+    runs = 1,
+    cases = "['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara']",
+  ) => ({
+    'reeval.config.ts': config('', SKILLED),
+    'skills/house-greeting/SKILL.md': SKILL,
+    'evals/envs.ts': envs,
+    'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+import { base, skilled } from './envs.ts'
+evaluate.each(${cases}${options})(
+  'writes ok.txt for %s',
+  { compare: { baseline: base, variants: [skilled], minLift: MIN_LIFT }, runs: ${runs} },
+  async (c, name) => {
+    await c.send('write ok.txt for ' + name)
+    await expect(c).toHaveFile('ok.txt')
+  },
+)
+`,
+  })
+
+  test('evaluate.each pools its cases into one paired lift that minLift gates', async () => {
+    const files = each('')
+    const p = await project('each-pooled', {
+      ...files,
+      'evals/e.eval.ts': files['evals/e.eval.ts'].replace('MIN_LIFT', '0.2'),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /^ +✓ writes ok\.txt for %s {2}6 cases · paired$/m)
+    assert.match(
+      r.stdout,
+      /^ +✓ ada {2}✓ grace {2}✓ linus {2}✓ margaret {2}✓ dennis {2}✓ barbara$/m,
+    )
+    assert.match(
+      r.stdout,
+      /fake\/skilled\/fake {2}pass@1 100% vs 0% {2}lift \+100 pts \(95% \+45…\+100, paired, 6 vs 0 discordant, p 0\.031\) \(minLift 20\)$/m,
+    )
+    assert.match(
+      r.stdout,
+      /^ ○ evals\/e\.eval\.ts › writes ok\.txt for %s {2}6 attempts on fake\/base\/fake$/m,
+    )
+    assert.match(r.stdout, /^Families {2}1 passed \(1\)$/m)
+
+    const { run, evals, read } = readRun(p.dir)
+    assert.deepEqual(
+      evals.map((e) => [e.name, e.family?.case]),
+      ['ada', 'grace', 'linus', 'margaret', 'dennis', 'barbara'].map((n, i) => [
+        `writes ok.txt for ${n}`,
+        i,
+      ]),
+    )
+    assert.ok(
+      evals.every((e) => e.cells.every((c) => c.lift?.minLift === undefined)),
+      'a case is not gated on minLift alone',
+    )
+    const [family] = run.families ?? []
+    assert.equal(family?.id, 'evals/e.eval.ts › writes ok.txt for %s')
+    assert.deepEqual(
+      family?.rates.map((x) => [x.cell, x.pass, x.counted, x.interval.method]),
+      [
+        ['fake/base/fake', 0, 6, 'wilson'],
+        ['fake/skilled/fake', 6, 6, 'wilson'],
+      ],
+    )
+    const lift = family?.lifts[0]
+    assert.deepEqual(
+      [
+        lift?.vs,
+        lift?.pairs,
+        lift?.discordant,
+        lift?.interval.method,
+        lift?.verdict,
+        lift?.outcome,
+      ],
+      ['fake/base/fake', 6, { variantOnly: 6, controlOnly: 0 }, 'newcombe-paired', 'lift', 'pass'],
+    )
+    assert.equal(family?.outcome, 'pass')
+    assert.match(read('summary.md'), /^## Families$/m)
+
+    const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
+    assert.equal(agent.code, 0, agent.stdout + agent.stderr)
+    assert.match(
+      agent.stdout,
+      /^family evals\/e\.eval\.ts › writes ok\.txt for %s: 6 cases · paired · fake\/skilled\/fake pass@1 100% vs 0% {2}lift \+100 pts .*\(minLift 20\)$/m,
+    )
+
+    const q = await runCli(p.dir, [
+      'query',
+      'select family_id, variant, pairs, verdict, outcome from family_lift',
+      '--json',
+    ])
+    assert.equal(q.code, 0, q.stdout + q.stderr)
+    assert.deepEqual(JSON.parse(q.stdout)[0], {
+      family_id: 'evals/e.eval.ts › writes ok.txt for %s',
+      variant: 'skilled',
+      pairs: 6,
+      verdict: 'lift',
+      outcome: 'pass',
+    })
+  })
+
+  test("a pooled lift below minLift fails the run, and the family's mark", async () => {
+    const files = each('')
+    const p = await project('each-min-lift', {
+      ...files,
+      'evals/e.eval.ts': files['evals/e.eval.ts'].replace('MIN_LIFT', '0.6'),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /^ +✗ writes ok\.txt for %s {2}6 cases · paired$/m)
+    assert.match(r.stdout, /\(minLift 60 ✗\)$/m)
+    assert.match(r.stdout, /^Families {2}1 failed \(1\)$/m)
+    assert.match(r.stdout, /pooled pass@1 .*: its lower bound is below minLift 60$/m)
+    const { run, evals } = readRun(p.dir)
+    assert.equal(run.families?.[0]?.outcome, 'fail')
+    assert.ok(
+      evals.every((e) => e.outcome === 'pass'),
+      'every case passed on its own',
+    )
+  })
+
+  test('evaluate.each with { pool: false } records independent evals', async () => {
+    const files = each(', { pool: false }')
+    const p = await project('each-unpooled', {
+      ...files,
+      'evals/e.eval.ts': files['evals/e.eval.ts'].replace(', minLift: MIN_LIFT', ''),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.doesNotMatch(r.stdout, /cases · paired|^Families/m)
+    const { run, evals } = readRun(p.dir)
+    assert.equal(run.families, undefined)
+    assert.equal(evals.length, 6)
+    assert.ok(evals.every((e) => e.family === undefined))
+  })
+
+  test('a pooled family over several runs a case pairs per-case pass rates', async () => {
+    const files = each('', 2, "['ada', 'grace', 'linus']")
+    const p = await project('each-runs', {
+      ...files,
+      'evals/e.eval.ts': files['evals/e.eval.ts'].replace('MIN_LIFT', '0.2'),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const lift = readRun(p.dir).run.families?.[0]?.lifts[0]
+    assert.deepEqual(
+      [lift?.pairs, lift?.points, lift?.interval.method, lift?.verdict, lift?.outcome],
+      [3, 1, 't-cases', 'insufficient', 'pass'],
+    )
+    assert.match(
+      r.stdout,
+      /\(95% \+100…\+100, paired, 3 cases, p 0\.25\), insufficient \(minLift 20\)$/m,
+    )
+  })
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
     const p = await project('compare', {
@@ -1209,9 +1365,19 @@ describe('common mistakes', () => {
       /evaluate\("e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\./,
     ],
     [
-      'evaluate.for cases with the same name',
-      `evaluate.for([{ a: 1, b: 2 }, { a: 1, b: 3 }])('adds $a', async () => {})`,
-      /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.for, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
+      'evaluate.each cases with the same name',
+      `evaluate.each([{ a: 1, b: 2 }, { a: 1, b: 3 }])('adds $a', async () => {})`,
+      /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.each, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
+    ],
+    [
+      "pool in an eval's options",
+      `evaluate.each([1, 2])('n %s', { pool: false } as never, async () => {})`,
+      /Unknown option "pool" in evaluate\("n 1"\)\. pool is an option of evaluate\.each, beside the cases: evaluate\.each\(cases, \{ pool: false \}\)\./,
+    ],
+    [
+      "eval options as evaluate.each's second argument",
+      `evaluate.each([1, 2], { runs: 2 } as never)('n %s', async () => {})`,
+      /evaluate\.each\(cases, options\) takes \{ pool\?: boolean \} \(got \{"runs":2\}\)\. Eval options such as compare go after the name/,
     ],
     [
       'a zero timeout',
