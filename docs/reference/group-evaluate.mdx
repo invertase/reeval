@@ -1,6 +1,6 @@
 ---
 title: group and evaluate
-description: The signatures of group and evaluate, their skip, only, todo and for variants, name placeholders and eval ids.
+description: The signatures of group and evaluate, their skip, only, todo and each variants, name placeholders, families and eval ids.
 ---
 
 `evaluate` declares one eval; `group` names a set of evals and gives them shared options.
@@ -14,7 +14,7 @@ group('math', { tags: ['smoke'] }, () => {
     await expect(turn).toHaveFile('add.js')
   })
 
-  evaluate.for([
+  evaluate.each([
     { a: 2, b: 3 },
     { a: 10, b: -4 },
   ])('adds $a and $b', async (c, { a, b }) => {
@@ -28,10 +28,10 @@ group('math', { tags: ['smoke'] }, () => {
 
 ```text
 plan  3 evals · 3 cells · 3 attempts · …
-eval                                   harnesses  variants  runs  attempts  notes
+eval                                     harnesses  variants  runs  attempts  notes
 ge/math.eval.ts › math › writes add.js   1          —         1     1
-ge/math.eval.ts › math › adds 2 and 3    1          —         1     1
-ge/math.eval.ts › math › adds 10 and -4  1          —         1     1
+ge/math.eval.ts › math › adds $a and $b  1          —         1     2         2 cases · pooled pass rate
+ge/math.eval.ts › math › multiplies      —          —         0     0         todo
 ```
 
 Eval files match `include` in `reeval.config.ts` (default `evals/**/*.eval.ts`). Both functions come from `'{{ pkg }}'`.
@@ -85,16 +85,34 @@ group(name, fn, options)
 | `evaluate.skip(name, …)` | Declares the eval but doesn't run it; it counts as skipped. |
 | `evaluate.only(name, …)` | Runs only the `.only` evals and groups of its file. |
 | `evaluate.todo(name)` | A placeholder with no body. It's one entry marked todo: a `todo` row in `--dry-run` (and `mode: 'todo'` under `excluded` in `--json`), `todo` in the summary and `summary.md`, `todo: true` with outcome `skipped` in the record, and Todo in the studio. It counts as skipped. |
-| `evaluate.for(cases)(name, …)` | One eval per case. The body gets `(c, item)`. |
+| `evaluate.each(cases, options?)(name, …)` | One eval per case, pooled into a family. The body gets `(c, item)`. |
 | `group.skip(name, …)` | Skips every eval in the group, nested groups included; each counts as skipped. |
 | `group.only(name, …)` | Runs only this group's evals within its file. |
 | `group.todo(name)` | A placeholder group, shown exactly as `evaluate.todo(name)` is: one todo entry, with the id `file › …groups › name`. |
 
 `.only` is refused when `CI` is set, so a forgotten `.only` can't shrink a CI run: `evaluate.only isn't allowed in CI` (or `group.only`).
 
-## Names in evaluate.for
+## evaluate.each
 
-`evaluate.for` fills placeholders in the name from each case:
+```ts
+evaluate.each(cases)(name, fn)
+evaluate.each(cases)(name, options, fn)
+evaluate.each(cases, { pool: false })(name, options, fn)
+```
+
+<Property name="cases" type="readonly T[]">
+  The cases. Each one becomes an eval, and `fn` gets it as its second argument: `(c, item)`.
+</Property>
+
+<Property name="pool" type="boolean" optional>
+  Pool the cases into a family. Default `true`; a family needs two or more cases. `false` keeps them independent evals.
+</Property>
+
+`name`, `options` and `fn` are those of `evaluate`, and the options apply to every case.
+
+### Names
+
+`evaluate.each` fills placeholders in the name from each case:
 
 | Placeholder | Becomes |
 |---|---|
@@ -102,9 +120,23 @@ group(name, fn, options)
 | `%s` | The case itself: a string as is, anything else as JSON |
 | `%#` | The case's index, from 0 |
 
-`evaluate.for([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (case %#)', …)` declares `adds 1 and 2 (case 0)` and `adds 3 and 4 (case 1)`. A `$key` the case doesn't have stays as written.
+`evaluate.each([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (case %#)', …)` declares `adds 1 and 2 (case 0)` and `adds 3 and 4 (case 1)`. A `$key` the case doesn't have stays as written.
 
 Two cases that end up with the same name stop the run with exit 2 (`evaluate("adds 1") is declared twice in this file. …`), as do two `evaluate` calls with the same name in the same group and file. Each eval's attempts belong to its id, so they'd otherwise merge.
+
+### Families
+
+A pooled `evaluate.each` is a family, with the id `file › …groups › name template` (`ge/math.eval.ts › math › adds $a and $b`). Each case keeps its own eval id, cells, outcome and history; the family adds:
+
+| What | Where |
+|---|---|
+| One plan row, with `N cases · pooled pass rate` (or `paired lift` with `compare`) | `--dry-run`; `--json` lists every case with its `family` |
+| One summary row: the cases' marks, a pooled pass@1 per cell, and a paired lift per variant | `reeval run`, `summary.md`, the studio's run page |
+| A gate: a variant's pooled lift whose lower bound is below `minLift` fails the run | Exit 1, `Lift below minLift` |
+| `evals[].family` and `families[]` | The [run record](/reference/record) |
+| `family_lift` | [`reeval query`](/reference/cli/query) |
+
+`minLift` on a family gates its pooled lift only, not each case's. Renaming the template starts a new family. See [Suites of cases](/recipes/eval-each) and [Lift](/concepts/lift).
 
 ## Eval ids
 
@@ -142,6 +174,8 @@ The nearest `tsconfig.json` must load: one that isn't valid JSON (comments and t
 | Two functions | `evaluate("x") got two functions. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks. …` |
 | An unknown option | `Unknown option "repeat" in evaluate("e"). Did you mean "runs"?` |
 | `.only` in CI | `evaluate.only isn't allowed in CI` |
+| Eval options as `evaluate.each`'s second argument | `evaluate.each(cases, options) takes { pool?: boolean } (got {"compare":{}}). Eval options such as compare go after the name: …` |
+| `pool` on an eval | `Unknown option "pool" in evaluate("x"). pool is an option of evaluate.each, beside the cases: evaluate.each(cases, { pool: false }).` |
 
 Errors in an eval file stop the run with exit 2 and name the file. More on [Errors](/reference/errors).
 

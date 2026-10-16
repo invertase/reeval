@@ -243,6 +243,12 @@ const RECORD_TYPES = [
   'EvalEntry',
   'CellRecord',
   'Lift',
+  'FamilyRecord',
+  'FamilyRate',
+  'FamilyLift',
+  'FamilyInterval',
+  'FamilyEffort',
+  'FamilyEffortMetric',
   'FingerprintParts',
   'AttemptRecord',
   'AttemptFiles',
@@ -261,7 +267,14 @@ const RECORD_TYPES = [
 ]
 
 /** One-line aliases the record uses, shown as a table of values. */
-const RECORD_ALIASES = ['Outcome', 'ErrorKind', 'TurnStatus', 'ArtifactLevel', 'RecordMode']
+const RECORD_ALIASES = [
+  'Outcome',
+  'ErrorKind',
+  'TurnStatus',
+  'ArtifactLevel',
+  'RecordMode',
+  'FamilyVerdict',
+]
 
 function aliases(files) {
   const found = new Map()
