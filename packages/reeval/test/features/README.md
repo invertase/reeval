@@ -57,8 +57,7 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
 ## Checks without an agent, and checks as the agent
 
 - **Checks on what the environment set up** (files, rules, skills, setup steps) don't need a
-  turn: `const box = await c.sandbox()` starts the sandbox, and then `box.exec` and
-  `box.readFile` work (so do `c.exec` and `c.readFile`).
+  turn: the first `c.exec`, `c.readFile` or `c.writeFile` starts the sandbox and session.
 - **What the agent itself sees** differs from what `c.exec` sees: checks get `to: 'checks'`
   secrets, and the agent doesn't. Script the fake agent in `reeval.config.ts` with real sandbox
   actions, then assert on its transcript:
@@ -98,7 +97,7 @@ at a time, at `--concurrency 1`, and spend money, so keep them cheap:
 - One short turn per eval, with a prompt that names the exact action ("run `cat …` once").
 - The check reads something the model can't fake: a file a tool wrote, the agent's own tool
   output, or the record (`context`, taken after the first turn, lists the adapter's home).
-- A canary that needs no turn (`await c.sandbox()`) when the check allows it; else one short turn.
+- A canary that needs no turn (only `c.exec` or `c.readFile`) when the check allows it; else one short turn.
 - A fixture whose behaviour only a real agent has (rules reaching its context) lists `real` alone,
   next to the fake/Docker fixture that checks where reeval put the file.
 

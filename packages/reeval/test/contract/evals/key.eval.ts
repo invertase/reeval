@@ -14,7 +14,6 @@ evaluate('key', { environment: scanned }, async (c) => {
 
 // Must fail: the same scan for a value planted in the environment and a home file finds it.
 evaluate('key canary', { environment: planted }, async (c) => {
-  await c.sandbox()
   const found = await scan(c.exec, process.env.REEVAL_CONTRACT_PLANTED_TARGETS ?? '[]')
   expect(found.hits).toEqual([])
 })

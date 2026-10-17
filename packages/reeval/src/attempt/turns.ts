@@ -56,12 +56,11 @@ type Checks = {
  */
 export function turnSender(
   a: Attempt,
-  start: () => Promise<[Sandbox, HarnessSession]>,
   takeContext: (box: Sandbox, signal: AbortSignal) => Promise<void>,
   checks: Checks,
 ) {
   return async (prompt: string): Promise<Turn> => {
-    const [box, agent] = await start()
+    const [box, agent] = await a.start('c.send()')
     const entry = {
       prompt,
       text: '',

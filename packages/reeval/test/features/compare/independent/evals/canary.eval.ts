@@ -5,7 +5,6 @@ import { baseline, ignored, variant } from './env.ts'
 group('parent', { environment: ignored }, () => {
   evaluate('canary', { compare: { baseline, variants: [variant] } }, async (c) => {
     if (c.attempt.cell.role !== 'variant') return
-    const box = await c.sandbox()
-    expect(await box.readFile('from-baseline.txt')).toBe('baseline-only')
+    expect(await c.readFile('from-baseline.txt')).toBe('baseline-only')
   })
 })

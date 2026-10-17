@@ -14,6 +14,5 @@ evaluate('edit and run', { environment: notes }, async (c) => {
 
 // Must fail: with no turn, the file is as the environment wrote it.
 evaluate('edit and run canary', { environment: notes }, async (c) => {
-  await c.sandbox()
   expect(await trimmed(c.readFile, 'notes.txt')).toBe('status: final')
 })

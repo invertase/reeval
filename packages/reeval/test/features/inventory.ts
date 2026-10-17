@@ -625,10 +625,15 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'c.sandbox',
+    id: 'c.first-use',
     area: 'Environments',
-    name: '`c.sandbox()`: checks without a turn',
-    fixtures: ['env/files-home', 'skills/workspace-placement'],
+    name: 'The sandbox starts on first use: checks without a turn, one start for concurrent first calls',
+    fixtures: [
+      'sandbox/read-before-send',
+      'sandbox/concurrent-first-use',
+      'env/files-home',
+      'skills/workspace-placement',
+    ],
   },
   {
     id: 'env.write-file',

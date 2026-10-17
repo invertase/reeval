@@ -2,7 +2,6 @@ import { evaluate, expect } from 'reeval'
 import { plain } from './env.ts'
 
 evaluate('canary', { environment: plain }, async (c) => {
-  await c.sandbox()
   try {
     await c.capture(9, { name: 'x' })
   } catch (error) {

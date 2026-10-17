@@ -12,6 +12,5 @@ evaluate('mcp', { environment: stamped, harness: withFakeMcp, tags: ['mcp'] }, a
 
 // Must fail: with no turn, nothing has called the tool.
 evaluate('mcp canary', { environment: stamped, harness: withFakeMcp, tags: ['mcp'] }, async (c) => {
-  await c.sandbox()
   expect((await c.readFile(MCP_LOG)) ?? '').toContain('tools/call')
 })

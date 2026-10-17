@@ -548,7 +548,7 @@ evaluate('fine', async () => {})
       'reeval.config.ts': fakeConfig(),
       'evals/dies.eval.ts': `import { evaluate } from 'reeval'
 evaluate('killed', async (c) => {
-  await c.sandbox()
+  await c.exec('true')
   process.kill(process.pid, 'SIGKILL')
 })
 `,
@@ -1317,8 +1317,7 @@ evaluate('noisy check', async (c) => {
   await c.send('go')
   await expect(c.exec('head -c 3000000 /dev/zero | tr "\\\\0" b; echo boom >&2; exit 3')).toSucceed()
 })
-evaluate('huge diff', async (c) => {
-  await c.sandbox()
+evaluate('huge diff', async () => {
   expect('a'.repeat(3_000_000)).toBe('x')
 })
 `,

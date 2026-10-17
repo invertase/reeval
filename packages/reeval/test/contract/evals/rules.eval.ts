@@ -10,6 +10,5 @@ evaluate('rules', { environment: ruled }, async (c) => {
 
 // Must fail: with no turn, nothing has written the codeword.
 evaluate('rules canary', { environment: ruled }, async (c) => {
-  await c.sandbox()
   expect(await trimmed(c.readFile, 'codeword.txt')).toBe(RULES_WORD)
 })

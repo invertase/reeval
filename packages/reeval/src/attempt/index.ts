@@ -5,9 +5,7 @@ import { AttemptDebug, withDebug } from '../debug/attempt.ts'
 import { attemptDebugDir } from '../debug/files.ts'
 import { getRunContext, type TestHandle } from '../engine/runtime.ts'
 import { TimeoutError } from '../errors.ts'
-import type { HarnessSession } from '../harness/types.ts'
 import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
-import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
 import { capturePage, serveCommand } from './capture.ts'
@@ -47,30 +45,25 @@ async function attemptBody(
   id: string,
   debug: AttemptDebug,
 ): Promise<void> {
-  const setupStart = performance.now()
   const ctx = getRunContext()
   const { runId, stagingDir, config } = ctx
   tracePlan(debug, spec, ctx)
-  // The environment and image are prepared on the test's signal; the eval timer starts after.
-  const a = createAttempt(spec, testSignal, progress)
   let timer: AbortSignal | undefined
   let clock: ReturnType<typeof evalTimer> | undefined
+  // The environment and image are prepared on the test's signal; the eval timer starts after,
+  // and pauses while the sandbox starts.
+  const a = createAttempt(spec, testSignal, progress, async (a, who) => {
+    debug.log('container', `starting the sandbox and session for ${who}`)
+    clock?.pause()
+    try {
+      return await a.timed('setupMs', () => startSession(a, runId))
+    } finally {
+      clock?.resume()
+    }
+  })
   const destroy = () => void a.sandbox?.destroy()
   testSignal.addEventListener('abort', destroy, { once: true })
 
-  // One start, whether c.sandbox() or the first c.send() asks first, or both at once.
-  let starting: Promise<[Sandbox, HarnessSession]> | undefined
-  const start = () => {
-    starting ??= (async () => {
-      clock?.pause()
-      try {
-        return await a.timed('setupMs', () => startSession(a, runId, setupStart))
-      } finally {
-        clock?.resume()
-      }
-    })()
-    return starting
-  }
   const takeContext = contextTaker(a)
   const { exec, readFile, writeFile } = createChecks(a)
 
@@ -85,11 +78,7 @@ async function attemptBody(
     serve: (command, port) => serveCommand(a, command, port),
     capture: (target, options) => capturePage(a, target, options),
     attempt: { id: attemptId(spec.cell.key, spec.n), cell: spec.cell, n: spec.n },
-    async sandbox() {
-      await start()
-      return { exec, readFile }
-    },
-    send: turnSender(a, start, takeContext, { exec, readFile }),
+    send: turnSender(a, takeContext, { exec, readFile }),
     judge: judgeCaller(a, readFile),
   }
 
@@ -104,10 +93,14 @@ async function attemptBody(
     timer = clock.signal
     a.signal = AbortSignal.any([testSignal, timer])
     timer.addEventListener('abort', destroy, { once: true })
-    await fn(c)
+    await fn(c).catch((error: unknown) => {
+      throw a.startFailure ? a.startFailure.error : error
+    })
     // A body that ignores the signal can still return normally after a timeout or cancel.
     a.signal.throwIfAborted()
     const missed = await unawaited()
+    // A start that failed under a caught call or `expect.soft` still fails the attempt as itself.
+    if (a.startFailure) throw a.startFailure.error
     if (missed) throw missed
     const [only, ...more] = a.judgeErrors
     if (only) {
@@ -126,6 +119,7 @@ async function attemptBody(
     // Checks the eval didn't await still use the sandbox: let them finish before teardown.
     if (!a.signal.aborted) await unawaited().catch(() => {})
     clock?.clear()
+    await a.endStarts()
     for (const bg of a.backgrounds) await bg.kill().catch(() => {})
     const { sandbox } = a
     if (sandbox && !a.signal.aborted) await takeContext(sandbox, AbortSignal.timeout(30_000))

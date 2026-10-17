@@ -156,11 +156,8 @@ async function startHarness(
  * environment's files and workspace skills, runs its setup steps, snapshots the workspace for
  * the diff, and starts the harness session with the harness-placed skills and MCP servers.
  */
-export async function startSession(
-  a: Attempt,
-  runId: string,
-  setupStart: number,
-): Promise<[Sandbox, HarnessSession]> {
+export async function startSession(a: Attempt, runId: string): Promise<[Sandbox, HarnessSession]> {
+  const startedAt = performance.now()
   const { spec } = a
   const env = a.env as ResolvedEnvironment
   const box = await createSandbox(spec.sandbox, {
@@ -246,6 +243,9 @@ export async function startSession(
     `${harnessId(spec.harness)} session ready in ${formatDuration(performance.now() - harnessStart)}`,
   )
   a.session = session
-  a.report({ kind: 'sandbox-ready', ms: Math.round(performance.now() - setupStart) })
+  const startMs = performance.now() - startedAt
+  debugLog('container', `sandbox and session started in ${formatDuration(startMs)}`)
+  // The environment's preparation plus this start, not the eval's own code before its first call.
+  a.report({ kind: 'sandbox-ready', ms: Math.round(a.record.timings.setupMs + startMs) })
   return [box, session]
 }

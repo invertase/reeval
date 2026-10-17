@@ -4,7 +4,6 @@ import { greeting, staged } from './env.ts'
 // The staged SKILL.md has reeval's frontmatter (name, then the description folded to one line) and
 // the body byte for byte.
 evaluate('lands', { environment: greeting }, async (c) => {
-  await c.sandbox()
   expect(await c.readFile(staged)).toBe(
     [
       '---',

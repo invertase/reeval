@@ -153,9 +153,8 @@ const withSkills = base.extendEnvironment('with-skills', ({ skill }) => ({
 
 ```ts title="evals/guide-env.eval.ts"
 evaluate('sees the house rules', async (c) => {
-  const sandbox = await c.sandbox()
-  expect(await sandbox.readFile('AGENTS.md')).toContain('House rules')
-  await expect(sandbox.exec('test -f docs/api.md')).toSucceed()
+  expect(await c.readFile('AGENTS.md')).toContain('House rules')
+  await expect(c.exec('test -f docs/api.md')).toSucceed()
 })
 ```
 
@@ -165,7 +164,7 @@ evaluate('sees the house rules', async (c) => {
      ✓ sees the house rules         282ms  0 turns
 ```
 
-`c.sandbox()` starts the sandbox and the agent session without a turn. Use it to test an environment before you spend a turn on it.
+The first `c.readFile` starts the sandbox and the agent session without a turn. Check an environment this way before you spend a turn on it.
 
 ## Next
 

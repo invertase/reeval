@@ -53,6 +53,15 @@ export type Attempt = {
   sandbox?: Sandbox
   session?: HarnessSession
   phases?: BrokerPhases
+  /**
+   * Starts the sandbox and session on the first call that needs them (`who` names it in the
+   * debug trace); every later or concurrent call shares that one start.
+   */
+  start: (who: string) => Promise<[Sandbox, HarnessSession]>
+  /** Refuses starts from now on and waits for one in flight, so teardown sees its sandbox. */
+  endStarts: () => Promise<void>
+  /** The start's failure, which fails the attempt whatever the eval's body made of it. */
+  startFailure?: { error: unknown }
   /** A judge call failed or had no model: a failed assertion is then the judge's. */
   judgeErrored: boolean
   /** Judge calls that failed without throwing, which fail the attempt once the eval's body is done. */
@@ -69,6 +78,7 @@ export function createAttempt(
   spec: AttemptSpec,
   signal: AbortSignal,
   progress: (update: ProgressUpdate & { at: number }) => void,
+  start: (a: Attempt, who: string) => Promise<[Sandbox, HarnessSession]>,
 ): Attempt {
   const record: EvalRecord = {
     startedAt: new Date().toISOString(),
@@ -81,10 +91,26 @@ export function createAttempt(
     timings: { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
     judgeInputs: [],
   }
-  return {
+  let starting: Promise<[Sandbox, HarnessSession]> | undefined
+  let ended = false
+  const a: Attempt = {
     spec,
     record,
     turns: [],
+    start(who) {
+      if (!starting && ended) {
+        return Promise.reject(new Error(`${who} came after the eval's body returned`))
+      }
+      starting ??= start(a, who).catch((error: unknown) => {
+        a.startFailure = { error }
+        throw error
+      })
+      return starting
+    },
+    async endStarts() {
+      ended = true
+      await starting?.catch(() => {})
+    },
     report: (update) => progress({ at: Date.now(), ...update }),
     async timed(phase, fn) {
       const start = performance.now()
@@ -101,6 +127,7 @@ export function createAttempt(
     backgrounds: [],
     artifactBlobs: new Map(),
   }
+  return a
 }
 
 /** How long a harness session may take to become ready, unless its `startTimeout` says. */

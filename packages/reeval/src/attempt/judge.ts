@@ -26,7 +26,7 @@ import type {
   ResolvedJudgeStateOptions,
   Turn,
 } from '../types.ts'
-import { requireSandbox } from './checks.ts'
+import { sandboxFor } from './checks.ts'
 import type { Attempt } from './state.ts'
 
 const noJudgeModel = (configFile: string) =>
@@ -170,8 +170,7 @@ export function judgeCaller(
       wanted,
       checks: a.record.checks,
       readFile,
-      listFiles: () =>
-        workspaceFiles(requireSandbox(a, 'c.judge() state.contents patterns'), a.signal),
+      listFiles: async () => workspaceFiles(await sandboxFor(a, 'c.judge()'), a.signal),
     })
     const name = judgeModelName(model)
     const state = stateOf(draft)
