@@ -196,6 +196,7 @@
           ]
         },
         "viewport": {
+          "description": "The window and saved PNG size, or `'full-page'`. Default 1280×720.",
           "anyOf": [
             {
               "$ref": "#/$defs/CaptureWindow"
@@ -213,9 +214,11 @@
       "type": "object",
       "properties": {
         "height": {
+          "description": "In CSS pixels.",
           "type": "number"
         },
         "width": {
+          "description": "In CSS pixels.",
           "type": "number"
         }
       },
@@ -415,6 +418,7 @@
       "required": ["kind", "model"]
     },
     "DockerSandboxDescriptor": {
+      "description": "A local Docker container, made by `docker()`.",
       "type": "object",
       "properties": {
         "capabilities": {
@@ -650,6 +654,7 @@
       ]
     },
     "FakeHarnessDescriptor": {
+      "description": "A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.",
       "type": "object",
       "properties": {
         "delayMs": {
@@ -746,6 +751,7 @@
           ]
         },
         "text": {
+          "description": "The fake agent's final message on every turn; default `Done.`.",
           "type": "string"
         },
         "tools": {
@@ -788,6 +794,7 @@
       "required": ["kind"]
     },
     "FakeSandboxDescriptor": {
+      "description": "A temp directory on the host instead of a container, made by `fakeSandbox()`.",
       "type": "object",
       "properties": {
         "dir": {
@@ -795,6 +802,7 @@
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `fake`.",
           "type": "string"
         },
         "kind": {
@@ -913,6 +921,7 @@
           "type": "string"
         },
         "url": {
+          "description": "What reeval fetches: the clone URL, or an absolute path for a local repository.",
           "type": "string"
         }
       },
@@ -965,6 +974,7 @@
       "required": ["kind", "model"]
     },
     "HarnessDescriptor": {
+      "description": "The agent an attempt runs: a real harness, or the fake one.",
       "anyOf": [
         {
           "$ref": "#/$defs/AntigravityHarnessDescriptor"
@@ -999,6 +1009,7 @@
           "type": "object",
           "properties": {
             "run": {
+              "description": "The shell command.",
               "type": "string"
             },
             "timeout": {

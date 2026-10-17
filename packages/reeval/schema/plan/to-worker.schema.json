@@ -115,6 +115,7 @@
           ]
         },
         "viewport": {
+          "description": "The window and saved PNG size, or `'full-page'`. Default 1280×720.",
           "anyOf": [
             {
               "$ref": "#/$defs/CaptureWindow"
@@ -132,9 +133,11 @@
       "type": "object",
       "properties": {
         "height": {
+          "description": "In CSS pixels.",
           "type": "number"
         },
         "width": {
+          "description": "In CSS pixels.",
           "type": "number"
         }
       },
@@ -255,6 +258,7 @@
           "type": "number"
         },
         "model": {
+          "description": "`'provider/model'`, or a fake judge.",
           "anyOf": [
             {
               "$ref": "#/$defs/FakeJudgeModel"
@@ -265,6 +269,7 @@
           ]
         },
         "providerOptions": {
+          "description": "AI SDK provider options for the judge's calls, keyed by provider.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -340,6 +345,7 @@
       "required": ["kind", "model"]
     },
     "DockerSandboxDescriptor": {
+      "description": "A local Docker container, made by `docker()`.",
       "type": "object",
       "properties": {
         "capabilities": {
@@ -436,12 +442,14 @@
           "const": "environment"
         },
         "layers": {
+          "description": "Its `extend` chain, root first.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/EnvironmentLayer"
           }
         },
         "name": {
+          "description": "The name it was defined or extended under, which names its cells.",
           "type": "string"
         }
       },
@@ -452,9 +460,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "The name passed to `defineEnvironment` or `extend`.",
           "type": "string"
         },
         "spec": {
+          "description": "The spec as that layer wrote it, before merging.",
           "$ref": "#/$defs/EnvironmentSpec"
         }
       },
@@ -485,6 +495,7 @@
           ]
         },
         "env": {
+          "description": "Variables and secrets for the sandbox, merged by name over the parent's.",
           "$ref": "#/$defs/EnvVars"
         },
         "files": {
@@ -504,6 +515,7 @@
           }
         },
         "mcp": {
+          "description": "MCP servers the agent gets, by name.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -534,12 +546,14 @@
           ]
         },
         "setup": {
+          "description": "Shell commands run in every attempt before the agent starts; a child's run after its parent's.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SetupStep"
           }
         },
         "skills": {
+          "description": "Skills placed for the agent.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SkillSource"
@@ -553,6 +567,7 @@
       "required": []
     },
     "EnvValue": {
+      "description": "A variable's value: a literal string, or a host secret.",
       "anyOf": [
         {
           "$ref": "#/$defs/Secret"
@@ -563,6 +578,7 @@
       ]
     },
     "EnvVars": {
+      "description": "Environment variables by name.",
       "type": "object",
       "properties": {},
       "required": [],
@@ -640,6 +656,7 @@
       "required": ["kind"]
     },
     "FakeHarnessDescriptor": {
+      "description": "A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.",
       "type": "object",
       "properties": {
         "delayMs": {
@@ -736,6 +753,7 @@
           ]
         },
         "text": {
+          "description": "The fake agent's final message on every turn; default `Done.`.",
           "type": "string"
         },
         "tools": {
@@ -785,6 +803,7 @@
           "const": "fake-judge"
         },
         "score": {
+          "description": "The score (0–1) every call gets, or a function of the state it would see.",
           "anyOf": [
             {
               "type": "number"
@@ -800,6 +819,7 @@
       "required": ["kind", "score"]
     },
     "FakeSandboxDescriptor": {
+      "description": "A temp directory on the host instead of a container, made by `fakeSandbox()`.",
       "type": "object",
       "properties": {
         "dir": {
@@ -807,6 +827,7 @@
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `fake`.",
           "type": "string"
         },
         "kind": {
@@ -906,6 +927,7 @@
           "type": "string"
         },
         "url": {
+          "description": "What reeval fetches: the clone URL, or an absolute path for a local repository.",
           "type": "string"
         }
       },
@@ -958,6 +980,7 @@
       "required": ["kind", "model"]
     },
     "HarnessDescriptor": {
+      "description": "The agent an attempt runs: a real harness, or the fake one.",
       "anyOf": [
         {
           "$ref": "#/$defs/AntigravityHarnessDescriptor"
@@ -993,6 +1016,7 @@
           "const": "file"
         },
         "path": {
+          "description": "Its absolute path on the host.",
           "type": "string"
         }
       },
@@ -1005,6 +1029,7 @@
           "type": "object",
           "properties": {
             "run": {
+              "description": "The shell command.",
               "type": "string"
             },
             "timeout": {
@@ -1035,6 +1060,7 @@
       ]
     },
     "JSONValue": {
+      "description": "Any JSON value.",
       "anyOf": [
         {
           "type": "array",
@@ -1065,6 +1091,7 @@
       ]
     },
     "McpServer": {
+      "description": "An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.",
       "anyOf": [
         {
           "type": "object",
@@ -1076,9 +1103,11 @@
               }
             },
             "command": {
+              "description": "The command that starts the server in the sandbox.",
               "type": "string"
             },
             "env": {
+              "description": "Variables the server process gets.",
               "$ref": "#/$defs/EnvVars"
             },
             "kind": {
@@ -1094,6 +1123,7 @@
           "type": "object",
           "properties": {
             "headers": {
+              "description": "Request headers, with secrets brokered by the egress gateway.",
               "type": "object",
               "properties": {},
               "required": [],
@@ -1115,6 +1145,7 @@
               "const": "mcp"
             },
             "transport": {
+              "description": "Streamable HTTP, or the older SSE transport.",
               "enum": ["http", "sse"]
             },
             "url": {
@@ -1567,6 +1598,7 @@
               "type": "number"
             },
             "model": {
+              "description": "`'provider/model'`, or a fake judge.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/FakeJudgeModel"
@@ -1577,6 +1609,7 @@
               ]
             },
             "providerOptions": {
+              "description": "AI SDK provider options for the judge's calls, keyed by provider.",
               "type": "object",
               "properties": {},
               "required": [],
@@ -1805,24 +1838,28 @@
           "const": "secret-template"
         },
         "template": {
+          "description": "The string, with `${NAME}` for each host variable to substitute.",
           "type": "string"
         }
       },
       "required": ["kind", "template"]
     },
     "SetupStep": {
-      "description": "A shell command, or `{ run, timeout?, cwd? }`; `cwd` is relative to the workspace or absolute.",
+      "description": "Runs in every attempt before the agent starts, with secrets, outside the eval timeout: a shell command, or `{ run, timeout?, cwd? }`.",
       "anyOf": [
         {
           "type": "object",
           "properties": {
             "cwd": {
+              "description": "Relative to the workspace, or absolute; default the workspace.",
               "type": "string"
             },
             "run": {
+              "description": "The shell command.",
               "type": "string"
             },
             "timeout": {
+              "description": "Default 5m.",
               "anyOf": [
                 {
                   "type": "number"
@@ -1854,17 +1891,21 @@
       "enum": ["harness", "workspace"]
     },
     "SkillSource": {
+      "description": "Skills to place for the agent, made by the `skill` helper.",
       "anyOf": [
         {
           "type": "object",
           "properties": {
             "content": {
+              "description": "The body of `SKILL.md`.",
               "type": "string"
             },
             "description": {
+              "description": "The skill's description, as in `SKILL.md`'s frontmatter.",
               "type": "string"
             },
             "files": {
+              "description": "Other files in the skill directory, by relative path.",
               "type": "object",
               "properties": {},
               "required": [],
@@ -1876,6 +1917,7 @@
               "const": "skill"
             },
             "name": {
+              "description": "The skill's name, as in `SKILL.md`'s frontmatter.",
               "type": "string"
             },
             "placement": {
@@ -1891,6 +1933,7 @@
           "type": "object",
           "properties": {
             "exclude": {
+              "description": "Paths in each skill directory to leave out, gitignore-style.",
               "type": "array",
               "items": {
                 "type": "string"
@@ -1900,48 +1943,14 @@
               "const": "skill"
             },
             "only": {
+              "description": "The skill names to keep; default every one found.",
               "type": "array",
               "items": {
                 "type": "string"
               }
             },
             "path": {
-              "type": "string"
-            },
-            "placement": {
-              "$ref": "#/$defs/SkillPlacement"
-            },
-            "ref": {
-              "type": "string"
-            },
-            "repo": {
-              "type": "string"
-            },
-            "source": {
-              "const": "git"
-            }
-          },
-          "required": ["kind", "placement", "repo", "source"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "exclude": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "kind": {
-              "const": "skill"
-            },
-            "only": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "path": {
+              "description": "A host directory with a `SKILL.md`, or a directory of them.",
               "type": "string"
             },
             "placement": {
@@ -1957,6 +1966,7 @@
           "type": "object",
           "properties": {
             "exclude": {
+              "description": "Paths in each skill directory to leave out, gitignore-style.",
               "type": "array",
               "items": {
                 "type": "string"
@@ -1966,12 +1976,14 @@
               "const": "skill"
             },
             "only": {
+              "description": "The skill names to keep; default every one found.",
               "type": "array",
               "items": {
                 "type": "string"
               }
             },
             "path": {
+              "description": "The directory in the package to read skills from; default `skills`.",
               "type": "string"
             },
             "placement": {
@@ -1981,6 +1993,7 @@
               "const": "npm"
             },
             "spec": {
+              "description": "A pinned npm package spec.",
               "type": "string"
             }
           },
@@ -1989,7 +2002,49 @@
         {
           "type": "object",
           "properties": {
+            "exclude": {
+              "description": "Paths in each skill directory to leave out, gitignore-style.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "const": "skill"
+            },
+            "only": {
+              "description": "The skill names to keep; default every one found.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "path": {
+              "description": "The directory in the repository to read skills from.",
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "ref": {
+              "description": "A branch, tag or commit SHA; unset is the remote's `HEAD`.",
+              "type": "string"
+            },
+            "repo": {
+              "description": "As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.",
+              "type": "string"
+            },
+            "source": {
+              "const": "git"
+            }
+          },
+          "required": ["kind", "placement", "repo", "source"]
+        },
+        {
+          "type": "object",
+          "properties": {
             "id": {
+              "description": "A skills.sh id, `owner/repo@skill`.",
               "type": "string"
             },
             "kind": {
@@ -2002,6 +2057,7 @@
               "const": "registry"
             },
             "version": {
+              "description": "A git ref of the skill's repository.",
               "type": "string"
             }
           },
