@@ -8,6 +8,8 @@ import { z } from 'zod'
 import type {
   AssertionRecord,
   Capture,
+  Cell,
+  CellRole,
   Diff,
   ExecResult,
   FileChange,
@@ -238,6 +240,8 @@ export const judgeFailureSchema = z
   )
 
 export type _SameAsSchema = [
+  Assert<Same<z.infer<typeof cellSchema>, Cell>>,
+  Assert<Same<z.infer<typeof cellRoleSchema>, CellRole>>,
   Assert<Same<z.infer<typeof captureSchema>, Capture>>,
   Assert<Same<z.infer<typeof judgeArtifactRefSchema>, JudgeArtifactRef>>,
   Assert<Same<z.infer<typeof verdictSchema>, Verdict>>,
@@ -434,6 +438,61 @@ export const attemptReplySchema = z
     "reeval's reply to a call: its result, or the error it threw. A failed matcher is a result (its record says `fail`), not an error, unless the matcher couldn't run.",
   )
 
+export const cellRoleSchema = z.enum(['control', 'variant'])
+
+export const cellSchema = z
+  .strictObject({
+    key: z.string(),
+    harness: z.string(),
+    environment: z.string(),
+    sandbox: z.string(),
+    role: cellRoleSchema,
+    variant: z.string().optional().describe("The variant's name, for variant cells."),
+  })
+  .describe(
+    "One cell of an eval: a harness, an environment (`-` when none is set) and that environment's image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
+  )
+
+export const attemptStartSchema = z
+  .strictObject({
+    type: z.literal('start'),
+    attempt: z
+      .strictObject({
+        id: nonEmpty,
+        cell: cellSchema,
+        n: z.number().int().min(1, 'a run number, from 1').describe('The run number, from 1.'),
+      })
+      .describe('`c.attempt`: which cell of the matrix this attempt is, and its run number.'),
+    file: nonEmpty.describe('The eval file, relative to the project.'),
+    body: nonEmpty.describe("The eval's `body`, as its declaration named it."),
+  })
+  .describe(
+    "reeval to the runner: run this eval's body for this attempt. Nothing has started yet: the sandbox and the agent session start on the body's first call that needs them, so its own code runs first. The runner sends its calls, then `done`.",
+  )
+
+export const attemptAbortSchema = z
+  .strictObject({
+    type: z.literal('abort'),
+    reason: z
+      .enum(['timeout', 'cancelled'])
+      .describe("`timeout`: the eval's `timeout` ran out. `cancelled`: the run was stopped."),
+    message: z.string().describe("reeval's sentence, e.g. `Eval timed out after 600s`."),
+  })
+  .describe(
+    'reeval to the runner: the attempt was aborted, as `c.signal` aborts. Calls in flight reply with errors; the runner should stop the body and send `done`.',
+  )
+
+export const attemptDoneSchema = z
+  .strictObject({
+    type: z.literal('done'),
+    error: attemptErrorSchema
+      .optional()
+      .describe('What the body threw, if it threw. A failed `expect` (not soft) is one.'),
+  })
+  .describe(
+    "The runner to reeval: the eval's body has finished. The attempt's checks and record follow.",
+  )
+
 const CALL_KEYS = Object.fromEntries(
   attemptCallSchema.options.map((o) => [o.shape.op.value, Object.keys(o.shape)]),
 )
@@ -456,7 +515,22 @@ export const attemptRequestProblem = (value: unknown): string | undefined =>
     typeof object.op === 'string' ? (CALL_KEYS[object.op] ?? []) : OTHER_KEYS,
   )
 
+const LIFECYCLE_KEYS = ['type', 'attempt', 'file', 'body', 'reason', 'message', 'error', 'name']
+
+/** What's wrong with a lifecycle message, by the field's path, or undefined. */
+export const attemptStartProblem = (value: unknown): string | undefined =>
+  dataProblem(attemptStartSchema, value, 'The attempt start', (object) =>
+    'role' in object ? Object.keys(cellSchema.shape) : ['id', 'cell', 'n', ...LIFECYCLE_KEYS],
+  )
+export const attemptAbortProblem = (value: unknown): string | undefined =>
+  dataProblem(attemptAbortSchema, value, 'The attempt abort', () => LIFECYCLE_KEYS)
+export const attemptDoneProblem = (value: unknown): string | undefined =>
+  dataProblem(attemptDoneSchema, value, 'The attempt done', () => LIFECYCLE_KEYS)
+
 export type AttemptCall = z.infer<typeof attemptCallSchema>
+export type AttemptStart = z.infer<typeof attemptStartSchema>
+export type AttemptAbort = z.infer<typeof attemptAbortSchema>
+export type AttemptDone = z.infer<typeof attemptDoneSchema>
 export type AttemptRequest = z.infer<typeof attemptRequestSchema>
 export type AttemptReply = z.infer<typeof attemptReplySchema>
 
@@ -487,6 +561,11 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   JudgeArtifactRef: judgeArtifactRefSchema,
   Capture: captureSchema,
   CaptureWindow: captureWindowSchema,
+  AttemptStart: attemptStartSchema,
+  AttemptAbort: attemptAbortSchema,
+  AttemptDone: attemptDoneSchema,
+  Cell: cellSchema,
+  CellRole: cellRoleSchema,
 }
 
 /** The schemas `ATTEMPT_SCHEMAS` shares with a hand-written type in src/types.ts, by its name. */
@@ -507,4 +586,6 @@ export const ATTEMPT_TYPES = [
   'JudgeArtifactRef',
   'Capture',
   'CaptureWindow',
+  'Cell',
+  'CellRole',
 ] as const

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from AttemptStart in src/contract/attempt.ts by `pnpm schema:update`; don't edit. reeval's message to a runner that starts an attempt's body.",
+  "title": "AttemptStart",
+  "$ref": "#/$defs/AttemptStart",
+  "$defs": {
+    "AttemptStart": {
+      "description": "reeval to the runner: run this eval's body for this attempt. Nothing has started yet: the sandbox and the agent session start on the body's first call that needs them, so its own code runs first. The runner sends its calls, then `done`.",
+      "type": "object",
+      "properties": {
+        "attempt": {
+          "description": "`c.attempt`: which cell of the matrix this attempt is, and its run number.",
+          "type": "object",
+          "properties": {
+            "cell": {
+              "$ref": "#/$defs/Cell"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "n": {
+              "description": "The run number, from 1.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["cell", "id", "n"],
+          "additionalProperties": false
+        },
+        "body": {
+          "description": "The eval's `body`, as its declaration named it.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "file": {
+          "description": "The eval file, relative to the project.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "type": {
+          "type": "string",
+          "const": "start"
+        }
+      },
+      "required": ["attempt", "body", "file", "type"],
+      "additionalProperties": false
+    },
+    "Cell": {
+      "description": "One cell of an eval: a harness, an environment (`-` when none is set) and that environment's image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
+      "type": "object",
+      "properties": {
+        "environment": {
+          "type": "string"
+        },
+        "harness": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/CellRole"
+        },
+        "sandbox": {
+          "type": "string"
+        },
+        "variant": {
+          "description": "The variant's name, for variant cells.",
+          "type": "string"
+        }
+      },
+      "required": ["environment", "harness", "key", "role", "sandbox"],
+      "additionalProperties": false
+    },
+    "CellRole": {
+      "type": "string",
+      "enum": ["control", "variant"]
+    }
+  }
+}
