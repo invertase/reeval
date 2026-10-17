@@ -127,7 +127,8 @@ group('greet module', () => {
 
     await expect(turn).toHaveFile('greet.js')
     await expect(c.exec('node --test')).toSucceed()
-    expect(await c.judge("Does the agent's final message accurately describe what it changed?")).toPass()
+    const honest = "Does the agent's final message describe what it changed?"
+    expect(await c.judge(honest)).toPass()
   })
 })
 ```
@@ -139,8 +140,11 @@ import { cursor } from 'reeval/harness'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
-  harness: cursor({ model: 'composer-2.5' }), // or claudeCode({ model }), antigravity({ model }), opencode({ model }), goose({ model }), pi({ model }), codex({ model }), or a list: each is its own cell
-  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // optional; pin the version
+  // or claudeCode, codex, antigravity, opencode, goose, pi, or a list of
+  // harnesses: each is its own cell
+  harness: cursor({ model: 'composer-2.5' }),
+  // optional; pin the version
+  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 },
   timeout: '15m',
   profiles: {
     pr: { limit: { runs: 1, compare: false }, budget: { attempts: 20 } },
@@ -220,40 +224,48 @@ Duration  40s
  Results  .reeval/runs/20260924T213759Z_1ba71aa_ci_4vb0/summary.md
 ```
 
-Under a coding agent, reeval switches to compact output: one block per failure and the path to its
-record. To see what an attempt did step by step, add `-v`: a timestamped line per phase (image,
-container, setup, brokering, each tool call, checks, judge calls, every gateway request).
-`-vv` adds the raw payloads and every `docker` command. Either way each attempt's trace is
-kept locally in `.reeval/debug`, never in the committed history. Commit runs into `evals/.history/` with `reeval record`, then track them with `reeval history`
-and `reeval compare`, or ask across runs with SQL: `reeval query lift`, `reeval query effort` (tool calls,
-agent time and tokens, variant against control), `reeval query factor_effects`, or
-`reeval query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`. Where the harness
-reports them (Cursor, Claude Code, Antigravity, pi and Codex do), the record keeps each turn's tokens and the model that
-served it, and totals them per attempt and per run.
+Under a coding agent, reeval switches to compact output: one block per failure and the path to
+its record. To see what an attempt did step by step, add `-v`; `-vv` adds the raw payloads and
+every `docker` command. Either way each attempt's trace stays local in `.reeval/debug`, never in
+the committed history.
 
-`reeval analyze` explains a run: one LLM call over a digest of those facts, with every claim's
-citations and every suggested command checked against reeval's own CLI. It's cached in `.reeval/`;
-`--save` commits it next to the run, and `reeval analyze --context` hands the same digest to your own
-coding agent instead, with no key.
+```bash
+reeval record                     # copy the latest run into evals/.history/
+reeval history                    # pass/fail per eval over recent runs
+reeval compare                    # latest vs its nearest recorded ancestor
+reeval query lift                 # each variant against its control
+reeval query effort               # tool calls, agent time and tokens
+reeval query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"
+reeval analyze                    # a checked reading of a run
+```
+
+Where the harness reports them (Cursor, Claude Code, Antigravity, pi and Codex do), the record
+keeps each turn's tokens and the model that served it, and totals them per attempt and per run.
+
+`reeval analyze` makes one LLM call over a digest of those facts, and checks every claim's
+citations and every suggested command against reeval's own CLI. `--save` commits it next to the
+run, and `reeval analyze --context` hands the same digest to your own coding agent, with no key.
 
 ## Studio
 
 ```bash
-reeval studio                    # browse runs, evals and transcripts at http://127.0.0.1:4984
-reeval studio build --out site   # the same thing as a static site for GitHub Pages or any host
+reeval studio                    # runs, evals and transcripts on :4984
+reeval studio build --out site   # the same as a static site, for any host
 ```
 
-The studio shows each run's commit, pass counts and drift. For compares it shows per-cell pass
-rates, lift and effort, and a run's saved analyses in its Analysis tab, and for each attempt the transcript, diff, checks and judge input. `reeval studio`
-adds a Debug tab for attempts with local debug data.
+The studio shows each run's commit, pass counts and drift, and its saved analyses. For compares
+it shows per-cell pass rates, lift and effort, and for each attempt the transcript, diff, checks
+and judge input. `reeval studio` adds a Debug tab for attempts with local debug data.
 
 ## Learn more
 
-The user docs in [`docs/`](./docs) are a [docs.page](https://use.docs.page) site: a Guide from a
-first eval to CI, Concepts, Recipes, and a Reference tab with every option, command, flag, exit
-code and file format. Preview them with `npx @docs.page/cli preview`. Coding agents writing evals
-can load the reeval skill in [`.agents/skills/reeval/SKILL.md`](./.agents/skills/reeval/SKILL.md).
-[AGENTS.md](./AGENTS.md) covers developing this repo.
+| For | Read |
+|---|---|
+| Learning reeval, from a first eval to CI | The Guide in [`docs/`](./docs), a [docs.page](https://use.docs.page) site (`npx @docs.page/cli preview`) |
+| How it works, and complete solutions | The docs' Concepts and Recipes |
+| Every option, command, flag, exit code and file format | The docs' Reference |
+| Coding agents writing evals | The reeval skill, [`.agents/skills/reeval/SKILL.md`](./.agents/skills/reeval/SKILL.md) |
+| Developing this repo | [AGENTS.md](./AGENTS.md) |
 
 ## License
 
