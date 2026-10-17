@@ -239,7 +239,7 @@ reeval query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"
 reeval analyze                    # a checked reading of a run
 ```
 
-Where the harness reports them (Cursor, Claude Code, Antigravity, pi and Codex do), the record
+Where the harness reports them (every harness but Goose does), the record
 keeps each turn's tokens and the model that served it, and totals them per attempt and per run.
 
 `reeval analyze` makes one LLM call over a digest of those facts, and checks every claim's
