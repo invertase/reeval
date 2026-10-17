@@ -54,11 +54,15 @@ export default defineConfig({
 | Served model | The dated model and reasoning effort, from each API response |
 | MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
 
-Build its image once with `reeval image build` in a project whose config uses `codex()`. `gpt-5.6-luna` is in Codex's catalog and passes the harness contract; pin the model you mean to measure.
+Build its image once with `reeval image build` in a project whose config uses `codex()`. `gpt-5.6-luna` is in Codex's catalogue and passes the harness contract; pin the model you mean to measure.
 
 ## Why not `@ai-sdk/harness-codex`
 
-That adapter runs Codex in the sandbox too, but its stream carries none of Codex's own events, so reeval couldn't check Codex's output format or replay real runs. It also drops reasoning tokens, and the release that matches reeval's `@ai-sdk/harness` pins Codex 0.155.0 behind `@openai/codex-sdk`. reeval's adapter runs `codex exec --json`, which that SDK wraps, directly.
+| | `@ai-sdk/harness-codex` | `@reeval/harness-codex` |
+|---|---|---|
+| Runs | Codex 0.155.0 behind `@openai/codex-sdk`, in the release that matches reeval's `@ai-sdk/harness` | `codex exec --json` directly, which that SDK wraps |
+| Codex's own events | None in its stream, so reeval couldn't check Codex's output format or replay real runs | Every one |
+| Reasoning tokens | Dropped | Recorded |
 
 ## The key
 
@@ -72,15 +76,27 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 ## Tokens and the served model
 
-Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens. Codex reports no cost, and reeval prices no models.
+| `model` | Served model recorded |
+|---|---|
+| `gpt-5.6-luna` | `gpt-5.6-luna[effort=medium]` |
+| `gpt-5.4-mini` | `gpt-5.4-mini-2026-03-17[effort=none]` |
 
-Codex doesn't say which model served a turn. The gateway reads it from each response instead: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for, so a turn on `gpt-5.6-luna` records `gpt-5.6-luna[effort=medium]`, and one on `gpt-5.4-mini` records `gpt-5.4-mini-2026-03-17[effort=none]`. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
+Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens.
+
+Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
 
 ## Turns and settings
 
-Each turn runs `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --model <model>`, and later turns add `resume <thread>`, so they continue the conversation. The Docker sandbox is the isolation, so Codex's own sandbox and approvals are off. The prompt is a command-line argument, so it must stay under 128 KiB. Instructions go to `~/.codex/AGENTS.md`, which Codex reads before the workspace's.
+```bash
+codex exec --json --skip-git-repo-check \
+  --dangerously-bypass-approvals-and-sandbox --model <model>
+```
 
-Codex takes each model's tools and default reasoning effort from the catalog bundled in its release (`codex debug models --bundled` lists it). A model the catalog doesn't list, such as `gpt-5.4-mini` since Codex 0.158.0, runs on fallback settings: no `apply_patch` tool and no reasoning effort. The agent then edits files from the shell, and the served model records `[effort=none]`.
+Each turn runs that, and later turns add `resume <thread>`, so they continue the conversation. The Docker sandbox is the isolation, so Codex's own sandbox and approvals are off. The prompt is a command-line argument, so it must stay under 128 KiB.
+
+Instructions go to `~/.codex/AGENTS.md`, which Codex reads before the workspace's. Codex takes each model's tools and default reasoning effort from the catalogue bundled in its release (`codex debug models --bundled` lists it).
+
+A model the catalogue doesn't list, such as `gpt-5.4-mini` since Codex 0.158.0, runs on fallback settings: no `apply_patch` tool and no reasoning effort. The agent then edits files from the shell, and the served model records `[effort=none]`.
 
 The adapter writes `~/.codex/config.toml` with Codex's defaults but for what it sends besides model requests:
 
@@ -93,7 +109,11 @@ With them, a turn contacts only `api.openai.com`, so `egress: 'deny-all'` needs 
 
 ## MCP
 
-MCP servers go in `config.toml` under `mcp_servers`: `mcp.stdio` as `command`, `args` and `env`, `mcp.http` as `url` and `http_headers`. Codex has no SSE transport, so an eval that gives it `mcp.sse` is refused at plan time, naming the server.
+| Server | In `config.toml` under `mcp_servers` |
+|---|---|
+| `mcp.stdio` | `command`, `args` and `env` |
+| `mcp.http` | `url` and `http_headers` |
+| `mcp.sse` | Refused at plan time, naming the server: Codex has no SSE transport |
 
 ## Errors
 

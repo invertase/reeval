@@ -67,7 +67,13 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 ## Tokens
 
-None are recorded: every turn's `usage` is `null`. Goose's ACP server reports its last model call's tokens as the turn's (a 4-call turn that used 16,253 input tokens reported 4,179), so reeval records nothing rather than an undercount. The served model is still recorded, from the gateway's requests.
+| A 4-call turn | Input tokens |
+|---|---|
+| Used | 16,253 |
+| Goose's ACP server reported | 4,179, the last model call's |
+| reeval records | Nothing: `usage` is `null` |
+
+Goose's ACP server reports its last model call's tokens as the turn's, so reeval records nothing rather than an undercount. The served model is still recorded, from the gateway's requests.
 
 ## Settings
 

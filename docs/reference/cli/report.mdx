@@ -6,9 +6,9 @@ description: Collect a redacted bug report about reeval, review it locally, then
 `reeval report` collects what a maintainer needs to debug reeval: versions, `reeval doctor`, your config's shape, the last command's error and stack, and the run's failures with their debug logs. Everything is redacted. It prints a summary and writes the report on your machine; nothing is uploaded until you file it.
 
 ```bash
-npx reeval report                 # summary, and the report in .reeval/reports/<time>/
-npx reeval report --out bug.md    # bug.md, bug.json and bug-logs.tar.gz
-npx reeval report --issue         # then a pre-filled GitHub issue
+npx reeval report               # the report in .reeval/reports/<time>/
+npx reeval report --out bug.md  # bug.md, bug.json and bug-logs.tar.gz
+npx reeval report --issue       # then a pre-filled GitHub issue
 ```
 
 ## Flags
@@ -79,7 +79,14 @@ Outcome infra_error.
 infra: agent failed: key [REDACTED] in <project>
 ```
 
-Every string in the report goes through the same masking as a run record: the values of secret-looking variables and `secret()` values, raw or JSON-, URL- or base64-encoded, any stretch of 8 or more of their characters, and well-known token shapes. On top of that, every value in `.env.local` and `.env` of 8 or more characters is masked, whatever its name. Then your project folder becomes `<project>` and your home folder `~`. The `redacted` line counts every `[REDACTED]` in the report and its attached logs, one per place a value was masked, and says how many reeval had masked already in the records and logs it read.
+| Masked | As |
+|---|---|
+| Secret-looking variables' and `secret()` values, raw or JSON-, URL- or base64-encoded, and any stretch of 8 or more of their characters | `[REDACTED]`, as in a run record |
+| Well-known token shapes | `[REDACTED]` |
+| Every value of 8 or more characters in `.env.local` and `.env`, whatever its name | `[REDACTED]` |
+| Your project folder, then your home folder | `<project>`, `~` |
+
+The `redacted` line counts every `[REDACTED]` in the report and its attached logs, one per place a value was masked, and says how many reeval had masked already in the records and logs it read.
 
 <Warning>
   Read `report.md` before you share it. The failure messages and logs are your agent's and your evals' own output, and redaction only catches what looks like a secret.
@@ -94,7 +101,7 @@ https://github.com/invertase/reeval/issues/new?template=bug_report.yml&title=ree
 
 `--issue` writes the report as above, then opens reeval's bug-report form in your browser with the title and the summary filled in. The URL stays under 8,000 characters: a long summary is cut at a line and says to attach `report.md`. Drag `report.md` and `report-logs.tar.gz` into the issue.
 
-With [`gh`](https://cli.github.com) installed, it asks first, then files the issue with `gh issue create` (the body is `issue.md` in the report's folder). `-y` answers yes. Without a terminal to ask in and without `-y`, it prints the URL. The repository comes from `bugs` in reeval's `package.json`.
+With [`gh`](https://cli.github.com) installed, it asks first, then files the issue with `gh issue create` (the body is `issue.md` in the report's folder), and `-y` answers yes. Without a terminal to ask in and without `-y`, it prints the URL. The repository comes from `bugs` in reeval's `package.json`.
 
 ## The hint
 

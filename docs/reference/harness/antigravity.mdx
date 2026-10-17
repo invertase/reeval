@@ -65,23 +65,44 @@ The adapter refuses to run in a sandbox that can't broker the key, so it can't l
 
 ## Settings
 
-reeval writes the CLI's settings with `enableTelemetry: false` and `modelProvider: 'gemini'`, and sets `AGY_CLI_DISABLE_AUTO_UPDATE=true` (`1` doesn't turn it off). MCP servers go to `~/.gemini/config/mcp_config.json`, where remote servers take `serverUrl`. The adapter appends its own instructions to `~/.gemini/GEMINI.md`.
-
-The CLI reads home skills from `~/.gemini/config/skills`, not the `~/.gemini/antigravity-cli/skills` its docs give; reeval uses the path it reads.
+| Setting | Why |
+|---|---|
+| `enableTelemetry: false` in the CLI's settings | No telemetry it can turn off (below) |
+| `modelProvider: 'gemini'` in the CLI's settings | The Gemini API key's provider |
+| `AGY_CLI_DISABLE_AUTO_UPDATE=true` | No updates; `1` doesn't turn them off |
+| MCP servers in `~/.gemini/config/mcp_config.json` | Where the CLI reads them; remote servers take `serverUrl` |
+| The adapter's instructions appended to `~/.gemini/GEMINI.md` | How the adapter talks to the agent |
+| Home skills in `~/.gemini/config/skills` | Where the CLI reads them, not the `~/.gemini/antigravity-cli/skills` its docs give |
 
 ## Telemetry it sends anyway
 
-CLI 1.4.2 opens `play.googleapis.com` (telemetry) and `antigravity-unleash.goog` (feature flags) in every session. No setting stops them, and neither gets the key.
+| Host | What |
+|---|---|
+| `play.googleapis.com` | Telemetry |
+| `antigravity-unleash.goog` | Feature flags |
 
-Under a restricted egress policy the gateway refuses them, records them under the record's `egress.expectedBlocked` rather than `blocked`, and `-v` prints one `gateway` line at teardown instead of one per request: `expected blocks, not logged per request:`, each `host:port` with its connection count, then the reason ("Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off").
+CLI 1.4.2 opens both in every session. No setting stops them, and neither gets the key.
+
+Under a restricted egress policy the gateway refuses them and records them under the record's `egress.expectedBlocked`, not `blocked`. `-v` prints one `gateway` line for them at teardown, `expected blocks, not logged per request:` with each `host:port` and its connection count, instead of one line per request.
 
 ## Tokens
 
-Each turn records the tokens the CLI reports and the model that served it. The summary totals them on its `Tokens` line and the record keeps them per turn, per attempt and for the run; reeval prices no models, so there's no USD. The CLI's `input_tokens` leaves out cache reads, as reeval's `input` does, so a turn served mostly from the cache records more `cacheRead` than `input`; the prompt was `input + cacheRead`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+| The CLI reports | The turn records |
+|---|---|
+| `input_tokens`, without cache reads | `input` |
+| `cache_read_tokens` | `cacheRead` |
+| `output_tokens`, thinking included | `output` |
+| `thinking_tokens` | `reasoning` |
+
+Each turn also records the model that served it. A turn served mostly from the cache records more `cacheRead` than `input`: the prompt was `input + cacheRead`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
 ## Prompt size
 
-The CLI takes the prompt as a command-line argument, so it must stay under 128 KiB. A longer one fails the turn with the shell's `Argument list too long`.
+```text
+Argument list too long
+```
+
+The CLI takes the prompt as a command-line argument, so it must stay under 128 KiB. A longer one fails the turn with the shell's error.
 
 ## Errors
 

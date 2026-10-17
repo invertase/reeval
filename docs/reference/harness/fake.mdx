@@ -129,7 +129,12 @@ Every turn starts with a `text` event `Working on: <prompt>`, then (when the env
 
 ## Skills
 
-Harness-placed skills are written under `~/`, where the layout's adapter would put them (`~/.agents/skills` by default). Workspace-placed skills go to the layout's workspace skill directory. Either way, the agent reports them in its `Loaded skills` line and switches to `withSkill`.
+| `placement` | Where the skill goes |
+|---|---|
+| `'harness'` (default) | Under `~/`, where the layout's adapter would put it (`~/.agents/skills` by default) |
+| `'workspace'` | The layout's workspace skill directory |
+
+Either way, the agent reports the skills in its `Loaded skills` line and switches to `withSkill`.
 
 ## Errors
 

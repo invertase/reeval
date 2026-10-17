@@ -55,7 +55,7 @@ A `run` is a [run reference](/reference/cli#run-references), `latest` by default
 
 ```json
 {
-  "columns": ["eval_key", "run_id", "started_at", "branch", "pr_number", "recorded", "outcome", …],
+  "columns": ["eval_key", "run_id", "started_at", "branch", "outcome", …],
   "rows": [
     {
       "eval_key": "evals/a.eval.ts › writes ok",
@@ -80,11 +80,13 @@ Each result is that JSON as text and as `structuredContent`. Every tool is marke
 
 ## Security
 
-- **Read-only.** SQL runs on the same read-only connection as `reeval query`, one `SELECT` or `WITH` statement at a time, so `ATTACH`, `PRAGMA` and `VACUUM INTO` are refused. The only write is `.reeval/history.db` catching up with new records.
-- **No evals run.** A run spends keys, starts containers and takes minutes: run it with `reeval run` in a terminal.
-- **Masked.** Records are masked when reeval writes them, and everything `reeval mcp` returns is masked again against its own environment. It loads no `.env` files.
-- **Scoped.** Runs are references, never paths. A transcript is read only from inside its run's folder, after resolving symlinks.
-- **HTTP:** it binds `127.0.0.1` and checks `Host` and `Origin`, so a web page can't reach it through DNS rebinding. Other hosts and origins get 403; GET gets 405.
+| Guarantee | How |
+|---|---|
+| Read-only | SQL runs on the same read-only connection as `reeval query`, one `SELECT` or `WITH` statement at a time, so `ATTACH`, `PRAGMA` and `VACUUM INTO` are refused. The only write is `.reeval/history.db` catching up with new records |
+| No evals run | A run spends keys, starts containers and takes minutes: run it with `reeval run` in a terminal |
+| Masked | Records are masked when reeval writes them, and everything `reeval mcp` returns is masked again against its own environment. It loads no `.env` files |
+| Scoped | Runs are references, never paths. A transcript is read only from inside its run's folder, after resolving symlinks |
+| Local over HTTP | It binds `127.0.0.1` and checks `Host` and `Origin`, so a web page can't reach it through DNS rebinding. Other hosts and origins get 403; GET gets 405 |
 
 ## A token
 

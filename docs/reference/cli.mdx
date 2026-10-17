@@ -59,7 +59,9 @@ Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interru
 
 ## Run references
 
-Commands that take a `[run]` accept any of these. They search recorded runs and unrecorded scratch runs. `reeval run --resume` is different: omitted and `latest` mean the newest **resumable** run (Stopped staging, or an `interrupted` / `budget` scratch), not assembled `latest`. See [Resume a stopped run](/reference/cli/run#resume-a-stopped-run).
+Commands that take a `[run]` accept any of these, and search recorded runs and unrecorded scratch runs.
+
+`reeval run --resume` is different: omitted and `latest` mean the newest **resumable** run (Stopped staging, or an `interrupted` or `budget` scratch), not assembled `latest`. See [Resume a stopped run](/reference/cli/run#resume-a-stopped-run).
 
 | Reference | Means |
 |---|---|

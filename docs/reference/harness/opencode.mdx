@@ -75,7 +75,9 @@ reeval reads the model's provider's key from the host, passes it to the adapter 
 | `openai` | `Authorization: Bearer` | `POST api.openai.com/v1/responses` |
 | `openrouter` | `Authorization: Bearer` | `POST openrouter.ai/api/v1/chat/completions` |
 
-Each provider's hosts, paths and headers come from running the pinned OpenCode against a mock server, once per provider and model API, and are listed [below](#supported-providers). A request that carries the placeholder anywhere else gets a 403 from the gateway. The adapter refuses to run in a sandbox that can't broker the key. `@ai-sdk/harness-opencode` brokers only a few providers' keys, for OpenCode 1, so reeval uses its own thin config over `@ai-sdk/harness-acp` instead.
+Each provider's hosts, paths and headers come from running the pinned OpenCode against a mock server, once per provider and model API, and are listed [below](#supported-providers). A request that carries the placeholder anywhere else gets a 403 from the gateway, and the adapter refuses to run in a sandbox that can't broker the key.
+
+`@ai-sdk/harness-opencode` brokers only a few providers' keys, for OpenCode 1, so reeval uses its own thin config over `@ai-sdk/harness-acp` instead.
 
 ## Served model
 
@@ -83,7 +85,9 @@ Each provider's hosts, paths and headers come from running the pinned OpenCode a
 { "model": "gpt-5.4-mini-2026-03-17[effort=none]", … }
 ```
 
-OpenCode's ACP server names no model, so each turn records the one the gateway saw serve its last model call. Gemini's API names it in the URL; every other provider's response body does, as its first `"model"` field, with the reasoning effort when the response reports one (OpenAI's Responses API). reeval runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCode's default for OpenAI and xAI is a WebSocket, whose frames the gateway doesn't read.
+OpenCode's ACP server names no model, so each turn records the one the gateway saw serve its last model call. Gemini's API names it in the URL; every other provider's response body does, as its first `"model"` field, with the reasoning effort when the response reports one (OpenAI's Responses API).
+
+reeval runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCode's default for OpenAI and xAI is a WebSocket, whose frames the gateway doesn't read.
 
 ## Amazon Bedrock
 
@@ -93,7 +97,9 @@ AWS_REGION=eu-west-1           # optional; default us-east-1
 ```
 
 ```ts title="reeval.config.ts"
-harness: opencode({ model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5' }),
+harness: opencode({
+  model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5',
+}),
 ```
 
 Bedrock runs on a Bedrock API key, which OpenCode sends as `Authorization: Bearer` and the gateway swaps in. reeval never passes AWS access keys, profiles or session tokens, which sign each request (SigV4) and can't be brokered. `AWS_REGION` isn't secret: reeval passes it into the sandbox as it is, and its region's hosts, `bedrock-runtime.<region>.amazonaws.com` and `bedrock-mantle.<region>.api.aws`, are the automatic egress hosts.
@@ -104,13 +110,16 @@ Bedrock's hosts, header and served model are checked with OpenCode against a moc
 
 ## Tokens
 
-Each turn records OpenCode's ACP `PromptResponse.usage`: uncached input, output, and thought or cache tokens when the model reports them. OpenCode [#52467](https://github.com/anomalyco/opencode/pull/52467) sums every model call in the turn. The summary totals them on its `Tokens` line and the record keeps them per turn, per attempt and for the run; reeval prices no models.
+| ACP message | Used for |
+|---|---|
+| `PromptResponse.usage` | The turn's tokens: uncached input, output, and thought or cache tokens when the model reports them. Since OpenCode [#52467](https://github.com/anomalyco/opencode/pull/52467) it sums every model call in the turn |
+| `usage_update` | Nothing: `used` is the last step's context size and `cost` the whole session's |
 
-`usage_update` is unused: `used` is still the last step's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
+The summary totals the tokens on its `Tokens` line, and the record keeps them per turn, per attempt and for the run.
 
 ## Settings
 
-reeval starts OpenCode with this config in `OPENCODE_CONFIG_CONTENT`, plus `OPENCODE_DISABLE_AUTOUPDATE=1` and `OPENCODE_DISABLE_MODELS_FETCH=1`. The CLI stays the image's, and its model catalog is the one it shipped with:
+reeval starts OpenCode with this config in `OPENCODE_CONFIG_CONTENT`, plus `OPENCODE_DISABLE_AUTOUPDATE=1` and `OPENCODE_DISABLE_MODELS_FETCH=1`. The CLI stays the image's, and its model catalogue is the one it shipped with:
 
 ```json
 {
@@ -144,12 +153,20 @@ Every other tool runs without asking, as on every harness: reeval answers OpenCo
 ```jsonc title="opencode.jsonc (in the eval's files)"
 {
   "agents": { "title": { "model": "google/gemini-2.5-flash" } },
-  "permissions": [{ "action": "webfetch", "resource": "*", "effect": "deny" }],
-  "mcp": { "servers": { "files": { "type": "local", "command": ["node", "files.mjs"] } } }
+  "permissions": [
+    { "action": "webfetch", "resource": "*", "effect": "deny" }
+  ],
+  "mcp": {
+    "servers": {
+      "files": { "type": "local", "command": ["node", "files.mjs"] }
+    }
+  }
 }
 ```
 
-OpenCode loads `~/.config/opencode`, then the workspace's `opencode.json(c)`, then reeval's config last. With the file above, session titles still run on your cell's model (a key both set is reeval's), `files` loads beside the environment's MCP servers (objects merge, servers by name), and `webfetch` is off. Permission rules append, the last match winning, so reeval's rules only deny: your own denies stand.
+OpenCode loads `~/.config/opencode`, then the workspace's `opencode.json(c)`, then reeval's config last. With the file above, session titles still run on your cell's model (a key both set is reeval's), `files` loads beside the environment's MCP servers (objects merge, servers by name), and `webfetch` is off.
+
+Permission rules append, the last match winning, so reeval's rules only deny: your own denies stand.
 
 OpenCode reads `AGENTS.md`, not `CLAUDE.md`. Besides its own skill directories, it also reads `.claude/skills` and `.agents/skills` in the workspace and the home directory, and nothing turns that off, so keep other agents' skills out of an OpenCode eval's files.
 
@@ -159,7 +176,9 @@ OpenCode reads `AGENTS.md`, not `CLAUDE.md`. Besides its own skill directories, 
 {"type":"web-search","toolCallId":"call_782405","query":"anomalyco opencode github","references":8,…}
 ```
 
-OpenCode's `websearch` tool calls a search service it's configured with; with none, it asks the user to pick one, which in an eval ends "Web search cancelled". reeval points it at Exa's hosted MCP server (`https://mcp.exa.ai/mcp`), which answers without a key. The search runs from the sandbox, so `mcp.exa.ai` is one of OpenCode's automatic hosts and works under `egress: 'deny-all'`.
+OpenCode's `websearch` tool calls a search service it's configured with; with none, it asks the user to pick one, which in an eval ends "Web search cancelled". reeval points it at Exa's hosted MCP server (`https://mcp.exa.ai/mcp`), which answers without a key.
+
+The search runs from the sandbox, so `mcp.exa.ai` is one of OpenCode's automatic hosts and works under `egress: 'deny-all'`.
 
 Exa's free tier is rate-limited. OpenCode sends an Exa key as a URL parameter, which the gateway can't swap in, so reeval uses none rather than put a key in the container.
 
@@ -169,7 +188,9 @@ Exa's free tier is rate-limited. OpenCode sends an Exa key as a URL parameter, w
 {"type":"tool","toolCallId":"call_451616","tool":"mcp__stamp__house_stamp","input":{},"output":{"metadata":{"truncated":false},"output":"STAMP-7Q"},"ok":true,…}
 ```
 
-The environment's MCP servers go in OpenCode's config (`mcp.servers`), `stdio` as `local` and `http` as `remote`, with `codemode: false`, so the model calls their tools directly and the transcript has each call's input and output. An `sse` server is refused at plan time (exit 2). Over ACP's `session/new`, OpenCode would offer them only through Code Mode, its `execute` tool.
+The environment's MCP servers go in OpenCode's config (`mcp.servers`), `stdio` as `local` and `http` as `remote`, with `codemode: false`, so the model calls their tools directly and the transcript has each call's input and output. Over ACP's `session/new`, OpenCode would offer them only through Code Mode, its `execute` tool.
+
+An `sse` server is refused at plan time (exit 2).
 
 OpenCode connects config MCP servers in the background once the session exists. reeval runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
 
@@ -186,7 +207,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox: set sandbox: docker() …` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
 | OpenCode doesn't start | `OpenCode harness failed to start: …` |
-| A model OpenCode's catalog doesn't have | The turn fails with `Invalid params: model not found: <provider>/<model>` |
+| A model OpenCode's catalogue doesn't have | The turn fails with `Invalid params: model not found: <provider>/<model>` |
 | A key the API rejects | The turn fails with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local. ACP prompt update stream failed: Internal error: API key not valid. …`, naming the provider's variable |
 
 ## Supported providers
