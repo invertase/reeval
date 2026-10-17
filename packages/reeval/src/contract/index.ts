@@ -7,9 +7,7 @@ import {
   budgetSchema,
   captureOptionsSchema,
   captureWindowSchema,
-  configJudgeDataSchema,
   fakeAnalysisDataSchema,
-  fakeJudgeDataSchema,
   historyConfigSchema,
   profileDataSchema,
   profileDefaultsDataSchema,
@@ -46,7 +44,7 @@ import {
   opencodeHarnessSchema,
   piHarnessSchema,
 } from './harness.ts'
-import { configJudgeSchema, fakeJudgeModelSchema, judgeStateSchema } from './judge.ts'
+import { configJudgeDataSchema, fakeJudgeDataSchema, judgeStateSchema } from './judge.ts'
 import {
   egressPolicySchema,
   envValueSchema,
@@ -84,7 +82,6 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   PiHarnessDescriptor: piHarnessSchema,
   CodexHarnessDescriptor: codexHarnessSchema,
   JudgeStateOptions: judgeStateSchema,
-  ConfigJudgeOptions: configJudgeSchema,
   CompareQuestion: compareQuestionSchema,
   PairFactor: pairFactorSchema,
   GatePolicy: gatePolicySchema,

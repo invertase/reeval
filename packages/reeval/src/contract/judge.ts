@@ -7,8 +7,8 @@ import { badJudgeArtifacts } from '../judge/artifacts.ts'
 import { checkModelString } from '../judge/index.ts'
 import type {
   Capture,
-  ConfigJudgeOptions,
-  FakeJudgeModel,
+  ConfigJudgeData,
+  FakeJudgeData,
   JSONValue,
   JudgeCallOptions,
   JudgeModel,
@@ -66,14 +66,7 @@ export const judgeStateSchema = z
     'What the judge is given: each key is a key of the state in `judge-input.json`. An unset key keeps its default, which is what the judge gets with no `state` option at all.',
   )
 
-// The `$def` stays the one generated from `FakeJudgeModel`: its `score` may be a function, which
-// JSON can't carry, so data and the config give a number.
-export const fakeJudgeModelSchema = z.object({
-  kind: z.literal('fake-judge'),
-  score: z.number(),
-}) as unknown as z.ZodType<FakeJudgeModel>
-
-const judgeFields = {
+export const judgeFields = {
   threshold: z
     .number()
     .min(0)
@@ -97,17 +90,22 @@ const judgeFields = {
     ),
 }
 
-export const judgeModelNameSchema = z.string().regex(/\//)
+export const fakeJudgeDataSchema = z
+  .strictObject({
+    kind: z.literal('fake-judge'),
+    score: z.number().min(0).max(1).describe('The score (0–1) every call gets.'),
+  })
+  .describe('`fakeJudge()` as data: the score every call gets.')
 
-export const configJudgeSchema = z
+export const configJudgeDataSchema = z
   .strictObject({
     model: z
-      .union([judgeModelNameSchema, fakeJudgeModelSchema])
+      .union([z.string(), fakeJudgeDataSchema])
       .optional()
       .describe("`'provider/model'`, or a fake judge."),
     ...judgeFields,
   })
-  .describe("The config file is plain data sent to workers, so its judge model can't be an object.")
+  .describe('`ConfigJudgeOptions` as data: the model by name, or a fake judge with a fixed score.')
 
 export const judgeOptionsSchema = z.strictObject({
   model: z.custom<JudgeModel>().optional(),
@@ -122,8 +120,9 @@ export const judgeCallSchema = judgeOptionsSchema.extend({
 export type _SameAsSchema = [
   Assert<Same<z.infer<typeof judgeStateSchema>, JudgeStateOptions>>,
   Assert<Same<keyof z.infer<typeof judgeStateSchema>, keyof JudgeStateOptions>>,
-  Assert<Same<z.infer<typeof configJudgeSchema>, ConfigJudgeOptions>>,
-  Assert<Same<keyof z.infer<typeof configJudgeSchema>, keyof ConfigJudgeOptions>>,
+  Assert<Same<z.infer<typeof fakeJudgeDataSchema>, FakeJudgeData>>,
+  Assert<Same<z.infer<typeof configJudgeDataSchema>, ConfigJudgeData>>,
+  Assert<Same<keyof z.infer<typeof configJudgeDataSchema>, keyof ConfigJudgeData>>,
   Assert<Same<z.infer<typeof judgeOptionsSchema>, JudgeOptions>>,
   Assert<Same<keyof z.infer<typeof judgeOptionsSchema>, keyof JudgeOptions>>,
   Assert<Same<z.infer<typeof judgeCallSchema>, JudgeCallOptions>>,
@@ -192,23 +191,34 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
   if (typeof judge !== 'object' || judge === null || Array.isArray(judge)) {
     return `judge must be an object such as { threshold: 0.8 } (got ${shown(judge)})${loc}`
   }
+  const value = judge as Record<string, unknown>
+  const model = value.model as { kind?: unknown; score?: unknown } | string | null | undefined
+  if (site.at === 'config' && typeof model === 'string') {
+    const problem = checkModelString(model)
+    if (problem) return `${site.where}: ${problem}`
+  }
   const schema =
     site.at === 'call'
       ? judgeCallSchema
       : site.at === 'config'
-        ? configJudgeSchema
+        ? configJudgeDataSchema
         : judgeOptionsSchema
   const parsed = schema.safeParse(judge)
   if (parsed.success) return undefined
-  const issues = parsed.error.issues
-  const value = judge as Record<string, unknown>
+  // The rest of a numeric fake judge (its score's range, a stray key) is left to the config's data
+  // check, which names the file it's in.
+  const numericFake =
+    site.at === 'config' &&
+    typeof model === 'object' &&
+    model?.kind === 'fake-judge' &&
+    typeof model.score === 'number'
+  const issues = parsed.error.issues.filter((i) => !(numericFake && i.path[0] === 'model'))
+  if (!issues.length) return undefined
   const at = (key: string) => issues.some((i) => i.path[0] === key)
   const order: Array<() => string | undefined> = []
   const modelProblem = () => {
     if (site.at !== 'config' || !at('model')) return undefined
-    const { model } = value
-    if (typeof model === 'string') return `${site.where}: ${checkModelString(model)}`
-    if ((model as { kind?: unknown } | null)?.kind === 'fake-judge') {
+    if (typeof model === 'object' && model?.kind === 'fake-judge') {
       return `${site.where}.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.`
     }
     return `${site.where}.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.`

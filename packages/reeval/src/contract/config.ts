@@ -9,11 +9,8 @@ import type {
   Budget,
   CaptureOptions,
   CaptureWindow,
-  ConfigJudgeData,
   FakeAnalysisData,
-  FakeJudgeData,
   HistoryConfig,
-  JSONValue,
   ProfileData,
   ProfileDefaultsData,
   ProfileLimit,
@@ -21,7 +18,7 @@ import type {
 } from '../types.ts'
 import { environmentDataSchema, sandboxDescriptorSchema } from './environment.ts'
 import { harnessDescriptorSchema } from './harness.ts'
-import { judgeStateSchema } from './judge.ts'
+import { configJudgeDataSchema } from './judge.ts'
 import { egressPolicySchema, envVarsSchema, gatePolicySchema } from './plain.ts'
 import {
   type Assert,
@@ -37,53 +34,6 @@ import {
 } from './shared.ts'
 
 const count = () => z.number().int().min(1)
-
-export const jsonValueSchema: z.ZodType<JSONValue> = z
-  .lazy(() =>
-    z.union([
-      z.null(),
-      z.boolean(),
-      z.number(),
-      z.string(),
-      z.array(jsonValueSchema),
-      z.record(z.string(), jsonValueSchema),
-    ]),
-  )
-  .describe('Any JSON value.')
-
-export const fakeJudgeDataSchema = z
-  .strictObject({
-    kind: z.literal('fake-judge'),
-    score: z.number().min(0).max(1).describe('The score (0–1) every call gets.'),
-  })
-  .describe('`fakeJudge()` as data: the score every call gets.')
-
-export const configJudgeDataSchema = z
-  .strictObject({
-    model: z
-      .union([z.string(), fakeJudgeDataSchema])
-      .optional()
-      .describe("`'provider/model'`, or a fake judge."),
-    threshold: z
-      .number()
-      .min(0)
-      .max(1)
-      .optional()
-      .describe('Minimum score (0–1) for a `pass` verdict.'),
-    providerOptions: z
-      .record(z.string(), z.record(z.string(), jsonValueSchema))
-      .optional()
-      .describe("AI SDK provider options for the judge's calls, keyed by provider."),
-    maxConcurrent: count()
-      .optional()
-      .describe("The most judge calls to this model's provider at once, across the run."),
-    state: judgeStateSchema
-      .optional()
-      .describe(
-        "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
-      ),
-  })
-  .describe('`ConfigJudgeOptions` as data: the model by name, or a fake judge with a fixed score.')
 
 export const captureWindowSchema = z
   .strictObject({
@@ -371,10 +321,6 @@ export const reevalConfigDataSchema = z
   )
 
 export type _SameAsSchema = [
-  Assert<Same<z.infer<typeof jsonValueSchema>, JSONValue>>,
-  Assert<Same<z.infer<typeof fakeJudgeDataSchema>, FakeJudgeData>>,
-  Assert<Same<z.infer<typeof configJudgeDataSchema>, ConfigJudgeData>>,
-  Assert<Same<keyof z.infer<typeof configJudgeDataSchema>, keyof ConfigJudgeData>>,
   Assert<Same<z.infer<typeof captureWindowSchema>, CaptureWindow>>,
   Assert<Same<z.infer<typeof captureOptionsSchema>, CaptureOptions>>,
   Assert<Same<z.infer<typeof budgetSchema>, Budget>>,
