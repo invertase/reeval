@@ -123,7 +123,7 @@ const dockerRow: Row = {
       case 'ok':
         return run('echo ok')
       case 'transient':
-        return { kind: 'docker', from: `registry.invalid.example:5000/es/none-${n}:1` }
+        return { kind: 'docker', from: `registry.invalid.example:5000/reeval/none-${n}:1` }
       case 'broken':
         return run('echo broken && exit 5')
       case 'oom':

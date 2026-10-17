@@ -1,5 +1,5 @@
 {
-  "kind": "es-run",
+  "kind": "reeval-run",
   "schemaVersion": 1,
   "runId": "20260929T034525Z_a7bf43a_runner_h50r",
   "status": "complete",
@@ -26,7 +26,7 @@
     "lockfiles": []
   },
   "stack": {
-    "es": "0.0.1",
+    "reeval": "0.0.1",
     "node": "24.21.0",
     "os": "linux",
     "arch": "x64",

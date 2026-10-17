@@ -34,7 +34,7 @@ export const analysisSchema = z.object({
   anomalies: z.array(
     z.object({
       text: z.string(),
-      kind: z.enum(['es-bug', 'eval-design', 'judge', 'noise', 'other']),
+      kind: z.enum(['reeval-bug', 'eval-design', 'judge', 'noise', 'other']),
       cites,
     }),
   ),
@@ -43,7 +43,7 @@ export const analysisSchema = z.object({
       z.object({
         title: z.string(),
         target: z.string().describe('The file, skill, eval or reeval setting to change'),
-        kind: z.enum(['skill', 'docs', 'eval', 'judge', 'es', 'harness']),
+        kind: z.enum(['skill', 'docs', 'eval', 'judge', 'reeval', 'harness']),
         change: z.string(),
         expectedEffect: z.string().describe('What should measurably change'),
         verify: z

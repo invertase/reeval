@@ -457,7 +457,7 @@ export type Cost = {
 }
 
 export type RunRecord = {
-  kind: 'es-run'
+  kind: 'reeval-run'
   schemaVersion: typeof SCHEMA_VERSION
   /** Also the file name: `<UTC start>_<short sha>_<author or ci>`. */
   runId: string
@@ -529,7 +529,8 @@ export type RunRecord = {
 
 /** What ran and graded the agents: the machine, images, harnesses and judge. */
 export type Stack = {
-  es: string
+  /** The reeval version that wrote the run. */
+  reeval: string
   /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
   node: string
   /**

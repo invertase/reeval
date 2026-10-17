@@ -103,10 +103,14 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
 }
 
 /** Moves whenever the code that builds and scores the judge prompt could have changed. */
-export function judgeVersion(es: string, packages: Record<string, string>, model: string): string {
+export function judgeVersion(
+  reeval: string,
+  packages: Record<string, string>,
+  model: string,
+): string {
   const direct = DIRECT_PROVIDERS[model.slice(0, model.indexOf('/'))]
   const adapter = (direct && packages[direct.pkg]) ?? packages.ai
-  return sha256(JSON.stringify({ es, ai: packages.ai, adapter, model })).slice(0, 12)
+  return sha256(JSON.stringify({ reeval, ai: packages.ai, adapter, model })).slice(0, 12)
 }
 
 /** Inputs every eval fingerprint hashes. Change it when the fingerprint's inputs change. */

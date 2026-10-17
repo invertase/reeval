@@ -220,7 +220,12 @@ describe('the Claude Code harness', () => {
   test('gets MCP servers in the .mcp.json shape', () => {
     assert.deepEqual(
       claudeMcpServers({
-        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: {
+          transport: 'stdio',
+          command: 'npx',
+          args: ['mcp-files'],
+          env: { ROOT: '/reeval' },
+        },
         docs: {
           transport: 'http',
           url: 'https://docs.example/mcp',
@@ -228,7 +233,7 @@ describe('the Claude Code harness', () => {
         },
       }),
       {
-        files: { type: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: { type: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/reeval' } },
         docs: {
           type: 'http',
           url: 'https://docs.example/mcp',
@@ -286,11 +291,16 @@ describe('the Antigravity harness', () => {
   test("gets MCP servers in the CLI's mcp_config.json shape (serverUrl, not url)", () => {
     assert.deepEqual(
       antigravityMcpServers({
-        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: {
+          transport: 'stdio',
+          command: 'npx',
+          args: ['mcp-files'],
+          env: { ROOT: '/reeval' },
+        },
         docs: { transport: 'sse', url: 'https://docs.example/sse', headers: { A: 'b' } },
       }),
       {
-        files: { command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: { command: 'npx', args: ['mcp-files'], env: { ROOT: '/reeval' } },
         docs: { serverUrl: 'https://docs.example/sse', headers: { A: 'b' } },
       },
     )
@@ -442,11 +452,16 @@ describe('the OpenCode harness', () => {
   test("gets MCP servers in its config's shape, and refuses SSE", () => {
     assert.deepEqual(
       AGENTS.opencode.mcpServers({
-        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: {
+          transport: 'stdio',
+          command: 'npx',
+          args: ['mcp-files'],
+          env: { ROOT: '/reeval' },
+        },
         docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
       }),
       {
-        files: { type: 'local', command: ['npx', 'mcp-files'], environment: { ROOT: '/es' } },
+        files: { type: 'local', command: ['npx', 'mcp-files'], environment: { ROOT: '/reeval' } },
         docs: {
           type: 'remote',
           url: 'https://docs.example/mcp',
@@ -539,11 +554,16 @@ describe('the Goose harness', () => {
   test('gets MCP servers as Goose extensions (stdio and streamable_http), and refuses SSE', () => {
     assert.deepEqual(
       gooseMcpServers({
-        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: {
+          transport: 'stdio',
+          command: 'npx',
+          args: ['mcp-files'],
+          env: { ROOT: '/reeval' },
+        },
         docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
       }),
       {
-        files: { type: 'stdio', cmd: 'npx', args: ['mcp-files'], envs: { ROOT: '/es' } },
+        files: { type: 'stdio', cmd: 'npx', args: ['mcp-files'], envs: { ROOT: '/reeval' } },
         docs: { type: 'streamable_http', uri: 'https://docs.example/mcp', headers: { A: 'b' } },
       },
     )
@@ -850,11 +870,16 @@ describe('the Cursor harness', () => {
   test("gets MCP servers in the SDK's McpServerConfig shape", () => {
     assert.deepEqual(
       cursorMcpServers({
-        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: {
+          transport: 'stdio',
+          command: 'npx',
+          args: ['mcp-files'],
+          env: { ROOT: '/reeval' },
+        },
         docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
       }),
       {
-        files: { type: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        files: { type: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/reeval' } },
         docs: { type: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
       },
     )
@@ -917,7 +942,7 @@ function recordingSession(): {
   const session: HarnessV1NetworkSandboxSession = {
     id: 'test',
     description: 'recording session',
-    defaultWorkingDirectory: '/es',
+    defaultWorkingDirectory: '/reeval',
     ports: [43210],
     getPortEndpoint: stop,
     getPortUrl: stop,
@@ -1781,7 +1806,7 @@ async function turnThrough(
   })
   const sandboxSession = {
     description: 'none',
-    defaultWorkingDirectory: '/es',
+    defaultWorkingDirectory: '/reeval',
     run: async () => ({ exitCode: 0, stdout: '/root', stderr: '' }),
     restricted: () => sandboxSession,
   }

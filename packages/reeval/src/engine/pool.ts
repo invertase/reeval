@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { UsageError } from '../errors.ts'
-import { DIST_DIR, esCommand } from '../root.ts'
+import { DIST_DIR, reevalCommand } from '../root.ts'
 import { type FromWorker, PROTOCOL, type ToWorker } from './protocol.ts'
 
 export type Exit = { code: number | null; signal: NodeJS.Signals | null }
@@ -24,7 +24,7 @@ export type WorkerProcess = {
 export type Spawn = (entry: string, cwd: string) => WorkerProcess
 
 export const forkWorker: Spawn = (entry, cwd) => {
-  const [command, ...args] = esCommand(entry, ['__worker'], ['--enable-source-maps'])
+  const [command, ...args] = reevalCommand(entry, ['__worker'], ['--enable-source-maps'])
   const child = spawn(command, args, {
     cwd,
     detached: true,

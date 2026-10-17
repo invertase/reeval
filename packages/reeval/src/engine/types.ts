@@ -1,6 +1,6 @@
 // What the engine hands the CLI: the plan it collected and each attempt's result.
 import type { AttemptMeta, RunContext } from '../types.ts'
-import type { EsEvent, EvalResult } from '../ui/events.ts'
+import type { EvalResult, ReevalEvent } from '../ui/events.ts'
 
 /** One attempt's result. */
 export type EngineEval = EvalResult
@@ -37,7 +37,7 @@ export type EngineOptions = {
   /** Called once the eval files are known, with how many there are. */
   onRunStart?: (files: number) => void
   /** Collection, start, progress, console output and result of each attempt, as they happen. */
-  onEvent?: (e: EsEvent) => void
+  onEvent?: (e: ReevalEvent) => void
   /** Called once the engine can be cancelled, with a function that cancels the run. */
   onCancellable?: (cancel: () => void) => void
   /**

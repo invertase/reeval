@@ -231,7 +231,7 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
   const language = languageLabel(env)
   rows.push([
     'reeval',
-    `${env.es} · ${runtimeLabel(env)}${language ? ` · ${language}` : ''} · ${env.os}/${env.arch}`,
+    `${env.reeval} · ${runtimeLabel(env)}${language ? ` · ${language}` : ''} · ${env.os}/${env.arch}`,
   ])
   rows.push([
     'Runner',

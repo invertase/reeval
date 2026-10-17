@@ -17,7 +17,7 @@ export type StartOptions = {
   host: string
   port: number
   token: boolean
-  es: string
+  reeval: string
   project: string
   appDir?: string
 }
@@ -53,7 +53,7 @@ export async function startStudio(options: StartOptions) {
     const app = createStudioApp({
       source,
       appDir: options.appDir ?? APP_DIR,
-      es: options.es,
+      reeval: options.reeval,
       project: options.project,
       token,
       hosts: allowedHosts(host, port),
@@ -93,11 +93,11 @@ export function openBrowser(url: string) {
 }
 
 /** The data routes as a Node request listener, for the studio-web dev server. No token or Host check. */
-export function devListener(source: StudioSource, es: string) {
+export function devListener(source: StudioSource, version: string) {
   const app = createStudioApp({
     source,
     appDir: APP_DIR,
-    es,
+    reeval: version,
     project: source.root.split(/[\\/]/).at(-1) ?? 'project',
     token: null,
     hosts: [],

@@ -2048,7 +2048,7 @@
           ]
         },
         "kind": {
-          "const": "es-run"
+          "const": "reeval-run"
         },
         "plan": {
           "type": "object",
@@ -2293,9 +2293,6 @@
             "$ref": "#/$defs/ContextFile"
           }
         },
-        "es": {
-          "type": "string"
-        },
         "fingerprintScope": {
           "type": "array",
           "items": {
@@ -2481,6 +2478,9 @@
             "type": "string"
           }
         },
+        "reeval": {
+          "type": "string"
+        },
         "runtime": {
           "type": "object",
           "properties": {
@@ -2497,14 +2497,14 @@
       "required": [
         "arch",
         "context",
-        "es",
         "fingerprintScope",
         "harnesses",
         "images",
         "judge",
         "node",
         "os",
-        "packages"
+        "packages",
+        "reeval"
       ]
     },
     "StartRetry": {

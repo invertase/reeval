@@ -55,7 +55,7 @@ export default defineConfig({
 `
 
 /** Runs `reeval`; the recipe's runs fail some evals on purpose, so exit 1 is fine. */
-function es(dir: string, args: string[]): void {
+function reeval(dir: string, args: string[]): void {
   const r = spawnSync(process.execPath, [join(PACKAGE_DIR, 'dist/cli.js'), ...args], {
     cwd: dir,
     encoding: 'utf8',
@@ -86,12 +86,12 @@ function recordRecipe(): string {
   git(dir, 'init', '-q')
   git(dir, 'add', '-A')
   git(dir, 'commit', '-qm', 'corpus recipe')
-  es(dir, ['run', 'greet', 'skill', 'cases', '--record'])
+  reeval(dir, ['run', 'greet', 'skill', 'cases', '--record'])
   const [first] = runsIn(dir)
   git(dir, 'add', '-A')
   git(dir, 'commit', '-qm', 'first run')
-  es(dir, ['run', 'slow', '--profile', 'budget', '--concurrency', '1', '--record'])
-  es(dir, ['analyze', first as string, '--save'])
+  reeval(dir, ['run', 'slow', '--profile', 'budget', '--concurrency', '1', '--record'])
+  reeval(dir, ['analyze', first as string, '--save'])
   return dir
 }
 
@@ -159,7 +159,7 @@ function main(): number {
   )
   // A copied run names the reeval that wrote it but not its commit, so the note carries that.
   const recordedBy = from.length
-    ? `reeval ${[...new Set(records.map((r) => r.stack?.es ?? 'unknown'))].join(', ')}`
+    ? `reeval ${[...new Set(records.map((r) => r.stack?.reeval ?? 'unknown'))].join(', ')}`
     : `reeval ${JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')).version} at ${git(PACKAGE_DIR, 'rev-parse', '--short', 'HEAD')}`
   const note =
     values.note ??

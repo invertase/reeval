@@ -61,11 +61,11 @@
             }
           ]
         },
-        "es": {
-          "type": "string"
-        },
         "exitCode": {
           "type": "number"
+        },
+        "reeval": {
+          "type": "string"
         },
         "runId": {
           "anyOf": [
@@ -90,8 +90,8 @@
         "command",
         "durationMs",
         "error",
-        "es",
         "exitCode",
+        "reeval",
         "runId",
         "unhandledErrors"
       ]

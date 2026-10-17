@@ -5,7 +5,7 @@
 // `../<dir>` from a module names the same place, and the prebuilt studio app (`dist/studio-app`).
 // Those lookups go through src/root.ts, reeval's one resource locator: the build rewrites each
 // `new URL('<path>', import.meta.url)` in an inlined package to root.ts's `ownFileURL`, and fails
-// on any other import.meta.url, so a compiled es (scripts/bun-compile.mjs) finds them too. THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
+// on any other import.meta.url, so a compiled reeval (scripts/bun-compile.mjs) finds them too. THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
 // that inlines (scripts/third-party.mjs).
 import {
   cpSync,

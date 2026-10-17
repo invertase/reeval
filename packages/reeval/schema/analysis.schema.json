@@ -5,7 +5,7 @@
   "$ref": "#/$defs/AnalysisDoc",
   "$defs": {
     "ActionKind": {
-      "enum": ["docs", "es", "eval", "harness", "judge", "skill"]
+      "enum": ["docs", "eval", "harness", "judge", "reeval", "skill"]
     },
     "AnalysisAction": {
       "type": "object",
@@ -242,7 +242,7 @@
           "required": ["digestHash", "digestVersion", "records"]
         },
         "kind": {
-          "const": "es-analysis"
+          "const": "reeval-analysis"
         },
         "latencyMs": {
           "type": "number"
@@ -392,7 +392,7 @@
       ]
     },
     "AnomalyKind": {
-      "enum": ["es-bug", "eval-design", "judge", "noise", "other"]
+      "enum": ["eval-design", "judge", "noise", "other", "reeval-bug"]
     },
     "Confidence": {
       "enum": ["high", "low", "medium"]

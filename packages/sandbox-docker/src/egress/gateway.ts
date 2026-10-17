@@ -16,7 +16,7 @@ export const PROXY_PORT = 43128
 export const CA_PATH = '/usr/local/share/ca-certificates/reeval-egress.crt'
 /** Debian's system bundle, which `update-ca-certificates` rebuilds with the gateway's CA in it. */
 export const CA_BUNDLE = '/etc/ssl/certs/ca-certificates.crt'
-const BUNDLED = 'es:ca-bundle'
+const BUNDLED = 'reeval:ca-bundle'
 
 const READY_TIMEOUT_MS = 15_000
 

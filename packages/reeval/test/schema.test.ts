@@ -280,7 +280,7 @@ describe('read defaults', () => {
         ),
     )
     assert.throws(
-      () => readableAnalysis({ kind: 'es-analysis', schemaVersion: 3 } as never),
+      () => readableAnalysis({ kind: 'reeval-analysis', schemaVersion: 3 } as never),
       NewerSchemaError,
     )
   })

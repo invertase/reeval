@@ -69,7 +69,7 @@ export function runtimeInfo(
 
 export function runnerInfo(env = process.env): RunnerInfo {
   if (!inCI(env)) {
-    return { kind: 'local', hostHash: sha256(`evalsuite:${hostname()}`).slice(0, 12) }
+    return { kind: 'local', hostHash: sha256(`reeval:${hostname()}`).slice(0, 12) }
   }
   if (env.GITHUB_ACTIONS) {
     const runUrl =

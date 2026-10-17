@@ -61,7 +61,7 @@ export function writeScratch(
   writeFileSync(
     join(root, '.reeval', 'runs', `${runId}.json`),
     `${JSON.stringify({
-      kind: 'es-run',
+      kind: 'reeval-run',
       runId,
       status,
       startedAt: '2026-01-01T00:00:00.000Z',

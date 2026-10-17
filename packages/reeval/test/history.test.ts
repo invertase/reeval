@@ -131,7 +131,7 @@ describe('recording runs into evals/.history', () => {
     assert.equal(recordedRuns(p.dir).length, 2)
 
     const shown = await runCli(p.dir, ['show', 'latest', '--json'])
-    assert.equal((JSON.parse(shown.stdout) as RunRecord).kind, 'es-run')
+    assert.equal((JSON.parse(shown.stdout) as RunRecord).kind, 'reeval-run')
     assert.match((await runCli(p.dir, ['show', run.runId, '--md'])).stdout, /^# reeval run /)
     assert.match(
       (await runCli(p.dir, ['history'])).stdout,
@@ -206,8 +206,8 @@ describe('recording runs into evals/.history', () => {
     // What a merge that went wrong, or a copy cut short, leaves behind.
     const conflicted = `${HISTORY}/20260101T000000Z_deadbee_someone_aaaa.json`
     const truncated = `${HISTORY}/20260101T000001Z_deadbee_someone_bbbb.json`
-    await writeFile(join(p.dir, conflicted), '<<<<<<< HEAD\n{"kind":"es-run"}\n=======\n')
-    await writeFile(join(p.dir, truncated), '{"kind":"es-run","runId":"2026')
+    await writeFile(join(p.dir, conflicted), '<<<<<<< HEAD\n{"kind":"reeval-run"}\n=======\n')
+    await writeFile(join(p.dir, truncated), '{"kind":"reeval-run","runId":"2026')
     for (const args of [['history'], ['history', '--json'], ['query', 'lift', '--rebuild']]) {
       const r = await runCli(p.dir, args)
       assert.equal(r.code, 0, `${args.join(' ')}: ${r.stderr}`)
@@ -861,7 +861,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
       history.rows.map((r: { id: string }) => r.id),
       ['evals/agent.eval.ts › agent'],
     )
-    assert.equal(JSON.parse((await ok(['show', 'latest', '--json'])).stdout).kind, 'es-run')
+    assert.equal(JSON.parse((await ok(['show', 'latest', '--json'])).stdout).kind, 'reeval-run')
     assert.match((await ok(['compare'])).stdout, /same/i)
     assert.deepEqual(JSON.parse((await ok(['query', 'failing_attempts', '--json'])).stdout), [])
     assert.ok(existsSync(join(p.dir, '.reeval/history.db')))

@@ -134,7 +134,7 @@ function evalSourcesChanged(base: EvalEntry, head: EvalEntry): boolean {
 /** Short tags for the evals in scope: the file's base name, numbered when a file has several. */
 function evalTags(evals: EvalEntry[]): Map<string, string> {
   const tags = new Map<string, string>()
-  const bases = evals.map((e) => basename(e.file).replace(/\.(?:eval|es)\.ts$|\.[jt]s$/, ''))
+  const bases = evals.map((e) => basename(e.file).replace(/(?:\.\w+)?\.[jt]s$/, ''))
   evals.forEach((e, i) => {
     const b = bases[i] as string
     const same = bases.filter((x) => x === b).length

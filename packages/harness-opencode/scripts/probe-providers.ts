@@ -122,7 +122,8 @@ const contextFor = (host: string) => {
 }
 
 const inner = createServer((req, res) => {
-  const host = (req.socket as TLSSocket & { esHost?: string }).esHost ?? req.headers.host ?? ''
+  const host =
+    (req.socket as TLSSocket & { reevalHost?: string }).reevalHost ?? req.headers.host ?? ''
   answer(host.split(':')[0] ?? host, req, res)
 })
 const proxy = createServer((req, res) => answer(new URL(req.url ?? '').hostname, req, res))
@@ -135,8 +136,8 @@ proxy.on('connect', (req: IncomingMessage, socket: Socket, head: Buffer) => {
     ALPNProtocols: ['http/1.1'],
     SNICallback: (name, cb) => cb(null, contextFor(name)),
     secureContext: contextFor(host),
-  }) as TLSSocket & { esHost?: string }
-  tls.esHost = host
+  }) as TLSSocket & { reevalHost?: string }
+  tls.reevalHost = host
   tls.on('error', (e) => process.stderr.write(`tls ${host} ${e.message}\n`))
   inner.emit('connection', tls)
 })

@@ -118,7 +118,7 @@ after(async () => {
 /** A saved analysis as `reeval analyze --save` writes it, citing one failing attempt. */
 function savedAnalysis(runId: string, attempt: { slug: string; id: string }) {
   const doc = {
-    kind: 'es-analysis',
+    kind: 'reeval-analysis',
     schemaVersion: 1,
     scope: { kind: 'run', head: runId, base: null, evals: null },
     anchor: runId,

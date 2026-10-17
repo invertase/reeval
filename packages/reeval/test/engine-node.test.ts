@@ -9,7 +9,7 @@ import type { Exit, Spawn, WorkerProcess } from '../src/engine/pool.ts'
 import { type FromWorker, PROTOCOL, type ToWorker, type WireTest } from '../src/engine/protocol.ts'
 import type { CollectedPlan, EngineOptions } from '../src/engine/types.ts'
 import type { AttemptMeta, RunContext } from '../src/types.ts'
-import type { EsEvent } from '../src/ui/events.ts'
+import type { ReevalEvent } from '../src/ui/events.ts'
 import { tempDir } from './helpers.ts'
 
 type Init = Extract<ToWorker, { t: 'init' }>
@@ -267,7 +267,7 @@ describe('runEngine: running', () => {
 
   test('events and results: by file then declaration, todos flagged, durations rounded', async () => {
     const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
-    const events: EsEvent[] = []
+    const events: ReevalEvent[] = []
     let files = 0
     const { spawn, spawned } = fakeSpawn(
       passing(two, (ctl) => {
@@ -319,7 +319,7 @@ describe('runEngine: running', () => {
     const types = events.map((e) => e.type)
     for (const type of ['collected', 'eval-start', 'eval-progress', 'debug', 'log', 'eval-end'])
       assert.ok(types.includes(type as never), type)
-    const logs = events.filter((e) => e.type === 'log') as Extract<EsEvent, { type: 'log' }>[]
+    const logs = events.filter((e) => e.type === 'log') as Extract<ReevalEvent, { type: 'log' }>[]
     assert.deepEqual(
       logs
         .filter((l) => l.text === 'hi\n' || l.text === 'unknown\n' || l.text === 'raw write\n')
@@ -330,7 +330,7 @@ describe('runEngine: running', () => {
       ],
     )
     const collected = events.find((e) => e.type === 'collected') as Extract<
-      EsEvent,
+      ReevalEvent,
       { type: 'collected' }
     >
     assert.deepEqual(
@@ -538,7 +538,7 @@ describe('runEngine: running', () => {
       test0(2, 'skipped', { mode: 'skip' }),
       test0(3, 'filtered out'),
     ]
-    const events: EsEvent[] = []
+    const events: ReevalEvent[] = []
     const { spawn } = fakeSpawn((ctl) => {
       ctl.emit({ t: 'collected', tests })
       if (!ctl.init.select) {

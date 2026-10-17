@@ -95,7 +95,7 @@ export type AssembleInput = {
   previous?: RunRecord | null
   /** Artifact directory of `previous`, when it was moved aside into staging. */
   previousArtifacts?: string | null
-  es: string
+  reeval: string
   runtime: NonNullable<Stack['runtime']>
   /** What the evals are written in; a runner for another language gives its own. */
   language: NonNullable<Stack['language']>
@@ -885,7 +885,7 @@ function stackOf(
 ): Stack {
   const packages = packageVersions(input.enginePackages)
   return {
-    es: input.es,
+    reeval: input.reeval,
     node: process.versions.node,
     runtime: input.runtime,
     language: input.language,
@@ -907,7 +907,7 @@ function stackOf(
       model: judgeModel,
       resolvedModels: [...seen.resolvedJudges].sort(),
       threshold,
-      version: judgeVersion(input.es, packages, judgeModel ?? ''),
+      version: judgeVersion(input.reeval, packages, judgeModel ?? ''),
     },
     context: [...seen.contexts.values()].sort(byName((c) => c.path)),
     fingerprintScope: FINGERPRINT_SCOPE,
@@ -937,7 +937,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     JSON.stringify({
       model: judgeModel,
       threshold: runJudge.threshold,
-      version: judgeVersion(input.es, packageVersions(input.enginePackages), judgeModel ?? ''),
+      version: judgeVersion(input.reeval, packageVersions(input.enginePackages), judgeModel ?? ''),
     }),
   )
   for (const e of engine.evals)
@@ -989,7 +989,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>
     list === undefined ? undefined : [list].flat().map(harnessId)
   const record: RunRecord = {
-    kind: 'es-run',
+    kind: 'reeval-run',
     schemaVersion: SCHEMA_VERSION,
     runId,
     status: input.interrupted ? 'interrupted' : input.budgetReached ? 'budget' : 'complete',

@@ -4,7 +4,7 @@ import type { AttemptMeta } from '../types.ts'
 import { type DebugLine, debugTime } from '../view/debug.ts'
 import type { Colors } from './colors.ts'
 import { stripAnsi } from './colors.ts'
-import type { EsEvent, EvalResult, Progress } from './events.ts'
+import type { EvalResult, Progress, ReevalEvent } from './events.ts'
 
 export { formatDuration }
 
@@ -217,7 +217,7 @@ function failureBody(
 /** Preflight's lines: which sandboxes it prepares, the slow ones when ready, and each failure. */
 export function prepareLines(
   c: Colors,
-  e: Extract<EsEvent, { type: 'prepare' }>,
+  e: Extract<ReevalEvent, { type: 'prepare' }>,
   max: number,
 ): string[] {
   if (e.state === 'start') {

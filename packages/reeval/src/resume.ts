@@ -189,7 +189,7 @@ async function readScratch(root: string, runId: string): Promise<RunRecord | nul
   try {
     const text = await readFile(join(scratchDir(root), `${runId}.json`), 'utf8')
     const record = JSON.parse(text) as RunRecord
-    return record.kind === 'es-run' && record.runId === runId ? record : null
+    return record.kind === 'reeval-run' && record.runId === runId ? record : null
   } catch {
     return null
   }
@@ -365,7 +365,7 @@ export async function loadPrevious(staging: string): Promise<{
   try {
     const record = JSON.parse(await readFile(file, 'utf8')) as RunRecord
     return {
-      record: record.kind === 'es-run' ? record : null,
+      record: record.kind === 'reeval-run' ? record : null,
       artifacts: existsSync(artifacts) ? artifacts : null,
     }
   } catch {

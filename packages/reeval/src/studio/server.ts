@@ -31,7 +31,7 @@ export type StudioServerOptions = {
   source: StudioSource
   /** The prebuilt web app (index.html and assets/). */
   appDir: string
-  es: string
+  reeval: string
   project: string
   /** null turns the token check off (`--no-token`). */
   token: string | null
@@ -228,7 +228,7 @@ export function createStudioApp(options: StudioServerOptions) {
       if (target.kind === 'studio') {
         const info: StudioInfo = {
           mode: 'live',
-          es: options.es,
+          reeval: options.reeval,
           project: options.project,
           generatedAt: new Date().toISOString(),
           features: {

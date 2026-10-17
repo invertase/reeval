@@ -1,5 +1,5 @@
 {
-  "kind": "es-run",
+  "kind": "reeval-run",
   "schemaVersion": 1,
   "runId": "20260930T123930Z_e1cee1a_cursor-agent_5gcw",
   "status": "budget",
@@ -26,7 +26,7 @@
     "lockfiles": []
   },
   "stack": {
-    "es": "0.3.0",
+    "reeval": "0.3.0",
     "node": "22.14.0",
     "runtime": {
       "name": "node",

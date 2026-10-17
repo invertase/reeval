@@ -369,7 +369,7 @@ async function runCommand(
       interrupted: stopped,
       budgetReached: budgetReached(),
       plan,
-      es: version,
+      reeval: version,
       runtime: runtimeInfo(),
       language: { name: 'typescript' },
       enginePackages: engineVersions,
@@ -978,7 +978,7 @@ function finish(code: number, error?: unknown, kind?: NonNullable<CliInvocation[
   const command = commandOf(argv)
   logInvocation(root, {
     at: new Date(startedAt).toISOString(),
-    es: version,
+    reeval: version,
     argv: redactArgv(argv),
     command,
     exitCode: code,

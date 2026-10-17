@@ -19,7 +19,7 @@ export type AnalysisClaim = {
   unverifiedNumbers?: string[]
 }
 
-export type AnomalyKind = 'es-bug' | 'eval-design' | 'judge' | 'noise' | 'other'
+export type AnomalyKind = 'reeval-bug' | 'eval-design' | 'judge' | 'noise' | 'other'
 export type AnalysisAnomaly = {
   text: string
   kind: AnomalyKind
@@ -28,7 +28,7 @@ export type AnalysisAnomaly = {
   unverifiedNumbers?: string[]
 }
 
-export type ActionKind = 'skill' | 'docs' | 'eval' | 'judge' | 'es' | 'harness'
+export type ActionKind = 'skill' | 'docs' | 'eval' | 'judge' | 'reeval' | 'harness'
 export type Level = 'high' | 'medium' | 'low'
 
 export type AnalysisAction = {
@@ -77,7 +77,7 @@ export type AnalysisScope = {
 }
 
 export type AnalysisDoc = {
-  kind: 'es-analysis'
+  kind: 'reeval-analysis'
   schemaVersion: 1
   scope: AnalysisScope
   /** The run the analysis belongs to: the scope's head. */

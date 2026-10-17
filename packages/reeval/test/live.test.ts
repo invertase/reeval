@@ -439,7 +439,7 @@ describe('the studio serves and streams live runs', () => {
     const app = createStudioApp({
       source,
       appDir: root,
-      es: 'test',
+      reeval: 'test',
       project: 'live',
       token: null,
       hosts: [],

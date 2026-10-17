@@ -8,5 +8,5 @@ const sandbox =
 
 export const homeFiles = defineEnvironment('home-files', {
   sandbox,
-  files: { '~/.config/es/hint.txt': 'from home' },
+  files: { '~/.config/reeval/hint.txt': 'from home' },
 })
