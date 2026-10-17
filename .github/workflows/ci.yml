@@ -114,6 +114,7 @@ jobs:
               case $f in
                 packages/reeval/src/engine/* | \
                 packages/reeval/src/attempt/* | \
+                packages/reeval/src/capture/* | \
                 packages/reeval/src/sandbox/* | \
                 packages/reeval/src/harness/* | \
                 packages/reeval/src/ui/* | \
@@ -129,6 +130,7 @@ jobs:
                 packages/reeval/src/sandbox/* | \
                 packages/reeval/src/harness/* | \
                 packages/reeval/src/attempt/* | \
+                packages/reeval/src/capture/* | \
                 packages/reeval/src/egress.ts | \
                 packages/reeval/test/features/* | \
                 packages/reeval/test/docker* | \
