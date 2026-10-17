@@ -758,6 +758,75 @@ export default defineConfig({
     assert.deepEqual(fact?.reasons, ['the first slot writes ok.txt'])
   })
 
+  // Three arms, three runs, and a vote that always picks the side shown first: every pair splits
+  // with the order, which the pooled rates (each arm 50%) and a "0 ties" count hide.
+  test('three arms: head to head per pair, and pairs the order decided are splits', async () => {
+    const p = await project('questions-splits', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: ${OK},
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  analysis: { model: fakeAnalysis({ vote: 'A' }) },
+})
+`,
+      'evals/envs.ts': `import { defineEnvironment } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+export const none = defineEnvironment('no-skill', { sandbox })
+export const current = defineEnvironment('current-skill', { sandbox })
+export const next = defineEnvironment('new-skill', { sandbox })
+`,
+      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+import { current, next, none } from './envs.ts'
+evaluate('asks', { compare: { baseline: none, variants: [current, next], gate: 'none', questions: ['Which delivers a better user experience?'] }, runs: 3 }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.answers?.[0]?.votes.length, 18)
+    const pairs =
+      'within fake: no-skill 0–0 current-skill (3 splits) · no-skill 0–0 new-skill (3 splits) · current-skill 0–0 new-skill (3 splits)'
+    const splits = /18 votes, 0 ties, 9\/9 pairs split by order, all to the side shown first/
+    assert.match(r.stdout, splits)
+    assert.ok(r.stdout.includes(pairs), r.stdout)
+    const summary = readRun(p.dir).read('summary.md')
+    assert.match(summary, splits)
+    assert.ok(summary.includes(`  - ${pairs}`), summary)
+    const q = await runCli(p.dir, [
+      'query',
+      'SELECT a, b, pairs, a_wins, b_wins, ties, splits, splits_first FROM question_pairs',
+      '--json',
+    ])
+    assert.equal(q.code, 0, q.stderr)
+    assert.deepEqual(
+      (JSON.parse(q.stdout) as Array<Record<string, unknown>>).map((x) => Object.values(x)),
+      [
+        ['no-skill', 'current-skill', 3, 0, 0, 0, 3, 3],
+        ['no-skill', 'new-skill', 3, 0, 0, 0, 3, 3],
+        ['current-skill', 'new-skill', 3, 0, 0, 0, 3, 3],
+      ],
+    )
+    const votes = await runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM votes', '--json'])
+    assert.deepEqual(JSON.parse(votes.stdout), [{ n: 18 }])
+    const out = await runCli(p.dir, ['analyze', '--context', '--vs', 'none'])
+    assert.equal(out.code, 0, out.stderr)
+    const json = /```json\n([\s\S]*?)\n```/.exec(out.stdout)?.[1]
+    assert.ok(json)
+    const fact = (JSON.parse(json) as { facts: Array<Record<string, unknown>> }).facts.find(
+      (f) => f.kind === 'compare-question',
+    )
+    assert.equal(fact?.splits, '9/9 pairs split by order, all to the side shown first')
+    assert.deepEqual(fact?.headToHead, [pairs])
+  })
+
   // Three harnesses: `two` writes an extra file, which the fake vote prefers, and `bad` fails
   // its check on every attempt, so it's in no pair but still in the pass rate and the exit code.
   const threeHarnesses = (
@@ -830,18 +899,18 @@ export default defineConfig({
     )
     assert.match(
       r.stdout,
-      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties · fake$/m,
+      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
     )
     const run = readRun(asked.dir)
     assert.match(
       run.read('summary.md'),
-      /^- Question: "Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties · fake$/m,
+      /^- Question: "Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
     )
     const agent = await runCli(asked.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 1, agent.stdout + agent.stderr)
     assert.match(
       agent.stdout,
-      /^question evals\/q\.eval\.ts › asks: "Which is cleaner\?" within: .* · 16 votes, 4 ties · fake$/m,
+      /^question evals\/q\.eval\.ts › asks: "Which is cleaner\?" within: .* · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
     )
   })
 
@@ -865,7 +934,7 @@ export default defineConfig({
     assert.ok(!answer.rates.some((x) => x.cut === 'across'))
     assert.match(
       r.stdout,
-      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · 8 votes, 4 ties · fake$/m,
+      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · 8 votes, 4 ties, 2\/4 pairs split by order, all to the side shown first · fake$/m,
     )
   })
 

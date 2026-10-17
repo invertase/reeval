@@ -30,6 +30,7 @@ import type {
   WebEventType,
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
+import { checkVerdict } from '../view/contrasts.ts'
 import { familiesOf } from './families.ts'
 import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
@@ -37,7 +38,6 @@ import {
   type AttemptFiles,
   type AttemptRecord,
   type CellRecord,
-  type CheckTally,
   type ContextFile,
   type Cost,
   type EvalEntry,
@@ -761,13 +761,6 @@ function checkTallies(entry: EvalEntry): void {
   }
 }
 
-/** Where every counted attempt that answered a check passed it (`all`), none did, or some. */
-const sideOf = (t: CheckTally): 'all' | 'none' | 'some' | undefined => {
-  const answered = t.pass + t.fail + t.notRun
-  if (answered === 0) return undefined
-  return t.pass === answered ? 'all' : t.pass === 0 ? 'none' : 'some'
-}
-
 /** Puts the control's tally beside each of the variant's checks, with whether it discriminates. */
 function discrimination(control: CellRecord, variant: CellRecord): void {
   for (const check of variant.checks ?? []) {
@@ -775,17 +768,8 @@ function discrimination(control: CellRecord, variant: CellRecord): void {
     if (!k) continue
     const { label: _label, ...tally } = k
     check.control = tally
-    const v = sideOf(check)
-    const c = sideOf(k)
-    if (v === undefined || c === undefined) continue
-    check.verdict =
-      v === 'all' && c === 'all'
-        ? 'both-pass'
-        : v === 'none' && c === 'none'
-          ? 'both-fail'
-          : (v === 'all' && c === 'none') || (v === 'none' && c === 'all')
-            ? 'discriminates'
-            : 'mixed'
+    const verdict = checkVerdict(check, k)
+    if (verdict) check.verdict = verdict
   }
 }
 

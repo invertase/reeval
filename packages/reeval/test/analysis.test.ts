@@ -45,12 +45,14 @@ import { fakeAnalysis } from '../src/judge.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import type { EvalResult } from '../src/ui/events.ts'
+import { formatTokens } from '../src/usage.ts'
 import { type AnalysisNote, analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
-import { contrastEffort, effortLabel } from '../src/view/effort.ts'
-import { parseTranscript } from '../src/view/model.ts'
+import { contrastEffort, directional, EFFORT_MIN_RUNS, effortLabel } from '../src/view/effort.ts'
+import { formatUsage, parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 import { REAL_HARNESSES, type RealAttempt, realAttempts } from './support/real-runs.ts'
+import { type StudyOptions, studyFiles } from './support/study.ts'
 
 type Row = Record<string, unknown>
 const FIXTURES = join(pkgRoot, 'test/fixtures/analysis')
@@ -366,7 +368,7 @@ describe('effort next to lift', () => {
     assert.equal(c.tokensNote, undefined)
     assert.equal(
       effortLabel(c),
-      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44), tokens 100 vs 1000 (×0.10): fewer tool calls (p = 0.029); fewer tokens (p = 0.029)',
+      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44), tokens 100 vs 1,000 (×0.10): fewer tool calls (p = 0.029); fewer tokens (p = 0.029)',
     )
   })
 
@@ -412,8 +414,75 @@ describe('effort next to lift', () => {
     assert.equal(c.verdict, 'fewer')
     assert.equal(c.tokensVerdict, 'fewer')
     assert.equal(c.tokensNote, 'some cells did not report usage')
-    assert.match(effortLabel(c), /tokens 100 vs 1000/)
+    assert.match(effortLabel(c), /tokens 100 vs 1,000/)
     assert.doesNotMatch(effortLabel(c), /insufficient/)
+  })
+
+  // A three-arm skill study's per-attempt values at 3 runs a cell: tools, tokens (k), agent (s).
+  const arm = (tools: number[], tokensK: number[], agentS: number[]) =>
+    tools.map((t, i) => ({
+      tools: t,
+      agentMs: (agentS[i] ?? 0) * 1000,
+      fileEdits: 1,
+      tokens: (tokensK[i] ?? 0) * 1000,
+    }))
+  const noSkill = arm([38, 55, 35], [908, 1117, 1094], [97, 110, 98])
+  const current = arm([28, 26, 26], [576, 430, 394], [69, 59, 63])
+  const fresh = arm([13, 19, 14], [221, 463, 279], [47, 69, 56])
+
+  test('3 against 3 with no overlap on any metric is directional, never an effect', () => {
+    const c = contrastEffort(current, noSkill)
+    assert.ok(c)
+    assert.deepEqual(
+      [c.verdict, c.timeVerdict, c.tokensVerdict],
+      ['insufficient', 'insufficient', 'insufficient'],
+    )
+    assert.deepEqual([c.separated, c.timeSeparated, c.tokensSeparated], [true, true, true])
+    assert.deepEqual(directional(c), ['tools', 'agentS', 'tokens'])
+    assert.equal(
+      effortLabel(c),
+      'tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430k vs 1,094k (×0.39, no overlap): too few attempts to test (n = 3 vs 3)',
+    )
+  })
+
+  test('3 against 3 that overlaps says nothing beyond too few attempts', () => {
+    const c = contrastEffort(fresh, current)
+    assert.ok(c)
+    assert.deepEqual([c.separated, c.timeSeparated, c.tokensSeparated], [true, false, false])
+    assert.deepEqual(directional(c), ['tools'])
+    assert.equal(
+      effortLabel(c),
+      'tools 14 vs 26 (×0.54, no overlap), agent 56s vs 1m 03s (×0.89), tokens 279k vs 430k (×0.65): too few attempts to test (n = 3 vs 3)',
+    )
+  })
+
+  test('2 against 2 is never directional, separated or not', () => {
+    const c = contrastEffort(current.slice(0, 2), noSkill.slice(0, 2))
+    assert.ok(c)
+    assert.equal(c.separated, true)
+    assert.deepEqual(directional(c), [])
+    assert.doesNotMatch(effortLabel(c), /no overlap/)
+  })
+
+  test('effort needs 4 runs a cell to be testable', () => {
+    assert.equal(EFFORT_MIN_RUNS, 4)
+    assert.ok(minimumP(3, 3) >= 0.05)
+    assert.ok(minimumP(4, 4) < 0.05)
+  })
+
+  test("tokens read the same everywhere: Ben's 430443 vs 1093952 is 430k vs 1,094k", () => {
+    assert.equal(`${formatTokens(430_443)} vs ${formatTokens(1_093_952)}`, '430k vs 1,094k')
+    assert.equal(formatTokens(9_512), '9,512')
+    assert.equal(
+      formatUsage({
+        input: 726_000,
+        output: 12_000,
+        cacheRead: 663_000,
+        cacheWrite: 0,
+        reasoning: null,
+      }),
+      '1,389k in (663k cached) · 12k out',
+    )
   })
 
   test('reeval run, summary.md and reeval compare show each variant cell\u2019s effort beside its lift', async () => {
@@ -796,6 +865,7 @@ describe('reeval analyze', () => {
     const digest: AnalysisDigest = {
       digestVersion: 5,
       scope: { kind: 'run', head: 'r1', base: null, evals: null },
+      frame: 'gate',
       runs: { r1: { runId: 'r1', commit: null, branch: null, status: 'complete', summary: '0/1' } },
       setup: {
         harnesses: ['fake'],
@@ -1258,6 +1328,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
     const digest: AnalysisDigest = {
       digestVersion: 3,
       scope: { kind: 'run', head: 'run1', base: null, evals: null },
+      frame: 'gate',
       runs: {},
       setup: { harnesses: [], judge: '', environments: [], evals: [] },
       rules: RULES,
@@ -1275,8 +1346,8 @@ evaluate('greets', { runs: 1 }, async (c) => {
           outcome: 'pass',
           tools: 1,
           agentS: 1,
-          judge: 0.87,
-          checks: 1,
+          judges: { tidy: 0.87 },
+          execs: 1,
           artifacts: null,
         },
       },
@@ -1285,7 +1356,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
           id: 'F1',
           kind: 'failure',
           attempt,
-          judge: { question: 'Is it tidy?', score: 0.87, threshold: 0.8 },
+          judges: [{ label: 'tidy', question: 'Is it tidy?', score: 0.87, threshold: 0.8 }],
         },
         { id: 'F2', kind: 'saturation', evals: [], saturated: ['greets'] },
       ],
@@ -2309,5 +2380,251 @@ describe("analysis.agent: the run's summary after reeval run", () => {
       [[cached?.key, undefined]],
       'the same key, now without the error',
     )
+  })
+})
+
+/** A study's digest: the run, then `reeval analyze --context` on it alone. */
+async function studyDigest(name: string, options: StudyOptions = {}) {
+  const p = await project(name, studyFiles(options))
+  const run = await runCli(p.dir)
+  assert.equal(run.code, options.gate === 'none' ? 0 : 1, run.stdout + run.stderr)
+  return { p, run, ...(await digestOf(p.dir, ['--vs', 'none'])) }
+}
+
+describe('a study: several arms, every cell ungated', () => {
+  test('labels and names: judges and checks go by their expect label, and the control by its environment', async () => {
+    const files = studyFiles({ gate: 'none' })
+    const script =
+      "node -e \"\\n  const fs = require('fs')\\n  process.exit(fs.statSync('src/App.tsx').size ? 0 : 1)\\n\""
+    files['evals/auth.eval.ts'] = (files['evals/auth.eval.ts'] as string).replace(
+      "c.exec('test -s src/App.tsx')",
+      `c.exec(${JSON.stringify(script)}.replaceAll('\\\\n', '\\n'))`,
+    )
+    const p = await project('study-labels', files)
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const show = await runCli(p.dir, ['show'])
+    assert.match(
+      show.stdout,
+      /fake\/no-skill\/fake 0\/3 \(control, not gated, Email sign-in 3\/3 · Social OAuth 3\/3 · Anonymous upgrade 0\/3 · MFA 0\/3\)/,
+      'the control names its judges by their expect labels',
+    )
+    assert.doesNotMatch(show.stdout, /…social sign-in|Does it upgrade an…/, 'no clipped question')
+    const newSkill =
+      /fake\/new-skill\/fake 0\/3 \(([^)]*\([^)]*\))*[^)]*\)/.exec(show.stdout)?.[0] ?? ''
+    assert.doesNotMatch(
+      newSkill,
+      /Social OAuth 3\/3 \(/,
+      'a labelled judge in the checks is not repeated',
+    )
+    assert.match(
+      show.stdout,
+      /judge pass 0\.94 \(≥ 0\.8\) {2}Social OAuth: Does it implement social sign-in\?/,
+    )
+    const summary = readRun(p.dir).read('summary.md')
+    assert.match(
+      summary,
+      /^- Check build exit 0: `node -e " …`/m,
+      'the label, and the script on one line',
+    )
+    assert.match(
+      summary,
+      /^- Judge MFA \*\*fail\*\* 0\.12 \(threshold 0\.8, fake\): Does it implement/m,
+    )
+    const { digest } = await digestOf(p.dir, ['--vs', 'none'])
+    const pass = digest.facts.find((f) => f.kind === 'pass@1') as { cells: Array<{ cell: string }> }
+    assert.deepEqual(
+      pass.cells.map((c) => c.cell),
+      ['no-skill (control)', 'current-skill', 'new-skill'],
+    )
+    assert.ok(
+      Object.keys(digest.attempts).includes('r1/auth/control#1'),
+      'attempt ids keep the tag',
+    )
+  })
+
+  test('the digest frames it as a study: criteria say what differs, never-met labels once, evidence for every arm', async () => {
+    const { p, digest, text } = await studyDigest('study-digest', {
+      gate: 'none',
+      instructions: 'Compare both skills against no skill and against each other.',
+      output: `(d) => {
+        const criteria = d.facts.find((f) => f.kind === 'criteria')
+        return { tldr: criteria.rows.map((r) => r.label).join(', ') + ' separates the arms; ' + criteria.neverMet.join(' and ') + ' are never met in any arm.', whatHappened: [{ text: 'Social OAuth separates the arms.', cites: [criteria.id], confidence: 'high' }], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'medium', why: 'n = 3' } }
+      }`,
+    })
+    const d = digest as Digest & { frame: string }
+    assert.equal(d.frame, 'study')
+    const criteria = digest.facts.find((f) => f.kind === 'criteria')
+    assert.deepEqual(criteria?.rows, [
+      {
+        label: 'Social OAuth',
+        cells: {
+          'no-skill (control)': '3/3 · 0.94',
+          'current-skill': '0/3 · 0.12',
+          'new-skill': '3/3 · 0.94',
+        },
+      },
+    ])
+    assert.deepEqual(criteria?.neverMet, ['Anonymous upgrade', 'MFA'])
+    assert.deepEqual(criteria?.alwaysMet, ['build', 'Email sign-in'])
+    const judge = digest.facts.find((f) => f.kind === 'judge')
+    assert.equal(judge?.verdicts, 36)
+    assert.equal(judge?.failures, undefined, 'which labels failed where is in criteria')
+    const use = digest.facts.find((f) => f.kind === 'context-use') as
+      | { cells: Array<{ cell: string; perAttempt: Record<string, string> }> }
+      | undefined
+    const perAttempt = Object.fromEntries((use?.cells ?? []).map((c) => [c.cell, c.perAttempt]))
+    assert.equal(
+      perAttempt['no-skill (control)']?.dependency,
+      '1 1 1',
+      'no skill: it reads the package types',
+    )
+    assert.equal(perAttempt['new-skill']?.context, '1 1 1', 'the new skill: its React reference')
+    assert.equal(perAttempt['no-skill (control)']?.context, undefined)
+    const effort = digest.facts.find((f) => f.kind === 'effort') as
+      | { cells: Array<{ vsControl?: { n: string; separated?: Record<string, boolean> } }> }
+      | undefined
+    const vs = effort?.cells.flatMap((c) => (c.vsControl ? [c.vsControl] : [])) ?? []
+    assert.equal(vs.length, 2)
+    for (const v of vs) {
+      assert.equal(v.n, '3 vs 3')
+      assert.deepEqual(Object.keys(v.separated ?? {}).slice(0, 2), ['tools', 'agentS'])
+    }
+    const current = digest.attempts['r1/auth/current-skill#1']
+    assert.deepEqual(
+      [current?.checks, current?.failed, current?.judges, current?.execs],
+      [
+        '2/5',
+        ['Social OAuth', 'Anonymous upgrade', 'MFA'],
+        { 'Email sign-in': 0.94, 'Social OAuth': 0.12, 'Anonymous upgrade': 0.12, MFA: 0.12 },
+        1,
+      ],
+    )
+    const failures = digest.facts.filter((f) => f.kind === 'failure')
+    assert.deepEqual(
+      failures.map((f) => f.attempt),
+      ['r1/auth/control#1', 'r1/auth/current-skill#1', 'r1/auth/new-skill#1'],
+      'one failure per arm, not eight from the first',
+    )
+    assert.deepEqual(failures[1]?.failed, ['Social OAuth', 'Anonymous upgrade', 'MFA'])
+    assert.deepEqual(
+      digest.evidence.filter((e) => e.ref.startsWith('attempt:')).map((e) => e.ref),
+      [
+        'attempt:r1/auth/control#1',
+        'attempt:r1/auth/current-skill#1',
+        'attempt:r1/auth/new-skill#1',
+      ],
+      'evidence for every arm, the current skill failing the label that separates it',
+    )
+    assert.ok(
+      digest.evidence[1]?.lines.includes('judge Social OAuth: Does it implement social sign-in?'),
+    )
+    assert.match(text, /This run is a study: every cell is ungated/)
+    assert.ok(
+      text.indexOf('## Project instructions') < text.indexOf('## How reeval decided'),
+      'the project instructions come before the rules',
+    )
+    const analyzed = await runCli(p.dir, ['analyze', '--vs', 'none'])
+    assert.equal(analyzed.code, 0, analyzed.stderr)
+    assert.match(
+      analyzed.stdout,
+      /Social OAuth separates the arms; Anonymous upgrade and MFA are never met in any arm\./,
+    )
+  })
+
+  test('canary: the same arms with gated variants are not a study', async () => {
+    const { digest, text } = await studyDigest('study-gated', { gate: 'variants' })
+    assert.equal((digest as Digest & { frame: string }).frame, 'gate')
+    assert.doesNotMatch(text, /This run is a study/)
+    assert.equal(
+      digest.facts.filter((f) => f.kind === 'failure').length,
+      8,
+      'a gate lists up to eight failures',
+    )
+  })
+})
+
+test('the prompt and rules say a study compares arms, and a label no arm meets explains nothing', () => {
+  assert.match(SYSTEM_PROMPT, /When the digest's frame is study/)
+  assert.match(SYSTEM_PROMPT, /never make one a why/)
+  assert.match(SYSTEM_PROMPT, /setup, rules and cli are context, not citable/)
+  assert.ok(RULES.some((r) => r.includes("can't explain a difference between arms")))
+  assert.ok(RULES.some((r) => r.startsWith('frame study means')))
+})
+
+describe('contrasts: each pair of arms, variant against variant too', () => {
+  test('show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side', async () => {
+    const p = await project('study-contrasts', studyFiles({ gate: 'none' }))
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    // Every attempt misses MFA, so pass@1 can't tell the arms apart; the checks do.
+    const pair =
+      /new-skill vs current-skill: lift \+0 pts \(95% [^)]*0\/3 vs 0\/3\), within noise, checks Social OAuth 3\/3 vs 0\/3, effort tools/
+    assert.match(run.stdout, /contrasts \(each pair of arms, same harness\)/)
+    assert.match(run.stdout, pair)
+    const show = await runCli(p.dir, ['show'])
+    assert.match(
+      show.stdout,
+      /current-skill vs no-skill: lift \+0 pts[^\n]*checks Social OAuth 0\/3 vs 3\/3/,
+    )
+    assert.match(show.stdout, /new-skill vs no-skill: lift \+0 pts[^\n]*no check tells them apart/)
+    assert.match(show.stdout, pair)
+    assert.match(
+      readRun(p.dir).read('summary.md'),
+      /Contrasts \(each pair of arms, same harness\):\n\n- current-skill vs no-skill/,
+    )
+    const rows = await query(
+      p.dir,
+      'SELECT a_environment, b_environment, a_pass, b_pass, pass_verdict, discriminating, checks FROM contrasts',
+    )
+    assert.deepEqual(
+      rows.map((r) => [
+        r.a_environment,
+        r.b_environment,
+        r.a_pass,
+        r.b_pass,
+        r.pass_verdict,
+        r.discriminating,
+        r.checks,
+      ]),
+      [
+        ['current-skill', 'no-skill', 0, 0, 'noise', 'Social OAuth', 5],
+        ['new-skill', 'no-skill', 0, 0, 'noise', null, 5],
+        ['new-skill', 'current-skill', 0, 0, 'noise', 'Social OAuth', 5],
+      ],
+    )
+    const { digest } = await digestOf(p.dir, ['--vs', 'none'])
+    const contrasts = digest.facts.filter((f) => f.kind === 'contrast')
+    assert.deepEqual(
+      contrasts.map((f) => [
+        f.a,
+        f.b,
+        f.passRate,
+        f.liftVerdict,
+        (f.checks as Row[]).map((k) => k.label),
+      ]),
+      [
+        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', []],
+        ['new-skill', 'current-skill', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+      ],
+    )
+    assert.equal(
+      digest.facts.filter((f) => f.kind === 'checks').length,
+      0,
+      'contrast facts replace the per-variant checks facts',
+    )
+  })
+
+  test('canary: with one variant there is no variant-against-variant row', async () => {
+    const p = await project('study-one-variant', studyFiles({ gate: 'none', oneVariant: true }))
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    assert.doesNotMatch(run.stdout, /contrasts \(each pair/)
+    assert.doesNotMatch((await runCli(p.dir, ['show'])).stdout, /vs current-skill/)
+    assert.deepEqual(await query(p.dir, 'SELECT * FROM contrasts'), [])
+    const { digest } = await digestOf(p.dir, ['--vs', 'none'])
+    assert.equal(digest.facts.filter((f) => f.kind === 'contrast').length, 0)
+    assert.equal(digest.facts.filter((f) => f.kind === 'checks').length, 1)
   })
 })

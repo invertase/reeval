@@ -8,9 +8,12 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, test } from 'node:test'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
+import { type ClassContext, classifyCall } from '../src/history/tool-class.ts'
+import { toolTarget } from '../src/history/tool-target.ts'
 import { statementCount } from '../src/query.ts'
 import { harnessLabel } from '../src/view/model.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, readRun, runCli } from './helpers.ts'
+import { fixture } from './support/fixture.ts'
 
 type Row = Record<string, unknown>
 
@@ -205,7 +208,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: check_discrimination, drift, effort, eval_trend, factor_effects, failing_attempts/,
+        /no view or table named "nope"\. Views: check_discrimination, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts/,
       ],
     ]
     for (const [sql, message] of cases) {
@@ -349,5 +352,119 @@ describe('reeval query plumbing', () => {
     assert.ok(!nodeAtLeast('22.12.9') && !nodeAtLeast('22.6.0') && !nodeAtLeast('20.19.0'))
     const pkg = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
     assert.equal(pkg.engines.node, `>=${SQLITE_NODE.replace(/\.0$/, '')}`)
+  })
+})
+
+describe('tool-call classes', () => {
+  const ctx: ClassContext = {
+    skills: ['fui-new'],
+    files: [
+      '~/.agents/skills/fui-new/SKILL.md',
+      '~/.agents/skills/fui-new/references/react.md',
+      '~/.agents/skills/fui-new/references/angular.md',
+      'AGENTS.md',
+    ],
+    mcp: ['docs'],
+    verify: ['test -s src/App.tsx'],
+  }
+  const cls = (tool: string, target: string) => classifyCall(tool, target, ctx)
+
+  test('a read of a placed file is context, by absolute path, ~ or a glob', () => {
+    assert.deepEqual(cls('read', '/home/reeval/.agents/skills/fui-new/SKILL.md'), {
+      class: 'context',
+      files: ['~/.agents/skills/fui-new/SKILL.md'],
+    })
+    assert.deepEqual(cls('shell', 'cat ~/.agents/skills/*/references/{react,core}.md'), {
+      class: 'context',
+      files: ['~/.agents/skills/fui-new/references/react.md'],
+    })
+    assert.deepEqual(cls('read', 'AGENTS.md'), { class: 'context', files: ['AGENTS.md'] })
+    assert.equal(cls('shell', 'ls ~/.agents/skills/fui-new/references').class, 'context')
+    assert.equal(cls('Skill', 'fui-new').class, 'context')
+    assert.equal(cls('mcp__docs__search', '{"q":"x"}').class, 'context')
+    assert.deepEqual(
+      cls('shell', `/bin/bash -lc "sed -n '1,260p' /home/reeval/.agents/skills/fui-new/SKILL.md"`),
+      { class: 'context', files: ['~/.agents/skills/fui-new/SKILL.md'] },
+    )
+    assert.deepEqual(
+      cls('glob', '**/SKILL.md'),
+      { class: 'workspace', files: [] },
+      'a glob from the workspace never reaches home',
+    )
+    assert.equal(toolTarget({ skill: 'fui-new' }, 'Skill'), 'fui-new')
+    assert.deepEqual(cls('Skill', toolTarget({ skill: 'fui-new' }, 'Skill')).files, [
+      '~/.agents/skills/fui-new/SKILL.md',
+    ])
+  })
+
+  test('digging in installed packages is dependency; an exclusion of them is not', () => {
+    assert.equal(cls('read', 'node_modules/@fui/react/index.d.ts').class, 'dependency')
+    assert.equal(
+      cls(
+        'shell',
+        'grep -rn "onSignIn|SignInAuthScreenProps" node_modules/@fui/react/dist/index.d.ts',
+      ).class,
+      'dependency',
+    )
+    assert.equal(cls('shell', 'npx fui --help').class, 'dependency')
+    assert.equal(
+      cls('shell', 'find . -maxdepth 3 -not -path "*/node_modules/*" -type f').class,
+      'workspace',
+    )
+    assert.equal(
+      cls('shell', 'find . -path ./node_modules -prune -o -name "*.tsx" -print').class,
+      'workspace',
+    )
+    assert.equal(cls('shell', 'grep -rn signIn . --exclude-dir=node_modules').class, 'workspace')
+    assert.equal(cls('shell', "rg signIn -g '!node_modules'").class, 'workspace')
+    assert.equal(cls('shell', 'ls | grep -v node_modules').class, 'workspace')
+    assert.equal(cls('shell', '[ -d node_modules ] && echo yes').class, 'workspace')
+  })
+
+  test('checks, builds and the web have their own classes; the rest is workspace', () => {
+    assert.equal(cls('shell', 'test -s src/App.tsx').class, 'verify')
+    assert.equal(cls('shell', 'npx tsc --noEmit').class, 'verify')
+    assert.equal(cls('bash', 'pnpm run build').class, 'verify')
+    assert.equal(cls('shell', 'curl -s https://example.com/docs').class, 'web')
+    assert.equal(cls('web_fetch', 'https://example.com').class, 'web')
+    assert.equal(cls('edit', 'src/App.tsx').class, 'workspace')
+    assert.equal(cls('read', '~/.agents/skills/other/SKILL.md').class, 'workspace')
+  })
+})
+
+describe('context_use and skill_files on real runs', () => {
+  test('each harness opened its placed SKILL.md; web and MCP calls have their classes', async () => {
+    const p = await fixture('fixtures/records/real-contract')
+    const q = async (sql: string) => {
+      const r = await runCli(p.dir, ['query', sql, '--json'])
+      assert.equal(r.code, 0, r.stderr)
+      return JSON.parse(r.stdout) as Array<Record<string, unknown>>
+    }
+    const reads = await q(
+      "SELECT attempt_id, MAX(reads) AS reads FROM skill_files WHERE path LIKE '%/contract-probe/SKILL.md' GROUP BY attempt_id ORDER BY attempt_id",
+    )
+    assert.deepEqual(
+      reads.map((r) => [String(r.attempt_id).split(':')[0], (r.reads as number) > 0]),
+      [
+        ['claude-code', true],
+        ['codex', true],
+        ['cursor', true],
+      ],
+    )
+    const classes = await q(
+      "SELECT attempt_id, class FROM context_use WHERE class IN ('web', 'context') ORDER BY attempt_id, class",
+    )
+    const of = (part: string) =>
+      classes.filter((r) => String(r.attempt_id).includes(`/${part}/`)).map((r) => r.class)
+    assert.ok(of('closed').every((c) => c === 'web') && of('closed').length > 0)
+    assert.ok(of('stamped').every((c) => c === 'context') && of('stamped').length > 0)
+    const unclaimed = await q(
+      "SELECT COUNT(*) AS n FROM skill_files WHERE path LIKE '%/.system/%' OR path LIKE '%.ai-sdk-harness-skills.json' OR path LIKE '~/.codex/config.toml'",
+    )
+    assert.equal(
+      unclaimed[0]?.n,
+      0,
+      'a CLI\u2019s own skills and home config are not the environment\u2019s',
+    )
   })
 })

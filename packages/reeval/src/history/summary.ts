@@ -1,6 +1,7 @@
-import { sampleReasons } from '../compare/pairs.ts'
+import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { CompareAnswer, Outcome } from '../types.ts'
+import { contrastsOf } from '../view/contrasts.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
 import {
   familyEffortLabel,
@@ -8,7 +9,14 @@ import {
   familyLiftLabel,
   familyRateLabel,
 } from '../view/family.ts'
-import { cellJudgeRates, cellUsage, judgeRatesLabel } from '../view/judgements.ts'
+import {
+  cellUsage,
+  checkLabels,
+  commandLine,
+  judgeRatesLabel,
+  labelledJudgements,
+  summaryJudgeRates,
+} from '../view/judgements.ts'
 import {
   formatUsage,
   harnessLabel,
@@ -115,7 +123,8 @@ const rateText = (r: CompareAnswer['rates'][number]) =>
 
 /**
  * One compare question's answer: `"Which is cleaner?" within: with-skill 2/2 (100%), plain 0/2
- * (0%) · 2 votes, 0 ties · google/gemini-3.8-flash`, or why it has no votes.
+ * (0%) · 2 votes, 0 ties, 0/1 pairs split by order · google/gemini-3.8-flash`, or why it has no
+ * votes. Each run's pair is voted in both orders, so a pooled rate counts a split once per side.
  */
 export function answersLabel(answer: CompareAnswer): string {
   const q = `"${clip(answer.question, 80)}"`
@@ -125,13 +134,39 @@ export function answersLabel(answer: CompareAnswer): string {
     return rates.length ? [`${cut}: ${rates.map(rateText).join(', ')}`] : []
   })
   const votes = answer.votes.length
-  const tally = `${votes} vote${votes === 1 ? '' : 's'}, ${ties} tie${ties === 1 ? '' : 's'}`
+  const splits = splitsLabel(pairTallies(answer.votes))
+  const tally = `${votes} vote${votes === 1 ? '' : 's'}, ${ties} tie${ties === 1 ? '' : 's'}${splits ? `, ${splits}` : ''}`
   const by = answer.resolvedModel ?? answer.model
   const failed = answer.error !== undefined ? ` · failed: ${clip(answer.error, 200)}` : ''
   if (votes === 0 && answer.error === undefined) {
     return `${q} no pairs to judge: attempts that failed their checks are left out`
   }
   return `${q} ${[...cuts, tally, by].join(' · ')}${failed}`
+}
+
+/**
+ * Each pair of arms on one harness, when an eval has two variants or more:
+ * `new-skill vs current-skill: lift +100 pts (…), checks Social OAuth 3/3 vs 0/3, effort tools 14
+ * vs 26 (×0.54, no overlap), …`. The harness is named when the eval has several.
+ */
+export function contrastLines(e: EvalEntry): string[] {
+  const harnesses = new Set(e.cells.map((c) => c.harness)).size
+  const cellOf = new Map(e.cells.map((c) => [c.key, c]))
+  const name = (key: string) => cellOf.get(key)?.environment ?? key
+  return contrastsOf(e).map((x) => {
+    const apart = x.checks.filter((k) => k.verdict === 'discriminates')
+    const parts = [
+      x.lift ? liftLabel(x.lift) : '',
+      apart.length
+        ? `checks ${apart.map((k) => `${k.label} ${k.a.pass}/${answered(k.a)} vs ${k.b.pass}/${answered(k.b)}`).join(' · ')}`
+        : x.checks.length
+          ? 'no check tells them apart'
+          : '',
+      x.effort ? `effort ${effortLabel(x.effort)}` : '',
+    ].filter(Boolean)
+    const on = harnesses > 1 ? ` (${cellOf.get(x.a)?.harness})` : ''
+    return `${name(x.a)} vs ${name(x.b)}${on}: ${parts.join(', ')}`
+  })
 }
 
 /** `fake/-/fake 0/2 (control, not gated) · fake/with-skill/fake 2/2 (lift +100 pts …)`. */
@@ -147,7 +182,7 @@ export function cellCounts(e: EvalEntry): string {
         ...[cellContrast(e, c.key)].flatMap((effort) =>
           effort ? [`effort ${effortLabel(effort)}`] : [],
         ),
-        ...[judgeRatesLabel(cellJudgeRates(e, c.key))].filter(Boolean),
+        ...[judgeRatesLabel(summaryJudgeRates(e, c))].filter(Boolean),
         ...[formatUsage(cellUsage(e, c.key))].filter((u): u is string => Boolean(u)),
         c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
       ].filter(Boolean)
@@ -305,9 +340,16 @@ export function renderSummary(run: RunRecord): string {
     lines.push('', `### ${OUTCOME_MARK[e.outcome]} ${e.id}`, '')
     const multi = e.attempts.length > 1
     if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
+    const contrasts = contrastLines(e)
+    if (contrasts.length) {
+      lines.push('Contrasts (each pair of arms, same harness):', '')
+      for (const line of contrasts) lines.push(`- ${cell(line)}`)
+      lines.push('')
+    }
     if (e.answers?.length) {
       for (const a of e.answers) {
         lines.push(`- Question: ${cell(answersLabel(a))}`)
+        for (const line of headToHeadLines(a.votes)) lines.push(`  - ${cell(line)}`)
         for (const reason of sampleReasons(a.votes)) lines.push(`  - ${cell(reason)}`)
       }
       lines.push('')
@@ -361,19 +403,21 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   lines.push(
     `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${formatDuration(act.reasoningMs)} reasoning`,
   )
-  for (const j of a.judgements) {
+  for (const { judgement: j, label, labelled } of labelledJudgements(a)) {
     const retried = j.retries?.length
       ? `, after ${j.retries.length} ${j.retries.length === 1 ? 'retry' : 'retries'}`
       : ''
     lines.push(
-      `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
+      `- Judge${labelled ? ` ${cell(label)}` : ''} **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
     )
   }
-  for (const c of a.checks) {
+  const labels = checkLabels(a)
+  a.checks.forEach((c, i) => {
+    const label = labels[i]
     lines.push(
-      `- Check exit ${c.exitCode}: \`${cell(c.command)}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
+      `- Check${label ? ` ${cell(label)}` : ''} exit ${c.exitCode}: \`${cell(commandLine(c.command))}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
     )
-  }
+  })
   if (a.changedFiles.length) {
     lines.push(
       `- Changed: ${a.changedFiles.map((f) => (f.count ? `\`${f.path}\` (${f.count} files)` : `${f.status} \`${f.path}\``)).join(', ')}`,

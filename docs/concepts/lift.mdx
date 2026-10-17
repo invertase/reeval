@@ -156,6 +156,16 @@ The smallest p a rank test can give depends only on the attempt counts, so a ver
 | 4 vs 4 | 0.029 | yes |
 | 5 vs 5 | 0.008 | yes |
 
+So `reeval run` hints when a compare runs 2 or 3 times a cell: `hint: 1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)`.
+
+### No overlap at small n
+
+```text
+effort: tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430k vs 1,094k (×0.39, no overlap): too few attempts to test (n = 3 vs 3)
+```
+
+At three or more attempts a side, a metric whose two ranges don't overlap (every attempt on one side beat every attempt on the other) says `no overlap` even when its test is `insufficient`. It's a direction, not an effect: one ordering in ten separates by chance at 3 vs 3. `reeval query effort` has it per metric as `separated`, `time_separated` and `tokens_separated`, and `reeval analyze` reports it as directional, never as an effect.
+
 ## Effects across runs
 
 `reeval query factor_effects` contrasts one factor at a time (`environment`, `harness`, `model`) with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. `pass_verdict` is `insufficient` when either side has fewer than two counted attempts. Each row has an evidence tier:

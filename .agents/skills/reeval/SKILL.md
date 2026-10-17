@@ -351,7 +351,14 @@ group(
   shows a skill's effect before pass@1 does:
   `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
   A cell without usage (Goose) is left out of the token sample only; if either side then
-  has none, the token metric is omitted, not `insufficient`.
+  has none, the token metric is omitted, not `insufficient`. Effort's test needs `runs: 4`
+  a cell (3 vs 3 can't reach p < 0.05; the plan hints so); from 3 a side, a metric whose ranges
+  don't overlap prints `(×0.68, no overlap)`: a direction, not an effect.
+  With two variants or more, `contrasts` (summary, `reeval show`, `reeval query contrasts`) set every
+  pair of arms side by side, variant against variant too.
+  `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each
+  attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
+  (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
 - **Label each requirement** with `expect`'s second argument:
@@ -363,7 +370,9 @@ group(
   `Checks that don't discriminate` lists the ones that pass (or fail) on both sides. After a
   run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict
   LIKE 'both-%'"` and rework or drop those checks: they measure nothing about the variant.
-  Changing a label changes the eval's fingerprint.
+  Changing a label changes the eval's fingerprint. Label judges too
+  (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
+  question in judge rates, `reeval show`, `summary.md` and the digest.
 - With `runs > 1`, a cell passes only if every counted attempt passes (pass^k), unless
   `gate: { passRate: 0.8 }` (a pass@1 threshold; pass@1 is passes over passes and fails). Infra errors don't count; a cell is `infra_error`
   only when nothing counted.
@@ -378,6 +387,11 @@ group(
   compare and never gate: pass, fail and the exit code stay the checks'.
   `reeval analyze` puts each answer in the digest (rates by pair kind, votes,
   ties, a failed call, a sample of reasons) as annotation, not a results line.
+  Each pair is voted in both orders; one whose orders disagree is a split (the
+  position decided), counted on the summary line (`2/9 pairs split by order`).
+  With three arms or more, read the head-to-head line (`no-skill 2–0
+  current-skill (1 split)`) or `reeval query question_pairs`, not the pooled
+  rates, which count a split as a win for each side.
   A vote may carry a short `reason` (capped); do not gate on its wording. Their
   model is the entry's `model`, else `analysis.model`, else the judge's when
   it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2
@@ -440,6 +454,8 @@ reeval analyze           (one checked LLM reading of a run; --vs none for this r
                          TL;DR is one sentence; confidence is capped after citation/command checks
                          (not high if any check failed; low if a claim dropped or a command rejected)
                          anomalies are number-checked; a cited judge score that disagrees is dropped
+                         every cell gate: 'none' reads as a study: how the arms differ, check by check
+                         (label your expects); analysis.instructions is the question it answers
                          analysis: { agent: true } also notes each eval × harness during reeval run
                          (.reeval/analysis/<run>/notes/) and caches the run's summary for reeval analyze
                          (a model call each, off by default; never gates)

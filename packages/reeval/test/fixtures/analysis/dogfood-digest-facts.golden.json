@@ -33,7 +33,7 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "pass": "2/2",
         "gated": false
       },
@@ -114,7 +114,7 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "pass": "1/2",
         "gated": false
       },
@@ -171,18 +171,28 @@
         "cell": "control",
         "n": 2,
         "medianToolCalls": 50.5,
-        "medianAgentS": 56
+        "medianAgentS": 56,
+        "medianCallsByClass": {
+          "dependency": 35.5,
+          "workspace": 15
+        }
       },
       {
         "cell": "es-weak",
         "n": 2,
         "medianToolCalls": 49,
         "medianAgentS": 51.1,
+        "medianCallsByClass": {
+          "context": 2,
+          "workspace": 47
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "49 vs 50.5 (×0.97)",
-          "agentS": "51.1 vs 56",
+          "agentS": "51.1 vs 56 (×0.91)",
           "p": 0.6667,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       },
       {
@@ -190,11 +200,18 @@
         "n": 2,
         "medianToolCalls": 8.5,
         "medianAgentS": 27.7,
+        "medianCallsByClass": {
+          "context": 1,
+          "dependency": 2,
+          "workspace": 5.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "8.5 vs 50.5 (×0.17)",
-          "agentS": "27.7 vs 56",
+          "agentS": "27.7 vs 56 (×0.49)",
           "p": 0.3333,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       }
     ]
@@ -206,21 +223,32 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "n": 2,
         "medianToolCalls": 31.5,
-        "medianAgentS": 34
+        "medianAgentS": 34,
+        "medianCallsByClass": {
+          "dependency": 14,
+          "workspace": 17.5
+        }
       },
       {
         "cell": "es-weak",
         "n": 2,
         "medianToolCalls": 29.5,
         "medianAgentS": 34,
+        "medianCallsByClass": {
+          "context": 1,
+          "dependency": 12,
+          "workspace": 16.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "29.5 vs 31.5 (×0.94)",
-          "agentS": "34 vs 34",
+          "agentS": "34 vs 34 (×1.00)",
           "p": 0.6667,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       },
       {
@@ -228,11 +256,17 @@
         "n": 2,
         "medianToolCalls": 14.5,
         "medianAgentS": 32.2,
+        "medianCallsByClass": {
+          "context": 1,
+          "workspace": 13.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "14.5 vs 31.5 (×0.46)",
-          "agentS": "32.2 vs 34",
+          "agentS": "32.2 vs 34 (×0.95)",
           "p": 0.3333,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       }
     ]
@@ -247,18 +281,29 @@
         "cell": "control",
         "n": 2,
         "medianToolCalls": 53,
-        "medianAgentS": 52.1
+        "medianAgentS": 52.1,
+        "medianCallsByClass": {
+          "dependency": 20.5,
+          "workspace": 32.5
+        }
       },
       {
         "cell": "es-weak",
         "n": 2,
         "medianToolCalls": 44.5,
         "medianAgentS": 51.3,
+        "medianCallsByClass": {
+          "context": 1.5,
+          "dependency": 31.5,
+          "workspace": 11.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "44.5 vs 53 (×0.84)",
-          "agentS": "51.3 vs 52.1",
+          "agentS": "51.3 vs 52.1 (×0.98)",
           "p": 0.3333,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       },
       {
@@ -266,11 +311,17 @@
         "n": 2,
         "medianToolCalls": 4.5,
         "medianAgentS": 22.2,
+        "medianCallsByClass": {
+          "context": 1,
+          "workspace": 3.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "4.5 vs 53 (×0.08)",
-          "agentS": "22.2 vs 52.1",
+          "agentS": "22.2 vs 52.1 (×0.43)",
           "p": 0.3333,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       }
     ]
@@ -285,18 +336,29 @@
         "cell": "control",
         "n": 2,
         "medianToolCalls": 51.5,
-        "medianAgentS": 50.1
+        "medianAgentS": 50.1,
+        "medianCallsByClass": {
+          "dependency": 39.5,
+          "workspace": 12
+        }
       },
       {
         "cell": "es-weak",
         "n": 2,
         "medianToolCalls": 53.5,
         "medianAgentS": 54.1,
+        "medianCallsByClass": {
+          "context": 2,
+          "dependency": 41,
+          "workspace": 10.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "53.5 vs 51.5 (×1.04)",
-          "agentS": "54.1 vs 50.1",
+          "agentS": "54.1 vs 50.1 (×1.08)",
           "p": 1,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       },
       {
@@ -304,11 +366,18 @@
         "n": 2,
         "medianToolCalls": 11.5,
         "medianAgentS": 26.8,
+        "medianCallsByClass": {
+          "context": 1,
+          "dependency": 5.5,
+          "workspace": 5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "11.5 vs 51.5 (×0.22)",
-          "agentS": "26.8 vs 50.1",
+          "agentS": "26.8 vs 50.1 (×0.53)",
           "p": 0.3333,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       }
     ]
@@ -320,21 +389,32 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "n": 2,
         "medianToolCalls": 24,
-        "medianAgentS": 29
+        "medianAgentS": 29,
+        "medianCallsByClass": {
+          "dependency": 11.5,
+          "workspace": 12.5
+        }
       },
       {
         "cell": "es-weak",
         "n": 2,
         "medianToolCalls": 25,
         "medianAgentS": 31.3,
+        "medianCallsByClass": {
+          "context": 1,
+          "dependency": 10.5,
+          "workspace": 13.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "25 vs 24 (×1.04)",
-          "agentS": "31.3 vs 29",
+          "agentS": "31.3 vs 29 (×1.08)",
           "p": 1,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       },
       {
@@ -342,11 +422,17 @@
         "n": 2,
         "medianToolCalls": 14.5,
         "medianAgentS": 27.8,
+        "medianCallsByClass": {
+          "context": 1,
+          "workspace": 13.5
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "14.5 vs 24 (×0.60)",
-          "agentS": "27.8 vs 29",
+          "agentS": "27.8 vs 29 (×0.96)",
           "p": 0.3333,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       }
     ]
@@ -361,18 +447,30 @@
         "cell": "control",
         "n": 2,
         "medianToolCalls": 35,
-        "medianAgentS": 40.4
+        "medianAgentS": 40.4,
+        "medianCallsByClass": {
+          "dependency": 13,
+          "workspace": 22
+        }
       },
       {
         "cell": "es-weak",
         "n": 2,
         "medianToolCalls": 38.5,
         "medianAgentS": 40.2,
+        "medianCallsByClass": {
+          "context": 1,
+          "dependency": 10,
+          "verify": 0.5,
+          "workspace": 27
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "38.5 vs 35 (×1.10)",
-          "agentS": "40.2 vs 40.4",
+          "agentS": "40.2 vs 40.4 (×0.99)",
           "p": 1,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       },
       {
@@ -380,11 +478,17 @@
         "n": 2,
         "medianToolCalls": 5,
         "medianAgentS": 21.1,
+        "medianCallsByClass": {
+          "context": 1,
+          "workspace": 4
+        },
         "vsControl": {
+          "n": "2 vs 2",
           "toolCalls": "5 vs 35 (×0.14)",
-          "agentS": "21.1 vs 40.4",
+          "agentS": "21.1 vs 40.4 (×0.52)",
           "p": 0.3333,
-          "verdict": "insufficient"
+          "verdict": "insufficient",
+          "timeVerdict": "insufficient"
         }
       }
     ]
@@ -586,6 +690,219 @@
   },
   {
     "id": "F25",
+    "kind": "context-use",
+    "note": "Tool calls per counted attempt by class (context: a placed skill, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.",
+    "cells": [
+      {
+        "run": "r1",
+        "eval": "compare",
+        "cell": "control",
+        "perAttempt": {
+          "dependency": "33 38",
+          "workspace": "15 15"
+        }
+      },
+      {
+        "run": "r1",
+        "eval": "compare",
+        "cell": "es-good",
+        "perAttempt": {
+          "context": "1 1",
+          "dependency": "3 1",
+          "workspace": "5 6"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-good/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r1",
+        "eval": "compare",
+        "cell": "es-weak",
+        "perAttempt": {
+          "context": "1 3",
+          "workspace": "46 48"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-weak/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r1",
+        "eval": "fix-config",
+        "cell": "broken-project (control)",
+        "perAttempt": {
+          "dependency": "13 15",
+          "workspace": "17 18"
+        }
+      },
+      {
+        "run": "r1",
+        "eval": "fix-config",
+        "cell": "es-good",
+        "perAttempt": {
+          "context": "1 1",
+          "workspace": "14 13"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-good/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r1",
+        "eval": "fix-config",
+        "cell": "es-weak",
+        "perAttempt": {
+          "context": "1 1",
+          "dependency": "11 13",
+          "workspace": "18 15"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-weak/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r1",
+        "eval": "scaffold",
+        "cell": "control",
+        "perAttempt": {
+          "dependency": "1 40",
+          "workspace": "55 10"
+        }
+      },
+      {
+        "run": "r1",
+        "eval": "scaffold",
+        "cell": "es-good",
+        "perAttempt": {
+          "context": "1 1",
+          "workspace": "3 4"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-good/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r1",
+        "eval": "scaffold",
+        "cell": "es-weak",
+        "perAttempt": {
+          "context": "1 2",
+          "dependency": "36 27",
+          "workspace": "12 11"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-weak/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r2",
+        "eval": "compare",
+        "cell": "control",
+        "perAttempt": {
+          "dependency": "44 35",
+          "workspace": "14 10"
+        }
+      },
+      {
+        "run": "r2",
+        "eval": "compare",
+        "cell": "es-good",
+        "perAttempt": {
+          "context": "1 1",
+          "dependency": "5 6",
+          "workspace": "5 5"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-good/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r2",
+        "eval": "compare",
+        "cell": "es-weak",
+        "perAttempt": {
+          "context": "2 2",
+          "dependency": "45 37",
+          "workspace": "9 12"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-weak/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r2",
+        "eval": "fix-config",
+        "cell": "broken-project (control)",
+        "perAttempt": {
+          "dependency": "8 15",
+          "workspace": "13 12"
+        }
+      },
+      {
+        "run": "r2",
+        "eval": "fix-config",
+        "cell": "es-good",
+        "perAttempt": {
+          "context": "1 1",
+          "workspace": "14 13"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-good/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r2",
+        "eval": "fix-config",
+        "cell": "es-weak",
+        "perAttempt": {
+          "context": "1 1",
+          "dependency": "10 11",
+          "workspace": "13 14"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-weak/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r2",
+        "eval": "scaffold",
+        "cell": "control",
+        "perAttempt": {
+          "dependency": "1 25",
+          "workspace": "34 10"
+        }
+      },
+      {
+        "run": "r2",
+        "eval": "scaffold",
+        "cell": "es-good",
+        "perAttempt": {
+          "context": "1 1",
+          "workspace": "5 3"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-good/SKILL.md 2/2"
+        ]
+      },
+      {
+        "run": "r2",
+        "eval": "scaffold",
+        "cell": "es-weak",
+        "perAttempt": {
+          "context": "1 1",
+          "verify": "1 0",
+          "workspace": "46 8",
+          "dependency": "0 20"
+        },
+        "files": [
+          "~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home/.agents/skills/es-weak/SKILL.md 2/2"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "F26",
     "kind": "saturation",
     "evals": [
       {
@@ -607,7 +924,7 @@
     ]
   },
   {
-    "id": "F26",
+    "id": "F27",
     "kind": "judge",
     "models": [
       "gemini-3.8-flash"
@@ -619,34 +936,31 @@
     "pass": 35,
     "scoresAtLeast098": 35,
     "nearThreshold": 0,
-    "failures": [
-      {
-        "attempt": "r2/fix-config/control#1",
-        "score": 0.1
-      }
-    ],
     "reasons": "not recorded"
   },
   {
-    "id": "F27",
+    "id": "F28",
     "kind": "failure",
     "attempt": "r2/fix-config/control#1",
     "outcome": "fail",
     "errorKind": "judge",
     "message": "judge score 0.10 is below 0.8 for \"Pass only if the final message names all three mistakes correctly: compare cannot be set in es.config.ts (it goes on the group or eval); environment takes one environment, not a list, and there is no baseline export (compare against the inherited environment…",
     "gated": false,
-    "judge": {
-      "question": "Pass only if the final message names all three mistakes correctly: compare cannot be set in es.config.ts (it goes on the group or eval); environment takes one environment, not a list, and there is no baseline export (compare against the inherited environment instead); and the option is runs, not repeat.",
-      "score": 0.1,
-      "threshold": 0.8
-    },
-    "failingChecks": []
+    "judges": [
+      {
+        "label": "Pass only if the final message names all three mistakes…",
+        "question": "Pass only if the final message names all three mistakes correctly: compare cannot be set in es.config.ts (it goes on the group or eval); environment takes one environment, not a list, and there is no baseline export (compare against the inherited environment instead); and the option is runs, not…",
+        "score": 0.1,
+        "threshold": 0.8
+      }
+    ],
+    "failingExecs": []
   },
   {
-    "id": "F28",
+    "id": "F29",
     "kind": "flaky",
     "eval": "fix-config",
-    "cell": "control",
+    "cell": "broken-project (control)",
     "pass": "3/4",
     "runs": 2,
     "wilson95": "30…95%",
@@ -654,7 +968,7 @@
     "cause": "agent"
   },
   {
-    "id": "F29",
+    "id": "F30",
     "kind": "drift",
     "from": "r1",
     "to": "r2",
@@ -667,7 +981,7 @@
     "verdict": "noise: agent runtime state only"
   },
   {
-    "id": "F30",
+    "id": "F31",
     "kind": "compare",
     "base": "r1",
     "head": "r2",
@@ -694,5 +1008,365 @@
         ]
       }
     ]
+  },
+  {
+    "id": "F32",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "compare",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "49 vs 50.5 (×0.97)",
+      "agentS": "51.1 vs 56 (×0.91)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F33",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "8.5 vs 50.5 (×0.17)",
+      "agentS": "27.7 vs 56 (×0.49)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F34",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "8.5 vs 49 (×0.17)",
+      "agentS": "27.7 vs 51.1 (×0.54)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F35",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "fix-config",
+    "a": "es-weak",
+    "b": "broken-project (control)",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "29.5 vs 31.5 (×0.94)",
+      "agentS": "34 vs 34 (×1.00)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F36",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "broken-project (control)",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 31.5 (×0.46)",
+      "agentS": "32.2 vs 34 (×0.95)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F37",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 29.5 (×0.49)",
+      "agentS": "32.2 vs 34 (×0.95)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F38",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "scaffold",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "44.5 vs 53 (×0.84)",
+      "agentS": "51.3 vs 52.1 (×0.98)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F39",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "4.5 vs 53 (×0.08)",
+      "agentS": "22.2 vs 52.1 (×0.43)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F40",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "4.5 vs 44.5 (×0.10)",
+      "agentS": "22.2 vs 51.3 (×0.43)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F41",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "compare",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "53.5 vs 51.5 (×1.04)",
+      "agentS": "54.1 vs 50.1 (×1.08)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F42",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "11.5 vs 51.5 (×0.22)",
+      "agentS": "26.8 vs 50.1 (×0.53)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F43",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "11.5 vs 53.5 (×0.21)",
+      "agentS": "26.8 vs 54.1 (×0.50)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F44",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "fix-config",
+    "a": "es-weak",
+    "b": "broken-project (control)",
+    "passRate": "2/2 vs 1/2",
+    "lift": "+50 pts (95% −27…+91)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "25 vs 24 (×1.04)",
+      "agentS": "31.3 vs 29 (×1.08)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F45",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "broken-project (control)",
+    "passRate": "2/2 vs 1/2",
+    "lift": "+50 pts (95% −27…+91)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 24 (×0.60)",
+      "agentS": "27.8 vs 29 (×0.96)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F46",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 25 (×0.58)",
+      "agentS": "27.8 vs 31.3 (×0.89)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F47",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "scaffold",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "38.5 vs 35 (×1.10)",
+      "agentS": "40.2 vs 40.4 (×0.99)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F48",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "5 vs 35 (×0.14)",
+      "agentS": "21.1 vs 40.4 (×0.52)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F49",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "5 vs 38.5 (×0.13)",
+      "agentS": "21.1 vs 40.2 (×0.53)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
   }
 ]

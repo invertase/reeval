@@ -4,16 +4,21 @@
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
-import { sampleReasons } from '../compare/pairs.ts'
+import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
 import type { HistoryDb } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS, LIFT_MIN_COUNTED } from '../history/facts.ts'
-import type { AttemptRecord, EvalEntry, RunRecord } from '../history/types.ts'
+import { TOOL_CLASSES } from '../history/tool-class.ts'
+import type { AttemptRecord, CheckTally, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
+import { formatTokens } from '../usage.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
+import { contrastsOf } from '../view/contrasts.ts'
+import { DIRECTIONAL_MIN } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
+import { labelledJudgements } from '../view/judgements.ts'
 
 export type DigestFact = { id: string; kind: string } & Record<string, unknown>
 export type DigestEvidence = {
@@ -35,14 +40,25 @@ export type DigestAttempt = {
   outcome: AttemptRecord['outcome']
   tools: number
   agentS: number
-  judge?: number
-  checks: number
+  /** Assertions (`expect` and `expect.soft`) passed over those that settled. */
+  checks?: string
+  /** The labels of the assertions that failed or couldn't answer. */
+  failed?: string[]
+  /** Each judgement's score, by its `expect` label (or question). */
+  judges?: Record<string, number>
+  /** `c.exec` calls; `<attempt id>:exec<n>` cites the n-th. */
+  execs: number
   artifacts: string | null
 }
 
 export type Digest = {
   digestVersion: number
   scope: { kind: 'run'; head: string; base: string | null; evals: string | null }
+  /**
+   * `study` when every cell in scope is ungated (`gate: 'none'`): the run measures how its arms
+   * differ, and no attempt failing is a failed gate. `gate` otherwise.
+   */
+  frame: 'study' | 'gate'
   runs: Record<
     string,
     { runId: string; commit: string | null; branch: string | null; status: string; summary: string }
@@ -77,15 +93,20 @@ export type DigestInput = {
 export const RULES = [
   `Lift (variant pass@1 minus control pass@1) is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
   'When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
-  'Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree.',
+  `Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree. Effort's separated (given from ${DIRECTIONAL_MIN} vs ${DIRECTIONAL_MIN}) says, per metric, that the two sides' ranges do not overlap: every attempt on one side beat every attempt on the other. insufficient with separated true is a directional signal: report the ratio, the n and "no overlap, not significant" as directional, never as an effect. separated false is no direction at all.`,
   "A family fact is one pooled evaluate.each: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; their own pass-rate facts carry no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. A family's minLift gates the pooled lower bound.",
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
   'An eval where every cell passes at least 95% is saturated: pass@1 cannot tell cells apart there, effort can.',
   'Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so.',
+  "A criteria fact lists each check (expect label, judges included) per cell: rows only for labels whose rate differs between cells, or is mixed within one; neverMet labels failed on every counted attempt of every cell, alwaysMet passed on all of them. A neverMet or alwaysMet label is the same in every arm: it can't explain a difference between arms.",
+  "frame study means every cell in scope is ungated (gate: 'none'): the run measures how its arms differ, so attempts that fail are data, not a failed gate.",
+  'setup, rules and cli give context and are not citable: cite facts, evidence and attempts.',
+  "A context-use fact counts each attempt's tool calls by class (context, dependency, web, verify, workspace) and lists which placed files each arm opened: how much an arm leaned on what its environment declared versus digging in installed packages. The classes are a heuristic over tool names and paths; cite them as counts, not as proof of intent.",
+  'A contrast fact (kind contrast) is one pair of arms on one harness, a against b, when an eval has two variants or more: pass rate and lift of a over b, the checks that tell them apart (discriminates or mixed; sameOnBoth counts the rest) and effort. It answers how two variants differ from each other, not only from the control; gating stays each variant against its control.',
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
-  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check.",
+  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates.",
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -152,7 +173,102 @@ function cellTags(e: EvalEntry): Map<string, string> {
   return new Map(e.cells.map((c) => [c.key, `${prefix(c)}${c.variant ?? 'control'}`]))
 }
 
+/**
+ * Cell names for facts: each tag, with a compare's control named by its environment
+ * (`no-skill (control)`) so a reading can name the arm. Attempt ids keep the tag.
+ */
+function cellNames(e: EvalEntry, tags: Map<string, string>): Map<string, string> {
+  const compare = e.cells.some((c) => c.role === 'variant')
+  return new Map(
+    e.cells.map((c) => {
+      const tag = tags.get(c.key) ?? c.key
+      const named = compare && c.role === 'control' && c.environment && c.environment !== '-'
+      return [c.key, named ? tag.replace(/control$/, `${c.environment} (control)`) : tag]
+    }),
+  )
+}
+
 const counted = (a: AttemptRecord) => a.outcome === 'pass' || a.outcome === 'fail'
+
+const LABEL_CHARS = 60
+const round2 = (x: number) => Math.round(x * 100) / 100
+const round1 = (x: number) => Math.round(x * 10) / 10
+const ratioText = (r: unknown) => (r == null ? '×–' : `×${Number(r).toFixed(2)}`)
+
+/** The labels of an attempt's assertions that failed or couldn't answer. */
+const failedLabels = (a: AttemptRecord) =>
+  (a.assertions ?? []).filter((x) => x.status !== 'pass').map((x) => clip(x.label, LABEL_CHARS))
+
+/** Every counted attempt passed (`all`), none did, or some; undefined when none answered. */
+const sideOf = (t: CheckTally): 'all' | 'none' | 'some' | undefined => {
+  const answered = t.pass + t.fail + t.error + t.notRun
+  if (answered === 0) return undefined
+  return t.pass === answered ? 'all' : t.pass === 0 ? 'none' : 'some'
+}
+
+/** Items interleaved by group, groups in order of first appearance: one from each, then the next. */
+function roundRobin<T>(items: T[], key: (item: T) => string): T[] {
+  const groups = new Map<string, T[]>()
+  for (const item of items) groups.set(key(item), [...(groups.get(key(item)) ?? []), item])
+  const out: T[] = []
+  for (let i = 0; out.length < items.length; i++) {
+    for (const g of groups.values()) if (i < g.length) out.push(g[i] as T)
+  }
+  return out
+}
+
+/** `study` when every cell in scope is ungated, so the run compares arms rather than gating them. */
+const frameOf = (evals: EvalEntry[]): Digest['frame'] => {
+  const cells = evals.flatMap((e) => e.cells)
+  return cells.length && cells.every((c) => c.gate === 'none') ? 'study' : 'gate'
+}
+
+/**
+ * One eval's checks per cell: a row with each cell's rate (and mean judge score) for each label
+ * that differs between cells or is mixed within one, and the labels every cell failed, or passed,
+ * on every counted attempt.
+ */
+function criteriaOf(e: EvalEntry, tag: (cell: string) => string) {
+  const cells = e.cells.filter((c) => c.checks?.length)
+  const labels = [...new Set(cells.flatMap((c) => (c.checks ?? []).map((k) => k.label)))]
+  if (!labels.length) return null
+  const scores = new Map<string, number[]>()
+  for (const a of e.attempts) {
+    if (!counted(a)) continue
+    for (const j of labelledJudgements(a)) {
+      if (j.check === undefined) continue
+      const id = `${a.cell}\0${j.check}`
+      scores.set(id, [...(scores.get(id) ?? []), j.judgement.score])
+    }
+  }
+  const rows: Array<{ label: string; cells: Record<string, string> }> = []
+  const neverMet: string[] = []
+  const alwaysMet: string[] = []
+  for (const label of labels) {
+    const tallies = cells.flatMap((c) => {
+      const k = c.checks?.find((x) => x.label === label)
+      return k ? [{ c, k }] : []
+    })
+    const sides = new Set(tallies.map(({ k }) => sideOf(k)))
+    if (sides.size === 1 && sides.has('none')) neverMet.push(clip(label, LABEL_CHARS))
+    else if (sides.size === 1 && sides.has('all')) alwaysMet.push(clip(label, LABEL_CHARS))
+    else {
+      rows.push({
+        label: clip(label, LABEL_CHARS),
+        cells: Object.fromEntries(
+          tallies.map(({ c, k }) => {
+            const s = scores.get(`${c.key}\0${label}`)
+            const mean = s?.length
+              ? ` · ${(s.reduce((x, y) => x + y, 0) / s.length).toFixed(2)}`
+              : ''
+            return [tag(c.key), `${k.pass}/${k.pass + k.fail + k.error + k.notRun}${mean}`]
+          }),
+        ),
+      })
+    }
+  }
+  return { rows, neverMet, alwaysMet }
+}
 
 export async function buildDigest(input: DigestInput): Promise<Digest> {
   return (await buildDigestKeepingDropped(input)).digest
@@ -168,6 +284,7 @@ export async function buildDigestKeepingDropped(
   const needle = input.evalFilter?.toLowerCase() ?? null
   const inScope = (e: EvalEntry) => !needle || e.id.toLowerCase().includes(needle)
   const scopeEvals = head.record.evals.filter(inScope)
+  const frame = frameOf(scopeEvals)
   const tags = evalTags(scopeEvals)
   const evalKeys = new Set(scopeEvals.map((e) => e.key))
   const tagOf = (key: string) => tags.get(key) ?? key
@@ -180,25 +297,40 @@ export async function buildDigestKeepingDropped(
     for (const e of r.record.evals) {
       if (!evalKeys.has(e.key)) continue
       const cells = cellTags(e)
-      for (const [key, tag] of cells) cellTagOf.set(`${r.record.runId}\0${e.key}\0${key}`, tag)
+      const names = cellNames(e, cells)
+      for (const [key, name] of names) cellTagOf.set(`${r.record.runId}\0${e.key}\0${key}`, name)
       for (const a of e.attempts) {
         const id = `${short.get(r.record.runId)}/${tagOf(e.key)}/${cells.get(a.cell)}#${a.n}`
         idOf.set(`${r.record.runId}\0${a.key}`, id)
-        const judge = a.judgements[0]
         const any = a.files.transcript ?? a.files.judgeInput ?? a.checks.find((c) => c.log)?.log
+        const assertions = a.assertions ?? []
+        const failed = failedLabels(a)
+        const judges = labelledJudgements(a)
         attempts[id] = {
           run: short.get(r.record.runId) as string,
           runId: r.record.runId,
           key: a.key,
           eval: tagOf(e.key),
           evalSlug: e.slug,
-          cell: cells.get(a.cell) as string,
+          cell: names.get(a.cell) as string,
           attempt: a.id,
           outcome: a.outcome,
           tools: a.activity.tools,
           agentS: Math.round(a.timings.agentMs / 1000),
-          ...(judge ? { judge: Math.round(judge.score * 100) / 100 } : {}),
-          checks: a.checks.length,
+          ...(assertions.length
+            ? {
+                checks: `${assertions.filter((x) => x.status === 'pass').length}/${assertions.length}`,
+              }
+            : {}),
+          ...(failed.length ? { failed } : {}),
+          ...(judges.length
+            ? {
+                judges: Object.fromEntries(
+                  judges.map((j) => [clip(j.label, LABEL_CHARS), round2(j.judgement.score)]),
+                ),
+              }
+            : {}),
+          execs: a.checks.length,
           artifacts: any ? `${r.record.runId}/${any.path.split('/').slice(0, 3).join('/')}` : null,
         }
       }
@@ -291,18 +423,41 @@ export async function buildDigestKeepingDropped(
         medianToolCalls: row.tools_median,
         medianAgentS: row.agent_s_median,
         ...(row.tokens_median != null ? { medianTokens: row.tokens_median } : {}),
+        ...(row.workspace_calls_median != null
+          ? {
+              medianCallsByClass: Object.fromEntries(
+                TOOL_CLASSES.flatMap((k) => {
+                  const m = row[`${k}_calls_median`]
+                  return m ? [[k, m]] : []
+                }),
+              ),
+            }
+          : {}),
         ...(row.control_key
           ? {
               vsControl: {
-                toolCalls: `${row.tools_median} vs ${row.control_tools_median} (×${Number(row.tools_ratio).toFixed(2)})`,
-                agentS: `${row.agent_s_median} vs ${row.control_agent_s_median}`,
+                n: `${row.n} vs ${row.control_n}`,
+                toolCalls: `${row.tools_median} vs ${row.control_tools_median} (${ratioText(row.tools_ratio)})`,
+                agentS: `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
                 p: row.tools_p,
                 verdict: row.verdict,
+                timeVerdict: row.time_verdict,
                 ...(row.tokens_verdict
                   ? {
-                      tokens: `${row.tokens_median} vs ${row.control_tokens_median} (×${Number(row.tokens_ratio).toFixed(2)})`,
+                      tokens: `${formatTokens(row.tokens_median as number)} vs ${formatTokens(row.control_tokens_median as number)} (${ratioText(row.tokens_ratio)})`,
                       tokensP: row.tokens_p,
                       tokensVerdict: row.tokens_verdict,
+                    }
+                  : {}),
+                ...(Math.min(Number(row.n), Number(row.control_n)) >= DIRECTIONAL_MIN
+                  ? {
+                      separated: {
+                        tools: row.separated === 1,
+                        agentS: row.time_separated === 1,
+                        ...(row.tokens_separated != null
+                          ? { tokens: row.tokens_separated === 1 }
+                          : {}),
+                      },
                     }
                   : {}),
                 ...(row.tokens_note ? { unreportedUsage: row.tokens_note } : {}),
@@ -437,6 +592,57 @@ export async function buildDigestKeepingDropped(
     })
   }
 
+  // What each arm's tool calls were for, per attempt, and which placed files it opened.
+  const classRows = q(
+    `SELECT t.run_id, a.eval_key, a.cell_key, a.n, t.class, COUNT(*) AS calls
+     FROM tool_calls t JOIN attempts a ON a.run_id = t.run_id AND a.key = t.attempt_key
+     WHERE t.run_id IN (${runList}) AND a.eval_key IN (${evalList}) AND a.outcome IN ('pass', 'fail')
+     GROUP BY t.run_id, a.key, t.class ORDER BY t.run_id, a.eval_key, a.cell_key, a.n`,
+  )
+  const fileRows = q(
+    `SELECT run_id, eval_key, cell_key, path, COUNT(*) AS attempts, SUM(reads > 0) AS read
+     FROM skill_files WHERE run_id IN (${runList}) AND eval_key IN (${evalList})
+     GROUP BY run_id, eval_key, cell_key, path ORDER BY run_id, eval_key, cell_key, path`,
+  )
+  type Use = { classes: Map<string, Map<number, number>>; files: string[] }
+  const useOf = new Map<string, Use>()
+  const useEntry = (row: Record<string, unknown>): Use => {
+    const id = `${row.run_id}\0${row.eval_key}\0${row.cell_key}`
+    const entry: Use = useOf.get(id) ?? { classes: new Map(), files: [] }
+    useOf.set(id, entry)
+    return entry
+  }
+  for (const r of classRows) {
+    const entry = useEntry(r)
+    const per = entry.classes.get(r.class as string) ?? new Map<number, number>()
+    per.set(r.n as number, r.calls as number)
+    entry.classes.set(r.class as string, per)
+  }
+  for (const r of fileRows) useEntry(r).files.push(`${r.path} ${r.read}/${r.attempts}`)
+  if (classRows.length) {
+    const attemptNs = new Map<string, number[]>()
+    for (const r of classRows) {
+      const id = `${r.run_id}\0${r.eval_key}\0${r.cell_key}`
+      attemptNs.set(id, [...new Set([...(attemptNs.get(id) ?? []), r.n as number])])
+    }
+    fact('context-use', {
+      note: 'Tool calls per counted attempt by class (context: a placed skill, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.',
+      cells: [...useOf].map(([id, u]) => {
+        const [runId, evalKey, cellKey] = id.split('\0') as [string, string, string]
+        const ns = (attemptNs.get(id) ?? []).sort((a, b) => a - b)
+        return {
+          run: short.get(runId),
+          eval: tagOf(evalKey),
+          cell: cellTag(runId, evalKey, cellKey),
+          perAttempt: Object.fromEntries(
+            [...u.classes].map(([k, per]) => [k, ns.map((n) => per.get(n) ?? 0).join(' ')]),
+          ),
+          ...(u.files.length ? { files: u.files } : {}),
+        }
+      }),
+    })
+  }
+
   // Saturation: pass rates pooled over these runs.
   const pooled = new Map<
     string,
@@ -463,54 +669,88 @@ export async function buildDigestKeepingDropped(
     saturated,
   })
 
-  // The judge: how sure it was, and what failed.
+  // Every check per cell: what differs between arms, and what no arm met (or every arm met).
+  const differing = new Map<string, Set<string>>()
+  for (const r of runs) {
+    for (const e of r.record.evals) {
+      if (!evalKeys.has(e.key)) continue
+      const criteria = criteriaOf(e, (cell) => cellTag(r.record.runId, e.key, cell))
+      if (!criteria) continue
+      differing.set(`${r.record.runId}\0${e.key}`, new Set(criteria.rows.map((x) => x.label)))
+      fact('criteria', {
+        run: short.get(r.record.runId),
+        eval: tagOf(e.key),
+        note: 'Each check (expect label) per cell: passed/counted, then the mean judge score for a judge.',
+        ...criteria,
+      })
+    }
+  }
+
+  // The judge: how sure it was. Which labels failed where is in the criteria facts.
   const judged = runs.flatMap((r) =>
     r.record.evals
       .filter((e) => evalKeys.has(e.key))
-      .flatMap((e) => e.attempts.flatMap((a) => a.judgements.map((j) => ({ r, a, j })))),
+      .flatMap((e) => e.attempts.flatMap((a) => a.judgements)),
   )
   if (judged.length) {
     fact('judge', {
-      models: [...new Set(judged.map(({ j }) => j.resolvedModel ?? j.model))],
-      threshold: [...new Set(judged.map(({ j }) => j.threshold))],
+      models: [...new Set(judged.map((j) => j.resolvedModel ?? j.model))],
+      threshold: [...new Set(judged.map((j) => j.threshold))],
       verdicts: judged.length,
-      pass: judged.filter(({ j }) => j.verdict === 'pass').length,
-      scoresAtLeast098: judged.filter(({ j }) => j.score >= 0.98).length,
-      nearThreshold: judged.filter(({ j }) => Math.abs(j.score - j.threshold) <= 0.1).length,
-      failures: judged
-        .filter(({ j }) => j.verdict === 'fail')
-        .map(({ r, a, j }) => ({
-          attempt: idOf.get(`${r.record.runId}\0${a.key}`),
-          score: j.score,
-        })),
+      pass: judged.filter((j) => j.verdict === 'pass').length,
+      scoresAtLeast098: judged.filter((j) => j.score >= 0.98).length,
+      nearThreshold: judged.filter((j) => Math.abs(j.score - j.threshold) <= 0.1).length,
       reasons: 'not recorded',
     })
   }
 
-  // Failed attempts.
-  const failures = runs
-    .slice()
-    .reverse()
-    .flatMap((r) =>
-      r.record.evals
-        .filter((e) => evalKeys.has(e.key))
-        .flatMap((e) =>
-          e.attempts
-            .filter((a) => a.outcome === 'fail' || a.outcome === 'infra_error')
-            .map((a) => ({ r, e, a })),
-        ),
-    )
-  for (const { r, e, a } of failures.slice(0, 8)) {
-    const j = a.judgements.find((x) => x.verdict === 'fail')
+  // Failed attempts, every cell before a second from any: the head run first, then the base.
+  const failures = roundRobin(
+    runs
+      .slice()
+      .reverse()
+      .flatMap((r) =>
+        r.record.evals
+          .filter((e) => evalKeys.has(e.key))
+          .flatMap((e) =>
+            e.attempts
+              .filter((a) => a.outcome === 'fail' || a.outcome === 'infra_error')
+              .map((a) => ({ r, e, a })),
+          ),
+      ),
+    ({ r, e, a }) => `${r.record.runId}\0${e.key}\0${a.cell}`,
+  )
+  // A study's failures are data the criteria facts tally: one per cell says what failing looks like.
+  const cellsSeen = new Set<string>()
+  const failureFacts =
+    frame === 'study'
+      ? failures.filter(({ r, e, a }) => {
+          const id = `${r.record.runId}\0${e.key}\0${a.cell}`
+          return !cellsSeen.has(id) && !!cellsSeen.add(id)
+        })
+      : failures.slice(0, 8)
+  for (const { r, e, a } of failureFacts) {
+    const failed = failedLabels(a)
+    const judges = labelledJudgements(a).filter((j) => j.judgement.verdict === 'fail')
     fact('failure', {
       attempt: idOf.get(`${r.record.runId}\0${a.key}`),
       outcome: a.outcome,
       errorKind: a.error?.kind ?? null,
       message: a.error ? clip(a.error.message.split('\n')[0] ?? '', 300) : null,
       gated: e.cells.find((c) => c.key === a.cell)?.gate !== 'none',
-      ...(j ? { judge: { question: j.question, score: j.score, threshold: j.threshold } } : {}),
-      failingChecks: a.checks
-        .map((c, i) => ({ check: i + 1, exit: c.exitCode, command: c.command }))
+      ...(failed.length ? { failed } : {}),
+      ...(judges.length
+        ? {
+            judges: judges.map((j) => ({
+              label: clip(j.label, LABEL_CHARS),
+              question: clip(j.judgement.question, 300),
+              score: j.judgement.score,
+              threshold: j.judgement.threshold,
+            })),
+          }
+        : {}),
+      failingExecs: a.checks
+        .map((c, i) => ({ exec: i + 1, exit: c.exitCode, command: clip(c.command, 300) }))
         .filter((c) => c.exit !== 0),
     })
   }
@@ -581,6 +821,8 @@ export async function buildDigestKeepingDropped(
       for (const a of e.answers ?? []) {
         const ties = a.votes.filter((v) => v.winner === 'tie').length
         const reasons = sampleReasons(a.votes)
+        const splits = splitsLabel(pairTallies(a.votes))
+        const headToHead = headToHeadLines(a.votes)
         fact('compare-question', {
           run: short.get(r.record.runId),
           eval: tagOf(e.key),
@@ -598,6 +840,8 @@ export async function buildDigestKeepingDropped(
                 })),
               }
             : {}),
+          ...(splits ? { splits } : {}),
+          ...(headToHead.length ? { headToHead } : {}),
           ...(a.error ? { error: clip(a.error, 200) } : {}),
           ...(a.votes.length === 0 && a.error === undefined
             ? { note: 'no pairs to judge: attempts that failed their checks are left out' }
@@ -608,10 +852,74 @@ export async function buildDigestKeepingDropped(
     }
   }
 
-  // Each variant cell's checks (expect labels) beside its control's, and whether each tells them apart.
+  // With two variants or more, each pair of arms on one harness; otherwise each variant cell's
+  // checks (expect labels) beside its control's, and whether each tells them apart.
   for (const r of runs) {
     for (const e of r.record.evals) {
       if (!evalKeys.has(e.key)) continue
+      const tag = (key: string) => cellTag(r.record.runId, e.key, key)
+      const contrasts = contrastsOf(e)
+      for (const x of contrasts) {
+        const apart = x.checks.filter((k) => k.verdict === 'discriminates' || k.verdict === 'mixed')
+        const ef = x.effort
+        fact('contrast', {
+          run: short.get(r.record.runId),
+          eval: tagOf(e.key),
+          a: tag(x.a),
+          b: tag(x.b),
+          ...(x.lift
+            ? {
+                passRate: `${x.lift.variant.pass}/${x.lift.variant.counted} vs ${x.lift.control.pass}/${x.lift.control.counted}`,
+                lift: digestLift(
+                  x.lift.variant.counted,
+                  x.lift.control.counted,
+                  x.lift.points,
+                  x.lift.interval.lo,
+                  x.lift.interval.hi,
+                ),
+                liftVerdict: digestLiftVerdict(
+                  x.lift.variant.counted,
+                  x.lift.control.counted,
+                  x.lift.withinNoise,
+                ),
+              }
+            : {}),
+          checks: apart.map((k) => ({
+            label: clip(k.label, LABEL_CHARS),
+            a: `${k.a.pass}/${k.a.pass + k.a.fail + k.a.notRun}`,
+            b: `${k.b.pass}/${k.b.pass + k.b.fail + k.b.notRun}`,
+            verdict: k.verdict,
+          })),
+          sameOnBoth: x.checks.length - apart.length,
+          ...(ef
+            ? {
+                effort: {
+                  n: `${ef.variant.n} vs ${ef.control.n}`,
+                  toolCalls: `${ef.variant.tools.median} vs ${ef.control.tools.median} (${ratioText(ef.toolsRatio)})`,
+                  agentS: `${round1(ef.variant.agentMs.median / 1000)} vs ${round1(ef.control.agentMs.median / 1000)} (${ratioText(ef.agentMsRatio)})`,
+                  verdict: ef.verdict,
+                  timeVerdict: ef.timeVerdict,
+                  ...(ef.tokensVerdict && ef.variant.tokens && ef.control.tokens
+                    ? {
+                        tokens: `${formatTokens(ef.variant.tokens.median)} vs ${formatTokens(ef.control.tokens.median)} (${ratioText(ef.tokensRatio)})`,
+                        tokensVerdict: ef.tokensVerdict,
+                      }
+                    : {}),
+                  ...(Math.min(ef.variant.n, ef.control.n) >= DIRECTIONAL_MIN
+                    ? {
+                        separated: {
+                          tools: ef.separated,
+                          agentS: ef.timeSeparated,
+                          ...(ef.tokensSeparated !== null ? { tokens: ef.tokensSeparated } : {}),
+                        },
+                      }
+                    : {}),
+                },
+              }
+            : {}),
+        })
+      }
+      if (contrasts.length) continue
       for (const c of e.cells) {
         const rows = (c.checks ?? []).filter((k) => k.control && k.verdict)
         if (!rows.length) continue
@@ -656,33 +964,48 @@ export async function buildDigestKeepingDropped(
     }
     return []
   }
-  for (const { r, e, a } of failures.slice(0, 3)) {
+  // One failing attempt per cell, preferring one that failed a check whose rate differs by cell.
+  const discriminating = ({ r, e, a }: (typeof failures)[number]) =>
+    failedLabels(a).some((l) => differing.get(`${r.record.runId}\0${e.key}`)?.has(l))
+  const perCell = new Map<string, (typeof failures)[number]>()
+  for (const f of failures) {
+    const id = `${f.r.record.runId}\0${f.e.key}\0${f.a.cell}`
+    const prev = perCell.get(id)
+    if (!prev || (!discriminating(prev) && discriminating(f))) perCell.set(id, f)
+  }
+  for (const [i, { r, e, a }] of [...perCell.values()].slice(0, 6).entries()) {
     const id = idOf.get(`${r.record.runId}\0${a.key}`) as string
     const lines = await lastText(r.record.runId, a)
-    const j = a.judgements.find((x) => x.verdict === 'fail')
-    if (j)
+    const judges = labelledJudgements(a).filter((j) => j.judgement.verdict === 'fail')
+    for (const { label, judgement: j } of judges) {
       lines.push(
-        `judge question: ${j.question}`,
+        `judge ${clip(label, LABEL_CHARS)}: ${j.question}`,
         `judge score: ${j.score} (threshold ${j.threshold})`,
       )
-    for (const [i, c] of a.checks.entries()) {
+    }
+    for (const x of a.assertions ?? []) {
+      if (x.status === 'pass' || /(^|\.)toPass$/.test(x.matcher)) continue
+      lines.push(`check ${x.status}: ${clip(x.label, LABEL_CHARS)}: ${clip(x.message ?? '', 300)}`)
+    }
+    for (const [n, c] of a.checks.entries()) {
       if (c.exitCode === 0 || !c.log) continue
       const log = await readFile(
         join(r.dir, r.record.runId, ...c.log.path.split('/')),
         'utf8',
       ).catch(() => '')
       lines.push(
-        `check ${i + 1} (exit ${c.exitCode}) ${c.command}:`,
+        `exec ${n + 1} (exit ${c.exitCode}) ${c.command}:`,
         ...log.trimEnd().split('\n').slice(-15),
       )
     }
     add(
       `attempt:${id}`,
-      `a failing attempt: its final message${j ? ' and the judge question it failed' : ''}`,
+      `a failing attempt of ${cellTag(r.record.runId, e.key, a.cell)}: its final message${judges.length ? ' and the judge questions it failed' : ''}`,
       lines,
       1,
     )
-    if (j) {
+    const j = judges[0]
+    if (j && i < 3) {
       const twin = e.attempts.find((x) => x.cell === a.cell && x.outcome === 'pass')
       if (twin) {
         const twinId = idOf.get(`${r.record.runId}\0${twin.key}`) as string
@@ -737,6 +1060,7 @@ export async function buildDigestKeepingDropped(
       base: base ? 'r1' : null,
       evals: input.evalFilter,
     },
+    frame,
     runs: Object.fromEntries(
       runs.map((r) => [
         short.get(r.record.runId),

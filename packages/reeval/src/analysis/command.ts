@@ -58,9 +58,9 @@ async function load(config: ResolvedConfig, entry: HistoryEntry): Promise<RunInp
   return { record: parseRecord(bytes, entry.runId), dir, bytes }
 }
 
-/** The model's input: the digest as JSON, after the project's own instructions. */
+/** The model's input: the project's own instructions, which set the question, then the digest as JSON. */
 export const promptOf = (d: Digest) =>
-  `${d.instructions ? `PROJECT INSTRUCTIONS: ${d.instructions}\n\n` : ''}DIGEST:\n${JSON.stringify(d)}`
+  `${d.instructions ? `PROJECT INSTRUCTIONS (the question this analysis answers): ${d.instructions}\n\n` : ''}DIGEST:\n${JSON.stringify(d)}`
 
 /** `--context`: the same digest and rules, for the user's own coding agent. */
 export function contextMarkdown(d: Digest, head: string, base: string | null): string {
@@ -69,6 +69,15 @@ export function contextMarkdown(d: Digest, head: string, base: string | null): s
     '',
     'Analyse this reeval run for the engineer who wrote the evals. The digest below holds facts reeval computed (F…), evidence excerpts (E…, transcript lines as L<n>) and the attempts table. Cite those ids for every claim, keep to the verdicts in the facts, and suggest at most 5 concrete actions, each verified with a reeval command from the CLI list.',
     '',
+    ...(d.frame === 'study'
+      ? [
+          "This run is a study: every cell is ungated (gate: 'none'), so it measures how the arms differ. Failing attempts are data, not a failed gate.",
+          '',
+        ]
+      : []),
+    ...(d.instructions
+      ? ['## Project instructions (the question this analysis answers)', '', d.instructions, '']
+      : []),
     '## How reeval decided each verdict',
     '',
     ...RULES.map((r) => `- ${r}`),
@@ -101,7 +110,7 @@ function citedSummary(d: Digest, cites: string[]): Record<string, string> {
   for (const c of cites) {
     const fact = d.facts.find((f) => f.id === c)
     const evidence = d.evidence.find((e) => e.id === c || c.startsWith(`${e.id}:`))
-    const attempt = d.attempts[c.replace(/:check\d+$/, '')]
+    const attempt = d.attempts[c.replace(/:exec\d+$/, '')]
     if (fact) {
       const { id: _id, ...rest } = fact
       out[c] = clip(JSON.stringify(rest), 400)
@@ -112,7 +121,7 @@ function citedSummary(d: Digest, cites: string[]): Record<string, string> {
         : `${evidence.ref}: ${evidence.why}`
     } else if (attempt) {
       out[c] =
-        `${attempt.runId} · ${attempt.attempt} · ${attempt.outcome} · ${attempt.tools} tool calls`
+        `${attempt.runId} · ${attempt.attempt} · ${attempt.outcome} · ${attempt.tools} tool calls${attempt.checks ? ` · checks ${attempt.checks}` : ''}`
     }
   }
   return out

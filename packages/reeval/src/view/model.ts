@@ -8,7 +8,7 @@ import type {
   RunRecord,
 } from '../history/types.ts'
 import type { Outcome, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
-import { promptTokens } from '../usage.ts'
+import { formatTokens, promptTokens } from '../usage.ts'
 import {
   type CompareCell,
   type CompareRow,
@@ -152,9 +152,8 @@ export function languageLabel(stack: Pick<RunRecord['stack'], 'language'>): stri
 /** Harness-reported tokens as `127k in (98k cached) · 776 out`; null when none were reported. */
 export function formatUsage(usage: TokenUsage | null | undefined): string | null {
   if (!usage) return null
-  const k = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : String(n))
-  const cached = usage.cacheRead ? ` (${k(usage.cacheRead)} cached)` : ''
-  return `${k(promptTokens(usage))} in${cached} · ${k(usage.output)} out`
+  const cached = usage.cacheRead ? ` (${formatTokens(usage.cacheRead)} cached)` : ''
+  return `${formatTokens(promptTokens(usage))} in${cached} · ${formatTokens(usage.output)} out`
 }
 
 export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : 'no git')

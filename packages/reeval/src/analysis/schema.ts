@@ -4,9 +4,7 @@ import { z } from 'zod'
 const confidence = z.enum(['high', 'medium', 'low'])
 const cites = z
   .array(z.string())
-  .describe(
-    'Ids from the digest: F<n>, E<n>, E<n>:L<line>, an attempt id, or <attempt id>:check<n>',
-  )
+  .describe('Ids from the digest: F<n>, E<n>, E<n>:L<line>, an attempt id, or <attempt id>:exec<n>')
 
 const claim = z.object({
   text: z.string(),
@@ -21,12 +19,14 @@ const claim = z.object({
 export const analysisSchema = z.object({
   tldr: z
     .string()
-    .describe('One sentence: what happened, how sure, why, next. No fact ids or intervals'),
+    .describe(
+      'One sentence: what happened, how sure, why, next. No fact ids or intervals. In a study (frame study), how the arms differ',
+    ),
   whatHappened: z.array(claim),
   results: z
     .array(claim)
     .describe(
-      'pass@1 and effort that were measured, each with its noise verdict. insufficient is not measured: never a results line',
+      'pass@1 and effort that were measured, each with its noise verdict. insufficient is not measured: never a results line, except effort separated at n ≥ 3 vs 3, reported as directional',
     ),
   why: z
     .array(claim)
@@ -65,13 +65,14 @@ export type AnalysisOutput = z.infer<typeof analysisSchema>
 export const SYSTEM_PROMPT = `You analyse the results of a reeval run for the engineer who wrote the evals.
 reeval runs coding agents in sandboxes. A compare eval runs a control cell and variant cells (with a skill, docs or MCP, say) and reports lift in pass@1 (the share of attempts that pass) with a 95% interval, and effort (tool calls, agent time, and tokens when both sides reported usage) next to it.
 
-You get a DIGEST: facts computed deterministically by reeval (ids F1...), evidence excerpts (ids E1...; transcript lines start with their line number L<n>), an attempts table (ids like r2/fix-config/control#1), the RULES reeval used for every verdict, and the CLI.
+You get a DIGEST: facts computed deterministically by reeval (ids F1...), evidence excerpts (ids E1...; transcript lines start with their line number L<n>), an attempts table (ids like r2/fix-config/control#1), the RULES reeval used for every verdict, and the CLI. PROJECT INSTRUCTIONS, when present, come first: they set the question this analysis answers. Follow them within these rules.
 
 Rules:
-- Every claim cites at least one id from the digest: F<n>, E<n>, E<n>:L<line> for a line the evidence shows, an attempt id, or <attempt id>:check<n>. Never cite anything that isn't in the digest.
+- Every claim cites at least one id from the digest: F<n>, E<n>, E<n>:L<line> for a line the evidence shows, an attempt id, or <attempt id>:exec<n> for its n-th c.exec. Never cite anything that isn't in the digest. setup, rules and cli are context, not citable.
+- When the digest's frame is study, every cell is ungated (gate: 'none'): the run is a study of how its arms differ, not a failing CI gate. The TL;DR says how the arms differ (the criteria rows, and contrast facts for each pair of arms), not that attempts failed. A label in a criteria fact's neverMet or alwaysMet is the same in every arm: name those once (as never met, or met, in any arm), and never make one a why or the reason for an eval change; never suggest rewriting the task prompt to name criteria the eval deliberately leaves out.
 - Take numbers from the facts. Don't compute new statistics beyond simple ratios of cited numbers.
 - A cited judge score must be the recorded score on that attempt. Do not invent a different number.
-- The verdicts in the facts are final: if a lift or effort verdict says within noise, insufficient or not comparable, say so; never call it an effect. insufficient is not measured: never put it on a results line. insufficient on effort is statistical only (too few attempts); a missing token metric is omitted, not insufficient — do not treat unreportedUsage as a result. When sources or the eval fingerprint differ across the compared runs, the first line says the eval changed; that pass@1 difference is not an effect, and mixed counts such as 6/10 vs 8/9 are not a results line. A lift is an effect only when sources match. Name each factor claim's tier (controlled, pooled, observed). Check facts (kind checks) list each expect label on a variant and its control: a both-pass or both-fail check is no evidence for the variant; cite discriminates rows for which requirement separated them. Compare-question facts (kind compare-question) are annotation: win rates, ties, errors and vote reasons never change pass, fail or the exit code. Do not put them on a results line as a gate. A vote's reason is the model's wording: do not treat it as a check.
+- The verdicts in the facts are final: if a lift or effort verdict says within noise, insufficient or not comparable, say so; never call it an effect. insufficient is not measured: never put it on a results line as an effect. The one exception is effort whose separated is true on a metric at n of at least 3 vs 3: every attempt on one side beat every attempt on the other, so put it under results as directional, with the ratio, the n and "no overlap, not significant". insufficient on effort is statistical only (too few attempts); a missing token metric is omitted, not insufficient — do not treat unreportedUsage as a result. When sources or the eval fingerprint differ across the compared runs, the first line says the eval changed; that pass@1 difference is not an effect, and mixed counts such as 6/10 vs 8/9 are not a results line. A lift is an effect only when sources match. Name each factor claim's tier (controlled, pooled, observed). Contrast facts (kind contrast) set two arms side by side (a against b, variant against variant too): cite them when the question is how two arms differ. Check facts (kind checks) list each expect label on a variant and its control: a both-pass or both-fail check is no evidence for the variant; cite discriminates rows for which requirement separated them. Compare-question facts (kind compare-question) are annotation: win rates, ties, errors and vote reasons never change pass, fail or the exit code. Do not put them on a results line as a gate. A vote's reason is the model's wording: do not treat it as a check.
 - Say what can't be attributed (factors that are not_measured).
 - Separate causes: the thing under test (skill, docs), the eval itself (task, checks, judge question), and reeval or infrastructure (bugs, fingerprints, harness).
 - Explain a failed judge verdict by comparing the cited output with the judge question, and say it's your reading: judges record no reason.

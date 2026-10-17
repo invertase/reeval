@@ -50,6 +50,7 @@ const prepareContract = (name: string) => `reeval/test/sandbox-prepare-contract.
 const debug = (name: string) => `reeval/test/debug.test.ts › ${name}`
 const studio = (name: string) => `reeval/test/studio.test.ts › ${name}`
 const analysis = (name: string) => `reeval/test/analysis.test.ts › ${name}`
+const query = (name: string) => `reeval/test/query.test.ts › ${name}`
 const workspace = (name: string) => `reeval/test/workspace.test.ts › ${name}`
 const checks = (name: string) => `reeval/test/checks.test.ts › ${name}`
 const engineExpect = (name: string) => `reeval/test/engine-expect.test.ts › ${name}`
@@ -209,6 +210,17 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/results.test.ts › the option takes all or { passRate }',
       "reeval/test/results.test.ts › 'all' matches { passRate: 1 }",
       options('a config-level gate applies to every eval'),
+    ],
+  },
+  {
+    id: 'gate.hint',
+    area: 'Config and selection',
+    name: "The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'`",
+    plan: ['compare/study', 'compare/control-and-variants'],
+    tests: [
+      options(
+        "'all' by default, { passRate } per eval or group, with a hint when runs > 1 and no gate",
+      ),
     ],
   },
   {
@@ -1468,6 +1480,64 @@ export const inventory: InventoryFeature[] = [
       analysis('reeval query effort verdicts tokens when usage is present'),
       analysis('the prompt and rules say missing usage omits tokens'),
       unit('effort under 10s reads in tenths, so a ratio matches its times'),
+    ],
+  },
+  {
+    id: 'effort.separation',
+    area: 'Records and studio',
+    name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) and the plan hint below 4 runs a cell',
+    plan: ['compare/study'],
+    tests: [
+      analysis('3 against 3 with no overlap on any metric is directional, never an effect'),
+      analysis('3 against 3 that overlaps says nothing beyond too few attempts'),
+      analysis('2 against 2 is never directional, separated or not'),
+      analysis('effort needs 4 runs a cell to be testable'),
+    ],
+  },
+  {
+    id: 'contrasts',
+    area: 'Records and studio',
+    name: 'Contrasts: each pair of arms on one harness (lift, checks, effort) in the run summary, `reeval show`, `summary.md`, `reeval query contrasts` and the digest',
+    tests: [
+      analysis(
+        'show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side',
+      ),
+      analysis('canary: with one variant there is no variant-against-variant row'),
+    ],
+  },
+  {
+    id: 'questions.splits',
+    area: 'Records and studio',
+    name: 'Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest',
+    tests: [
+      "reeval/test/results.test.ts › head to head: a pair whose two orders disagree is a split, not a win each (Ben's UX votes)",
+      'reeval/test/results.test.ts › canary: two arms get no head-to-head line, and orders that agree split nothing',
+      options('three arms: head to head per pair, and pairs the order decided are splits'),
+    ],
+  },
+  {
+    id: 'summary.labels',
+    area: 'Records and studio',
+    name: 'Labels and names: judges and `toSucceed` checks by their `expect` label in judge rates, `reeval show` and `summary.md` (a long script on one line), tokens as `430k vs 1,094k` everywhere, and a compare\u2019s control named by its environment in the digest',
+    tests: [
+      analysis(
+        'labels and names: judges and checks go by their expect label, and the control by its environment',
+      ),
+      analysis("tokens read the same everywhere: Ben's 430443 vs 1093952 is 430k vs 1,094k"),
+    ],
+  },
+  {
+    id: 'query.context-use',
+    area: 'Records and studio',
+    name: 'Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest\u2019s `context-use` fact',
+    tests: [
+      query('a read of a placed file is context, by absolute path, ~ or a glob'),
+      query('digging in installed packages is dependency; an exclusion of them is not'),
+      query('checks, builds and the web have their own classes; the rest is workspace'),
+      query('each harness opened its placed SKILL.md; web and MCP calls have their classes'),
+      analysis(
+        'the digest frames it as a study: criteria say what differs, never-met labels once, evidence for every arm',
+      ),
     ],
   },
   {

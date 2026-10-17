@@ -10,10 +10,13 @@ import { recordFailure } from '../src/attempt/record.ts'
 import type { Attempt } from '../src/attempt/state.ts'
 import {
   acrossOf,
+  headToHeadLines,
   type PairAttempt,
   pairsOf,
+  pairTallies,
   ratesOf,
   sampleReasons,
+  splitsLabel,
   VOTE_REASON_CAP,
   voteOf,
 } from '../src/compare/pairs.ts'
@@ -502,6 +505,76 @@ describe('compare question pairs', () => {
       { cut: 'within', name: 'sdk', wins: 1, n: 3 },
       { cut: 'within', name: 'ui', wins: 2, n: 3 },
     ])
+  })
+
+  // Ben's UX question over three arms and three runs: his record's pooled line read no-skill 9/12,
+  // current-skill 2/12, new-skill 7/12 and "0 ties", while 4 of the 9 pairs were decided by
+  // which attempt was shown first.
+  test("head to head: a pair whose two orders disagree is a split, not a win each (Ben's UX votes)", () => {
+    const arms = ['no-skill', 'current-skill', 'new-skill']
+    const pairs = pairsOf(
+      arms.flatMap((arm) =>
+        [1, 2, 3].map((run) => ({ ...side('cursor', arm, run), control: arm === 'no-skill' })),
+      ),
+    )
+    // [unswapped pick, swapped pick] per pair and run, in pairsOf's order.
+    const picks: Record<string, Array<['A' | 'B', 'A' | 'B']>> = {
+      'no-skill current-skill': [
+        ['A', 'B'],
+        ['A', 'B'],
+        ['A', 'A'],
+      ],
+      'no-skill new-skill': [
+        ['A', 'A'],
+        ['A', 'A'],
+        ['A', 'B'],
+      ],
+      'current-skill new-skill': [
+        ['B', 'A'],
+        ['B', 'A'],
+        ['A', 'A'],
+      ],
+    }
+    const votes = pairs.flatMap((pair) => {
+      const [x, y] = picks[`${pair.a.arm} ${pair.b.arm}`]?.[pair.run - 1] ?? ['A', 'A']
+      return [voteOf('UX', pair, false, x), voteOf('UX', pair, true, y)]
+    })
+    assert.deepEqual(
+      ratesOf(votes).map((r) => `${r.name} ${r.wins}/${r.n}`),
+      ['no-skill 9/12', 'current-skill 2/12', 'new-skill 7/12'],
+      'the pooled rates Ben saw',
+    )
+    assert.deepEqual(
+      pairTallies(votes).map((t) => [t.a, t.b, t.aWins, t.bWins, t.ties, t.splits, t.splitsFirst]),
+      [
+        ['no-skill', 'current-skill', 2, 0, 0, 1, 1],
+        ['no-skill', 'new-skill', 1, 0, 0, 2, 2],
+        ['current-skill', 'new-skill', 0, 2, 0, 1, 1],
+      ],
+    )
+    assert.deepEqual(headToHeadLines(votes), [
+      'within cursor: no-skill 2–0 current-skill (1 split) · no-skill 1–0 new-skill (2 splits) · current-skill 0–2 new-skill (1 split)',
+    ])
+    assert.equal(
+      splitsLabel(pairTallies(votes)),
+      '4/9 pairs split by order, all to the side shown first',
+    )
+  })
+
+  test('canary: two arms get no head-to-head line, and orders that agree split nothing', () => {
+    const pairs = pairsOf(matrix(['h'], ['sdk', 'ui'], 2))
+    const votes = pairs.flatMap((pair) => [
+      voteOf('q', pair, false, 'B'),
+      voteOf('q', pair, true, pair.run === 1 ? 'A' : 'tie'),
+    ])
+    assert.deepEqual(headToHeadLines(votes), [])
+    assert.deepEqual(
+      pairTallies(votes).map((t) => [t.aWins, t.bWins, t.ties, t.splits]),
+      [[0, 2, 0, 0]],
+      'a tie beside a pick decides for the pick',
+    )
+    assert.equal(splitsLabel(pairTallies(votes)), '0/2 pairs split by order')
+    assert.equal(splitsLabel([]), null)
   })
 
   test('a vote reason is stored, capped and sampled; empty is omitted', async () => {

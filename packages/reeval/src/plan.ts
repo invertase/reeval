@@ -19,6 +19,7 @@ import type {
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
+import { EFFORT_ALPHA, EFFORT_MIN_RUNS } from './view/effort.ts'
 
 /** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
@@ -117,7 +118,10 @@ export async function buildPlan(options: {
   const descriptors = new Map<string, HarnessDescriptor>()
   const harnesses = new Set<string>()
   // A filter can leave out some of an eval's cells: each row counts what it actually plans.
-  const counted = new Map<string, { harnesses: Set<string>; variants: Set<string>; n: number }>()
+  const counted = new Map<
+    string,
+    { harnesses: Set<string>; variants: Set<string>; n: number; gated: boolean }
+  >()
   let attempts = 0
   let estimateMs = 0
   for (const { id, attempt } of planned) {
@@ -141,8 +145,14 @@ export async function buildPlan(options: {
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
     harnesses.add(attempt.cell.harness)
-    const row = counted.get(id) ?? { harnesses: new Set(), variants: new Set(), n: 0 }
+    const row = counted.get(id) ?? {
+      harnesses: new Set(),
+      variants: new Set(),
+      n: 0,
+      gated: false,
+    }
     row.harnesses.add(attempt.cell.harness)
+    if (attempt.gate !== 'none') row.gated = true
     if (attempt.cell.variant !== undefined) row.variants.add(attempt.cell.variant)
     row.n++
     counted.set(id, row)
@@ -176,7 +186,10 @@ export async function buildPlan(options: {
     sandboxWarnings: [...sandboxWarnings.values()].sort(
       (a, b) => Number(a.kind !== 'root') - Number(b.kind !== 'root'),
     ),
-    hints: gateHint([...rows.values()]),
+    hints: [
+      ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
+      ...effortHint([...rows.values()]),
+    ],
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
@@ -232,11 +245,28 @@ function questionLines(members: PlanRow[], questionModel: string | null): string
 }
 
 /** One line when evals run several times under the default gate, which every attempt must pass. */
+/** Rows with a gated cell left at the default gate; a study whose cells are all `'none'` has none. */
 function gateHint(rows: PlanRow[]): string[] {
   const n = rows.filter((r) => !r.plan.skip && r.plan.runs > 1 && r.plan.gate === undefined).length
   if (n === 0) return []
   return [
     `${plural(n, 'eval')} ${n === 1 ? 'runs' : 'run'} more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead`,
+  ]
+}
+
+/** One line when compares run too few times per cell for effort's test to ever reach p < 0.05. */
+function effortHint(rows: PlanRow[]): string[] {
+  const few = rows.filter(
+    (r) =>
+      !r.plan.skip &&
+      (r.plan.variants?.run ?? 0) > 0 &&
+      r.plan.runs >= 2 &&
+      r.plan.runs < EFFORT_MIN_RUNS,
+  )
+  if (few.length === 0) return []
+  const runs = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b).join(' or ')
+  return [
+    `${plural(few.length, 'compare')} ${few.length === 1 ? 'runs' : 'run'} ${runs} times per cell; effort can't reach p < ${EFFORT_ALPHA} below ${EFFORT_MIN_RUNS} vs ${EFFORT_MIN_RUNS} (runs: ${EFFORT_MIN_RUNS})`,
   ]
 }
 

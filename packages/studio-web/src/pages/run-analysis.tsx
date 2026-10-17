@@ -24,7 +24,7 @@ import { formatDate } from '@/lib/format'
 
 /** A citation: an attempt links to its page; a fact or evidence id shows what it says. */
 function Cite({ doc, id }: { doc: AnalysisDoc; id: string }) {
-  const attempt = doc.attempts[id.replace(/:check\d+$/, '')]
+  const attempt = doc.attempts[id.replace(/:exec\d+$/, '')]
   const chip =
     'inline-flex rounded border bg-muted/60 px-1 font-mono text-[10px] text-muted-foreground'
   if (attempt) {

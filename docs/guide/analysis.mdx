@@ -64,6 +64,8 @@ evals/skill.eval.ts › house greeting › greets in the house…  antigravity:g
 
 `effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap. `tokens_verdict` is null when either side has no usage sample: omitted, not insufficient. A Goose cell does not blank `tokens_verdict` on Cursor cells in the same study.
 
+`separated`, `time_separated` and `tokens_separated` are 1 when the variant's and control's ranges don't overlap on tool calls, agent time or tokens. At three attempts a side or more, that's a direction the summary prints as `no overlap`, though the test is still `insufficient`.
+
 ## Pool runs to separate the factors
 
 ```bash
@@ -103,6 +105,32 @@ a path under `skills/<name>/`, or a dedicated `skill` / `load_skill` call. It's
 null, with `reads` at 0, when the agent never opened it. A variant that passes
 without reading its skill didn't pass because of it. The same signals are
 `expect(turn).toHaveCalledSkill(name)` during the eval.
+
+## See what each arm leaned on
+
+```bash
+npx reeval query "SELECT cell_key, path, reads, first_line FROM skill_files"
+```
+
+```text
+history.db: 3 runs
+cell_key                                     path                                      reads  first_line
+cursor:composer-2.5/skilled/docker           ~/.agents/skills/contract-probe/SKILL.md  1      3
+claude-code:claude-haiku-4-5/skilled/docker  ~/.claude/skills/contract-probe/SKILL.md  1      3
+codex:gpt-5.4-mini/skilled/docker            ~/.agents/skills/contract-probe/SKILL.md  2      3
+```
+
+`skill_files` lists every file an attempt's environment declared (each skill's
+`SKILL.md` and references, rules files) and how many tool calls opened it,
+directly, through a glob or a shell command. A `NULL` `first_line` means the
+agent never opened it.
+
+`context_use` sorts each attempt's tool calls into `context` (a placed skill,
+rules file or MCP tool), `dependency` (`node_modules`, `site-packages`,
+`--help`), `web`, `verify` (a check's command, tests, builds) and `workspace`.
+An arm that spends its calls in `dependency` while another stays in `context`
+is digging for what the other was told. The classes are a heuristic over tool
+names and paths, and `reeval analyze` cites them as counts.
 
 ## Count tokens
 
@@ -218,6 +246,8 @@ export default defineConfig({
   // …
 })
 ```
+
+`instructions` opens the prompt, before the digest, as the question the analysis answers. A run where every cell has `gate: 'none'` is read as a study: the TL;DR says how the arms differ, check by check, rather than that attempts failed.
 
 ## Notes during a run
 

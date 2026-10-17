@@ -1,7 +1,8 @@
-import { sampleReasons } from '../compare/pairs.ts'
+import { headToHeadLines, sampleReasons } from '../compare/pairs.ts'
 import {
   answersLabel,
   checksLabel,
+  contrastLines,
   gateLabel,
   liftLabel,
   undiscriminating,
@@ -25,10 +26,10 @@ import {
   familyRateLabel,
 } from '../view/family.ts'
 import {
-  cellJudgeRates,
   cellUsage,
   collapsedJudgeLabel,
   judgeRatesLabel,
+  summaryJudgeRates,
 } from '../view/judgements.ts'
 import { formatUsage, hasUngatedCells, isUngatedMiss } from '../view/model.ts'
 import { type Colors, colors } from './colors.ts'
@@ -142,7 +143,7 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
     const rows = [
       `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  pass@1 ${pct(cell.passRate)}${note}${infra}${usage}`,
     ]
-    const rates = judgeRatesLabel(cellJudgeRates(e, cell.key))
+    const rates = judgeRatesLabel(summaryJudgeRates(e, cell))
     if (rates) rows.push(`${indent}  ${c.dim(rates)}`)
     const effort = cellContrast(e, cell.key)
     if (effort) rows.push(`${indent}  ${c.dim(`effort: ${effortLabel(effort)}`)}`)
@@ -155,12 +156,26 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
   })
 }
 
+/** With two variants or more, each pair of arms on one harness: lift, checks and effort. */
+function contrastRows(c: Colors, e: EvalEntry, indent: string): string[] {
+  const lines = contrastLines(e)
+  if (!lines.length) return []
+  return [
+    `${indent}${c.dim('contrasts (each pair of arms, same harness)')}`,
+    ...lines.map((line) => `${indent}  ${c.dim(line)}`),
+  ]
+}
+
 /** One row per compare question: its win rates, or why it has none. They never gate. */
 function questionRows(c: Colors, e: EvalEntry, indent: string): string[] {
   return (e.answers ?? []).flatMap((a) => {
     const label = answersLabel(a)
     const head = `${indent}${c.dim('question')}  ${a.error !== undefined ? c.yellow(label) : label}`
-    return [head, ...sampleReasons(a.votes).map((reason) => `${indent}  ${c.dim(reason)}`)]
+    return [
+      head,
+      ...headToHeadLines(a.votes).map((line) => `${indent}  ${line}`),
+      ...sampleReasons(a.votes).map((reason) => `${indent}  ${c.dim(reason)}`),
+    ]
   })
 }
 
@@ -258,6 +273,7 @@ function tree(c: Colors, evals: EvalEntry[], families: FamilyRecord[] = []): str
     return [
       ` ${pad}${name}${fill}  ${evalColumns(c, entry)}`,
       ...cellRows(c, entry, ` ${pad}    `),
+      ...contrastRows(c, entry, ` ${pad}    `),
       ...questionRows(c, entry, ` ${pad}    `),
     ]
   })

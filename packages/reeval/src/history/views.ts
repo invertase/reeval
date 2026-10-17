@@ -8,8 +8,16 @@ import {
   stackChanges,
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
+import { labelledJudgements } from '../view/judgements.ts'
 import { warnings } from './state.ts'
-import { cellCounts, OUTCOME_MARK, repeatsVerdict, stateRows, summaryCounts } from './summary.ts'
+import {
+  cellCounts,
+  contrastLines,
+  OUTCOME_MARK,
+  repeatsVerdict,
+  stateRows,
+  summaryCounts,
+} from './summary.ts'
 import type { HistoryCell, HistoryEntry, RunRecord } from './types.ts'
 
 export {
@@ -284,14 +292,19 @@ export function formatShow(run: RunRecord): string {
     lines.push(
       `  ${OUTCOME_MARK[e.outcome]} ${e.id}${single && first ? `  ${formatDuration(first.durationMs)}` : `  ${cellCounts(e)}`}`,
     )
+    const contrasts = contrastLines(e)
+    if (contrasts.length) {
+      lines.push('      contrasts (each pair of arms, same harness)')
+      for (const line of contrasts) lines.push(`        ${line}`)
+    }
     for (const t of e.attempts) {
       const indent = single ? '      ' : '        '
       if (!single) {
         lines.push(`      ${OUTCOME_MARK[t.outcome]} ${t.id}  ${formatDuration(t.durationMs)}`)
       }
-      for (const j of t.judgements) {
+      for (const { judgement: j, label, labelled } of labelledJudgements(t)) {
         lines.push(
-          `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${j.question}`,
+          `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${labelled ? `${label}: ` : ''}${j.question}`,
         )
       }
       if (t.error && !repeatsVerdict(t)) {
