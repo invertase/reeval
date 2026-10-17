@@ -550,7 +550,7 @@ describe('collapsed judges, per-key rates and tokens', () => {
     })
     const out = summaryOf([e])
     assert.match(out, /pass 0\.92\/0\.80/)
-    assert.match(out, /1270 in · 80 out/)
+    assert.match(out, /1,270 in · 80 out/)
     assert.doesNotMatch(out, /judge 0\.92[^/]/)
   })
 

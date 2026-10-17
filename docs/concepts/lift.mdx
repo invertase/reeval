@@ -161,7 +161,7 @@ So `reeval run` hints when a compare runs 2 or 3 times a cell: `hint: 1 compare 
 ### No overlap at small n
 
 ```text
-effort: tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430000 vs 1094000 (×0.39, no overlap): too few attempts to test (n = 3 vs 3)
+effort: tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430k vs 1,094k (×0.39, no overlap): too few attempts to test (n = 3 vs 3)
 ```
 
 At three or more attempts a side, a metric whose two ranges don't overlap (every attempt on one side beat every attempt on the other) says `no overlap` even when its test is `insufficient`. It's a direction, not an effect: one ordering in ten separates by chance at 3 vs 3. `reeval query effort` has it per metric as `separated`, `time_separated` and `tokens_separated`, and `reeval analyze` reports it as directional, never as an effect.

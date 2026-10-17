@@ -370,7 +370,9 @@ group(
   `Checks that don't discriminate` lists the ones that pass (or fail) on both sides. After a
   run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict
   LIKE 'both-%'"` and rework or drop those checks: they measure nothing about the variant.
-  Changing a label changes the eval's fingerprint.
+  Changing a label changes the eval's fingerprint. Label judges too
+  (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
+  question in judge rates, `reeval show`, `summary.md` and the digest.
 - With `runs > 1`, a cell passes only if every counted attempt passes (pass^k), unless
   `gate: { passRate: 0.8 }` (a pass@1 threshold; pass@1 is passes over passes and fails). Infra errors don't count; a cell is `infra_error`
   only when nothing counted.

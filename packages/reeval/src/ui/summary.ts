@@ -26,10 +26,10 @@ import {
   familyRateLabel,
 } from '../view/family.ts'
 import {
-  cellJudgeRates,
   cellUsage,
   collapsedJudgeLabel,
   judgeRatesLabel,
+  summaryJudgeRates,
 } from '../view/judgements.ts'
 import { formatUsage, hasUngatedCells, isUngatedMiss } from '../view/model.ts'
 import { type Colors, colors } from './colors.ts'
@@ -143,7 +143,7 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
     const rows = [
       `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  pass@1 ${pct(cell.passRate)}${note}${infra}${usage}`,
     ]
-    const rates = judgeRatesLabel(cellJudgeRates(e, cell.key))
+    const rates = judgeRatesLabel(summaryJudgeRates(e, cell))
     if (rates) rows.push(`${indent}  ${c.dim(rates)}`)
     const effort = cellContrast(e, cell.key)
     if (effort) rows.push(`${indent}  ${c.dim(`effort: ${effortLabel(effort)}`)}`)

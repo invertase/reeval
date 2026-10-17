@@ -33,7 +33,7 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "pass": "2/2",
         "gated": false
       },
@@ -114,7 +114,7 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "pass": "1/2",
         "gated": false
       },
@@ -223,7 +223,7 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "n": 2,
         "medianToolCalls": 31.5,
         "medianAgentS": 34,
@@ -389,7 +389,7 @@
     "eval": "fix-config",
     "cells": [
       {
-        "cell": "control",
+        "cell": "broken-project (control)",
         "n": 2,
         "medianToolCalls": 24,
         "medianAgentS": 29,
@@ -730,7 +730,7 @@
       {
         "run": "r1",
         "eval": "fix-config",
-        "cell": "control",
+        "cell": "broken-project (control)",
         "perAttempt": {
           "dependency": "13 15",
           "workspace": "17 18"
@@ -833,7 +833,7 @@
       {
         "run": "r2",
         "eval": "fix-config",
-        "cell": "control",
+        "cell": "broken-project (control)",
         "perAttempt": {
           "dependency": "8 15",
           "workspace": "13 12"
@@ -960,7 +960,7 @@
     "id": "F29",
     "kind": "flaky",
     "eval": "fix-config",
-    "cell": "control",
+    "cell": "broken-project (control)",
     "pass": "3/4",
     "runs": 2,
     "wilson95": "30…95%",
@@ -1075,7 +1075,7 @@
     "run": "r1",
     "eval": "fix-config",
     "a": "es-weak",
-    "b": "control",
+    "b": "broken-project (control)",
     "passRate": "2/2 vs 2/2",
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
@@ -1095,7 +1095,7 @@
     "run": "r1",
     "eval": "fix-config",
     "a": "es-good",
-    "b": "control",
+    "b": "broken-project (control)",
     "passRate": "2/2 vs 2/2",
     "lift": "+0 pts (95% −66…+66)",
     "liftVerdict": "within noise",
@@ -1255,7 +1255,7 @@
     "run": "r2",
     "eval": "fix-config",
     "a": "es-weak",
-    "b": "control",
+    "b": "broken-project (control)",
     "passRate": "2/2 vs 1/2",
     "lift": "+50 pts (95% −27…+91)",
     "liftVerdict": "within noise",
@@ -1275,7 +1275,7 @@
     "run": "r2",
     "eval": "fix-config",
     "a": "es-good",
-    "b": "control",
+    "b": "broken-project (control)",
     "passRate": "2/2 vs 1/2",
     "lift": "+50 pts (95% −27…+91)",
     "liftVerdict": "within noise",

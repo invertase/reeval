@@ -244,6 +244,8 @@ Checks that don't discriminate (2)
  · evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake  adds package.json: passes on both
 ```
 
+A labelled judge (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`) is one of these checks, so its label replaces the question everywhere: in a cell's judge rates, `reeval show`, `summary.md` and the analysis digest. A labelled `toSucceed()` names its `- Check` line in `summary.md`, and a long script shows its first line; the log has the rest.
+
 A check that passes on both sides, or fails on both, measures nothing about the variant. The notice lists them but never fails the run. Rework such a check, or drop it.
 
 Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early, the later checks never run: they read `0/2 (2 not run)` and count against the control. The same verdicts are in `reeval query`'s `check_discrimination` view:

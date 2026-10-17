@@ -4,7 +4,7 @@
 // aren't reeval's to know.
 import type { AttemptRecord, EvalEntry } from '../history/types.ts'
 import { mannWhitney, median, minimumP, quantile } from '../stats.ts'
-import { totalTokens } from '../usage.ts'
+import { formatTokens, totalTokens } from '../usage.ts'
 
 /** Below this two-sided p, an effort difference is an effect. */
 export const EFFORT_ALPHA = 0.05
@@ -270,7 +270,7 @@ export function effortLabel(c: EffortContrast): string {
   const parts = [tools, time]
   if (c.tokensVerdict !== null && c.variant.tokens && c.control.tokens) {
     parts.push(
-      `tokens ${formatCount(c.variant.tokens.median)} vs ${formatCount(c.control.tokens.median)} ${r('tokens', c.tokensRatio)}`,
+      `tokens ${formatTokens(c.variant.tokens.median)} vs ${formatTokens(c.control.tokens.median)} ${r('tokens', c.tokensRatio)}`,
     )
   }
   const n = apartOn.size ? ` (n = ${c.variant.n} vs ${c.control.n})` : ''
@@ -280,7 +280,7 @@ export function effortLabel(c: EffortContrast): string {
 /** One cell's effort on its own: `tools 43 · agent 46s`, plus tokens when any attempt reported them. */
 export const effortSummary = (e: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>) =>
   e.tokens
-    ? `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)} · tokens ${formatCount(e.tokens.median)}`
+    ? `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)} · tokens ${formatTokens(e.tokens.median)}`
     : `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)}`
 
 /** The same cell between two runs: `tools 44 → 10 (×0.23) · agent 45s → 21s (×0.47)`. */
@@ -293,5 +293,5 @@ export function effortChangeLabel(
   const core = `tools ${formatCount(base.tools.median)} → ${formatCount(head.tools.median)} (${formatRatio(t)}) · agent ${formatSeconds(base.agentMs.median)} → ${formatSeconds(head.agentMs.median)} (${formatRatio(a)})`
   if (!base.tokens || !head.tokens) return core
   const tok = ratio(head.tokens.median, base.tokens.median)
-  return `${core} · tokens ${formatCount(base.tokens.median)} → ${formatCount(head.tokens.median)} (${formatRatio(tok)})`
+  return `${core} · tokens ${formatTokens(base.tokens.median)} → ${formatTokens(head.tokens.median)} (${formatRatio(tok)})`
 }
