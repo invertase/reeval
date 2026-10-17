@@ -1484,6 +1484,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'summary.labels',
+    area: 'Records and studio',
+    name: 'Labels and names: judges and `toSucceed` checks by their `expect` label in judge rates, `reeval show` and `summary.md` (a long script on one line), tokens as `430k vs 1,094k` everywhere, and a compare\u2019s control named by its environment in the digest',
+    tests: [
+      analysis(
+        'labels and names: judges and checks go by their expect label, and the control by its environment',
+      ),
+      analysis("tokens read the same everywhere: Ben's 430443 vs 1093952 is 430k vs 1,094k"),
+    ],
+  },
+  {
     id: 'query.context-use',
     area: 'Records and studio',
     name: 'Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest\u2019s `context-use` fact',

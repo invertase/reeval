@@ -11,6 +11,7 @@ import { TOOL_CLASSES } from '../history/tool-class.ts'
 import type { AttemptRecord, CheckTally, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
+import { formatTokens } from '../usage.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
 import { contrastsOf } from '../view/contrasts.ts'
@@ -172,6 +173,21 @@ function cellTags(e: EvalEntry): Map<string, string> {
   return new Map(e.cells.map((c) => [c.key, `${prefix(c)}${c.variant ?? 'control'}`]))
 }
 
+/**
+ * Cell names for facts: each tag, with a compare's control named by its environment
+ * (`no-skill (control)`) so a reading can name the arm. Attempt ids keep the tag.
+ */
+function cellNames(e: EvalEntry, tags: Map<string, string>): Map<string, string> {
+  const compare = e.cells.some((c) => c.role === 'variant')
+  return new Map(
+    e.cells.map((c) => {
+      const tag = tags.get(c.key) ?? c.key
+      const named = compare && c.role === 'control' && c.environment && c.environment !== '-'
+      return [c.key, named ? tag.replace(/control$/, `${c.environment} (control)`) : tag]
+    }),
+  )
+}
+
 const counted = (a: AttemptRecord) => a.outcome === 'pass' || a.outcome === 'fail'
 
 const LABEL_CHARS = 60
@@ -281,7 +297,8 @@ export async function buildDigestKeepingDropped(
     for (const e of r.record.evals) {
       if (!evalKeys.has(e.key)) continue
       const cells = cellTags(e)
-      for (const [key, tag] of cells) cellTagOf.set(`${r.record.runId}\0${e.key}\0${key}`, tag)
+      const names = cellNames(e, cells)
+      for (const [key, name] of names) cellTagOf.set(`${r.record.runId}\0${e.key}\0${key}`, name)
       for (const a of e.attempts) {
         const id = `${short.get(r.record.runId)}/${tagOf(e.key)}/${cells.get(a.cell)}#${a.n}`
         idOf.set(`${r.record.runId}\0${a.key}`, id)
@@ -295,7 +312,7 @@ export async function buildDigestKeepingDropped(
           key: a.key,
           eval: tagOf(e.key),
           evalSlug: e.slug,
-          cell: cells.get(a.cell) as string,
+          cell: names.get(a.cell) as string,
           attempt: a.id,
           outcome: a.outcome,
           tools: a.activity.tools,
@@ -427,7 +444,7 @@ export async function buildDigestKeepingDropped(
                 timeVerdict: row.time_verdict,
                 ...(row.tokens_verdict
                   ? {
-                      tokens: `${row.tokens_median} vs ${row.control_tokens_median} (${ratioText(row.tokens_ratio)})`,
+                      tokens: `${formatTokens(row.tokens_median as number)} vs ${formatTokens(row.control_tokens_median as number)} (${ratioText(row.tokens_ratio)})`,
                       tokensP: row.tokens_p,
                       tokensVerdict: row.tokens_verdict,
                     }
@@ -884,7 +901,7 @@ export async function buildDigestKeepingDropped(
                   timeVerdict: ef.timeVerdict,
                   ...(ef.tokensVerdict && ef.variant.tokens && ef.control.tokens
                     ? {
-                        tokens: `${ef.variant.tokens.median} vs ${ef.control.tokens.median} (${ratioText(ef.tokensRatio)})`,
+                        tokens: `${formatTokens(ef.variant.tokens.median)} vs ${formatTokens(ef.control.tokens.median)} (${ratioText(ef.tokensRatio)})`,
                         tokensVerdict: ef.tokensVerdict,
                       }
                     : {}),

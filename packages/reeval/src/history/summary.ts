@@ -9,7 +9,14 @@ import {
   familyLiftLabel,
   familyRateLabel,
 } from '../view/family.ts'
-import { cellJudgeRates, cellUsage, judgeRatesLabel } from '../view/judgements.ts'
+import {
+  cellUsage,
+  checkLabels,
+  commandLine,
+  judgeRatesLabel,
+  labelledJudgements,
+  summaryJudgeRates,
+} from '../view/judgements.ts'
 import {
   formatUsage,
   harnessLabel,
@@ -175,7 +182,7 @@ export function cellCounts(e: EvalEntry): string {
         ...[cellContrast(e, c.key)].flatMap((effort) =>
           effort ? [`effort ${effortLabel(effort)}`] : [],
         ),
-        ...[judgeRatesLabel(cellJudgeRates(e, c.key))].filter(Boolean),
+        ...[judgeRatesLabel(summaryJudgeRates(e, c))].filter(Boolean),
         ...[formatUsage(cellUsage(e, c.key))].filter((u): u is string => Boolean(u)),
         c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
       ].filter(Boolean)
@@ -396,19 +403,21 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   lines.push(
     `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${formatDuration(act.reasoningMs)} reasoning`,
   )
-  for (const j of a.judgements) {
+  for (const { judgement: j, label, labelled } of labelledJudgements(a)) {
     const retried = j.retries?.length
       ? `, after ${j.retries.length} ${j.retries.length === 1 ? 'retry' : 'retries'}`
       : ''
     lines.push(
-      `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
+      `- Judge${labelled ? ` ${cell(label)}` : ''} **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
     )
   }
-  for (const c of a.checks) {
+  const labels = checkLabels(a)
+  a.checks.forEach((c, i) => {
+    const label = labels[i]
     lines.push(
-      `- Check exit ${c.exitCode}: \`${cell(c.command)}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
+      `- Check${label ? ` ${cell(label)}` : ''} exit ${c.exitCode}: \`${cell(commandLine(c.command))}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
     )
-  }
+  })
   if (a.changedFiles.length) {
     lines.push(
       `- Changed: ${a.changedFiles.map((f) => (f.count ? `\`${f.path}\` (${f.count} files)` : `${f.status} \`${f.path}\``)).join(', ')}`,

@@ -25,3 +25,9 @@ export const promptTokens = (u: TokenUsage) => u.input + u.cacheRead + u.cacheWr
 
 /** Prompt side, output, and reasoning when the harness reported it. No USD. */
 export const totalTokens = (u: TokenUsage) => promptTokens(u) + u.output + (u.reasoning ?? 0)
+
+/** A token count as people read it: `9,512`, `430k`, `1,094k`. */
+export const formatTokens = (n: number) =>
+  n >= 10_000
+    ? `${Math.round(n / 1000).toLocaleString('en-US')}k`
+    : Math.round(n).toLocaleString('en-US')

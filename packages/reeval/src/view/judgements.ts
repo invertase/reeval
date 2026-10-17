@@ -104,7 +104,10 @@ export function uniqueJudgeLabels(
 
 export type JudgeKeyRate = {
   key: string
+  /** The `expect` label when the judge had one, else a short name from its question. */
   label: string
+  /** Named by an `expect` label, so the cell's checks carry it too. */
+  labelled: boolean
   question: string
   pass: number
   counted: number
@@ -112,15 +115,23 @@ export type JudgeKeyRate = {
   lift: Pick<Lift, 'points' | 'control' | 'variant' | 'withinNoise'> | null
 }
 
-type KeyTally = { label: string; question: string; pass: number; counted: number }
+type KeyTally = {
+  label: string
+  labelled: boolean
+  question: string
+  pass: number
+  counted: number
+}
 
 function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string, KeyTally> {
   const byKey = new Map<string, KeyTally>()
+  const expectLabels = new Map<string, string>()
   for (const a of e.attempts) {
     if (a.cell !== cellKey || !counted(a)) continue
-    for (const j of a.judgements) {
+    for (const { judgement: j, label, labelled } of labelledJudgements(a)) {
       const row = byKey.get(j.key) ?? {
         label: '',
+        labelled: false,
         question: j.question,
         pass: 0,
         counted: 0,
@@ -128,12 +139,17 @@ function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string
       row.counted++
       if (j.verdict === 'pass') row.pass++
       byKey.set(j.key, row)
+      if (labelled && !expectLabels.has(j.key)) expectLabels.set(j.key, label)
     }
   }
   const labels = uniqueJudgeLabels(
     [...byKey].map(([key, row]) => ({ key, question: row.question })),
   )
-  for (const [key, row] of byKey) row.label = labels.get(key) ?? judgeLabel(row.question)
+  for (const [key, row] of byKey) {
+    const label = expectLabels.get(key)
+    row.labelled = label !== undefined
+    row.label = label ?? labels.get(key) ?? judgeLabel(row.question)
+  }
   return byKey
 }
 
@@ -177,6 +193,20 @@ export function cellJudgeRates(
     ...row,
     lift: liftForKey(row, controlTallies?.get(key)),
   }))
+}
+
+/**
+ * The judge rates a cell's summary line adds to its checks: a labelled judge whose label is one
+ * of the cell's checks against its control is already there.
+ */
+export function summaryJudgeRates(
+  e: Pick<EvalEntry, 'attempts' | 'cells'>,
+  cell: Pick<CellRecord, 'key' | 'checks'>,
+): JudgeKeyRate[] {
+  const checked = new Set(
+    (cell.checks ?? []).filter((k) => k.control && k.verdict).map((k) => k.label),
+  )
+  return cellJudgeRates(e, cell.key).filter((r) => !(r.labelled && checked.has(r.label)))
 }
 
 const signedPoints = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
@@ -236,7 +266,7 @@ const JUDGE_ERROR = /^judge failed for /
  */
 export function labelledJudgements(
   a: Pick<AttemptRecord, 'judgements' | 'assertions'>,
-): Array<{ judgement: JudgementRecord; label: string; check?: string }> {
+): Array<{ judgement: JudgementRecord; label: string; labelled: boolean; check?: string }> {
   const passes = (a.assertions ?? []).filter(
     (x) => /(^|\.)toPass$/.test(x.matcher) && !JUDGE_ERROR.test(x.message ?? ''),
   )
@@ -246,6 +276,7 @@ export function labelledJudgements(
     return {
       judgement,
       label: x?.labelled ? x.label : judgeText(judgement.question),
+      labelled: x?.labelled === true,
       ...(x ? { check: x.label } : {}),
     }
   })
@@ -254,4 +285,28 @@ export function labelledJudgements(
 /** Sum of counted attempts' usage; null when none of them reported any. */
 export function cellUsage(e: Pick<EvalEntry, 'attempts'>, cellKey: string): TokenUsage | null {
   return sumUsage(e.attempts.filter((a) => a.cell === cellKey && counted(a)).map((a) => a.usage))
+}
+
+/**
+ * Each `c.exec` check's `expect` label, by position: the attempt's `toSucceed` assertions in call
+ * order, when they are exactly as many as its checks; undefined where no label reaches.
+ */
+export function checkLabels(
+  a: Pick<AttemptRecord, 'checks' | 'assertions'>,
+): Array<string | undefined> {
+  const succeeds = (a.assertions ?? []).filter((x) => /(^|\.)toSucceed$/.test(x.matcher))
+  const zip = succeeds.length === a.checks.length
+  return a.checks.map((_, i) => {
+    const x = zip ? succeeds[i] : undefined
+    return x?.labelled ? x.label : undefined
+  })
+}
+
+/** A check's command on one line: the first non-empty line, clipped; its log has the rest. */
+export function commandLine(command: string, max = 80): string {
+  const lines = command
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  return clip(lines.length > 1 ? `${lines[0]} …` : (lines[0] ?? ''), max)
 }

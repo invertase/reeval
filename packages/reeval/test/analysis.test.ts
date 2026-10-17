@@ -45,9 +45,10 @@ import { fakeAnalysis } from '../src/judge.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import type { EvalResult } from '../src/ui/events.ts'
+import { formatTokens } from '../src/usage.ts'
 import { type AnalysisNote, analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
 import { contrastEffort, directional, EFFORT_MIN_RUNS, effortLabel } from '../src/view/effort.ts'
-import { parseTranscript } from '../src/view/model.ts'
+import { formatUsage, parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 import { REAL_HARNESSES, type RealAttempt, realAttempts } from './support/real-runs.ts'
@@ -367,7 +368,7 @@ describe('effort next to lift', () => {
     assert.equal(c.tokensNote, undefined)
     assert.equal(
       effortLabel(c),
-      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44), tokens 100 vs 1000 (×0.10): fewer tool calls (p = 0.029); fewer tokens (p = 0.029)',
+      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44), tokens 100 vs 1,000 (×0.10): fewer tool calls (p = 0.029); fewer tokens (p = 0.029)',
     )
   })
 
@@ -413,7 +414,7 @@ describe('effort next to lift', () => {
     assert.equal(c.verdict, 'fewer')
     assert.equal(c.tokensVerdict, 'fewer')
     assert.equal(c.tokensNote, 'some cells did not report usage')
-    assert.match(effortLabel(c), /tokens 100 vs 1000/)
+    assert.match(effortLabel(c), /tokens 100 vs 1,000/)
     assert.doesNotMatch(effortLabel(c), /insufficient/)
   })
 
@@ -440,7 +441,7 @@ describe('effort next to lift', () => {
     assert.deepEqual(directional(c), ['tools', 'agentS', 'tokens'])
     assert.equal(
       effortLabel(c),
-      'tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430000 vs 1094000 (×0.39, no overlap): too few attempts to test (n = 3 vs 3)',
+      'tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430k vs 1,094k (×0.39, no overlap): too few attempts to test (n = 3 vs 3)',
     )
   })
 
@@ -451,7 +452,7 @@ describe('effort next to lift', () => {
     assert.deepEqual(directional(c), ['tools'])
     assert.equal(
       effortLabel(c),
-      'tools 14 vs 26 (×0.54, no overlap), agent 56s vs 1m 03s (×0.89), tokens 279000 vs 430000 (×0.65): too few attempts to test (n = 3 vs 3)',
+      'tools 14 vs 26 (×0.54, no overlap), agent 56s vs 1m 03s (×0.89), tokens 279k vs 430k (×0.65): too few attempts to test (n = 3 vs 3)',
     )
   })
 
@@ -467,6 +468,21 @@ describe('effort next to lift', () => {
     assert.equal(EFFORT_MIN_RUNS, 4)
     assert.ok(minimumP(3, 3) >= 0.05)
     assert.ok(minimumP(4, 4) < 0.05)
+  })
+
+  test("tokens read the same everywhere: Ben's 430443 vs 1093952 is 430k vs 1,094k", () => {
+    assert.equal(`${formatTokens(430_443)} vs ${formatTokens(1_093_952)}`, '430k vs 1,094k')
+    assert.equal(formatTokens(9_512), '9,512')
+    assert.equal(
+      formatUsage({
+        input: 726_000,
+        output: 12_000,
+        cacheRead: 663_000,
+        cacheWrite: 0,
+        reasoning: null,
+      }),
+      '1,389k in (663k cached) · 12k out',
+    )
   })
 
   test('reeval run, summary.md and reeval compare show each variant cell\u2019s effort beside its lift', async () => {
@@ -2376,6 +2392,57 @@ async function studyDigest(name: string, options: StudyOptions = {}) {
 }
 
 describe('a study: several arms, every cell ungated', () => {
+  test('labels and names: judges and checks go by their expect label, and the control by its environment', async () => {
+    const files = studyFiles({ gate: 'none' })
+    const script =
+      "node -e \"\\n  const fs = require('fs')\\n  process.exit(fs.statSync('src/App.tsx').size ? 0 : 1)\\n\""
+    files['evals/auth.eval.ts'] = (files['evals/auth.eval.ts'] as string).replace(
+      "c.exec('test -s src/App.tsx')",
+      `c.exec(${JSON.stringify(script)}.replaceAll('\\\\n', '\\n'))`,
+    )
+    const p = await project('study-labels', files)
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const show = await runCli(p.dir, ['show'])
+    assert.match(
+      show.stdout,
+      /fake\/no-skill\/fake 0\/3 \(control, not gated, Email sign-in 3\/3 · Social OAuth 3\/3 · Anonymous upgrade 0\/3 · MFA 0\/3\)/,
+      'the control names its judges by their expect labels',
+    )
+    assert.doesNotMatch(show.stdout, /…social sign-in|Does it upgrade an…/, 'no clipped question')
+    const newSkill =
+      /fake\/new-skill\/fake 0\/3 \(([^)]*\([^)]*\))*[^)]*\)/.exec(show.stdout)?.[0] ?? ''
+    assert.doesNotMatch(
+      newSkill,
+      /Social OAuth 3\/3 \(/,
+      'a labelled judge in the checks is not repeated',
+    )
+    assert.match(
+      show.stdout,
+      /judge pass 0\.94 \(≥ 0\.8\) {2}Social OAuth: Does it implement social sign-in\?/,
+    )
+    const summary = readRun(p.dir).read('summary.md')
+    assert.match(
+      summary,
+      /^- Check build exit 0: `node -e " …`/m,
+      'the label, and the script on one line',
+    )
+    assert.match(
+      summary,
+      /^- Judge MFA \*\*fail\*\* 0\.12 \(threshold 0\.8, fake\): Does it implement/m,
+    )
+    const { digest } = await digestOf(p.dir, ['--vs', 'none'])
+    const pass = digest.facts.find((f) => f.kind === 'pass@1') as { cells: Array<{ cell: string }> }
+    assert.deepEqual(
+      pass.cells.map((c) => c.cell),
+      ['no-skill (control)', 'current-skill', 'new-skill'],
+    )
+    assert.ok(
+      Object.keys(digest.attempts).includes('r1/auth/control#1'),
+      'attempt ids keep the tag',
+    )
+  })
+
   test('the digest frames it as a study: criteria say what differs, never-met labels once, evidence for every arm', async () => {
     const { p, digest, text } = await studyDigest('study-digest', {
       gate: 'none',
@@ -2392,7 +2459,7 @@ describe('a study: several arms, every cell ungated', () => {
       {
         label: 'Social OAuth',
         cells: {
-          control: '3/3 · 0.94',
+          'no-skill (control)': '3/3 · 0.94',
           'current-skill': '0/3 · 0.12',
           'new-skill': '3/3 · 0.94',
         },
@@ -2407,9 +2474,13 @@ describe('a study: several arms, every cell ungated', () => {
       | { cells: Array<{ cell: string; perAttempt: Record<string, string> }> }
       | undefined
     const perAttempt = Object.fromEntries((use?.cells ?? []).map((c) => [c.cell, c.perAttempt]))
-    assert.equal(perAttempt.control?.dependency, '1 1 1', 'no skill: it reads the package types')
+    assert.equal(
+      perAttempt['no-skill (control)']?.dependency,
+      '1 1 1',
+      'no skill: it reads the package types',
+    )
     assert.equal(perAttempt['new-skill']?.context, '1 1 1', 'the new skill: its React reference')
-    assert.equal(perAttempt.control?.context, undefined)
+    assert.equal(perAttempt['no-skill (control)']?.context, undefined)
     const effort = digest.facts.find((f) => f.kind === 'effort') as
       | { cells: Array<{ vsControl?: { n: string; separated?: Record<string, boolean> } }> }
       | undefined
@@ -2533,8 +2604,8 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
         (f.checks as Row[]).map((k) => k.label),
       ]),
       [
-        ['current-skill', 'control', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
-        ['new-skill', 'control', '0/3 vs 0/3', 'within noise', []],
+        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', []],
         ['new-skill', 'current-skill', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
       ],
     )

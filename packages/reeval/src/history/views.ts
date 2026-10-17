@@ -8,6 +8,7 @@ import {
   stackChanges,
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
+import { labelledJudgements } from '../view/judgements.ts'
 import { warnings } from './state.ts'
 import {
   cellCounts,
@@ -301,9 +302,9 @@ export function formatShow(run: RunRecord): string {
       if (!single) {
         lines.push(`      ${OUTCOME_MARK[t.outcome]} ${t.id}  ${formatDuration(t.durationMs)}`)
       }
-      for (const j of t.judgements) {
+      for (const { judgement: j, label, labelled } of labelledJudgements(t)) {
         lines.push(
-          `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${j.question}`,
+          `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${labelled ? `${label}: ` : ''}${j.question}`,
         )
       }
       if (t.error && !repeatsVerdict(t)) {
