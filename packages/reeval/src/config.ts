@@ -26,6 +26,7 @@ import {
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
+import { isObjectLike } from './object.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
@@ -296,8 +297,8 @@ function withHostPaths(
 /** The config from its data form: each environment's data becomes an `Environment` again. */
 function configFromData(data: Record<string, unknown>): ReevalConfig {
   const withEnvironment = (options: unknown) => {
-    if (typeof options !== 'object' || options === null) return options
-    const { environment } = options as { environment?: unknown }
+    if (!isObjectLike(options)) return options
+    const { environment } = options
     return isEnvironment(environment)
       ? { ...options, environment: environmentFrom(environment) }
       : options
@@ -306,8 +307,8 @@ function configFromData(data: Record<string, unknown>): ReevalConfig {
   const { profiles } = config
   if (typeof profiles !== 'object' || profiles === null || Array.isArray(profiles)) return config
   const each = Object.entries(profiles).map(([name, profile]) => {
-    if (typeof profile !== 'object' || profile === null) return [name, profile]
-    const { defaults } = profile as { defaults?: unknown }
+    if (!isObjectLike(profile)) return [name, profile]
+    const { defaults } = profile
     return [
       name,
       defaults === undefined ? profile : { ...profile, defaults: withEnvironment(defaults) },
@@ -406,8 +407,8 @@ export function checkBudget(budget: unknown, where: string): Budget {
 }
 
 const describeValue = (v: unknown) => {
-  if (typeof v !== 'object' || v === null) return JSON.stringify(v)
-  const { kind } = v as HarnessDescriptor
+  if (!isObjectLike(v)) return JSON.stringify(v)
+  const { kind } = v
   if (kind === 'fake') return 'fakeHarness({ … })'
   return isAgentKind(kind) ? `${AGENTS[kind].factory}({ … })` : 'an object'
 }
@@ -598,7 +599,7 @@ function checkAnalysis(analysis: ReevalConfig['analysis']): ResolvedConfig['anal
   if (typeof model === 'string') {
     const problem = checkModelString(model)
     if (problem) throw new UsageError(problem.replace('Judge model', 'config.analysis.model'))
-  } else if (model !== undefined && (model as { kind?: string })?.kind !== 'fake-analysis') {
+  } else if (model !== undefined && !(isObjectLike(model) && model.kind === 'fake-analysis')) {
     throw new UsageError(
       "config.analysis.model must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash'",
     )
@@ -708,8 +709,9 @@ function resolveJudge(
 
 /** Host variables that required `env` secrets read, as `[sandbox name, host name]`. */
 export function secretSources(env: EnvVars): Array<[string, string]> {
-  return Object.entries(env).flatMap(([name, value]) =>
-    isSecret(value) && !value.optional ? [[name, value.from ?? name] as [string, string]] : [],
+  return Object.entries(env).flatMap(
+    ([name, value]): Array<[string, string]> =>
+      isSecret(value) && !value.optional ? [[name, value.from ?? name]] : [],
   )
 }
 
@@ -745,10 +747,11 @@ export function missingCredentials(
   const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
   for (const key of keys) if (!env[key]) missing.push(key)
   const judge = runJudgeModel(config, options.profile)
+  const agent = agentModel(config)
   const models = [
     ...(judge !== undefined ? [judge] : []),
     ...(options.questionModels ?? []),
-    ...(agentModel(config) ? [agentModel(config) as string] : []),
+    ...(agent ? [agent] : []),
   ]
   for (const model of models) {
     const modelKeys = judgeCredentials(model)

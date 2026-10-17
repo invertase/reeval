@@ -31,6 +31,7 @@ import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { mergeJudge } from './judge/state-options.ts'
+import { isObjectLike } from './object.ts'
 import type {
   CaptureOptions,
   Cell,
@@ -139,11 +140,13 @@ export function sandboxId(s: SandboxDescriptor): string {
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
   `${harness}/${environment}/${sandbox}`
 
-const isHarness = (v: unknown) =>
-  (v as { kind?: string })?.kind === 'fake' || isAgentKind((v as { kind?: string })?.kind)
+const isHarness = (v: unknown): v is HarnessDescriptor =>
+  isObjectLike(v) && (v.kind === 'fake' || isAgentKind(v.kind))
 
 function checkMaxConcurrent(value: unknown, where: string): void {
-  if (value === undefined || (Number.isInteger(value) && (value as number) >= 1)) return
+  if (value === undefined || (typeof value === 'number' && Number.isInteger(value) && value >= 1)) {
+    return
+  }
   throw new UsageError(
     `maxConcurrent must be a whole number of at least 1 (got ${String(value)}) for ${where}`,
   )
@@ -305,24 +308,22 @@ export function checkCapture(value: unknown, where: string): void {
 
 function checkViewport(value: unknown, where: string): void {
   if (value === 'full-page') return
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isObjectLike(value) || Array.isArray(value)) {
     throw new UsageError(
       `capture.viewport is { width, height } or 'full-page' (got ${JSON.stringify(value)}) in ${where}`,
     )
   }
-  const o = value as Record<string, unknown>
-  const keys = Object.keys(o)
+  const keys = Object.keys(value)
   if (keys.includes('fullPage')) {
     throw new UsageError(
       `capture.viewport is { width, height } or 'full-page' in ${where}, not { height, fullPage }. Use viewport: 'full-page' for a tall shot.`,
     )
   }
-  const width = o.width
-  const height = o.height
+  const isSize = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n > 0
   if (
     keys.some((k) => k !== 'width' && k !== 'height') ||
-    !(Number.isInteger(width) && (width as number) > 0) ||
-    !(Number.isInteger(height) && (height as number) > 0)
+    !isSize(value.width) ||
+    !isSize(value.height)
   ) {
     throw new UsageError(
       `capture.viewport is { width, height } or 'full-page' (got ${JSON.stringify(value)}) in ${where}`,
@@ -401,12 +402,12 @@ export function checkHarnesses(list: unknown[], where: string): void {
         `harness in ${where} must be like ${HARNESS_EXAMPLE} (got ${describe(item)})`,
       )
     }
-    if ((item as HarnessDescriptor).kind === 'opencode') {
-      const why = opencodeModelError((item as { model?: unknown }).model)
+    if (item.kind === 'opencode') {
+      const why = opencodeModelError(item.model)
       if (why) throw new UsageError(`opencode() in ${where}: ${why}`)
     }
-    checkMaxConcurrent((item as HarnessDescriptor).maxConcurrent, `harness in ${where}`)
-    const { startTimeout } = item as HarnessDescriptor
+    checkMaxConcurrent(item.maxConcurrent, `harness in ${where}`)
+    const { startTimeout } = item
     if (startTimeout !== undefined) {
       try {
         parseDuration(startTimeout)
@@ -414,7 +415,7 @@ export function checkHarnesses(list: unknown[], where: string): void {
         throw new UsageError(`startTimeout of harness in ${where}: ${(error as Error).message}`)
       }
     }
-    const problem = harnessProblem(item as HarnessDescriptor)
+    const problem = harnessProblem(item)
     if (problem) throw new UsageError(`harness in ${where}: ${problem}`)
   }
 }

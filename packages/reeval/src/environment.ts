@@ -22,7 +22,6 @@ import { isObjectLike } from './object.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
 import type {
-  Duration,
   EgressPolicy,
   Environment,
   EnvironmentData,
@@ -42,7 +41,6 @@ import type {
   SecretOptions,
   SecretTemplate,
   SkillHelper,
-  SkillSource,
   SubstituteIn,
 } from './types.ts'
 
@@ -743,21 +741,20 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   }
   if (s.env !== undefined) checkEnv(s.env, where)
   if (s.egress !== undefined) checkEgress(s.egress, where)
-  const list = (key: 'setup' | 'skills') => {
-    const value = s[key]
+  const list = <T>(key: 'setup' | 'skills', value: T[] | undefined): T[] => {
     if (value !== undefined && !Array.isArray(value)) {
       throw new DefinitionError(`${key} in ${where} must be a list`)
     }
     return value ?? []
   }
-  for (const step of list('setup')) {
+  for (const step of list('setup', s.setup)) {
     const shape = `Steps in ${where} are strings or { run, timeout?, cwd? } objects`
-    const run = typeof step === 'string' ? step : (step as { run?: unknown })?.run
+    const run = typeof step === 'string' ? step : isObjectLike(step) ? step.run : undefined
     if (typeof run !== 'string' || !run.trim()) throw new DefinitionError(shape)
     if (typeof step === 'string') continue
     const extra = Object.keys(step).filter((k) => !['run', 'timeout', 'cwd'].includes(k))
     if (extra.length) throw new DefinitionError(`${shape} (got "${extra.join('", "')}")`)
-    const { cwd, timeout } = step as { cwd?: unknown; timeout?: Duration }
+    const { cwd, timeout } = step
     if (timeout !== undefined) {
       try {
         parseDuration(timeout)
@@ -771,23 +768,23 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
       )
     }
   }
-  for (const [i, skill] of list('skills').entries()) {
-    if ((skill as SkillSource)?.kind !== 'skill') {
+  for (const [i, skill] of list('skills', s.skills).entries()) {
+    if (skill?.kind !== 'skill') {
       throw new DefinitionError(
         `skills in ${where} must come from the skill helper, e.g. skills: [skill.local('./skills')] (got ${JSON.stringify(skill)})`,
       )
     }
-    const call = `skill.${String((skill as SkillSource).source)}`
+    const call = `skill.${String(skill.source)}`
     const problem = descriptorProblem(skillSourceSchema, skill, call)
     if (problem) throw new DefinitionError(`skills[${i}] in ${where}: ${problem}`)
   }
   for (const [name, server] of Object.entries(s.mcp ?? {})) {
-    if ((server as McpServer)?.kind !== 'mcp') {
+    if (server?.kind !== 'mcp') {
       throw new DefinitionError(
         `mcp.${name} in ${where} must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server'])`,
       )
     }
-    const call = `mcp.${String((server as McpServer).transport)}`
+    const call = `mcp.${String(server.transport)}`
     const problem = descriptorProblem(mcpServerSchema, server, call)
     if (problem) throw new DefinitionError(`mcp.${name} in ${where}: ${problem}`)
   }
@@ -963,14 +960,14 @@ export const environmentSandbox = (
 ): SandboxDescriptor => sandboxOf(env?.layers ?? [], fallback)
 
 function checkSandbox(value: unknown, where: string): asserts value is SandboxDescriptor {
-  const kind = (value as { kind?: string } | null)?.kind
-  if (kind !== 'docker' && kind !== 'fake') {
+  const kind = isObjectLike(value) ? value.kind : undefined
+  if (!isObjectLike(value) || (kind !== 'docker' && kind !== 'fake')) {
     throw new DefinitionError(
       `sandbox in ${where} must come from docker() or fakeSandbox() (got ${JSON.stringify(value)})`,
     )
   }
-  const max = (value as SandboxDescriptor).maxConcurrent
-  if (max !== undefined && !(Number.isInteger(max) && max >= 1)) {
+  const max = value.maxConcurrent
+  if (max !== undefined && !(typeof max === 'number' && Number.isInteger(max) && max >= 1)) {
     throw new DefinitionError(
       `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
     )
