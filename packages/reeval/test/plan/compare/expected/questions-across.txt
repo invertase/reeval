@@ -16,4 +16,4 @@ evals/questions-across.eval.ts › question across overrides compare.across  a/b
                                                                            question: Which follows the house style more closely? · environment · 2 pairs · no language model
 excluded: —
 image docker · 3 evals
-  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

@@ -6,4 +6,4 @@ evals/files.eval.ts › a variant adds a directory   fake/whole/docker       con
                                                    fake/composed/docker    variant composed  gated    ×1  files NOTES.md, README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts, tools/notes.py
 excluded: —
 image docker · 4 evals
-  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

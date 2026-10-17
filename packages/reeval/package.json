@@ -103,7 +103,7 @@
     "@modelcontextprotocol/client": "2.3.1",
     "@reeval/harness-antigravity": "workspace:0.1.6",
     "@reeval/harness-codex": "workspace:0.1.6",
-    "@reeval/harness-cursor-sdk": "workspace:0.1.4",
+    "@reeval/harness-cursor-sdk": "workspace:0.1.5",
     "@reeval/harness-goose": "workspace:0.1.2",
     "@reeval/harness-opencode": "workspace:0.2.7",
     "@reeval/harness-pi": "workspace:0.2.6",
