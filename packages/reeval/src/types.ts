@@ -251,7 +251,7 @@ export type FakeJudgeModel = {
 }
 
 /**
- * `'provider/model'` (e.g. `'typesafe-ai/jev-1.13.0'`, `'google/gemini-3.8-flash'`), an AI SDK
+ * `'provider/model'` (e.g. `'typesafe-ai/jev-1.14.0'`, `'google/gemini-3.8-flash'`), an AI SDK
  * decision model object (per group, eval or call only), or a fake judge.
  */
 export type JudgeModel = string | FakeJudgeModel | { readonly specificationVersion: string }
@@ -328,8 +328,8 @@ export type JudgeCallOptions = JudgeOptions & {
   on?: Turn | JSONValue
   /**
    * Captures this call sends the judge as file parts: `c.capture()` handles or their names, or
-   * `true` for every capture so far. Call-only: the bytes are on this attempt. The provider that
-   * cannot take files fails the call.
+   * `true` for every capture so far. Call-only: the bytes are on this attempt. Jev takes PNG
+   * captures; a provider that cannot take files fails the call.
    */
   artifacts?: true | Array<Capture | string>
 }

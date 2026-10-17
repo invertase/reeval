@@ -144,7 +144,7 @@ export default defineConfig({
   // harnesses: each is its own cell
   harness: cursor({ model: 'composer-2.5' }),
   // optional; pin the version
-  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 },
+  judge: { model: 'typesafe-ai/jev-1.14.0', threshold: 0.8 },
   timeout: '15m',
   profiles: {
     pr: { limit: { runs: 1, compare: false }, budget: { attempts: 20 } },

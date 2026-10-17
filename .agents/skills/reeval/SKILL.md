@@ -79,7 +79,7 @@ export default defineConfig({
   include: ['evals/**/*.eval.ts'],            // default
   harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
   // no default judge model; pin versions
-  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 },
+  judge: { model: 'typesafe-ai/jev-1.14.0', threshold: 0.8 },
   runs: 1,                                    // attempts per cell
   timeout: '15m',                             // per attempt
 })
@@ -89,7 +89,7 @@ A project without TypeScript can write `reeval.yaml` (or `.yml`) instead, with n
 
 ```yaml
 harness: { kind: cursor, model: composer-2.5 }
-judge: { model: typesafe-ai/jev-1.13.0 }   # or { kind: fake-judge, score: 0.9 }
+judge: { model: typesafe-ai/jev-1.14.0 }   # or { kind: fake-judge, score: 0.9 }
 env:
   NPM_TOKEN: { kind: secret, hosts: [registry.npmjs.org] }
 environment:
@@ -145,7 +145,7 @@ Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway
 harness's own endpoints. Every harness but Goose reports tokens, which reeval records per turn,
 attempt and run (no prices).
 
-- Judge models: `'typesafe-ai/jev-1.13.0'` (`TYPESAFE_AI_API_KEY`, recommended),
+- Judge models: `'typesafe-ai/jev-1.14.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
   the Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Always a provider prefix.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
@@ -245,7 +245,8 @@ group('hello', () => {
   adds that `c.exec` result; `turns: 'all'` gives every turn; `task: false` and `output: false`
   leave those out. `state` cascades like every other option, key by key. `artifacts`
   is call-only: `true` for every capture so far, or `c.capture()` handles or names, sent as file parts. Ask about facts in the
-  picture, not whether it "looks great". A provider that cannot take files fails that call.
+  picture, not whether it "looks great". Jev (`typesafe-ai/jev-1.14.0`) takes PNG captures; a
+  provider that cannot take files fails that call.
   Prefer deterministic checks for what can be checked; use the judge for quality, with plain
   yes/no questions that don't name one specific way of doing it.
 - Make the eval trustworthy. Before a real run, run it on two fake configs: an oracle

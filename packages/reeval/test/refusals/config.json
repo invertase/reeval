@@ -21,7 +21,7 @@
   "yaml: an empty harness list": "UsageError: harness is an empty list in reeval.yaml. Give at least one, e.g. harness: cursor({ model: 'composer-2.5' })",
   "yaml: a fake judge with a string score": "UsageError: judge.model in reeval.yaml must be fakeJudge({ score }) with a number. Pass a score function per group, eval or call instead.",
   "yaml: a fake judge above 1": "UsageError: judge.model.score in reeval.yaml must be at most 1 (got 2)",
-  "yaml: a judge model without a provider": "UsageError: judge.model in reeval.yaml needs a provider prefix, e.g. \"typesafe-ai/jev-1.13.0\" or \"google/jev\" (got \"jev\")",
+  "yaml: a judge model without a provider": "UsageError: judge.model in reeval.yaml needs a provider prefix, e.g. \"typesafe-ai/jev-1.14.0\" or \"google/jev\" (got \"jev\")",
   "yaml: a typo in judge.state": "UsageError: Unknown judge.state key \"transcrpt\" in reeval.yaml. Did you mean \"transcript\"?",
   "yaml: providerOptions as data": null,
   "yaml: environment a name": "UsageError: environment in reeval.yaml must be an object (got \"base\")",

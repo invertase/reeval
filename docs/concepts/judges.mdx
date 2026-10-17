@@ -48,7 +48,7 @@ evaluate('strict', { judge: { threshold: 0.9 } }, async (c) => {
 
 ## Which model it calls
 
-There's no default model. Set `judge.model` in the config, a group, an eval or the call, or `c.judge()` fails with `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.`
+There's no default model. Set `judge.model` in the config, a group, an eval or the call, or `c.judge()` fails with `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.14.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.`
 
 ```mermaid
 flowchart LR
@@ -61,14 +61,14 @@ flowchart LR
 
 | `model` | With its own key | Otherwise |
 |---|---|---|
-| `'typesafe-ai/jev-1.13.0'` (recommended) | `TYPESAFE_AI_API_KEY` | The AI Gateway |
+| `'typesafe-ai/jev-1.14.0'` (recommended) | `TYPESAFE_AI_API_KEY` | The AI Gateway |
 | `'google/gemini-3.8-flash'` | `GOOGLE_GENERATIVE_AI_API_KEY` | The AI Gateway |
 | Any other `provider/model` | — | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
 | An evaluation model object | Used as is, per group, eval or call only | — |
 | `fakeJudge({ score })` | A fixed score, no model call | — |
 
 <Warning>
-  Pin model versions: `jev-1.13.0`, not `jev-latest`. A moving alias changes scores between runs, and the judge's model is part of every [fingerprint](/concepts/fingerprints).
+  Pin model versions: `jev-1.14.0`, not `jev-latest`. A moving alias changes scores between runs, and the judge's model is part of every [fingerprint](/concepts/fingerprints).
 </Warning>
 
 ## Retries
