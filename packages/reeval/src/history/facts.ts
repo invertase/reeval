@@ -5,6 +5,7 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
 import { liftInterval, round3, wilson } from '../stats.ts'
+import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
   contrastEffort,
   type EffortContrast,
@@ -12,6 +13,7 @@ import {
   type EffortVerdict,
   effortOf,
 } from '../view/effort.ts'
+import type { CheckTally } from './types.ts'
 
 /** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
 export const FLAKY_MIN_ATTEMPTS = 6
@@ -35,6 +37,15 @@ CREATE TABLE effort_m (
   tools_p REAL, agent_s_p REAL, tokens_p REAL,
   separated INTEGER, time_separated INTEGER, tokens_separated INTEGER,
   verdict TEXT, time_verdict TEXT, tokens_verdict TEXT, tokens_note TEXT
+);
+CREATE TABLE contrasts_m (
+  run_id TEXT, eval_key TEXT, harness TEXT, sandbox TEXT, a_key TEXT, b_key TEXT,
+  a_environment TEXT, b_environment TEXT, a_pass INTEGER, a_counted INTEGER, b_pass INTEGER,
+  b_counted INTEGER, points REAL, lo REAL, hi REAL, pass_verdict TEXT,
+  a_tools_median REAL, b_tools_median REAL, tools_ratio REAL, tools_p REAL, separated INTEGER,
+  verdict TEXT, agent_s_ratio REAL, time_separated INTEGER, time_verdict TEXT,
+  tokens_ratio REAL, tokens_separated INTEGER, tokens_verdict TEXT,
+  checks INTEGER, discriminating TEXT
 );
 CREATE TABLE factor_effects_m (
   factor TEXT, level TEXT, baseline TEXT, context TEXT, tier TEXT, run_id TEXT, eval_key TEXT,
@@ -76,7 +87,7 @@ const FAMILY_COLUMNS = [
   'tokens_verdict',
 ] as const
 
-export const DERIVED = ['effort_m', 'factor_effects_m', 'flaky_m', 'drift_m']
+export const DERIVED = ['effort_m', 'contrasts_m', 'factor_effects_m', 'flaky_m', 'drift_m']
 
 type Cell = {
   run_id: string
@@ -374,6 +385,87 @@ export function deriveFacts(db: DatabaseSync): void {
     }
   })
   insertAll(db, 'effort_m', effortRows)
+
+  // contrasts: each pair of arms on one harness and sandbox, when an eval has two variants or more.
+  const checkRows = db
+    .prepare(
+      'SELECT run_id, eval_key, cell_key, label, pass, fail, error, not_run FROM cell_checks',
+    )
+    .all() as Array<{
+    run_id: string
+    eval_key: string
+    cell_key: string
+    label: string
+    pass: number
+    fail: number
+    error: number
+    not_run: number
+  }>
+  const checksOf = new Map<string, Map<string, CheckTally>>()
+  for (const k of checkRows) {
+    const id = cellId(k.run_id, k.eval_key, k.cell_key)
+    const m = checksOf.get(id) ?? new Map<string, CheckTally>()
+    m.set(k.label, { pass: k.pass, fail: k.fail, error: k.error, notRun: k.not_run })
+    checksOf.set(id, m)
+  }
+  const evalCells = new Map<string, Cell[]>()
+  for (const c of cells) {
+    const id = `${c.run_id}\0${c.eval_key}`
+    evalCells.set(id, [...(evalCells.get(id) ?? []), c])
+  }
+  const contrastRows: Row[] = []
+  for (const group of evalCells.values()) {
+    for (const [a, b] of contrastPairs(group)) {
+      const x = side(a)
+      const y = side(b)
+      const e = contrastEffort(x.samples, y.samples)
+      const ka = checksOf.get(cellId(a.run_id, a.eval_key, a.key)) ?? new Map<string, CheckTally>()
+      const kb = checksOf.get(cellId(b.run_id, b.eval_key, b.key)) ?? new Map<string, CheckTally>()
+      const verdicts = [...ka].flatMap(([label, t]) => {
+        const other = kb.get(label)
+        const verdict = other && checkVerdict(t, other)
+        return verdict ? [{ label, verdict }] : []
+      })
+      const pass = passCols(x, y)
+      contrastRows.push({
+        run_id: a.run_id,
+        eval_key: a.eval_key,
+        harness: a.harness,
+        sandbox: a.sandbox,
+        a_key: a.key,
+        b_key: b.key,
+        a_environment: a.environment,
+        b_environment: b.environment,
+        a_pass: x.pass,
+        a_counted: x.counted,
+        b_pass: y.pass,
+        b_counted: y.counted,
+        points: pass.points ?? null,
+        lo: pass.lo ?? null,
+        hi: pass.hi ?? null,
+        pass_verdict: pass.pass_verdict ?? null,
+        a_tools_median: e?.variant.tools.median ?? null,
+        b_tools_median: e?.control.tools.median ?? null,
+        tools_ratio: r4(e?.toolsRatio ?? null),
+        tools_p: r4(e?.toolsP ?? null),
+        separated: e ? (e.separated ? 1 : 0) : null,
+        verdict: e?.verdict ?? null,
+        agent_s_ratio: r4(e?.agentMsRatio ?? null),
+        time_separated: e ? (e.timeSeparated ? 1 : 0) : null,
+        time_verdict: e?.timeVerdict ?? null,
+        tokens_ratio: r4(e?.tokensRatio ?? null),
+        tokens_separated: e?.tokensSeparated == null ? null : e.tokensSeparated ? 1 : 0,
+        tokens_verdict: e?.tokensVerdict ?? null,
+        checks: verdicts.length,
+        discriminating:
+          verdicts
+            .filter((v) => v.verdict === 'discriminates')
+            .map((v) => v.label)
+            .join(' · ') || null,
+      })
+    }
+  }
+  insertAll(db, 'contrasts_m', contrastRows)
 
   // Controlled contrasts: a variant against its control, and a harness or model against the
   // eval's first one, on the same environment and sandbox.

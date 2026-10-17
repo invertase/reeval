@@ -715,5 +715,365 @@
         ]
       }
     ]
+  },
+  {
+    "id": "F31",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "compare",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "49 vs 50.5 (×0.97)",
+      "agentS": "51.1 vs 56 (×0.91)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F32",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "8.5 vs 50.5 (×0.17)",
+      "agentS": "27.7 vs 56 (×0.49)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F33",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "8.5 vs 49 (×0.17)",
+      "agentS": "27.7 vs 51.1 (×0.54)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F34",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "fix-config",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "29.5 vs 31.5 (×0.94)",
+      "agentS": "34 vs 34 (×1.00)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F35",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 31.5 (×0.46)",
+      "agentS": "32.2 vs 34 (×0.95)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F36",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 29.5 (×0.49)",
+      "agentS": "32.2 vs 34 (×0.95)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F37",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "scaffold",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "44.5 vs 53 (×0.84)",
+      "agentS": "51.3 vs 52.1 (×0.98)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F38",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "4.5 vs 53 (×0.08)",
+      "agentS": "22.2 vs 52.1 (×0.43)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F39",
+    "kind": "contrast",
+    "run": "r1",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "4.5 vs 44.5 (×0.10)",
+      "agentS": "22.2 vs 51.3 (×0.43)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F40",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "compare",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "53.5 vs 51.5 (×1.04)",
+      "agentS": "54.1 vs 50.1 (×1.08)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F41",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "11.5 vs 51.5 (×0.22)",
+      "agentS": "26.8 vs 50.1 (×0.53)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F42",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "compare",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "11.5 vs 53.5 (×0.21)",
+      "agentS": "26.8 vs 54.1 (×0.50)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F43",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "fix-config",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 1/2",
+    "lift": "+50 pts (95% −27…+91)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "25 vs 24 (×1.04)",
+      "agentS": "31.3 vs 29 (×1.08)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F44",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 1/2",
+    "lift": "+50 pts (95% −27…+91)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 24 (×0.60)",
+      "agentS": "27.8 vs 29 (×0.96)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F45",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "fix-config",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "14.5 vs 25 (×0.58)",
+      "agentS": "27.8 vs 31.3 (×0.89)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F46",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "scaffold",
+    "a": "es-weak",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "38.5 vs 35 (×1.10)",
+      "agentS": "40.2 vs 40.4 (×0.99)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F47",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "control",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "5 vs 35 (×0.14)",
+      "agentS": "21.1 vs 40.4 (×0.52)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
+  },
+  {
+    "id": "F48",
+    "kind": "contrast",
+    "run": "r2",
+    "eval": "scaffold",
+    "a": "es-good",
+    "b": "es-weak",
+    "passRate": "2/2 vs 2/2",
+    "lift": "+0 pts (95% −66…+66)",
+    "liftVerdict": "within noise",
+    "checks": [],
+    "sameOnBoth": 0,
+    "effort": {
+      "n": "2 vs 2",
+      "toolCalls": "5 vs 38.5 (×0.13)",
+      "agentS": "21.1 vs 40.2 (×0.53)",
+      "verdict": "insufficient",
+      "timeVerdict": "insufficient"
+    }
   }
 ]

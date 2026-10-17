@@ -349,6 +349,8 @@ group(
   has none, the token metric is omitted, not `insufficient`. Effort's test needs `runs: 4`
   a cell (3 vs 3 can't reach p < 0.05; the plan hints so); from 3 a side, a metric whose ranges
   don't overlap prints `(×0.68, no overlap)`: a direction, not an effect.
+  With two variants or more, `contrasts` (summary, `reeval show`, `reeval query contrasts`) set every
+  pair of arms side by side, variant against variant too.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
 - **Label each requirement** with `expect`'s second argument:
