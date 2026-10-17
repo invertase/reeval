@@ -60,6 +60,9 @@ export const FLAGS = {
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
   resume: { type: 'string', optional: true },
+  verdict: { type: 'string' },
+  reason: { type: 'string' },
+  author: { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -187,6 +190,18 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 1,
     help: `
   reeval show [run]             One run: table, --md (summary.md) or --json (the record)`,
+  },
+  override: {
+    flags: ['verdict', 'reason', 'author'],
+    positionals: 3,
+    help: `
+  reeval override <run> <attempt> <judge>
+                                Overrule one judge's verdict: writes it with your reason into the
+                                run's overrides.json, beside the record it leaves unchanged; show,
+                                query and analyze then show both. Attempt and judge match by name
+                                (sign-in # new-skill#1, an expect label or question)
+    --verdict <pass|fail>       The verdict that stands; --reason <why> (required)
+    --author <name>             Who overrode it (default: git config user.name)`,
   },
   compare: {
     flags: ['md', 'json', 'fail-on-regression'],

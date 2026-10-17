@@ -237,7 +237,7 @@ const has = (value: unknown, segments: string[]): boolean => {
 }
 
 describe('read defaults', () => {
-  const { records, transcripts, analyses } = corpus()
+  const { records, transcripts, analyses, overrides } = corpus()
   const lines = transcripts.flatMap((f) =>
     readFileSync(f, 'utf8')
       .split('\n')
@@ -252,6 +252,7 @@ describe('read defaults', () => {
       analysis: analyses.map((a) => a.value),
       'debug-request': [],
       'cli-invocation': [],
+      overrides: overrides.map((o) => o.value),
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {

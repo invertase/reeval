@@ -1,9 +1,11 @@
 // The run-history commands: record, history, show, compare.
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
+import { userInfo } from 'node:os'
 import { join, resolve } from 'node:path'
 import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
+import { withOverrides, writeOverride } from './history/overrides.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
@@ -21,6 +23,7 @@ import {
 } from './history/views.ts'
 import { fromCwd, sha256 } from './ids.ts'
 import type { ResolvedConfig } from './types.ts'
+import { labelledJudgements } from './view/judgements.ts'
 
 export type HistoryFlags = {
   json?: boolean
@@ -149,7 +152,7 @@ export async function historyCommand(ctx: Ctx, filter: string[]): Promise<number
 export async function showRecord(config: ResolvedConfig, ref?: string) {
   const entry = resolveRun(await allRuns(config), ref)
   const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
-  return readRecord(join(dir, `${entry.runId}.json`))
+  return withOverrides(await readRecord(join(dir, `${entry.runId}.json`)), dir)
 }
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
@@ -158,6 +161,88 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
   else if (ctx.flags.md) ctx.out(renderSummary(run).trimEnd())
   else ctx.out(formatShow(run))
   return 0
+}
+
+/** The one item whose names match `wanted`: exactly first, then as a case-insensitive substring. */
+function pick<T>(items: T[], names: (item: T) => string[], wanted: string, what: string): T {
+  const exact = items.filter((x) => names(x).includes(wanted))
+  const lower = wanted.toLowerCase()
+  const found = exact.length
+    ? exact
+    : items.filter((x) => names(x).some((n) => n.toLowerCase().includes(lower)))
+  if (found.length === 1) return found[0] as T
+  const listed = (found.length ? found : items).slice(0, 8).map((x) => `  ${names(x)[0]}`)
+  throw new CommandError(
+    `${found.length ? `"${wanted}" matches ${found.length} ${what}s` : `No ${what} matches "${wanted}"`}; ${found.length ? 'say which' : 'the run has'}:\n${listed.join('\n')}`,
+  )
+}
+
+/**
+ * `reeval override <run> <attempt> <judge> --verdict pass|fail --reason <why>`: records a person's
+ * verdict on one judgement in the run's `overrides.json`, beside the record it leaves unchanged.
+ */
+export async function overrideCommand(
+  ctx: Ctx & { flags: { verdict?: string; reason?: string; author?: string } },
+  args: string[],
+): Promise<number> {
+  const { verdict, reason } = ctx.flags
+  if (args.length !== 3) {
+    throw new CommandError(
+      'reeval override needs a run, an attempt and a judge: reeval override latest "sign-in # new-skill#1" "Email sign-in" --verdict pass --reason "…"',
+    )
+  }
+  if (verdict !== 'pass' && verdict !== 'fail') {
+    throw new CommandError('--verdict must be pass or fail')
+  }
+  if (!reason?.trim()) throw new CommandError('--reason is required: say why the judge was wrong')
+  const [ref, attemptArg, judgeArg] = args as [string, string, string]
+  const entry = resolveRun(await allRuns(ctx.config), ref)
+  const dir = entry.recorded ? ctx.config.history.dir : scratchDir(ctx.config.root)
+  const run = await withOverrides(await readRecord(join(dir, `${entry.runId}.json`)), dir)
+  const attempts = run.evals.flatMap((e) =>
+    e.attempts.filter((a) => a.judgements.length).map((a) => ({ e, a })),
+  )
+  if (!attempts.length) throw new CommandError(`${run.runId} has no judged attempts`)
+  const { e, a } = pick(
+    attempts,
+    ({ e, a }) => [`${e.name} # ${a.id}`, a.key, a.id],
+    attemptArg,
+    'judged attempt',
+  )
+  const judged = labelledJudgements(a)
+  const { judgement: j, label } = pick(
+    judged,
+    (x) => [x.label, x.judgement.question, x.judgement.key],
+    judgeArg,
+    `judge of ${e.name} # ${a.id}`,
+  )
+  const author =
+    ctx.flags.author?.trim() ||
+    (await lines(ctx.config.root, ['config', 'user.name']))?.[0]?.trim() ||
+    userName()
+  const path = await writeOverride(dir, run.runId, {
+    attempt: a.key,
+    judgement: j.key,
+    label,
+    verdict,
+    reason: reason.trim(),
+    author,
+    at: new Date().toISOString(),
+  })
+  const was = j.override ? `, replacing ${j.override.author}'s ${j.override.verdict}` : ''
+  ctx.out(
+    `${e.name} # ${a.id} · ${label}: judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold}), overridden ${verdict} by ${author}${was}\n` +
+      `wrote ${rel(path)}${entry.recorded ? '. Commit it with git.' : '. reeval record copies it with the run.'}`,
+  )
+  return 0
+}
+
+function userName(): string {
+  try {
+    return userInfo().username || 'unknown'
+  } catch {
+    return 'unknown'
+  }
 }
 
 /**

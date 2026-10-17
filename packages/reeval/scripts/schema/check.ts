@@ -9,6 +9,7 @@ import {
   MIGRATIONS,
   READ_DEFAULTS,
   readableAnalysis,
+  readableOverrides,
   readableRecord,
   readableTranscriptLine,
 } from '../../src/view/record.ts'
@@ -152,7 +153,7 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
           .join('\n')}`,
       )
   }
-  const { records, transcripts, analyses } = corpus()
+  const { records, transcripts, analyses, overrides } = corpus()
   const shape = (name: string) => current.get(name) as ShapeSchema
   for (const r of records) {
     report(r.file, validate(shape('run-record'), readableRecord(structuredClone(r.value) as never)))
@@ -168,6 +169,12 @@ export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
   }
   for (const a of analyses) {
     report(a.file, validate(shape('analysis'), readableAnalysis(structuredClone(a.value) as never)))
+  }
+  for (const o of overrides) {
+    report(
+      o.file,
+      validate(shape('overrides'), readableOverrides(structuredClone(o.value) as never)),
+    )
   }
   if (!problems.length) return []
   return [

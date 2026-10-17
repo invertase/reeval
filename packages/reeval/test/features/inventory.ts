@@ -1291,6 +1291,17 @@ export const inventory: InventoryFeature[] = [
     tests: [engine('a model judge makes a real provider call')],
   },
   {
+    id: 'judge.override',
+    area: 'Judges and matchers',
+    name: "`reeval override`: a person's verdict on one judgement, with their reason, in the run's `overrides.json` (the record unchanged), shown beside the judge's in `reeval show`, `summary.md`, `reeval query judgements` and the digest, and copied by `reeval record`",
+    tests: [
+      "reeval/test/override.test.ts › a person's verdict stands beside the judge's everywhere, and the record is unchanged",
+      'reeval/test/override.test.ts › canary: no reason, a bad verdict or an ambiguous attempt write nothing',
+      'reeval/test/override.test.ts › an unreadable overrides.json is ignored with a warning, never a crash',
+      "reeval/test/override.test.ts › an unlabelled judge's rate names its overrides, both ways; canary: none without",
+    ],
+  },
+  {
     id: 'matchers',
     area: 'Judges and matchers',
     name: '`toHaveFile`, `toSucceed` and `toPass`',

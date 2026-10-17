@@ -10,11 +10,13 @@ import {
   familyRateLabel,
 } from '../view/family.ts'
 import {
+  cellJudgeRates,
   cellUsage,
   checkLabels,
   commandLine,
   judgeRatesLabel,
   labelledJudgements,
+  overriddenRate,
   summaryJudgeRates,
 } from '../view/judgements.ts'
 import {
@@ -78,8 +80,13 @@ const VERDICT_ORDER: Record<string, number> = { discriminates: 0, mixed: 1 }
  * `loads the skill 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`. Empty
  * without a control's tally.
  */
-export function checksLabel(cell: CellRecord): string {
+export function checksLabel(cell: CellRecord, e?: Pick<EvalEntry, 'attempts' | 'cells'>): string {
   const rows = (cell.checks ?? []).filter((k) => k.control && k.verdict)
+  const overridden = new Map(
+    (e ? cellJudgeRates(e, cell.key) : [])
+      .filter((r) => r.labelled && r.overridden)
+      .map((r) => [r.label, overriddenRate(r)]),
+  )
   return rows
     .map((k, i) => ({ k, i }))
     .sort(
@@ -93,6 +100,7 @@ export function checksLabel(cell: CellRecord): string {
       const notes = [
         notRun ? `${notRun} not run` : '',
         k.verdict === 'both-pass' || k.verdict === 'both-fail' ? "doesn't discriminate" : '',
+        overridden.get(k.label) ?? '',
       ].filter(Boolean)
       return `${k.label} ${k.pass}/${answered(k)} vs ${control.pass}/${answered(control)}${notes.length ? ` (${notes.join(', ')})` : ''}`
     })
@@ -178,7 +186,7 @@ export function cellCounts(e: EvalEntry): string {
         c.gate === 'none' ? 'not gated' : '',
         c.gate !== 'all' && c.gate !== 'none' ? `gate ${gateLabel(c.gate)}` : '',
         c.lift ? liftLabel(c.lift) : '',
-        ...[checksLabel(c)].flatMap((checks) => (checks ? [`checks ${checks}`] : [])),
+        ...[checksLabel(c, e)].flatMap((checks) => (checks ? [`checks ${checks}`] : [])),
         ...[cellContrast(e, c.key)].flatMap((effort) =>
           effort ? [`effort ${effortLabel(effort)}`] : [],
         ),
@@ -410,6 +418,8 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
     lines.push(
       `- Judge${labelled ? ` ${cell(label)}` : ''} **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
     )
+    const o = j.override
+    if (o) lines.push(`  - Overridden **${o.verdict}** by ${cell(o.author)}: ${cell(o.reason)}`)
   }
   const labels = checkLabels(a)
   a.checks.forEach((c, i) => {

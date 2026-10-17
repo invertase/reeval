@@ -7,6 +7,7 @@ import { allRuns, CommandError, lines, reachability } from '../commands.ts'
 import { UsageError } from '../errors.ts'
 import { openHistoryDb } from '../history/db.ts'
 import { parseRecord, scratchDir } from '../history/files.ts'
+import { withOverrides } from '../history/overrides.ts'
 import { author } from '../history/provenance.ts'
 import type { HistoryEntry } from '../history/types.ts'
 import { pickBaseline, RefError, resolveRun } from '../history/views.ts'
@@ -55,7 +56,7 @@ type Ctx = {
 async function load(config: ResolvedConfig, entry: HistoryEntry): Promise<RunInput> {
   const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
   const bytes = await readFile(join(dir, `${entry.runId}.json`))
-  return { record: parseRecord(bytes, entry.runId), dir, bytes }
+  return { record: await withOverrides(parseRecord(bytes, entry.runId), dir), dir, bytes }
 }
 
 /** The model's input: the project's own instructions, which set the question, then the digest as JSON. */

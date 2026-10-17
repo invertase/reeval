@@ -368,6 +368,12 @@ group(
   Changing a label changes the eval's fingerprint. Label judges too
   (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
   question in judge rates, `reeval show`, `summary.md` and the digest.
+- A judge returns a score, never its reasons. When you read an attempt (its diff, transcript)
+  and the judge was wrong, overrule it rather than explaining it away in prose:
+  `reeval override latest "sign-in # new-skill#1" "Email sign-in" --verdict pass --reason "…"`.
+  It goes in the run's `overrides.json` (commit it); `show`, `summary.md`, `reeval query
+  judgements` (`overridden`, `override_verdict`) and the digest show it beside the judge's
+  verdict (`2/3 vs 3/3 (3/3 with 1 override)`). Outcomes, pass rates and lift don't change.
 - With `runs > 1`, a cell passes only if every counted attempt passes (pass^k), unless
   `gate: { passRate: 0.8 }` (a pass@1 threshold; pass@1 is passes over passes and fails). Infra errors don't count; a cell is `infra_error`
   only when nothing counted.
@@ -443,6 +449,7 @@ blocked request doesn't fail the attempt; it's recorded, and your checks decide.
 ```text
 reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p> --record --ui plain -v
 reeval record            reeval history      reeval show [run]      reeval compare [base] [head] [--md]
+reeval override <run> <attempt> <judge> --verdict pass|fail --reason <why>
 reeval query lift        reeval query effort      reeval query "SELECT … FROM failing_attempts"
 reeval analyze           (one checked LLM reading of a run; --vs none for this run only;
                          --context for your own agent)

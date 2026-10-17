@@ -64,6 +64,14 @@ export const SHAPES: PersistedShape[] = [
     versionField: 'schemaVersion',
   },
   {
+    name: 'overrides',
+    file: 'src/history/types.ts',
+    type: 'OverridesFile',
+    where:
+      "People's verdicts on a run's judgements, written by reeval override: evals/.history/<run>/overrides.json and .reeval/runs/<run>/overrides.json",
+    versionField: 'schemaVersion',
+  },
+  {
     name: 'cli-invocation',
     file: 'src/report/types.ts',
     type: 'CliInvocation',

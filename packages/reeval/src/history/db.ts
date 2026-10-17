@@ -11,6 +11,7 @@ import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
+import { overridesPath, withOverrides } from './overrides.ts'
 import { type ClassContext, classifyCall } from './tool-class.ts'
 import { toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
@@ -18,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 10
+const DB_VERSION = 11
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -55,8 +56,9 @@ function loadSqlite(): typeof import('node:sqlite') {
 
 const TABLES = `
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
--- The record file each run was read from, and its size and mtime when it was.
-CREATE TABLE files (run_id TEXT PRIMARY KEY, path TEXT NOT NULL, size INTEGER NOT NULL, mtime_ms REAL NOT NULL);
+-- The record file each run was read from, its size and mtime when it was, and its overrides.json's
+-- mtime (null without one).
+CREATE TABLE files (run_id TEXT PRIMARY KEY, path TEXT NOT NULL, size INTEGER NOT NULL, mtime_ms REAL NOT NULL, overrides_mtime_ms REAL);
 CREATE TABLE runs (
   run_id TEXT PRIMARY KEY, recorded INTEGER NOT NULL, status TEXT, started_at TEXT, ended_at TEXT,
   duration_ms INTEGER, author TEXT, git_sha TEXT, branch TEXT, dirty INTEGER, runner TEXT,
@@ -121,9 +123,11 @@ CREATE TABLE attempts (
   reasoning_effort TEXT, served_reasoning_effort TEXT,
   PRIMARY KEY (run_id, key)
 );
+-- verdict is the judge's; overridden = 1 when a person overrode it (reeval override), with theirs.
 CREATE TABLE judgements (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, key TEXT NOT NULL, question TEXT,
   verdict TEXT, score REAL, threshold REAL, model TEXT, resolved_model TEXT, input_path TEXT,
+  overridden INTEGER, override_verdict TEXT, override_reason TEXT, override_author TEXT,
   PRIMARY KEY (run_id, attempt_key, key)
 );
 CREATE TABLE environments (
@@ -656,7 +660,7 @@ function insertRun(
       }
       for (const j of a.judgements) {
         run(
-          'INSERT OR IGNORE INTO judgements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          `INSERT OR IGNORE INTO judgements VALUES (${Array(14).fill('?').join(', ')})`,
           record.runId,
           a.key,
           j.key,
@@ -667,6 +671,10 @@ function insertRun(
           j.model,
           j.resolvedModel ?? null,
           a.files.judgeInput?.path ?? null,
+          j.override ? 1 : 0,
+          j.override?.verdict ?? null,
+          j.override?.reason ?? null,
+          j.override?.author ?? null,
         )
       }
       for (const [kind, ref] of Object.entries(a.files)) {
@@ -854,11 +862,14 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
   }
   const known = new Map(
     (
-      db.prepare('SELECT run_id, path, size, mtime_ms FROM files').all() as Array<{
+      db
+        .prepare('SELECT run_id, path, size, mtime_ms, overrides_mtime_ms FROM files')
+        .all() as Array<{
         run_id: string
         path: string
         size: number
         mtime_ms: number
+        overrides_mtime_ms: number | null
       }>
     ).map((r) => [r.run_id, r]),
   )
@@ -874,21 +885,35 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
     }
     for (const [runId, { path, recorded }] of wanted) {
       const info = await stat(path)
+      const overrides =
+        (await stat(overridesPath(dirname(path), runId)).catch(() => null))?.mtimeMs ?? null
       const rel = relativeFile(root, path)
       const had = known.get(runId)
-      if (had && had.path === rel && had.size === info.size && had.mtime_ms === info.mtimeMs) {
+      if (
+        had &&
+        had.path === rel &&
+        had.size === info.size &&
+        had.mtime_ms === info.mtimeMs &&
+        had.overrides_mtime_ms === overrides
+      ) {
         continue
       }
       let record: RunRecord
       try {
-        record = await readRecord(path)
+        record = await withOverrides(await readRecord(path), dirname(path))
       } catch (error) {
         warnUnreadable(path, error)
         continue
       }
       if (had) removeRun(db, runId)
       insertRun(db, record, recorded, await readTranscripts(dirname(path), record))
-      db.prepare('INSERT INTO files VALUES (?, ?, ?, ?)').run(runId, rel, info.size, info.mtimeMs)
+      db.prepare('INSERT INTO files VALUES (?, ?, ?, ?, ?)').run(
+        runId,
+        rel,
+        info.size,
+        info.mtimeMs,
+        overrides,
+      )
       added++
     }
     if (added || removed || rebuilt) deriveFacts(db)

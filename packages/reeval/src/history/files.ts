@@ -343,6 +343,8 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
   if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record)))
+  const overrides = await readFile(join(source, runId, 'overrides.json')).catch(() => null)
+  if (overrides) files.set('overrides.json', overrides)
 
   if (!options.skipSecretScan) {
     const scanned: Array<[string, Finding[]]> = [

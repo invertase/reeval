@@ -2,9 +2,10 @@
 // wrote at any point since keeps loading in the CLI. The studio's browser test opens the same runs.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { describe, test } from 'node:test'
-import type { RunRecord } from '../src/history/types.ts'
+import { applyOverrides } from '../src/history/overrides.ts'
+import type { OverridesFile, RunRecord } from '../src/history/types.ts'
 import { countSecrets } from '../src/redact.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { runCli } from './helpers.ts'
@@ -20,6 +21,7 @@ const REQUIRED = [
   'pooled family',
   'judge pass',
   'judge fail',
+  'judge override',
   'outcome fail',
   'outcome infra_error',
   'outcome skipped',
@@ -40,13 +42,25 @@ const REQUIRED = [
   'before the reeval sandbox user',
 ]
 
+/** A corpus run as every reader sees it: read, with its overrides.json attached. */
+function readRun(run: { runId: string; file: string; raw: Record<string, unknown> }): RunRecord {
+  const path = join(dirname(run.file), run.runId, 'overrides.json')
+  const overrides = existsSync(path)
+    ? (JSON.parse(readFileSync(path, 'utf8')) as OverridesFile)
+    : null
+  return applyOverrides(readableRecord(structuredClone(run.raw) as never), overrides)
+}
+
 function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: boolean): string[] {
   const out = new Set<string>()
   const attempts = record.evals.flatMap((e) => e.attempts)
   if (record.evals.some((e) => e.cells.some((c) => c.lift))) out.add('compare with lift')
   if (record.families?.some((f) => f.lifts.length)) out.add('pooled family')
   for (const a of attempts) {
-    for (const j of a.judgements) out.add(`judge ${j.verdict}`)
+    for (const j of a.judgements) {
+      out.add(`judge ${j.verdict}`)
+      if (j.override) out.add('judge override')
+    }
     out.add(`outcome ${a.outcome}`)
     if (a.files.transcript) out.add('transcript')
     if (a.files.diff) out.add('diff')
@@ -67,11 +81,7 @@ function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: bo
 describe('the record corpus', () => {
   test('holds every kind of run the record can describe', () => {
     const found = new Set(
-      entries.flatMap((e) =>
-        e.runs.flatMap((r) =>
-          covers(readableRecord(structuredClone(r.raw) as never), r.raw, r.analyses > 0),
-        ),
-      ),
+      entries.flatMap((e) => e.runs.flatMap((r) => covers(readRun(r), r.raw, r.analyses > 0))),
     )
     const missing = REQUIRED.filter((k) => !found.has(k))
     assert.deepEqual(missing, [], 'add a corpus entry that has them (scripts/corpus/add.ts)')
@@ -157,7 +167,7 @@ describe('the record corpus', () => {
           assert.match(text, new RegExp(`\\n {2}${row} +\\S`), `${entry.name} ${run.runId}: ${row}`)
         await ok(['show', run.runId, '--md'])
         const shown = JSON.parse(await ok(['show', run.runId, '--json']))
-        assert.deepEqual(shown, readableRecord(structuredClone(run.raw) as never))
+        assert.deepEqual(shown, readRun(run))
         await ok(['compare', run.runId], [0, 1])
         await ok(['analyze', run.runId, '--dry-run'])
         if (run.analyses)

@@ -102,6 +102,40 @@ export type JudgementRecord = {
   retries?: JudgeRetry[]
   /** Captures this call sent the judge as file parts, when any. */
   artifacts?: JudgeArtifactRef[]
+  /**
+   * A person's verdict on this judgement, from the run's `overrides.json` (`reeval override`).
+   * Readers attach it; the record file never holds it, and `verdict` stays the judge's.
+   */
+  override?: JudgeOverride
+}
+
+/** A person's verdict on one judgement, and why. */
+export type JudgeOverride = {
+  verdict: 'pass' | 'fail'
+  reason: string
+  author: string
+  /** When it was written, ISO 8601. */
+  at: string
+}
+
+/**
+ * `<run>/overrides.json` beside a run's record: people's verdicts on its judgements, written by
+ * `reeval override`. A record is never rewritten, so corrections live here, one per judgement.
+ */
+export type OverridesFile = {
+  kind: 'reeval-overrides'
+  schemaVersion: 1
+  runId: string
+  overrides: Array<
+    JudgeOverride & {
+      /** The attempt's key, `<eval key> # <cell key>#<n>`. */
+      attempt: string
+      /** The judgement's key, `<index>:<sha256(question) prefix>`. */
+      judgement: string
+      /** Its `expect` label, or its question, as it read when overridden. */
+      label: string
+    }
+  >
 }
 
 export type AttemptFiles = {

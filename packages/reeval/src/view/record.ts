@@ -3,7 +3,7 @@
 // the types to it: a field added as required needs a read default below, or a schemaVersion bump
 // with a migration.
 
-import type { RunRecord } from '../history/types.ts'
+import type { OverridesFile, RunRecord } from '../history/types.ts'
 import { SCHEMA_VERSION } from '../history/types.ts'
 import type { CliInvocation } from '../report/types.ts'
 import type { AnalysisDoc, AnalysisNote } from './analysis.ts'
@@ -19,6 +19,7 @@ export type ShapeName =
   | 'debug-request'
   | 'live-progress'
   | 'cli-invocation'
+  | 'overrides'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -44,6 +45,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'debug-request': [],
   'live-progress': [],
   'cli-invocation': [],
+  overrides: [],
 }
 
 /**
@@ -57,6 +59,7 @@ export const SCHEMA_VERSIONS = {
   'run-record': SCHEMA_VERSION,
   analysis: 1,
   'analysis-note': 1,
+  overrides: 1,
 } as const
 
 /** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
@@ -151,3 +154,9 @@ export const readableDebugRequest = (request: DebugRequest): DebugRequest =>
 /** A line of `.reeval/cli.jsonl` as `reeval report` sees it. */
 export const readableCliInvocation = (entry: CliInvocation): CliInvocation =>
   fillDefaults('cli-invocation', entry)
+
+/** A run's `overrides.json` as every reader sees it; one from a newer reeval throws. */
+export const readableOverrides = (
+  file: OverridesFile,
+  what = 'This overrides file',
+): OverridesFile => fillDefaults('overrides', upgrade('overrides', file, what))

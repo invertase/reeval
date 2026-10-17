@@ -49,16 +49,20 @@ export function corpus(): {
   records: Array<{ file: string; value: Record<string, unknown> }>
   transcripts: string[]
   analyses: Array<{ file: string; value: Record<string, unknown> }>
+  overrides: Array<{ file: string; value: Record<string, unknown> }>
 } {
   const records: Array<{ file: string; value: Record<string, unknown> }> = []
   const transcripts: string[] = []
   const analyses: Array<{ file: string; value: Record<string, unknown> }> = []
+  const overrides: Array<{ file: string; value: Record<string, unknown> }> = []
   const walk = (dir: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, e.name)
       if (e.isDirectory()) walk(path)
       else if (e.name === 'transcript.jsonl') transcripts.push(path)
-      else if (e.name.endsWith('.json') && basename(dir) === 'analysis') {
+      else if (e.name === 'overrides.json') {
+        overrides.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
+      } else if (e.name.endsWith('.json') && basename(dir) === 'analysis') {
         analyses.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       }
     }
@@ -67,5 +71,5 @@ export function corpus(): {
     for (const run of entry.runs) records.push({ file: run.file, value: run.raw })
     walk(join(entry.dir, HISTORY))
   }
-  return { records, transcripts, analyses }
+  return { records, transcripts, analyses, overrides }
 }

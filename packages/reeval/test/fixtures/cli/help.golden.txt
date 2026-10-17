@@ -51,6 +51,13 @@ Usage:
   reeval history [filter]       Pass/fail per recorded eval over recent runs
                                 --limit <n> --all (include unrecorded runs) --json
   reeval show [run]             One run: table, --md (summary.md) or --json (the record)
+  reeval override <run> <attempt> <judge>
+                                Overrule one judge's verdict: writes it with your reason into the
+                                run's overrides.json, beside the record it leaves unchanged; show,
+                                query and analyze then show both. Attempt and judge match by name
+                                (sign-in # new-skill#1, an expect label or question)
+    --verdict <pass|fail>       The verdict that stands; --reason <why> (required)
+    --author <name>             Who overrode it (default: git config user.name)
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                                 --md --json --fail-on-regression
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied

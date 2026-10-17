@@ -101,7 +101,7 @@ Several views repeat a cell's key across evals in a run, so join `attempts` and 
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
 | `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
-| `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
+| `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path`, `overridden`, `override_verdict`, `override_reason`, `override_author` |
 | `question_pairs_m` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `reeval`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
 | `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms`, `class` |

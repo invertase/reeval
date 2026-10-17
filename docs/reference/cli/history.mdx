@@ -1,13 +1,15 @@
 ---
-title: reeval history, show, compare, checkout
-description: Read recorded runs, diff two of them and reproduce one.
+title: reeval history, show, override, compare, checkout
+description: Read recorded runs, overrule a judge, diff two runs and reproduce one.
 ---
 
-Four commands read the history: recorded runs, plus unrecorded scratch runs where noted.
+These commands read the history: recorded runs, plus unrecorded scratch runs where noted.
 
 ```bash
 npx reeval history             # pass/fail per eval across runs
 npx reeval show latest --md    # one run as Markdown
+npx reeval override latest "sign-in # new-skill#1" "Email sign-in" \
+  --verdict pass --reason "mounts SignInAuthScreen"
 npx reeval compare             # latest vs its nearest recorded ancestor
 npx reeval checkout latest     # a worktree at that run's commit
 ```
@@ -46,7 +48,43 @@ reeval show [run]             One run: table, --md (summary.md) or --json (the r
 
 [//]: # (/generated:cli-help:show)
 
-The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then a line per eval. `--md` prints the run's `summary.md`; `--json` prints the record.
+The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then a line per eval. `--md` prints the run's `summary.md`; `--json` prints the record, with any [overrides](#reeval-override) on its judgements.
+
+## reeval override
+
+[//]: # (generated:cli-help:override)
+
+```text
+reeval override <run> <attempt> <judge>
+                              Overrule one judge's verdict: writes it with your reason into the
+                              run's overrides.json, beside the record it leaves unchanged; show,
+                              query and analyze then show both. Attempt and judge match by name
+                              (sign-in # new-skill#1, an expect label or question)
+  --verdict <pass|fail>       The verdict that stands; --reason <why> (required)
+  --author <name>             Who overrode it (default: git config user.name)
+```
+
+[//]: # (/generated:cli-help:override)
+
+A judge can be wrong. `reeval override` records your verdict on one judgement, and why, in the run's `overrides.json` beside its record. The record never changes, and neither do the attempt's outcome, the cell's pass rate, lift or the exit code.
+
+```text
+$ npx reeval override latest "sign-in # fake/new-skill/fake#2" email --verdict pass \
+    --reason "mounts SignInAuthScreen, which renders the email form" --author ben
+sign-in # fake/new-skill/fake#2 · Email sign-in: judge fail 0.09 (≥ 0.8), overridden pass by ben
+wrote .reeval/runs/20261017T134011Z_nogit_cursor-agent_kswv/overrides.json. reeval record copies it with the run.
+$ npx reeval show
+  ✗ evals/sign-in.eval.ts › sign-in  … checks Email sign-in 2/3 vs 3/3 (3/3 with 1 override) …
+…
+      ✗ fake/new-skill/fake#2  31ms
+        judge fail 0.09 (≥ 0.8)  Email sign-in: Does the app offer email sign-in?
+          overridden pass by ben: mounts SignInAuthScreen, which renders the email form
+```
+
+- **Attempt** matches the attempt key, `<eval name> # <cell>#<n>` as `reeval show` lists it, or a unique substring. **Judge** matches its `expect` label, its question or a unique substring. Several matches list them and write nothing.
+- **One per judgement:** a second override of the same judgement replaces the first. Delete its entry from `overrides.json` to drop it.
+- **Readers:** `reeval show` adds `overridden pass by ben: <reason>` under the judge, `summary.md` an `Overridden` line, and a cell's rate gains `(3/3 with 1 override)`. [`reeval query`](/reference/cli/query)'s `judgements` has `overridden`, `override_verdict`, `override_reason` and `override_author`, and [`reeval analyze`](/reference/cli/analyze) treats an override as the verdict that stands.
+- **Scratch runs:** an override on a run in `.reeval/runs` goes beside it there, and [`reeval record`](/reference/cli/record) copies it with the run.
 
 ## reeval compare
 

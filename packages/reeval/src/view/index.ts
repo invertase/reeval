@@ -11,6 +11,8 @@ export type {
   HistoryCell,
   HistoryEntry,
   JudgementRecord,
+  JudgeOverride,
+  OverridesFile,
   RunRecord,
   StackSummary,
 } from '../history/types.ts'

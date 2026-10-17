@@ -18,7 +18,7 @@ import { contrastsOf } from '../view/contrasts.ts'
 import { DIRECTIONAL_MIN } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
-import { labelledJudgements } from '../view/judgements.ts'
+import { effectiveVerdict, labelledJudgements, overriddenRate } from '../view/judgements.ts'
 
 export type DigestFact = { id: string; kind: string } & Record<string, unknown>
 export type DigestEvidence = {
@@ -46,6 +46,8 @@ export type DigestAttempt = {
   failed?: string[]
   /** Each judgement's score, by its `expect` label (or question). */
   judges?: Record<string, number>
+  /** The verdict a person put on a judgement (`reeval override`), by its label. */
+  overrides?: Record<string, 'pass' | 'fail'>
   /** `c.exec` calls; `<attempt id>:exec<n>` cites the n-th. */
   execs: number
   artifacts: string | null
@@ -99,7 +101,7 @@ export const RULES = [
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
   'An eval where every cell passes at least 95% is saturated: pass@1 cannot tell cells apart there, effort can.',
-  'Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so.',
+  "Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so. A person's override (the judge fact's overrides, an attempt's overrides, \"with N override\" on a criteria cell) is the verdict that stands, with their reason: report the rate with overrides beside the judge's own, and never cite an overridden verdict as a failure.",
   "A criteria fact lists each check (expect label, judges included) per cell: rows only for labels whose rate differs between cells, or is mixed within one; neverMet labels failed on every counted attempt of every cell, alwaysMet passed on all of them. A neverMet or alwaysMet label is the same in every arm: it can't explain a difference between arms.",
   "frame study means every cell in scope is ungated (gate: 'none'): the run measures how its arms differ, so attempts that fail are data, not a failed gate.",
   'setup, rules and cli give context and are not citable: cite facts, evidence and attempts.',
@@ -191,6 +193,8 @@ function cellNames(e: EvalEntry, tags: Map<string, string>): Map<string, string>
 const counted = (a: AttemptRecord) => a.outcome === 'pass' || a.outcome === 'fail'
 
 const LABEL_CHARS = 60
+/** Overrides the judge fact lists; `overridden` counts them all. */
+const MAX_OVERRIDES = 12
 const round2 = (x: number) => Math.round(x * 100) / 100
 const round1 = (x: number) => Math.round(x * 10) / 10
 const ratioText = (r: unknown) => (r == null ? '×–' : `×${Number(r).toFixed(2)}`)
@@ -233,14 +237,23 @@ function criteriaOf(e: EvalEntry, tag: (cell: string) => string) {
   const labels = [...new Set(cells.flatMap((c) => (c.checks ?? []).map((k) => k.label)))]
   if (!labels.length) return null
   const scores = new Map<string, number[]>()
+  // Per cell and label: judgements a person overrode, and the passes that gains (less those lost).
+  const overridden = new Map<string, { n: number; gained: number }>()
   for (const a of e.attempts) {
     if (!counted(a)) continue
     for (const j of labelledJudgements(a)) {
       if (j.check === undefined) continue
       const id = `${a.cell}\0${j.check}`
       scores.set(id, [...(scores.get(id) ?? []), j.judgement.score])
+      const o = j.judgement.override
+      if (!o) continue
+      const row = overridden.get(id) ?? { n: 0, gained: 0 }
+      row.n++
+      row.gained += (o.verdict === 'pass' ? 1 : 0) - (j.judgement.verdict === 'pass' ? 1 : 0)
+      overridden.set(id, row)
     }
   }
+  const touched = new Set([...overridden.keys()].map((id) => id.split('\0')[1]))
   const rows: Array<{ label: string; cells: Record<string, string> }> = []
   const neverMet: string[] = []
   const alwaysMet: string[] = []
@@ -250,8 +263,10 @@ function criteriaOf(e: EvalEntry, tag: (cell: string) => string) {
       return k ? [{ c, k }] : []
     })
     const sides = new Set(tallies.map(({ k }) => sideOf(k)))
-    if (sides.size === 1 && sides.has('none')) neverMet.push(clip(label, LABEL_CHARS))
-    else if (sides.size === 1 && sides.has('all')) alwaysMet.push(clip(label, LABEL_CHARS))
+    // A label someone overrode stays a row, so the rate with their verdicts shows beside it.
+    const same = sides.size === 1 && !touched.has(label)
+    if (same && sides.has('none')) neverMet.push(clip(label, LABEL_CHARS))
+    else if (same && sides.has('all')) alwaysMet.push(clip(label, LABEL_CHARS))
     else {
       rows.push({
         label: clip(label, LABEL_CHARS),
@@ -261,7 +276,12 @@ function criteriaOf(e: EvalEntry, tag: (cell: string) => string) {
             const mean = s?.length
               ? ` · ${(s.reduce((x, y) => x + y, 0) / s.length).toFixed(2)}`
               : ''
-            return [tag(c.key), `${k.pass}/${k.pass + k.fail + k.error + k.notRun}${mean}`]
+            const total = k.pass + k.fail + k.error + k.notRun
+            const o = overridden.get(`${c.key}\0${label}`)
+            const standing = o
+              ? ` (${overriddenRate({ overridden: o.n, standing: k.pass + o.gained, counted: total })})`
+              : ''
+            return [tag(c.key), `${k.pass}/${total}${mean}${standing}`]
           }),
         ),
       })
@@ -306,6 +326,11 @@ export async function buildDigestKeepingDropped(
         const assertions = a.assertions ?? []
         const failed = failedLabels(a)
         const judges = labelledJudgements(a)
+        const overrides = judges.flatMap((j) =>
+          j.judgement.override
+            ? [[clip(j.label, LABEL_CHARS), j.judgement.override.verdict] as const]
+            : [],
+        )
         attempts[id] = {
           run: short.get(r.record.runId) as string,
           runId: r.record.runId,
@@ -330,6 +355,7 @@ export async function buildDigestKeepingDropped(
                 ),
               }
             : {}),
+          ...(overrides.length ? { overrides: Object.fromEntries(overrides) } : {}),
           execs: a.checks.length,
           artifacts: any ? `${r.record.runId}/${any.path.split('/').slice(0, 3).join('/')}` : null,
         }
@@ -692,6 +718,28 @@ export async function buildDigestKeepingDropped(
       .filter((e) => evalKeys.has(e.key))
       .flatMap((e) => e.attempts.flatMap((a) => a.judgements)),
   )
+  const overridden = runs.flatMap((r) =>
+    r.record.evals
+      .filter((e) => evalKeys.has(e.key))
+      .flatMap((e) =>
+        e.attempts.flatMap((a) =>
+          labelledJudgements(a).flatMap(({ judgement: j, label }) =>
+            j.override
+              ? [
+                  {
+                    attempt: idOf.get(`${r.record.runId}\0${a.key}`),
+                    label: clip(label, LABEL_CHARS),
+                    judge: `${j.verdict} ${round2(j.score)}`,
+                    verdict: j.override.verdict,
+                    by: j.override.author,
+                    reason: clip(j.override.reason, 300),
+                  },
+                ]
+              : [],
+          ),
+        ),
+      ),
+  )
   if (judged.length) {
     fact('judge', {
       models: [...new Set(judged.map((j) => j.resolvedModel ?? j.model))],
@@ -701,6 +749,9 @@ export async function buildDigestKeepingDropped(
       scoresAtLeast098: judged.filter((j) => j.score >= 0.98).length,
       nearThreshold: judged.filter((j) => Math.abs(j.score - j.threshold) <= 0.1).length,
       reasons: 'not recorded',
+      ...(overridden.length
+        ? { overridden: overridden.length, overrides: overridden.slice(0, MAX_OVERRIDES) }
+        : {}),
     })
   }
 
@@ -731,7 +782,7 @@ export async function buildDigestKeepingDropped(
       : failures.slice(0, 8)
   for (const { r, e, a } of failureFacts) {
     const failed = failedLabels(a)
-    const judges = labelledJudgements(a).filter((j) => j.judgement.verdict === 'fail')
+    const judges = labelledJudgements(a).filter((j) => effectiveVerdict(j.judgement) === 'fail')
     fact('failure', {
       attempt: idOf.get(`${r.record.runId}\0${a.key}`),
       outcome: a.outcome,
@@ -976,7 +1027,7 @@ export async function buildDigestKeepingDropped(
   for (const [i, { r, e, a }] of [...perCell.values()].slice(0, 6).entries()) {
     const id = idOf.get(`${r.record.runId}\0${a.key}`) as string
     const lines = await lastText(r.record.runId, a)
-    const judges = labelledJudgements(a).filter((j) => j.judgement.verdict === 'fail')
+    const judges = labelledJudgements(a).filter((j) => effectiveVerdict(j.judgement) === 'fail')
     for (const { label, judgement: j } of judges) {
       lines.push(
         `judge ${clip(label, LABEL_CHARS)}: ${j.question}`,

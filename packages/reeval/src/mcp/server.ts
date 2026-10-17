@@ -1,11 +1,13 @@
 // `reeval mcp`'s server: run history as read-only MCP tools and resources. The same factory serves
 // stdio and each stateless HTTP request, so it builds a fresh McpServer and holds nothing.
 import { readFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { allRuns, compareView, historyView, showRecord } from '../commands.ts'
 import { openHistoryDb, VIEW_NAMES } from '../history/db.ts'
 import { readRecord } from '../history/files.ts'
+import { withOverrides } from '../history/overrides.ts'
 import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { resolveRun } from '../history/views.ts'
@@ -195,7 +197,7 @@ async function readTranscript(config: ResolvedConfig, run: RunRecord, ref: strin
 async function recordById(config: ResolvedConfig, runId: string): Promise<RunRecord | null> {
   if (!RUN_ID.test(runId)) return null
   const file = await resolveFile(source(config), { kind: 'record', runId })
-  return file ? readRecord(file) : null
+  return file ? withOverrides(await readRecord(file), dirname(file)) : null
 }
 
 const INSTRUCTIONS = `Read-only access to this project's reeval run history: runs of evals for coding agents, recorded in git and scratch runs in .reeval/runs.

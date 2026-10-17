@@ -105,6 +105,17 @@ A call that fails (a provider error after its retries, or a missing key) doesn't
 
 `toPass()` and `.not.toPass()` both fail on it, with the call's error. `c.judge()` still throws on a mistake in the call itself (no model, an empty question, a bad threshold, `include` or `files`) and when the run is cancelled or times out.
 
+## Overriding a verdict
+
+A judge records a score, not its reasons: the decision models reeval calls return a probability only. When you read an attempt and the judge was wrong, overrule it with your reason:
+
+```bash
+npx reeval override latest "sign-in # new-skill#1" "Email sign-in" \
+  --verdict pass --reason "mounts SignInAuthScreen, which renders the email form"
+```
+
+The verdict goes in the run's `overrides.json`, and the judge's stays in the record. `reeval show`, `reeval query` and `reeval analyze` show both, and the attempt's outcome doesn't change. See [reeval override](/reference/cli/history#reeval-override).
+
 ## Providers and keys
 
 reeval calls a provider's own package when its key is set, and the Vercel AI Gateway otherwise:

@@ -328,10 +328,11 @@ Every shape reeval writes to disk and reads back later, maybe from an older or n
 `packages/reeval/scripts/schema/shapes.ts` and snapshotted as a JSON Schema generated from its
 TypeScript type in `packages/reeval/schema/`: the run record (`RunRecord`), transcript lines
 (`TranscriptLine`), analysis documents (`AnalysisDoc`), `analysis.agent`'s notes (`AnalysisNote`,
-`.reeval/analysis/<run>/notes/`), `.reeval/debug` request lines
+`.reeval/analysis/<run>/notes/`), people's verdicts on judgements (`OverridesFile`,
+`<run>/overrides.json`, written by `reeval override`), `.reeval/debug` request lines
 (`DebugRequest`) and a running `reeval run`'s progress file, `.reeval/staging/<run>/live.json`
 (`LiveProgress`, read by `reeval studio`; never part of a record). Every reader goes through `src/view/record.ts` (`readableRecord`,
-`readableTranscriptLine`, `readableAnalysis`, `readableAnalysisNote`, `readableDebugRequest`).
+`readableTranscriptLine`, `readableAnalysis`, `readableAnalysisNote`, `readableOverrides`, `readableDebugRequest`).
 
 ```bash
 pnpm --filter reeval schema:check    # CI (typecheck job); fails on a breaking change

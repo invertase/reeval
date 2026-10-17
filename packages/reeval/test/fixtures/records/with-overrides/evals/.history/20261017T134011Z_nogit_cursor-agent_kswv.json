@@ -1,0 +1,859 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261017T134011Z_nogit_cursor-agent_kswv",
+  "status": "complete",
+  "startedAt": "2026-10-17T13:40:11.871Z",
+  "endedAt": "2026-10-17T13:40:12.937Z",
+  "durationMs": 1066,
+  "author": "cursor-agent",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.9.0",
+    "node": "22.14.0",
+    "runtime": {
+      "name": "node",
+      "version": "22.14.0"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.7",
+      "@reeval/harness-opencode": "0.2.8",
+      "@reeval/harness-goose": "0.1.3",
+      "@reeval/harness-pi": "0.2.7",
+      "@reeval/harness-cursor-sdk": "0.1.5",
+      "@ai-sdk/harness-claude-code": "1.0.152-patch.8edc594f",
+      "@reeval/harness-codex": "0.1.7",
+      "ai": "7.0.140",
+      "@ai-sdk/harness": "1.0.148",
+      "@ai-sdk/google": "4.0.93",
+      "@ai-sdk/typesafe-ai": "3.0.18"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": "fake",
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "c333ac5c17b5"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "new-skill",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:598d1a17e15c682126e7cfb6fd542ea003b2d8615b5c6bf76cc8ebe6ee009cb6",
+      "setup": [],
+      "skills": [
+        {
+          "name": "s",
+          "source": "local:skills/s",
+          "commit": null,
+          "sha256": "12fbf3b54e0318e8d896f410e2e4b80888614a0536ed99029caabfc893ad051e",
+          "placement": "harness",
+          "excluded": []
+        }
+      ],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "no-skill",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 2,
+    "attempts": 6,
+    "estimateMs": 6000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": "fake",
+    "runs": 1,
+    "judgeModel": "fake",
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 1,
+    "configHash": "eb06194691956d2a4cac750d0a0c6e5f1b4756244f565170cc4a7453c95dd0d7"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "failures",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 6,
+    "pass": 5,
+    "fail": 1,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/sign-in.eval.ts › sign-in",
+      "key": "evals/sign-in.eval.ts › sign-in",
+      "slug": "evals-sign-in-eval-ts-sign-in-b5f072",
+      "file": "evals/sign-in.eval.ts",
+      "group": [],
+      "name": "sign-in",
+      "tags": [],
+      "compare": {
+        "baseline": "no-skill"
+      },
+      "fingerprint": "82525d094c71468d2207cc0aa6b1a994da244a1dbf11f059223fde8e86adcd26",
+      "sources": [
+        {
+          "path": "evals/sign-in.eval.ts",
+          "sha256": "e1b56657402219d35716b8f226478d5cbe17cf14d8d7e91cfbfd5a8118a55d36"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0.6666666666666666,
+      "cells": [
+        {
+          "key": "fake/no-skill/fake",
+          "harness": "fake",
+          "environment": "no-skill",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "b0263d1ac82ac94e491be904c70023dce830b0a0d194161d023d36817cac9571",
+          "fingerprintParts": {
+            "sources": "dedf3bdd203704901fe477c4f6cd302b554793b505edb3e80d33d1655263ed31",
+            "harness": "b68e86747477de7ba57a64021eebd1912d50e9c89204ce7b8b15f6082b43e55f",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 3,
+          "pass": 3,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "Email sign-in",
+              "pass": 3,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/new-skill/fake",
+          "harness": "fake",
+          "environment": "new-skill",
+          "sandbox": "fake",
+          "role": "variant",
+          "variant": "new-skill",
+          "fingerprint": "664d6239fed4deb26dad08d51061b4a8f2e947dd406237a4ea022a9234f5087d",
+          "fingerprintParts": {
+            "sources": "dedf3bdd203704901fe477c4f6cd302b554793b505edb3e80d33d1655263ed31",
+            "harness": "b68e86747477de7ba57a64021eebd1912d50e9c89204ce7b8b15f6082b43e55f",
+            "environment": "sha256:598d1a17e15c682126e7cfb6fd542ea003b2d8615b5c6bf76cc8ebe6ee009cb6",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:598d1a17e15c682126e7cfb6fd542ea003b2d8615b5c6bf76cc8ebe6ee009cb6",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 3,
+          "pass": 2,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0.6666666666666666,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "Email sign-in",
+              "pass": 2,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 3,
+                "fail": 0,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "mixed"
+            }
+          ],
+          "lift": {
+            "vs": "fake/no-skill/fake",
+            "control": {
+              "pass": 3,
+              "counted": 3
+            },
+            "variant": {
+              "pass": 2,
+              "counted": 3
+            },
+            "points": -0.333,
+            "interval": {
+              "lo": -0.792,
+              "hi": 0.291,
+              "level": 0.95,
+              "method": "newcombe-wilson"
+            },
+            "withinNoise": true
+          }
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/sign-in.eval.ts › sign-in # fake/no-skill/fake#1",
+          "id": "fake/no-skill/fake#1",
+          "cell": "fake/no-skill/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-17T13:40:12.752Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 46,
+          "turns": [
+            {
+              "prompt": "Build sign-in",
+              "status": "completed",
+              "startedAt": "2026-10-17T13:40:12.770Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 16,
+            "agentMs": 0,
+            "diffMs": 11,
+            "checksMs": 0,
+            "judgeMs": 1
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 0.96,
+              "threshold": 0.8,
+              "question": "Does the app offer email sign-in?",
+              "model": "fake",
+              "key": "0:ca46d2fbfdd2"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "Email sign-in",
+              "labelled": true,
+              "matcher": "toPass",
+              "status": "pass",
+              "soft": true
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/1/transcript.jsonl",
+              "sha256": "3984da2826a1ef80fdbd433546a915884b298feeb3ef4b756f8a4459add2e7ee",
+              "bytes": 409
+            },
+            "diff": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "judgeInput": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/1/judge-input.json",
+              "sha256": "a3300fd7f935859025bbcdcfaea9533f2f8a35affedb6eaa705977a48a781e37",
+              "bytes": 321
+            }
+          }
+        },
+        {
+          "key": "evals/sign-in.eval.ts › sign-in # fake/no-skill/fake#2",
+          "id": "fake/no-skill/fake#2",
+          "cell": "fake/no-skill/fake",
+          "n": 2,
+          "seq": 3,
+          "startedAt": "2026-10-17T13:40:12.828Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 23,
+          "turns": [
+            {
+              "prompt": "Build sign-in",
+              "status": "completed",
+              "startedAt": "2026-10-17T13:40:12.838Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 9,
+            "agentMs": 0,
+            "diffMs": 8,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 0.96,
+              "threshold": 0.8,
+              "question": "Does the app offer email sign-in?",
+              "model": "fake",
+              "key": "0:ca46d2fbfdd2"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "Email sign-in",
+              "labelled": true,
+              "matcher": "toPass",
+              "status": "pass",
+              "soft": true
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/2/transcript.jsonl",
+              "sha256": "5ef69c1eb9eef69fd365bd272f8b9d61173428ad4fccbc679cafbbcff87279b7",
+              "bytes": 409
+            },
+            "diff": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/2/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "judgeInput": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/2/judge-input.json",
+              "sha256": "a3300fd7f935859025bbcdcfaea9533f2f8a35affedb6eaa705977a48a781e37",
+              "bytes": 321
+            }
+          }
+        },
+        {
+          "key": "evals/sign-in.eval.ts › sign-in # fake/no-skill/fake#3",
+          "id": "fake/no-skill/fake#3",
+          "cell": "fake/no-skill/fake",
+          "n": 3,
+          "seq": 5,
+          "startedAt": "2026-10-17T13:40:12.882Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 24,
+          "turns": [
+            {
+              "prompt": "Build sign-in",
+              "status": "completed",
+              "startedAt": "2026-10-17T13:40:12.891Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 9,
+            "agentMs": 0,
+            "diffMs": 8,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 0.96,
+              "threshold": 0.8,
+              "question": "Does the app offer email sign-in?",
+              "model": "fake",
+              "key": "0:ca46d2fbfdd2"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "Email sign-in",
+              "labelled": true,
+              "matcher": "toPass",
+              "status": "pass",
+              "soft": true
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/3/transcript.jsonl",
+              "sha256": "855a9aa4f2254eb4888102b5df537b3e28d9bd84cae86ae451907701c6b75b38",
+              "bytes": 409
+            },
+            "diff": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/3/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "judgeInput": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-no-skill-fake-b76b06/3/judge-input.json",
+              "sha256": "a3300fd7f935859025bbcdcfaea9533f2f8a35affedb6eaa705977a48a781e37",
+              "bytes": 321
+            }
+          }
+        },
+        {
+          "key": "evals/sign-in.eval.ts › sign-in # fake/new-skill/fake#1",
+          "id": "fake/new-skill/fake#1",
+          "cell": "fake/new-skill/fake",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-10-17T13:40:12.794Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 34,
+          "turns": [
+            {
+              "prompt": "Build sign-in",
+              "status": "completed",
+              "startedAt": "2026-10-17T13:40:12.812Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "skilled"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 17,
+            "agentMs": 0,
+            "diffMs": 10,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 0.98,
+              "threshold": 0.8,
+              "question": "Does the app offer email sign-in?",
+              "model": "fake",
+              "key": "0:ca46d2fbfdd2"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "Email sign-in",
+              "labelled": true,
+              "matcher": "toPass",
+              "status": "pass",
+              "soft": true
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/1/transcript.jsonl",
+              "sha256": "9fc9601a7170b74e3163cac0c8b4412695ccd85c43a100de78f1e0f1eed0df07",
+              "bytes": 518
+            },
+            "diff": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "judgeInput": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/1/judge-input.json",
+              "sha256": "afa16b2602588a83c5867429d387ebc6b5e8df69412bd29b89f788c45925b658",
+              "bytes": 323
+            }
+          }
+        },
+        {
+          "key": "evals/sign-in.eval.ts › sign-in # fake/new-skill/fake#2",
+          "id": "fake/new-skill/fake#2",
+          "cell": "fake/new-skill/fake",
+          "n": 2,
+          "seq": 4,
+          "startedAt": "2026-10-17T13:40:12.850Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "judge",
+            "message": "Email sign-in: judge score 0.09 is below 0.8 for \"Does the app offer email sign-in?\" (fake)"
+          },
+          "durationMs": 31,
+          "turns": [
+            {
+              "prompt": "Build sign-in",
+              "status": "completed",
+              "startedAt": "2026-10-17T13:40:12.861Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "skilled"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 10,
+            "agentMs": 0,
+            "diffMs": 9,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "fail",
+              "score": 0.09,
+              "threshold": 0.8,
+              "question": "Does the app offer email sign-in?",
+              "model": "fake",
+              "key": "0:ca46d2fbfdd2"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "Email sign-in",
+              "labelled": true,
+              "matcher": "toPass",
+              "status": "fail",
+              "soft": true,
+              "message": "Email sign-in: judge score 0.09 is below 0.8 for \"Does the app offer email sign-in?\" (fake)"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/2/transcript.jsonl",
+              "sha256": "d4251827f52a188546f54dd09b4fc42e54e4219fe692895bfc322159cca08161",
+              "bytes": 518
+            },
+            "diff": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/2/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "judgeInput": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/2/judge-input.json",
+              "sha256": "afa16b2602588a83c5867429d387ebc6b5e8df69412bd29b89f788c45925b658",
+              "bytes": 323
+            }
+          }
+        },
+        {
+          "key": "evals/sign-in.eval.ts › sign-in # fake/new-skill/fake#3",
+          "id": "fake/new-skill/fake#3",
+          "cell": "fake/new-skill/fake",
+          "n": 3,
+          "seq": 6,
+          "startedAt": "2026-10-17T13:40:12.906Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 24,
+          "turns": [
+            {
+              "prompt": "Build sign-in",
+              "status": "completed",
+              "startedAt": "2026-10-17T13:40:12.917Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "skilled"
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 10,
+            "agentMs": 0,
+            "diffMs": 8,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 0.97,
+              "threshold": 0.8,
+              "question": "Does the app offer email sign-in?",
+              "model": "fake",
+              "key": "0:ca46d2fbfdd2"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "Email sign-in",
+              "labelled": true,
+              "matcher": "toPass",
+              "status": "pass",
+              "soft": true
+            }
+          ],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/3/transcript.jsonl",
+              "sha256": "ad200cb505a7f25d1cf70aa456434b1f32cb0a844a071c37be5020a7957ea395",
+              "bytes": 518
+            },
+            "diff": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/3/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            },
+            "judgeInput": {
+              "path": "evals-sign-in-eval-ts-sign-in-b5f072/fake-new-skill-fake-3a9e88/3/judge-input.json",
+              "sha256": "afa16b2602588a83c5867429d387ebc6b5e8df69412bd29b89f788c45925b658",
+              "bytes": 323
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

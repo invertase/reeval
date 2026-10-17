@@ -8,7 +8,7 @@ import {
   stackChanges,
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
-import { labelledJudgements } from '../view/judgements.ts'
+import { labelledJudgements, overrideText } from '../view/judgements.ts'
 import { warnings } from './state.ts'
 import {
   cellCounts,
@@ -306,6 +306,7 @@ export function formatShow(run: RunRecord): string {
         lines.push(
           `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${labelled ? `${label}: ` : ''}${j.question}`,
         )
+        if (j.override) lines.push(`${indent}  overridden ${overrideText(j.override)}`)
       }
       if (t.error && !repeatsVerdict(t)) {
         lines.push(`${indent}${t.error.kind}: ${t.error.message.split('\n')[0]}`)

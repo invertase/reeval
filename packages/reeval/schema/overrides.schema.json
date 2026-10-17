@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from OverridesFile in src/history/types.ts by `pnpm schema:update`; don't edit. People's verdicts on a run's judgements, written by reeval override: evals/.history/<run>/overrides.json and .reeval/runs/<run>/overrides.json.",
+  "title": "OverridesFile",
+  "$ref": "#/$defs/OverridesFile",
+  "$defs": {
+    "OverridesFile": {
+      "description": "`<run>/overrides.json` beside a run's record: people's verdicts on its judgements, written by `reeval override`. A record is never rewritten, so corrections live here, one per judgement.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "reeval-overrides"
+        },
+        "overrides": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "at": {
+                "description": "When it was written, ISO 8601.",
+                "type": "string"
+              },
+              "attempt": {
+                "description": "The attempt's key, `<eval key> # <cell key>#<n>`.",
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "judgement": {
+                "description": "The judgement's key, `<index>:<sha256(question) prefix>`.",
+                "type": "string"
+              },
+              "label": {
+                "description": "Its `expect` label, or its question, as it read when overridden.",
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "verdict": {
+                "enum": ["fail", "pass"]
+              }
+            },
+            "required": ["at", "attempt", "author", "judgement", "label", "reason", "verdict"]
+          }
+        },
+        "runId": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        }
+      },
+      "required": ["kind", "overrides", "runId", "schemaVersion"]
+    }
+  },
+  "x-schemaVersion": 1
+}

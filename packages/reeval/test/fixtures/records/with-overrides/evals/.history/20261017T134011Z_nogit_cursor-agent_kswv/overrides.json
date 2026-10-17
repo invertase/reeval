@@ -1,0 +1,16 @@
+{
+  "kind": "reeval-overrides",
+  "schemaVersion": 1,
+  "runId": "20261017T134011Z_nogit_cursor-agent_kswv",
+  "overrides": [
+    {
+      "attempt": "evals/sign-in.eval.ts › sign-in # fake/new-skill/fake#2",
+      "judgement": "0:ca46d2fbfdd2",
+      "label": "Email sign-in",
+      "verdict": "pass",
+      "reason": "mounts SignInAuthScreen, which renders the email form",
+      "author": "ben",
+      "at": "2026-10-17T13:40:13.878Z"
+    }
+  ]
+}

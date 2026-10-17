@@ -19,6 +19,7 @@ evals/.history/                            commit this
   <runId>.json                             the record
   <runId>/summary.md                       the run as Markdown
   <runId>/worktree.patch                   uncommitted changes, when the run was dirty
+  <runId>/overrides.json                   people's verdicts on judgements (reeval override)
   <runId>/<eval-slug>/<cell-slug>/<n>/     one directory per attempt
     transcript.jsonl                       timed agent events (see Transcripts)
     diff.patch                             the agent's changes, dependency noise dropped
@@ -768,6 +769,10 @@ Also has every field of `FileRef`.
   Captures this call sent the judge as file parts, when any.
 </Property>
 
+<Property name="override" type="JudgeOverride" optional>
+  A person's verdict on this judgement, from the run's `overrides.json` (`reeval override`). Readers attach it; the record file never holds it, and `verdict` stays the judge's.
+</Property>
+
 ### JudgeArtifactRef
 
 A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.
@@ -937,6 +942,31 @@ Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` readi
 <Property name="status" type="'added' | 'modified' | 'deleted'"></Property>
 
 [//]: # (/generated:record-types)
+
+## overrides.json
+
+People's verdicts on a run's judgements, written by [reeval override](/reference/cli/history#reeval-override), one per judgement. The record is never rewritten, so readers attach each to its judgement as `override`, and `verdict` stays the judge's.
+
+```json title="evals/.history/<runId>/overrides.json"
+{
+  "kind": "reeval-overrides",
+  "schemaVersion": 1,
+  "runId": "20261017T134011Z_nogit_cursor-agent_kswv",
+  "overrides": [
+    {
+      "attempt": "evals/sign-in.eval.ts › sign-in # fake/new-skill/fake#2",
+      "judgement": "0:ca46d2fbfdd2",
+      "label": "Email sign-in",
+      "verdict": "pass",
+      "reason": "mounts SignInAuthScreen, which renders the email form",
+      "author": "ben",
+      "at": "2026-10-17T13:54:16.985Z"
+    }
+  ]
+}
+```
+
+`attempt` is the attempt's `key` and `judgement` the judgement's `key`; `label` is how it read when overridden.
 
 ## What a record can't pin down
 

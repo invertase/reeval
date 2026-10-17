@@ -23,6 +23,14 @@ const COLLAPSE_AFTER = 2
 
 const counted = (a: Pick<AttemptRecord, 'outcome'>) => a.outcome === 'pass' || a.outcome === 'fail'
 
+/** The verdict that stands: a person's override (`reeval override`), else the judge's. */
+export const effectiveVerdict = (j: Pick<JudgementRecord, 'verdict' | 'override'>) =>
+  j.override?.verdict ?? j.verdict
+
+/** `pass by ben: mounts SignInAuthScreen`, for a judgement a person overrode. */
+export const overrideText = (o: NonNullable<JudgementRecord['override']>) =>
+  `${o.verdict} by ${o.author}: ${o.reason}`
+
 /** Short names stay at this many characters; a collision takes the distinctive tail instead. */
 const LABEL_MAX = 20
 
@@ -111,6 +119,9 @@ export type JudgeKeyRate = {
   question: string
   pass: number
   counted: number
+  /** Judgements a person overrode; `standing` passes once their verdicts stand. Display only. */
+  overridden: number
+  standing: number
   /** Compact lift vs the paired control, only when both sides have enough counted. */
   lift: Pick<Lift, 'points' | 'control' | 'variant' | 'withinNoise'> | null
 }
@@ -121,6 +132,8 @@ type KeyTally = {
   question: string
   pass: number
   counted: number
+  overridden: number
+  standing: number
 }
 
 function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string, KeyTally> {
@@ -135,9 +148,13 @@ function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string
         question: j.question,
         pass: 0,
         counted: 0,
+        overridden: 0,
+        standing: 0,
       }
       row.counted++
       if (j.verdict === 'pass') row.pass++
+      if (j.override) row.overridden++
+      if (effectiveVerdict(j) === 'pass') row.standing++
       byKey.set(j.key, row)
       if (labelled && !expectLabels.has(j.key)) expectLabels.set(j.key, label)
     }
@@ -211,12 +228,24 @@ export function summaryJudgeRates(
 
 const signedPoints = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
 
-/** `login 4/5 · checkout 0/5`, with `(+80 pts)` on a key that has lift. */
+/** `3/3 with 1 override`: what a key's rate is once people's overrides stand; '' with none. */
+export const overriddenRate = (r: Pick<JudgeKeyRate, 'overridden' | 'standing' | 'counted'>) =>
+  r.overridden
+    ? `${r.standing}/${r.counted} with ${r.overridden} override${r.overridden === 1 ? '' : 's'}`
+    : ''
+
+/**
+ * `login 4/5 · checkout 0/5`, with `(+80 pts)` on a key that has lift and
+ * `(3/3 with 1 override)` on one a person overrode.
+ */
 export function judgeRatesLabel(rates: readonly JudgeKeyRate[]): string {
   return rates
     .map((r) => {
       const n = `${r.label} ${r.pass}/${r.counted}`
-      return r.lift ? `${n} (${signedPoints(r.lift.points)} pts)` : n
+      const notes = [r.lift ? `${signedPoints(r.lift.points)} pts` : '', overriddenRate(r)].filter(
+        Boolean,
+      )
+      return notes.length ? `${n} (${notes.join(', ')})` : n
     })
     .join(' · ')
 }
