@@ -15,11 +15,14 @@ import {
 import { type Change, checkDefaults, compare } from './compat.ts'
 import { CORPUS_DIR, corpus } from './corpus.ts'
 import { generate, type ShapeSchema } from './generate.ts'
+import { protocolDocs } from './protocol.ts'
 import {
   PACKAGE_DIR,
   type PersistedShape,
   PLAN_SHAPES,
   PLAN_SNAPSHOT_DIR,
+  PROTOCOL_SHAPES,
+  PROTOCOL_SNAPSHOT_DIR,
   SHAPES,
   SNAPSHOT_DIR,
 } from './shapes.ts'
@@ -196,6 +199,15 @@ export function stalePlanShapes(current: Map<string, ShapeSchema>) {
   })
 }
 
+/** The protocol shapes whose snapshot in schema/protocol/ isn't what their Zod schemas generate. */
+export function staleProtocolShapes(current: Map<string, ShapeSchema>) {
+  return PROTOCOL_SHAPES.filter((shape) => {
+    const file = snapshotFile(shape, PROTOCOL_SNAPSHOT_DIR)
+    const doc = current.get(shape.name) as ShapeSchema
+    return !existsSync(file) || encode(JSON.parse(readFileSync(file, 'utf8'))) !== encode(doc)
+  })
+}
+
 function main(argv: string[]): number {
   const update = argv.includes('--update')
   const current = generate([...SHAPES, ...PLAN_SHAPES])
@@ -213,17 +225,23 @@ function main(argv: string[]): number {
   }
   const stale = reports.filter((r) => r.stale)
   const plan = stalePlanShapes(current)
+  const protocol = protocolDocs()
+  const protocolStale = staleProtocolShapes(protocol)
   for (const r of reports) {
     for (const c of r.changes) process.stdout.write(`  ${r.shape.type}: ${c.message}\n`)
   }
-  if (!stale.length && !plan.length) {
+  if (!stale.length && !plan.length && !protocolStale.length) {
     process.stdout.write(
-      `✓ ${SHAPES.length} persisted shapes match their snapshots in schema/, and every corpus file reads; ${PLAN_SHAPES.length} plan shapes match schema/plan/\n`,
+      `✓ ${SHAPES.length} persisted shapes match their snapshots in schema/, and every corpus file reads; ${PLAN_SHAPES.length} plan shapes match schema/plan/; ${PROTOCOL_SHAPES.length} protocol shapes match schema/protocol/\n`,
     )
     return 0
   }
   if (!update) {
-    const names = [...stale.map((r) => r.shape.type), ...plan.map((s) => s.type)]
+    const names = [
+      ...stale.map((r) => r.shape.type),
+      ...plan.map((s) => s.type),
+      ...protocolStale.map((s) => s.root),
+    ]
     process.stderr.write(
       `✗ ${names.join(', ')} changed compatibly, but schema/ wasn't updated. Run \`pnpm --filter reeval schema:update\` and commit schema/.\n`,
     )
@@ -231,9 +249,14 @@ function main(argv: string[]): number {
   }
   mkdirSync(SNAPSHOT_DIR, { recursive: true })
   mkdirSync(PLAN_SNAPSHOT_DIR, { recursive: true })
+  mkdirSync(PROTOCOL_SNAPSHOT_DIR, { recursive: true })
   const written = [
     ...stale.map((r) => ({ file: snapshotFile(r.shape), doc: current.get(r.shape.name) })),
     ...plan.map((s) => ({ file: snapshotFile(s, PLAN_SNAPSHOT_DIR), doc: current.get(s.name) })),
+    ...protocolStale.map((s) => ({
+      file: snapshotFile(s, PROTOCOL_SNAPSHOT_DIR),
+      doc: protocol.get(s.name),
+    })),
   ] as Array<{ file: string; doc: ShapeSchema }>
   writeSnapshots(written)
   for (const { file } of written) process.stdout.write(`updated ${relative(PACKAGE_DIR, file)}\n`)

@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from AttemptRequest in src/contract/attempt.ts by `pnpm schema:update`; don't edit. A call an eval's body makes on its attempt, as a runner in another language sends it.",
+  "title": "AttemptRequest",
+  "$ref": "#/$defs/AttemptRequest",
+  "$defs": {
+    "AttemptCall": {
+      "description": "One call an eval's body makes on its attempt.",
+      "oneOf": [
+        {
+          "description": "`c.send(prompt)`: the next turn of the agent session. Replies with a turn.",
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "send"
+            },
+            "prompt": {
+              "description": "The turn's prompt.",
+              "type": "string"
+            }
+          },
+          "required": ["op", "prompt"],
+          "additionalProperties": false
+        },
+        {
+          "description": "`c.exec(command)`: a command in the sandbox. Replies with its exit code and output.",
+          "type": "object",
+          "properties": {
+            "command": {
+              "description": "A shell command, run in the workspace.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "op": {
+              "type": "string",
+              "const": "exec"
+            }
+          },
+          "required": ["command", "op"],
+          "additionalProperties": false
+        },
+        {
+          "description": "`c.readFile(path)`. Replies with its contents, or null when there is no such file.",
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "readFile"
+            },
+            "path": {
+              "description": "Workspace-relative, or `~/` for the home directory.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["op", "path"],
+          "additionalProperties": false
+        },
+        {
+          "description": "`c.writeFile(path, contents)`, creating its directories.",
+          "type": "object",
+          "properties": {
+            "contents": {
+              "description": "The file's contents, in `encoding`.",
+              "type": "string"
+            },
+            "encoding": {
+              "description": "How `contents` is encoded; base64 carries bytes. Default `utf8`.",
+              "type": "string",
+              "enum": ["utf8", "base64"]
+            },
+            "op": {
+              "type": "string",
+              "const": "writeFile"
+            },
+            "path": {
+              "description": "Workspace-relative, or `~/` for the home directory.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["contents", "op", "path"],
+          "additionalProperties": false
+        },
+        {
+          "description": "A matcher call: `expect(subject, label).not?.matcher(...args)`. Replies with its record.",
+          "type": "object",
+          "properties": {
+            "args": {
+              "description": "The matcher's arguments.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MatcherArg"
+              }
+            },
+            "label": {
+              "description": "`expect`'s second argument.",
+              "type": "string"
+            },
+            "matcher": {
+              "description": "The matcher's name, e.g. `toHaveFile` or `toBe`, without `not.`.",
+              "type": "string",
+              "pattern": "^[a-z][A-Za-z]*$"
+            },
+            "not": {
+              "description": "Called as `expect(…).not`.",
+              "type": "boolean"
+            },
+            "op": {
+              "type": "string",
+              "const": "expect"
+            },
+            "soft": {
+              "description": "Called as `expect.soft`: a failure fails the attempt at its end.",
+              "type": "boolean"
+            },
+            "subject": {
+              "$ref": "#/$defs/MatcherSubject"
+            }
+          },
+          "required": ["args", "matcher", "not", "op", "soft", "subject"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "AttemptRequest": {
+      "description": "A call, numbered so its reply can find it.",
+      "type": "object",
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/AttemptCall"
+        },
+        "id": {
+          "description": "Pairs a reply with its request.",
+          "type": "string",
+          "pattern": "\\S"
+        }
+      },
+      "required": ["call", "id"],
+      "additionalProperties": false
+    },
+    "JSONValue": {
+      "description": "Any JSON value.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        }
+      ]
+    },
+    "MatcherArg": {
+      "description": "One argument to a matcher: a JSON value, or a regular expression as `{ regexp, flags? }`.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Pattern"
+        },
+        {
+          "$ref": "#/$defs/JSONValue"
+        }
+      ]
+    },
+    "MatcherSubject": {
+      "description": "What `expect` was given: a turn `c.send` returned, the attempt (for its files and latest turn), or a value, such as an `ExecResult`.",
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "turn": {
+              "description": "The turn's index, from 0.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": ["turn"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "attempt": {
+              "description": "The attempt itself, `c`.",
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": ["attempt"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "value": {
+              "description": "A value the eval passes as it is.",
+              "$ref": "#/$defs/JSONValue"
+            }
+          },
+          "required": ["value"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Pattern": {
+      "description": "A regular expression, where a matcher takes a string or a `RegExp`.",
+      "type": "object",
+      "properties": {
+        "flags": {
+          "description": "Its flags, e.g. `i`.",
+          "type": "string",
+          "pattern": "^[dgimsuvy]*$"
+        },
+        "regexp": {
+          "description": "The pattern's source, as `RegExp.prototype.source` gives it.",
+          "type": "string"
+        }
+      },
+      "required": ["regexp"],
+      "additionalProperties": false
+    }
+  }
+}

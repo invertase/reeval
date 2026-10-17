@@ -19,10 +19,12 @@ export function fits(doc: ShapeSchema, schema: Schema, value: unknown): boolean 
 function check(doc: ShapeSchema, schema: Schema, value: unknown, path: string, out: string[]) {
   const s = resolve(doc, schema)
   const at = path || '(root)'
-  if (s.anyOf) {
-    if (s.anyOf.some((a) => fits(doc, a, value))) return
+  // Zod writes a discriminated union as `oneOf`; its variants never overlap, so it reads as `anyOf`.
+  const alternatives = s.anyOf ?? s.oneOf
+  if (alternatives) {
+    if (alternatives.some((a) => fits(doc, a, value))) return
     // Report against the variant it was most likely meant to be, by its const fields.
-    const objects = s.anyOf
+    const objects = alternatives
       .map((a) => resolve(doc, a))
       .filter((a) => a.type === 'object' && value && typeof value === 'object')
     const match = objects.find((o) =>
@@ -34,7 +36,7 @@ function check(doc: ShapeSchema, schema: Schema, value: unknown, path: string, o
     if (match) check(doc, match, value, path, out)
     else
       out.push(
-        `${at}: ${JSON.stringify(value)?.slice(0, 80)} fits none of ${s.anyOf.length} alternatives`,
+        `${at}: ${JSON.stringify(value)?.slice(0, 80)} fits none of ${alternatives.length} alternatives`,
       )
     return
   }
@@ -46,6 +48,11 @@ function check(doc: ShapeSchema, schema: Schema, value: unknown, path: string, o
   if (s.enum) {
     if (!s.enum.includes(value as string))
       out.push(`${at}: ${JSON.stringify(value)} isn't one of ${s.enum.join(', ')}`)
+    return
+  }
+  if (Array.isArray(s.type)) {
+    if (!s.type.some((type) => fits(doc, { ...s, type }, value)))
+      out.push(`${at}: expected ${s.type.join(' or ')}, got ${JSON.stringify(value) ?? 'nothing'}`)
     return
   }
   switch (s.type) {
@@ -76,6 +83,10 @@ function check(doc: ShapeSchema, schema: Schema, value: unknown, path: string, o
       }
       return
     }
+    case 'integer':
+      if (!Number.isInteger(value))
+        out.push(`${at}: expected a whole number, got ${JSON.stringify(value) ?? 'nothing'}`)
+      return
     default:
       if (typeof value !== s.type)
         out.push(`${at}: expected ${s.type}, got ${value === undefined ? 'nothing' : typeof value}`)
@@ -89,8 +100,9 @@ function check(doc: ShapeSchema, schema: Schema, value: unknown, path: string, o
 export function withUnknownFields(doc: ShapeSchema, value: unknown, extra: () => unknown): void {
   const walk = (schema: Schema, v: unknown) => {
     const s = resolve(doc, schema)
-    if (s.anyOf) {
-      const match = s.anyOf.find((a) => fits(doc, a, v))
+    const alternatives = s.anyOf ?? s.oneOf
+    if (alternatives) {
+      const match = alternatives.find((a) => fits(doc, a, v))
       if (match) walk(match, v)
       return
     }

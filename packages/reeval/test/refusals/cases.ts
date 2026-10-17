@@ -5,7 +5,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveConfig } from '../../src/config.ts'
+import { attemptRequestProblem } from '../../src/contract/attempt.ts'
+import { declarationProblem } from '../../src/contract/declaration.ts'
 import { defineEnvironment } from '../../src/environment.ts'
+import { UsageError } from '../../src/errors.ts'
 import {
   antigravity,
   claudeCode,
@@ -43,6 +46,37 @@ export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
 writeFileSync(join(DIR, 'a.txt'), 'a')
 writeFileSync(join(DIR, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
 mkdirSync(join(DIR, 'empty'))
+
+/** What `declareTree` checks before it declares anything. */
+const tree = (children: unknown) => () => {
+  const problem = declarationProblem(children)
+  if (problem) throw new UsageError(problem)
+}
+const evalNode = (o: object = {}) => ({
+  type: 'eval',
+  name: 'e',
+  mode: 'run',
+  options: {},
+  body: 'b1',
+  ...o,
+})
+
+/** What a runner's attempt request is checked against. */
+const request =
+  (call: unknown, id: unknown = '1') =>
+  () => {
+    const problem = attemptRequestProblem({ id, call })
+    if (problem) throw new UsageError(problem)
+  }
+const expectCall = (o: object = {}) => ({
+  op: 'expect',
+  subject: { attempt: true },
+  matcher: 'toHaveFile',
+  args: ['greet.js'],
+  not: false,
+  soft: false,
+  ...o,
+})
 
 const e1 = defineEnvironment('one', {})
 const e2 = defineEnvironment('two', {})
@@ -590,5 +624,93 @@ export const CASES: Record<string, Case[]> = {
       options({ environment: { kind: 'environment', name: 'a b', layers: [] } }),
     ],
     ['data: good', options({ environment: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
+  ],
+  declaration: [
+    ['not a list', tree({ type: 'eval' })],
+    ['a node that is not one', tree(['e'])],
+    ['an unknown node type', tree([evalNode({ type: 'test' })])],
+    ['a node without a type', tree([{ name: 'e' }])],
+    ['an eval without a body', tree([{ type: 'eval', name: 'e', mode: 'run', options: {} }])],
+    ['an eval with a bad mode', tree([evalNode({ mode: 'focus' })])],
+    ['an eval with an unknown key', tree([evalNode({ timeout: '1m' })])],
+    ['an eval whose options are a list', tree([evalNode({ options: [] })])],
+    ['an eval whose name is a number', tree([evalNode({ name: 3 })])],
+    ['a family without its cases', tree([evalNode({ family: { name: 'e', case: 0 } })])],
+    [
+      'a family with a fractional case',
+      tree([evalNode({ family: { name: 'e', case: 0.5, cases: 2 } })]),
+    ],
+    [
+      'a nested eval with a typo',
+      tree([
+        {
+          type: 'group',
+          name: 'g',
+          mode: 'run',
+          options: {},
+          children: [evalNode(), evalNode({ bdy: 'b2' })],
+        },
+      ]),
+    ],
+    ['a group without children', tree([{ type: 'group', name: 'g', mode: 'run', options: {} }])],
+    ['a todo with options', tree([{ type: 'todo', name: 't', options: {} }])],
+    [
+      'good',
+      tree([
+        { type: 'group', name: 'g', mode: 'skip', options: { runs: 2 }, children: [evalNode()] },
+        evalNode({ family: { name: 'case %#', case: 1, cases: 2 } }),
+        { type: 'todo', name: 'later' },
+      ]),
+    ],
+  ],
+  protocol: [
+    ['an empty id', request({ op: 'send', prompt: 'hi' }, '')],
+    ['an unknown op', request({ op: 'judge', question: 'ok?' })],
+    ['send without a prompt', request({ op: 'send' })],
+    ['exec with a typo', request({ op: 'exec', cmd: 'ls' })],
+    ['exec with an empty command', request({ op: 'exec', command: '' })],
+    ['readFile with a number', request({ op: 'readFile', path: 3 })],
+    [
+      'writeFile with a bad encoding',
+      request({ op: 'writeFile', path: 'a', contents: 'YQ==', encoding: 'hex' }),
+    ],
+    ['expect with a dotted matcher', request(expectCall({ matcher: 'not.toBe' }))],
+    ['expect without not', request(expectCall({ not: undefined }))],
+    ['expect with a bad subject', request(expectCall({ subject: { turm: 0 } }))],
+    [
+      'expect with a bad pattern flag',
+      request(expectCall({ args: [{ regexp: 'a', flags: 'x' }] })),
+    ],
+    ['expect with a label that is a number', request(expectCall({ label: 3 }))],
+    ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
+    ['good: exec', request({ op: 'exec', command: 'node greet.js' })],
+    ['good: readFile', request({ op: 'readFile', path: '~/notes.md' })],
+    [
+      'good: writeFile',
+      request({ op: 'writeFile', path: 'a.bin', contents: 'AAE=', encoding: 'base64' }),
+    ],
+    [
+      'good: expect',
+      request(
+        expectCall({
+          subject: { turn: 0 },
+          matcher: 'toHaveRun',
+          args: [{ regexp: '^npm (test|t)$', flags: 'i' }],
+          not: true,
+          soft: true,
+          label: 'never runs the tests',
+        }),
+      ),
+    ],
+    [
+      'good: expect on a value',
+      request(
+        expectCall({
+          subject: { value: { exitCode: 0, stdout: '', stderr: '' } },
+          matcher: 'toSucceed',
+          args: [],
+        }),
+      ),
+    ],
   ],
 }

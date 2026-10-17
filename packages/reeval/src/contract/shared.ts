@@ -114,6 +114,38 @@ export function genericProblem(call: string, issue: Issue, value: unknown): stri
 }
 
 /**
+ * reeval's sentence for what `schema` refuses in data a runner in another language sent, naming
+ * the field by its path in `what` ("The declaration tree", "The attempt request"), or undefined.
+ * An unknown key comes first, since it's usually a typo of a missing one; `keysAt` gives the keys
+ * the object holding it takes, for "Did you mean".
+ */
+export function dataProblem(
+  schema: z.ZodType,
+  value: unknown,
+  what: string,
+  keysAt: (object: Record<string, unknown>) => readonly string[],
+): string | undefined {
+  const result = schema.safeParse(value)
+  if (result.success) return undefined
+  const { issues } = result.error
+  const issue = issues.find((i) => i.code === 'unrecognized_keys') ?? (issues[0] as Issue)
+  const field = fieldPath(issue.path)
+  const v = valueAt(value, issue.path)
+  if (issue.code === 'invalid_union' && 'options' in issue) {
+    return `${what}'s ${field} is ${oneOf(issue.options as unknown[])} (got ${got(v)})`
+  }
+  if (issue.code === 'invalid_union') {
+    return `${what}'s ${field || 'value'} matches none of its forms (got ${got(v)})`
+  }
+  if (issue.code === 'unrecognized_keys') {
+    const near = closest(issue.keys[0] as string, keysAt(v as Record<string, unknown>))
+    const hint = near ? `. Did you mean "${near}"?` : ''
+    return `${what}'s ${field || 'value'} has an unknown key "${issue.keys[0]}"${hint}`
+  }
+  return `${what}'s ${genericProblem('', issue, value)}`
+}
+
+/**
  * reeval's sentence for what `schema` refuses in `value`, or undefined when it's accepted. Issues
  * under a key in `skip` are left to a later check that names where the value was set.
  */

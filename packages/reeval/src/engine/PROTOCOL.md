@@ -71,6 +71,16 @@ A `SerializedError` is `name`, `message` and optionally `stack`, `expected`, `ac
 `diff` (for the diff printer), and `errors` (an AggregateError's). `load-error` fails the file's
 evals; `unhandled` fails the run; a failed attempt is a `result` with `state: "failed"`.
 
+## The contract beside it
+
+`declaration` in `schema/plan/` takes its node shapes from the Zod schemas in
+`src/contract/declaration.ts`, and `declareTree` checks a tree against them before declaring it.
+The calls an eval's body makes on its attempt (`c.send`, `c.exec`, `c.readFile`, `c.writeFile`
+and each matcher) have their own schemas in `src/contract/attempt.ts`, with JSON Schemas in
+`schema/protocol/` (`attempt-request`, `attempt-reply`). Those calls run inside the worker today,
+so none of them crosses this channel; a runner in another language would send them, numbered by
+`id`, and read reeval's replies.
+
 ## Versions
 
 `PROTOCOL` in `protocol.ts` is one integer, bumped whenever a message changes shape or meaning,

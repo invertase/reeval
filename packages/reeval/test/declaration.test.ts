@@ -140,6 +140,24 @@ test('replaying a tree with compare: false is refused like evaluate', async () =
   )
 })
 
+test('a malformed tree is refused before anything is declared', async () => {
+  const root = tempDir('malformed')
+  const declared = await collected(root, () => {
+    assert.throws(
+      () =>
+        declareTree(
+          [
+            { type: 'eval', name: 'a', mode: 'run', options: {}, body: 'b1' },
+            { type: 'eval', name: 'b', mode: 'run', options: {}, bdy: 'b2' } as never,
+          ],
+          () => async () => {},
+        ),
+      /^UsageError: The declaration tree's children\[1\] has an unknown key "bdy". Did you mean "body"\?$/,
+    )
+  })
+  assert.deepEqual(declared.tests, [])
+})
+
 test('planEval is pure: the same declaration and context give the same tests, gate as data', () => {
   const run = runIn(tempDir('pure'))
   const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 3 }
@@ -177,4 +195,9 @@ test('the tree and the collected tests fit their JSON Schemas in schema/plan/', 
     assert.deepEqual(validate(schema('wire-test'), test), [], test.name)
   // The canary: a tree the schema rules out.
   assert.notDeepEqual(validate(schema('declaration'), { children: [{ type: 'eval' }] }), [])
+  const family = { name: 'case', case: 0.5, cases: 2 }
+  const fractional = { type: 'eval', name: 'e', mode: 'run', options: {}, body: 'b', family }
+  assert.deepEqual(validate(schema('declaration'), { children: [fractional] }), [
+    'children[0].family.case: expected a whole number, got 0.5',
+  ])
 })

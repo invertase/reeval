@@ -1,0 +1,568 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from AttemptReply in src/contract/attempt.ts by `pnpm schema:update`; don't edit. reeval's reply to an attempt request.",
+  "title": "AttemptReply",
+  "$ref": "#/$defs/AttemptReply",
+  "$defs": {
+    "AssertionRecord": {
+      "description": "One `expect` or `expect.soft` matcher call an attempt made.",
+      "type": "object",
+      "properties": {
+        "durationMs": {
+          "description": "Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`).",
+          "type": "number"
+        },
+        "label": {
+          "description": "`expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.",
+          "type": "string"
+        },
+        "labelled": {
+          "description": "The eval gave the label.",
+          "type": "boolean"
+        },
+        "matcher": {
+          "description": "`toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`.",
+          "type": "string"
+        },
+        "message": {
+          "description": "Why it failed or couldn't answer, cut at 1 KB.",
+          "type": "string"
+        },
+        "soft": {
+          "type": "boolean"
+        },
+        "status": {
+          "description": "`error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report).",
+          "type": "string",
+          "enum": ["pass", "fail", "error"]
+        }
+      },
+      "required": ["label", "labelled", "matcher", "soft", "status"],
+      "additionalProperties": false
+    },
+    "AttemptError": {
+      "description": "Why a call failed, in reeval's words.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "name": {
+          "description": "The error's class, e.g. `UsageError` or `AssertionError`.",
+          "type": "string"
+        }
+      },
+      "required": ["message", "name"],
+      "additionalProperties": {}
+    },
+    "AttemptReply": {
+      "description": "reeval's reply to a call: its result, or the error it threw. A failed matcher is a result (its record says `fail`), not an error, unless the matcher couldn't run.",
+      "anyOf": [
+        {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "send"
+                },
+                "turn": {
+                  "$ref": "#/$defs/TurnData"
+                }
+              },
+              "required": ["id", "ok", "op", "turn"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "exec"
+                },
+                "result": {
+                  "$ref": "#/$defs/ExecResult"
+                }
+              },
+              "required": ["id", "ok", "op", "result"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "contents": {
+                  "description": "Null when there is no such file.",
+                  "type": ["string", "null"]
+                },
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "readFile"
+                }
+              },
+              "required": ["contents", "id", "ok", "op"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "writeFile"
+                }
+              },
+              "required": ["id", "ok", "op"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "assertion": {
+                  "$ref": "#/$defs/AssertionRecord"
+                },
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "expect"
+                }
+              },
+              "required": ["assertion", "id", "ok", "op"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/AttemptError"
+            },
+            "id": {
+              "description": "Pairs a reply with its request.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "ok": {
+              "type": "boolean",
+              "const": false
+            },
+            "op": {
+              "type": "string",
+              "enum": ["send", "exec", "readFile", "writeFile", "expect"]
+            }
+          },
+          "required": ["error", "id", "ok", "op"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Diff": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FileChange"
+          }
+        },
+        "patch": {
+          "type": "string"
+        }
+      },
+      "required": ["files", "patch"],
+      "additionalProperties": false
+    },
+    "ExecResult": {
+      "type": "object",
+      "properties": {
+        "exitCode": {
+          "type": "number"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        }
+      },
+      "required": ["exitCode", "stderr", "stdout"],
+      "additionalProperties": false
+    },
+    "FileChange": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["added", "modified", "deleted"]
+        }
+      },
+      "required": ["path", "status"],
+      "additionalProperties": false
+    },
+    "TokenUsage": {
+      "description": "The tokens one turn used, as its harness reported them. `input` excludes cache reads and writes (so the prompt was `input + cacheRead + cacheWrite`); `reasoning` is part of `output`.",
+      "type": "object",
+      "properties": {
+        "cacheRead": {
+          "type": "number"
+        },
+        "cacheWrite": {
+          "type": "number"
+        },
+        "input": {
+          "type": "number"
+        },
+        "output": {
+          "type": "number"
+        },
+        "reasoning": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"],
+      "additionalProperties": false
+    },
+    "TranscriptEvent": {
+      "description": "Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is null when the harness never reported the end.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": ["number", "null"]
+            },
+            "text": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["text", "reasoning"]
+            }
+          },
+          "required": ["atMs", "durationMs", "text", "ts", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "added": {
+              "description": "Line counts, or null when the harness didn't send the content (e.g. deletes).",
+              "type": ["number", "null"]
+            },
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": ["number", "null"]
+            },
+            "kind": {
+              "type": "string",
+              "enum": ["create", "modify", "delete"]
+            },
+            "path": {
+              "type": "string"
+            },
+            "removed": {
+              "type": ["number", "null"]
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "file-edit"
+            }
+          },
+          "required": [
+            "added",
+            "atMs",
+            "durationMs",
+            "kind",
+            "path",
+            "removed",
+            "toolCallId",
+            "ts",
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": ["number", "null"]
+            },
+            "ok": {
+              "description": "Whether the search succeeded. Absent means it did.",
+              "type": "boolean"
+            },
+            "query": {
+              "type": "string"
+            },
+            "references": {
+              "description": "How many sources the harness says it used; Cursor sends no URLs or titles.",
+              "type": ["number", "null"]
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "web-search"
+            }
+          },
+          "required": ["atMs", "durationMs", "query", "references", "toolCallId", "ts", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": ["number", "null"]
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "web-fetch"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": ["atMs", "durationMs", "ok", "toolCallId", "ts", "type", "url"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": ["number", "null"]
+            },
+            "input": {},
+            "ok": {
+              "type": "boolean"
+            },
+            "output": {},
+            "tool": {
+              "type": "string"
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "tool"
+            }
+          },
+          "required": [
+            "atMs",
+            "durationMs",
+            "input",
+            "ok",
+            "output",
+            "tool",
+            "toolCallId",
+            "ts",
+            "type"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "message": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "error"
+            }
+          },
+          "required": ["atMs", "message", "ts", "type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "message": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "retry"
+            }
+          },
+          "required": ["atMs", "message", "ts", "type"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TurnData": {
+      "description": "A turn as data, as a record or another language's runner carries it: `Turn` without its methods.",
+      "type": "object",
+      "properties": {
+        "diff": {
+          "description": "Workspace changes since the eval started, as of the end of this turn.",
+          "$ref": "#/$defs/Diff"
+        },
+        "durationMs": {
+          "type": "number"
+        },
+        "model": {
+          "description": "The model the harness says served the turn, e.g. `composer-2.5[fast=false]`; null when it reports none. It can differ from the requested one (an alias, or parameters it filled in).",
+          "type": ["string", "null"]
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/TurnStatus"
+        },
+        "text": {
+          "description": "The agent's final message for this turn.",
+          "type": "string"
+        },
+        "transcript": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TranscriptEvent"
+          }
+        },
+        "unreported": {
+          "description": "Event types the harness couldn't report for this turn: the agent may have searched or fetched with no event in `transcript`. `toHaveSearched()` and `toHaveFetched()` refuse such a turn. Usually `[]`; a Cursor turn whose web calls the adapter couldn't recover (its SDK drops them from the stream) is `['web-search', 'web-fetch']`.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WebEventType"
+          }
+        },
+        "usage": {
+          "description": "Tokens the turn used; null when the harness reports none.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "diff",
+        "durationMs",
+        "model",
+        "prompt",
+        "startedAt",
+        "status",
+        "text",
+        "transcript",
+        "unreported",
+        "usage"
+      ],
+      "additionalProperties": false
+    },
+    "TurnStatus": {
+      "type": "string",
+      "enum": ["completed", "aborted", "error"]
+    },
+    "WebEventType": {
+      "description": "The transcript events a harness may be unable to report.",
+      "type": "string",
+      "enum": ["web-search", "web-fetch"]
+    }
+  }
+}

@@ -2,6 +2,16 @@
 // each a Zod schema that validates it, describes it and gives its JSON Schema.
 import type { z } from 'zod'
 import { compareQuestionSchema, pairFactorSchema } from './compare.ts'
+import {
+  declarationTreeSchema,
+  declaredEvalSchema,
+  declaredFamilySchema,
+  declaredGroupSchema,
+  declaredModeSchema,
+  declaredNodeSchema,
+  declaredTodoSchema,
+  evalOptionsDataSchema,
+} from './declaration.ts'
 import { dockerSandboxSchema, fakeSandboxSchema, installStepSchema } from './docker.ts'
 import {
   environmentDataSchema,
@@ -79,4 +89,19 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   EnvironmentSpec: environmentSpecSchema,
   EnvironmentLayer: environmentLayerSchema,
   EnvironmentData: environmentDataSchema,
+  DeclarationTree: declarationTreeSchema,
+  DeclaredNode: declaredNodeSchema,
+  DeclaredGroup: declaredGroupSchema,
+  DeclaredEval: declaredEvalSchema,
+  DeclaredFamily: declaredFamilySchema,
+  DeclaredTodo: declaredTodoSchema,
+  DeclaredMode: declaredModeSchema,
+}
+
+/**
+ * Schemas registered only so the contract's JSON Schema refers to them by name: their `$def`
+ * stays the one generated from the type, since another check validates them in its own words.
+ */
+export const CONTRACT_REFS: Record<string, z.ZodType> = {
+  EvalOptionsData: evalOptionsDataSchema,
 }

@@ -4,7 +4,7 @@
 // module's `_SameAsSchema`), and here, where the def generated from the type and Zod's must have
 // the same properties, the same required ones and the same descriptions.
 import { z } from 'zod'
-import { CONTRACT_SCHEMAS } from '../../src/contract/index.ts'
+import { CONTRACT_REFS, CONTRACT_SCHEMAS } from '../../src/contract/index.ts'
 import type { Schema } from './generate.ts'
 
 let cached: Record<string, Schema> | undefined
@@ -12,22 +12,38 @@ let cached: Record<string, Schema> | undefined
 /** Zod's JSON Schema for every contract schema, by its `$def` name. */
 export function zodDefs(
   schemas: Record<string, z.ZodType> = CONTRACT_SCHEMAS,
+  refs: Record<string, z.ZodType> = CONTRACT_REFS,
 ): Record<string, Schema> {
   if (cached && schemas === CONTRACT_SCHEMAS) return cached
   const registry = z.registry<{ id: string }>()
-  for (const [id, schema] of Object.entries(schemas)) registry.add(schema, { id })
+  for (const [id, schema] of Object.entries({ ...refs, ...schemas })) registry.add(schema, { id })
   const out = z.toJSONSchema(registry, {
     target: 'draft-2020-12',
     uri: (id) => `#/$defs/${id}`,
   }).schemas
+  const shared = (out.__shared?.$defs ?? {}) as Record<string, unknown>
   const defs = Object.fromEntries(
-    Object.entries(out).map(([id, { $schema: _, $id: __, ...schema }]) => [
-      id,
-      canonical(schema) as Schema,
-    ]),
+    Object.entries(inlineShared(out, shared) as typeof out)
+      .filter(([id]) => !(id in refs) && id !== '__shared')
+      .map(([id, { $schema: _, $id: __, ...schema }]) => [id, canonical(schema) as Schema]),
   )
   if (schemas === CONTRACT_SCHEMAS) cached = defs
   return defs
+}
+
+/**
+ * `value` with each `$ref` to a schema Zod pulled out on its own (the inside of a recursive
+ * `z.lazy`, which has no name) replaced by that schema, merged with what sits beside the `$ref`.
+ */
+function inlineShared(value: unknown, shared: Record<string, unknown>): unknown {
+  if (Array.isArray(value)) return value.map((v) => inlineShared(v, shared))
+  if (typeof value !== 'object' || value === null) return value
+  const { $ref, ...rest } = value as Record<string, unknown>
+  const name =
+    typeof $ref === 'string' ? /^#\/\$defs\/__shared#\/\$defs\/(.+)$/.exec($ref)?.[1] : undefined
+  const base = name === undefined ? ($ref === undefined ? {} : { $ref }) : (shared[name] as object)
+  const merged: Record<string, unknown> = { ...base, ...rest }
+  return Object.fromEntries(Object.entries(merged).map(([k, v]) => [k, inlineShared(v, shared)]))
 }
 
 /** Laid out like the defs generated from types: description first, properties and `required` sorted. */

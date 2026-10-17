@@ -6,14 +6,19 @@ import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
 import { PACKAGE_DIR, type PersistedShape, PLAN_SHAPES, type PlanShape, SHAPES } from './shapes.ts'
 import { checkContractCoverage, withZodDefs } from './zod.ts'
 
+type SchemaType = 'string' | 'number' | 'integer' | 'boolean' | 'null' | 'array' | 'object'
+
 export type Schema = {
   /** The TSDoc comment of the type alias, interface or property it was generated from. */
   description?: string
   $ref?: string
-  type?: 'string' | 'number' | 'boolean' | 'null' | 'array' | 'object'
+  /** A list where Zod writes a nullable value, `['string', 'null']`. */
+  type?: SchemaType | SchemaType[]
   const?: string | number | boolean
   enum?: Array<string | number | boolean>
   anyOf?: Schema[]
+  /** Zod's discriminated unions; the types' own unions are `anyOf`. */
+  oneOf?: Schema[]
   items?: Schema
   properties?: Record<string, Schema>
   required?: string[]
