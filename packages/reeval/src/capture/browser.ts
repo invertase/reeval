@@ -245,6 +245,66 @@ export function listenForCaptureWait(
   }
 }
 
+/** Chromium's `networkAlmostIdle` rule: at most two requests in flight for 500ms. */
+export const NETWORK_QUIET_MS = 500
+const QUIET_IN_FLIGHT = 2
+
+function requestId(msg: unknown): string | undefined {
+  const body = msg as { params?: { requestId?: string }; requestId?: string }
+  return (body.params ?? body).requestId
+}
+
+/**
+ * Counts the tab's requests from `Network.enable` on, for a journey's `{ wait: 'idle' }` beat.
+ * Chromium emits `networkAlmostIdle` once per document, so after a click that only fetches it
+ * never comes again. As in Chromium, every request that starts or ends restarts the quiet window.
+ */
+export function trackNetwork(
+  cdp: Pick<CdpClient, 'on'>,
+  quietMs = NETWORK_QUIET_MS,
+): { quiet(timeoutMs: number): Promise<void> } {
+  const inFlight = new Set<string>()
+  let changed: (() => void) | undefined
+  cdp.on('Network.requestWillBeSent', (msg) => {
+    const id = requestId(msg)
+    if (id === undefined) return
+    inFlight.add(id)
+    changed?.()
+  })
+  const end = (msg: unknown) => {
+    const id = requestId(msg)
+    if (id === undefined || !inFlight.delete(id)) return
+    changed?.()
+  }
+  cdp.on('Network.loadingFinished', end)
+  cdp.on('Network.loadingFailed', end)
+  return {
+    quiet(timeoutMs) {
+      return new Promise<void>((resolve, reject) => {
+        let settle: ReturnType<typeof setTimeout> | undefined
+        const stop = () => {
+          clearTimeout(timer)
+          clearTimeout(settle)
+          changed = undefined
+        }
+        const timer = setTimeout(() => {
+          stop()
+          reject(captureWaitTimeout('idle'))
+        }, timeoutMs)
+        changed = () => {
+          clearTimeout(settle)
+          if (inFlight.size > QUIET_IN_FLIGHT) return
+          settle = setTimeout(() => {
+            stop()
+            resolve()
+          }, quietMs)
+        }
+        changed()
+      })
+    },
+  }
+}
+
 /** Pinned Chrome for Testing `chrome-headless-shell` build. */
 export const CHROME_VERSION = '140.0.7339.185'
 export const CHROME_NAME = 'chrome-headless-shell'
@@ -543,6 +603,7 @@ export type ChromeSession = {
   cdp: CdpClient
   window: CaptureWindow
   navigate(url: string): Promise<{ loaderId?: string } | undefined>
+  /** Without `nav` (a journey's beat), `'idle'` is the tab's network going quiet from now. */
   wait(wait: Wait, timeoutMs: number, nav?: { loaderId?: string }): Promise<void>
   screenshot(fullPage: boolean): Promise<Buffer>
   dispatch(action: CaptureUseAction, page?: { width: number; height: number }): Promise<void>
@@ -578,6 +639,8 @@ export async function withChrome<T>(
     try {
       await cdp.send('Page.enable')
       await cdp.send('Page.setLifecycleEventsEnabled', { enabled: true })
+      const network = trackNetwork(cdp)
+      await cdp.send('Network.enable')
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width: window.width,
         height: window.height,
@@ -599,6 +662,7 @@ export async function withChrome<T>(
           return nav
         },
         wait(wait, waitMs, nav) {
+          if (wait === 'idle' && !nav) return network.quiet(waitMs)
           return waitForPage(cdp, wait, waitMs, nav)
         },
         async screenshot(fullPage) {
