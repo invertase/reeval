@@ -97,8 +97,8 @@ test('state resolves every key to its default, and merges key by key', () => {
 test('judge options name an unknown key, a misspelt state key and a bad value', () => {
   const loc = { at: 'options', where: 'evals/a.eval.ts › lands' } as const
   assert.equal(
-    judgeProblem({ include: ['src/'] }, loc),
-    'Unknown judge option "include" in evals/a.eval.ts › lands. Did you mean "state.diff"?',
+    judgeProblem({ diff: ['src/'] }, loc),
+    'Unknown judge option "diff" in evals/a.eval.ts › lands. Did you mean "state.diff"?',
   )
   assert.equal(
     judgeProblem({ thresold: 0.5 }, loc),

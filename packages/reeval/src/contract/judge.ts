@@ -145,11 +145,6 @@ export type JudgeSite =
   | { at: 'call' }
 
 const JUDGE_HINTS: Record<string, string> = {
-  include: 'state.diff',
-  exclude: 'state.diff',
-  files: 'state.contents',
-  contents: 'state.contents',
-  transcript: 'state.transcript',
   see: 'state',
   shows: 'state',
   show: 'state',
@@ -246,7 +241,9 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
     const name = (key as (Issue & { keys: string[] }) | undefined)?.keys[0]
     if (name === undefined) return undefined
     const allowed = Object.keys(schema.shape)
-    const hint = JUDGE_HINTS[name] ?? nearest(name, allowed)
+    const hint =
+      JUDGE_HINTS[name] ??
+      ((STATE_KEYS as string[]).includes(name) ? `state.${name}` : nearest(name, allowed))
     const why =
       site.at !== 'call' && (name === 'on' || name === 'artifacts')
         ? ` ${name} is per call: c.judge(question, { ${name} }).`

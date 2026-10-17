@@ -504,7 +504,7 @@ recorded `*.log` files; `reeval record` warns if git still ignores a file it wro
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `c.judge() has no model` | Set one, or `fakeJudge()` |
 | The judge's provider refuses a big input | The provider's message, then `The judge's input was ~…k tokens (estimated): diff …, of which …` | Add a `.gitignore` to the environment, or `state: { diff: ['src/'] }` |
-| `include` or `files` on a judge | `Unknown judge option "include" … Did you mean "state.diff"?` | `state: { diff: […] }`, `state: { contents: […] }` |
+| `diff` or `contents` on a judge, outside `state` | `Unknown judge option "diff" … Did you mean "state.diff"?` | `state: { diff: […] }`, `state: { contents: […] }` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
