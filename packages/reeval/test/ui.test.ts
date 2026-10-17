@@ -452,7 +452,7 @@ const answered: ReevalEvent[] = interleaved.map((e) => {
 })
 
 const ANSWER_LINES = [
-  '"Which is cleaner?" across: cursor 0/1 (0%), codex 1/1 (100%) · 2 votes, 1 tie · google/gemini-3.8-flash',
+  '"Which is cleaner?" across: cursor 0/1 (0%), codex 1/1 (100%) · 2 votes, 1 tie, 0/1 pairs split by order · google/gemini-3.8-flash',
   '"Which is shorter?" 0 votes, 0 ties · google/gemini-3.8-flash · failed: quota exceeded',
 ]
 

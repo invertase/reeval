@@ -1,4 +1,4 @@
-import { sampleReasons } from '../compare/pairs.ts'
+import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { CompareAnswer, Outcome } from '../types.ts'
 import { contrastsOf } from '../view/contrasts.ts'
@@ -116,7 +116,8 @@ const rateText = (r: CompareAnswer['rates'][number]) =>
 
 /**
  * One compare question's answer: `"Which is cleaner?" within: with-skill 2/2 (100%), plain 0/2
- * (0%) · 2 votes, 0 ties · google/gemini-3.8-flash`, or why it has no votes.
+ * (0%) · 2 votes, 0 ties, 0/1 pairs split by order · google/gemini-3.8-flash`, or why it has no
+ * votes. Each run's pair is voted in both orders, so a pooled rate counts a split once per side.
  */
 export function answersLabel(answer: CompareAnswer): string {
   const q = `"${clip(answer.question, 80)}"`
@@ -126,7 +127,8 @@ export function answersLabel(answer: CompareAnswer): string {
     return rates.length ? [`${cut}: ${rates.map(rateText).join(', ')}`] : []
   })
   const votes = answer.votes.length
-  const tally = `${votes} vote${votes === 1 ? '' : 's'}, ${ties} tie${ties === 1 ? '' : 's'}`
+  const splits = splitsLabel(pairTallies(answer.votes))
+  const tally = `${votes} vote${votes === 1 ? '' : 's'}, ${ties} tie${ties === 1 ? '' : 's'}${splits ? `, ${splits}` : ''}`
   const by = answer.resolvedModel ?? answer.model
   const failed = answer.error !== undefined ? ` · failed: ${clip(answer.error, 200)}` : ''
   if (votes === 0 && answer.error === undefined) {
@@ -340,6 +342,7 @@ export function renderSummary(run: RunRecord): string {
     if (e.answers?.length) {
       for (const a of e.answers) {
         lines.push(`- Question: ${cell(answersLabel(a))}`)
+        for (const line of headToHeadLines(a.votes)) lines.push(`  - ${cell(line)}`)
         for (const reason of sampleReasons(a.votes)) lines.push(`  - ${cell(reason)}`)
       }
       lines.push('')

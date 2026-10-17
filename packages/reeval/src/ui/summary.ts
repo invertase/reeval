@@ -1,4 +1,4 @@
-import { sampleReasons } from '../compare/pairs.ts'
+import { headToHeadLines, sampleReasons } from '../compare/pairs.ts'
 import {
   answersLabel,
   checksLabel,
@@ -171,7 +171,11 @@ function questionRows(c: Colors, e: EvalEntry, indent: string): string[] {
   return (e.answers ?? []).flatMap((a) => {
     const label = answersLabel(a)
     const head = `${indent}${c.dim('question')}  ${a.error !== undefined ? c.yellow(label) : label}`
-    return [head, ...sampleReasons(a.votes).map((reason) => `${indent}  ${c.dim(reason)}`)]
+    return [
+      head,
+      ...headToHeadLines(a.votes).map((line) => `${indent}  ${line}`),
+      ...sampleReasons(a.votes).map((reason) => `${indent}  ${c.dim(reason)}`),
+    ]
   })
 }
 

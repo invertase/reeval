@@ -207,3 +207,103 @@ export function ratesOf(votes: PairVote[]): CompareAnswer['rates'] {
   const order: CompareCut[] = ['within', 'across']
   return [...rates.values()].sort((x, y) => order.indexOf(x.cut) - order.indexOf(y.cut))
 }
+
+/**
+ * One pair of sides over a question's runs: each run's pair is voted twice, once per order, and
+ * decides for a side only when both orders agree (or one is a tie). Orders that pick opposite
+ * sides are a split: the pick followed the position, not the work.
+ */
+export type PairTally = {
+  cut: CompareCut
+  /** What both sides held: the harness within, the arm across. */
+  held: string
+  a: string
+  b: string
+  /** Runs voted on. */
+  pairs: number
+  aWins: number
+  bWins: number
+  ties: number
+  splits: number
+  /** Splits where each order picked the side shown first. */
+  splitsFirst: number
+}
+
+/** Each pair of sides' head-to-head over its runs, in vote order. */
+export function pairTallies(votes: PairVote[]): PairTally[] {
+  const byPair = new Map<string, PairVote[]>()
+  for (const v of votes) {
+    const key = [v.cut, v.harness ?? v.arm ?? '', v.a, v.b, v.run].join('\0')
+    byPair.set(key, [...(byPair.get(key) ?? []), v])
+  }
+  const tallies = new Map<string, PairTally>()
+  for (const pair of byPair.values()) {
+    const v = pair[0] as PairVote
+    const key = [v.cut, v.harness ?? v.arm ?? '', v.a, v.b].join('\0')
+    const t = tallies.get(key) ?? {
+      cut: v.cut,
+      held: v.harness ?? v.arm ?? '',
+      a: v.a,
+      b: v.b,
+      pairs: 0,
+      aWins: 0,
+      bWins: 0,
+      ties: 0,
+      splits: 0,
+      splitsFirst: 0,
+    }
+    tallies.set(key, t)
+    t.pairs++
+    const winners = new Set(pair.map((x) => x.winner).filter((w) => w !== 'tie'))
+    if (winners.size === 0) t.ties++
+    else if (winners.size > 1) {
+      t.splits++
+      if (pair.every((x) => x.winner === (x.swapped ? x.b : x.a))) t.splitsFirst++
+    } else if (winners.has(v.a)) t.aWins++
+    else t.bWins++
+  }
+  return [...tallies.values()]
+}
+
+/** `no-skill 1–0 new-skill (2 splits)`. */
+export function pairTallyLabel(t: PairTally): string {
+  const extra = [
+    t.splits ? `${t.splits} split${t.splits === 1 ? '' : 's'}` : '',
+    t.ties ? `${t.ties} tie${t.ties === 1 ? '' : 's'}` : '',
+  ].filter(Boolean)
+  return `${t.a} ${t.aWins}–${t.bWins} ${t.b}${extra.length ? ` (${extra.join(', ')})` : ''}`
+}
+
+/**
+ * How many pairs the two orders split on: `4/9 pairs split by order, all to the side shown
+ * first`. Null when there are no votes.
+ */
+export function splitsLabel(tallies: PairTally[]): string | null {
+  const pairs = tallies.reduce((n, t) => n + t.pairs, 0)
+  if (!pairs) return null
+  const splits = tallies.reduce((n, t) => n + t.splits, 0)
+  const first = tallies.reduce((n, t) => n + t.splitsFirst, 0)
+  const toFirst = !splits
+    ? ''
+    : first === splits
+      ? ', all to the side shown first'
+      : first === 0
+        ? ', all to the side shown second'
+        : `, ${first} to the side shown first`
+  return `${splits}/${pairs} pairs split by order${toFirst}`
+}
+
+/**
+ * Head-to-head lines for each cut where more than two sides met, which a pooled win rate blurs:
+ * `within cursor:composer-2.5: no-skill 2–0 current-skill (1 split) · new-skill 2–0 current-skill`.
+ */
+export function headToHeadLines(votes: PairVote[]): string[] {
+  const groups = new Map<string, PairTally[]>()
+  for (const t of pairTallies(votes)) {
+    const key = `${t.cut} ${t.held}`
+    groups.set(key, [...(groups.get(key) ?? []), t])
+  }
+  return [...groups]
+    .filter(([, ts]) => new Set(ts.flatMap((t) => [t.a, t.b])).size > 2)
+    .map(([key, ts]) => `${key}: ${ts.map(pairTallyLabel).join(' · ')}`)
+}

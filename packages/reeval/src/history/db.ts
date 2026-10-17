@@ -5,6 +5,7 @@ import { mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
+import { pairTallies } from '../compare/pairs.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
@@ -76,6 +77,20 @@ CREATE TABLE families (
   cases INTEGER, ran INTEGER, cell_key TEXT NOT NULL, cell_cases INTEGER, pass INTEGER,
   counted INTEGER, pass_at_1 REAL, lo REAL, hi REAL, method TEXT, outcome TEXT,
   PRIMARY KEY (run_id, family_id, cell_key)
+);
+-- Every compare-question vote: a pair of sides (arms within a harness, harnesses across an arm)
+-- on one run, shown in one order (swapped = 1: b first), and the side picked or 'tie'.
+CREATE TABLE votes (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, question TEXT NOT NULL, cut TEXT, held TEXT,
+  pair_run INTEGER, a TEXT, b TEXT, winner TEXT, swapped INTEGER, reason TEXT
+);
+-- Each pair of sides' head-to-head per question: a pair decides when both orders agree (or one
+-- ties); a split is a pair whose orders picked opposite sides, split_first those that picked
+-- the side shown first both times.
+CREATE TABLE question_pairs_m (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, question TEXT NOT NULL, cut TEXT, held TEXT,
+  a TEXT, b TEXT, pairs INTEGER, a_wins INTEGER, b_wins INTEGER, ties INTEGER, splits INTEGER,
+  splits_first INTEGER
 );
 CREATE TABLE family_lift_m (
   run_id TEXT NOT NULL, family_id TEXT NOT NULL, name TEXT, harness TEXT, variant TEXT,
@@ -195,6 +210,10 @@ CREATE VIEW effort AS SELECT * FROM effort_m;
 -- tell them apart. A variant against its control is here too; gating stays variant vs control.
 CREATE VIEW contrasts AS SELECT * FROM contrasts_m;
 
+-- Each compare question's pairs of sides, head to head: wins when both orders agree, and splits
+-- when the order decided. The pooled win rate counts a split as a win for each side.
+CREATE VIEW question_pairs AS SELECT * FROM question_pairs_m;
+
 -- What a factor (environment, harness, model) did, by evidence tier: controlled (one run),
 -- pooled (comparable runs, and across evals), observed (over time), not_measured (one level).
 CREATE VIEW factor_effects AS SELECT * FROM factor_effects_m;
@@ -292,6 +311,7 @@ export const VIEW_NAMES = [
   'family_lift',
   'effort',
   'contrasts',
+  'question_pairs',
   'factor_effects',
   'skill_reads',
   'context_use',
@@ -509,6 +529,42 @@ function insertRun(
         )
       }
     }
+    for (const answer of e.answers ?? []) {
+      for (const v of answer.votes) {
+        run(
+          `INSERT INTO votes VALUES (${Array(11).fill('?').join(', ')})`,
+          record.runId,
+          e.key,
+          answer.question,
+          v.cut,
+          v.harness ?? v.arm ?? null,
+          v.run,
+          v.a,
+          v.b,
+          v.winner,
+          v.swapped ? 1 : 0,
+          v.reason ?? null,
+        )
+      }
+      for (const t of pairTallies(answer.votes)) {
+        run(
+          `INSERT INTO question_pairs_m VALUES (${Array(13).fill('?').join(', ')})`,
+          record.runId,
+          e.key,
+          answer.question,
+          t.cut,
+          t.held,
+          t.a,
+          t.b,
+          t.pairs,
+          t.aWins,
+          t.bWins,
+          t.ties,
+          t.splits,
+          t.splitsFirst,
+        )
+      }
+    }
     for (const a of e.attempts) {
       run(
         `INSERT INTO attempts VALUES (${Array(30).fill('?').join(', ')})`,
@@ -709,6 +765,8 @@ const DATA_TABLES = [
   'evals',
   'families',
   'family_lift_m',
+  'votes',
+  'question_pairs_m',
   'cells',
   'attempts',
   'judgements',
