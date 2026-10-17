@@ -11,7 +11,6 @@ import {
   fakeAnalysisDataSchema,
   fakeJudgeDataSchema,
   historyConfigSchema,
-  jsonValueSchema,
   profileDataSchema,
   profileDefaultsDataSchema,
   profileLimitSchema,
@@ -47,7 +46,7 @@ import {
   opencodeHarnessSchema,
   piHarnessSchema,
 } from './harness.ts'
-import { judgeStateSchema } from './judge.ts'
+import { configJudgeSchema, fakeJudgeModelSchema, judgeStateSchema } from './judge.ts'
 import {
   egressPolicySchema,
   envValueSchema,
@@ -62,7 +61,7 @@ import {
   skillSourceSchema,
   substituteInSchema,
 } from './plain.ts'
-import { durationSchema } from './shared.ts'
+import { durationSchema, jsonValueSchema } from './shared.ts'
 
 /**
  * The schemas that own a `$def` in schema/plan/, by its name there. scripts/schema/zod.ts puts
@@ -85,6 +84,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   PiHarnessDescriptor: piHarnessSchema,
   CodexHarnessDescriptor: codexHarnessSchema,
   JudgeStateOptions: judgeStateSchema,
+  ConfigJudgeOptions: configJudgeSchema,
   CompareQuestion: compareQuestionSchema,
   PairFactor: pairFactorSchema,
   GatePolicy: gatePolicySchema,

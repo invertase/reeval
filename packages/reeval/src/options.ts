@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { compareProblem, isEvaluationModel } from './contract/compare.ts'
 import { sandboxProblem } from './contract/docker.ts'
 import { harnessProblem } from './contract/harness.ts'
+import { judgeProblem } from './contract/judge.ts'
 import { gateProblem } from './contract/plain.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
@@ -29,7 +30,7 @@ import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
-import { judgeProblem, mergeJudge } from './judge/state-options.ts'
+import { mergeJudge } from './judge/state-options.ts'
 import type {
   CaptureOptions,
   Cell,
@@ -203,17 +204,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   }
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
   if (o.egress !== undefined) checkEgress(o.egress, where, UsageError)
-  checkMaxConcurrent(o.judge?.maxConcurrent, `judge in ${where}`)
-  const threshold = o.judge?.threshold
-  if (
-    threshold !== undefined &&
-    !(typeof threshold === 'number' && threshold >= 0 && threshold <= 1)
-  ) {
-    throw new UsageError(
-      `judge.threshold must be between 0 and 1 (got ${String(threshold)}) in ${where}`,
-    )
-  }
-  const judgeIssue = o.judge && judgeProblem(o.judge, ` in ${where}`)
+  const judgeIssue = o.judge !== undefined && judgeProblem(o.judge, { at: 'options', where })
   if (judgeIssue) throw new UsageError(judgeIssue)
   if (o.sandbox !== undefined) {
     const kind = (o.sandbox as { kind?: string }).kind

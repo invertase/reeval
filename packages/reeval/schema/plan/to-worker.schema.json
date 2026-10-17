@@ -188,28 +188,33 @@
       "properties": {
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",
-          "type": "number"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "model": {
           "description": "`'provider/model'`, or a fake judge.",
           "anyOf": [
             {
-              "$ref": "#/$defs/FakeJudgeModel"
+              "type": "string",
+              "pattern": "\\/"
             },
             {
-              "type": "string"
+              "$ref": "#/$defs/FakeJudgeModel"
             }
           ]
         },
         "providerOptions": {
           "description": "AI SDK provider options for the judge's calls, keyed by provider.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "object",
-            "properties": {},
-            "required": [],
+            "propertyNames": {
+              "type": "string"
+            },
             "additionalProperties": {
               "$ref": "#/$defs/JSONValue"
             }
@@ -221,10 +226,12 @@
         },
         "threshold": {
           "description": "Minimum score (0–1) for a `pass` verdict.",
-          "type": "number"
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         }
       },
-      "required": []
+      "additionalProperties": false
     },
     "CursorHarnessDescriptor": {
       "description": "Cursor's agent through the Cursor TypeScript SDK's local runtime (`@reeval/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.",

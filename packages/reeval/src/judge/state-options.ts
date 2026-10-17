@@ -1,7 +1,5 @@
-import { judgeStateSchema } from '../contract/judge.ts'
+import { STATE_KEYS } from '../contract/judge.ts'
 import type { JudgeOptions, JudgeStateOptions, ResolvedJudgeStateOptions } from '../types.ts'
-
-export const STATE_KEYS = Object.keys(judgeStateSchema.shape) as Array<keyof JudgeStateOptions>
 
 export const DEFAULT_STATE: ResolvedJudgeStateOptions = {
   task: true,
@@ -29,83 +27,4 @@ export function mergeJudge<T extends JudgeOptions>(outer: T, inner: Partial<T> |
   const out = { ...outer, ...inner }
   if (outer.state || inner.state) out.state = { ...outer.state, ...inner.state }
   return out
-}
-
-const JUDGE_KEYS = ['model', 'threshold', 'providerOptions', 'maxConcurrent', 'state']
-const CALL_KEYS = [...JUDGE_KEYS, 'on', 'artifacts']
-
-const JUDGE_HINTS: Record<string, string> = {
-  include: 'state.diff',
-  exclude: 'state.diff',
-  files: 'state.contents',
-  contents: 'state.contents',
-  transcript: 'state.transcript',
-  see: 'state',
-  shows: 'state',
-  show: 'state',
-  input: 'state',
-}
-
-const VALUES: Record<keyof JudgeStateOptions, string> = {
-  task: 'true or false',
-  output: 'true or false',
-  files: 'true or false',
-  diff: 'true, false or a non-empty list of patterns',
-  contents: 'a list of paths or patterns',
-  transcript: "true, false, 'tools' or 'full'",
-  turns: "'last' or 'all'",
-  checks: 'true, false or a list of commands',
-}
-
-function distance(a: string, b: string): number {
-  const row = Array.from({ length: b.length + 1 }, (_, i) => i)
-  for (let i = 1; i <= a.length; i++) {
-    let prev = row[0] ?? 0
-    row[0] = i
-    for (let j = 1; j <= b.length; j++) {
-      const here = row[j] ?? 0
-      row[j] = Math.min(here + 1, (row[j - 1] ?? 0) + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1))
-      prev = here
-    }
-  }
-  return row[b.length] ?? 0
-}
-
-const nearest = (key: string, keys: readonly string[]) =>
-  keys.find((k) => distance(key.toLowerCase(), k.toLowerCase()) <= 2)
-
-const shown = (value: unknown) => JSON.stringify(value) ?? String(value)
-
-/**
- * The first problem with a judge options object's own keys and its `state`, as a sentence ending
- * in `loc` (e.g. ` in evals/a.eval.ts › lands`), or undefined. `call` allows `on` and `artifacts`.
- */
-export function judgeProblem(judge: object, loc: string, call = false): string | undefined {
-  const allowed = call ? CALL_KEYS : JUDGE_KEYS
-  for (const key of Object.keys(judge)) {
-    if (allowed.includes(key)) continue
-    const hint = JUDGE_HINTS[key] ?? nearest(key, allowed)
-    const why =
-      !call && (key === 'on' || key === 'artifacts')
-        ? ` ${key} is per call: c.judge(question, { ${key} }).`
-        : hint
-          ? ` Did you mean "${hint}"?`
-          : ''
-    return `Unknown judge option "${key}"${loc}.${why}`
-  }
-  const { state } = judge as JudgeOptions
-  if (state === undefined) return undefined
-  if (typeof state !== 'object' || state === null || Array.isArray(state)) {
-    return `judge.state must be an object such as { transcript: 'tools' } (got ${shown(state)})${loc}`
-  }
-  const parsed = judgeStateSchema.safeParse(state)
-  if (parsed.success) return undefined
-  const issue = parsed.error.issues[0]
-  if (issue?.code === 'unrecognized_keys') {
-    const key = issue.keys[0] ?? ''
-    const hint = nearest(key, STATE_KEYS)
-    return `Unknown judge.state key "${key}"${loc}.${hint ? ` Did you mean "${hint}"?` : ''}`
-  }
-  const key = issue?.path[0] as keyof JudgeStateOptions
-  return `judge.state.${key} must be ${VALUES[key]} (got ${shown((state as JudgeStateOptions)[key])})${loc}`
 }

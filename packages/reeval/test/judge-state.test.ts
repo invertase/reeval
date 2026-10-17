@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { judgeProblem } from '../src/contract/judge.ts'
 import { withInputSize } from '../src/judge/size.ts'
 import { type Draft, stateOf } from '../src/judge/state.ts'
-import { judgeProblem, mergeJudge, resolveStateOptions } from '../src/judge/state-options.ts'
+import { mergeJudge, resolveStateOptions } from '../src/judge/state-options.ts'
 import { transcriptForJudge } from '../src/judge/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 
@@ -94,7 +95,7 @@ test('state resolves every key to its default, and merges key by key', () => {
 })
 
 test('judge options name an unknown key, a misspelt state key and a bad value', () => {
-  const loc = ' in evals/a.eval.ts › lands'
+  const loc = { at: 'options', where: 'evals/a.eval.ts › lands' } as const
   assert.equal(
     judgeProblem({ include: ['src/'] }, loc),
     'Unknown judge option "include" in evals/a.eval.ts › lands. Did you mean "state.diff"?',
@@ -107,7 +108,19 @@ test('judge options name an unknown key, a misspelt state key and a bad value', 
     judgeProblem({ on: 'x' }, loc),
     'Unknown judge option "on" in evals/a.eval.ts › lands. on is per call: c.judge(question, { on }).',
   )
-  assert.equal(judgeProblem({ on: 'x', artifacts: [] }, loc, true), undefined)
+  assert.equal(judgeProblem({ on: 'x', artifacts: [] }, { at: 'call' }), undefined)
+  assert.equal(
+    judgeProblem({ threshold: 2, maxConcurrent: 0 }, { at: 'call' }),
+    'c.judge() threshold must be between 0 and 1 (got 2)',
+  )
+  assert.equal(
+    judgeProblem({ maxConcurrent: 0 }, { at: 'call' }),
+    'c.judge() maxConcurrent must be a whole number of at least 1 (got 0)',
+  )
+  assert.equal(
+    judgeProblem({ model: { kind: 'fake-judge', score: () => 1 } }, { at: 'call' }),
+    undefined,
+  )
   assert.equal(
     judgeProblem({ state: { contnets: ['a'] } }, loc),
     'Unknown judge.state key "contnets" in evals/a.eval.ts › lands. Did you mean "contents"?',
