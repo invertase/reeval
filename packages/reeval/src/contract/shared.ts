@@ -90,6 +90,13 @@ const EXPECTED: Record<string, string> = {
   record: 'an object',
 }
 
+/** `'a', 'b' or 'c'`, or `one of …` for a list of values. */
+export function oneOf(values: readonly unknown[]): string {
+  const quoted = values.map((v) => (typeof v === 'string' ? `'${v}'` : String(v)))
+  if (quoted.length < 2) return quoted.join('')
+  return `${quoted.length > 2 ? 'one of ' : ''}${quoted.slice(0, -1).join(', ')} or ${quoted.at(-1)}`
+}
+
 /**
  * The sentence for an issue no hand-written one covers, naming the field as `call({ field })`:
  * an unknown key, a value of the wrong type, or Zod's own words for anything else.
@@ -100,6 +107,9 @@ export function genericProblem(call: string, issue: Issue, value: unknown): stri
     return `${call}({ ${at} }) has an unknown key "${issue.keys[0]}"`
   }
   const v = valueAt(value, issue.path)
+  if (issue.code === 'invalid_value') {
+    return `${call}({ ${at} }) is ${oneOf(issue.values as string[])} (got ${got(v)})`
+  }
   const expected = issue.code === 'invalid_type' ? EXPECTED[issue.expected] : undefined
   if (expected) return `${call}({ ${at} }) must be ${expected} (got ${got(v)})`
   return `${call}({ ${at} }): ${issue.message} (got ${got(v)})`

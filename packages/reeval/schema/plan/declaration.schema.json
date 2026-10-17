@@ -651,18 +651,19 @@
       "description": "A variable's value: a literal string, or a host secret.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Secret"
+          "type": "string"
         },
         {
-          "type": "string"
+          "$ref": "#/$defs/Secret"
         }
       ]
     },
     "EnvVars": {
       "description": "Environment variables by name.",
       "type": "object",
-      "properties": {},
-      "required": [],
+      "propertyNames": {
+        "type": "string"
+      },
       "additionalProperties": {
         "$ref": "#/$defs/EnvValue"
       }
@@ -1687,6 +1688,7 @@
           "type": "boolean"
         },
         "kind": {
+          "type": "string",
           "const": "git"
         },
         "path": {
@@ -1699,7 +1701,8 @@
         },
         "repo": {
           "description": "As written: a URL, `github:owner/repo`, or a local path.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "token": {
           "description": "The host variable holding a token for the fetch; read on the host only.",
@@ -1707,10 +1710,12 @@
         },
         "url": {
           "description": "What reeval fetches: the clone URL, or an absolute path for a local repository.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         }
       },
-      "required": ["kind", "repo", "url"]
+      "required": ["kind", "repo", "url"],
+      "additionalProperties": false
     },
     "GooseHarnessDescriptor": {
       "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models on a Gemini API key, and reports no usage (its ACP server counts one call).",
@@ -1781,14 +1786,17 @@
       "type": "object",
       "properties": {
         "kind": {
+          "type": "string",
           "const": "file"
         },
         "path": {
           "description": "Its absolute path on the host.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         }
       },
-      "required": ["kind", "path"]
+      "required": ["kind", "path"],
+      "additionalProperties": false
     },
     "InstallStep": {
       "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
@@ -1916,7 +1924,7 @@
     },
     "McpServer": {
       "description": "An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.",
-      "anyOf": [
+      "oneOf": [
         {
           "type": "object",
           "properties": {
@@ -1928,20 +1936,24 @@
             },
             "command": {
               "description": "The command that starts the server in the sandbox.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "env": {
               "description": "Variables the server process gets.",
               "$ref": "#/$defs/EnvVars"
             },
             "kind": {
+              "type": "string",
               "const": "mcp"
             },
             "transport": {
+              "type": "string",
               "const": "stdio"
             }
           },
-          "required": ["args", "command", "env", "kind", "transport"]
+          "required": ["args", "command", "env", "kind", "transport"],
+          "additionalProperties": false
         },
         {
           "type": "object",
@@ -1949,34 +1961,39 @@
             "headers": {
               "description": "Request headers, with secrets brokered by the egress gateway.",
               "type": "object",
-              "properties": {},
-              "required": [],
+              "propertyNames": {
+                "type": "string"
+              },
               "additionalProperties": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
                   {
                     "$ref": "#/$defs/Secret"
                   },
                   {
                     "$ref": "#/$defs/SecretTemplate"
-                  },
-                  {
-                    "type": "string"
                   }
                 ]
               }
             },
             "kind": {
+              "type": "string",
               "const": "mcp"
             },
             "transport": {
               "description": "Streamable HTTP, or the older SSE transport.",
+              "type": "string",
               "enum": ["http", "sse"]
             },
             "url": {
-              "type": "string"
+              "type": "string",
+              "format": "uri"
             }
           },
-          "required": ["headers", "kind", "transport", "url"]
+          "required": ["headers", "kind", "transport", "url"],
+          "additionalProperties": false
         }
       ]
     },
@@ -2065,10 +2082,12 @@
       "properties": {
         "from": {
           "description": "The host variable; defaults to the key it's set under.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
         },
         "hosts": {
           "description": "Brokers the secret: the sandbox gets a per-attempt placeholder, and the Docker egress gateway swaps in the real value only on HTTPS requests to these hosts (`*.example.com` for subdomains).",
+          "minItems": 1,
           "type": "array",
           "items": {
             "type": "string"
@@ -2076,12 +2095,14 @@
         },
         "in": {
           "description": "Where in a request to those hosts the gateway substitutes; defaults to `['header']`.",
+          "minItems": 1,
           "type": "array",
           "items": {
             "$ref": "#/$defs/SubstituteIn"
           }
         },
         "kind": {
+          "type": "string",
           "const": "secret"
         },
         "optional": {
@@ -2090,16 +2111,19 @@
         },
         "to": {
           "description": "`agent` (default): the container's environment. `checks`: only `c.exec` and `setup` steps.",
+          "type": "string",
           "enum": ["agent", "checks"]
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "SecretTemplate": {
       "description": "`secret.template('Bearer ${TOKEN}')`: host variables substituted into a string, for MCP headers.",
       "type": "object",
       "properties": {
         "kind": {
+          "type": "string",
           "const": "secret-template"
         },
         "template": {
@@ -2107,7 +2131,8 @@
           "type": "string"
         }
       },
-      "required": ["kind", "template"]
+      "required": ["kind", "template"],
+      "additionalProperties": false
     },
     "SetupStep": {
       "description": "Runs in every attempt before the agent starts, with secrets, outside the eval timeout: a shell command, or `{ run, timeout?, cwd? }`.",
@@ -2153,47 +2178,12 @@
     },
     "SkillPlacement": {
       "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",
+      "type": "string",
       "enum": ["harness", "workspace"]
     },
     "SkillSource": {
       "description": "Skills to place for the agent, made by the `skill` helper.",
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "content": {
-              "description": "The body of `SKILL.md`.",
-              "type": "string"
-            },
-            "description": {
-              "description": "The skill's description, as in `SKILL.md`'s frontmatter.",
-              "type": "string"
-            },
-            "files": {
-              "description": "Other files in the skill directory, by relative path.",
-              "type": "object",
-              "properties": {},
-              "required": [],
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "kind": {
-              "const": "skill"
-            },
-            "name": {
-              "description": "The skill's name, as in `SKILL.md`'s frontmatter.",
-              "type": "string"
-            },
-            "placement": {
-              "$ref": "#/$defs/SkillPlacement"
-            },
-            "source": {
-              "const": "inline"
-            }
-          },
-          "required": ["content", "description", "files", "kind", "name", "placement", "source"]
-        },
+      "oneOf": [
         {
           "type": "object",
           "properties": {
@@ -2205,6 +2195,7 @@
               }
             },
             "kind": {
+              "type": "string",
               "const": "skill"
             },
             "only": {
@@ -2216,16 +2207,19 @@
             },
             "path": {
               "description": "A host directory with a `SKILL.md`, or a directory of them.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "placement": {
               "$ref": "#/$defs/SkillPlacement"
             },
             "source": {
+              "type": "string",
               "const": "local"
             }
           },
-          "required": ["kind", "path", "placement", "source"]
+          "required": ["kind", "path", "placement", "source"],
+          "additionalProperties": false
         },
         {
           "type": "object",
@@ -2238,43 +2232,7 @@
               }
             },
             "kind": {
-              "const": "skill"
-            },
-            "only": {
-              "description": "The skill names to keep; default every one found.",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "path": {
-              "description": "The directory in the package to read skills from; default `skills`.",
-              "type": "string"
-            },
-            "placement": {
-              "$ref": "#/$defs/SkillPlacement"
-            },
-            "source": {
-              "const": "npm"
-            },
-            "spec": {
-              "description": "A pinned npm package spec.",
-              "type": "string"
-            }
-          },
-          "required": ["kind", "path", "placement", "source", "spec"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "exclude": {
-              "description": "Paths in each skill directory to leave out, gitignore-style.",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "kind": {
+              "type": "string",
               "const": "skill"
             },
             "only": {
@@ -2297,28 +2255,34 @@
             },
             "repo": {
               "description": "As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "source": {
+              "type": "string",
               "const": "git"
             }
           },
-          "required": ["kind", "placement", "repo", "source"]
+          "required": ["kind", "placement", "repo", "source"],
+          "additionalProperties": false
         },
         {
           "type": "object",
           "properties": {
             "id": {
               "description": "A skills.sh id, `owner/repo@skill`.",
-              "type": "string"
+              "type": "string",
+              "pattern": "^[\\w.-]+\\/[\\w.-]+@[a-z0-9-]+$"
             },
             "kind": {
+              "type": "string",
               "const": "skill"
             },
             "placement": {
               "$ref": "#/$defs/SkillPlacement"
             },
             "source": {
+              "type": "string",
               "const": "registry"
             },
             "version": {
@@ -2326,13 +2290,96 @@
               "type": "string"
             }
           },
-          "required": ["id", "kind", "placement", "source"]
+          "required": ["id", "kind", "placement", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exclude": {
+              "description": "Paths in each skill directory to leave out, gitignore-style.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "skill"
+            },
+            "only": {
+              "description": "The skill names to keep; default every one found.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "path": {
+              "description": "The directory in the package to read skills from; default `skills`.",
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "type": "string",
+              "const": "npm"
+            },
+            "spec": {
+              "description": "A pinned npm package spec.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["kind", "path", "placement", "source", "spec"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "content": {
+              "description": "The body of `SKILL.md`.",
+              "type": "string"
+            },
+            "description": {
+              "description": "The skill's description, as in `SKILL.md`'s frontmatter.",
+              "type": "string"
+            },
+            "files": {
+              "description": "Other files in the skill directory, by relative path.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "skill"
+            },
+            "name": {
+              "description": "The skill's name, as in `SKILL.md`'s frontmatter.",
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "type": "string",
+              "const": "inline"
+            }
+          },
+          "required": ["content", "description", "files", "kind", "name", "placement", "source"],
+          "additionalProperties": false
         }
       ]
     },
     "SubstituteIn": {
       "description": "`header` values, the `query` string, or the request `body`.",
-      "enum": ["body", "header", "query"]
+      "type": "string",
+      "enum": ["header", "query", "body"]
     }
   }
 }

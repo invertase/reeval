@@ -486,19 +486,26 @@
       "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
       "anyOf": [
         {
-          "enum": ["allow-all", "deny-all"]
+          "type": "string",
+          "const": "allow-all"
+        },
+        {
+          "type": "string",
+          "const": "deny-all"
         },
         {
           "type": "object",
           "properties": {
             "allow": {
+              "readOnly": true,
               "type": "array",
               "items": {
                 "type": "string"
               }
             }
           },
-          "required": ["allow"]
+          "required": ["allow"],
+          "additionalProperties": false
         }
       ]
     },
@@ -893,6 +900,7 @@
           "type": "boolean"
         },
         "kind": {
+          "type": "string",
           "const": "git"
         },
         "path": {
@@ -905,7 +913,8 @@
         },
         "repo": {
           "description": "As written: a URL, `github:owner/repo`, or a local path.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "token": {
           "description": "The host variable holding a token for the fetch; read on the host only.",
@@ -913,10 +922,12 @@
         },
         "url": {
           "description": "What reeval fetches: the clone URL, or an absolute path for a local repository.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         }
       },
-      "required": ["kind", "repo", "url"]
+      "required": ["kind", "repo", "url"],
+      "additionalProperties": false
     },
     "GooseHarnessDescriptor": {
       "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models on a Gemini API key, and reports no usage (its ACP server counts one call).",

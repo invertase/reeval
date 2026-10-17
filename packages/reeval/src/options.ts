@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { compareProblem, isEvaluationModel } from './contract/compare.ts'
 import { sandboxProblem } from './contract/docker.ts'
 import { harnessProblem } from './contract/harness.ts'
+import { gateProblem } from './contract/plain.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
@@ -92,13 +93,8 @@ const SUGGEST: Record<string, string> = {
 
 /** Throws unless `value` is `'all'` or `{ passRate }` with a rate in (0, 1]. */
 export function checkGate(value: unknown, where: string): void {
-  if (value === 'all') return
-  const rate = (value as { passRate?: unknown })?.passRate
-  const keys = typeof value === 'object' && value !== null ? Object.keys(value) : []
-  if (keys.length === 1 && typeof rate === 'number' && rate > 0 && rate <= 1) return
-  throw new UsageError(
-    `gate is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got ${JSON.stringify(value)}) in ${where}`,
-  )
+  const problem = gateProblem(value, where)
+  if (problem) throw new UsageError(problem)
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
 

@@ -1,9 +1,19 @@
 import { readdirSync, realpathSync, statSync } from 'node:fs'
-import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import picomatch from 'picomatch'
 import { sandboxProblem } from './contract/docker.ts'
+import {
+  badHost,
+  descriptorProblem,
+  egressProblem,
+  gitWorkspaceSchema,
+  hostFileSchema,
+  mcpServerSchema,
+  secretSchema,
+  skillSourceSchema,
+  VAR,
+} from './contract/plain.ts'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -37,7 +47,6 @@ export class DefinitionError extends Error {
 }
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
-const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
 const SPEC_KEYS = [
   'sandbox',
   'workspace',
@@ -125,30 +134,7 @@ const localNpmSpec = (spec: string, base: string) => {
   return /^\.{1,2}(?:\/|$)/.test(path) || isAbsolute(path) ? toPath(path, base) : spec
 }
 
-/** A host name, or `*.` and a domain for its subdomains. */
-const HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/i
 const SUBSTITUTE_IN: readonly SubstituteIn[] = ['header', 'query', 'body']
-
-/** Why `host` isn't a host name or `*.` pattern, or undefined when it is one. */
-function badHost(host: unknown): string | undefined {
-  if (typeof host === 'string' && HOST.test(host)) {
-    const name = host.replace(/^\*\./, '')
-    if (/(?:^|\.)\d+$/.test(name) && (name !== host || isIP(name) !== 4)) {
-      return `'${host}' isn't a host name or an IPv4 address, and a *. pattern never matches an address.`
-    }
-    if (name !== host && !name.includes('.')) {
-      return `'${host}' would allow every host under .${name}; name the domain, e.g. '*.example.${name}'.`
-    }
-    return undefined
-  }
-  if (typeof host === 'string' && /^[a-z]+:\/\//i.test(host)) {
-    return `hosts are host names, not URLs: use '${new URL(host).hostname}' (got '${host}')`
-  }
-  if (typeof host === 'string' && /^[^:/]+:\d+$/.test(host)) {
-    return `hosts are host names without a port: use '${host.split(':')[0]}' (got '${host}')`
-  }
-  return `${JSON.stringify(host)} isn't a host. Use a name like 'api.example.com', or '*.example.com' for its subdomains.`
-}
 
 /** Throws unless `value` is `'allow-all'`, `'deny-all'` or `{ allow: [hosts] }`. */
 export function checkEgress(
@@ -156,32 +142,8 @@ export function checkEgress(
   where: string,
   Err: new (message: string) => Error = DefinitionError,
 ): asserts value is EgressPolicy {
-  if (value === 'allow-all' || value === 'deny-all') return
-  const shape = `egress is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    const list = Array.isArray(value)
-      ? ` For a list of hosts, use { allow: ${JSON.stringify(value)} }.`
-      : ''
-    throw new Err(`${shape} (got ${JSON.stringify(value)}) in ${where}.${list}`)
-  }
-  for (const key of Object.keys(value)) {
-    if (key === 'allow') continue
-    const hint =
-      key === 'deny'
-        ? " A policy lists what's allowed; everything else is refused."
-        : key === 'hosts' || key === 'allowedHosts'
-          ? ' Did you mean "allow"?'
-          : ''
-    throw new Err(`Unknown egress key "${key}" in ${where}.${hint}`)
-  }
-  const allow = (value as { allow?: unknown }).allow
-  if (!Array.isArray(allow)) {
-    throw new Err(`${shape} (got ${JSON.stringify(value)}) in ${where}`)
-  }
-  for (const host of allow) {
-    const bad = badHost(host)
-    if (bad) throw new Err(`egress.allow in ${where}: ${bad}`)
-  }
+  const problem = egressProblem(value, where)
+  if (problem) throw new Err(problem)
 }
 
 export const SECRET_HOSTS: SecretHelper['hosts'] = Object.freeze({
@@ -733,7 +695,11 @@ export function checkEnv(env: unknown, where: string, Err = DefinitionError): vo
   }
   for (const [name, value] of Object.entries(env)) {
     if (!VAR.test(name)) throw new Err(`env.${name} in ${where} isn't a valid variable name`)
-    if (isSecret(value)) continue
+    if (isSecret(value)) {
+      const problem = descriptorProblem(secretSchema, value, 'secret')
+      if (problem) throw new Err(`env.${name} in ${where}: ${problem}`)
+      continue
+    }
     if (typeof value !== 'string') {
       throw new Err(`env.${name} in ${where} must be a string or secret.fromEnv()`)
     }
@@ -772,6 +738,10 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
       `workspace in ${where} must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got ${JSON.stringify(s.workspace)})`,
     )
   }
+  if (s.workspace !== undefined) {
+    const problem = descriptorProblem(gitWorkspaceSchema, s.workspace, 'git')
+    if (problem) throw new DefinitionError(`workspace in ${where}: ${problem}`)
+  }
   if (s.env !== undefined) checkEnv(s.env, where)
   if (s.egress !== undefined) checkEgress(s.egress, where)
   const list = (key: 'setup' | 'skills') => {
@@ -802,12 +772,15 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
       )
     }
   }
-  for (const skill of list('skills')) {
+  for (const [i, skill] of list('skills').entries()) {
     if ((skill as SkillSource)?.kind !== 'skill') {
       throw new DefinitionError(
         `skills in ${where} must come from the skill helper, e.g. skills: [skill.local('./skills')] (got ${JSON.stringify(skill)})`,
       )
     }
+    const call = `skill.${String((skill as SkillSource).source)}`
+    const problem = descriptorProblem(skillSourceSchema, skill, call)
+    if (problem) throw new DefinitionError(`skills[${i}] in ${where}: ${problem}`)
   }
   for (const [name, server] of Object.entries(s.mcp ?? {})) {
     if ((server as McpServer)?.kind !== 'mcp') {
@@ -815,6 +788,9 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
         `mcp.${name} in ${where} must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server'])`,
       )
     }
+    const call = `mcp.${String((server as McpServer).transport)}`
+    const problem = descriptorProblem(mcpServerSchema, server, call)
+    if (problem) throw new DefinitionError(`mcp.${name} in ${where}: ${problem}`)
   }
   for (const [path, value] of Object.entries(s.files ?? {})) {
     const key = `files[${JSON.stringify(path)}] in ${where}`
@@ -831,10 +807,14 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     if (typeof value !== 'string' && !isHostFile(value)) {
       throw new DefinitionError(`${key} must be a string or file(path)`)
     }
+    const problem = isHostFile(value) && descriptorProblem(hostFileSchema, value, 'file')
+    if (problem) throw new DefinitionError(`${key}: ${problem}`)
   }
   if (s.rules !== undefined && typeof s.rules !== 'string' && !isHostFile(s.rules)) {
     throw new DefinitionError(`rules in ${where} must be markdown or file(path)`)
   }
+  const rules = isHostFile(s.rules) && descriptorProblem(hostFileSchema, s.rules, 'file')
+  if (rules) throw new DefinitionError(`rules in ${where}: ${rules}`)
   return structuredClone(s)
 }
 

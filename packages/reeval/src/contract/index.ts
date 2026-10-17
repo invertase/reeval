@@ -15,6 +15,20 @@ import {
   opencodeHarnessSchema,
   piHarnessSchema,
 } from './harness.ts'
+import {
+  egressPolicySchema,
+  envValueSchema,
+  envVarsSchema,
+  gatePolicySchema,
+  gitWorkspaceSchema,
+  hostFileSchema,
+  mcpServerSchema,
+  secretSchema,
+  secretTemplateSchema,
+  skillPlacementSchema,
+  skillSourceSchema,
+  substituteInSchema,
+} from './plain.ts'
 import { durationSchema } from './shared.ts'
 
 /**
@@ -39,4 +53,16 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   CodexHarnessDescriptor: codexHarnessSchema,
   CompareQuestion: compareQuestionSchema,
   PairFactor: pairFactorSchema,
+  GatePolicy: gatePolicySchema,
+  EgressPolicy: egressPolicySchema,
+  Secret: secretSchema,
+  SecretTemplate: secretTemplateSchema,
+  SubstituteIn: substituteInSchema,
+  EnvValue: envValueSchema,
+  EnvVars: envVarsSchema,
+  HostFile: hostFileSchema,
+  SkillPlacement: skillPlacementSchema,
+  SkillSource: skillSourceSchema,
+  McpServer: mcpServerSchema,
+  GitWorkspace: gitWorkspaceSchema,
 }

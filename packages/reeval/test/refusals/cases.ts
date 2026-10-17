@@ -360,6 +360,19 @@ export const CASES: Record<string, Case[]> = {
     ['data: secret with a typo', options({ env: { A_KEY: { kind: 'secret', host: ['x.com'] } } })],
     ['data: secret to unknown', options({ env: { A_KEY: { kind: 'secret', to: 'host' } } })],
     [
+      'data: secret with a URL host',
+      options({ env: { A_KEY: { kind: 'secret', hosts: ['https://x.com'] } } }),
+    ],
+    [
+      'data: secret in without hosts',
+      options({ env: { A_KEY: { kind: 'secret', in: ['query'] } } }),
+    ],
+    ['data: secret from a bad name', options({ env: { A_KEY: { kind: 'secret', from: 'a-b' } } })],
+    [
+      'data: secret good',
+      options({ env: { A_KEY: { kind: 'secret', from: 'B', hosts: ['x.com'], in: ['body'] } } }),
+    ],
+    [
       'skill placement unknown',
       helpers(({ skill }) => ({
         skills: [skill.registry('o/r@s', { placement: 'home' as never })],
@@ -420,6 +433,18 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: mcp with a bad transport',
       env({ mcp: { s: { kind: 'mcp', transport: 'ws', url: 'wss://x' } } }),
+    ],
+    [
+      'data: mcp http with a bad url',
+      env({ mcp: { s: { kind: 'mcp', transport: 'http', url: 'not a url', headers: {} } } }),
+    ],
+    [
+      'data: mcp http good',
+      env({
+        mcp: {
+          s: { kind: 'mcp', transport: 'http', url: 'https://x.com/mcp', headers: { a: 'b' } },
+        },
+      }),
     ],
     ['file with backslashes', env({ files: { 'a\\b.txt': 'x' } })],
     ['file absolute', env({ files: { '/etc/x': 'x' } })],
@@ -502,6 +527,11 @@ export const CASES: Record<string, Case[]> = {
       'data: workspace with a typo',
       env({ workspace: { kind: 'git', repo: 'r', url: 'r', rf: 'main' } }),
     ],
+    [
+      'data: workspace with a literal token',
+      env({ workspace: { kind: 'git', repo: 'r', url: 'r', token: 'ghp_abc-123' } }),
+    ],
+    ['data: workspace good', env({ workspace: { kind: 'git', repo: 'r', url: 'r', ref: 'v1' } })],
   ],
   environment: [
     ['a bad name', any(defineEnvironment, 'a b', {})],
