@@ -11,7 +11,7 @@ import type {
   PairFactor,
 } from '../types.ts'
 import { FACTORY, harnessDescriptorSchema, harnessProblem } from './harness.ts'
-import { type Assert, got, type Issue, nonEmpty, refusal, type Same } from './shared.ts'
+import { type Assert, type Issue, nonEmpty, refusal, type Same } from './shared.ts'
 
 export const pairFactorSchema = z
   .enum(['environment', 'harness'])

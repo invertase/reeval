@@ -137,9 +137,11 @@ export const secretTemplateSchema = z
     kind: z.literal('secret-template'),
     template: z
       .string()
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
       .describe('The string, with `${NAME}` for each host variable to substitute.'),
   })
   .describe(
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
     "`secret.template('Bearer ${TOKEN}')`: host variables substituted into a string, for MCP headers.",
   )
 
