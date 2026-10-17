@@ -27,7 +27,7 @@ export default defineConfig({
 </Property>
 
 <Property name="dir" type="string | URL" optional>
-  The parent directory for each attempt's temporary directory, as a path or a `file:` URL such as `new URL('./sandboxes', import.meta.url)`. Default the OS temp directory.
+  The parent directory for each attempt's temporary directory: a path relative to the file that calls `fakeSandbox()`, an absolute path, or a `file:` URL such as `new URL('./sandboxes', import.meta.url)`. In data, `{ kind: fake, dir }` resolves the same way. Default the OS temp directory.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>

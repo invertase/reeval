@@ -877,6 +877,72 @@ export function environmentDataProblem(
   return undefined
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isPath = (value: unknown): value is string => typeof value === 'string' && value !== ''
+
+/** Throws for a Dockerfile, at `field` (e.g. `sandbox.dockerfile`), that isn't a file at `full`. */
+export type MissingDockerfile = (field: string, full: string) => never
+
+/**
+ * A sandbox descriptor written as data with its host paths made absolute against `base`, as
+ * `docker({ dockerfile })` and `fakeSandbox({ dir })` resolve theirs: a Dockerfile, which must be
+ * a file, and a fake sandbox's `dir`. Any other value is left for the checks to name.
+ */
+export function sandboxPaths(
+  value: unknown,
+  base: string,
+  field: string,
+  missing: MissingDockerfile,
+): unknown {
+  if (!isRecord(value)) return value
+  if (value.kind === 'docker' && isPath(value.dockerfile)) {
+    const full = toPath(value.dockerfile, base)
+    if (!statSync(full, { throwIfNoEntry: false })?.isFile()) missing(`${field}.dockerfile`, full)
+    return { ...value, dockerfile: full }
+  }
+  return value.kind === 'fake' && isPath(value.dir)
+    ? { ...value, dir: toPath(value.dir, base) }
+    : value
+}
+
+/**
+ * An environment spec written as data with its host paths made absolute against `base`, as the
+ * helpers resolve theirs: host files in `files` and `rules`, a local skill's `path`, a local npm
+ * skill spec, a local git workspace's `url`, and the sandbox's. Only a non-empty string changes,
+ * and an absolute path stays as written.
+ */
+export function specPaths(
+  value: unknown,
+  base: string,
+  field: string,
+  missing: MissingDockerfile,
+): unknown {
+  if (!isRecord(value)) return value
+  const hostFile = (v: unknown) =>
+    isRecord(v) && v.kind === 'file' && isPath(v.path) ? { ...v, path: toPath(v.path, base) } : v
+  const skill = (v: unknown) => {
+    if (!isRecord(v)) return v
+    if (v.source === 'local' && isPath(v.path)) return { ...v, path: toPath(v.path, base) }
+    return v.source === 'npm' && isPath(v.spec) ? { ...v, spec: localNpmSpec(v.spec, base) } : v
+  }
+  const out = { ...value }
+  const prefix = field ? `${field}.` : ''
+  if ('sandbox' in value)
+    out.sandbox = sandboxPaths(value.sandbox, base, `${prefix}sandbox`, missing)
+  const { workspace, files, rules, skills } = value
+  if (isRecord(workspace) && isPath(workspace.url) && isLocalPath(workspace.url)) {
+    out.workspace = { ...workspace, url: toPath(workspace.url, base) }
+  }
+  if (isRecord(files)) {
+    out.files = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, hostFile(v)]))
+  }
+  if ('rules' in value) out.rules = hostFile(rules)
+  if (Array.isArray(skills)) out.skills = skills.map(skill)
+  return out
+}
+
 function buildSpec(input: EnvironmentInput, where: string, base: string): EnvironmentSpec {
   const spec = typeof input === 'function' ? input(helpersFor(base)) : input
   if (spec instanceof Promise || typeof (spec as { then?: unknown })?.then === 'function') {
@@ -884,7 +950,12 @@ function buildSpec(input: EnvironmentInput, where: string, base: string): Enviro
       `${where} returned a Promise. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead.`,
     )
   }
-  return checkSpec(spec, where)
+  const missing: MissingDockerfile = (field, full) => {
+    throw new DefinitionError(
+      `${field} in ${where}: ${full} doesn't exist. Paths are relative to the file that defines the environment.`,
+    )
+  }
+  return checkSpec(specPaths(spec, base, '', missing) as EnvironmentSpec, where)
 }
 
 /** An environment from its data, as a declaration tree carries it: `extendEnvironment` works again. */

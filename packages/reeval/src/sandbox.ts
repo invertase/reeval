@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { checkDockerOptions, type DockerOptions } from './contract/docker.ts'
-import { callerDir } from './environment.ts'
+import { callerDir, toPath } from './environment.ts'
 import { UsageError } from './errors.ts'
 import type { DockerSandboxDescriptor, FakeSandboxDescriptor } from './types.ts'
 
@@ -50,8 +50,9 @@ export function docker(options: DockerOptions = {}): DockerSandboxDescriptor {
 }
 
 /**
- * A temp directory on the host with no isolation. For tests and the fake harness only. `dir` may
- * be a `file:` URL, such as `new URL('./sandboxes', import.meta.url)`.
+ * A temp directory on the host with no isolation. For tests and the fake harness only. A relative
+ * `dir` resolves against the file that calls `fakeSandbox()`; it may also be absolute or a `file:`
+ * URL, such as `new URL('./sandboxes', import.meta.url)`.
  */
 export const fakeSandbox = ({
   dir,
@@ -60,7 +61,7 @@ export const fakeSandbox = ({
   ({
     kind: 'fake',
     ...options,
-    ...(dir !== undefined && { dir: dir instanceof URL ? fileURLToPath(dir) : dir }),
+    ...(dir !== undefined && { dir: toPath(dir, callerDir() ?? process.cwd()) }),
   }) satisfies FakeSandboxDescriptor
 
 export type { DockerSandboxDescriptor, FakeSandboxDescriptor, SandboxDescriptor } from './types.ts'

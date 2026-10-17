@@ -47,6 +47,12 @@ export const cases: PlanCase[] = [
     name: 'profile-from-above',
     args: ['--config', 'project/reeval.yaml', '--profile', 'nightly'],
   },
+  { dir: 'ts-paths', name: 'from-above', args: ['--config', 'project/reeval.config.ts'] },
+  {
+    dir: 'ts-paths',
+    name: 'profile-from-above',
+    args: ['--config', 'project/reeval.config.ts', '--profile', 'nightly'],
+  },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },

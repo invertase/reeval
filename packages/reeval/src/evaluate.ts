@@ -9,7 +9,7 @@ import type {
 } from './declaration.ts'
 import { collectingFile, getRunContext, registerGroup, registerTest } from './engine/runtime.ts'
 import { inCI } from './env.ts'
-import { environmentFrom } from './environment.ts'
+import { callerDir, environmentFrom, sandboxPaths } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { planEval } from './plan-eval.ts'
@@ -54,6 +54,25 @@ function declare(node: DeclaredNode): void {
   tree.children.push(node)
 }
 
+/**
+ * The options with a `sandbox` written as data given absolute host paths against the eval file,
+ * as `docker()` and `fakeSandbox()` resolve theirs against the file that calls them.
+ */
+function withPaths<T extends GroupOptions>(options: T, where: string): T {
+  if (typeof options !== 'object' || options === null || !('sandbox' in options)) return options
+  const sandbox = sandboxPaths(
+    options.sandbox,
+    callerDir() ?? process.cwd(),
+    'sandbox',
+    (field, full) => {
+      throw new UsageError(
+        `${field} in ${where}: ${full} doesn't exist. Paths are relative to the file that declares it.`,
+      )
+    },
+  )
+  return { ...options, sandbox }
+}
+
 /** `(name, fn)`, `(name, options, fn)` as in Vitest, or `(name, fn, options)`. */
 function splitArgs<F extends (...args: never[]) => unknown>(
   what: string,
@@ -92,7 +111,8 @@ const defineGroup =
   (mode: DeclaredMode): GroupFn =>
   (name: string, a?: GroupOptions | (() => void), b?: GroupOptions | (() => void)) => {
     checkOnly(mode, 'group')
-    const [options, fn] = splitArgs<() => void>('group', name, a, b)
+    const [written, fn] = splitArgs<() => void>('group', name, a, b)
+    const options = withPaths(written, `group("${name}")`)
     checkOptions(options, `group("${name}")`)
     const node: DeclaredGroup = { type: 'group', name, mode, options: data(options), children: [] }
     declare(node)
@@ -184,7 +204,7 @@ const defineEval =
   (name: string, a?: EvalOptions | EvalFn, b?: EvalOptions | EvalFn) => {
     checkOnly(mode, 'evaluate')
     const [own, fn] = splitArgs<EvalFn>('evaluate', name, a, b)
-    register(mode, name, own, fn)
+    register(mode, name, withPaths(own, `evaluate("${name}")`), fn)
   }
 
 /** `$key` is a property of the case, `%s` the case itself, `%#` its index. */
@@ -235,12 +255,13 @@ const evalEach =
         `evaluate.each takes an array of cases (got ${typeof cases}), e.g. evaluate.each([{ n: 1 }, { n: 2 }])("case $n", async (c, item) => { … }).`,
       )
     }
-    const [own, fn] = splitArgs<(c: AttemptContext, item: T) => Promise<void>>(
+    const [written, fn] = splitArgs<(c: AttemptContext, item: T) => Promise<void>>(
       'evaluate.each',
       name,
       a as EvalOptions,
       b as EvalOptions,
     )
+    const own = withPaths(written, `evaluate.each("${name}")`)
     const hint = ` For evaluate.each, put $key, %s or %# in the name ("${name}") so each case's name differs.`
     const pooled = pool && cases.length >= 2
     cases.forEach((item, i) => {
