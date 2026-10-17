@@ -1608,7 +1608,7 @@
           ]
         },
         "judge": {
-          "description": "Over the judge's model, threshold and version.",
+          "description": "Over the judge's model, threshold and version, and the config's `sees` when it sets one.",
           "type": "string"
         },
         "sources": {
@@ -1965,6 +1965,67 @@
         }
       },
       "required": ["cause", "class", "log", "ref", "setBy", "stage"]
+    },
+    "ResolvedJudgeSees": {
+      "description": "`JudgeSees` with every key set: what one judge call saw.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "contents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "diff": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "files": {
+          "type": "boolean"
+        },
+        "output": {
+          "type": "boolean"
+        },
+        "task": {
+          "type": "boolean"
+        },
+        "transcript": {
+          "anyOf": [
+            {
+              "enum": ["full", "tools"]
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "turns": {
+          "enum": ["all", "last"]
+        }
+      },
+      "required": ["checks", "contents", "diff", "files", "output", "task", "transcript", "turns"]
     },
     "ResourceFailureRecord": {
       "description": "The sandbox ran out of a resource during the attempt: `oom` is the kernel killing `kills` processes at its memory limit. The attempt is then an infra error, whatever its checks said.",
@@ -2638,6 +2699,10 @@
               "items": {
                 "type": "string"
               }
+            },
+            "sees": {
+              "description": "What the judge sees by default, every key resolved; absent when the config and profile leave `sees` at its defaults.",
+              "$ref": "#/$defs/ResolvedJudgeSees"
             },
             "threshold": {
               "type": "number"

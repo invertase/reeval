@@ -53,6 +53,8 @@ const analysis = (name: string) => `reeval/test/analysis.test.ts › ${name}`
 const workspace = (name: string) => `reeval/test/workspace.test.ts › ${name}`
 const checks = (name: string) => `reeval/test/checks.test.ts › ${name}`
 const engineExpect = (name: string) => `reeval/test/engine-expect.test.ts › ${name}`
+const judgeSees = (name: string) => `reeval/test/judge-sees.test.ts › ${name}`
+const history = (name: string) => `reeval/test/history.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -1235,12 +1237,39 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.scope',
     area: 'Judges and matchers',
-    name: 'What the judge sees: build output, source maps, build info and minified files dropped from its diff, `judge.include` and `judge.files` from the config to the call',
-    fixtures: ['judge/build-output', 'judge/include', 'judge/files'],
+    name: 'What the judge sees: `judge.sees` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff',
+    fixtures: [
+      'judge/build-output',
+      'judge/sees-diff',
+      'judge/sees-contents',
+      'judge/sees-contents-glob',
+      'judge/sees-off',
+      'judge/sees-transcript',
+      'judge/sees-turns',
+      'judge/sees-checks',
+      'judge/sees-cascade',
+    ],
     tests: [
       unit('the judge drops build output, source maps, build info and minified files'),
-      unit("the judge's include filters its diff and files"),
-      engine('judge include and files cascade from the config to the call'),
+      unit("the judge's sees.diff patterns filter its diff and files"),
+      engine('judge sees cascades key by key from the config to the call'),
+      engine("c.judge refuses an unknown option, a command it hasn't run and on without sees.output"),
+      judgeSees('the transcript renders one compact entry per event, by mode'),
+      judgeSees('sees resolves every key to its default, and merges key by key'),
+      judgeSees('judge options name an unknown key, a misspelt sees key and a bad value'),
+      history("the config's judge.sees is in the record and the fingerprint"),
+    ],
+  },
+  {
+    id: 'judge.budget',
+    area: 'Judges and matchers',
+    name: "The judge's state budget per model (32k for Jev, 100k otherwise, `judge.maxInputTokens` to override): tool output clipped, then transcript events, diff files, check output and contents cut, largest first, each named in `dropped`",
+    fixtures: ['judge/budget', 'judge/budget-contents'],
+    tests: [
+      judgeSees('each model has its state budget'),
+      judgeSees('the budget cuts the transcript first'),
+      judgeSees('a state whose kept parts alone are over the budget is an error naming them'),
+      engine('a judge call whose kept parts are over the budget is a judge error'),
     ],
   },
   {
@@ -1257,7 +1286,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.input-size',
     area: 'Judges and matchers',
-    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint",
+    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `sees` hint",
     tests: [
       unit("a provider's error keeps its wording and adds what fills the judge's input"),
       engine("a provider's error keeps its wording and names what filled the judge's input"),
