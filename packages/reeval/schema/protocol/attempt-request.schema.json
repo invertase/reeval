@@ -5,7 +5,7 @@
   "$ref": "#/$defs/AttemptRequest",
   "$defs": {
     "AttemptCall": {
-      "description": "One call an eval's body makes on its attempt.",
+      "description": "One call an eval's body makes on its attempt. The sandbox and the agent session start on the first call that needs them; there's no call to start them.",
       "oneOf": [
         {
           "description": "`c.send(prompt)`: the next turn of the agent session. Replies with a turn.",
@@ -140,18 +140,6 @@
             }
           },
           "required": ["op", "question"],
-          "additionalProperties": false
-        },
-        {
-          "description": "`c.sandbox()`: starts the sandbox and the agent session without a turn.",
-          "type": "object",
-          "properties": {
-            "op": {
-              "type": "string",
-              "const": "sandbox"
-            }
-          },
-          "required": ["op"],
           "additionalProperties": false
         }
       ]

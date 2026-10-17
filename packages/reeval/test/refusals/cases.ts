@@ -835,7 +835,6 @@ profiles:
         options: { artifacts: [{ name: 'home', port: 3000, path: '/', viewport: 'full-page' }] },
       }),
     ],
-    ['sandbox with an argument', request({ op: 'sandbox', start: true })],
     ['send without a prompt', request({ op: 'send' })],
     ['exec with a typo', request({ op: 'exec', cmd: 'ls' })],
     ['exec with an empty command', request({ op: 'exec', command: '' })],
@@ -853,7 +852,6 @@ profiles:
     ],
     ['expect with a label that is a number', request(expectCall({ label: 3 }))],
     ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
-    ['good: sandbox', request({ op: 'sandbox' })],
     ['good: judge', request({ op: 'judge', question: 'Does greet.js export greet?' })],
     [
       'good: judge with options',

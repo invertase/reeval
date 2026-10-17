@@ -202,26 +202,6 @@
               },
               "required": ["id", "ok", "op", "verdict"],
               "additionalProperties": false
-            },
-            {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "description": "Pairs a reply with its request.",
-                  "type": "string",
-                  "pattern": "\\S"
-                },
-                "ok": {
-                  "type": "boolean",
-                  "const": true
-                },
-                "op": {
-                  "type": "string",
-                  "const": "sandbox"
-                }
-              },
-              "required": ["id", "ok", "op"],
-              "additionalProperties": false
             }
           ]
         },
@@ -242,7 +222,7 @@
             },
             "op": {
               "type": "string",
-              "enum": ["send", "exec", "readFile", "writeFile", "expect", "judge", "sandbox"]
+              "enum": ["send", "exec", "readFile", "writeFile", "expect", "judge"]
             }
           },
           "required": ["error", "id", "ok", "op"],

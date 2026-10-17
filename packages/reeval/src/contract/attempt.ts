@@ -384,11 +384,10 @@ export const attemptCallSchema = z
       .describe(
         '`c.judge(question, options)`. Replies with its verdict, or a judge failure when the provider failed.',
       ),
-    z
-      .strictObject({ op: z.literal('sandbox') })
-      .describe('`c.sandbox()`: starts the sandbox and the agent session without a turn.'),
   ])
-  .describe("One call an eval's body makes on its attempt.")
+  .describe(
+    "One call an eval's body makes on its attempt. The sandbox and the agent session start on the first call that needs them; there's no call to start them.",
+  )
 
 export const attemptErrorSchema = z
   .looseObject({
@@ -427,12 +426,11 @@ export const attemptReplySchema = z
         op: z.literal('judge'),
         verdict: z.union([verdictSchema, judgeFailureSchema]),
       }),
-      z.strictObject({ id, ok: z.literal(true), op: z.literal('sandbox') }),
     ]),
     z.strictObject({
       id,
       ok: z.literal(false),
-      op: z.enum(['send', 'exec', 'readFile', 'writeFile', 'expect', 'judge', 'sandbox']),
+      op: z.enum(['send', 'exec', 'readFile', 'writeFile', 'expect', 'judge']),
       error: attemptErrorSchema,
     }),
   ])
