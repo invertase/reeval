@@ -530,7 +530,9 @@ const VERDICT_LABEL = {
 /** Each check of a variant beside its control's: which ones told them apart. */
 function ChecksTable({ entry }: { entry: EvalEntry }) {
   const rows = entry.cells.flatMap((cell) =>
-    (cell.checks ?? []).flatMap((k) => (k.control && k.verdict ? [{ cell, k }] : [])),
+    (cell.checks ?? []).flatMap((k) =>
+      k.control && k.verdict ? [{ cell, k, control: k.control }] : [],
+    ),
   )
   if (!rows.length) return null
   const answered = (t: { pass: number; fail: number; notRun: number }) => t.pass + t.fail + t.notRun
@@ -549,9 +551,8 @@ function ChecksTable({ entry }: { entry: EvalEntry }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map(({ cell, k }) => {
+            {rows.map(({ cell, k, control }) => {
               const idle = k.verdict === 'both-pass' || k.verdict === 'both-fail'
-              const control = k.control as NonNullable<typeof k.control>
               return (
                 <TableRow
                   key={`${cell.key}:${k.label}`}

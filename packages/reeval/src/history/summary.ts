@@ -79,7 +79,9 @@ const VERDICT_ORDER: Record<string, number> = { discriminates: 0, mixed: 1 }
  * without a control's tally.
  */
 export function checksLabel(cell: CellRecord): string {
-  const rows = (cell.checks ?? []).filter((k) => k.control && k.verdict)
+  const rows = (cell.checks ?? []).flatMap((k) =>
+    k.control && k.verdict ? [{ ...k, control: k.control }] : [],
+  )
   return rows
     .map((k, i) => ({ k, i }))
     .sort(
@@ -88,7 +90,7 @@ export function checksLabel(cell: CellRecord): string {
         a.i - b.i,
     )
     .map(({ k }) => {
-      const control = k.control as CheckTally
+      const { control } = k
       const notRun = k.notRun + control.notRun
       const notes = [
         notRun ? `${notRun} not run` : '',
