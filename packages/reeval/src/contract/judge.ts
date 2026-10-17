@@ -3,6 +3,7 @@
 // a fake judge); groups, evals and `c.judge()` also take an AI SDK model object, which only
 // TypeScript can hold, so the authored schemas accept any model and the cascade checks it later.
 import { z } from 'zod'
+import { badJudgeArtifacts } from '../judge/artifacts.ts'
 import { checkModelString } from '../judge/index.ts'
 import type {
   Capture,
@@ -259,6 +260,8 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
     at('providerOptions')
       ? `judge.providerOptions maps each provider to an object of JSON values, e.g. { google: { thinkingConfig: { thinkingBudget: 0 } } } (got ${shown(value.providerOptions)})${loc}`
       : undefined
+  const artifactsProblem = () =>
+    at('artifacts') ? `c.judge() artifacts ${badJudgeArtifacts(value.artifacts)}` : undefined
   if (site.at === 'config') {
     order.push(modelProblem, keyProblem, stateProblem, providerOptionsProblem, thresholdProblem)
   } else if (site.at === 'call') {
@@ -268,6 +271,7 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
       keyProblem,
       stateProblem,
       providerOptionsProblem,
+      artifactsProblem,
     )
   } else {
     order.push(

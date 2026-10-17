@@ -118,6 +118,10 @@ test('judge options name an unknown key, a misspelt state key and a bad value', 
     'c.judge() maxConcurrent must be a whole number of at least 1 (got 0)',
   )
   assert.equal(
+    judgeProblem({ artifacts: 'form' }, { at: 'call' }),
+    'c.judge() artifacts must be a list of capture handles or names (got "form")',
+  )
+  assert.equal(
     judgeProblem({ model: { kind: 'fake-judge', score: () => 1 } }, { at: 'call' }),
     undefined,
   )
