@@ -130,15 +130,23 @@ The recipe as written, under the [fake harness](/recipes/fake-harness) (which wr
 
 ## Read the effort
 
-A skill can help without changing the pass rate: the agent gets there with less searching. The `effort:` line under each variant compares medians with the control's. In the real run above, the variant used 3 tool calls against 8, and 9 s of agent time against 18 s.
-
-`×0.38` is the variant's median divided by the control's. The verdict at the end comes from a rank test on tool calls: `fewer tool calls` or `more tool calls` (with its p) when it's significant, `within noise` when it isn't, and `too few attempts to test` when the counts can't reach significance at all. Two or three attempts per side never can; four per side can. Tokens join that test when both sides reported usage; a cell without usage is left out of the token sample only, and the token line is omitted rather than marked `insufficient`.
-
 ```bash
 npx reeval run skill --runs 4
 npx reeval query effort
 npx reeval analyze
 ```
+
+A skill can help without changing the pass rate: the agent gets there with less searching. The `effort:` line under each variant compares medians with the control's. In the real run above, the variant used 3 tool calls against 8, and 9 s of agent time against 18 s.
+
+`×0.38` is the variant's median divided by the control's. The verdict comes from a rank test on tool calls, and needs four attempts a side to reach significance:
+
+| Verdict | When |
+|---|---|
+| `fewer tool calls`, `more tool calls` | The test is significant, with its p |
+| `within noise` | It isn't |
+| `too few attempts to test` | The counts can't reach significance at all, as at two or three attempts a side |
+
+Tokens join that test when both sides reported usage. [Effort](/concepts/lift#effort-next-to-lift) has the details.
 
 `reeval query effort` lists the same numbers for every recorded run. [`reeval analyze`](/reference/cli/analyze) explains a run in plain words, lift and effort included, with each claim tied to a fact from the run.
 
@@ -164,13 +172,15 @@ Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidenc
 
 ## Variations
 
-- **Several skills:** `compare: { baseline: plain, variants: [good, weak], minLift: 0 }` gives each its own cell and lift against the same control.
-- **Skill from git or npm:** `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan.
-- **A shared starting point:** `const withSkill = base.extendEnvironment('with-skill', …)` then `compare: { baseline: base, variants: [withSkill] }`. `compare` does not layer them.
-- **Report only:** drop `minLift` and set `compare: { baseline, variants, gate: 'none' }` to see lift without failing anything.
-- **Ask which arm did better:** `compare: { baseline, variants, questions: ['Which greet.js reads more like our house style?'] }` judges the two arms' diffs pair by pair after the run, as `examples/hello`'s `skill.eval.ts` does. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Ask questions](/guide/compare#ask-questions).
-- **Across runs:** `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)).
-- **Did the agent open the skill?** `expect(turn).toHaveCalledSkill('house-greeting')` after `c.send`. That is "opened or loaded", not "followed". Keep the `c.exec` check for the greeting. See [Matchers](/reference/matchers#transcript-matchers).
+| Variation | How |
+|---|---|
+| Several skills | `compare: { baseline: plain, variants: [good, weak], minLift: 0 }` gives each its own cell and lift against the same control |
+| Skill from git or npm | `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan |
+| A shared starting point | `const withSkill = base.extendEnvironment('with-skill', …)` then `compare: { baseline: base, variants: [withSkill] }`. `compare` does not layer them |
+| Report only | Drop `minLift` and set `compare: { baseline, variants, gate: 'none' }` to see lift without failing anything |
+| Ask which arm did better | `compare: { baseline, variants, questions: ['Which greet.js reads more like our house style?'] }` judges the two arms' diffs pair by pair after the run, as `examples/hello`'s `skill.eval.ts` does. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Compare questions](/guide/questions) |
+| Across runs | `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)) |
+| Did the agent open the skill? | `expect(turn).toHaveCalledSkill('house-greeting')` after `c.send`. That is "opened or loaded", not "followed". Keep the `c.exec` check for the greeting. See [Matchers](/reference/matchers#transcript-matchers) |
 
 ## Next
 

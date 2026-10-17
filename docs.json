@@ -45,6 +45,7 @@
         { "title": "Evals and checks", "href": "/guide/writing-evals" },
         { "title": "Multi-turn evals", "href": "/guide/multi-turn" },
         { "title": "Compare and lift", "href": "/guide/compare" },
+        { "title": "Compare questions", "href": "/guide/questions" },
         { "title": "Environments and skills", "href": "/guide/environments" }
       ]
     },
@@ -66,6 +67,7 @@
         { "title": "The studio", "href": "/guide/studio" },
         { "title": "CI", "href": "/guide/ci" },
         { "title": "Analysis", "href": "/guide/analysis" },
+        { "title": "Explaining a run", "href": "/guide/analyze" },
         { "title": "Debugging a run", "href": "/guide/debugging" }
       ]
     },

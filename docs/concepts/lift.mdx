@@ -51,7 +51,9 @@ The `gate` option (on the config, a profile's `defaults`, a group or an eval) de
 | `'all'` (default) | Every counted attempt passes | pass^k |
 | `{ passRate: 0.8 }` | Its pass@1 is at least 0.8 | a pass@1 threshold |
 
-A cell's pass@1 is its passes over its passes and fails: the chance that one attempt passes. Infra errors and skipped attempts don't count either way. `'all'` gets harder to meet as `runs` grows, even for an agent that's no worse: an agent with a pass@1 of 0.85 passes all five of `runs: 5` only 0.85⁵ = 44% of the time. So the plan prints a hint when an eval runs more than once with it.
+A cell's pass@1 is its passes over its passes and fails: the chance that one attempt passes. Infra errors and skipped attempts don't count either way.
+
+`'all'` gets harder to meet as `runs` grows, even for an agent that's no worse: at a pass@1 of 0.85, all five of `runs: 5` pass only 0.85⁵ = 44% of the time. The plan prints a hint when an eval runs more than once with it.
 
 ## Lift and its interval
 
@@ -66,12 +68,9 @@ flowchart LR
 
 When the interval spans 0, the summary adds `within noise`: at this many attempts, the variant and the control can't be told apart. The Wilson interval stays sensible at 0/n and n/n, which is where small evals usually land.
 
-Lift gates; the win rates of a [compare question](/guide/compare#ask-questions) only annotate. They judge the attempts that passed their checks against each other, and never change a cell's outcome.
+Lift gates; the win rates of a [compare question](/guide/questions) only annotate, and never change a cell's outcome.
 
-Each judge key also has its own pass rate on the cell
-(`login 4/5 · checkout 0/5`). A key's lift prints only when both sides have at
-least two counted attempts — the same floor at which an all-or-nothing split
-can exclude 0. An attempt still fails if any judge fails.
+Each judge key also has its own pass rate on the cell (`login 4/5 · checkout 0/5`). A key's lift prints only when both sides have at least two counted attempts, the floor at which an all-or-nothing split can exclude 0.
 
 ## Why two runs is usually noise
 
@@ -88,7 +87,7 @@ The interval is wide when attempts are few. These are reeval's own intervals for
 | 10/10 | 5/10 | +50 | +12…+76 | no |
 | 20/20 | 10/20 | +50 | +24…+70 | no |
 
-At two runs per cell only an all-or-nothing difference clears noise. `reeval analyze` treats fewer than two counted attempts a side as `insufficient` (not measured), not as a results line; the run summary still prints the interval. reeval's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
+At two runs per cell only an all-or-nothing difference clears noise. reeval's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
 
 ```text
      ✓ fixes a broken config and explains it      5/6 · pass@1 100% gated  6 attempts
@@ -118,11 +117,11 @@ An [`evaluate.each`](/recipes/eval-each) family with `compare` gets one lift per
 | 1 | Newcombe's paired score interval (his method 10) | McNemar's exact test | 6 discordant cases |
 | More | A t interval over each case's pass-rate difference | Wilcoxon signed-rank | 6 cases |
 
-Six discordant cases are the fewest whose exact p can fall below 0.05 (2 · 0.5⁶ = 0.031). The verdict is `lift` or `drop` when the interval excludes 0, else `noise`. A family's effort is the same per-case pairing: the ratio of medians, with a signed-rank verdict.
+Six discordant cases are the fewest whose exact p can fall below 0.05 (2 · 0.5⁶ = 0.031). The verdict is `lift` or `drop` when the interval excludes 0, else `noise`, and a family's effort uses the same per-case pairing with a signed-rank verdict.
 
 ## Effort next to lift
 
-Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. When both sides reported usage, tokens join that line with the same rank test. From a real run of Cursor and Antigravity at `--runs 2`:
+Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. From a real run of Cursor and Antigravity at `--runs 2`:
 
 ```text
      ✓ greets in the house style                    4/8 · pass@1 100% gated  8 attempts
@@ -134,11 +133,11 @@ Pass rate can't tell a skill that makes the agent four times cheaper from no ski
            effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
 ```
 
-The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure (agent time and tokens each get their own verdict in `reeval query effort`). Effort never fails a run, and reeval prices no models.
+The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure; agent time and tokens get their own verdicts in `reeval query effort`. Effort never fails a run.
 
-**Effort** in reeval always means this measure: tool calls, agent time and tokens, read from the attempt. It's an output, never a setting. A harness factory's `effort` option, as in `codex({ effort: 'high' })`, is **reasoning effort**, an input to the model; `reeval query` has it as `reasoning_effort` on `cells` and `attempts`.
+Tokens join the line when both sides reported usage. An attempt with no usage (Goose's, say) drops out of the token sample only, and when either side has none left the token metric is omitted, not `insufficient`.
 
-Attempts that reported no usage (Goose, or any cell without `usage`) drop out of the token sample only. If either side then has no token sample, the token metric is omitted: no token line, and not `insufficient`. A Goose cell in the same study does not blank tokens on Cursor cells. `insufficient` is statistical only (too few attempts).
+**Effort** always means this measure, an output read from the attempt. A harness factory's `effort` option, as in `codex({ effort: 'high' })`, is **reasoning effort**, an input to the model, which `reeval query` has as `reasoning_effort`.
 
 | Verdict | Printed | When |
 |---|---|---|
@@ -164,21 +163,9 @@ So `reeval run` hints when a compare runs 2 or 3 times a cell: `hint: 1 compare 
 effort: tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430k vs 1,094k (×0.39, no overlap): too few attempts to test (n = 3 vs 3)
 ```
 
-At three or more attempts a side, a metric whose two ranges don't overlap (every attempt on one side beat every attempt on the other) says `no overlap` even when its test is `insufficient`. It's a direction, not an effect: one ordering in ten separates by chance at 3 vs 3. `reeval query effort` has it per metric as `separated`, `time_separated` and `tokens_separated`, and `reeval analyze` reports it as directional, never as an effect.
+At three or more attempts a side, a metric whose two ranges don't overlap says `no overlap` even when its test is `insufficient`. It's a direction, not an effect: one ordering in ten separates by chance at 3 vs 3. `reeval query effort` has it as `separated`, `time_separated` and `tokens_separated`.
 
 ## Effects across runs
-
-`reeval query factor_effects` contrasts one factor at a time (`environment`, `harness`, `model`) with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. `pass_verdict` is `insufficient` when either side has fewer than two counted attempts. Each row has an evidence tier:
-
-| `tier` | The contrast |
-|---|---|
-| `controlled` | Two cells in one run and eval |
-| `pooled` | The same contrast over comparable runs: attempts summed per eval, then across evals, where an effort effect needs the same verdict in at least 2/3 of them. Two source fingerprints of the same eval are not pooled |
-| `paired` | A variant against its control over a pooled `evaluate.each` family's cases in one run; `strata` is the paired cases |
-| `observed` | A cell between two runs whose fingerprint changed in one part; `confounded` when several did |
-| `not_measured` | The factor has one level |
-
-Pooling is how 2 runs at a time add up to a verdict. Over the same history, each run's skill contrast is `insufficient` on effort, and the pooled one isn't:
 
 ```text
 eval_key                                                    factor       tier        points  lo      hi     pass_verdict  effort_verdict
@@ -188,7 +175,17 @@ evals/skill.eval.ts › house greeting › greets in the house…   environment 
 ·                                                           harness      pooled      0       -0.436  0.436  noise         insufficient
 ```
 
-`reeval analyze` reads these facts and explains a run in plain words; see [reeval analyze](/reference/cli/analyze).
+`reeval query factor_effects` contrasts one factor at a time (`environment`, `harness` or `model`), with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. Pooling is how two runs at a time add up to a verdict: each run's skill contrast is `insufficient` on effort, and the pooled one isn't.
+
+| `tier` | The contrast |
+|---|---|
+| `controlled` | Two cells in one run and eval |
+| `pooled` | The same contrast over comparable runs: attempts summed per eval, then across evals, where an effort effect needs the same verdict in at least 2/3 of them. Two source fingerprints of the same eval are not pooled |
+| `paired` | A variant against its control over a pooled `evaluate.each` family's cases in one run; `strata` is the paired cases |
+| `observed` | A cell between two runs whose fingerprint changed in one part; `confounded` when several did |
+| `not_measured` | The factor has one level |
+
+[`reeval analyze`](/guide/analyze) reads these facts and explains a run in plain words.
 
 ## Gate on the lower bound with minLift
 
@@ -201,7 +198,7 @@ Lift below minLift (1)
  ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +100 pts (95% +7…+100, 2/2 vs 0/2): its lower bound is below minLift 50
 ```
 
-A variant below its `minLift` fails the run with exit 1. To pass it, add runs until the interval narrows, not until the point estimate looks good. On an `evaluate.each` family, `minLift` gates the pooled lift's lower bound, not each case's, so more cases narrow it too.
+A variant below its `minLift` fails the run with exit 1: add runs until the interval narrows. On an `evaluate.each` family, `minLift` gates the pooled lift's lower bound, not each case's, so more cases narrow it too.
 
 ## Methods
 

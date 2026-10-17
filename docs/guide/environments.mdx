@@ -126,16 +126,20 @@ export const notes = defineEnvironment('acme-notes', ({ directory }) => ({
 }))
 ```
 
-`directory()` maps every file in a host directory to its `file()`, so a later key overrides it. It skips `.git`, dependency and build output such as `node_modules/` and `dist/`, and caches. `into` places the files under a subdirectory, and `glob` picks them with ordered patterns, `!` excluding: `glob: ['src/**', 'package.json', '!**/*.test.ts']`. [Helpers](/reference/helpers#directory) lists the default ignores and how symlinks and modes are handled.
+`directory()` maps every file in a host directory to its `file()`, so a later key overrides it. It skips `.git`, dependencies, build output and caches, such as `node_modules/`, `dist/` and `.cache/`.
+
+`into` places the files under a subdirectory, and `glob` picks them with ordered patterns, `!` excluding: `glob: ['src/**', 'package.json', '!**/*.test.ts']`. [Helpers](/reference/helpers#directory) lists the default ignores and how symlinks and modes are handled.
 
 ## Run setup steps
 
-`setup` runs commands in order in every attempt, before the agent starts. Steps get the environment's secrets, run outside the eval's timeout, and write their output to the attempt's `setup.log`. Each step can set its own `timeout` and `cwd`.
-
 ```mermaid
 flowchart LR
-  I[image ready] --> V[env] --> W[workspace] --> F[files and rules] --> S[setup] --> N[snapshot] --> A["agent, with skills and MCP"]
+  I[image ready] --> V[env] --> W[workspace]
+  W --> F[files and rules] --> S[setup] --> N[snapshot]
+  N --> A["agent, with skills and MCP"]
 ```
+
+`setup` runs commands in order in every attempt, before the agent starts. Steps get the environment's secrets, run outside the eval's timeout, and write their output to the attempt's `setup.log`. Each step can set its own `timeout` and `cwd`.
 
 reeval snapshots the workspace after setup, so the repository, files, rules and setup output never show in the agent's diff. Anything baked into the image instead belongs to the [sandbox](/guide/sandboxes).
 
@@ -147,7 +151,7 @@ const withSkills = base.extendEnvironment('with-skills', ({ skill }) => ({
 }))
 ```
 
-`extendEnvironment` is how two environments share setup. The child's spec layers on the parent's: where both set the same key (a variable, a file path, a skill or server name, `rules`, `workspace`), the child wins, and the record lists it under `overrides`. `setup` steps concatenate, parent first. `compare` does not do this for you.
+`extendEnvironment` is how two environments share setup. The child's spec layers on the parent's: where both set the same key (a variable, a file path, a skill or server name, `rules`, `workspace`), the child wins, and the record lists it under `overrides`. `setup` steps concatenate, parent first, and `compare` doesn't layer for you.
 
 ## Check what the environment set up
 

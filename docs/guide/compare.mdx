@@ -105,9 +105,11 @@ flowchart LR
   V --> V1[attempt 1] & V2[attempt 2]
 ```
 
-`baseline` is the control. Each variant runs as that environment on its own, with the same prompt and checks. `compare` does not layer, inherit or extend. Each is a [cell](/concepts/matrix), and `--runs 2` runs each cell twice.
+`baseline` is the control. Each variant runs as that environment on its own, with the same prompt and checks: `compare` doesn't layer, inherit or extend. Each arm is a [cell](/concepts/matrix), and `--runs 2` runs each cell twice.
 
-Share setup before compare, with `extendEnvironment`. The child keeps the parent's layers and wins on shared keys. The house-greeting variant above is `plain` plus the skill. With a `baseline`, the compare names every arm: don't set `environment` on the same object, and reeval doesn't apply one inherited from a parent.
+Share setup with `extendEnvironment` before the compare. The child keeps the parent's layers and wins on shared keys, so the house-greeting variant is `plain` plus the skill.
+
+With a `baseline`, the compare names every arm. Don't set `environment` on the same object; reeval doesn't apply one inherited from a parent either.
 
 ## Leave out the baseline
 
@@ -167,7 +169,7 @@ Lift and effort pair each variant with the control, whether you named it or not.
 }
 ```
 
-By default only variant cells decide pass or fail. The control is expected to do worse, so its misses print in their own `Expected misses, not gated` section, one line of why each, never under `Failures`, and never break CI. `gate: 'all'` gates the control too, and `'none'` only reports.
+By default only variant cells decide pass or fail. The control is expected to do worse, so its misses print in their own `Expected misses, not gated` section, never under `Failures`, and never break CI. `gate: 'all'` gates the control too, and `'none'` only reports.
 
 ## Gate on pass@1
 
@@ -178,7 +180,9 @@ By default only variant cells decide pass or fail. The control is expected to do
 }
 ```
 
-A cell passes only when every counted attempt passes, by default: pass^k. That gets harder as `runs` grows, even for an agent that's no worse, which is what the plan's hint says. `gate: { passRate: 0.8 }` passes a cell when its pass@1, the share of its attempts that pass, is at least 80%. Infra errors don't count either way; a cell is `infra_error` only when nothing counted.
+By default a cell passes only when every counted attempt passes: pass^k. That gets harder as `runs` grows, even for an agent that's no worse, which is what the plan's hint says.
+
+`gate: { passRate: 0.8 }` passes a cell when its pass@1, the share of its attempts that pass, is at least 80%. Infra errors don't count either way; a cell is `infra_error` only when nothing counted.
 
 ## Require a minimum lift
 
@@ -218,7 +222,9 @@ effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to tes
 
 Under each variant, the effort line compares the median attempt with the control's: tool calls, then the agent's time, then tokens when both sides reported usage. With the skill, Cursor made 3 tool calls instead of 8 and finished in half the time.
 
-The verdict comes from a rank test on the tool calls. Two attempts against two can never reach significance, so it says `too few attempts to test`. With enough runs it says `fewer tool calls` or `more tool calls` with a p-value, or `within noise`. From three attempts a side, a metric whose ranges don't overlap at all says `no overlap` beside its ratio: a direction, still not significant. Tokens use the same test on the attempts that reported usage; a cell without usage is left out of that sample only, and if either side then has none the token line is omitted, not marked `insufficient`. The studio's cells table shows effort next to lift, as in the screenshot above.
+The verdict comes from a rank test on the tool calls. Two attempts against two can never reach significance, so it says `too few attempts to test`. With enough runs it says `fewer tool calls` or `more tool calls` with a p-value, or `within noise`.
+
+From three attempts a side, a metric whose ranges don't overlap at all says `no overlap` beside its ratio: a direction, still not significant. Tokens use the same test on the attempts that reported usage, and the token figures are left out when either side has none. [Effort](/concepts/lift#effort-next-to-lift) has the details.
 
 ## Which checks made the difference
 
@@ -244,11 +250,11 @@ Checks that don't discriminate (2)
  · evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake  adds package.json: passes on both
 ```
 
-A labelled judge (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`) is one of these checks, so its label replaces the question everywhere: in a cell's judge rates, `reeval show`, `summary.md` and the analysis digest. A labelled `toSucceed()` names its `- Check` line in `summary.md`, and a long script shows its first line; the log has the rest.
+A check that passes on both sides, or fails on both, measures nothing about the variant. The notice lists them but never fails the run: rework such a check, or drop it.
 
-A check that passes on both sides, or fails on both, measures nothing about the variant. The notice lists them but never fails the run. Rework such a check, or drop it.
+A labelled judge (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`) is one of these checks, and its label replaces the question everywhere it's shown.
 
-Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early, the later checks never run: they read `0/2 (2 not run)` and count against the control. The same verdicts are in `reeval query`'s `check_discrimination` view:
+Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early the later checks never run: they read `0/2 (2 not run)` and count against the control. The same verdicts are in `reeval query`'s `check_discrimination` view:
 
 ```bash
 npx reeval query "SELECT label, variant_pass, control_pass, verdict
@@ -275,62 +281,7 @@ contrasts (each pair of arms, same harness)
 
 With two variants or more, the run summary, `reeval show` and `summary.md` also set every pair of arms on one harness side by side: lift, the checks that tell them apart and effort. Here every attempt misses a requirement no arm meets, so pass@1 says nothing and the checks carry the difference. Gating stays each variant against its control.
 
-`reeval query contrasts` has the same pairs as rows (`a_environment`, `b_environment`, `pass_verdict`, effort verdicts and `discriminating`), and `reeval analyze` gets one `contrast` fact per pair.
-
-## Ask questions
-
-```ts title="evals/questions.eval.ts"
-evaluate('greets by name', {
-  harness: [composer, pim],
-  runs: 1,
-  compare: {
-    baseline: plain,
-    variants: [withHouseGreeting],
-    questions: [{
-      question: 'Which greet.js handles a missing or empty name better?',
-      across: 'environment',
-    }],
-  },
-}, async (c) => { … })
-```
-
-Lift says which arm passes more often. Each of `questions` asks which attempt did the better job, pair by pair, once every attempt of the eval has finished. Questions annotate the compare: they never change pass, fail or the exit code.
-
-```text
-plan  profile questions (--profile) · 1 eval · 4 cells · 4 attempts · …
-eval                                      harnesses  variants  runs  attempts  notes
-evals/questions.eval.ts › greets by name  2          1         1     4
-  question 1/1  Which greet.js handles a missing or empty name better? · after the run · environment · 2 pairs · google/gemini-3.8-flash
-```
-
-`reeval run --dry-run` lists each question, the model that will answer it, and how many pairs it will ask (assuming every attempt passes its checks). A profile that leaves only the baseline drops them. `questions` is always a list: each entry is a string, or `{ question, model?, across? }`. `across` is the factor you vary when pairing: `'environment'` holds the harness (Auth vs Firebase UI); `'harness'` holds the environment (Cursor vs Antigravity). `compare.across: 'environment'` sets that default for every question that does not name its own `across`. A list of both, or omitting it, asks both pair kinds. Without a model, `analysis.model` answers, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time.
-
-## Read the answers
-
-```text
-Summary
- evals/questions.eval.ts
-   ✓ greets by name      4/4 · pass@1 100% gated  4 attempts
-       cursor:composer-2.5/plain/docker                control    1/1  pass@1 100%
-       cursor:composer-2.5/with-house-greeting/docker  variant    1/1  pass@1 100%   lift +0 pts (95% −79…+79, 1/1 vs 1/1), within noise
-       …
-       pi:gemini-3.8-flash/plain/docker                control    1/1  pass@1 100%
-       pi:gemini-3.8-flash/with-house-greeting/docker  variant    1/1  pass@1 100%   lift +0 pts (95% −79…+79, 1/1 vs 1/1), within noise
-       …
-       question  "Which greet.js handles a missing or empty name better?" within: plain 0/4 (0%), with-house-greeting 4/4 (100%) · across: cursor:composer-2.5 0/2 (0%), pi:gemini-3.8-flash 2/2 (100%) · 8 votes, 2 ties, 0/4 pairs split by order · gemini-3.8-flash
-```
-
-A real run on Cursor and pi. Lift can't separate the arms, since all four attempts passed, but the question can: with the skill, both agents' `greet.js` answered a missing name with `Ahoy, crew!`, and the model picked that arm in both orders on both harnesses.
-
-reeval pairs the attempts from their diffs by varying one factor and holding the others, unless `across` or `compare.across` keeps one. Vary the environment and two environments meet on the same harness and run; vary the harness and two agents meet on the same environment and run. Each pair goes to the model twice, the order swapped, labelled only A and B, so neither position nor a name can win it.
-
-A pair whose two orders pick opposite sides is a split: the position decided it, not the work. The summary counts splits (`0/4 pairs split by order`), and with three arms or more prints each pair head to head, a split apart from a win: `within cursor:composer-2.5: no-skill 2–0 current-skill (1 split) · …`. `reeval query question_pairs` has those tallies, and the `votes` table every vote.
-
-A side's rate is its wins over the decided votes it was in; a tie counts for neither side, and a split counts one win for each. Every vote is in the record under `evals[].answers`, with the rates per pair kind. A vote may carry a short `reason` (capped), shown in `reeval show`, the summary and the studio. A model error is kept on its answer as `error` and printed as a warning, and the outcomes stand. `reeval analyze` includes those rates, the vote and tie counts, a failed call, and a sample of reasons, as annotation: they never gate the run.
-
-<Warning>
-  Attempts that failed their checks are left out of the pairs. A question on a compare whose baseline is expected to fail, like the house-greeting eval, has no pairs to judge: ask it where both arms can pass.
-</Warning>
+`reeval query contrasts` has the same pairs as rows, and `reeval analyze` gets one `contrast` fact per pair. To ask a model which arm did better, add [compare questions](/guide/questions).
 
 ## Next
 

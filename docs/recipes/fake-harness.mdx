@@ -307,19 +307,23 @@ No turn runs, so the check sees only what the environment set up: `c.readFile` s
 
 ## The fake sandbox and judge
 
-- `fakeSandbox()` gives each attempt a temporary directory on the host (`dir` picks the parent). Commands run on your machine with your tools.
-- It can't enforce `egress`: an eval with a restricted policy stops the run with exit 2 under it (see [Offline evals](/recipes/offline)). Brokered secrets become placeholders that nothing substitutes.
-- `fakeJudge({ score })` returns that score for every question (default 1), so `fakeJudge({ score: 0.3 })` tests how a failing verdict reads.
+| Fake | What it does |
+|---|---|
+| `fakeSandbox()` | Gives each attempt a temporary directory on the host (`dir` picks the parent). Commands run on your machine with your tools |
+| `fakeSandbox()` and `egress` | It can't enforce a policy: an eval with a restricted one stops the run with exit 2 (see [Offline evals](/recipes/offline)). Brokered secrets become placeholders that nothing substitutes |
+| `fakeJudge({ score })` | Returns that score for every question (default 1), so `fakeJudge({ score: 0.3 })` tests how a failing verdict reads |
 
 Both configs plan the same evals, so `--dry-run` under either shows the same eval rows.
 
 ## Variations
 
-- **A flaky agent:** `fakeHarness({ files, flakeRate: 0.3 })` writes nothing in about 30% of attempts, for trying `gate: { passRate }`.
-- **Canned tool calls:** `tools: [{ tool: 'read', input: {…}, output: '…' }]` adds tool events to every turn, for transcript checks.
-- **Only some files:** `include: ['evals/hello.eval.ts']` in the fake config leaves out evals that need a real agent or Docker.
-- **Profiles:** the fake config needs its own `profiles` if you pass `--profile`; `examples/hello/reeval.fake.config.ts` has `smoke` and `nightly`.
-- **Record fake runs:** `reeval run --config reeval.fake.config.ts --record` writes history you can open in `reeval studio`, handy for trying the studio or `reeval query`.
+| Variation | How |
+|---|---|
+| A flaky agent | `fakeHarness({ files, flakeRate: 0.3 })` writes nothing in about 30% of attempts, for trying `gate: { passRate }` |
+| Canned tool calls | `tools: [{ tool: 'read', input: {…}, output: '…' }]` adds tool events to every turn, for transcript checks |
+| Only some files | `include: ['evals/hello.eval.ts']` in the fake config leaves out evals that need a real agent or Docker |
+| Profiles | The fake config needs its own `profiles` if you pass `--profile`; `examples/hello/reeval.fake.config.ts` has `smoke` and `nightly` |
+| Record fake runs | `reeval run --config reeval.fake.config.ts --record` writes history you can open in `reeval studio`, handy for trying the studio or `reeval query` |
 
 ## Next
 

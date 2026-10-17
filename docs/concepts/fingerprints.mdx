@@ -79,7 +79,12 @@ Some changes sit outside the fingerprint but still move results, such as the mod
 
 ## Renaming an eval starts a new history
 
-An eval's id is its file, its groups and its name: `evals/hello.eval.ts › greet module › creates a tested greet module`. History, compare and the studio follow evals by that id.
+```text
+evals/hello.eval.ts › greet module › creates a tested greet module
+└ file               └ group         └ name
+```
+
+An eval's id is its file, its groups and its name. History, compare and the studio follow evals by that id.
 
 <Warning>
   Renaming an eval, one of its groups or its file gives it a new id. `reeval compare` shows the old one as `removed` and the new one as `new`, and its history starts again.

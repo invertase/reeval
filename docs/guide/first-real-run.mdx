@@ -21,12 +21,13 @@ import { docker } from '{{ pkg }}/sandbox'
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
   harness: cursor({ model: 'composer-2.5' }),
+  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   timeout: '15m',
 })
 ```
 
-The [harness](/reference/harness/cursor) is the agent, and the [sandbox](/reference/sandbox/docker) is where it runs. `docker()` with no options uses reeval's own image: Node 22, git and Cursor's agent, which reeval drives through the Cursor TypeScript SDK. `model` is required.
+The [harness](/reference/harness/cursor) is the agent, and the [sandbox](/reference/sandbox/docker) is where it runs. `docker()`, the default, uses reeval's own image: Node 22, git and Cursor's agent, which reeval drives through the Cursor TypeScript SDK. `model` is required.
 
 ## Write the evals
 
@@ -110,13 +111,13 @@ GOOGLE_GENERATIVE_AI_API_KEY=...
 
 ## Your key stays on the host
 
-`CURSOR_API_KEY` never enters the container. The agent sees a placeholder, and reeval's egress gateway swaps in the real key only on the request that exchanges it with Cursor. A check that prints `env` in the sandbox finds `aisdkhc_…`, not your key. [Credential brokering](/concepts/credential-brokering) shows how.
-
-`reeval run -v` says so for every attempt:
-
 ```text
 [agent#1 cursor]  17:40:47 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
 ```
+
+`reeval run -v` prints that line for every attempt. `CURSOR_API_KEY` never enters the container: the agent sees a placeholder, and reeval's egress gateway swaps in the real key only on the request that exchanges it with Cursor.
+
+A check that prints `env` in the sandbox finds `aisdkhc_…`, not your key. [Credential brokering](/concepts/credential-brokering) shows how.
 
 ## Run it
 
@@ -155,11 +156,7 @@ Duration  17s
 
 `hello` is a filter: it matches the file `evals/hello.eval.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict.
 
-Each attempt line shows the judge as `pass 0.99/0.80` (score against the
-threshold). `Tokens` is what Cursor reported for the run — input, the cached
-part, and output — and the same figures appear on each attempt line when the
-harness reports them. reeval records them per turn and per attempt, but prices
-no models, so there's no cost.
+Each attempt line shows the judge as `pass 0.99/0.80`: its score against the threshold. `Tokens` is what Cursor reported for the run (input, the cached part and output), and each attempt line shows the same figures when the harness reports them. reeval records them per turn and per attempt but prices no models, so there's no cost.
 
 On a terminal, the same run is in colour:
 
@@ -199,9 +196,7 @@ plan  config ../../reeval.config.ts · …
 
 `.reeval/` holds scratch runs, caches and debug data. `.env*` holds your keys.
 
-<Success>
-  A real agent passed your evals in Docker, and your key never left the host.
-</Success>
+A real agent passed your evals in Docker, and your key never left the host.
 
 ## Next
 

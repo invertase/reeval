@@ -175,7 +175,7 @@ analysis: {
 }
 ```
 
-`vote` answers [compare questions](/guide/compare#ask-questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, `{ winner, reason? }` to record a reason, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
+`vote` answers [compare questions](/guide/questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, `{ winner, reason? }` to record a reason, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
 
 ## Errors
 

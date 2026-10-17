@@ -70,11 +70,15 @@ Each restricted eval lists its policy and the automatic hosts it adds.
 
 `'deny-all'` means "nothing but what the attempt itself needs", so the agent still works:
 
-- **The harness's API:** `api2.cursor.sh` and `*.cursor.sh` for Cursor, `api.anthropic.com` and `*.anthropic.com` for Claude Code, and `generativelanguage.googleapis.com` for Antigravity.
-- **Every brokered secret's `hosts`**, so a key the agent is meant to use keeps working.
-- **Each MCP `http` or `sse` server's host.**
+| Automatic host | Such as |
+|---|---|
+| The harness's API | `api2.cursor.sh` and `*.cursor.sh` for Cursor, `api.anthropic.com` and `*.anthropic.com` for Claude Code, `generativelanguage.googleapis.com` for Antigravity, Goose and pi, `api.openai.com` for Codex, and the provider's hosts and `mcp.exa.ai` for OpenCode |
+| Every brokered secret's `hosts` | A key the agent is meant to use keeps working |
+| Each MCP `http` or `sse` server's host | The server the environment gives the agent |
 
-The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, so an egress policy doesn't stop them and the egress record doesn't see them. reeval still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway. A search the gateway refuses is still a `web-search` (`ok: false`); the matcher sees it.
+The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, and Codex's on OpenAI's side, so an egress policy doesn't stop them and the egress record doesn't see them.
+
+reeval still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway. A search the gateway refuses is still a `web-search` (`ok: false`), so the matcher sees it too.
 
 ## Run it and see what was blocked
 
@@ -126,10 +130,12 @@ reeval: evals/offline.eval.ts: evaluate("writes a CSV parser offline") runs unde
 
 ## Variations
 
-- **One policy for the whole suite:** set `egress` in `reeval.config.ts` or a profile's `defaults`; groups, environments and evals can still override it.
-- **Offline as a compare:** `compare: { baseline: online, variants: [offline] }` with `defineEnvironment('online', {})` and `defineEnvironment('offline', { egress: 'deny-all' })` shows how much the agent relies on the network, as lift.
-- **Your API only:** `{ allow: ['api.acme.dev'] }` without `DEFAULT_EGRESS_ALLOW` blocks installs as well.
-- **A brokered key:** `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })` adds `api.acme.dev` to the automatic hosts and keeps the token out of the sandbox.
+| Variation | How |
+|---|---|
+| One policy for the whole suite | Set `egress` in `reeval.config.ts` or a profile's `defaults`; groups, environments and evals can still override it |
+| Offline as a compare | `compare: { baseline: online, variants: [offline] }` with `defineEnvironment('online', {})` and `defineEnvironment('offline', { egress: 'deny-all' })` shows how much the agent relies on the network, as lift |
+| Your API only | `{ allow: ['api.acme.dev'] }` without `DEFAULT_EGRESS_ALLOW` blocks installs as well |
+| A brokered key | `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })` adds `api.acme.dev` to the automatic hosts and keeps the token out of the sandbox |
 
 ## Next
 

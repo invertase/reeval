@@ -55,7 +55,7 @@ A restricted policy always allows what the attempt itself needs, so an agent sti
 | Brokered secrets | Each secret's `hosts` |
 | MCP servers | Each `http` or `sse` server's host |
 
-Only the attempt's own harness's hosts are added: a Cursor attempt under `'deny-all'` can't reach Anthropic. Cursor needs only its agent backend: reeval's Cursor adapter fetches the model catalog from `api.cursor.com` on the host, not in the sandbox.
+Only the attempt's own harness's hosts are added: a Cursor attempt under `'deny-all'` can't reach Anthropic. Cursor needs only its agent backend: reeval's Cursor adapter fetches the model catalogue from `api.cursor.com` on the host, not in the sandbox.
 
 ## Expected telemetry hosts
 
