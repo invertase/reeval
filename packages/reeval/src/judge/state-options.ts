@@ -1,51 +1,5 @@
-import { z } from 'zod'
+import { judgeStateSchema } from '../contract/judge.ts'
 import type { JudgeOptions, JudgeStateOptions, ResolvedJudgeStateOptions } from '../types.ts'
-
-const pattern = z.string().refine((s) => s.trim().length > 0)
-
-/** `JudgeStateOptions` as data: the same shape for a config object, a declaration tree or another language. */
-export const judgeStateSchema = z.strictObject({
-  task: z.boolean().optional().describe("The graded turn's prompt. Default true."),
-  output: z
-    .boolean()
-    .optional()
-    .describe("The graded turn's final message, or `on`'s value. Default true."),
-  files: z
-    .boolean()
-    .optional()
-    .describe('`status path` lines for the changed files. Default true.'),
-  diff: z
-    .union([z.boolean(), z.array(pattern).min(1)])
-    .optional()
-    .describe(
-      'The diff since the eval started, or gitignore-style patterns over it. Default true.',
-    ),
-  contents: z
-    .array(pattern)
-    .optional()
-    .describe(
-      'Workspace files shown whole: exact paths or gitignore-style patterns. Default none.',
-    ),
-  transcript: z
-    .union([z.boolean(), z.enum(['tools', 'full'])])
-    .optional()
-    .describe("The graded turn's transcript: true, 'tools' or 'full'. Default false."),
-  turns: z
-    .enum(['last', 'all'])
-    .optional()
-    .describe("'all': every turn up to the graded one. Default 'last'."),
-  checks: z
-    .union([z.boolean(), z.array(pattern)])
-    .optional()
-    .describe('`c.exec` results so far, or only the commands listed. Default false.'),
-})
-
-type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
-type Assert<T extends true> = T
-export type _SameAsSchema = [
-  Assert<Same<z.infer<typeof judgeStateSchema>, JudgeStateOptions>>,
-  Assert<Same<keyof z.infer<typeof judgeStateSchema>, keyof JudgeStateOptions>>,
-]
 
 export const STATE_KEYS = Object.keys(judgeStateSchema.shape) as Array<keyof JudgeStateOptions>
 

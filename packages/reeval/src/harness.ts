@@ -1,32 +1,25 @@
 // `reeval/harness`: agent harness descriptors. The implementations load lazily in workers.
 import { resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
+import { harnessProblem } from './contract/harness.ts'
 import { UsageError } from './errors.ts'
 import type {
   AntigravityHarnessDescriptor,
-  ClaudeCodeEffort,
   ClaudeCodeHarnessDescriptor,
   CodexHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
   GooseHarnessDescriptor,
+  HarnessDescriptor,
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,
 } from './types.ts'
 
-const CLAUDE_CODE_EFFORTS: readonly ClaudeCodeEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
-
-function isClaudeCodeEffort(value: string): value is ClaudeCodeEffort {
-  return (CLAUDE_CODE_EFFORTS as readonly string[]).includes(value)
-}
-
-/** `effort` is the value that CLI takes; there is no shared enum. Fast is not this. */
-function checkEffort(factory: string, effort: unknown): void {
-  if (effort === undefined) return
-  if (typeof effort !== 'string' || !effort.trim()) {
-    throw new UsageError(
-      `${factory}({ effort }) is the value that CLI takes, e.g. ${factory}({ effort: 'high' }) (got ${JSON.stringify(effort)})`,
-    )
-  }
+/** `options` as a descriptor of `kind`, checked; throws its factory's sentence for the first problem. */
+function make<D extends HarnessDescriptor>(kind: D['kind'], options: unknown): D {
+  const descriptor = { kind, ...(options as object) } as D
+  const problem = harnessProblem(descriptor)
+  if (problem) throw new UsageError(problem)
+  return descriptor
 }
 
 /**
@@ -36,23 +29,8 @@ function checkEffort(factory: string, effort: unknown): void {
  * `id` names the cell; it defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]`
  * when `effort` is set.
  */
-export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHarnessDescriptor => {
-  if (typeof options?.model !== 'string' || !options.model) {
-    throw new UsageError("cursor() needs a model, e.g. cursor({ model: 'composer-2.5' })")
-  }
-  if (
-    options.params !== undefined &&
-    (typeof options.params !== 'object' ||
-      options.params === null ||
-      !Object.values(options.params).every((v) => typeof v === 'string'))
-  ) {
-    throw new UsageError(
-      `cursor({ params }) maps parameter ids to string values, e.g. { fast: 'false' } (got ${JSON.stringify(options.params)})`,
-    )
-  }
-  checkEffort('cursor', options.effort)
-  return { kind: 'cursor', ...options }
-}
+export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHarnessDescriptor =>
+  make('cursor', options)
 
 /**
  * The Claude Code CLI. `model` is required, since the CLI's default changes under you. `effort`
@@ -62,22 +40,7 @@ export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHa
  */
 export const claudeCode = (
   options: Omit<ClaudeCodeHarnessDescriptor, 'kind' | 'effort'> & { effort?: string },
-): ClaudeCodeHarnessDescriptor => {
-  if (typeof options?.model !== 'string' || !options.model) {
-    throw new UsageError(
-      "claudeCode() needs a model, e.g. claudeCode({ model: 'claude-sonnet-5' })",
-    )
-  }
-  checkEffort('claudeCode', options.effort)
-  const { effort, ...rest } = options
-  if (effort === undefined) return { kind: 'claude-code', ...rest }
-  if (!isClaudeCodeEffort(effort)) {
-    throw new UsageError(
-      `claudeCode({ effort }) must be low, medium, high, xhigh or max (got ${JSON.stringify(effort)})`,
-    )
-  }
-  return { kind: 'claude-code', ...rest, effort }
-}
+): ClaudeCodeHarnessDescriptor => make('claude-code', options)
 
 /**
  * The Antigravity CLI, with a Gemini API key. `model` is required, since the CLI's default
@@ -87,15 +50,7 @@ export const claudeCode = (
  */
 export const antigravity = (
   options: Omit<AntigravityHarnessDescriptor, 'kind'>,
-): AntigravityHarnessDescriptor => {
-  if (typeof options?.model !== 'string' || !options.model) {
-    throw new UsageError(
-      "antigravity() needs a model, e.g. antigravity({ model: 'gemini-3.8-flash-medium' })",
-    )
-  }
-  checkEffort('antigravity', options.effort)
-  return { kind: 'antigravity', ...options }
-}
+): AntigravityHarnessDescriptor => make('antigravity', options)
 
 /**
  * OpenCode, on the model's provider: `model` is OpenCode's `<provider>/<model>`, such as
@@ -109,8 +64,7 @@ export const opencode = (
 ): OpenCodeHarnessDescriptor => {
   const why = opencodeModelError(options?.model)
   if (why) throw new UsageError(`opencode(): ${why}`)
-  checkEffort('opencode', options.effort)
-  return { kind: 'opencode', ...options }
+  return make('opencode', options)
 }
 
 /** Why `model` can't run on OpenCode, or undefined when it can. */
@@ -127,30 +81,16 @@ export function opencodeModelError(model: unknown): string | undefined {
  * provider. `effort` is `GOOSE_THINKING_EFFORT`. `id` names the cell; it defaults to
  * `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.
  */
-export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarnessDescriptor => {
-  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
-    throw new UsageError(
-      `goose() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. goose({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
-    )
-  }
-  checkEffort('goose', options.effort)
-  return { kind: 'goose', ...options }
-}
+export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarnessDescriptor =>
+  make('goose', options)
 
 /**
  * pi, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google` provider.
  * `effort` is pi's `--thinking` flag. `id` names the cell; it defaults to `pi:<model>`, or
  * `pi:<model>[effort=<value>]` when `effort` is set.
  */
-export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescriptor => {
-  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
-    throw new UsageError(
-      `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
-    )
-  }
-  checkEffort('pi', options.effort)
-  return { kind: 'pi', ...options }
-}
+export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescriptor =>
+  make('pi', options)
 
 /**
  * OpenAI's Codex CLI, with an OpenAI API key: `model` is an OpenAI model id, e.g. `gpt-5.6-luna`,
@@ -158,61 +98,13 @@ export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescrip
  * names the cell; it defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when
  * `effort` is set.
  */
-export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarnessDescriptor => {
-  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
-    throw new UsageError(
-      `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got ${JSON.stringify(options?.model)})`,
-    )
-  }
-  checkEffort('codex', options.effort)
-  return { kind: 'codex', ...options }
-}
-
-const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex']
-
-const STEP_KEYS = ['exec', 'write', 'reply', 'mcp', 'error']
-
-function checkScript(script: unknown): void {
-  const example = "script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]]"
-  if (!Array.isArray(script) || !script.every(Array.isArray)) {
-    throw new UsageError(
-      `fakeHarness({ script }) takes one list of steps per turn, e.g. ${example} (got ${JSON.stringify(script)})`,
-    )
-  }
-  for (const step of script.flat() as unknown[]) {
-    const keys = typeof step === 'object' && step !== null ? Object.keys(step) : []
-    const [key] = keys
-    const value = key === undefined ? undefined : (step as Record<string, unknown>)[key]
-    const valid =
-      keys.length === 1 &&
-      key !== undefined &&
-      STEP_KEYS.includes(key) &&
-      (key === 'write'
-        ? typeof value === 'object' &&
-          value !== null &&
-          Object.values(value).every((c) => typeof c === 'string')
-        : key === 'mcp'
-          ? typeof value === 'string' && /^[^/]+\/[^/]+$/.test(value)
-          : typeof value === 'string')
-    if (!valid) {
-      throw new UsageError(
-        `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string }, { mcp: '<server>/<tool>' } or { error: string } (got ${JSON.stringify(step)})`,
-      )
-    }
-  }
-}
+export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarnessDescriptor =>
+  make('codex', options)
 
 /** A fake agent that writes canned files and replies with canned text. For tests and dry runs. */
-export const fakeHarness = (options: Omit<FakeHarnessDescriptor, 'kind'> = {}) => {
-  if (options.script !== undefined) checkScript(options.script)
-  if (options.layout !== undefined && !LAYOUTS.includes(options.layout)) {
-    throw new UsageError(
-      `fakeHarness({ layout }) is one of ${LAYOUTS.map((l) => `'${l}'`).join(', ')} (got ${JSON.stringify(options.layout)})`,
-    )
-  }
-  checkEffort('fakeHarness', options.effort)
-  return { kind: 'fake', ...options } satisfies FakeHarnessDescriptor
-}
+export const fakeHarness = (
+  options: Omit<FakeHarnessDescriptor, 'kind'> = {},
+): FakeHarnessDescriptor => make('fake', options)
 
 export type {
   AgentHarnessDescriptor,

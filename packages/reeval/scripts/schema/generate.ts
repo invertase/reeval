@@ -3,7 +3,8 @@
 // property's TSDoc comment becomes its `description`.
 import { join } from 'node:path'
 import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
-import { PACKAGE_DIR, type PersistedShape, type PlanShape, SHAPES } from './shapes.ts'
+import { PACKAGE_DIR, type PersistedShape, PLAN_SHAPES, type PlanShape, SHAPES } from './shapes.ts'
+import { checkContractCoverage, withZodDefs } from './zod.ts'
 
 export type Schema = {
   /** The TSDoc comment of the type alias, interface or property it was generated from. */
@@ -165,6 +166,7 @@ export function generate(
     const project = snapshot.getProjects()[0]
     const checker = project.checker
     const out = new Map<string, ShapeSchema>()
+    const typed = new Set<string>()
     for (const shape of shapes) {
       const file = join(PACKAGE_DIR, shape.file)
       const source = project.program.getSourceFile(file)
@@ -175,12 +177,17 @@ export function generate(
       // system (macOS, Windows), with forward slashes.
       const gen = new Generator(checker, api.toPath(join(PACKAGE_DIR, 'src')))
       const root = gen.schema(checker.getDeclaredTypeOfSymbol(symbol))
+      const plan = !SHAPES.includes(shape as PersistedShape)
+      if (plan) for (const name of gen.defs.keys()) typed.add(name)
       const doc: ShapeSchema = {
         $schema: 'https://json-schema.org/draft/2020-12/schema',
         $comment: `Generated from ${shape.type} in ${shape.file} by \`pnpm schema:update\`; don't edit. ${shape.where}.`,
         title: shape.type,
         $ref: root.$ref ?? '',
-        $defs: Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b))),
+        // Persisted shapes stay generated from their types; plan shapes take the contract's defs.
+        $defs: plan
+          ? withZodDefs(Object.fromEntries(gen.defs))
+          : Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b))),
       }
       const field = 'versionField' in shape ? shape.versionField : undefined
       const version = field && resolve(doc, root).properties?.[field]
@@ -192,6 +199,7 @@ export function generate(
       }
       out.set(shape.name, doc)
     }
+    if (PLAN_SHAPES.every((shape) => shapes.includes(shape))) checkContractCoverage(typed)
     return out
   } finally {
     api.close()

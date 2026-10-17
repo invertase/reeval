@@ -1,6 +1,11 @@
 // The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
 import { createHash } from 'node:crypto'
+import { z } from 'zod'
+import { compareProblem, isEvaluationModel } from './contract/compare.ts'
+import { sandboxProblem } from './contract/docker.ts'
+import { harnessProblem } from './contract/harness.ts'
+import { gateProblem } from './contract/plain.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
@@ -10,6 +15,7 @@ import {
   checkEnv,
   EMPTY_BASELINE,
   emptyEnvironment,
+  environmentDataProblem,
   isEnvironment,
   isMovingRef,
   plannedSecrets,
@@ -23,7 +29,6 @@ import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
-import { checkModelString } from './judge/index.ts'
 import { judgeProblem, mergeJudge } from './judge/state-options.ts'
 import type {
   CaptureOptions,
@@ -89,22 +94,10 @@ const SUGGEST: Record<string, string> = {
 
 /** Throws unless `value` is `'all'` or `{ passRate }` with a rate in (0, 1]. */
 export function checkGate(value: unknown, where: string): void {
-  if (value === 'all') return
-  const rate = (value as { passRate?: unknown })?.passRate
-  const keys = typeof value === 'object' && value !== null ? Object.keys(value) : []
-  if (keys.length === 1 && typeof rate === 'number' && rate > 0 && rate <= 1) return
-  throw new UsageError(
-    `gate is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got ${JSON.stringify(value)}) in ${where}`,
-  )
+  const problem = gateProblem(value, where)
+  if (problem) throw new UsageError(problem)
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
-const GATES: CompareGate[] = ['variants', 'all', 'none']
-const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'questions', 'across']
-const QUESTION_KEYS = ['question', 'model', 'across']
-const QUESTION_EXAMPLE = `questions: ['Which handles state more cleanly?']`
-const PAIR_FACTORS: PairFactor[] = ['environment', 'harness']
-const ACROSS_HINT = `'environment' (vary the environment, same harness) or 'harness' (vary the harness, same environment)`
-const ACROSS_MEAN = ' Did you mean "across"? It is the factor you vary: across: \'environment\'.'
 
 const ID = /^[A-Za-z0-9._:@+\-=[\]]+$/
 
@@ -162,159 +155,6 @@ const describe = (value: unknown) => {
     return keys.length ? `an object with ${keys.map((k) => `"${k}"`).join(', ')}` : 'an object'
   }
   return JSON.stringify(value) ?? String(value)
-}
-
-/** A question's model is a language model: evaluation models score yes/no questions only. */
-const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
-
-function checkQuestion(item: unknown, where: string): string {
-  if (typeof item === 'string') {
-    if (item.trim()) return item
-    throw new UsageError(
-      `compare.questions in ${where} is an empty string. Ask something, e.g. ${QUESTION_EXAMPLE}.`,
-    )
-  }
-  if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-    throw new UsageError(
-      `compare.questions in ${where} takes strings or { question, model?, across? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
-    )
-  }
-  const unknown = Object.keys(item).filter((k) => !QUESTION_KEYS.includes(k))
-  if (unknown.length) {
-    const hint = unknown.some((k) => k === 'cut' || k === 'cuts') ? ACROSS_MEAN : ''
-    throw new UsageError(
-      `compare.questions in ${where} takes { question, model?, across? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).${hint}`,
-    )
-  }
-  const { question, model, across } = item as {
-    question?: unknown
-    model?: unknown
-    across?: unknown
-  }
-  if (typeof question !== 'string' || !question.trim()) {
-    throw new UsageError(
-      `compare.questions in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`,
-    )
-  }
-  if (across !== undefined) checkAcross(across, where, question)
-  if (model !== undefined) {
-    if (typeof model !== 'string' || checkModelString(model)) {
-      throw new UsageError(
-        `compare.questions "${question}" in ${where}: model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${describe(model)})`,
-      )
-    }
-    if (isEvaluationModel(model)) {
-      throw new UsageError(
-        `compare.questions "${question}" in ${where} names ${model}, an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
-      )
-    }
-  }
-  return question
-}
-
-function checkQuestions(value: unknown, where: string): void {
-  if (!Array.isArray(value)) {
-    throw new UsageError(
-      `compare.questions in ${where} is a list (got ${describe(value)}), e.g. ${QUESTION_EXAMPLE}.`,
-    )
-  }
-  const list: unknown[] = value
-  if (list.length === 0) {
-    throw new UsageError(
-      `compare.questions in ${where} is an empty list. Ask at least one, e.g. ${QUESTION_EXAMPLE}, or leave questions out.`,
-    )
-  }
-  const texts = list.map((item) => checkQuestion(item, where))
-  const dupe = texts.find((t, i) => texts.indexOf(t) !== i)
-  if (dupe) throw new UsageError(`compare.questions in ${where} asks "${dupe}" twice`)
-}
-
-function checkAcross(value: unknown, where: string, question: string): void {
-  if (PAIR_FACTORS.includes(value as PairFactor)) return
-  throw new UsageError(
-    `compare.questions "${question}" in ${where}: across is ${ACROSS_HINT} (got ${describe(value)}). Leave it out to vary both.`,
-  )
-}
-
-function checkAcrosses(value: unknown, where: string): void {
-  const list = Array.isArray(value) ? value : [value]
-  if (list.length === 0) {
-    throw new UsageError(
-      `compare.across in ${where} is ${ACROSS_HINT}, or a list of those (got ${describe(value)}). Leave it out to vary both.`,
-    )
-  }
-  const seen = new Set<string>()
-  for (const item of list) {
-    if (!PAIR_FACTORS.includes(item as PairFactor)) {
-      throw new UsageError(
-        `compare.across in ${where} is ${ACROSS_HINT}, or a list of those (got ${describe(item)}).`,
-      )
-    }
-    if (seen.has(item as string)) {
-      throw new UsageError(`compare.across in ${where} lists "${item}" twice`)
-    }
-    seen.add(item as string)
-  }
-}
-
-function checkCompare(value: unknown, where: string): void {
-  if (Array.isArray(value)) {
-    throw new UsageError(
-      `compare must be an object in ${where}. Use compare: { baseline, variants: [...] }.`,
-    )
-  }
-  const spec = value as { baseline?: unknown; variants?: unknown }
-  if (typeof value !== 'object' || value === null || !Array.isArray(spec.variants)) {
-    throw new UsageError(
-      `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions?, across? }.`,
-    )
-  }
-  for (const key of Object.keys(value)) {
-    if (!COMPARE_KEYS.includes(key)) {
-      const hint =
-        key === 'question'
-          ? `. Did you mean "questions"? It's a list: ${QUESTION_EXAMPLE}.`
-          : key === 'cut' || key === 'cuts'
-            ? `.${ACROSS_MEAN}`
-            : ''
-      throw new UsageError(`Unknown compare option "${key}" in ${where}${hint}`)
-    }
-  }
-  const { baseline, variants, gate, minLift, harness, questions, across } = spec as {
-    baseline?: unknown
-    variants: unknown[]
-    gate?: unknown
-    minLift?: unknown
-    harness?: unknown
-    questions?: unknown
-    across?: unknown
-  }
-  if (questions !== undefined) checkQuestions(questions, where)
-  if (across !== undefined) checkAcrosses(across, where)
-  if (baseline !== undefined && !isEnvironment(baseline)) {
-    throw new UsageError(
-      `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(baseline)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environment as the control.`,
-    )
-  }
-  if (gate !== undefined && !GATES.includes(gate as CompareGate)) {
-    throw new UsageError(`compare.gate must be one of ${GATES.join(', ')} in ${where}`)
-  }
-  if (minLift !== undefined && !(typeof minLift === 'number' && minLift >= -1 && minLift <= 1)) {
-    throw new UsageError(`compare.minLift is points from -1 to 1 (got ${minLift}) in ${where}`)
-  }
-  if (harness !== undefined && !Array.isArray(harness)) {
-    throw new UsageError(`compare.harness must be a list of harness ids in ${where}`)
-  }
-  if (variants.length === 0) {
-    throw new UsageError(`compare has no variants in ${where}. Give at least one environment.`)
-  }
-  for (const v of variants) {
-    if (!isEnvironment(v)) {
-      throw new UsageError(
-        `compare takes environments (got ${describe(v)}) in ${where}. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval.`,
-      )
-    }
-  }
 }
 
 /** `compare: false` and `environment` beside `compare.baseline` are never legal options. */
@@ -388,6 +228,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
         `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
       )
     }
+    const problem = sandboxProblem(o.sandbox)
+    if (problem) throw new UsageError(`sandbox in ${where}: ${problem}`)
   }
   if (o.environment !== undefined) {
     if (Array.isArray(o.environment)) {
@@ -400,10 +242,23 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
         `environment in ${where} must come from defineEnvironment(…) (got ${describe(o.environment)})`,
       )
     }
+    const problem = environmentDataProblem(o.environment, 'environment', where)
+    if (problem) throw new UsageError(problem)
   }
   const raw = options as { environment?: unknown; compare?: unknown }
   refuseIllegalCompare(raw, where)
-  if (o.compare !== undefined) checkCompare(o.compare, where)
+  if (o.compare !== undefined) {
+    const problem = compareProblem(o.compare, where, z.custom<Environment>(isEnvironment))
+    if (problem) throw new UsageError(problem)
+    const { baseline, variants } = o.compare
+    for (const [label, env] of [
+      ['compare.baseline', baseline],
+      ...variants.map((v, i) => [`compare.variants[${i}]`, v] as const),
+    ] as const) {
+      const bad = env && environmentDataProblem(env, label, where)
+      if (bad) throw new UsageError(bad)
+    }
+  }
   if (o.pin !== undefined) {
     const bad = Array.isArray(o.pin) ? o.pin.filter((k) => !PINNABLE.includes(k)) : [o.pin]
     if (bad.length) {
@@ -568,6 +423,8 @@ export function checkHarnesses(list: unknown[], where: string): void {
         throw new UsageError(`startTimeout of harness in ${where}: ${(error as Error).message}`)
       }
     }
+    const problem = harnessProblem(item as HarnessDescriptor)
+    if (problem) throw new UsageError(`harness in ${where}: ${problem}`)
   }
 }
 

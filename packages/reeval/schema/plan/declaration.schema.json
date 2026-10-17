@@ -10,13 +10,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort passed as `agy --effort`, e.g. `low`, `medium`, `high` or `max`. The slug's `-low`/`-medium`/`-high` suffix is the same knob baked into `model`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "antigravity"
         },
         "maxConcurrent": {
@@ -25,30 +28,16 @@
         },
         "model": {
           "description": "A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "CaptureOptions": {
       "description": "Camera defaults for `c.capture()`. Cascades config → profile defaults → group → eval, shallow-merged. `viewport` on a level replaces the whole value. `port` is not an option: pass it as the first argument to `c.capture`.",
@@ -117,13 +106,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort the Agent SDK `/effort` control takes: `low`, `medium`, `high`, `xhigh` (Extra in the UI) or `max`.",
-          "enum": ["high", "low", "max", "medium", "xhigh"]
+          "type": "string",
+          "enum": ["low", "medium", "high", "xhigh", "max"]
         },
         "id": {
           "description": "Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "claude-code"
         },
         "maxConcurrent": {
@@ -132,30 +124,16 @@
         },
         "model": {
           "description": "A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "CodexHarnessDescriptor": {
       "description": "OpenAI's Codex CLI through `@reeval/harness-codex` (`codex exec --json`), made by `codex()`. It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.",
@@ -163,13 +141,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort as Codex's `model_reasoning_effort`, e.g. `low`, `medium`, `high`, `xhigh`, `max` or `ultra`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "codex"
         },
         "maxConcurrent": {
@@ -178,53 +159,42 @@
         },
         "model": {
           "description": "An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[\\w.-]+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "CompareQuestion": {
       "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run.",
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "across": {
               "description": "The factor it varies when pairing.",
-              "enum": ["environment", "harness"]
+              "$ref": "#/$defs/PairFactor"
             },
             "model": {
               "description": "`'provider/model'` that answers it.",
               "type": "string"
             },
             "question": {
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             }
           },
-          "required": ["question"]
-        },
-        {
-          "type": "string"
+          "required": ["question"],
+          "additionalProperties": false
         }
       ]
     },
@@ -278,13 +248,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "cursor"
         },
         "maxConcurrent": {
@@ -293,39 +266,26 @@
         },
         "model": {
           "description": "A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "params": {
           "description": "Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "string"
           }
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "DeclarationTree": {
       "description": "An eval file's top-level groups, evals and todos, in declaration order.",
@@ -455,37 +415,45 @@
           "description": "Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped.",
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^(CAP_)?[A-Z_]+$"
           }
         },
         "cpus": {
           "description": "CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's.",
-          "type": "number"
+          "type": "number",
+          "exclusiveMinimum": 0
         },
         "dockerfile": {
           "description": "An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "from": {
           "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "image": {
           "description": "An image that already has the harness baked in, used as is.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "install": {
           "description": "Baked onto the sandbox image in one build container: in order, no secrets, no workspace.",
+          "minItems": 1,
           "type": "array",
           "items": {
             "$ref": "#/$defs/InstallStep"
           }
         },
         "kind": {
+          "type": "string",
           "const": "docker"
         },
         "maxConcurrent": {
@@ -496,16 +464,21 @@
           "description": "The container's memory: `'4g'` (default), `'512m'`, or bytes.",
           "anyOf": [
             {
-              "type": "number"
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
             },
             {
-              "type": "string"
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
           ]
         },
         "pids": {
           "description": "Processes and threads at once. Default 1024.",
-          "type": "number"
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         },
         "root": {
           "description": "Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. For evals that install system packages at run time.",
@@ -515,25 +488,71 @@
           "description": "Swap on top of `memory`, in the same units. Default: as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.",
           "anyOf": [
             {
-              "type": "number"
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
             },
             {
-              "type": "string"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           ]
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "Duration": {
+      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^(?=.*[1-9])\\d+(\\.\\d+)?(ms|s|m|h)$"
+        }
+      ]
+    },
+    "EgressPolicy": {
+      "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "allow-all"
+        },
+        {
+          "type": "string",
+          "const": "deny-all"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "allow": {
+              "readOnly": true,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["allow"],
+          "additionalProperties": false
+        }
+      ]
     },
     "EnvironmentData": {
       "description": "An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`.",
       "type": "object",
       "properties": {
         "kind": {
+          "type": "string",
           "const": "environment"
         },
         "layers": {
           "description": "Its `extend` chain, root first.",
+          "readOnly": true,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EnvironmentLayer"
@@ -541,10 +560,12 @@
         },
         "name": {
           "description": "The name it was defined or extended under, which names its cells.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]*$"
         }
       },
-      "required": ["kind", "layers", "name"]
+      "required": ["kind", "layers", "name"],
+      "additionalProperties": false
     },
     "EnvironmentLayer": {
       "description": "One environment in an `extend` chain.",
@@ -552,14 +573,16 @@
       "properties": {
         "name": {
           "description": "The name passed to `defineEnvironment` or `extend`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]*$"
         },
         "spec": {
           "description": "The spec as that layer wrote it, before merging.",
           "$ref": "#/$defs/EnvironmentSpec"
         }
       },
-      "required": ["name", "spec"]
+      "required": ["name", "spec"],
+      "additionalProperties": false
     },
     "EnvironmentSpec": {
       "description": "What an eval runs in: the declarative, phased spec of one environment.",
@@ -567,23 +590,7 @@
       "properties": {
         "egress": {
           "description": "Replaces the inherited policy; an `extend` child's replaces its parent's.",
-          "anyOf": [
-            {
-              "enum": ["allow-all", "deny-all"]
-            },
-            {
-              "type": "object",
-              "properties": {
-                "allow": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "required": ["allow"]
-            }
-          ]
+          "$ref": "#/$defs/EgressPolicy"
         },
         "env": {
           "description": "Variables and secrets for the sandbox, merged by name over the parent's.",
@@ -592,15 +599,16 @@
         "files": {
           "description": "Workspace-relative, or `~/` for home.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "anyOf": [
               {
-                "$ref": "#/$defs/HostFile"
+                "type": "string"
               },
               {
-                "type": "string"
+                "$ref": "#/$defs/HostFile"
               }
             ]
           }
@@ -608,8 +616,9 @@
         "mcp": {
           "description": "MCP servers the agent gets, by name.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "$ref": "#/$defs/McpServer"
           }
@@ -618,23 +627,16 @@
           "description": "Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code.",
           "anyOf": [
             {
-              "$ref": "#/$defs/HostFile"
+              "type": "string"
             },
             {
-              "type": "string"
+              "$ref": "#/$defs/HostFile"
             }
           ]
         },
         "sandbox": {
           "description": "Where the attempt runs: `docker()` or `fakeSandbox()`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; install is not merged onto the parent image.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DockerSandboxDescriptor"
-            },
-            {
-              "$ref": "#/$defs/FakeSandboxDescriptor"
-            }
-          ]
+          "$ref": "#/$defs/SandboxDescriptor"
         },
         "setup": {
           "description": "Shell commands run in every attempt before the agent starts; a child's run after its parent's.",
@@ -655,24 +657,25 @@
           "$ref": "#/$defs/GitWorkspace"
         }
       },
-      "required": []
+      "additionalProperties": false
     },
     "EnvValue": {
       "description": "A variable's value: a literal string, or a host secret.",
       "anyOf": [
         {
-          "$ref": "#/$defs/Secret"
+          "type": "string"
         },
         {
-          "type": "string"
+          "$ref": "#/$defs/Secret"
         }
       ]
     },
     "EnvVars": {
       "description": "Environment variables by name.",
       "type": "object",
-      "properties": {},
-      "required": [],
+      "propertyNames": {
+        "type": "string"
+      },
       "additionalProperties": {
         "$ref": "#/$defs/EnvValue"
       }
@@ -1454,7 +1457,8 @@
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "failWith": {
           "description": "Throw before the first turn starts, to simulate an infra failure.",
@@ -1463,8 +1467,9 @@
         "files": {
           "description": "Files the fake agent writes into the sandbox on every turn.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "string"
           }
@@ -1475,18 +1480,21 @@
         },
         "id": {
           "description": "Cell id; defaults to `fake`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "ignoreAbort": {
           "description": "Sits out `delayMs` even after an abort, like an agent that doesn't stop when it's told to.",
           "type": "boolean"
         },
         "kind": {
+          "type": "string",
           "const": "fake"
         },
         "layout": {
           "description": "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
-          "enum": ["antigravity", "claude-code", "codex", "cursor", "goose", "opencode", "pi"]
+          "type": "string",
+          "enum": ["cursor", "claude-code", "antigravity", "opencode", "goose", "pi", "codex"]
         },
         "maxConcurrent": {
           "description": "The most attempts on this harness kind at once, across the run.",
@@ -1514,32 +1522,17 @@
           "description": "The first this many session starts of an attempt never become ready, even when aborted (`true`: every one).",
           "anyOf": [
             {
-              "const": false
+              "type": "number"
             },
             {
-              "type": "number"
+              "type": "boolean",
+              "const": true
             }
           ]
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         },
         "text": {
           "description": "The fake agent's final message on every turn; default `Done.`.",
@@ -1560,7 +1553,8 @@
                 "type": "string"
               }
             },
-            "required": ["input", "output", "tool"]
+            "required": ["input", "output", "tool"],
+            "additionalProperties": false
           }
         },
         "withSkill": {
@@ -1569,8 +1563,9 @@
           "properties": {
             "files": {
               "type": "object",
-              "properties": {},
-              "required": [],
+              "propertyNames": {
+                "type": "string"
+              },
               "additionalProperties": {
                 "type": "string"
               }
@@ -1579,10 +1574,11 @@
               "type": "string"
             }
           },
-          "required": []
+          "additionalProperties": false
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "FakeJudgeModel": {
       "description": "A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a function of the state the judge would see works per group, eval or call, not in the config.",
@@ -1613,13 +1609,16 @@
       "properties": {
         "dir": {
           "description": "Parent directory for the per-eval workspace (defaults to the OS temp dir).",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `fake`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "fake"
         },
         "maxConcurrent": {
@@ -1627,7 +1626,8 @@
           "type": "number"
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "FakeScriptStep": {
       "description": "One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp` (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error` ends the turn there with status `error` and that message, as a provider error would.",
@@ -1635,29 +1635,28 @@
         {
           "type": "object",
           "properties": {
-            "error": {
-              "type": "string"
-            }
-          },
-          "required": ["error"]
-        },
-        {
-          "type": "object",
-          "properties": {
             "exec": {
               "type": "string"
             }
           },
-          "required": ["exec"]
+          "required": ["exec"],
+          "additionalProperties": false
         },
         {
           "type": "object",
           "properties": {
-            "mcp": {
-              "type": "string"
+            "write": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
             }
           },
-          "required": ["mcp"]
+          "required": ["write"],
+          "additionalProperties": false
         },
         {
           "type": "object",
@@ -1666,21 +1665,29 @@
               "type": "string"
             }
           },
-          "required": ["reply"]
+          "required": ["reply"],
+          "additionalProperties": false
         },
         {
           "type": "object",
           "properties": {
-            "write": {
-              "type": "object",
-              "properties": {},
-              "required": [],
-              "additionalProperties": {
-                "type": "string"
-              }
+            "mcp": {
+              "type": "string",
+              "pattern": "^[^/]+\\/[^/]+$"
             }
           },
-          "required": ["write"]
+          "required": ["mcp"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": ["error"],
+          "additionalProperties": false
         }
       ]
     },
@@ -1693,6 +1700,7 @@
           "type": "boolean"
         },
         "kind": {
+          "type": "string",
           "const": "git"
         },
         "path": {
@@ -1705,7 +1713,8 @@
         },
         "repo": {
           "description": "As written: a URL, `github:owner/repo`, or a local path.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "token": {
           "description": "The host variable holding a token for the fetch; read on the host only.",
@@ -1713,10 +1722,12 @@
         },
         "url": {
           "description": "What reeval fetches: the clone URL, or an absolute path for a local repository.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         }
       },
-      "required": ["kind", "repo", "url"]
+      "required": ["kind", "repo", "url"],
+      "additionalProperties": false
     },
     "GooseHarnessDescriptor": {
       "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models on a Gemini API key, and reports no usage (its ACP server counts one call).",
@@ -1724,13 +1735,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort as `GOOSE_THINKING_EFFORT`, e.g. `off`, `low`, `medium`, `high` or `max`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "goose"
         },
         "maxConcurrent": {
@@ -1739,57 +1753,43 @@
         },
         "model": {
           "description": "A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[\\w.-]+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "HarnessDescriptor": {
       "description": "The agent an attempt runs: a real harness, or the fake one.",
-      "anyOf": [
+      "oneOf": [
         {
-          "$ref": "#/$defs/AntigravityHarnessDescriptor"
-        },
-        {
-          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
-        },
-        {
-          "$ref": "#/$defs/CodexHarnessDescriptor"
+          "$ref": "#/$defs/FakeHarnessDescriptor"
         },
         {
           "$ref": "#/$defs/CursorHarnessDescriptor"
         },
         {
-          "$ref": "#/$defs/FakeHarnessDescriptor"
+          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
         },
         {
-          "$ref": "#/$defs/GooseHarnessDescriptor"
+          "$ref": "#/$defs/AntigravityHarnessDescriptor"
         },
         {
           "$ref": "#/$defs/OpenCodeHarnessDescriptor"
         },
         {
+          "$ref": "#/$defs/GooseHarnessDescriptor"
+        },
+        {
           "$ref": "#/$defs/PiHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/CodexHarnessDescriptor"
         }
       ]
     },
@@ -1798,49 +1798,39 @@
       "type": "object",
       "properties": {
         "kind": {
+          "type": "string",
           "const": "file"
         },
         "path": {
           "description": "Its absolute path on the host.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         }
       },
-      "required": ["kind", "path"]
+      "required": ["kind", "path"],
+      "additionalProperties": false
     },
     "InstallStep": {
       "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "run": {
               "description": "The shell command.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "timeout": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                }
-              ]
+              "$ref": "#/$defs/Duration"
             }
           },
-          "required": ["run"]
-        },
-        {
-          "type": "string"
+          "required": ["run"],
+          "additionalProperties": false
         }
       ]
     },
@@ -1883,13 +1873,14 @@
           "description": "`c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false.",
           "anyOf": [
             {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "type": "boolean"
             },
             {
-              "type": "boolean"
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
             }
           ]
         },
@@ -1897,20 +1888,23 @@
           "description": "Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing. These files leave the diff. Default none.",
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "\\S"
           }
         },
         "diff": {
           "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
           "anyOf": [
             {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "type": "boolean"
             },
             {
-              "type": "boolean"
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
             }
           ]
         },
@@ -1930,23 +1924,25 @@
           "description": "The graded turn's transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. Default false.",
           "anyOf": [
             {
-              "enum": ["full", "tools"]
+              "type": "boolean"
             },
             {
-              "type": "boolean"
+              "type": "string",
+              "enum": ["tools", "full"]
             }
           ]
         },
         "turns": {
           "description": "`'all'`: every turn up to the graded one under `turns`, each with its task, output and (with `transcript`) transcript. Default `'last'`.",
-          "enum": ["all", "last"]
+          "type": "string",
+          "enum": ["last", "all"]
         }
       },
-      "required": []
+      "additionalProperties": false
     },
     "McpServer": {
       "description": "An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.",
-      "anyOf": [
+      "oneOf": [
         {
           "type": "object",
           "properties": {
@@ -1958,20 +1954,24 @@
             },
             "command": {
               "description": "The command that starts the server in the sandbox.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "env": {
               "description": "Variables the server process gets.",
               "$ref": "#/$defs/EnvVars"
             },
             "kind": {
+              "type": "string",
               "const": "mcp"
             },
             "transport": {
+              "type": "string",
               "const": "stdio"
             }
           },
-          "required": ["args", "command", "env", "kind", "transport"]
+          "required": ["args", "command", "env", "kind", "transport"],
+          "additionalProperties": false
         },
         {
           "type": "object",
@@ -1979,34 +1979,39 @@
             "headers": {
               "description": "Request headers, with secrets brokered by the egress gateway.",
               "type": "object",
-              "properties": {},
-              "required": [],
+              "propertyNames": {
+                "type": "string"
+              },
               "additionalProperties": {
                 "anyOf": [
+                  {
+                    "type": "string"
+                  },
                   {
                     "$ref": "#/$defs/Secret"
                   },
                   {
                     "$ref": "#/$defs/SecretTemplate"
-                  },
-                  {
-                    "type": "string"
                   }
                 ]
               }
             },
             "kind": {
+              "type": "string",
               "const": "mcp"
             },
             "transport": {
               "description": "Streamable HTTP, or the older SSE transport.",
+              "type": "string",
               "enum": ["http", "sse"]
             },
             "url": {
-              "type": "string"
+              "type": "string",
+              "format": "uri"
             }
           },
-          "required": ["headers", "kind", "transport", "url"]
+          "required": ["headers", "kind", "transport", "url"],
+          "additionalProperties": false
         }
       ]
     },
@@ -2016,13 +2021,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort for that provider: `options.reasoningEffort` (OpenAI) or `options.thinking` (Anthropic). Values are whatever that provider takes.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `opencode:<model>`, or `opencode:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "opencode"
         },
         "maxConcurrent": {
@@ -2031,33 +2039,20 @@
         },
         "model": {
           "description": "OpenCode's model id, `<provider>/<model>`, e.g. `google/gemini-3.8-flash` or `anthropic/claude-haiku-4-5`; the provider picks the key.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "PairFactor": {
       "description": "A matrix factor a compare question varies when pairing; the others are held.",
+      "type": "string",
       "enum": ["environment", "harness"]
     },
     "PiHarnessDescriptor": {
@@ -2066,13 +2061,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort, passed as pi's `--thinking` (the CLI's name). Values are whatever that flag takes, e.g. `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "pi"
         },
         "maxConcurrent": {
@@ -2081,34 +2079,30 @@
         },
         "model": {
           "description": "A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[\\w.-]+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "PinnableKey": {
       "description": "An option a profile's `limit` can narrow, and `pin` can protect.",
       "enum": ["compare", "harness", "runs"]
+    },
+    "SandboxDescriptor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FakeSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/DockerSandboxDescriptor"
+        }
+      ]
     },
     "Secret": {
       "description": "A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by the `secret` helper of `defineEnvironment` and `defineConfig` callbacks.",
@@ -2116,10 +2110,12 @@
       "properties": {
         "from": {
           "description": "The host variable; defaults to the key it's set under.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
         },
         "hosts": {
           "description": "Brokers the secret: the sandbox gets a per-attempt placeholder, and the Docker egress gateway swaps in the real value only on HTTPS requests to these hosts (`*.example.com` for subdomains).",
+          "minItems": 1,
           "type": "array",
           "items": {
             "type": "string"
@@ -2127,12 +2123,14 @@
         },
         "in": {
           "description": "Where in a request to those hosts the gateway substitutes; defaults to `['header']`.",
+          "minItems": 1,
           "type": "array",
           "items": {
             "$ref": "#/$defs/SubstituteIn"
           }
         },
         "kind": {
+          "type": "string",
           "const": "secret"
         },
         "optional": {
@@ -2141,16 +2139,19 @@
         },
         "to": {
           "description": "`agent` (default): the container's environment. `checks`: only `c.exec` and `setup` steps.",
+          "type": "string",
           "enum": ["agent", "checks"]
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "SecretTemplate": {
       "description": "`secret.template('Bearer ${TOKEN}')`: host variables substituted into a string, for MCP headers.",
       "type": "object",
       "properties": {
         "kind": {
+          "type": "string",
           "const": "secret-template"
         },
         "template": {
@@ -2158,93 +2159,47 @@
           "type": "string"
         }
       },
-      "required": ["kind", "template"]
+      "required": ["kind", "template"],
+      "additionalProperties": false
     },
     "SetupStep": {
       "description": "Runs in every attempt before the agent starts, with secrets, outside the eval timeout: a shell command, or `{ run, timeout?, cwd? }`.",
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "cwd": {
               "description": "Relative to the workspace, or absolute; default the workspace.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "run": {
               "description": "The shell command.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "timeout": {
               "description": "Default 5m.",
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                }
-              ]
+              "$ref": "#/$defs/Duration"
             }
           },
-          "required": ["run"]
-        },
-        {
-          "type": "string"
+          "required": ["run"],
+          "additionalProperties": false
         }
       ]
     },
     "SkillPlacement": {
       "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",
+      "type": "string",
       "enum": ["harness", "workspace"]
     },
     "SkillSource": {
       "description": "Skills to place for the agent, made by the `skill` helper.",
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "content": {
-              "description": "The body of `SKILL.md`.",
-              "type": "string"
-            },
-            "description": {
-              "description": "The skill's description, as in `SKILL.md`'s frontmatter.",
-              "type": "string"
-            },
-            "files": {
-              "description": "Other files in the skill directory, by relative path.",
-              "type": "object",
-              "properties": {},
-              "required": [],
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "kind": {
-              "const": "skill"
-            },
-            "name": {
-              "description": "The skill's name, as in `SKILL.md`'s frontmatter.",
-              "type": "string"
-            },
-            "placement": {
-              "$ref": "#/$defs/SkillPlacement"
-            },
-            "source": {
-              "const": "inline"
-            }
-          },
-          "required": ["content", "description", "files", "kind", "name", "placement", "source"]
-        },
+      "oneOf": [
         {
           "type": "object",
           "properties": {
@@ -2256,6 +2211,7 @@
               }
             },
             "kind": {
+              "type": "string",
               "const": "skill"
             },
             "only": {
@@ -2267,16 +2223,19 @@
             },
             "path": {
               "description": "A host directory with a `SKILL.md`, or a directory of them.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "placement": {
               "$ref": "#/$defs/SkillPlacement"
             },
             "source": {
+              "type": "string",
               "const": "local"
             }
           },
-          "required": ["kind", "path", "placement", "source"]
+          "required": ["kind", "path", "placement", "source"],
+          "additionalProperties": false
         },
         {
           "type": "object",
@@ -2289,43 +2248,7 @@
               }
             },
             "kind": {
-              "const": "skill"
-            },
-            "only": {
-              "description": "The skill names to keep; default every one found.",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "path": {
-              "description": "The directory in the package to read skills from; default `skills`.",
-              "type": "string"
-            },
-            "placement": {
-              "$ref": "#/$defs/SkillPlacement"
-            },
-            "source": {
-              "const": "npm"
-            },
-            "spec": {
-              "description": "A pinned npm package spec.",
-              "type": "string"
-            }
-          },
-          "required": ["kind", "path", "placement", "source", "spec"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "exclude": {
-              "description": "Paths in each skill directory to leave out, gitignore-style.",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "kind": {
+              "type": "string",
               "const": "skill"
             },
             "only": {
@@ -2348,28 +2271,34 @@
             },
             "repo": {
               "description": "As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "source": {
+              "type": "string",
               "const": "git"
             }
           },
-          "required": ["kind", "placement", "repo", "source"]
+          "required": ["kind", "placement", "repo", "source"],
+          "additionalProperties": false
         },
         {
           "type": "object",
           "properties": {
             "id": {
               "description": "A skills.sh id, `owner/repo@skill`.",
-              "type": "string"
+              "type": "string",
+              "pattern": "^[\\w.-]+\\/[\\w.-]+@[a-z0-9-]+$"
             },
             "kind": {
+              "type": "string",
               "const": "skill"
             },
             "placement": {
               "$ref": "#/$defs/SkillPlacement"
             },
             "source": {
+              "type": "string",
               "const": "registry"
             },
             "version": {
@@ -2377,13 +2306,96 @@
               "type": "string"
             }
           },
-          "required": ["id", "kind", "placement", "source"]
+          "required": ["id", "kind", "placement", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exclude": {
+              "description": "Paths in each skill directory to leave out, gitignore-style.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "skill"
+            },
+            "only": {
+              "description": "The skill names to keep; default every one found.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "path": {
+              "description": "The directory in the package to read skills from; default `skills`.",
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "type": "string",
+              "const": "npm"
+            },
+            "spec": {
+              "description": "A pinned npm package spec.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["kind", "path", "placement", "source", "spec"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "content": {
+              "description": "The body of `SKILL.md`.",
+              "type": "string"
+            },
+            "description": {
+              "description": "The skill's description, as in `SKILL.md`'s frontmatter.",
+              "type": "string"
+            },
+            "files": {
+              "description": "Other files in the skill directory, by relative path.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "type": "string",
+              "const": "skill"
+            },
+            "name": {
+              "description": "The skill's name, as in `SKILL.md`'s frontmatter.",
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "type": "string",
+              "const": "inline"
+            }
+          },
+          "required": ["content", "description", "files", "kind", "name", "placement", "source"],
+          "additionalProperties": false
         }
       ]
     },
     "SubstituteIn": {
       "description": "`header` values, the `query` string, or the request `body`.",
-      "enum": ["body", "header", "query"]
+      "type": "string",
+      "enum": ["header", "query", "body"]
     }
   }
 }

@@ -10,13 +10,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort passed as `agy --effort`, e.g. `low`, `medium`, `high` or `max`. The slug's `-low`/`-medium`/`-high` suffix is the same knob baked into `model`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "antigravity"
         },
         "maxConcurrent": {
@@ -25,30 +28,16 @@
         },
         "model": {
           "description": "A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "AttemptMeta": {
       "description": "Set when an attempt is registered, so the reporter has it even for skipped attempts.",
@@ -276,13 +265,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort the Agent SDK `/effort` control takes: `low`, `medium`, `high`, `xhigh` (Extra in the UI) or `max`.",
-          "enum": ["high", "low", "max", "medium", "xhigh"]
+          "type": "string",
+          "enum": ["low", "medium", "high", "xhigh", "max"]
         },
         "id": {
           "description": "Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "claude-code"
         },
         "maxConcurrent": {
@@ -291,30 +283,16 @@
         },
         "model": {
           "description": "A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "CodexHarnessDescriptor": {
       "description": "OpenAI's Codex CLI through `@reeval/harness-codex` (`codex exec --json`), made by `codex()`. It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.",
@@ -322,13 +300,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort as Codex's `model_reasoning_effort`, e.g. `low`, `medium`, `high`, `xhigh`, `max` or `ultra`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "codex"
         },
         "maxConcurrent": {
@@ -337,30 +318,16 @@
         },
         "model": {
           "description": "An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[\\w.-]+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "CursorHarnessDescriptor": {
       "description": "Cursor's agent through the Cursor TypeScript SDK's local runtime (`@reeval/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.",
@@ -368,13 +335,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "cursor"
         },
         "maxConcurrent": {
@@ -383,39 +353,26 @@
         },
         "model": {
           "description": "A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "params": {
           "description": "Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "string"
           }
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "DebugLine": {
       "description": "One debug line: level 1 is `-v`, level 2 is `-vv` only.",
@@ -460,37 +417,45 @@
           "description": "Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped.",
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^(CAP_)?[A-Z_]+$"
           }
         },
         "cpus": {
           "description": "CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's.",
-          "type": "number"
+          "type": "number",
+          "exclusiveMinimum": 0
         },
         "dockerfile": {
           "description": "An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "from": {
           "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "image": {
           "description": "An image that already has the harness baked in, used as is.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "install": {
           "description": "Baked onto the sandbox image in one build container: in order, no secrets, no workspace.",
+          "minItems": 1,
           "type": "array",
           "items": {
             "$ref": "#/$defs/InstallStep"
           }
         },
         "kind": {
+          "type": "string",
           "const": "docker"
         },
         "maxConcurrent": {
@@ -501,16 +466,21 @@
           "description": "The container's memory: `'4g'` (default), `'512m'`, or bytes.",
           "anyOf": [
             {
-              "type": "number"
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
             },
             {
-              "type": "string"
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
           ]
         },
         "pids": {
           "description": "Processes and threads at once. Default 1024.",
-          "type": "number"
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         },
         "root": {
           "description": "Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. For evals that install system packages at run time.",
@@ -520,33 +490,57 @@
           "description": "Swap on top of `memory`, in the same units. Default: as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.",
           "anyOf": [
             {
-              "type": "number"
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
             },
             {
-              "type": "string"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           ]
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "Duration": {
+      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^(?=.*[1-9])\\d+(\\.\\d+)?(ms|s|m|h)$"
+        }
+      ]
     },
     "EgressPolicy": {
       "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
       "anyOf": [
         {
-          "enum": ["allow-all", "deny-all"]
+          "type": "string",
+          "const": "allow-all"
+        },
+        {
+          "type": "string",
+          "const": "deny-all"
         },
         {
           "type": "object",
           "properties": {
             "allow": {
+              "readOnly": true,
               "type": "array",
               "items": {
                 "type": "string"
               }
             }
           },
-          "required": ["allow"]
+          "required": ["allow"],
+          "additionalProperties": false
         }
       ]
     },
@@ -767,7 +761,8 @@
         },
         "effort": {
           "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "failWith": {
           "description": "Throw before the first turn starts, to simulate an infra failure.",
@@ -776,8 +771,9 @@
         "files": {
           "description": "Files the fake agent writes into the sandbox on every turn.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "type": "string"
           }
@@ -788,18 +784,21 @@
         },
         "id": {
           "description": "Cell id; defaults to `fake`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "ignoreAbort": {
           "description": "Sits out `delayMs` even after an abort, like an agent that doesn't stop when it's told to.",
           "type": "boolean"
         },
         "kind": {
+          "type": "string",
           "const": "fake"
         },
         "layout": {
           "description": "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
-          "enum": ["antigravity", "claude-code", "codex", "cursor", "goose", "opencode", "pi"]
+          "type": "string",
+          "enum": ["cursor", "claude-code", "antigravity", "opencode", "goose", "pi", "codex"]
         },
         "maxConcurrent": {
           "description": "The most attempts on this harness kind at once, across the run.",
@@ -827,32 +826,17 @@
           "description": "The first this many session starts of an attempt never become ready, even when aborted (`true`: every one).",
           "anyOf": [
             {
-              "const": false
+              "type": "number"
             },
             {
-              "type": "number"
+              "type": "boolean",
+              "const": true
             }
           ]
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         },
         "text": {
           "description": "The fake agent's final message on every turn; default `Done.`.",
@@ -873,7 +857,8 @@
                 "type": "string"
               }
             },
-            "required": ["input", "output", "tool"]
+            "required": ["input", "output", "tool"],
+            "additionalProperties": false
           }
         },
         "withSkill": {
@@ -882,8 +867,9 @@
           "properties": {
             "files": {
               "type": "object",
-              "properties": {},
-              "required": [],
+              "propertyNames": {
+                "type": "string"
+              },
               "additionalProperties": {
                 "type": "string"
               }
@@ -892,10 +878,11 @@
               "type": "string"
             }
           },
-          "required": []
+          "additionalProperties": false
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "FakeSandboxDescriptor": {
       "description": "A temp directory on the host instead of a container, made by `fakeSandbox()`.",
@@ -903,13 +890,16 @@
       "properties": {
         "dir": {
           "description": "Parent directory for the per-eval workspace (defaults to the OS temp dir).",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `fake`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "fake"
         },
         "maxConcurrent": {
@@ -917,7 +907,8 @@
           "type": "number"
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "FakeScriptStep": {
       "description": "One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp` (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error` ends the turn there with status `error` and that message, as a provider error would.",
@@ -925,29 +916,28 @@
         {
           "type": "object",
           "properties": {
-            "error": {
-              "type": "string"
-            }
-          },
-          "required": ["error"]
-        },
-        {
-          "type": "object",
-          "properties": {
             "exec": {
               "type": "string"
             }
           },
-          "required": ["exec"]
+          "required": ["exec"],
+          "additionalProperties": false
         },
         {
           "type": "object",
           "properties": {
-            "mcp": {
-              "type": "string"
+            "write": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "string"
+              }
             }
           },
-          "required": ["mcp"]
+          "required": ["write"],
+          "additionalProperties": false
         },
         {
           "type": "object",
@@ -956,21 +946,29 @@
               "type": "string"
             }
           },
-          "required": ["reply"]
+          "required": ["reply"],
+          "additionalProperties": false
         },
         {
           "type": "object",
           "properties": {
-            "write": {
-              "type": "object",
-              "properties": {},
-              "required": [],
-              "additionalProperties": {
-                "type": "string"
-              }
+            "mcp": {
+              "type": "string",
+              "pattern": "^[^/]+\\/[^/]+$"
             }
           },
-          "required": ["write"]
+          "required": ["mcp"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": ["error"],
+          "additionalProperties": false
         }
       ]
     },
@@ -1205,6 +1203,7 @@
           "type": "boolean"
         },
         "kind": {
+          "type": "string",
           "const": "git"
         },
         "path": {
@@ -1217,7 +1216,8 @@
         },
         "repo": {
           "description": "As written: a URL, `github:owner/repo`, or a local path.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "token": {
           "description": "The host variable holding a token for the fetch; read on the host only.",
@@ -1225,10 +1225,12 @@
         },
         "url": {
           "description": "What reeval fetches: the clone URL, or an absolute path for a local repository.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         }
       },
-      "required": ["kind", "repo", "url"]
+      "required": ["kind", "repo", "url"],
+      "additionalProperties": false
     },
     "GooseHarnessDescriptor": {
       "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models on a Gemini API key, and reports no usage (its ACP server counts one call).",
@@ -1236,13 +1238,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort as `GOOSE_THINKING_EFFORT`, e.g. `off`, `low`, `medium`, `high` or `max`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "goose"
         },
         "maxConcurrent": {
@@ -1251,57 +1256,43 @@
         },
         "model": {
           "description": "A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[\\w.-]+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "HarnessDescriptor": {
       "description": "The agent an attempt runs: a real harness, or the fake one.",
-      "anyOf": [
+      "oneOf": [
         {
-          "$ref": "#/$defs/AntigravityHarnessDescriptor"
-        },
-        {
-          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
-        },
-        {
-          "$ref": "#/$defs/CodexHarnessDescriptor"
+          "$ref": "#/$defs/FakeHarnessDescriptor"
         },
         {
           "$ref": "#/$defs/CursorHarnessDescriptor"
         },
         {
-          "$ref": "#/$defs/FakeHarnessDescriptor"
+          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
         },
         {
-          "$ref": "#/$defs/GooseHarnessDescriptor"
+          "$ref": "#/$defs/AntigravityHarnessDescriptor"
         },
         {
           "$ref": "#/$defs/OpenCodeHarnessDescriptor"
         },
         {
+          "$ref": "#/$defs/GooseHarnessDescriptor"
+        },
+        {
           "$ref": "#/$defs/PiHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/CodexHarnessDescriptor"
         }
       ]
     },
@@ -1309,36 +1300,23 @@
       "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "run": {
               "description": "The shell command.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "timeout": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                }
-              ]
+              "$ref": "#/$defs/Duration"
             }
           },
-          "required": ["run"]
-        },
-        {
-          "type": "string"
+          "required": ["run"],
+          "additionalProperties": false
         }
       ]
     },
@@ -1357,13 +1335,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort for that provider: `options.reasoningEffort` (OpenAI) or `options.thinking` (Anthropic). Values are whatever that provider takes.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `opencode:<model>`, or `opencode:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "opencode"
         },
         "maxConcurrent": {
@@ -1372,30 +1353,16 @@
         },
         "model": {
           "description": "OpenCode's model id, `<provider>/<model>`, e.g. `google/gemini-3.8-flash` or `anthropic/claude-haiku-4-5`; the provider picks the key.",
-          "type": "string"
+          "type": "string",
+          "minLength": 1
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "PiHarnessDescriptor": {
       "description": "pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs Google models on a Gemini API key and reports each model call's tokens. It takes stdio and HTTP MCP servers, not SSE ones.",
@@ -1403,13 +1370,16 @@
       "properties": {
         "effort": {
           "description": "Reasoning effort, passed as pi's `--thinking` (the CLI's name). Values are whatever that flag takes, e.g. `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "pi"
         },
         "maxConcurrent": {
@@ -1418,30 +1388,16 @@
         },
         "model": {
           "description": "A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[\\w.-]+$"
         },
         "startTimeout": {
           "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            },
-            {
-              "type": "string"
-            }
-          ]
+          "$ref": "#/$defs/Duration"
         }
       },
-      "required": ["kind", "model"]
+      "required": ["kind", "model"],
+      "additionalProperties": false
     },
     "PlannedEgress": {
       "description": "An attempt's egress policy, and the hosts a restricted one allows on top of its own.",
@@ -1720,10 +1676,10 @@
     "SandboxDescriptor": {
       "anyOf": [
         {
-          "$ref": "#/$defs/DockerSandboxDescriptor"
+          "$ref": "#/$defs/FakeSandboxDescriptor"
         },
         {
-          "$ref": "#/$defs/FakeSandboxDescriptor"
+          "$ref": "#/$defs/DockerSandboxDescriptor"
         }
       ]
     },

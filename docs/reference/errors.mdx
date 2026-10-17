@@ -65,6 +65,9 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `compare.across in evaluate("e") is 'environment' …` | Pass `across: 'environment'`, `across: 'harness'`, or a list of those. An empty list and a repeated value are refused too. |
 | `compare.questions "Which?" in evaluate("e") names typesafe-ai/jev-1.13.0, an evaluation model: …` | Give the question a language model, e.g. `'google/gemini-3.8-flash'`. A model without a provider prefix is refused too. |
 | `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. The hint names `from` for a base image string and `install` for a list of steps. |
+| `Unknown cursor() option "modle". Did you mean "model"?` | Every harness factory refuses a key it doesn't take. Use the suggested one. See the harness's page under [Harnesses](/reference/harness/cursor). |
+| `harness in evals/a.eval.ts › e: Unknown cursor() option "modle". …` | A harness, sandbox, secret, skill, MCP server, file, workspace or environment built as plain data (by hand, or by an SDK in another language) is checked as its helper's result is, and named by where it sits: `sandbox in …`, `env.A_KEY in …`, `skills[0] in …`, `mcp.s in …`, `files["a.txt"] in …`, `workspace in …`. Build it with the helper, or fix the named field. |
+| `Unknown field "setpu" in layer "x" of environment "x" in evals/a.eval.ts › e.` | An environment as data has each layer's spec checked as `defineEnvironment` checks it. Fix the named field. |
 | `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (c) => { … })`. |
 | `evaluate.only isn't allowed in CI` | Remove the `.only` before pushing. |
 
