@@ -2,6 +2,6 @@ packages:
   - packages/*
   - examples/*
 patchedDependencies:
-  '@ai-sdk/harness-claude-code@1.0.152': patches/@ai-sdk__harness-claude-code@1.0.152.patch
+  '@ai-sdk/harness-claude-code@1.0.158': patches/@ai-sdk__harness-claude-code@1.0.158.patch
 # Scripts run in pnpm's portable shell, so `VAR=x cmd`, quotes and && mean the same on Windows.
 shellEmulator: true
