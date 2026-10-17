@@ -2679,6 +2679,7 @@
           }
         },
         "reeval": {
+          "description": "The reeval version that wrote the run.",
           "type": "string"
         },
         "runtime": {
