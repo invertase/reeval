@@ -479,7 +479,7 @@ describe('recording runs into evals/.history', () => {
     )
   })
 
-  test("the config's judge.sees is in the record and the fingerprint; its defaults change neither", async () => {
+  test("the config's judge.state is in the record and the fingerprint; its defaults change neither", async () => {
     const run = async (name: string, judge: string) => {
       const p = await project(name, {
         'evals/agent.eval.ts': agent(),
@@ -489,20 +489,20 @@ describe('recording runs into evals/.history', () => {
       assert.equal(r.code, 0, r.stdout + r.stderr)
       return readRun(p.dir).run
     }
-    const plain = await run('sees-none', '{ model: fakeJudge({ score: 0.9 }) }')
+    const plain = await run('state-none', '{ model: fakeJudge({ score: 0.9 }) }')
     const defaults = await run(
-      'sees-defaults',
-      '{ model: fakeJudge({ score: 0.9 }), sees: { diff: true } }',
+      'state-defaults',
+      '{ model: fakeJudge({ score: 0.9 }), state: { diff: true } }',
     )
     const narrowed = await run(
-      'sees-diff',
-      "{ model: fakeJudge({ score: 0.9 }), sees: { diff: ['src/'] } }",
+      'state-diff',
+      "{ model: fakeJudge({ score: 0.9 }), state: { diff: ['src/'] } }",
     )
     const part = (r: typeof plain) => r.evals[0]?.cells[0]?.fingerprintParts.judge
     assert.equal(part(defaults), part(plain), 'the defaults are the same measurement')
-    assert.equal(defaults.stack.judge.sees, undefined)
+    assert.equal(defaults.stack.judge.state, undefined)
     assert.notEqual(part(narrowed), part(plain), 'a narrower judge is a new measurement')
-    assert.deepEqual(narrowed.stack.judge.sees?.diff, ['src/'])
+    assert.deepEqual(narrowed.stack.judge.state?.diff, ['src/'])
   })
 
   test('a project reached through another spelling of its path records like any other', async () => {

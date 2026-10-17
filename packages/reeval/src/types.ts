@@ -266,15 +266,18 @@ export type JudgeOptions = {
   providerOptions?: Record<string, Record<string, JSONValue>>
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
-  /** What the judge sees beside the question. Merged key by key down the cascade. */
-  sees?: JudgeSees
+  /**
+   * The judge's state: what the judge is given beside the question, not the workspace's or the
+   * attempt's state. Merged key by key down the cascade.
+   */
+  state?: JudgeStateOptions
 }
 
 /**
- * What the judge sees: each key is a key of the judge's state. An unset key keeps its default,
- * which is what the judge sees with no `sees` at all.
+ * What the judge is given: each key is a key of the state in `judge-input.json`. An unset key
+ * keeps its default, which is what the judge gets with no `state` option at all.
  */
-export type JudgeSees = {
+export type JudgeStateOptions = {
   /** The graded turn's prompt. Default true. */
   task?: boolean
   /** The graded turn's final message, or `on`'s value. Default true. */
@@ -308,8 +311,8 @@ export type JudgeSees = {
   checks?: boolean | string[]
 }
 
-/** `JudgeSees` with every key set: what one judge call saw. */
-export type ResolvedJudgeSees = {
+/** `JudgeStateOptions` with every key set: what one judge call saw. */
+export type ResolvedJudgeStateOptions = {
   task: boolean
   output: boolean
   files: boolean
@@ -1587,8 +1590,8 @@ export type AttemptImage = {
 export type JudgeInput = {
   question: string
   model: string
-  /** What the call chose to see, every key resolved. */
-  sees?: ResolvedJudgeSees
+  /** The call's `state` option, every key resolved; `state` is what that gave the judge. */
+  stateOptions?: ResolvedJudgeStateOptions
   state: { [key: string]: JSONValue }
   /** Captures sent as file parts; refs only, never the PNG bytes. */
   artifacts?: JudgeArtifactRef[]

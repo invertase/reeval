@@ -2,7 +2,7 @@ import type { ExecResult, JSONValue, JudgeJsonState } from '../types.ts'
 
 export type DraftTurn = { task?: string; output?: JSONValue; transcript?: string }
 
-/** The judge's state before it's serialised: each part `sees` kept. */
+/** The judge's state before it's serialised: each part the `state` option kept. */
 export type Draft = {
   all: boolean
   turns: DraftTurn[]

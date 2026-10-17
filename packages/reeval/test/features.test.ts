@@ -277,7 +277,7 @@ const judgeInputOf = (run: RunRecord, runDir: string, name = 'lands') => {
   assert.ok(path, `${name} recorded its judge input`)
   const [input] = JSON.parse(readFileSync(join(runDir, path), 'utf8'))
   return input as {
-    sees?: Record<string, unknown>
+    stateOptions?: Record<string, unknown>
     state: Record<string, unknown>
     dropped?: string[]
     artifacts?: Array<{ name: string; path: string; mediaType: string; bytes: number }>
@@ -1485,18 +1485,18 @@ export const features: Feature[] = [
       ]),
   },
   {
-    dir: 'judge/sees-diff',
+    dir: 'judge/state-diff',
     tiers: ['fake'],
     env: 'scoped-app',
     canary: /expected \[ 'added src\/app\.ts' \] to deeply equal/,
     record: ({ run, runDir }) =>
       assert.deepEqual(judgeInputOf(run, runDir).dropped, [
-        'notes.md: not in sees.diff',
-        'src/app.test.ts: not in sees.diff',
+        'notes.md: not in state.diff',
+        'src/app.test.ts: not in state.diff',
       ]),
   },
   {
-    dir: 'judge/sees-contents-glob',
+    dir: 'judge/state-contents-glob',
     tiers: ['fake'],
     env: 'glob-app',
     canary: /expected \[ 'src\/app\.ts', 'src\/util\.ts' \] to deeply equal/,
@@ -1510,12 +1510,12 @@ export const features: Feature[] = [
     },
   },
   {
-    dir: 'judge/sees-off',
+    dir: 'judge/state-off',
     tiers: ['fake'],
     env: 'off-app',
     canary: /expected \[ 'output' \] to deeply equal \[ 'output', 'diff' \]/,
     record: ({ run, runDir }) =>
-      assert.deepEqual(judgeInputOf(run, runDir).sees, {
+      assert.deepEqual(judgeInputOf(run, runDir).stateOptions, {
         task: false,
         output: true,
         files: false,
@@ -1527,14 +1527,15 @@ export const features: Feature[] = [
       }),
   },
   {
-    dir: 'judge/sees-transcript',
+    dir: 'judge/state-transcript',
     tiers: ['fake'],
     env: 'transcript-app',
     canary: /expected '.*' to contain 'thinking it over'/s,
-    record: ({ run, runDir }) => assert.equal(judgeInputOf(run, runDir).sees?.transcript, 'tools'),
+    record: ({ run, runDir }) =>
+      assert.equal(judgeInputOf(run, runDir).stateOptions?.transcript, 'tools'),
   },
   {
-    dir: 'judge/sees-turns',
+    dir: 'judge/state-turns',
     tiers: ['fake'],
     env: 'turns-app',
     canary: /expected \[ 'write the app', 'now add tests' \] to deeply equal \[ 'now add tests' \]/,
@@ -1544,17 +1545,17 @@ export const features: Feature[] = [
     },
   },
   {
-    dir: 'judge/sees-checks',
+    dir: 'judge/state-checks',
     tiers: ['fake'],
     env: 'checks-app',
     canary: /to deeply equal \[ { command: 'echo first'/,
   },
   {
-    dir: 'judge/sees-cascade',
+    dir: 'judge/state-cascade',
     tiers: ['fake'],
     env: 'cascade-app',
     canary: /expected \{ files: \[ 'added src\/app\.ts' \], …\(1\) \} to deeply equal/,
-    record: ({ run }) => assert.deepEqual(run.stack.judge.sees?.diff, ['src/']),
+    record: ({ run }) => assert.deepEqual(run.stack.judge.state?.diff, ['src/']),
   },
   {
     dir: 'assert/labelled',
@@ -1624,7 +1625,7 @@ export const features: Feature[] = [
     canary: /expected no changes to test\/\*\*, got \["test\/greet\.test\.js" \(modified\)\]/,
   },
   {
-    dir: 'judge/sees-contents',
+    dir: 'judge/state-contents',
     tiers: ['fake'],
     env: 'readme-app',
     canary: /to deeply equal \{ 'README\.md': 'Run npm test\\n'/,

@@ -1608,7 +1608,7 @@
           ]
         },
         "judge": {
-          "description": "Over the judge's model, threshold and version, and the config's `sees` when it sets one.",
+          "description": "Over the judge's model, threshold and version, and the config's `state` when it sets one.",
           "type": "string"
         },
         "sources": {
@@ -1966,8 +1966,8 @@
       },
       "required": ["cause", "class", "log", "ref", "setBy", "stage"]
     },
-    "ResolvedJudgeSees": {
-      "description": "`JudgeSees` with every key set: what one judge call saw.",
+    "ResolvedJudgeStateOptions": {
+      "description": "`JudgeStateOptions` with every key set: what one judge call saw.",
       "type": "object",
       "properties": {
         "checks": {
@@ -2700,9 +2700,9 @@
                 "type": "string"
               }
             },
-            "sees": {
-              "description": "What the judge sees by default, every key resolved; absent when the config and profile leave `sees` at its defaults.",
-              "$ref": "#/$defs/ResolvedJudgeSees"
+            "state": {
+              "description": "What the judge sees by default, every key resolved; absent when the config and profile leave `state` at its defaults.",
+              "$ref": "#/$defs/ResolvedJudgeStateOptions"
             },
             "threshold": {
               "type": "number"

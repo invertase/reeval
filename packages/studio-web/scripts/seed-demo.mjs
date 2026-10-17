@@ -112,7 +112,7 @@ export default defineConfig({
   include: ${JSON.stringify(include)},
   harness: [${harnesses.join(', ')}],
   sandbox: fakeSandbox(),
-  judge: { model: fakeJudge({ score: ${judge} }), sees: { transcript: 'tools' } },
+  judge: { model: fakeJudge({ score: ${judge} }), state: { transcript: 'tools' } },
   // Answers the compare questions: the attempt whose diff says Ahoy wins, then the one that
   // defaults the name. review.eval.ts's second question fails at the model.
   analysis: {${agent ? '\n    agent: true,' : ''}

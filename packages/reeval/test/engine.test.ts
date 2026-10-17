@@ -1065,11 +1065,11 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     )
   })
 
-  test('judge sees cascades key by key from the config to the call; build output is dropped', async () => {
+  test('judge state cascades key by key from the config to the call; build output is dropped', async () => {
     const p = await project('judge-scope', {
       'reeval.config.ts': fakeConfig({
         harness: `{ files: { 'src/app.ts': 'export const app = 1\\n', 'notes.md': 'notes\\n', 'dist/app.js': 'bundle\\n' } }`,
-        judge: `{ model: fakeJudge({ score: 0.9 }), sees: { diff: ['src/'] } }`,
+        judge: `{ model: fakeJudge({ score: 0.9 }), state: { diff: ['src/'] } }`,
       }),
       'evals/scope.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -1077,8 +1077,8 @@ const env = defineEnvironment('scoped', { sandbox: fakeSandbox(), files: { 'READ
 evaluate('scope', { environment: env }, async (c) => {
   await c.send('go')
   expect(await c.judge('from the config')).toPass()
-  expect(await c.judge('from the call', { sees: { diff: true, contents: ['README.md', './src/app.ts'] } })).toPass()
-  expect(await c.judge('a missing file', { sees: { contents: ['gone.txt'] } })).toPass()
+  expect(await c.judge('from the call', { state: { diff: true, contents: ['README.md', './src/app.ts'] } })).toPass()
+  expect(await c.judge('a missing file', { state: { contents: ['gone.txt'] } })).toPass()
 })
 `,
     })
@@ -1089,8 +1089,8 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.match(String(fromConfig?.state.diff), /\+export const app = 1/)
     assert.doesNotMatch(String(fromConfig?.state.diff), /notes|dist/)
     assert.deepEqual(fromConfig?.dropped, [
-      'dist/app.js: not in sees.diff',
-      'notes.md: not in sees.diff',
+      'dist/app.js: not in state.diff',
+      'notes.md: not in state.diff',
     ])
     assert.equal(fromConfig?.state.contents, undefined)
 
@@ -1115,7 +1115,7 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.deepEqual(
       missing?.state.files,
       ['added src/app.ts'],
-      'the config sees.diff still applies',
+      'the config state.diff still applies',
     )
   })
 
@@ -1148,7 +1148,7 @@ evaluate('agent eval', async (c) => {
       assert.equal(e?.error?.kind, 'judge')
       assert.match(
         e?.error?.message ?? '',
-        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): [^\n]*\. Narrow (sees\.\w+, )*sees\.\w+ or sees\.\w+\.$/,
+        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): [^\n]*\. Narrow (state\.\w+, )*state\.\w+ or state\.\w+\.$/,
       )
       assert.equal(judgeInputs(e)[0]?.retries, undefined, 'not retried')
     } finally {
@@ -1221,27 +1221,27 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it 
     assert.deepEqual(judged, { empty: 0, 'over one': 0, fine: 1 })
   })
 
-  test("c.judge refuses an unknown option, a command it hasn't run and on without sees.output", async () => {
-    const p = await project('judge-sees-call', {
+  test("c.judge refuses an unknown option, a command it hasn't run and on without state.output", async () => {
+    const p = await project('judge-state-call', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('unknown', async (c) => { await c.send('go'); await c.judge('ok?', { include: ['src/'] } as never) })
-evaluate('not run', async (c) => { await c.send('go'); await c.judge('ok?', { sees: { checks: ['npm tset'] } }) })
-evaluate('on off', async (c) => { await c.send('go'); await c.judge('ok?', { on: 'x', sees: { output: false } }) })
-evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', { sees: { output: false } })).toPass() })
+evaluate('not run', async (c) => { await c.send('go'); await c.judge('ok?', { state: { checks: ['npm tset'] } }) })
+evaluate('on off', async (c) => { await c.send('go'); await c.judge('ok?', { on: 'x', state: { output: false } }) })
+evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', { state: { output: false } })).toPass() })
 `,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /Unknown judge option "include" in c\.judge\(\)\. Did you mean "sees\.diff"\?/,
+      /Unknown judge option "include" in c\.judge\(\)\. Did you mean "state\.diff"\?/,
     )
     assert.match(
       r.stdout,
-      /c\.judge\(\) sees\.checks names a command this attempt hasn't run: "npm tset"/,
+      /c\.judge\(\) state\.checks names a command this attempt hasn't run: "npm tset"/,
     )
-    assert.match(r.stdout, /c\.judge\(\) on gives the output, but sees\.output is false/)
+    assert.match(r.stdout, /c\.judge\(\) on gives the output, but state\.output is false/)
     const judged = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
     )
@@ -1249,7 +1249,7 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', 
     assert.deepEqual(judged, { unknown: 0, 'not run': 0, 'on off': 0, fine: 1 })
   })
 
-  test('the judge gets all of what sees selects, however big', async () => {
+  test('the judge gets all of what state selects, however big', async () => {
     const big = 'x'.repeat(400_000)
     const p = await project('judge-big-input', {
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'big.txt': '${big}' } }` }),
@@ -1259,7 +1259,7 @@ evaluate('big', async (c) => {
   await c.send('x'.repeat(40_000))
   let size = 0
   const look = fakeJudge({ score: (s) => ((size = JSON.stringify(s).length), 1) })
-  expect(await c.judge('ok?', { model: look, sees: { contents: ['**'] } })).toPass()
+  expect(await c.judge('ok?', { model: look, state: { contents: ['**'] } })).toPass()
   expect(size).toBeGreaterThan(440_000)
 })
 `,

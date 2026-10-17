@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 type JudgeInput = {
   question: string
   model: string
-  sees?: Record<string, unknown>
+  stateOptions?: Record<string, unknown>
   state: Record<string, unknown>
 }
 
@@ -16,8 +16,8 @@ const seen = (value: unknown) =>
   value === true ? null : Array.isArray(value) ? value.join(', ') : String(value)
 
 /** `task · output · diff (src/) · transcript (tools)`, then the keys that are off. */
-function Sees({ sees }: { sees: Record<string, unknown> }) {
-  const entries = Object.entries(sees)
+function StateOptions({ options }: { options: Record<string, unknown> }) {
+  const entries = Object.entries(options)
   const on = entries.filter(
     ([k, v]) =>
       v !== false && !(Array.isArray(v) && v.length === 0) && !(k === 'turns' && v === 'last'),
@@ -25,7 +25,7 @@ function Sees({ sees }: { sees: Record<string, unknown> }) {
   const off = entries.filter(([, v]) => v === false || (Array.isArray(v) && v.length === 0))
   return (
     <div className="border-b px-4 py-2 text-xs">
-      <span className="mr-2 text-muted-foreground">Sees</span>
+      <span className="mr-2 text-muted-foreground">State</span>
       <span className="font-mono">
         {on.map(([k, v]) => (seen(v) === null ? k : `${k} (${seen(v)})`)).join(' · ')}
       </span>
@@ -150,7 +150,7 @@ export function Judge({ record, attempt }: { record: RunRecord; attempt: Attempt
                       <span className="font-medium">{input.question}</span>
                       <span className="ml-2 font-mono text-muted-foreground">{input.model}</span>
                     </div>
-                    {input.sees ? <Sees sees={input.sees} /> : null}
+                    {input.stateOptions ? <StateOptions options={input.stateOptions} /> : null}
                     {Object.entries(input.state).map(([k, v]) => (
                       <Field key={k} name={k} value={v} />
                     ))}

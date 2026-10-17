@@ -261,9 +261,9 @@
             }
           }
         },
-        "sees": {
-          "description": "What the judge sees beside the question. Merged key by key down the cascade.",
-          "$ref": "#/$defs/JudgeSees"
+        "state": {
+          "description": "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
+          "$ref": "#/$defs/JudgeStateOptions"
         },
         "threshold": {
           "description": "Minimum score (0–1) for a `pass` verdict.",
@@ -1875,8 +1875,8 @@
         }
       ]
     },
-    "JudgeSees": {
-      "description": "What the judge sees: each key is a key of the judge's state. An unset key keeps its default, which is what the judge sees with no `sees` at all.",
+    "JudgeStateOptions": {
+      "description": "What the judge is given: each key is a key of the state in `judge-input.json`. An unset key keeps its default, which is what the judge gets with no `state` option at all.",
       "type": "object",
       "properties": {
         "checks": {

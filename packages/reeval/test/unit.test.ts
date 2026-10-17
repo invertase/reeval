@@ -687,7 +687,7 @@ test('the judge drops build output, source maps, build info and minified files, 
   ])
 })
 
-test("the judge's sees.diff patterns filter its diff and files, the last match winning; contents leave the diff", () => {
+test("the judge's state.diff patterns filter its diff and files, the last match winning; contents leave the diff", () => {
   const paths = ['src/app.ts', 'src/app.test.ts', 'src/secret/key.ts', 'README.md', 'dist/a.js']
   const diff = {
     patch: paths.map((p) => added(p, `// ${p}`)).join(''),
@@ -703,9 +703,9 @@ test("the judge's sees.diff patterns filter its diff and files, the last match w
     'nothing outside include, not even a marker',
   )
   assert.deepEqual(only.dropped, [
-    'src/app.test.ts: not in sees.diff',
-    'README.md: not in sees.diff',
-    'dist/a.js: not in sees.diff',
+    'src/app.test.ts: not in state.diff',
+    'README.md: not in state.diff',
+    'dist/a.js: not in state.diff',
   ])
   const without = judgeDiff(diff, { include: ['!README.md'] })
   assert.deepEqual(without.files, [
@@ -776,7 +776,7 @@ test("a provider's error keeps its wording and adds what fills the judge's input
   )
   assert.match(
     message,
-    /\. Narrow sees\.diff, sees\.contents, sees\.files, sees\.task or sees\.output\.$/,
+    /\. Narrow state\.diff, state\.contents, state\.files, state\.task or state\.output\.$/,
   )
   const small = withInputSize('Bad request', { task: 't', diff: '' }, 'q?')
   assert.match(

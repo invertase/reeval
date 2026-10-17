@@ -24,7 +24,7 @@ import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { checkModelString } from './judge/index.ts'
-import { judgeProblem, mergeJudge } from './judge/sees.ts'
+import { judgeProblem, mergeJudge } from './judge/state-options.ts'
 import type {
   CaptureOptions,
   Cell,

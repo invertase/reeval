@@ -22,7 +22,7 @@ config API like any other project.
 | `with-named-checks` | The corpus project's fake-harness runs with `evals[].attempts[].assertions` and `evals[].cells[].checks`: labelled and default-labelled checks, a soft one, a compare whose variant's checks have verdicts, and cells with no counted attempts |
 | `before-families` | The corpus project's fake-harness runs from before `evals[].family` and `families` (a pooled `evaluate.each`) |
 | `with-families` | The corpus project's fake-harness runs with `families`: a pooled `evaluate.each` compare with per-cell rates, a paired lift that fails its `minLift`, and an unpooled `evaluate.each` |
-| `before-judge-sees` | The corpus project's fake-harness runs from before `stack.judge.sees` (the config's default of what the judge sees) |
+| `before-judge-state` | The corpus project's fake-harness runs from before `stack.judge.state` (the config's default of what the judge is given) |
 | `fake-matrix` | The fake harness: a compare with lift, judges that pass and fail, a failed check, infra errors, todo and skipped evals, a budget-stopped run and a saved analysis |
 | `real-harnesses` | One tiny eval on each of the seven real harnesses in Docker (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex), with each one's transcript, tokens and served model |
 | `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/invertase/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |

@@ -60,7 +60,7 @@ export type {
   JudgeCallOptions,
   JudgeFailure,
   JudgeOptions,
-  JudgeSees,
+  JudgeStateOptions,
   McpServer,
   PairFactor,
   PairVote,

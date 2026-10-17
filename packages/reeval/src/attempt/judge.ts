@@ -12,9 +12,9 @@ import {
 import { judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { isApiError, type RetriedError } from '../judge/retry.ts'
-import { judgeProblem, mergeJudge, resolveSees } from '../judge/sees.ts'
 import { withInputSize } from '../judge/size.ts'
 import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
+import { judgeProblem, mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -23,7 +23,7 @@ import type {
   JSONValue,
   JudgeFailure,
   JudgeInput,
-  ResolvedJudgeSees,
+  ResolvedJudgeStateOptions,
   Turn,
 } from '../types.ts'
 import { requireSandbox } from './checks.ts'
@@ -45,43 +45,43 @@ type StateSources = {
   turns: readonly Turn[]
   subject: Turn
   output: JSONValue
-  sees: ResolvedJudgeSees
+  wanted: ResolvedJudgeStateOptions
   checks: Attempt['record']['checks']
   readFile: (path: string) => Promise<string | null>
   listFiles: () => Promise<string[]>
 }
 
 /**
- * The judge's state for what `sees` chose: the graded turn's task and output (or every turn's),
+ * The judge's state for what the `state` option chose: the graded turn's task and output (or every turn's),
  * its changed files and diff as `judgeDiff` shows them, files whole, `c.exec` results and the
  * transcript.
  */
 async function draftState(src: StateSources): Promise<{ draft: Draft; dropped: string[] }> {
-  const { subject, sees } = src
+  const { subject, wanted } = src
   const at = src.turns.indexOf(subject)
-  const graded = sees.turns === 'all' && at >= 0 ? src.turns.slice(0, at + 1) : [subject]
+  const graded = wanted.turns === 'all' && at >= 0 ? src.turns.slice(0, at + 1) : [subject]
   const turns: DraftTurn[] = graded.map((turn) => ({
-    ...(sees.task ? { task: turn.prompt } : {}),
-    ...(sees.output ? { output: turn === subject ? src.output : turn.text } : {}),
-    ...(sees.transcript
-      ? { transcript: transcriptForJudge(turn.transcript, sees.transcript).join('\n') }
+    ...(wanted.task ? { task: turn.prompt } : {}),
+    ...(wanted.output ? { output: turn === subject ? src.output : turn.text } : {}),
+    ...(wanted.transcript
+      ? { transcript: transcriptForJudge(turn.transcript, wanted.transcript).join('\n') }
       : {}),
   }))
-  const contents = await filesWhole(sees.contents, src)
+  const contents = await filesWhole(wanted.contents, src)
   const shown = judgeDiff(subject.diff, {
-    ...(Array.isArray(sees.diff) ? { include: sees.diff } : {}),
+    ...(Array.isArray(wanted.diff) ? { include: wanted.diff } : {}),
     ...(contents ? { inFull: new Set(Object.keys(contents)) } : {}),
   })
-  const checks = checksShown(sees.checks, src.checks)
+  const checks = checksShown(wanted.checks, src.checks)
   const draft: Draft = {
-    all: sees.turns === 'all',
+    all: wanted.turns === 'all',
     turns,
-    ...(sees.files ? { files: shown.files } : {}),
-    ...(sees.diff !== false ? { diff: shown.patch } : {}),
+    ...(wanted.files ? { files: shown.files } : {}),
+    ...(wanted.diff !== false ? { diff: shown.patch } : {}),
     ...(contents ? { contents } : {}),
     ...(checks ? { checks } : {}),
   }
-  return { draft, dropped: sees.diff !== false ? shown.dropped : [] }
+  return { draft, dropped: wanted.diff !== false ? shown.dropped : [] }
 }
 
 /** Exact paths (`null` when missing) and every workspace file the patterns match, in path order. */
@@ -105,7 +105,7 @@ async function filesWhole(
 }
 
 function checksShown(
-  which: ResolvedJudgeSees['checks'],
+  which: ResolvedJudgeStateOptions['checks'],
   ran: Attempt['record']['checks'],
 ): Draft['checks'] {
   if (which === false) return undefined
@@ -113,7 +113,7 @@ function checksShown(
     const missing = which.find((command) => !ran.some((r) => r.command === command))
     if (missing !== undefined) {
       throw new Error(
-        `c.judge() sees.checks names a command this attempt hasn't run: ${JSON.stringify(missing)}`,
+        `c.judge() state.checks names a command this attempt hasn't run: ${JSON.stringify(missing)}`,
       )
     }
   }
@@ -157,21 +157,21 @@ export function judgeCaller(
       a.judgeErrored = true
       throw new Error(noJudgeModel(getRunContext().config.file))
     }
-    const sees = resolveSees(options.sees)
-    if (on !== undefined && !isTurn(on) && !sees.output) {
-      throw new Error('c.judge() on gives the output, but sees.output is false')
+    const wanted = resolveStateOptions(options.state)
+    if (on !== undefined && !isTurn(on) && !wanted.output) {
+      throw new Error('c.judge() on gives the output, but state.output is false')
     }
-    const { sees: _sees, maxConcurrent, ...judgeOptions } = options
+    const { state: _state, maxConcurrent, ...judgeOptions } = options
     const output = on === undefined || isTurn(on) ? subject.text : on
     const { draft, dropped } = await draftState({
       turns: a.turns,
       subject,
       output,
-      sees,
+      wanted,
       checks: a.record.checks,
       readFile,
       listFiles: () =>
-        workspaceFiles(requireSandbox(a, 'c.judge() sees.contents patterns'), a.signal),
+        workspaceFiles(requireSandbox(a, 'c.judge() state.contents patterns'), a.signal),
     })
     const name = judgeModelName(model)
     const state = stateOf(draft)
@@ -181,7 +181,7 @@ export function judgeCaller(
     const input: JudgeInput = {
       question,
       model: name,
-      sees,
+      stateOptions: wanted,
       state,
       ...(refs.length ? { artifacts: refs } : {}),
       ...(dropped.length ? { dropped } : {}),

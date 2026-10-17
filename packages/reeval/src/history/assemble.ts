@@ -7,7 +7,7 @@ import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effo
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
-import { mergeJudge, resolveSees } from '../judge/sees.ts'
+import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { harnessId, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
@@ -24,7 +24,7 @@ import type {
   FileChange,
   HarnessDescriptor,
   Outcome,
-  ResolvedJudgeSees,
+  ResolvedJudgeStateOptions,
   RunContext,
   TranscriptEvent,
   WebEventType,
@@ -435,8 +435,8 @@ function cellOf(
 }
 
 /**
- * Over the judge's model, threshold and version, and the config's `sees` when it sets one: a new
- * judge is a new measurement. `sees` set in an eval file is in its sources already.
+ * Over the judge's model, threshold and version, and the config's `state` when it sets one: a new
+ * judge is a new measurement. `state` set in an eval file is in its sources already.
  */
 type JudgeFingerprint = string
 
@@ -887,7 +887,7 @@ function stackOf(
   seen: Seen,
   judgeModel: string | null,
   threshold: number,
-  sees: ResolvedJudgeSees | undefined,
+  stateOptions: ResolvedJudgeStateOptions | undefined,
 ): Stack {
   const packages = packageVersions(input.enginePackages)
   return {
@@ -914,7 +914,7 @@ function stackOf(
       resolvedModels: [...seen.resolvedJudges].sort(),
       threshold,
       version: judgeVersion(input.reeval, packages, judgeModel ?? ''),
-      ...(sees ? { sees } : {}),
+      ...(stateOptions ? { state: stateOptions } : {}),
     },
     context: [...seen.contexts.values()].sort(byName((c) => c.path)),
     fingerprintScope: FINGERPRINT_SCOPE,
@@ -926,9 +926,11 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const { config, runId, profile } = ctx
   const out = new Artifacts()
   const runJudge = profile ? mergeJudge(config.judge, profileJudge(profile)) : config.judge
-  const runSees = runJudge.sees && resolveSees(runJudge.sees)
-  const ownSees =
-    runSees && JSON.stringify(runSees) !== JSON.stringify(resolveSees({})) ? runSees : undefined
+  const runStateOptions = runJudge.state && resolveStateOptions(runJudge.state)
+  const ownStateOptions =
+    runStateOptions && JSON.stringify(runStateOptions) !== JSON.stringify(resolveStateOptions({}))
+      ? runStateOptions
+      : undefined
   const judgeModel = runJudge.model === undefined ? null : judgeModelName(runJudge.model)
   const configHash = sha256(
     JSON.stringify({
@@ -948,7 +950,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       model: judgeModel,
       threshold: runJudge.threshold,
       version: judgeVersion(input.reeval, packageVersions(input.enginePackages), judgeModel ?? ''),
-      ...(ownSees ? { sees: ownSees } : {}),
+      ...(ownStateOptions ? { state: ownStateOptions } : {}),
     }),
   )
   for (const e of engine.evals)
@@ -1011,7 +1013,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     git: gitState(input, out),
     runner: input.runner,
     dependencies: { lockfiles: input.lockfiles },
-    stack: stackOf(input, seen, judgeModel, runJudge.threshold, ownSees),
+    stack: stackOf(input, seen, judgeModel, runJudge.threshold, ownStateOptions),
     environments: [...seen.environments.values()].sort(byName((e) => e.name)),
     profile: profile
       ? {

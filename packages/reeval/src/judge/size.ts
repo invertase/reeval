@@ -62,11 +62,11 @@ export function describeSize(state: Record<string, JSONValue>, question: string)
     .join('; ')
 }
 
-/** `Narrow sees.diff, sees.transcript or sees.output.`: the state's parts, largest first. */
-function seesHint(state: Record<string, JSONValue>, question: string): string {
+/** `Narrow state.diff, state.transcript or state.output.`: the state's parts, largest first. */
+function stateHint(state: Record<string, JSONValue>, question: string): string {
   const keys = partsOf(state, question)
     .filter((p) => p.name !== 'question')
-    .map((p) => `sees.${p.name}`)
+    .map((p) => `state.${p.name}`)
   if (!keys.length) return ''
   const last = keys.pop()
   return ` Narrow ${keys.length ? `${keys.join(', ')} or ${last}` : last}.`
@@ -74,7 +74,7 @@ function seesHint(state: Record<string, JSONValue>, question: string): string {
 
 /**
  * A provider's error, as the provider worded it, then what the judge's input held: its estimated
- * size and biggest parts and files, and the `sees` keys that were on, largest first. reeval knows
+ * size and biggest parts and files, and the `state` keys that were on, largest first. reeval knows
  * no model's limit, so this follows every provider error.
  */
 export const withInputSize = (
@@ -83,4 +83,4 @@ export const withInputSize = (
   question: string,
 ) =>
   `${message}\nThe judge's input was ~${k(inputTokens(state, question))} tokens (estimated): ` +
-  `${describeSize(state, question)}.${seesHint(state, question)}`
+  `${describeSize(state, question)}.${stateHint(state, question)}`
