@@ -1873,13 +1873,14 @@
           "description": "`c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false.",
           "anyOf": [
             {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "type": "boolean"
             },
             {
-              "type": "boolean"
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
             }
           ]
         },
@@ -1887,20 +1888,23 @@
           "description": "Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing. These files leave the diff. Default none.",
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "\\S"
           }
         },
         "diff": {
           "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
           "anyOf": [
             {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
+              "type": "boolean"
             },
             {
-              "type": "boolean"
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
             }
           ]
         },
@@ -1920,19 +1924,21 @@
           "description": "The graded turn's transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. Default false.",
           "anyOf": [
             {
-              "enum": ["full", "tools"]
+              "type": "boolean"
             },
             {
-              "type": "boolean"
+              "type": "string",
+              "enum": ["tools", "full"]
             }
           ]
         },
         "turns": {
           "description": "`'all'`: every turn up to the graded one under `turns`, each with its task, output and (with `transcript`) transcript. Default `'last'`.",
-          "enum": ["all", "last"]
+          "type": "string",
+          "enum": ["last", "all"]
         }
       },
-      "required": []
+      "additionalProperties": false
     },
     "McpServer": {
       "description": "An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.",

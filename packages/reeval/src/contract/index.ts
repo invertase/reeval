@@ -22,6 +22,7 @@ import {
   opencodeHarnessSchema,
   piHarnessSchema,
 } from './harness.ts'
+import { judgeStateSchema } from './judge.ts'
 import {
   egressPolicySchema,
   envValueSchema,
@@ -58,6 +59,7 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   GooseHarnessDescriptor: gooseHarnessSchema,
   PiHarnessDescriptor: piHarnessSchema,
   CodexHarnessDescriptor: codexHarnessSchema,
+  JudgeStateOptions: judgeStateSchema,
   CompareQuestion: compareQuestionSchema,
   PairFactor: pairFactorSchema,
   GatePolicy: gatePolicySchema,
