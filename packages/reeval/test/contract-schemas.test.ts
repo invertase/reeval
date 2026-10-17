@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { z } from 'zod'
-import { differences, withZodDefs, zodDefs } from '../scripts/schema/zod.ts'
+import { checkContractCoverage, differences, withZodDefs, zodDefs } from '../scripts/schema/zod.ts'
 import { closest, durationProblem, durationSchema, refusal } from '../src/contract/shared.ts'
 
 const generated = {
@@ -53,6 +53,23 @@ test('the drift guard names a property, required flag or description that differ
   assert.throws(
     () => withZodDefs({ Thing: { ...generated, required: ['kind'] } }, owned),
     /Thing's TypeScript type and its Zod schema in src\/contract\/ disagree:\n {2}type only: {2}name\?/,
+  )
+})
+
+test('every contract schema is checked against its type, or listed as Zod-only with why', () => {
+  const schemas = { Thing: thing, Duration: durationSchema }
+  assert.doesNotThrow(() => checkContractCoverage(new Set(['Thing']), schemas, { Duration: 'why' }))
+  assert.throws(
+    () => checkContractCoverage(new Set(['Other']), schemas, { Duration: 'why' }),
+    /^Error: Thing is in CONTRACT_SCHEMAS but no plan type has a def by that name/,
+  )
+  assert.throws(
+    () => checkContractCoverage(new Set(['Thing', 'Duration']), schemas, { Duration: 'why' }),
+    /Duration is in ZOD_ONLY but a plan type has a def for it now/,
+  )
+  assert.throws(
+    () => checkContractCoverage(new Set(['Thing']), { Thing: thing }, { Duration: 'why' }),
+    /Duration is in ZOD_ONLY but not in CONTRACT_SCHEMAS/,
   )
 })
 

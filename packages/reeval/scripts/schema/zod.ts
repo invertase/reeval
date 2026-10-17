@@ -117,3 +117,39 @@ function facts(schema: Schema): Set<string> {
   }
   return out
 }
+
+/**
+ * Contract schemas no plan type has a `$def` for, so only their module's `_SameAsSchema` holds
+ * them to their type, with why.
+ */
+export const ZOD_ONLY: Record<string, string> = {
+  Duration: 'a union alias, which the type generator inlines',
+  GatePolicy: 'a union alias, which the type generator inlines',
+}
+
+/**
+ * Fails unless every contract schema is checked against the def generated from its type (`typed`
+ * names every def the plan shapes' types produced), or is in `ZOD_ONLY`.
+ */
+export function checkContractCoverage(
+  typed: ReadonlySet<string>,
+  schemas: Record<string, z.ZodType> = CONTRACT_SCHEMAS,
+  zodOnly: Record<string, string> = ZOD_ONLY,
+): void {
+  const problems = [
+    ...Object.keys(schemas)
+      .filter((name) => !typed.has(name) && !(name in zodOnly))
+      .map(
+        (name) =>
+          `${name} is in CONTRACT_SCHEMAS but no plan type has a def by that name, so nothing checks it against its type: name it after its type, or add it to ZOD_ONLY with why`,
+      ),
+    ...Object.keys(zodOnly)
+      .filter((name) => typed.has(name) || !(name in schemas))
+      .map((name) =>
+        typed.has(name)
+          ? `${name} is in ZOD_ONLY but a plan type has a def for it now: drop it from ZOD_ONLY`
+          : `${name} is in ZOD_ONLY but not in CONTRACT_SCHEMAS: drop it from ZOD_ONLY`,
+      ),
+  ]
+  if (problems.length) throw new Error(problems.join('\n'))
+}
