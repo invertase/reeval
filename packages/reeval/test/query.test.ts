@@ -205,7 +205,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: check_discrimination, drift, effort, eval_trend, factor_effects, failing_attempts/,
+        /no view or table named "nope"\. Views: check_discrimination, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts/,
       ],
     ]
     for (const [sql, message] of cases) {

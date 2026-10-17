@@ -1483,6 +1483,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'contrasts',
+    area: 'Records and studio',
+    name: 'Contrasts: each pair of arms on one harness (lift, checks, effort) in the run summary, `reeval show`, `summary.md`, `reeval query contrasts` and the digest',
+    tests: [
+      analysis(
+        'show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side',
+      ),
+      analysis('canary: with one variant there is no variant-against-variant row'),
+    ],
+  },
+  {
     id: 'summary.judge-keys',
     area: 'Records and studio',
     name: 'Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts',

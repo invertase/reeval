@@ -25,6 +25,8 @@ export type StudyOptions = {
   /** `analysis` config body, after `model:`'s fake. */
   output?: string
   instructions?: string
+  /** Leave out the new skill: one variant, so no variant faces another. */
+  oneVariant?: boolean
 }
 
 export function studyFiles(options: StudyOptions = {}): Record<string, string> {
@@ -92,7 +94,7 @@ group(
   {
     compare: {
       baseline: noSkill,
-      variants: [currentSkill, newSkill],
+      variants: [currentSkill${options.oneVariant ? '' : ', newSkill'}],
       ${gate}
       across: 'environment',
       questions: ['Which sign-in has the better UX?', 'Which follows the library docs more closely?'],

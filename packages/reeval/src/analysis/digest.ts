@@ -12,6 +12,7 @@ import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
+import { contrastsOf } from '../view/contrasts.ts'
 import { DIRECTIONAL_MIN } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
@@ -100,6 +101,7 @@ export const RULES = [
   "A criteria fact lists each check (expect label, judges included) per cell: rows only for labels whose rate differs between cells, or is mixed within one; neverMet labels failed on every counted attempt of every cell, alwaysMet passed on all of them. A neverMet or alwaysMet label is the same in every arm: it can't explain a difference between arms.",
   "frame study means every cell in scope is ungated (gate: 'none'): the run measures how its arms differ, so attempts that fail are data, not a failed gate.",
   'setup, rules and cli give context and are not citable: cite facts, evidence and attempts.',
+  'A contrast fact (kind contrast) is one pair of arms on one harness, a against b, when an eval has two variants or more: pass rate and lift of a over b, the checks that tell them apart (discriminates or mixed; sameOnBoth counts the rest) and effort. It answers how two variants differ from each other, not only from the control; gating stays each variant against its control.',
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check.",
 ]
@@ -172,6 +174,7 @@ const counted = (a: AttemptRecord) => a.outcome === 'pass' || a.outcome === 'fai
 
 const LABEL_CHARS = 60
 const round2 = (x: number) => Math.round(x * 100) / 100
+const round1 = (x: number) => Math.round(x * 10) / 10
 const ratioText = (r: unknown) => (r == null ? '×–' : `×${Number(r).toFixed(2)}`)
 
 /** The labels of an attempt's assertions that failed or couldn't answer. */
@@ -765,10 +768,74 @@ export async function buildDigestKeepingDropped(
     }
   }
 
-  // Each variant cell's checks (expect labels) beside its control's, and whether each tells them apart.
+  // With two variants or more, each pair of arms on one harness; otherwise each variant cell's
+  // checks (expect labels) beside its control's, and whether each tells them apart.
   for (const r of runs) {
     for (const e of r.record.evals) {
       if (!evalKeys.has(e.key)) continue
+      const tag = (key: string) => cellTag(r.record.runId, e.key, key)
+      const contrasts = contrastsOf(e)
+      for (const x of contrasts) {
+        const apart = x.checks.filter((k) => k.verdict === 'discriminates' || k.verdict === 'mixed')
+        const ef = x.effort
+        fact('contrast', {
+          run: short.get(r.record.runId),
+          eval: tagOf(e.key),
+          a: tag(x.a),
+          b: tag(x.b),
+          ...(x.lift
+            ? {
+                passRate: `${x.lift.variant.pass}/${x.lift.variant.counted} vs ${x.lift.control.pass}/${x.lift.control.counted}`,
+                lift: digestLift(
+                  x.lift.variant.counted,
+                  x.lift.control.counted,
+                  x.lift.points,
+                  x.lift.interval.lo,
+                  x.lift.interval.hi,
+                ),
+                liftVerdict: digestLiftVerdict(
+                  x.lift.variant.counted,
+                  x.lift.control.counted,
+                  x.lift.withinNoise,
+                ),
+              }
+            : {}),
+          checks: apart.map((k) => ({
+            label: clip(k.label, LABEL_CHARS),
+            a: `${k.a.pass}/${k.a.pass + k.a.fail + k.a.notRun}`,
+            b: `${k.b.pass}/${k.b.pass + k.b.fail + k.b.notRun}`,
+            verdict: k.verdict,
+          })),
+          sameOnBoth: x.checks.length - apart.length,
+          ...(ef
+            ? {
+                effort: {
+                  n: `${ef.variant.n} vs ${ef.control.n}`,
+                  toolCalls: `${ef.variant.tools.median} vs ${ef.control.tools.median} (${ratioText(ef.toolsRatio)})`,
+                  agentS: `${round1(ef.variant.agentMs.median / 1000)} vs ${round1(ef.control.agentMs.median / 1000)} (${ratioText(ef.agentMsRatio)})`,
+                  verdict: ef.verdict,
+                  timeVerdict: ef.timeVerdict,
+                  ...(ef.tokensVerdict && ef.variant.tokens && ef.control.tokens
+                    ? {
+                        tokens: `${ef.variant.tokens.median} vs ${ef.control.tokens.median} (${ratioText(ef.tokensRatio)})`,
+                        tokensVerdict: ef.tokensVerdict,
+                      }
+                    : {}),
+                  ...(Math.min(ef.variant.n, ef.control.n) >= DIRECTIONAL_MIN
+                    ? {
+                        separated: {
+                          tools: ef.separated,
+                          agentS: ef.timeSeparated,
+                          ...(ef.tokensSeparated !== null ? { tokens: ef.tokensSeparated } : {}),
+                        },
+                      }
+                    : {}),
+                },
+              }
+            : {}),
+        })
+      }
+      if (contrasts.length) continue
       for (const c of e.cells) {
         const rows = (c.checks ?? []).filter((k) => k.control && k.verdict)
         if (!rows.length) continue

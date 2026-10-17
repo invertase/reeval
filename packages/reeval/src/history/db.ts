@@ -181,6 +181,11 @@ CREATE VIEW drift AS SELECT * FROM drift_m;
 -- Tool calls, agent time and tokens per cell, and a variant's against its control in the same run.
 CREATE VIEW effort AS SELECT * FROM effort_m;
 
+-- Each pair of arms (cells a and b) on one harness and sandbox, when an eval has two variants or
+-- more: pass@1 lift of a over b, effort with its verdicts and separation, and the checks that
+-- tell them apart. A variant against its control is here too; gating stays variant vs control.
+CREATE VIEW contrasts AS SELECT * FROM contrasts_m;
+
 -- What a factor (environment, harness, model) did, by evidence tier: controlled (one run),
 -- pooled (comparable runs, and across evals), observed (over time), not_measured (one level).
 CREATE VIEW factor_effects AS SELECT * FROM factor_effects_m;
@@ -249,6 +254,7 @@ export const VIEW_NAMES = [
   'lift',
   'family_lift',
   'effort',
+  'contrasts',
   'factor_effects',
   'skill_reads',
   'flaky_cells',

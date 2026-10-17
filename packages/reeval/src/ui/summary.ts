@@ -2,6 +2,7 @@ import { sampleReasons } from '../compare/pairs.ts'
 import {
   answersLabel,
   checksLabel,
+  contrastLines,
   gateLabel,
   liftLabel,
   undiscriminating,
@@ -155,6 +156,16 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
   })
 }
 
+/** With two variants or more, each pair of arms on one harness: lift, checks and effort. */
+function contrastRows(c: Colors, e: EvalEntry, indent: string): string[] {
+  const lines = contrastLines(e)
+  if (!lines.length) return []
+  return [
+    `${indent}${c.dim('contrasts (each pair of arms, same harness)')}`,
+    ...lines.map((line) => `${indent}  ${c.dim(line)}`),
+  ]
+}
+
 /** One row per compare question: its win rates, or why it has none. They never gate. */
 function questionRows(c: Colors, e: EvalEntry, indent: string): string[] {
   return (e.answers ?? []).flatMap((a) => {
@@ -258,6 +269,7 @@ function tree(c: Colors, evals: EvalEntry[], families: FamilyRecord[] = []): str
     return [
       ` ${pad}${name}${fill}  ${evalColumns(c, entry)}`,
       ...cellRows(c, entry, ` ${pad}    `),
+      ...contrastRows(c, entry, ` ${pad}    `),
       ...questionRows(c, entry, ` ${pad}    `),
     ]
   })

@@ -2473,3 +2473,80 @@ test('the prompt and rules say a study compares arms, and a label no arm meets e
   assert.ok(RULES.some((r) => r.includes("can't explain a difference between arms")))
   assert.ok(RULES.some((r) => r.startsWith('frame study means')))
 })
+
+describe('contrasts: each pair of arms, variant against variant too', () => {
+  test('show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side', async () => {
+    const p = await project('study-contrasts', studyFiles({ gate: 'none' }))
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    // Every attempt misses MFA, so pass@1 can't tell the arms apart; the checks do.
+    const pair =
+      /new-skill vs current-skill: lift \+0 pts \(95% [^)]*0\/3 vs 0\/3\), within noise, checks Social OAuth 3\/3 vs 0\/3, effort tools/
+    assert.match(run.stdout, /contrasts \(each pair of arms, same harness\)/)
+    assert.match(run.stdout, pair)
+    const show = await runCli(p.dir, ['show'])
+    assert.match(
+      show.stdout,
+      /current-skill vs no-skill: lift \+0 pts[^\n]*checks Social OAuth 0\/3 vs 3\/3/,
+    )
+    assert.match(show.stdout, /new-skill vs no-skill: lift \+0 pts[^\n]*no check tells them apart/)
+    assert.match(show.stdout, pair)
+    assert.match(
+      readRun(p.dir).read('summary.md'),
+      /Contrasts \(each pair of arms, same harness\):\n\n- current-skill vs no-skill/,
+    )
+    const rows = await query(
+      p.dir,
+      'SELECT a_environment, b_environment, a_pass, b_pass, pass_verdict, discriminating, checks FROM contrasts',
+    )
+    assert.deepEqual(
+      rows.map((r) => [
+        r.a_environment,
+        r.b_environment,
+        r.a_pass,
+        r.b_pass,
+        r.pass_verdict,
+        r.discriminating,
+        r.checks,
+      ]),
+      [
+        ['current-skill', 'no-skill', 0, 0, 'noise', 'Social OAuth', 5],
+        ['new-skill', 'no-skill', 0, 0, 'noise', null, 5],
+        ['new-skill', 'current-skill', 0, 0, 'noise', 'Social OAuth', 5],
+      ],
+    )
+    const { digest } = await digestOf(p.dir, ['--vs', 'none'])
+    const contrasts = digest.facts.filter((f) => f.kind === 'contrast')
+    assert.deepEqual(
+      contrasts.map((f) => [
+        f.a,
+        f.b,
+        f.passRate,
+        f.liftVerdict,
+        (f.checks as Row[]).map((k) => k.label),
+      ]),
+      [
+        ['current-skill', 'control', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+        ['new-skill', 'control', '0/3 vs 0/3', 'within noise', []],
+        ['new-skill', 'current-skill', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+      ],
+    )
+    assert.equal(
+      digest.facts.filter((f) => f.kind === 'checks').length,
+      0,
+      'contrast facts replace the per-variant checks facts',
+    )
+  })
+
+  test('canary: with one variant there is no variant-against-variant row', async () => {
+    const p = await project('study-one-variant', studyFiles({ gate: 'none', oneVariant: true }))
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    assert.doesNotMatch(run.stdout, /contrasts \(each pair/)
+    assert.doesNotMatch((await runCli(p.dir, ['show'])).stdout, /vs current-skill/)
+    assert.deepEqual(await query(p.dir, 'SELECT * FROM contrasts'), [])
+    const { digest } = await digestOf(p.dir, ['--vs', 'none'])
+    assert.equal(digest.facts.filter((f) => f.kind === 'contrast').length, 0)
+    assert.equal(digest.facts.filter((f) => f.kind === 'checks').length, 1)
+  })
+})

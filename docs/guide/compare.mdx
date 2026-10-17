@@ -262,6 +262,19 @@ house greeting     2             0             discriminates
 
 `verdict` is `discriminates` when every counted attempt passes on one side and none on the other, else `both-pass`, `both-fail` or `mixed`.
 
+## Two variants against each other
+
+```text
+contrasts (each pair of arms, same harness)
+  current-skill vs no-skill: lift +0 pts (95% −56…+56, 0/3 vs 0/3), within noise, checks Social OAuth 0/3 vs 3/3, effort …
+  new-skill vs no-skill: lift +0 pts (95% −56…+56, 0/3 vs 0/3), within noise, no check tells them apart, effort …
+  new-skill vs current-skill: lift +0 pts (95% −56…+56, 0/3 vs 0/3), within noise, checks Social OAuth 3/3 vs 0/3, effort …
+```
+
+With two variants or more, the run summary, `reeval show` and `summary.md` also set every pair of arms on one harness side by side: lift, the checks that tell them apart and effort. Here every attempt misses a requirement no arm meets, so pass@1 says nothing and the checks carry the difference. Gating stays each variant against its control.
+
+`reeval query contrasts` has the same pairs as rows (`a_environment`, `b_environment`, `pass_verdict`, effort verdicts and `discriminating`), and `reeval analyze` gets one `contrast` fact per pair.
+
 ## Ask questions
 
 ```ts title="evals/questions.eval.ts"

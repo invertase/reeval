@@ -9,7 +9,14 @@ import {
 } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
 import { warnings } from './state.ts'
-import { cellCounts, OUTCOME_MARK, repeatsVerdict, stateRows, summaryCounts } from './summary.ts'
+import {
+  cellCounts,
+  contrastLines,
+  OUTCOME_MARK,
+  repeatsVerdict,
+  stateRows,
+  summaryCounts,
+} from './summary.ts'
 import type { HistoryCell, HistoryEntry, RunRecord } from './types.ts'
 
 export {
@@ -284,6 +291,11 @@ export function formatShow(run: RunRecord): string {
     lines.push(
       `  ${OUTCOME_MARK[e.outcome]} ${e.id}${single && first ? `  ${formatDuration(first.durationMs)}` : `  ${cellCounts(e)}`}`,
     )
+    const contrasts = contrastLines(e)
+    if (contrasts.length) {
+      lines.push('      contrasts (each pair of arms, same harness)')
+      for (const line of contrasts) lines.push(`        ${line}`)
+    }
     for (const t of e.attempts) {
       const indent = single ? '      ' : '        '
       if (!single) {

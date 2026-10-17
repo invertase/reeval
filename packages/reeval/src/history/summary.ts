@@ -1,6 +1,7 @@
 import { sampleReasons } from '../compare/pairs.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { CompareAnswer, Outcome } from '../types.ts'
+import { contrastsOf } from '../view/contrasts.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
 import {
   familyEffortLabel,
@@ -132,6 +133,31 @@ export function answersLabel(answer: CompareAnswer): string {
     return `${q} no pairs to judge: attempts that failed their checks are left out`
   }
   return `${q} ${[...cuts, tally, by].join(' · ')}${failed}`
+}
+
+/**
+ * Each pair of arms on one harness, when an eval has two variants or more:
+ * `new-skill vs current-skill: lift +100 pts (…), checks Social OAuth 3/3 vs 0/3, effort tools 14
+ * vs 26 (×0.54, no overlap), …`. The harness is named when the eval has several.
+ */
+export function contrastLines(e: EvalEntry): string[] {
+  const harnesses = new Set(e.cells.map((c) => c.harness)).size
+  const cellOf = new Map(e.cells.map((c) => [c.key, c]))
+  const name = (key: string) => cellOf.get(key)?.environment ?? key
+  return contrastsOf(e).map((x) => {
+    const apart = x.checks.filter((k) => k.verdict === 'discriminates')
+    const parts = [
+      x.lift ? liftLabel(x.lift) : '',
+      apart.length
+        ? `checks ${apart.map((k) => `${k.label} ${k.a.pass}/${answered(k.a)} vs ${k.b.pass}/${answered(k.b)}`).join(' · ')}`
+        : x.checks.length
+          ? 'no check tells them apart'
+          : '',
+      x.effort ? `effort ${effortLabel(x.effort)}` : '',
+    ].filter(Boolean)
+    const on = harnesses > 1 ? ` (${cellOf.get(x.a)?.harness})` : ''
+    return `${name(x.a)} vs ${name(x.b)}${on}: ${parts.join(', ')}`
+  })
 }
 
 /** `fake/-/fake 0/2 (control, not gated) · fake/with-skill/fake 2/2 (lift +100 pts …)`. */
@@ -305,6 +331,12 @@ export function renderSummary(run: RunRecord): string {
     lines.push('', `### ${OUTCOME_MARK[e.outcome]} ${e.id}`, '')
     const multi = e.attempts.length > 1
     if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
+    const contrasts = contrastLines(e)
+    if (contrasts.length) {
+      lines.push('Contrasts (each pair of arms, same harness):', '')
+      for (const line of contrasts) lines.push(`- ${cell(line)}`)
+      lines.push('')
+    }
     if (e.answers?.length) {
       for (const a of e.answers) {
         lines.push(`- Question: ${cell(answersLabel(a))}`)
