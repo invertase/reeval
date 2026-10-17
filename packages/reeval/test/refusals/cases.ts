@@ -994,6 +994,29 @@ environment:
       request(expectCall({ args: [{ regexp: 'a', flags: 'x' }] })),
     ],
     ['expect with a label that is a number', request(expectCall({ label: 3 }))],
+    [
+      'exec in the background with a string',
+      request({ op: 'exec', command: 'ls', background: 'yes' }),
+    ],
+    ['serve on port 0', request({ op: 'serve', command: 'npm start', port: 0 })],
+    ['serve on a port above 65535', request({ op: 'serve', command: 'npm start', port: 70000 })],
+    ['kill without a handle', request({ op: 'kill' })],
+    ['capture without a target', request({ op: 'capture' })],
+    ['capture on a host', request({ op: 'capture', target: { host: 'localhost' } })],
+    [
+      'capture with a viewport typo',
+      request({ op: 'capture', target: { port: 3000 }, options: { viewport: 'fullpage' } }),
+    ],
+    [
+      'capture with a negative wait',
+      request({ op: 'capture', target: { port: 3000 }, options: { wait: { ms: -1 } } }),
+    ],
+    [
+      'poll on a value',
+      request(expectCall({ subject: { value: 1 }, matcher: 'toBe', args: [1], poll: {} })),
+    ],
+    ['poll with a zero interval', request(expectCall({ poll: { interval: 0 } }))],
+    ['poll with a typo', request(expectCall({ poll: { timout: 5000 } }))],
     ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
     ['good: judge', request({ op: 'judge', question: 'Does greet.js export greet?' })],
     [
@@ -1029,6 +1052,52 @@ environment:
       }),
     ],
     ['good: exec', request({ op: 'exec', command: 'node greet.js' })],
+    [
+      'good: exec in the background',
+      request({ op: 'exec', command: 'npm run watch', background: true }),
+    ],
+    ['good: serve', request({ op: 'serve', command: 'npm start', port: 3000 })],
+    ['good: serve on any port', request({ op: 'serve', command: 'npx serve -l $PORT' })],
+    ['good: kill', request({ op: 'kill', handle: 'h1' })],
+    ['good: capture on a port', request({ op: 'capture', target: { port: 3000 } })],
+    [
+      'good: capture on a serve handle',
+      request({
+        op: 'capture',
+        target: { handle: 'h1' },
+        options: {
+          name: 'about',
+          path: '/about',
+          viewport: 'full-page',
+          timeout: '30s',
+          wait: 'idle',
+          instructions: ['Open the menu', { wait: { ms: 500 } }, 'Click About'],
+          model: 'google/gemini-3.8-flash',
+        },
+      }),
+    ],
+    [
+      'good: poll a command',
+      request(
+        expectCall({
+          subject: { exec: 'curl -s localhost:3000' },
+          matcher: 'toSucceed',
+          args: [],
+          poll: { interval: 200, timeout: 10000 },
+        }),
+      ),
+    ],
+    [
+      'good: poll a file',
+      request(
+        expectCall({
+          subject: { readFile: 'out.log' },
+          matcher: 'toContain',
+          args: ['ready'],
+          poll: {},
+        }),
+      ),
+    ],
     ['good: readFile', request({ op: 'readFile', path: '~/notes.md' })],
     [
       'good: writeFile',

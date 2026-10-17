@@ -218,6 +218,71 @@ test('a call and its reply round-trip through JSON unchanged', () => {
   }
 })
 
+test('a served app, captured, polled and killed, round-trips through JSON unchanged', () => {
+  const capture = {
+    name: 'about',
+    port: 3000,
+    path: '/about',
+    viewport: 'full-page',
+    file: { path: 'artifacts/about.png', sha256: 'ab12', bytes: 2048 },
+  }
+  const poll = {
+    op: 'expect',
+    subject: { exec: 'curl -sf localhost:3000/health' },
+    matcher: 'toSucceed',
+    args: [],
+    not: false,
+    soft: false,
+    poll: { interval: 200, timeout: 10000 },
+  }
+  const steps = [
+    [
+      { op: 'serve', command: 'npm start', port: 3000 },
+      { op: 'serve', handle: 'h1', port: 3000 },
+    ],
+    [
+      { op: 'exec', command: 'npm run watch', background: true },
+      { op: 'exec', result: { handle: 'h2' } },
+    ],
+    [
+      { op: 'capture', target: { handle: 'h1' }, options: { path: '/about', wait: 'idle' } },
+      { op: 'capture', capture },
+    ],
+    [
+      poll,
+      {
+        op: 'expect',
+        assertion: {
+          label: 'expect(…).toSucceed()',
+          labelled: false,
+          matcher: 'toSucceed',
+          status: 'pass',
+          soft: false,
+        },
+      },
+    ],
+    [{ op: 'kill', handle: 'h2' }, { op: 'kill' }],
+    [{ op: 'kill', handle: 'h1' }, { op: 'kill' }],
+  ] as const
+  for (const [i, [call, result]] of steps.entries()) {
+    const request = JSON.parse(JSON.stringify({ id: String(i), call }))
+    const reply = JSON.parse(JSON.stringify({ id: String(i), ok: true, ...result }))
+    assert.deepEqual(attemptRequestSchema.parse(request), request)
+    assert.deepEqual(validate(snapshot('attempt-request'), request), [])
+    assert.deepEqual(attemptReplySchema.parse(reply), reply)
+    assert.deepEqual(validate(snapshot('attempt-reply'), reply), [])
+  }
+  // The canaries: a background exec's reply that also carries output, a numeric handle, and a
+  // polled value. validate() allows extra keys, so only Zod refuses the first.
+  const both = { id: '1', ok: true, op: 'exec', result: { handle: 'h2', exitCode: 0 } }
+  assert.equal(attemptReplySchema.safeParse(both).success, false)
+  const numeric = { id: '1', ok: true, op: 'serve', handle: 1, port: 3000 }
+  assert.equal(attemptReplySchema.safeParse(numeric).success, false)
+  assert.notDeepEqual(validate(snapshot('attempt-reply'), numeric), [])
+  const value = { id: '1', call: { ...poll, subject: { value: 1 } } }
+  assert.equal(attemptRequestSchema.safeParse(value).success, false)
+})
+
 test("the protocol's shared defs match their types' properties and TSDoc", () => {
   const defs = zodDefs(ATTEMPT_SCHEMAS, {})
   assert.deepEqual(typeDrift(defs), [])
