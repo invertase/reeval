@@ -257,7 +257,7 @@ export type FamilyInterval = {
   method: 'wilson' | 'newcombe-paired' | 't-cases'
 }
 
-/** One cell's pass rate over a family's cases. */
+/** One cell's pass@1 over a family's cases. */
 export type FamilyRate = {
   /** The cell's key, the same in every case. */
   cell: string

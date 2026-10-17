@@ -16,7 +16,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 9
+const DB_VERSION = 10
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -68,17 +68,18 @@ CREATE TABLE evals (
   case_index INTEGER,
   PRIMARY KEY (run_id, key)
 );
--- Each pooled evaluate.each per run: its cases, and each cell's pass rate over them.
+-- Each pooled evaluate.each per run: its cases, and each cell's pass@1 over them (the mean of the
+-- cases' pass@1).
 CREATE TABLE families (
   run_id TEXT NOT NULL, family_id TEXT NOT NULL, file TEXT, groups TEXT, name TEXT,
   cases INTEGER, ran INTEGER, cell_key TEXT NOT NULL, cell_cases INTEGER, pass INTEGER,
-  counted INTEGER, pass_rate REAL, lo REAL, hi REAL, method TEXT, outcome TEXT,
+  counted INTEGER, pass_at_1 REAL, lo REAL, hi REAL, method TEXT, outcome TEXT,
   PRIMARY KEY (run_id, family_id, cell_key)
 );
 CREATE TABLE family_lift_m (
   run_id TEXT NOT NULL, family_id TEXT NOT NULL, name TEXT, harness TEXT, variant TEXT,
   cell_key TEXT, control TEXT,
-  pairs INTEGER, variant_rate REAL, control_rate REAL, discordant_vc INTEGER,
+  pairs INTEGER, variant_pass_at_1 REAL, control_pass_at_1 REAL, discordant_vc INTEGER,
   discordant_cv INTEGER, points REAL, lo REAL, hi REAL, method TEXT, p REAL,
   within_noise INTEGER, verdict TEXT, min_lift REAL, outcome TEXT, tools_ratio REAL,
   tools_p REAL, effort_verdict TEXT, agent_s_ratio REAL, agent_s_p REAL, time_verdict TEXT,

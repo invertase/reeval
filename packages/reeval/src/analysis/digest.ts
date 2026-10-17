@@ -257,7 +257,7 @@ export async function buildDigestKeepingDropped(
         cases: f.ran === f.cases ? f.cases : `${f.ran} of ${f.cases}`,
         rates: f.rates.map((x) => ({
           cell: cellTag(r.record.runId, member.key, x.cell),
-          passRate: familyRateLabel(x),
+          passAt1: familyRateLabel(x),
         })),
         lifts: f.lifts.map((l) => ({
           cell: cellTag(r.record.runId, member.key, l.variant),
