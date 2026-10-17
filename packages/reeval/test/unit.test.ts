@@ -21,6 +21,7 @@ import {
   defaultConcurrency,
   evalRoot,
   findConfig,
+  loadConfig,
   malformedCredentials,
   missingConfigMessage,
   missingCredentials,
@@ -628,6 +629,66 @@ test('findConfig takes a reeval.yaml, and refuses it beside another config', () 
     )
     writeFileSync(join(root, 'reeval.yaml'), '')
     assert.throws(() => findConfig(root), /^UsageError: reeval\.yaml and reeval\.yml are both in /)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test("a reeval.yaml's relative host paths resolve against its directory", async () => {
+  const root = mkdtempSync(join(tmpdir(), 'reeval-yaml-paths-'))
+  const dir = join(root, 'project')
+  try {
+    mkdirSync(join(dir, 'docker'), { recursive: true })
+    writeFileSync(join(dir, 'docker', 'Dockerfile'), 'FROM debian:bookworm-slim\n')
+    const absolute = join(root, 'elsewhere.md')
+    writeFileSync(
+      join(dir, 'reeval.yaml'),
+      `sandbox: { kind: docker, dockerfile: docker/Dockerfile }
+environment:
+  kind: environment
+  name: base
+  layers:
+    - name: base
+      spec:
+        workspace: { kind: git, repo: ../app, url: ../app }
+        files:
+          a.md: { kind: file, path: notes/a.md }
+          b.md: { kind: file, path: ${JSON.stringify(absolute)} }
+          c.md: written inline
+        rules: { kind: file, path: ./AGENTS.md }
+        skills:
+          - { kind: skill, source: local, path: ./skills, placement: harness }
+          - { kind: skill, source: npm, spec: file:../pkg.tgz, path: skills, placement: harness }
+          - { kind: skill, source: npm, spec: '@acme/skills@1.2.3', path: skills, placement: harness }
+profiles:
+  local:
+    defaults:
+      sandbox: { kind: fake, dir: ./tmp }
+      environment:
+        kind: environment
+        name: remote
+        layers: [{ name: remote, spec: { workspace: { kind: git, repo: github:acme/app, url: https://github.com/acme/app.git } } }]
+`,
+    )
+    const config = await loadConfig(join(dir, 'reeval.yaml'))
+    assert.deepEqual(config.sandbox, { kind: 'docker', dockerfile: join(dir, 'docker/Dockerfile') })
+    const spec = config.environment?.layers[0]?.spec
+    assert.equal(spec?.workspace?.url, join(root, 'app'))
+    assert.equal(spec?.workspace?.repo, '../app', 'repo stays as written')
+    assert.deepEqual(spec?.files, {
+      'a.md': { kind: 'file', path: join(dir, 'notes/a.md') },
+      'b.md': { kind: 'file', path: absolute },
+      'c.md': 'written inline',
+    })
+    assert.deepEqual(spec?.rules, { kind: 'file', path: join(dir, 'AGENTS.md') })
+    assert.deepEqual(
+      spec?.skills?.map((s) => (s.source === 'local' ? s.path : s.source === 'npm' ? s.spec : '')),
+      [join(dir, 'skills'), join(root, 'pkg.tgz'), '@acme/skills@1.2.3'],
+    )
+    const local = config.profiles.local?.defaults
+    assert.deepEqual(local?.sandbox, { kind: 'fake', dir: join(dir, 'tmp') })
+    const remote = local?.environment?.layers[0]?.spec.workspace
+    assert.equal(remote?.url, 'https://github.com/acme/app.git', 'a URL is not a path')
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

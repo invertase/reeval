@@ -6,7 +6,15 @@ import { configDataProblem } from './contract/config.ts'
 import { judgeProblem } from './contract/judge.ts'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
-import { environmentFrom, helpersFor, isEnvironment, isSecret } from './environment.ts'
+import {
+  environmentFrom,
+  helpersFor,
+  isEnvironment,
+  isLocalPath,
+  isSecret,
+  localNpmSpec,
+  toPath,
+} from './environment.ts'
 import { UsageError } from './errors.ts'
 import {
   AGENTS,
@@ -194,6 +202,97 @@ export function parseYamlConfig(text: string, file: string): unknown {
   return doc.toJS() ?? {}
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isPath = (value: unknown): value is string => typeof value === 'string' && value !== ''
+
+/**
+ * A data config with its host paths made absolute against its directory, as `file()`,
+ * `skill.local()`, `skill.npm()`, `git()` and `docker({ dockerfile })` resolve a script config's
+ * against its file: host files (`files`, `rules`), local skills and npm specs, a local git
+ * workspace, a Dockerfile and a fake sandbox's `dir`. Only a non-empty string changes; any other
+ * value is left for the checks to name.
+ */
+function withHostPaths(
+  data: Record<string, unknown>,
+  root: string,
+  file: string,
+): Record<string, unknown> {
+  const hostFile = (value: unknown) =>
+    isRecord(value) && value.kind === 'file' && isPath(value.path)
+      ? { ...value, path: toPath(value.path, root) }
+      : value
+  const sandbox = (value: unknown, where: string) => {
+    if (!isRecord(value)) return value
+    if (value.kind === 'docker' && isPath(value.dockerfile)) {
+      const full = toPath(value.dockerfile, root)
+      if (!existsSync(full)) {
+        throw new UsageError(
+          `${where}.dockerfile in ${file}: ${full} doesn't exist. Paths in ${file} are relative to its directory.`,
+        )
+      }
+      return { ...value, dockerfile: full }
+    }
+    return value.kind === 'fake' && isPath(value.dir)
+      ? { ...value, dir: toPath(value.dir, root) }
+      : value
+  }
+  const skill = (value: unknown) => {
+    if (!isRecord(value)) return value
+    if (value.source === 'local' && isPath(value.path)) {
+      return { ...value, path: toPath(value.path, root) }
+    }
+    return value.source === 'npm' && isPath(value.spec)
+      ? { ...value, spec: localNpmSpec(value.spec, root) }
+      : value
+  }
+  const spec = (value: unknown, where: string) => {
+    if (!isRecord(value)) return value
+    const out = { ...value }
+    if ('sandbox' in value) out.sandbox = sandbox(value.sandbox, `${where}.sandbox`)
+    const { workspace, files, rules, skills } = value
+    if (isRecord(workspace) && isPath(workspace.url) && isLocalPath(workspace.url)) {
+      out.workspace = { ...workspace, url: toPath(workspace.url, root) }
+    }
+    if (isRecord(files)) {
+      out.files = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, hostFile(v)]))
+    }
+    if ('rules' in value) out.rules = hostFile(rules)
+    if (Array.isArray(skills)) out.skills = skills.map(skill)
+    return out
+  }
+  const environment = (value: unknown, where: string) =>
+    isRecord(value) && Array.isArray(value.layers)
+      ? {
+          ...value,
+          layers: value.layers.map((layer, i) =>
+            isRecord(layer)
+              ? { ...layer, spec: spec(layer.spec, `${where}.layers[${i}].spec`) }
+              : layer,
+          ),
+        }
+      : value
+  const options = (value: unknown, prefix: string) => {
+    if (!isRecord(value)) return value
+    const out = { ...value }
+    if ('sandbox' in value) out.sandbox = sandbox(value.sandbox, `${prefix}sandbox`)
+    if ('environment' in value) {
+      out.environment = environment(value.environment, `${prefix}environment`)
+    }
+    return out
+  }
+  const config = options(data, '') as Record<string, unknown>
+  const { profiles } = config
+  if (!isRecord(profiles)) return config
+  const each = Object.entries(profiles).map(([name, profile]) =>
+    isRecord(profile) && 'defaults' in profile
+      ? [name, { ...profile, defaults: options(profile.defaults, `profiles.${name}.defaults.`) }]
+      : [name, profile],
+  )
+  return { ...config, profiles: Object.fromEntries(each) }
+}
+
 /** The config from its data form: each environment's data becomes an `Environment` again. */
 function configFromData(data: Record<string, unknown>): ReevalConfig {
   const withEnvironment = (options: unknown) => {
@@ -219,15 +318,17 @@ function configFromData(data: Record<string, unknown>): ReevalConfig {
 
 /**
  * Resolves a config in its data form (a parsed `reeval.yaml`, or `ReevalConfigData` from another
- * language): `resolveConfig`'s checks name a mistake in their own words first, and the config
- * contract refuses anything they let through, such as a `null` or a misspelt nested key.
+ * language) whose relative host paths resolve against `root`, its directory: `resolveConfig`'s
+ * checks name a mistake in their own words first, and the config contract refuses anything they
+ * let through, such as a `null` or a misspelt nested key.
  */
-export function resolveConfigData(data: unknown, root: string, file: string): ResolvedConfig {
-  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+export function resolveConfigData(input: unknown, root: string, file: string): ResolvedConfig {
+  if (!isRecord(input)) {
     throw new UsageError(
-      `${file} must be a mapping of config keys, like harness: and judge: (got ${JSON.stringify(data)})`,
+      `${file} must be a mapping of config keys, like harness: and judge: (got ${JSON.stringify(input)})`,
     )
   }
+  const data = withHostPaths(input, root, file)
   // `resolveConfig` would ask for `defineEnvironment(…)`, which a data config can't call.
   const { environment, profiles } = data as ReevalConfigData
   const environments = [
@@ -242,7 +343,7 @@ export function resolveConfigData(data: unknown, root: string, file: string): Re
   }
   let resolved: ResolvedConfig
   try {
-    resolved = resolveConfig(configFromData(data as Record<string, unknown>), root, file)
+    resolved = resolveConfig(configFromData(data), root, file)
   } catch (error) {
     if (error instanceof UsageError) throw error
     const problem = configDataProblem(data, file)

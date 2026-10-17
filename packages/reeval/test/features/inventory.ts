@@ -245,6 +245,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'config.yaml-paths',
+    area: 'Config and selection',
+    name: "`reeval.yaml`'s relative host paths (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`) resolve against its directory",
+    plan: ['yaml-paths/from-above', 'yaml-paths/profile-from-above'],
+    tests: [unit("a reeval.yaml's relative host paths resolve against its directory")],
+  },
+  {
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',

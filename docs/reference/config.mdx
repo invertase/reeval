@@ -116,10 +116,33 @@ A project without TypeScript can write its config as YAML. It takes the same key
 | `docker({ from: 'node:24' })`, `fakeSandbox()` | `{ kind: docker, from: 'node:24' }`, `{ kind: fake }` |
 | `secret({ hosts: [...] })`, `secret.fromEnv('X')` | `{ kind: secret, hosts: [...] }`, `{ kind: secret, from: X }` |
 | `defineEnvironment('base', spec)` | `{ kind: environment, name: base, layers: [{ name: base, spec }] }` |
+| `file('./notes.md')` | `{ kind: file, path: ./notes.md }` |
+| `skill.local('./skills')` | `{ kind: skill, source: local, path: ./skills, placement: harness }` |
+| `git('../app')` | `{ kind: git, repo: ../app, url: ../app }` |
 | `fakeJudge({ score: 0.9 })` | `{ kind: fake-judge, score: 0.9 }` |
 | `fakeAnalysis({ note, vote })` | `{ kind: fake-analysis, note, vote }`, with fixed values |
 
-There is no callback, so `ci`, `hostEnv` and the helpers aren't available. Paths in data, such as a host file's, are absolute. AI SDK model objects and score functions stay TypeScript only. Its shape is a JSON Schema, `packages/reeval/schema/plan/config.schema.json` in reeval's repository, which a YAML language server can check the file against.
+There is no callback, so `ci`, `hostEnv` and the helpers aren't available, and AI SDK model objects and score functions stay TypeScript only. Its shape is a JSON Schema, `packages/reeval/schema/plan/config.schema.json` in reeval's repository, which a YAML language server can check the file against.
+
+### Paths in reeval.yaml
+
+```yaml title="reeval.yaml"
+sandbox: { kind: docker, dockerfile: docker/Dockerfile }
+environment:
+  kind: environment
+  name: base
+  layers:
+    - name: base
+      spec:
+        files: { NOTES.md: { kind: file, path: ./notes.md } }
+        rules: { kind: file, path: rules.md }
+        skills:
+          - { kind: skill, source: local, path: ./skills, placement: harness }
+```
+
+Relative host paths resolve against the directory `reeval.yaml` is in, wherever you run `reeval` from, as `file()` and `skill.local()` resolve against the file that calls them. That covers a host file in `files` or `rules`, a local skill's `path`, an npm skill's `./`, `../` or `file:` spec, a local git workspace's `url`, a Dockerfile and a fake sandbox's `dir`, at the top level, in `profiles.*.defaults` and in each environment layer. Absolute paths stay as written, and a missing Dockerfile is an error naming its field.
+
+### Mistakes in reeval.yaml
 
 An empty file is an empty config. A YAML syntax error names the line and column. Every key gets the checks `reeval.config.ts` gets, and the config contract then refuses anything else that isn't its data form, naming the field:
 
@@ -235,6 +258,7 @@ reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 | No `reeval.config.*` here or above | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.` |
 | A `reeval.yaml` beside another config | `reeval.config.ts and reeval.yaml are both in .: reeval reads one config per directory. Keep one, or pass --config.` |
 | A YAML syntax error | `reeval.yaml isn't valid YAML: Map keys must be unique at line 2, column 1: …` |
+| A relative Dockerfile in `reeval.yaml` that isn't there | `sandbox.dockerfile in reeval.yaml: /project/docker/Dockerfile doesn't exist. Paths in reeval.yaml are relative to its directory.` |
 | A `null` or a misspelt nested key in `reeval.yaml` | `include in reeval.yaml must be a list (got null)`, `Unknown option "dirr" in history in reeval.yaml. Did you mean "dir"?` |
 
 More messages, with fixes, are on [Errors](/reference/errors).

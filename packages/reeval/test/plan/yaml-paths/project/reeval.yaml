@@ -1,0 +1,16 @@
+# Relative paths resolve against this file's directory, wherever reeval runs from.
+harness: { kind: fake }
+sandbox: { kind: docker, dockerfile: docker/Dockerfile }
+environment:
+  kind: environment
+  name: base
+  layers:
+    - name: base
+      spec:
+        files: { NOTES.md: { kind: file, path: ./notes.md } }
+        rules: { kind: file, path: rules.md }
+        skills: [{ kind: skill, source: local, path: ./skills, placement: harness }]
+profiles:
+  nightly:
+    defaults:
+      sandbox: { kind: docker, dockerfile: ./nightly/Dockerfile }
