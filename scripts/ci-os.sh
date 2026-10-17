@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ci.yml's Windows and macOS legs: every tier that needs no Docker, one part at a time.
+# extended.yml's Windows and macOS legs: every tier that needs no Docker, one part at a time.
 #
 #   scripts/ci-os.sh unit 2/4    a shard of the unit and plan test files
-#   scripts/ci-os.sh tiers       typecheck, lint, fixtures (fake tier), studio, the other packages
+#   scripts/ci-os.sh tiers       typecheck, schema check, lint, fixtures (fake tier), studio, the other packages
 #   scripts/ci-os.sh packed      the pack test, then reeval init → run → doctor → studio build from the tarball
 #
 # Run after `pnpm install` and `pnpm build`, from anywhere in the repo.

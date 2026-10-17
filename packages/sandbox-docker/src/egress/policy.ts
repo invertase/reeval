@@ -34,7 +34,7 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   opencode: ['generativelanguage.googleapis.com', 'mcp.exa.ai'],
   goose: ['generativelanguage.googleapis.com'],
   pi: ['generativelanguage.googleapis.com'],
-  // The Responses API only, with analytics, feedback and the update check off.
+  // The Responses API only, with analytics and the plugin sync off.
   codex: ['api.openai.com'],
 }
 

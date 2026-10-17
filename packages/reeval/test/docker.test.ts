@@ -381,7 +381,7 @@ evaluate('run', { environment: defineEnvironment('run', { sandbox: docker({ dock
     async () => {
       const p = await project('docker-clean-images', { 'reeval.config.ts': config('{}') })
       const nonce = `${Date.now()}-${process.pid}`
-      // A commit over an existing tag leaves the old image dangling, as rebuilding reeval's image did.
+      // A commit over an existing tag leaves the old image dangling.
       const container = execFileSync('docker', ['create', 'debian:bookworm-slim', 'true'], {
         encoding: 'utf8',
       }).trim()

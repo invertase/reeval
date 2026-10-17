@@ -197,7 +197,6 @@ function judgeCell(e: EvalEntry): string {
   return judgements.map((j) => `${j.verdict} ${j.score.toFixed(2)}/${j.threshold}`).join(', ')
 }
 
-/** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
 const short = (hash: string) => hash.replace(/^sha256:/, '').slice(0, 12)
 
 /**
@@ -297,6 +296,7 @@ function familySection(run: RunRecord): string[] {
   return lines
 }
 
+/** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
 export function renderSummary(run: RunRecord): string {
   const lines = [
     `# reeval run ${run.runId}`,

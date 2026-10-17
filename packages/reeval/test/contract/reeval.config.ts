@@ -42,6 +42,6 @@ export default defineConfig({
   // No retries, one attempt per cell: a failure is a failure (see README, flake policy).
   runs: 1,
   timeout: '4m',
-  // The hard cap: the 12 evals below, and nothing a stray eval file could add.
+  // The hard cap: the 12 evals in evals/, and nothing a stray eval file could add.
   budget: { attempts: 12 },
 })

@@ -162,7 +162,6 @@ const passRateOf = (outcomes: Outcome[]) => {
   return counted ? pass / counted : null
 }
 
-/** Concurrency caps change how fast a run goes, not what it measures. */
 /** Without the operational limits (`maxConcurrent`, `startTimeout`), which don't change results. */
 const withoutCaps = <T extends { maxConcurrent?: number; startTimeout?: unknown }>({
   maxConcurrent: _,

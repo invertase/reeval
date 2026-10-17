@@ -1,4 +1,4 @@
-// The run-history commands: record, history, show, compare.
+// The run-history commands: record, history, show, compare, checkout.
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'

@@ -67,7 +67,7 @@ export const artifactRefsOf = (resolved: readonly ResolvedJudgeArtifact[]): Judg
   resolved.map(({ data: _data, ...ref }) => ref)
 
 /**
- * JSON-only state stays an object so TypeSafe and other JSON judges are unchanged.
+ * JSON-only state is a plain object, as TypeSafe and other JSON judges read it.
  * File parts are an ordered decide-state array: one JSON part, then each capture.
  */
 export function decideState(json: JudgeJsonState, files: readonly JudgeFilePart[]): JudgeState {

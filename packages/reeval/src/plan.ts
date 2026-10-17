@@ -244,8 +244,10 @@ function questionLines(members: PlanRow[], questionModel: string | null): string
   )
 }
 
-/** One line when evals run several times under the default gate, which every attempt must pass. */
-/** Rows with a gated cell left at the default gate; a study whose cells are all `'none'` has none. */
+/**
+ * One line when evals run several times under the default gate, which every attempt must pass.
+ * `rows` are those with a gated cell; a study whose cells are all `'none'` has none.
+ */
 function gateHint(rows: PlanRow[]): string[] {
   const n = rows.filter((r) => !r.plan.skip && r.plan.runs > 1 && r.plan.gate === undefined).length
   if (n === 0) return []
