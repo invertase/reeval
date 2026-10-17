@@ -2,7 +2,9 @@ import { readdirSync, realpathSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import picomatch from 'picomatch'
+import { z } from 'zod'
 import { sandboxProblem } from './contract/docker.ts'
+import { environmentDataSchema, environmentSpecSchema, NAME } from './contract/environment.ts'
 import {
   badHost,
   descriptorProblem,
@@ -14,6 +16,7 @@ import {
   skillSourceSchema,
   VAR,
 } from './contract/plain.ts'
+import { genericProblem, got, type Issue, refusal } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -46,7 +49,6 @@ export class DefinitionError extends Error {
   override name = 'DefinitionError'
 }
 
-const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
 const SPEC_KEYS = [
   'sandbox',
   'workspace',
@@ -815,7 +817,63 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   }
   const rules = isHostFile(s.rules) && descriptorProblem(hostFileSchema, s.rules, 'file')
   if (rules) throw new DefinitionError(`rules in ${where}: ${rules}`)
+  const rest = refusal(
+    environmentSpecSchema,
+    s,
+    (issue, value) => `${where}: ${genericProblem('', issue, value)}`,
+  )
+  if (rest) throw new DefinitionError(rest)
   return structuredClone(s)
+}
+
+const NAME_RULE = 'a name of letters, digits, ".", "_", "@", "+" or "-"'
+
+/** The envelope of environment data: its name and layers, each layer's spec only as an object. */
+const environmentEnvelope = environmentDataSchema.extend({
+  layers: z.array(
+    z.strictObject({ name: z.string().regex(NAME), spec: z.record(z.string(), z.unknown()) }),
+  ),
+})
+
+/**
+ * What's wrong with an environment as data (from another language, or built by hand), in the
+ * words `defineEnvironment` uses for each layer's spec, or undefined. `option` names the option
+ * (`environment`, `compare.baseline`, …) and `where` the eval or config that set it.
+ */
+export function environmentDataProblem(
+  value: unknown,
+  option: string,
+  at: string,
+): string | undefined {
+  const env = value as EnvironmentData
+  const where = `${option} in ${at}`
+  const envelope = refusal(environmentEnvelope, value, (issue: Issue) => {
+    const [key, index, field] = issue.path as [string?, number?, string?]
+    const layer = index === undefined ? undefined : env.layers[index]
+    if (issue.code === 'unrecognized_keys') {
+      const what = layer ? `layer ${index} of the environment` : 'the environment'
+      return `${where}: ${what} has no "${issue.keys[0]}" field`
+    }
+    if (key === 'name') return `${where} needs ${NAME_RULE} (got ${got(env.name)})`
+    if (field === 'name') {
+      return `${where}: layer ${index} of "${env.name}" needs ${NAME_RULE} (got ${got(layer?.name)})`
+    }
+    if (field === 'spec') {
+      return `${where}: layer "${layer?.name}" of "${env.name}" needs its spec, an object (got ${got(layer?.spec)})`
+    }
+    return `${where}: ${genericProblem('environment', issue, value)}`
+  })
+  if (envelope) return envelope
+  for (const layer of env.layers) {
+    try {
+      const of = option === 'environment' ? at : where
+      checkSpec(layer.spec, `layer "${layer.name}" of environment "${env.name}" in ${of}`)
+    } catch (error) {
+      if (error instanceof DefinitionError) return error.message
+      throw error
+    }
+  }
+  return undefined
 }
 
 function buildSpec(input: EnvironmentInput, where: string, base: string): EnvironmentSpec {

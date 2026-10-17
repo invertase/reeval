@@ -515,15 +515,44 @@
         }
       ]
     },
+    "EgressPolicy": {
+      "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
+      "anyOf": [
+        {
+          "type": "string",
+          "const": "allow-all"
+        },
+        {
+          "type": "string",
+          "const": "deny-all"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "allow": {
+              "readOnly": true,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["allow"],
+          "additionalProperties": false
+        }
+      ]
+    },
     "EnvironmentData": {
       "description": "An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`.",
       "type": "object",
       "properties": {
         "kind": {
+          "type": "string",
           "const": "environment"
         },
         "layers": {
           "description": "Its `extend` chain, root first.",
+          "readOnly": true,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EnvironmentLayer"
@@ -531,10 +560,12 @@
         },
         "name": {
           "description": "The name it was defined or extended under, which names its cells.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]*$"
         }
       },
-      "required": ["kind", "layers", "name"]
+      "required": ["kind", "layers", "name"],
+      "additionalProperties": false
     },
     "EnvironmentLayer": {
       "description": "One environment in an `extend` chain.",
@@ -542,14 +573,16 @@
       "properties": {
         "name": {
           "description": "The name passed to `defineEnvironment` or `extend`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]*$"
         },
         "spec": {
           "description": "The spec as that layer wrote it, before merging.",
           "$ref": "#/$defs/EnvironmentSpec"
         }
       },
-      "required": ["name", "spec"]
+      "required": ["name", "spec"],
+      "additionalProperties": false
     },
     "EnvironmentSpec": {
       "description": "What an eval runs in: the declarative, phased spec of one environment.",
@@ -557,23 +590,7 @@
       "properties": {
         "egress": {
           "description": "Replaces the inherited policy; an `extend` child's replaces its parent's.",
-          "anyOf": [
-            {
-              "enum": ["allow-all", "deny-all"]
-            },
-            {
-              "type": "object",
-              "properties": {
-                "allow": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "required": ["allow"]
-            }
-          ]
+          "$ref": "#/$defs/EgressPolicy"
         },
         "env": {
           "description": "Variables and secrets for the sandbox, merged by name over the parent's.",
@@ -582,15 +599,16 @@
         "files": {
           "description": "Workspace-relative, or `~/` for home.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "anyOf": [
               {
-                "$ref": "#/$defs/HostFile"
+                "type": "string"
               },
               {
-                "type": "string"
+                "$ref": "#/$defs/HostFile"
               }
             ]
           }
@@ -598,8 +616,9 @@
         "mcp": {
           "description": "MCP servers the agent gets, by name.",
           "type": "object",
-          "properties": {},
-          "required": [],
+          "propertyNames": {
+            "type": "string"
+          },
           "additionalProperties": {
             "$ref": "#/$defs/McpServer"
           }
@@ -608,23 +627,16 @@
           "description": "Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code.",
           "anyOf": [
             {
-              "$ref": "#/$defs/HostFile"
+              "type": "string"
             },
             {
-              "type": "string"
+              "$ref": "#/$defs/HostFile"
             }
           ]
         },
         "sandbox": {
           "description": "Where the attempt runs: `docker()` or `fakeSandbox()`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; install is not merged onto the parent image.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DockerSandboxDescriptor"
-            },
-            {
-              "$ref": "#/$defs/FakeSandboxDescriptor"
-            }
-          ]
+          "$ref": "#/$defs/SandboxDescriptor"
         },
         "setup": {
           "description": "Shell commands run in every attempt before the agent starts; a child's run after its parent's.",
@@ -645,7 +657,7 @@
           "$ref": "#/$defs/GitWorkspace"
         }
       },
-      "required": []
+      "additionalProperties": false
     },
     "EnvValue": {
       "description": "A variable's value: a literal string, or a host secret.",
@@ -2076,6 +2088,16 @@
       "description": "An option a profile's `limit` can narrow, and `pin` can protect.",
       "enum": ["compare", "harness", "runs"]
     },
+    "SandboxDescriptor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FakeSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/DockerSandboxDescriptor"
+        }
+      ]
+    },
     "Secret": {
       "description": "A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by the `secret` helper of `defineEnvironment` and `defineConfig` callbacks.",
       "type": "object",
@@ -2138,41 +2160,29 @@
       "description": "Runs in every attempt before the agent starts, with secrets, outside the eval timeout: a shell command, or `{ run, timeout?, cwd? }`.",
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "cwd": {
               "description": "Relative to the workspace, or absolute; default the workspace.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "run": {
               "description": "The shell command.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "timeout": {
               "description": "Default 5m.",
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                }
-              ]
+              "$ref": "#/$defs/Duration"
             }
           },
-          "required": ["run"]
-        },
-        {
-          "type": "string"
+          "required": ["run"],
+          "additionalProperties": false
         }
       ]
     },

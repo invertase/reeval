@@ -31,5 +31,5 @@
   "harness with a number": "UsageError: compare.harness must be a list of harness ids in evals/a.eval.ts › e",
   "environment beside baseline": "UsageError: environment and compare.baseline can't both be set in evals/a.eval.ts › e. compare: { baseline, variants } names every arm, so drop environment, or drop baseline to make environment the control.",
   "good": null,
-  "data: a variant with a bad spec": null
+  "data: a variant with a bad spec": "UsageError: Unknown field \"setpu\" in layer \"x\" of environment \"x\" in compare.variants[0] in evals/a.eval.ts › e."
 }

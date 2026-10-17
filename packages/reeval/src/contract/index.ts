@@ -4,6 +4,13 @@ import type { z } from 'zod'
 import { compareQuestionSchema, pairFactorSchema } from './compare.ts'
 import { dockerSandboxSchema, fakeSandboxSchema, installStepSchema } from './docker.ts'
 import {
+  environmentDataSchema,
+  environmentLayerSchema,
+  environmentSpecSchema,
+  sandboxDescriptorSchema,
+  setupStepSchema,
+} from './environment.ts'
+import {
   antigravityHarnessSchema,
   claudeCodeHarnessSchema,
   codexHarnessSchema,
@@ -65,4 +72,9 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   SkillSource: skillSourceSchema,
   McpServer: mcpServerSchema,
   GitWorkspace: gitWorkspaceSchema,
+  SandboxDescriptor: sandboxDescriptorSchema,
+  SetupStep: setupStepSchema,
+  EnvironmentSpec: environmentSpecSchema,
+  EnvironmentLayer: environmentLayerSchema,
+  EnvironmentData: environmentDataSchema,
 }

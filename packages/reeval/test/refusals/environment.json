@@ -19,9 +19,9 @@
   "good": null,
   "options: a list": "UsageError: environment takes one environment, not a list (evals/a.eval.ts › e). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.",
   "options: not an environment": "UsageError: environment in evals/a.eval.ts › e must come from defineEnvironment(…) (got \"one\")",
-  "data: a typo in a layer": null,
-  "data: a bad setup step": null,
-  "data: a layer without a spec": null,
-  "data: a bad name": null,
+  "data: a typo in a layer": "UsageError: Unknown field \"setpu\" in layer \"x\" of environment \"x\" in evals/a.eval.ts › e.",
+  "data: a bad setup step": "UsageError: Steps in layer \"x\" of environment \"x\" in evals/a.eval.ts › e are strings or { run, timeout?, cwd? } objects",
+  "data: a layer without a spec": "UsageError: environment in evals/a.eval.ts › e: layer \"x\" of \"x\" needs its spec, an object (got undefined)",
+  "data: a bad name": "UsageError: environment in evals/a.eval.ts › e needs a name of letters, digits, \".\", \"_\", \"@\", \"+\" or \"-\" (got \"a b\")",
   "data: good": null
 }

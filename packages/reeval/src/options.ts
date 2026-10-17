@@ -15,6 +15,7 @@ import {
   checkEnv,
   EMPTY_BASELINE,
   emptyEnvironment,
+  environmentDataProblem,
   isEnvironment,
   isMovingRef,
   plannedSecrets,
@@ -241,12 +242,22 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
         `environment in ${where} must come from defineEnvironment(…) (got ${describe(o.environment)})`,
       )
     }
+    const problem = environmentDataProblem(o.environment, 'environment', where)
+    if (problem) throw new UsageError(problem)
   }
   const raw = options as { environment?: unknown; compare?: unknown }
   refuseIllegalCompare(raw, where)
   if (o.compare !== undefined) {
     const problem = compareProblem(o.compare, where, z.custom<Environment>(isEnvironment))
     if (problem) throw new UsageError(problem)
+    const { baseline, variants } = o.compare
+    for (const [label, env] of [
+      ['compare.baseline', baseline],
+      ...variants.map((v, i) => [`compare.variants[${i}]`, v] as const),
+    ] as const) {
+      const bad = env && environmentDataProblem(env, label, where)
+      if (bad) throw new UsageError(bad)
+    }
   }
   if (o.pin !== undefined) {
     const bad = Array.isArray(o.pin) ? o.pin.filter((k) => !PINNABLE.includes(k)) : [o.pin]

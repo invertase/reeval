@@ -98,21 +98,19 @@ export function oneOf(values: readonly unknown[]): string {
 }
 
 /**
- * The sentence for an issue no hand-written one covers, naming the field as `call({ field })`:
+ * The sentence for an issue no hand-written one covers, naming the field as `call({ field })`
+ * (or bare, without a `call`):
  * an unknown key, a value of the wrong type, or Zod's own words for anything else.
  */
 export function genericProblem(call: string, issue: Issue, value: unknown): string {
-  const at = fieldPath(issue.path)
-  if (issue.code === 'unrecognized_keys') {
-    return `${call}({ ${at} }) has an unknown key "${issue.keys[0]}"`
-  }
+  const path = fieldPath(issue.path)
+  const at = call ? `${call}({ ${path} })` : path
+  if (issue.code === 'unrecognized_keys') return `${at} has an unknown key "${issue.keys[0]}"`
   const v = valueAt(value, issue.path)
-  if (issue.code === 'invalid_value') {
-    return `${call}({ ${at} }) is ${oneOf(issue.values as string[])} (got ${got(v)})`
-  }
+  if (issue.code === 'invalid_value') return `${at} is ${oneOf(issue.values)} (got ${got(v)})`
   const expected = issue.code === 'invalid_type' ? EXPECTED[issue.expected] : undefined
-  if (expected) return `${call}({ ${at} }) must be ${expected} (got ${got(v)})`
-  return `${call}({ ${at} }): ${issue.message} (got ${got(v)})`
+  if (expected) return `${at} must be ${expected} (got ${got(v)})`
+  return `${at}: ${issue.message} (got ${got(v)})`
 }
 
 /**
