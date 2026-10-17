@@ -41,6 +41,12 @@ export const cases: PlanCase[] = [
   { dir: 'yaml', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'yaml', name: 'nightly', args: ['--profile', 'nightly'] },
   { dir: 'yaml', name: 'config-flag', args: ['--config', 'reeval.staging.yml'] },
+  { dir: 'yaml-paths', name: 'from-above', args: ['--config', 'project/reeval.yaml'] },
+  {
+    dir: 'yaml-paths',
+    name: 'profile-from-above',
+    args: ['--config', 'project/reeval.yaml', '--profile', 'nightly'],
+  },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },

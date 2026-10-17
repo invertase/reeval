@@ -42,6 +42,7 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `Config file not found: nope.ts` | Check the `--config` path. |
 | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.` | `reeval run` and `reeval image build` need a config file. Run `reeval init`, or pass `--config`. A parent-directory config still counts. |
 | `reeval.config.ts and reeval.yaml are both in .: reeval reads one config per directory. Keep one, or pass --config.` | A directory has a script config and a `reeval.yaml` (or both `reeval.yaml` and `reeval.yml`). Delete one, or name the one to read with `--config`. |
+| `sandbox.dockerfile in reeval.yaml: /project/docker/Dockerfile doesn't exist. Paths in reeval.yaml are relative to its directory.` | A relative path in `reeval.yaml` resolves against its directory, not the one you run `reeval` from. Fix the path, or add the Dockerfile there. |
 | `reeval.config.ts has no default export (it exports config). Write export default defineConfig({…}).` | Export the config as the default: `export default defineConfig({ … })`. |
 | `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` | Use `ms`, `s`, `m` or `h`, or a number of milliseconds. |
 | `Invalid duration 0. A duration is more than zero: …` | A timeout or budget of zero (or less) would stop every attempt at once. Give a positive duration. |

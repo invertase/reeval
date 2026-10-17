@@ -122,7 +122,8 @@ export function callerDir(): string | undefined {
   return undefined
 }
 
-const toPath = (value: string | URL, base: string) => {
+/** A path as written, or a `file:` URL, made absolute against `base`. */
+export const toPath = (value: string | URL, base: string) => {
   const path = value instanceof URL ? fileURLToPath(value) : value
   return isAbsolute(path) ? path : resolve(base, path)
 }
@@ -131,7 +132,7 @@ const toPath = (value: string | URL, base: string) => {
  * A tarball or folder spec (`./x.tgz`, `../pkg`, `/abs`, `file:…`) as an absolute path, resolved
  * like `file()`; npm resolves relative ones against its working directory, reeval's cache.
  */
-const localNpmSpec = (spec: string, base: string) => {
+export const localNpmSpec = (spec: string, base: string) => {
   const path = spec.startsWith('file:') ? spec.slice('file:'.length) : spec
   return /^\.{1,2}(?:\/|$)/.test(path) || isAbsolute(path) ? toPath(path, base) : spec
 }
@@ -345,7 +346,7 @@ function credentialsIn(repo: string): string | undefined {
 
 const GIT_OPTIONS = ['ref', 'path', 'init', 'token']
 
-const isLocalPath = (repo: string) => /^\.{1,2}(?:\/|$)/.test(repo) || isAbsolute(repo)
+export const isLocalPath = (repo: string) => /^\.{1,2}(?:\/|$)/.test(repo) || isAbsolute(repo)
 
 function gitHelper(base: string): GitHelper {
   return (repo, options = {}) => {

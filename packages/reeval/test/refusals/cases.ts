@@ -34,6 +34,8 @@ const harnesses =
 const config = (c: unknown) => () => resolveConfig(c as never, '/project', 'reeval.config.ts')
 const yaml = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), '/project', 'reeval.yaml')
+const yamlIn = (text: string) => () =>
+  resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), DIR, 'reeval.yaml')
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
@@ -748,6 +750,55 @@ profiles:
     judge: { model: google/gemini-3.8-flash }
     record: always
 `),
+    ],
+    [
+      'yaml: a relative dockerfile',
+      yamlIn('sandbox: { kind: docker, dockerfile: ./Dockerfile }\n'),
+    ],
+    [
+      'yaml: a missing relative dockerfile',
+      yamlIn('sandbox: { kind: docker, dockerfile: nope/Dockerfile }\n'),
+    ],
+    [
+      'yaml: a missing dockerfile in a profile',
+      yamlIn(
+        'profiles:\n  big:\n    defaults:\n      sandbox: { kind: docker, dockerfile: big/Dockerfile }\n',
+      ),
+    ],
+    [
+      'yaml: a missing dockerfile in an environment layer',
+      yamlIn(
+        'environment:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec: { sandbox: { kind: docker, dockerfile: nope } }\n',
+      ),
+    ],
+    [
+      'yaml: relative host files, rules, skills and a local repository',
+      yamlIn(`sandbox: { kind: fake, dir: ./tmp }
+environment:
+  kind: environment
+  name: base
+  layers:
+    - name: base
+      spec:
+        workspace: { kind: git, repo: ../app, url: ../app }
+        files: { a.txt: { kind: file, path: a.txt }, b.txt: inline }
+        rules: { kind: file, path: ./a.txt }
+        skills:
+          - { kind: skill, source: local, path: ./skills, placement: harness }
+          - { kind: skill, source: npm, spec: ./pkg.tgz, path: skills, placement: harness }
+`),
+    ],
+    [
+      'yaml: a host file with an empty path',
+      yamlIn(
+        'environment:\n  kind: environment\n  name: base\n  layers: [{ name: base, spec: { files: { a.txt: { kind: file, path: "" } } } }]\n',
+      ),
+    ],
+    [
+      'yaml: a local skill path a number',
+      yamlIn(
+        'environment:\n  kind: environment\n  name: base\n  layers: [{ name: base, spec: { skills: [{ kind: skill, source: local, path: 3, placement: harness }] } }]\n',
+      ),
     ],
   ],
   declaration: [
