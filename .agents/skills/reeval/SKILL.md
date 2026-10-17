@@ -351,7 +351,9 @@ group(
   shows a skill's effect before pass@1 does:
   `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
   A cell without usage (Goose) is left out of the token sample only; if either side then
-  has none, the token metric is omitted, not `insufficient`.
+  has none, the token metric is omitted, not `insufficient`. Effort's test needs `runs: 4`
+  a cell (3 vs 3 can't reach p < 0.05; the plan hints so); from 3 a side, a metric whose ranges
+  don't overlap prints `(×0.68, no overlap)`: a direction, not an effect.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
 - **Label each requirement** with `expect`'s second argument:

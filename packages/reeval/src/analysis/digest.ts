@@ -12,6 +12,7 @@ import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
+import { DIRECTIONAL_MIN } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
 import { labelledJudgements } from '../view/judgements.ts'
@@ -89,7 +90,7 @@ export type DigestInput = {
 export const RULES = [
   `Lift (variant pass@1 minus control pass@1) is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
   'When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
-  'Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree.',
+  `Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree. Effort's separated (given from ${DIRECTIONAL_MIN} vs ${DIRECTIONAL_MIN}) says, per metric, that the two sides' ranges do not overlap: every attempt on one side beat every attempt on the other. insufficient with separated true is a directional signal: report the ratio, the n and "no overlap, not significant" as directional, never as an effect. separated false is no direction at all.`,
   "A family fact is one pooled evaluate.each: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; their own pass-rate facts carry no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. A family's minLift gates the pooled lower bound.",
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
@@ -171,6 +172,7 @@ const counted = (a: AttemptRecord) => a.outcome === 'pass' || a.outcome === 'fai
 
 const LABEL_CHARS = 60
 const round2 = (x: number) => Math.round(x * 100) / 100
+const ratioText = (r: unknown) => (r == null ? '×–' : `×${Number(r).toFixed(2)}`)
 
 /** The labels of an attempt's assertions that failed or couldn't answer. */
 const failedLabels = (a: AttemptRecord) =>
@@ -402,15 +404,28 @@ export async function buildDigestKeepingDropped(
         ...(row.control_key
           ? {
               vsControl: {
-                toolCalls: `${row.tools_median} vs ${row.control_tools_median} (×${Number(row.tools_ratio).toFixed(2)})`,
-                agentS: `${row.agent_s_median} vs ${row.control_agent_s_median}`,
+                n: `${row.n} vs ${row.control_n}`,
+                toolCalls: `${row.tools_median} vs ${row.control_tools_median} (${ratioText(row.tools_ratio)})`,
+                agentS: `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
                 p: row.tools_p,
                 verdict: row.verdict,
+                timeVerdict: row.time_verdict,
                 ...(row.tokens_verdict
                   ? {
-                      tokens: `${row.tokens_median} vs ${row.control_tokens_median} (×${Number(row.tokens_ratio).toFixed(2)})`,
+                      tokens: `${row.tokens_median} vs ${row.control_tokens_median} (${ratioText(row.tokens_ratio)})`,
                       tokensP: row.tokens_p,
                       tokensVerdict: row.tokens_verdict,
+                    }
+                  : {}),
+                ...(Math.min(Number(row.n), Number(row.control_n)) >= DIRECTIONAL_MIN
+                  ? {
+                      separated: {
+                        tools: row.separated === 1,
+                        agentS: row.time_separated === 1,
+                        ...(row.tokens_separated != null
+                          ? { tokens: row.tokens_separated === 1 }
+                          : {}),
+                      },
                     }
                   : {}),
                 ...(row.tokens_note ? { unreportedUsage: row.tokens_note } : {}),

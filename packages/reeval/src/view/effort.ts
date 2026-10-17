@@ -48,6 +48,10 @@ export type EffortContrast = {
   agentMsP: number | null
   /** The variant's and control's tool-call ranges don't overlap. */
   separated: boolean
+  /** Their agent-time ranges don't overlap. */
+  timeSeparated: boolean
+  /** Their token ranges don't overlap; null when the token test was omitted. */
+  tokensSeparated: boolean | null
   /** On tool calls, the steadier measure; `timeVerdict` on agent time. */
   verdict: EffortVerdict
   timeVerdict: EffortVerdict
@@ -112,6 +116,40 @@ export function effortVerdict(
 
 const ratio = (a: number, b: number) => (b === 0 ? null : a / b)
 
+/** Every value on one side is below every value on the other. */
+const apart = (xs: number[], ys: number[]) =>
+  Math.max(...xs) < Math.min(...ys) || Math.min(...xs) > Math.max(...ys)
+
+/**
+ * The fewest attempts a side for "no overlap" to say anything: at 3 against 3 one ordering in
+ * ten separates by chance; at 1 against 1 every pair of unequal values does.
+ */
+export const DIRECTIONAL_MIN = 3
+
+/**
+ * The fewest runs per cell whose effort test can reach `EFFORT_ALPHA` (4 against 4: p = 2/70).
+ */
+export const EFFORT_MIN_RUNS = (() => {
+  let n = 1
+  while (minimumP(n, n) >= EFFORT_ALPHA) n++
+  return n
+})()
+
+export type EffortMetric = 'tools' | 'agentS' | 'tokens'
+
+/**
+ * The metrics whose test is `insufficient` but whose ranges don't overlap at
+ * `DIRECTIONAL_MIN` a side or more: a direction, not an effect.
+ */
+export function directional(c: EffortContrast): EffortMetric[] {
+  if (Math.min(c.variant.n, c.control.n) < DIRECTIONAL_MIN) return []
+  const out: EffortMetric[] = []
+  if (c.separated && c.verdict === 'insufficient') out.push('tools')
+  if (c.timeSeparated && c.timeVerdict === 'insufficient') out.push('agentS')
+  if (c.tokensSeparated && c.tokensVerdict === 'insufficient') out.push('tokens')
+  return out
+}
+
 export function contrastEffort(
   variant: EffortSample[],
   control: EffortSample[],
@@ -133,8 +171,6 @@ export function contrastEffort(
   const tokens = vTok.length && cTok.length ? effortVerdict(vTok, cTok) : null
   const reported = vTok.length + cTok.length
   const unreported = reported > 0 && reported < variant.length + control.length
-  const vt = variant.map((s) => s.tools)
-  const ct = control.map((s) => s.tools)
   return {
     variant: v,
     control: c,
@@ -143,7 +179,15 @@ export function contrastEffort(
     agentMsDelta: v.agentMs.median - c.agentMs.median,
     toolsP: tools.p,
     agentMsP: time.p,
-    separated: Math.max(...vt) < Math.min(...ct) || Math.min(...vt) > Math.max(...ct),
+    separated: apart(
+      variant.map((s) => s.tools),
+      control.map((s) => s.tools),
+    ),
+    timeSeparated: apart(
+      variant.map((s) => s.agentMs),
+      control.map((s) => s.agentMs),
+    ),
+    tokensSeparated: tokens ? apart(vTok, cTok) : null,
     verdict: tools.verdict,
     timeVerdict: time.verdict,
     tokensRatio: tokens && v.tokens && c.tokens ? ratio(v.tokens.median, c.tokens.median) : null,
@@ -215,17 +259,22 @@ const tokensVerdictText = (c: EffortContrast): string => {
  * `tools 5 vs 43 (×0.11), agent 21s vs 46s (×0.47): too few attempts to test` for a variant
  * against its control; with enough attempts, `fewer tool calls (p = 0.029)`. Tokens fold in
  * when both sides have usage samples; they are omitted (not `insufficient`) when either does not.
+ * A metric too small to test whose ranges don't overlap says so: `(×0.37, no overlap)`.
  */
 export function effortLabel(c: EffortContrast): string {
-  const tools = `tools ${formatCount(c.variant.tools.median)} vs ${formatCount(c.control.tools.median)} (${formatRatio(c.toolsRatio)})`
-  const time = `agent ${formatSeconds(c.variant.agentMs.median)} vs ${formatSeconds(c.control.agentMs.median)} (${formatRatio(c.agentMsRatio)})`
+  const apartOn = new Set(directional(c))
+  const r = (metric: EffortMetric, value: number | null) =>
+    `(${formatRatio(value)}${apartOn.has(metric) ? ', no overlap' : ''})`
+  const tools = `tools ${formatCount(c.variant.tools.median)} vs ${formatCount(c.control.tools.median)} ${r('tools', c.toolsRatio)}`
+  const time = `agent ${formatSeconds(c.variant.agentMs.median)} vs ${formatSeconds(c.control.agentMs.median)} ${r('agentS', c.agentMsRatio)}`
   const parts = [tools, time]
   if (c.tokensVerdict !== null && c.variant.tokens && c.control.tokens) {
     parts.push(
-      `tokens ${formatCount(c.variant.tokens.median)} vs ${formatCount(c.control.tokens.median)} (${formatRatio(c.tokensRatio)})`,
+      `tokens ${formatCount(c.variant.tokens.median)} vs ${formatCount(c.control.tokens.median)} ${r('tokens', c.tokensRatio)}`,
     )
   }
-  return `${parts.join(', ')}: ${toolsVerdictText(c)}${tokensVerdictText(c)}`
+  const n = apartOn.size ? ` (n = ${c.variant.n} vs ${c.control.n})` : ''
+  return `${parts.join(', ')}: ${toolsVerdictText(c)}${tokensVerdictText(c)}${n}`
 }
 
 /** One cell's effort on its own: `tools 43 · agent 46s`, plus tokens when any attempt reported them. */

@@ -33,7 +33,8 @@ CREATE TABLE effort_m (
   control_tokens_median REAL,
   tools_ratio REAL, agent_s_ratio REAL, agent_s_delta REAL, tokens_ratio REAL,
   tools_p REAL, agent_s_p REAL, tokens_p REAL,
-  separated INTEGER, verdict TEXT, time_verdict TEXT, tokens_verdict TEXT, tokens_note TEXT
+  separated INTEGER, time_separated INTEGER, tokens_separated INTEGER,
+  verdict TEXT, time_verdict TEXT, tokens_verdict TEXT, tokens_note TEXT
 );
 CREATE TABLE factor_effects_m (
   factor TEXT, level TEXT, baseline TEXT, context TEXT, tier TEXT, run_id TEXT, eval_key TEXT,
@@ -364,6 +365,8 @@ export function deriveFacts(db: DatabaseSync): void {
       agent_s_p: r4(vs?.agentMsP ?? null),
       tokens_p: r4(vs?.tokensP ?? null),
       separated: vs ? (vs.separated ? 1 : 0) : null,
+      time_separated: vs ? (vs.timeSeparated ? 1 : 0) : null,
+      tokens_separated: vs?.tokensSeparated == null ? null : vs.tokensSeparated ? 1 : 0,
       verdict: vs?.verdict ?? null,
       time_verdict: vs?.timeVerdict ?? null,
       tokens_verdict: vs?.tokensVerdict ?? null,
