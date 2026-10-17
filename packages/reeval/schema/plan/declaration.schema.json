@@ -174,24 +174,27 @@
       "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run.",
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "across": {
               "description": "The factor it varies when pairing.",
-              "enum": ["environment", "harness"]
+              "$ref": "#/$defs/PairFactor"
             },
             "model": {
               "description": "`'provider/model'` that answers it.",
               "type": "string"
             },
             "question": {
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             }
           },
-          "required": ["question"]
-        },
-        {
-          "type": "string"
+          "required": ["question"],
+          "additionalProperties": false
         }
       ]
     },
@@ -2014,6 +2017,7 @@
     },
     "PairFactor": {
       "description": "A matrix factor a compare question varies when pairing; the others are held.",
+      "type": "string",
       "enum": ["environment", "harness"]
     },
     "PiHarnessDescriptor": {

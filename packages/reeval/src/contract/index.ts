@@ -1,6 +1,7 @@
 // The SDK-facing plain-data contract: the shapes another language's declaration tree carries,
 // each a Zod schema that validates it, describes it and gives its JSON Schema.
 import type { z } from 'zod'
+import { compareQuestionSchema, pairFactorSchema } from './compare.ts'
 import { dockerSandboxSchema, fakeSandboxSchema, installStepSchema } from './docker.ts'
 import {
   antigravityHarnessSchema,
@@ -36,4 +37,6 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   GooseHarnessDescriptor: gooseHarnessSchema,
   PiHarnessDescriptor: piHarnessSchema,
   CodexHarnessDescriptor: codexHarnessSchema,
+  CompareQuestion: compareQuestionSchema,
+  PairFactor: pairFactorSchema,
 }

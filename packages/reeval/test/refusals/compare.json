@@ -27,6 +27,8 @@
   "across an empty list": "UsageError: compare.across in evals/a.eval.ts › e is 'environment' (vary the environment, same harness) or 'harness' (vary the harness, same environment), or a list of those (got a list of 0). Leave it out to vary both.",
   "across twice": "UsageError: compare.across in evals/a.eval.ts › e lists \"harness\" twice",
   "compare false": "UsageError: compare: false can't be set in evals/a.eval.ts › e. A profile turns compare off with limit.compare: false, which runs the baseline and strips the variants. On a group or eval, omit compare or pass compare: { baseline, variants }.",
+  "harness with a bad descriptor": "UsageError: compare.harness in evals/a.eval.ts › e: Unknown cursor() option \"modle\". Did you mean \"model\"?",
+  "harness with a number": "UsageError: compare.harness must be a list of harness ids in evals/a.eval.ts › e",
   "environment beside baseline": "UsageError: environment and compare.baseline can't both be set in evals/a.eval.ts › e. compare: { baseline, variants } names every arm, so drop environment, or drop baseline to make environment the control.",
   "good": null,
   "data: a variant with a bad spec": null

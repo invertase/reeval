@@ -267,6 +267,11 @@ export const CASES: Record<string, Case[]> = {
     ['across twice', options({ compare: { variants: [e2], across: ['harness', 'harness'] } })],
     ['compare false', options({ compare: false })],
     [
+      'harness with a bad descriptor',
+      options({ compare: { variants: [e2], harness: [{ kind: 'cursor', modle: 'm' }] } }),
+    ],
+    ['harness with a number', options({ compare: { variants: [e2], harness: [3] } })],
+    [
       'environment beside baseline',
       options({ environment: e1, compare: { baseline: e1, variants: [e2] } }),
     ],
