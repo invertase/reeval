@@ -1237,20 +1237,34 @@ export type HistoryConfig = {
 }
 
 /** Run-level caps. `attempts` is checked against the plan; `duration` while running. */
-export type Budget = { attempts?: number; duration?: Duration }
+export type Budget = {
+  /** The most attempts the plan may have. */
+  attempts?: number
+  /** How long the run may go on, from the first attempt's start. */
+  duration?: Duration
+}
 
 /** What evals get when they don't say otherwise: under groups and evals. */
 export type ProfileDefaults = {
+  /** The agents every eval runs on, unless a group or eval replaces them. */
   harness?: HarnessDescriptor | HarnessDescriptor[]
   /** The default machine when the resolved environment omits `sandbox`. */
   sandbox?: SandboxDescriptor
+  /** What every eval runs in when it names no environment. */
   environment?: Environment
+  /** Attempts per cell. */
   runs?: number
+  /** How each cell's attempts decide its outcome. */
   gate?: GatePolicy
+  /** Variables and secrets for the sandbox, merged by name over the config's. */
   env?: EnvVars
+  /** Where the sandbox may connect; replaces the config's policy. */
   egress?: EgressPolicy
+  /** Defaults for `c.judge()`, merged field by field over the config's. */
   judge?: ConfigJudgeOptions
+  /** Per attempt. */
   timeout?: Duration
+  /** Screenshot defaults for `c.capture()`, shallow-merged over the config's. */
   capture?: CaptureOptions
 }
 
@@ -1266,10 +1280,15 @@ export type ProfileLimit = {
 
 /** How a run is sized: chosen with `--profile`, `REEVAL_PROFILE` or `defaultProfile`. */
 export type Profile = {
+  /** What evals get when they don't say otherwise: under groups and evals. */
   defaults?: ProfileDefaults
+  /** Caps over every eval, which only narrow; `pin` on a group or eval skips them. */
   limit?: ProfileLimit
+  /** Judge settings for this profile, the same as `defaults.judge`, which wins field by field. */
   judge?: ConfigJudgeOptions
+  /** Merged over the config's `budget`. */
   budget?: Budget
+  /** When this profile's runs are copied into the history folder. */
   record?: RecordMode
   /** Tag filters for this profile, like `--tag` (`'!slow'` excludes). */
   tags?: string[]
@@ -1325,20 +1344,28 @@ export type AnalysisConfig = {
 }
 
 export type ReevalConfig = {
+  /** Globs of eval files, relative to the config's directory; default every `.eval.ts` under `evals`. */
   include?: string[]
+  /** The agents every eval runs on, unless a group or eval replaces them; default Cursor. */
   harness?: HarnessDescriptor | HarnessDescriptor[]
   /**
    * The default machine when the resolved environment omits `sandbox`. Not an environment:
    * it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.
    */
   sandbox?: SandboxDescriptor
+  /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
   environment?: Environment
+  /** Attempts per cell; default 1. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
+  /** Variables and secrets for the sandbox, merged by name down the cascade. */
   env?: EnvVars
+  /** Where the sandbox may connect; default `'allow-all'`. */
   egress?: EgressPolicy
+  /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
+  /** Per attempt; default `'15m'`. */
   timeout?: Duration
   /**
    * Screenshot defaults for `c.capture()`. `REEVAL_CAPTURE_BROWSER=0` refuses the host
@@ -1349,8 +1376,11 @@ export type ReevalConfig = {
   concurrency?: number
   /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
   record?: RecordMode
+  /** The history folder, and which attempts keep their artifacts there. */
   history?: HistoryConfig
+  /** Caps on a run; a profile's `budget` is merged over it. */
   budget?: Budget
+  /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
   profiles?: Record<string, Profile>
   /** The profile when neither `--profile` nor `REEVAL_PROFILE` names one: `ci` when `CI` is set. */
   defaultProfile?: { ci?: string; local?: string }
@@ -1361,7 +1391,73 @@ export type ReevalConfig = {
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
+  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
   analysis?: AnalysisConfig
+}
+
+/** `fakeJudge()` as data: the score every call gets. */
+export type FakeJudgeData = {
+  kind: 'fake-judge'
+  /** The score (0–1) every call gets. */
+  score: number
+}
+
+/** `ConfigJudgeOptions` as data: the model by name, or a fake judge with a fixed score. */
+export type ConfigJudgeData = Omit<ConfigJudgeOptions, 'model'> & {
+  /** `'provider/model'`, or a fake judge. */
+  model?: string | FakeJudgeData
+}
+
+/** `fakeAnalysis()` as data: canned answers, without the functions of the digest or pair. */
+export type FakeAnalysisData = {
+  kind: 'fake-analysis'
+  /** The model's structured answer. */
+  output?: unknown
+  /** `analysis.agent`'s note on each eval and harness, or an error to throw. */
+  note?: string | { error: string }
+  /** How it answers compare questions: a fixed pick, or `{ error }` to fail every call. */
+  vote?: FakePick | { error: string }
+}
+
+/** `AnalysisConfig` as data: the model by name, or a fake analysis. */
+export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
+  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  model?: string | FakeAnalysisData
+}
+
+/** `ProfileDefaults` as data: the environment without `extend`, and the judge as data. */
+export type ProfileDefaultsData = Omit<ProfileDefaults, 'environment' | 'judge'> & {
+  /** What every eval runs in when it names no environment. */
+  environment?: EnvironmentData
+  /** Defaults for `c.judge()`, merged field by field over the config's. */
+  judge?: ConfigJudgeData
+}
+
+/** `Profile` as data: its defaults and judge as data. */
+export type ProfileData = Omit<Profile, 'defaults' | 'judge'> & {
+  /** What evals get when they don't say otherwise: under groups and evals. */
+  defaults?: ProfileDefaultsData
+  /** Judge settings for this profile, the same as `defaults.judge`, which wins field by field. */
+  judge?: ConfigJudgeData
+}
+
+/**
+ * `ReevalConfig` in its data forms, as `reeval.yaml` or another language carries it: the
+ * environment without `extend`, judge and analysis models by name or as fakes with fixed answers,
+ * and profiles the same way. AI SDK model objects and fake score functions are TypeScript only.
+ */
+export type ReevalConfigData = Omit<
+  ReevalConfig,
+  'environment' | 'judge' | 'profiles' | 'analysis'
+> & {
+  /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
+  environment?: EnvironmentData
+  /** Defaults for `c.judge()`, merged field by field down the cascade. */
+  judge?: ConfigJudgeData
+  /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
+  profiles?: Record<string, ProfileData>
+  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
+  analysis?: AnalysisConfigData
 }
 
 /** What a `defineConfig` callback gets: the environment helpers plus the run's context. */

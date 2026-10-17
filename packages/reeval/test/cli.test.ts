@@ -195,7 +195,7 @@ describe('cli', () => {
   test('run and image build without a config file exit 2', async () => {
     const p = await project('cli-no-config', {})
     const missing =
-      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs\) here or above\. Run reeval init\.\n$/
+      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs, reeval\.yaml, reeval\.yml\) here or above\. Run reeval init\.\n$/
     for (const argv of [
       ['run'],
       ['run', '--dry-run'],

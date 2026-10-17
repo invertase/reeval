@@ -235,6 +235,16 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'config.yaml',
+    area: 'Config and selection',
+    name: '`reeval.yaml`: the config as data, with profiles, `--config` and one config per directory',
+    plan: ['yaml/default', 'yaml/pr-in-ci', 'yaml/nightly', 'yaml/config-flag'],
+    tests: [
+      unit('findConfig takes a reeval.yaml, and refuses it beside another config'),
+      options('a reeval.yaml mistake, or a reeval.yaml beside reeval.config.ts, exits 2'),
+    ],
+  },
+  {
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',

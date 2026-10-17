@@ -1,0 +1,12 @@
+profile nightly (--profile) · 3 evals · 8 cells · 16 attempts
+hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+hint: 1 compare runs 2 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
+evals/y.eval.ts › inherits             a/nightly/fake  control          gated    ×2
+                                       b/nightly/fake  control          gated    ×2
+evals/y.eval.ts › compared             a/nightly/fake  control          ungated  ×2
+                                       a/skilled/fake  variant skilled  gated    ×2
+                                       b/nightly/fake  control          ungated  ×2
+                                       b/skilled/fake  variant skilled  gated    ×2
+evals/y.eval.ts › slow [nightly-only]  a/nightly/fake  control          gated    ×2
+                                       b/nightly/fake  control          gated    ×2
+excluded: —

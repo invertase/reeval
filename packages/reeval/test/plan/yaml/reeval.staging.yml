@@ -1,0 +1,3 @@
+harness: { kind: fake, id: staging }
+sandbox: { kind: fake }
+runs: 3

@@ -1,9 +1,11 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { parseDocument } from 'yaml'
+import { configDataProblem } from './contract/config.ts'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
-import { helpersFor, isSecret } from './environment.ts'
+import { environmentFrom, helpersFor, isEnvironment, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
 import {
   AGENTS,
@@ -25,7 +27,9 @@ import type {
   EnvVars,
   HarnessDescriptor,
   Profile,
+  ProfileData,
   ReevalConfig,
+  ReevalConfigData,
   ResolvedConfig,
   ResolvedProfile,
 } from './types.ts'
@@ -79,10 +83,17 @@ export const defineConfig = <T extends ConfigInput>(config: T): T => config
 
 export { parseDuration }
 
-/** The file names `reeval` looks for in each directory, first match first, as Vitest orders its own. */
-export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map(
-  (ext) => `reeval.config.${ext}`,
-)
+/** The script configs `reeval` looks for in each directory, first match first, as Vitest orders its own. */
+const SCRIPT_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((ext) => `reeval.config.${ext}`)
+
+/** The data configs, for projects without TypeScript: one of them, and no script config beside it. */
+const YAML_FILES = ['reeval.yaml', 'reeval.yml']
+
+/** Every file name `reeval` looks for in each directory. */
+export const CONFIG_FILES = [...SCRIPT_FILES, ...YAML_FILES]
+
+/** True for a `reeval.yaml`-style config, which is data rather than a module. */
+export const isYamlConfig = (path: string): boolean => /\.ya?ml$/i.test(path)
 
 const DEFAULT_CONFIG_FILE = 'reeval.config.ts'
 
@@ -107,10 +118,16 @@ export function requireConfig(path: string | undefined): string {
  */
 export function findConfig(from = process.cwd()): string | undefined {
   for (let dir = resolve(from); ; dir = dirname(dir)) {
-    for (const name of CONFIG_FILES) {
-      const path = join(dir, name)
-      if (existsSync(path)) return path
+    const script = SCRIPT_FILES.find((name) => existsSync(join(dir, name)))
+    const yaml = YAML_FILES.filter((name) => existsSync(join(dir, name)))
+    const found = [...(script ? [script] : []), ...yaml]
+    if (found.length > 1) {
+      const where = fromCwd(dir) || '.'
+      throw new UsageError(
+        `${found.join(' and ')} are both in ${where}: reeval reads one config per directory. Keep one, or pass --config.`,
+      )
     }
+    if (found[0]) return join(dir, found[0])
     if (dirname(dir) === dir) return undefined
   }
 }
@@ -135,36 +152,106 @@ export async function loadConfig(
   if (path === undefined) return resolveConfig({}, process.cwd(), DEFAULT_CONFIG_FILE)
   const root = dirname(path)
   const configPath = configLabel(path)
-  let user: ReevalConfig = {}
-  if (existsSync(path)) {
-    const jiti = await reevalJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
-    const module = (await jiti.import(path)) as Record<string, unknown>
-    // Without this, a config that forgets `export default` would run the default harness for real.
-    if (!module || typeof module !== 'object' || !('default' in module)) {
-      const names = module && typeof module === 'object' ? Object.keys(module) : []
-      const exportsNote = names.length ? ` (it exports ${names.join(', ')})` : ''
+  if (!existsSync(path)) throw new UsageError(`Config file not found: ${configPath}`)
+  if (isYamlConfig(path)) {
+    return resolveConfigData(
+      parseYamlConfig(readFileSync(path, 'utf8'), configPath),
+      root,
+      configPath,
+    )
+  }
+  const jiti = await reevalJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
+  const module = (await jiti.import(path)) as Record<string, unknown>
+  // Without this, a config that forgets `export default` would run the default harness for real.
+  if (!module || typeof module !== 'object' || !('default' in module)) {
+    const names = module && typeof module === 'object' ? Object.keys(module) : []
+    const exportsNote = names.length ? ` (it exports ${names.join(', ')})` : ''
+    throw new UsageError(
+      `${configPath} has no default export${exportsNote}. Write export default defineConfig({…}).`,
+    )
+  }
+  let exported = module.default as ConfigInput | Promise<ReevalConfig>
+  if (typeof exported === 'function') {
+    const hostEnv = process.env
+    exported = exported({ ...helpersFor(root), ci: inCI(hostEnv), command, hostEnv, profile })
+    if (exported instanceof Promise) {
       throw new UsageError(
-        `${configPath} has no default export${exportsNote}. Write export default defineConfig({…}).`,
+        `The defineConfig callback in ${configPath} returned a Promise. It runs once when the config loads and must return the config synchronously.`,
       )
     }
-    let exported = module.default as ConfigInput | Promise<ReevalConfig>
-    if (typeof exported === 'function') {
-      const hostEnv = process.env
-      exported = exported({ ...helpersFor(root), ci: inCI(hostEnv), command, hostEnv, profile })
-      if (exported instanceof Promise) {
-        throw new UsageError(
-          `The defineConfig callback in ${configPath} returned a Promise. It runs once when the config loads and must return the config synchronously.`,
-        )
-      }
-    }
-    if (!exported || typeof exported !== 'object' || exported instanceof Promise) {
-      throw new UsageError(`${configPath} must default-export defineConfig({...})`)
-    }
-    user = exported
-  } else {
-    throw new UsageError(`Config file not found: ${configPath}`)
   }
-  return resolveConfig(user, root, configPath)
+  if (!exported || typeof exported !== 'object' || exported instanceof Promise) {
+    throw new UsageError(`${configPath} must default-export defineConfig({...})`)
+  }
+  return resolveConfig(exported, root, configPath)
+}
+
+/** A `reeval.yaml`'s text as data: an empty file is an empty config. */
+export function parseYamlConfig(text: string, file: string): unknown {
+  const doc = parseDocument(text, { prettyErrors: true })
+  const [error] = doc.errors
+  if (error) throw new UsageError(`${file} isn't valid YAML: ${error.message.trimEnd()}`)
+  return doc.toJS() ?? {}
+}
+
+/** The config from its data form: each environment's data becomes an `Environment` again. */
+function configFromData(data: Record<string, unknown>): ReevalConfig {
+  const withEnvironment = (options: unknown) => {
+    if (typeof options !== 'object' || options === null) return options
+    const { environment } = options as { environment?: unknown }
+    return isEnvironment(environment)
+      ? { ...options, environment: environmentFrom(environment) }
+      : options
+  }
+  const config = withEnvironment(data) as Record<string, unknown>
+  const { profiles } = config
+  if (typeof profiles !== 'object' || profiles === null || Array.isArray(profiles)) return config
+  const each = Object.entries(profiles).map(([name, profile]) => {
+    if (typeof profile !== 'object' || profile === null) return [name, profile]
+    const { defaults } = profile as { defaults?: unknown }
+    return [
+      name,
+      defaults === undefined ? profile : { ...profile, defaults: withEnvironment(defaults) },
+    ]
+  })
+  return { ...config, profiles: Object.fromEntries(each) }
+}
+
+/**
+ * Resolves a config in its data form (a parsed `reeval.yaml`, or `ReevalConfigData` from another
+ * language): `resolveConfig`'s checks name a mistake in their own words first, and the config
+ * contract refuses anything they let through, such as a `null` or a misspelt nested key.
+ */
+export function resolveConfigData(data: unknown, root: string, file: string): ResolvedConfig {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    throw new UsageError(
+      `${file} must be a mapping of config keys, like harness: and judge: (got ${JSON.stringify(data)})`,
+    )
+  }
+  // `resolveConfig` would ask for `defineEnvironment(…)`, which a data config can't call.
+  const { environment, profiles } = data as ReevalConfigData
+  const environments = [
+    environment,
+    ...Object.values(typeof profiles === 'object' && profiles ? profiles : {}).map(
+      (p) => (p as ProfileData | null)?.defaults?.environment,
+    ),
+  ]
+  if (environments.some((e) => e !== undefined && !isEnvironment(e))) {
+    const problem = configDataProblem(data, file)
+    if (problem) throw new UsageError(problem)
+  }
+  let resolved: ResolvedConfig
+  try {
+    resolved = resolveConfig(configFromData(data as Record<string, unknown>), root, file)
+  } catch (error) {
+    if (error instanceof UsageError) throw error
+    const problem = configDataProblem(data, file)
+    if (problem) throw new UsageError(problem)
+    throw error
+  }
+  const problem = configDataProblem(data, file)
+  if (problem) throw new UsageError(problem)
+  return resolved
 }
 
 const GLOB = /[*?[\]{}!]/
