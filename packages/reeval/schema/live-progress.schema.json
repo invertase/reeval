@@ -8,6 +8,7 @@
       "type": "object",
       "properties": {
         "cell": {
+          "description": "The cell key, e.g. `fake/default/fake`.",
           "type": "string"
         },
         "durationMs": {
@@ -27,6 +28,7 @@
           "type": "string"
         },
         "key": {
+          "description": "The attempt key, `<eval id> # <cell key>#<n>`, as in the record.",
           "type": "string"
         },
         "n": {
@@ -62,6 +64,7 @@
       ]
     },
     "LiveCounts": {
+      "description": "Attempts finished, and of those how many passed, failed or errored; and how many are running.",
       "type": "object",
       "properties": {
         "done": {
@@ -86,6 +89,7 @@
       "required": ["done", "errored", "failed", "passed", "running", "skipped"]
     },
     "LivePhase": {
+      "description": "What the run is doing: running attempts, cancelling them, or assembling its record.",
       "enum": ["cancelling", "finishing", "running"]
     },
     "LiveProgress": {
@@ -101,6 +105,7 @@
           "$ref": "#/$defs/LiveCounts"
         },
         "heartbeatAt": {
+          "description": "Rewritten every few seconds while the run is alive.",
           "type": "string"
         },
         "host": {
@@ -110,6 +115,7 @@
           "$ref": "#/$defs/LivePhase"
         },
         "pid": {
+          "description": "The `reeval run` process and the host it runs on, so a killed run can be told apart.",
           "type": "number"
         },
         "planned": {
@@ -139,6 +145,7 @@
       ]
     },
     "LiveStatus": {
+      "description": "Where an attempt is: waiting, running, or finished with its outcome.",
       "enum": ["fail", "infra_error", "pass", "queued", "running", "skipped"]
     }
   },

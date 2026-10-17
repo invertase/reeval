@@ -5,24 +5,30 @@
   "$ref": "#/$defs/DeclarationTree",
   "$defs": {
     "AntigravityHarnessDescriptor": {
+      "description": "The Antigravity CLI through `@reeval/harness-antigravity`, made by `antigravity()`.",
       "type": "object",
       "properties": {
         "effort": {
+          "description": "Reasoning effort passed as `agy --effort`, e.g. `low`, `medium`, `high` or `max`. The slug's `-low`/`-medium`/`-high` suffix is the same knob baked into `model`.",
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set.",
           "type": "string"
         },
         "kind": {
           "const": "antigravity"
         },
         "maxConcurrent": {
+          "description": "The most Antigravity attempts at once, across the run, e.g. for the key's rate limits.",
           "type": "number"
         },
         "model": {
+          "description": "A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`.",
           "type": "string"
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -45,15 +51,19 @@
       "required": ["kind", "model"]
     },
     "CaptureOptions": {
+      "description": "Camera defaults for `c.capture()`. Cascades config → profile defaults → group → eval, shallow-merged. `viewport` on a level replaces the whole value. `port` is not an option: pass it as the first argument to `c.capture`.",
       "type": "object",
       "properties": {
         "browser": {
+          "description": "`false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws.",
           "type": "boolean"
         },
         "model": {
+          "description": "Vision model for `instructions`. Cascades like `question`. Default is the analysis model when that model accepts images; never Jev.",
           "type": "string"
         },
         "timeout": {
+          "description": "How long to poll before failing. Default `'60s'`.",
           "anyOf": [
             {
               "type": "number"
@@ -86,6 +96,7 @@
       "required": []
     },
     "CaptureWindow": {
+      "description": "Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`.",
       "type": "object",
       "properties": {
         "height": {
@@ -98,24 +109,30 @@
       "required": ["height", "width"]
     },
     "ClaudeCodeHarnessDescriptor": {
+      "description": "Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`.",
       "type": "object",
       "properties": {
         "effort": {
+          "description": "Reasoning effort the Agent SDK `/effort` control takes: `low`, `medium`, `high`, `xhigh` (Extra in the UI) or `max`.",
           "enum": ["high", "low", "max", "medium", "xhigh"]
         },
         "id": {
+          "description": "Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.",
           "type": "string"
         },
         "kind": {
           "const": "claude-code"
         },
         "maxConcurrent": {
+          "description": "The most Claude Code attempts at once, across the run, e.g. for the account's rate limits.",
           "type": "number"
         },
         "model": {
+          "description": "A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`.",
           "type": "string"
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -138,24 +155,30 @@
       "required": ["kind", "model"]
     },
     "CodexHarnessDescriptor": {
+      "description": "OpenAI's Codex CLI through `@reeval/harness-codex` (`codex exec --json`), made by `codex()`. It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.",
       "type": "object",
       "properties": {
         "effort": {
+          "description": "Reasoning effort as Codex's `model_reasoning_effort`, e.g. `low`, `medium`, `high`, `xhigh`, `max` or `ultra`.",
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.",
           "type": "string"
         },
         "kind": {
           "const": "codex"
         },
         "maxConcurrent": {
+          "description": "The most Codex attempts at once, across the run, e.g. for the key's rate limits.",
           "type": "number"
         },
         "model": {
+          "description": "An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`.",
           "type": "string"
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -178,6 +201,7 @@
       "required": ["kind", "model"]
     },
     "CompareQuestion": {
+      "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run.",
       "anyOf": [
         {
           "type": "object",
@@ -200,21 +224,25 @@
       ]
     },
     "ConfigJudgeOptions": {
+      "description": "The config file is plain data sent to workers, so its judge model can't be an object.",
       "type": "object",
       "properties": {
         "files": {
+          "description": "Workspace files the judge sees whole, as they are now, whether or not the agent changed them.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "include": {
+          "description": "Which changed files the judge's diff shows: gitignore-style patterns over workspace paths, where the last matching pattern wins and a `!` pattern excludes. Default: every changed file.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "maxConcurrent": {
+          "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "number"
         },
         "model": {
@@ -241,30 +269,37 @@
           }
         },
         "threshold": {
+          "description": "Minimum score (0–1) for a `pass` verdict.",
           "type": "number"
         }
       },
       "required": []
     },
     "CursorHarnessDescriptor": {
+      "description": "Cursor's agent through the Cursor TypeScript SDK's local runtime (`@reeval/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.",
       "type": "object",
       "properties": {
         "effort": {
+          "description": "Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`.",
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]` when `effort` is set.",
           "type": "string"
         },
         "kind": {
           "const": "cursor"
         },
         "maxConcurrent": {
+          "description": "The most Cursor attempts at once, across the run, e.g. for the account's rate limits.",
           "type": "number"
         },
         "model": {
+          "description": "A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`.",
           "type": "string"
         },
         "params": {
+          "description": "Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -273,6 +308,7 @@
           }
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -310,9 +346,11 @@
       "type": "object",
       "properties": {
         "body": {
+          "description": "Names the eval's body to whoever runs it.",
           "type": "string"
         },
         "family": {
+          "description": "Set on each case of a pooled `evaluate.each`: its template, index and the list's length.",
           "$ref": "#/$defs/DeclaredFamily"
         },
         "mode": {
@@ -370,6 +408,7 @@
       "required": ["children", "mode", "name", "options", "type"]
     },
     "DeclaredMode": {
+      "description": "How a group or eval was declared: `group`/`evaluate`, `.skip` or `.only`.",
       "enum": ["only", "run", "skip"]
     },
     "DeclaredNode": {
@@ -386,6 +425,7 @@
       ]
     },
     "DeclaredTodo": {
+      "description": "`evaluate.todo` or `group.todo`.",
       "type": "object",
       "properties": {
         "name": {
@@ -401,27 +441,34 @@
       "type": "object",
       "properties": {
         "capabilities": {
+          "description": "Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "cpus": {
+          "description": "CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's.",
           "type": "number"
         },
         "dockerfile": {
+          "description": "An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
           "type": "string"
         },
         "from": {
+          "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash.",
           "type": "string"
         },
         "image": {
+          "description": "An image that already has the harness baked in, used as is.",
           "type": "string"
         },
         "install": {
+          "description": "Baked onto the sandbox image in one build container: in order, no secrets, no workspace.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/InstallStep"
@@ -431,9 +478,11 @@
           "const": "docker"
         },
         "maxConcurrent": {
+          "description": "The most Docker sandboxes at once, across the run, whatever their image.",
           "type": "number"
         },
         "memory": {
+          "description": "The container's memory: `'4g'` (default), `'512m'`, or bytes.",
           "anyOf": [
             {
               "type": "number"
@@ -444,12 +493,15 @@
           ]
         },
         "pids": {
+          "description": "Processes and threads at once. Default 1024.",
           "type": "number"
         },
         "root": {
+          "description": "Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. For evals that install system packages at run time.",
           "type": "boolean"
         },
         "swap": {
+          "description": "Swap on top of `memory`, in the same units. Default: as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.",
           "anyOf": [
             {
               "type": "number"
@@ -463,6 +515,7 @@
       "required": ["kind"]
     },
     "EnvironmentData": {
+      "description": "An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`.",
       "type": "object",
       "properties": {
         "kind": {
@@ -481,6 +534,7 @@
       "required": ["kind", "layers", "name"]
     },
     "EnvironmentLayer": {
+      "description": "One environment in an `extend` chain.",
       "type": "object",
       "properties": {
         "name": {
@@ -493,9 +547,11 @@
       "required": ["name", "spec"]
     },
     "EnvironmentSpec": {
+      "description": "What an eval runs in: the declarative, phased spec of one environment.",
       "type": "object",
       "properties": {
         "egress": {
+          "description": "Replaces the inherited policy; an `extend` child's replaces its parent's.",
           "anyOf": [
             {
               "enum": ["allow-all", "deny-all"]
@@ -518,6 +574,7 @@
           "$ref": "#/$defs/EnvVars"
         },
         "files": {
+          "description": "Workspace-relative, or `~/` for home.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -541,6 +598,7 @@
           }
         },
         "rules": {
+          "description": "Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code.",
           "anyOf": [
             {
               "$ref": "#/$defs/HostFile"
@@ -551,6 +609,7 @@
           ]
         },
         "sandbox": {
+          "description": "Where the attempt runs: `docker()` or `fakeSandbox()`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; install is not merged onto the parent image.",
           "anyOf": [
             {
               "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -573,6 +632,7 @@
           }
         },
         "workspace": {
+          "description": "The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's.",
           "$ref": "#/$defs/GitWorkspace"
         }
       },
@@ -597,17 +657,20 @@
       }
     },
     "EvalOptionsData": {
+      "description": "`EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model by name or a fake judge, and environments without `extend`. The same `environment` / compare object split as `EvalOptions`.",
       "anyOf": [
         {
           "type": "object",
           "properties": {
             "capture": {
+              "description": "Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value.",
               "$ref": "#/$defs/CaptureOptions"
             },
             "compare": {
               "type": "object",
               "properties": {
                 "across": {
+                  "description": "The factor every question varies when pairing, when a question does not name its own `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of both, or omitted, asks both pair kinds.",
                   "anyOf": [
                     {
                       "enum": ["environment", "harness"]
@@ -621,12 +684,15 @@
                   ]
                 },
                 "baseline": {
+                  "description": "The control. Not layered under the variants. Without it, the control is the environment the eval would otherwise run in (the cascaded `environment`), else an empty one named `baseline`.",
                   "$ref": "#/$defs/EnvironmentData"
                 },
                 "gate": {
+                  "description": "Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).",
                   "enum": ["all", "none", "variants"]
                 },
                 "harness": {
+                  "description": "Harnesses (ids or descriptors) to compare on; the others run the control only.",
                   "type": "array",
                   "items": {
                     "anyOf": [
@@ -661,15 +727,18 @@
                   }
                 },
                 "minLift": {
+                  "description": "Lift in points from -1 to 1; a variant cell below it fails.",
                   "type": "number"
                 },
                 "questions": {
+                  "description": "Asked of pairs of attempts after the run, always a list. They annotate the compare with win rates and never change pass, fail or the exit code.",
                   "type": "array",
                   "items": {
                     "$ref": "#/$defs/CompareQuestion"
                   }
                 },
                 "variants": {
+                  "description": "Other environments, each planned and run as itself.",
                   "type": "array",
                   "items": {
                     "$ref": "#/$defs/EnvironmentData"
@@ -679,6 +748,7 @@
               "required": ["baseline", "variants"]
             },
             "egress": {
+              "description": "Where the sandbox may connect. Replaces the inherited policy: config, profile defaults, the environment, then groups and the eval.",
               "anyOf": [
                 {
                   "enum": ["allow-all", "deny-all"]
@@ -698,9 +768,11 @@
               ]
             },
             "env": {
+              "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
               "$ref": "#/$defs/EnvVars"
             },
             "gate": {
+              "description": "How each cell's attempts decide its outcome; default `'all'`.",
               "anyOf": [
                 {
                   "const": "all"
@@ -813,15 +885,18 @@
               "$ref": "#/$defs/ConfigJudgeOptions"
             },
             "pin": {
+              "description": "Keys a profile's `limit` may not narrow for this group or eval.",
               "type": "array",
               "items": {
                 "$ref": "#/$defs/PinnableKey"
               }
             },
             "runs": {
+              "description": "Attempts per cell.",
               "type": "number"
             },
             "sandbox": {
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -838,6 +913,7 @@
               }
             },
             "timeout": {
+              "description": "Per attempt.",
               "anyOf": [
                 {
                   "type": "number"
@@ -863,12 +939,14 @@
           "type": "object",
           "properties": {
             "capture": {
+              "description": "Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value.",
               "$ref": "#/$defs/CaptureOptions"
             },
             "compare": {
               "type": "object",
               "properties": {
                 "across": {
+                  "description": "The factor every question varies when pairing, when a question does not name its own `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of both, or omitted, asks both pair kinds.",
                   "anyOf": [
                     {
                       "enum": ["environment", "harness"]
@@ -882,9 +960,11 @@
                   ]
                 },
                 "gate": {
+                  "description": "Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).",
                   "enum": ["all", "none", "variants"]
                 },
                 "harness": {
+                  "description": "Harnesses (ids or descriptors) to compare on; the others run the control only.",
                   "type": "array",
                   "items": {
                     "anyOf": [
@@ -919,15 +999,18 @@
                   }
                 },
                 "minLift": {
+                  "description": "Lift in points from -1 to 1; a variant cell below it fails.",
                   "type": "number"
                 },
                 "questions": {
+                  "description": "Asked of pairs of attempts after the run, always a list. They annotate the compare with win rates and never change pass, fail or the exit code.",
                   "type": "array",
                   "items": {
                     "$ref": "#/$defs/CompareQuestion"
                   }
                 },
                 "variants": {
+                  "description": "Other environments, each planned and run as itself.",
                   "type": "array",
                   "items": {
                     "$ref": "#/$defs/EnvironmentData"
@@ -937,6 +1020,7 @@
               "required": ["variants"]
             },
             "egress": {
+              "description": "Where the sandbox may connect. Replaces the inherited policy: config, profile defaults, the environment, then groups and the eval.",
               "anyOf": [
                 {
                   "enum": ["allow-all", "deny-all"]
@@ -956,12 +1040,15 @@
               ]
             },
             "env": {
+              "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
               "$ref": "#/$defs/EnvVars"
             },
             "environment": {
+              "description": "The control: the compare has no `baseline`.",
               "$ref": "#/$defs/EnvironmentData"
             },
             "gate": {
+              "description": "How each cell's attempts decide its outcome; default `'all'`.",
               "anyOf": [
                 {
                   "const": "all"
@@ -1074,15 +1161,18 @@
               "$ref": "#/$defs/ConfigJudgeOptions"
             },
             "pin": {
+              "description": "Keys a profile's `limit` may not narrow for this group or eval.",
               "type": "array",
               "items": {
                 "$ref": "#/$defs/PinnableKey"
               }
             },
             "runs": {
+              "description": "Attempts per cell.",
               "type": "number"
             },
             "sandbox": {
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -1099,6 +1189,7 @@
               }
             },
             "timeout": {
+              "description": "Per attempt.",
               "anyOf": [
                 {
                   "type": "number"
@@ -1124,9 +1215,11 @@
           "type": "object",
           "properties": {
             "capture": {
+              "description": "Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value.",
               "$ref": "#/$defs/CaptureOptions"
             },
             "egress": {
+              "description": "Where the sandbox may connect. Replaces the inherited policy: config, profile defaults, the environment, then groups and the eval.",
               "anyOf": [
                 {
                   "enum": ["allow-all", "deny-all"]
@@ -1146,12 +1239,15 @@
               ]
             },
             "env": {
+              "description": "Variables and secrets for the sandbox, merged by name down the cascade.",
               "$ref": "#/$defs/EnvVars"
             },
             "environment": {
+              "description": "What this group or eval runs in, and the control of a compare without a `baseline`.",
               "$ref": "#/$defs/EnvironmentData"
             },
             "gate": {
+              "description": "How each cell's attempts decide its outcome; default `'all'`.",
               "anyOf": [
                 {
                   "const": "all"
@@ -1264,15 +1360,18 @@
               "$ref": "#/$defs/ConfigJudgeOptions"
             },
             "pin": {
+              "description": "Keys a profile's `limit` may not narrow for this group or eval.",
               "type": "array",
               "items": {
                 "$ref": "#/$defs/PinnableKey"
               }
             },
             "runs": {
+              "description": "Attempts per cell.",
               "type": "number"
             },
             "sandbox": {
+              "description": "The default machine when the resolved environment omits `sandbox`. Cascades like `harness`. Not an environment: it does not invent skills, files or a name.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/DockerSandboxDescriptor"
@@ -1289,6 +1388,7 @@
               }
             },
             "timeout": {
+              "description": "Per attempt.",
               "anyOf": [
                 {
                   "type": "number"
@@ -1316,15 +1416,19 @@
       "type": "object",
       "properties": {
         "delayMs": {
+          "description": "Simulated turn length, honours the abort signal.",
           "type": "number"
         },
         "effort": {
+          "description": "Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the turn reports (`fake-1[effort=medium]`). Fast is not this.",
           "type": "string"
         },
         "failWith": {
+          "description": "Throw before the first turn starts, to simulate an infra failure.",
           "type": "string"
         },
         "files": {
+          "description": "Files the fake agent writes into the sandbox on every turn.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -1333,27 +1437,34 @@
           }
         },
         "flakeRate": {
+          "description": "Chance (0–1) that an attempt writes no files and says so, for flaky pass rates.",
           "type": "number"
         },
         "id": {
+          "description": "Cell id; defaults to `fake`.",
           "type": "string"
         },
         "ignoreAbort": {
+          "description": "Sits out `delayMs` even after an abort, like an agent that doesn't stop when it's told to.",
           "type": "boolean"
         },
         "kind": {
           "const": "fake"
         },
         "layout": {
+          "description": "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
           "enum": ["antigravity", "claude-code", "codex", "cursor", "goose", "opencode", "pi"]
         },
         "maxConcurrent": {
+          "description": "The most attempts on this harness kind at once, across the run.",
           "type": "number"
         },
         "reasoning": {
+          "description": "A reasoning block at the start of every turn.",
           "type": "string"
         },
         "script": {
+          "description": "Real sandbox actions, one list per `c.send` (the last list repeats), run in order before `files`. `exec` runs as the agent: with the sandbox's own variables, none of the checks'.",
           "type": "array",
           "items": {
             "type": "array",
@@ -1363,9 +1474,11 @@
           }
         },
         "servedModel": {
+          "description": "The model the fake agent says served each turn, as a real harness reports its resolved model and variant (`composer-2.5[fast=true]`); unset, it reports none.",
           "type": "string"
         },
         "startHangs": {
+          "description": "The first this many session starts of an attempt never become ready, even when aborted (`true`: every one).",
           "anyOf": [
             {
               "const": false
@@ -1376,6 +1489,7 @@
           ]
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -1398,6 +1512,7 @@
           "type": "string"
         },
         "tools": {
+          "description": "Tool calls the fake agent reports on every turn, before writing files.",
           "type": "array",
           "items": {
             "type": "object",
@@ -1415,6 +1530,7 @@
           }
         },
         "withSkill": {
+          "description": "Files and message used instead when the environment gives the agent a skill.",
           "type": "object",
           "properties": {
             "files": {
@@ -1435,6 +1551,7 @@
       "required": ["kind"]
     },
     "FakeJudgeModel": {
+      "description": "A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a function of the state the judge would see works per group, eval or call, not in the config.",
       "type": "object",
       "properties": {
         "kind": {
@@ -1459,6 +1576,7 @@
       "type": "object",
       "properties": {
         "dir": {
+          "description": "Parent directory for the per-eval workspace (defaults to the OS temp dir).",
           "type": "string"
         },
         "id": {
@@ -1468,12 +1586,14 @@
           "const": "fake"
         },
         "maxConcurrent": {
+          "description": "The most attempts on this sandbox kind at once, across the run.",
           "type": "number"
         }
       },
       "required": ["kind"]
     },
     "FakeScriptStep": {
+      "description": "One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp` (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error` ends the turn there with status `error` and that message, as a provider error would.",
       "anyOf": [
         {
           "type": "object",
@@ -1528,24 +1648,30 @@
       ]
     },
     "GitWorkspace": {
+      "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",
       "type": "object",
       "properties": {
         "init": {
+          "description": "Give the workspace a `.git`: one commit of the fetched tree, with no remote.",
           "type": "boolean"
         },
         "kind": {
           "const": "git"
         },
         "path": {
+          "description": "A directory in the repository whose contents become the workspace.",
           "type": "string"
         },
         "ref": {
+          "description": "A branch, tag or commit SHA; unset is the remote's `HEAD`.",
           "type": "string"
         },
         "repo": {
+          "description": "As written: a URL, `github:owner/repo`, or a local path.",
           "type": "string"
         },
         "token": {
+          "description": "The host variable holding a token for the fetch; read on the host only.",
           "type": "string"
         },
         "url": {
@@ -1555,24 +1681,30 @@
       "required": ["kind", "repo", "url"]
     },
     "GooseHarnessDescriptor": {
+      "description": "Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models on a Gemini API key, and reports no usage (its ACP server counts one call).",
       "type": "object",
       "properties": {
         "effort": {
+          "description": "Reasoning effort as `GOOSE_THINKING_EFFORT`, e.g. `off`, `low`, `medium`, `high` or `max`.",
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.",
           "type": "string"
         },
         "kind": {
           "const": "goose"
         },
         "maxConcurrent": {
+          "description": "The most Goose attempts at once, across the run, e.g. for the key's rate limits.",
           "type": "number"
         },
         "model": {
+          "description": "A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`.",
           "type": "string"
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -1623,6 +1755,7 @@
       ]
     },
     "HostFile": {
+      "description": "A file on the host, read when an attempt starts. Made by the `file` helper.",
       "type": "object",
       "properties": {
         "kind": {
@@ -1635,6 +1768,7 @@
       "required": ["kind", "path"]
     },
     "InstallStep": {
+      "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
       "anyOf": [
         {
           "type": "object",
@@ -1761,24 +1895,30 @@
       ]
     },
     "OpenCodeHarnessDescriptor": {
+      "description": "OpenCode through `@reeval/harness-opencode` (`opencode acp`), made by `opencode()`. It runs on any provider whose key OpenCode sends in a header on known hosts, with that provider's key, and reports no usage (its ACP server counts one call).",
       "type": "object",
       "properties": {
         "effort": {
+          "description": "Reasoning effort for that provider: `options.reasoningEffort` (OpenAI) or `options.thinking` (Anthropic). Values are whatever that provider takes.",
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `opencode:<model>`, or `opencode:<model>[effort=<value>]` when `effort` is set.",
           "type": "string"
         },
         "kind": {
           "const": "opencode"
         },
         "maxConcurrent": {
+          "description": "The most OpenCode attempts at once, across the run, e.g. for the key's rate limits.",
           "type": "number"
         },
         "model": {
+          "description": "OpenCode's model id, `<provider>/<model>`, e.g. `google/gemini-3.8-flash` or `anthropic/claude-haiku-4-5`; the provider picks the key.",
           "type": "string"
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -1801,27 +1941,34 @@
       "required": ["kind", "model"]
     },
     "PairFactor": {
+      "description": "A matrix factor a compare question varies when pairing; the others are held.",
       "enum": ["environment", "harness"]
     },
     "PiHarnessDescriptor": {
+      "description": "pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs Google models on a Gemini API key and reports each model call's tokens. It takes stdio and HTTP MCP servers, not SSE ones.",
       "type": "object",
       "properties": {
         "effort": {
+          "description": "Reasoning effort, passed as pi's `--thinking` (the CLI's name). Values are whatever that flag takes, e.g. `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.",
           "type": "string"
         },
         "id": {
+          "description": "Cell id; defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.",
           "type": "string"
         },
         "kind": {
           "const": "pi"
         },
         "maxConcurrent": {
+          "description": "The most pi attempts at once, across the run, e.g. for the key's rate limits.",
           "type": "number"
         },
         "model": {
+          "description": "A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`.",
           "type": "string"
         },
         "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
           "anyOf": [
             {
               "type": "number"
@@ -1847,18 +1994,22 @@
       "enum": ["compare", "harness", "runs"]
     },
     "Secret": {
+      "description": "A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by the `secret` helper of `defineEnvironment` and `defineConfig` callbacks.",
       "type": "object",
       "properties": {
         "from": {
+          "description": "The host variable; defaults to the key it's set under.",
           "type": "string"
         },
         "hosts": {
+          "description": "Brokers the secret: the sandbox gets a per-attempt placeholder, and the Docker egress gateway swaps in the real value only on HTTPS requests to these hosts (`*.example.com` for subdomains).",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "in": {
+          "description": "Where in a request to those hosts the gateway substitutes; defaults to `['header']`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/SubstituteIn"
@@ -1868,15 +2019,18 @@
           "const": "secret"
         },
         "optional": {
+          "description": "When the host variable is unset, skip it (the record says so) instead of failing.",
           "type": "boolean"
         },
         "to": {
+          "description": "`agent` (default): the container's environment. `checks`: only `c.exec` and `setup` steps.",
           "enum": ["agent", "checks"]
         }
       },
       "required": ["kind"]
     },
     "SecretTemplate": {
+      "description": "`secret.template('Bearer ${TOKEN}')`: host variables substituted into a string, for MCP headers.",
       "type": "object",
       "properties": {
         "kind": {
@@ -1889,6 +2043,7 @@
       "required": ["kind", "template"]
     },
     "SetupStep": {
+      "description": "A shell command, or `{ run, timeout?, cwd? }`; `cwd` is relative to the workspace or absolute.",
       "anyOf": [
         {
           "type": "object",
@@ -1927,6 +2082,7 @@
       ]
     },
     "SkillPlacement": {
+      "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",
       "enum": ["harness", "workspace"]
     },
     "SkillSource": {
@@ -2086,6 +2242,7 @@
       ]
     },
     "SubstituteIn": {
+      "description": "`header` values, the `query` string, or the request `body`.",
       "enum": ["body", "header", "query"]
     }
   }

@@ -73,6 +73,7 @@ function discriminant(doc: Doc, objects: Schema[]): string | null {
 const constsOf = (doc: Doc, o: Schema, key: string) =>
   alternatives(doc, o.properties?.[key] ?? {}).map((a) => a.const)
 
+/** A `description` is documentation: changing, adding or removing one is never a change here. */
 export function compare(
   oldDoc: ShapeSchema,
   newDoc: ShapeSchema,

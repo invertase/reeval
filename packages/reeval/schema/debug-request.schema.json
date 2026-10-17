@@ -5,6 +5,7 @@
   "$ref": "#/$defs/DebugRequest",
   "$defs": {
     "DebugRequest": {
+      "description": "One request through the egress gateway, or one tunnel it passed through without reading.",
       "type": "object",
       "properties": {
         "allowed": {
@@ -38,6 +39,7 @@
           "type": "number"
         },
         "substituted": {
+          "description": "Brokered secrets and the harness credential swapped in, by name.",
           "type": "array",
           "items": {
             "type": "string"

@@ -198,6 +198,24 @@ describe('persisted shapes', () => {
     )
     assert.match(explain([report]), /the field is optional, so readers already handle it missing/)
   })
+
+  test('descriptions come from TSDoc, and changing them is documentation only', () => {
+    const now = snapshot('run-record')
+    assert.match(def(now, 'Cost').description ?? '', /\w/)
+    assert.match(def(now, 'RunRecord').properties?.status?.description ?? '', /\w/)
+    const bare = JSON.parse(JSON.stringify(now), (k, v) => (k === 'description' ? undefined : v))
+    const reworded = copy(now)
+    def(reworded, 'Cost').description = 'Reworded.'
+    for (const [before, after] of [
+      [bare, now],
+      [now, bare],
+      [now, reworded],
+    ]) {
+      const report = checkShape(shape('run-record'), after as ShapeSchema, before as ShapeSchema)
+      assert.deepEqual(report.changes, [])
+      assert.equal(report.stale, true, 'schema:update still rewrites the snapshot')
+    }
+  })
 })
 
 const has = (value: unknown, segments: string[]): boolean => {

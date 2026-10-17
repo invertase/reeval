@@ -10,6 +10,7 @@
           "type": "object",
           "properties": {
             "added": {
+              "description": "Line counts, or null when the harness didn't send the content (e.g. deletes).",
               "anyOf": [
                 {
                   "type": "null"
@@ -141,12 +142,14 @@
               ]
             },
             "ok": {
+              "description": "Whether the search succeeded. Absent means it did.",
               "type": "boolean"
             },
             "query": {
               "type": "string"
             },
             "references": {
+              "description": "How many sources the harness says it used; Cursor sends no URLs or titles.",
               "anyOf": [
                 {
                   "type": "null"
