@@ -50,6 +50,11 @@ function check(doc: ShapeSchema, schema: Schema, value: unknown, path: string, o
       out.push(`${at}: ${JSON.stringify(value)} isn't one of ${s.enum.join(', ')}`)
     return
   }
+  if (Array.isArray(s.type)) {
+    if (!s.type.some((type) => fits(doc, { ...s, type }, value)))
+      out.push(`${at}: expected ${s.type.join(' or ')}, got ${JSON.stringify(value) ?? 'nothing'}`)
+    return
+  }
   switch (s.type) {
     case undefined:
       return

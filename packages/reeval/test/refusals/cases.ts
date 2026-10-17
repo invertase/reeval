@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveConfig } from '../../src/config.ts'
+import { attemptRequestProblem } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
@@ -57,6 +58,23 @@ const evalNode = (o: object = {}) => ({
   mode: 'run',
   options: {},
   body: 'b1',
+  ...o,
+})
+
+/** What a runner's attempt request is checked against. */
+const request =
+  (call: unknown, id: unknown = '1') =>
+  () => {
+    const problem = attemptRequestProblem({ id, call })
+    if (problem) throw new UsageError(problem)
+  }
+const expectCall = (o: object = {}) => ({
+  op: 'expect',
+  subject: { attempt: true },
+  matcher: 'toHaveFile',
+  args: ['greet.js'],
+  not: false,
+  soft: false,
   ...o,
 })
 
@@ -643,6 +661,56 @@ export const CASES: Record<string, Case[]> = {
         evalNode({ family: { name: 'case %#', case: 1, cases: 2 } }),
         { type: 'todo', name: 'later' },
       ]),
+    ],
+  ],
+  protocol: [
+    ['an empty id', request({ op: 'send', prompt: 'hi' }, '')],
+    ['an unknown op', request({ op: 'judge', question: 'ok?' })],
+    ['send without a prompt', request({ op: 'send' })],
+    ['exec with a typo', request({ op: 'exec', cmd: 'ls' })],
+    ['exec with an empty command', request({ op: 'exec', command: '' })],
+    ['readFile with a number', request({ op: 'readFile', path: 3 })],
+    [
+      'writeFile with a bad encoding',
+      request({ op: 'writeFile', path: 'a', contents: 'YQ==', encoding: 'hex' }),
+    ],
+    ['expect with a dotted matcher', request(expectCall({ matcher: 'not.toBe' }))],
+    ['expect without not', request(expectCall({ not: undefined }))],
+    ['expect with a bad subject', request(expectCall({ subject: { turm: 0 } }))],
+    [
+      'expect with a bad pattern flag',
+      request(expectCall({ args: [{ regexp: 'a', flags: 'x' }] })),
+    ],
+    ['expect with a label that is a number', request(expectCall({ label: 3 }))],
+    ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
+    ['good: exec', request({ op: 'exec', command: 'node greet.js' })],
+    ['good: readFile', request({ op: 'readFile', path: '~/notes.md' })],
+    [
+      'good: writeFile',
+      request({ op: 'writeFile', path: 'a.bin', contents: 'AAE=', encoding: 'base64' }),
+    ],
+    [
+      'good: expect',
+      request(
+        expectCall({
+          subject: { turn: 0 },
+          matcher: 'toHaveRun',
+          args: [{ regexp: '^npm (test|t)$', flags: 'i' }],
+          not: true,
+          soft: true,
+          label: 'never runs the tests',
+        }),
+      ),
+    ],
+    [
+      'good: expect on a value',
+      request(
+        expectCall({
+          subject: { value: { exitCode: 0, stdout: '', stderr: '' } },
+          matcher: 'toSucceed',
+          args: [],
+        }),
+      ),
     ],
   ],
 }

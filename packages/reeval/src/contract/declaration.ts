@@ -12,17 +12,7 @@ import type {
   DeclaredTodo,
 } from '../declaration.ts'
 import type { EvalOptionsData } from '../types.ts'
-import {
-  type Assert,
-  closest,
-  fieldPath,
-  genericProblem,
-  got,
-  type Issue,
-  oneOf,
-  type Same,
-  valueAt,
-} from './shared.ts'
+import { type Assert, dataProblem, type Same } from './shared.ts'
 
 /** A node's options: any object, until the cascade checks it. Its JSON Schema is the type's. */
 export const evalOptionsDataSchema = z.record(
@@ -101,8 +91,6 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof declarationTreeSchema>, DeclarationTree>>,
 ]
 
-const NODE_TYPES = ['group', 'eval', 'todo']
-
 const NODE_SCHEMAS: Record<string, z.ZodObject> = {
   eval: declaredEvalSchema,
   group: declaredGroupSchema,
@@ -111,24 +99,9 @@ const NODE_SCHEMAS: Record<string, z.ZodObject> = {
 
 /**
  * What's wrong with a declaration tree's shape, or undefined: the field, by its path from the
- * tree's `children`. An unknown key comes first, since it's usually a typo of a missing one.
- * Options are left to the cascade.
+ * tree's `children`. Options are left to the cascade.
  */
-export function declarationProblem(children: unknown): string | undefined {
-  const tree = { children }
-  const result = declarationTreeSchema.safeParse(tree)
-  if (result.success) return undefined
-  const { issues } = result.error
-  const issue = issues.find((i) => i.code === 'unrecognized_keys') ?? (issues[0] as Issue)
-  if (issue.code === 'invalid_union') {
-    return `The declaration tree's ${fieldPath(issue.path)} is ${oneOf(NODE_TYPES)} (got ${got(valueAt(tree, issue.path))})`
-  }
-  if (issue.code === 'unrecognized_keys') {
-    const node = valueAt(tree, issue.path) as { type?: string }
-    const keys = Object.keys(NODE_SCHEMAS[String(node.type)]?.shape ?? { name: 0 })
-    const near = closest(issue.keys[0] as string, keys)
-    const hint = near ? `. Did you mean "${near}"?` : ''
-    return `The declaration tree's ${genericProblem('', issue, tree)}${hint}`
-  }
-  return `The declaration tree's ${genericProblem('', issue, tree)}`
-}
+export const declarationProblem = (children: unknown): string | undefined =>
+  dataProblem(declarationTreeSchema, { children }, 'The declaration tree', (node) =>
+    Object.keys(NODE_SCHEMAS[String(node.type)]?.shape ?? {}),
+  )

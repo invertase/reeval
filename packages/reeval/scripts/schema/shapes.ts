@@ -107,3 +107,26 @@ export const PLAN_SHAPES: PlanShape[] = [
     where: 'A message from a worker to the main process (src/engine/PROTOCOL.md)',
   },
 ]
+
+export const PROTOCOL_SNAPSHOT_DIR = fileURLToPath(
+  new URL('../../schema/protocol/', import.meta.url),
+)
+
+/**
+ * A message of the attempt protocol (src/contract/attempt.ts), whose JSON Schema is generated
+ * from its Zod schema alone: `root` names it in `ATTEMPT_SCHEMAS`.
+ */
+export type ProtocolShape = { name: string; root: string; where: string }
+
+export const PROTOCOL_SHAPES: ProtocolShape[] = [
+  {
+    name: 'attempt-request',
+    root: 'AttemptRequest',
+    where: "A call an eval's body makes on its attempt, as a runner in another language sends it",
+  },
+  {
+    name: 'attempt-reply',
+    root: 'AttemptReply',
+    where: "reeval's reply to an attempt request",
+  },
+]

@@ -21,13 +21,29 @@ export function zodDefs(
     target: 'draft-2020-12',
     uri: (id) => `#/$defs/${id}`,
   }).schemas
+  const shared = (out.__shared?.$defs ?? {}) as Record<string, unknown>
   const defs = Object.fromEntries(
-    Object.entries(out)
-      .filter(([id]) => !(id in refs))
+    Object.entries(inlineShared(out, shared) as typeof out)
+      .filter(([id]) => !(id in refs) && id !== '__shared')
       .map(([id, { $schema: _, $id: __, ...schema }]) => [id, canonical(schema) as Schema]),
   )
   if (schemas === CONTRACT_SCHEMAS) cached = defs
   return defs
+}
+
+/**
+ * `value` with each `$ref` to a schema Zod pulled out on its own (the inside of a recursive
+ * `z.lazy`, which has no name) replaced by that schema, merged with what sits beside the `$ref`.
+ */
+function inlineShared(value: unknown, shared: Record<string, unknown>): unknown {
+  if (Array.isArray(value)) return value.map((v) => inlineShared(v, shared))
+  if (typeof value !== 'object' || value === null) return value
+  const { $ref, ...rest } = value as Record<string, unknown>
+  const name =
+    typeof $ref === 'string' ? /^#\/\$defs\/__shared#\/\$defs\/(.+)$/.exec($ref)?.[1] : undefined
+  const base = name === undefined ? ($ref === undefined ? {} : { $ref }) : (shared[name] as object)
+  const merged: Record<string, unknown> = { ...base, ...rest }
+  return Object.fromEntries(Object.entries(merged).map(([k, v]) => [k, inlineShared(v, shared)]))
 }
 
 /** Laid out like the defs generated from types: description first, properties and `required` sorted. */

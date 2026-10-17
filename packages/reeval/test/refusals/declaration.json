@@ -1,8 +1,8 @@
 {
   "not a list": "UsageError: The declaration tree's children must be a list (got {\"type\":\"eval\"})",
   "a node that is not one": "UsageError: The declaration tree's children[0] must be an object (got \"e\")",
-  "an unknown node type": "UsageError: The declaration tree's children[0].type is one of 'group', 'eval' or 'todo' (got \"test\")",
-  "a node without a type": "UsageError: The declaration tree's children[0].type is one of 'group', 'eval' or 'todo' (got undefined)",
+  "an unknown node type": "UsageError: The declaration tree's children[0].type is one of 'eval', 'group' or 'todo' (got \"test\")",
+  "a node without a type": "UsageError: The declaration tree's children[0].type is one of 'eval', 'group' or 'todo' (got undefined)",
   "an eval without a body": "UsageError: The declaration tree's children[0].body must be a string (got undefined)",
   "an eval with a bad mode": "UsageError: The declaration tree's children[0].mode is one of 'run', 'skip' or 'only' (got \"focus\")",
   "an eval with an unknown key": "UsageError: The declaration tree's children[0] has an unknown key \"timeout\"",
