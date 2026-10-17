@@ -21,10 +21,31 @@ export function zodDefs(
     uri: (id) => `#/$defs/${id}`,
   }).schemas
   const defs = Object.fromEntries(
-    Object.entries(out).map(([id, { $schema: _, $id: __, ...schema }]) => [id, schema as Schema]),
+    Object.entries(out).map(([id, { $schema: _, $id: __, ...schema }]) => [
+      id,
+      canonical(schema) as Schema,
+    ]),
   )
   if (schemas === CONTRACT_SCHEMAS) cached = defs
   return defs
+}
+
+/** Laid out like the defs generated from types: description first, properties and `required` sorted. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical)
+  if (typeof value !== 'object' || value === null) return value
+  const { description, ...rest } = value as Record<string, unknown>
+  const out: Record<string, unknown> = description === undefined ? {} : { description }
+  for (const [key, inner] of Object.entries(rest)) {
+    if (key === 'properties') {
+      const sorted = Object.entries(inner as Record<string, unknown>).sort(([a], [b]) =>
+        a.localeCompare(b),
+      )
+      out[key] = Object.fromEntries(sorted.map(([k, v]) => [k, canonical(v)]))
+    } else if (key === 'required') out[key] = [...(inner as string[])].sort()
+    else out[key] = canonical(inner)
+  }
+  return out
 }
 
 /**

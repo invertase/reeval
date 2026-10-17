@@ -460,37 +460,45 @@
           "description": "Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped.",
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^(CAP_)?[A-Z_]+$"
           }
         },
         "cpus": {
           "description": "CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's.",
-          "type": "number"
+          "type": "number",
+          "exclusiveMinimum": 0
         },
         "dockerfile": {
           "description": "An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "from": {
           "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "image": {
           "description": "An image that already has the harness baked in, used as is.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "install": {
           "description": "Baked onto the sandbox image in one build container: in order, no secrets, no workspace.",
+          "minItems": 1,
           "type": "array",
           "items": {
             "$ref": "#/$defs/InstallStep"
           }
         },
         "kind": {
+          "type": "string",
           "const": "docker"
         },
         "maxConcurrent": {
@@ -501,16 +509,21 @@
           "description": "The container's memory: `'4g'` (default), `'512m'`, or bytes.",
           "anyOf": [
             {
-              "type": "number"
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
             },
             {
-              "type": "string"
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             }
           ]
         },
         "pids": {
           "description": "Processes and threads at once. Default 1024.",
-          "type": "number"
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         },
         "root": {
           "description": "Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. For evals that install system packages at run time.",
@@ -520,15 +533,32 @@
           "description": "Swap on top of `memory`, in the same units. Default: as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.",
           "anyOf": [
             {
-              "type": "number"
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
             },
             {
-              "type": "string"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           ]
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
+    },
+    "Duration": {
+      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^(?=.*[1-9])\\d+(\\.\\d+)?(ms|s|m|h)$"
+        }
+      ]
     },
     "EgressPolicy": {
       "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
@@ -903,13 +933,16 @@
       "properties": {
         "dir": {
           "description": "Parent directory for the per-eval workspace (defaults to the OS temp dir).",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "id": {
           "description": "Cell id; defaults to `fake`.",
-          "type": "string"
+          "type": "string",
+          "pattern": "\\S"
         },
         "kind": {
+          "type": "string",
           "const": "fake"
         },
         "maxConcurrent": {
@@ -917,7 +950,8 @@
           "type": "number"
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false
     },
     "FakeScriptStep": {
       "description": "One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp` (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`. `error` ends the turn there with status `error` and that message, as a provider error would.",
@@ -1309,36 +1343,23 @@
       "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`.",
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "run": {
               "description": "The shell command.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "timeout": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                }
-              ]
+              "$ref": "#/$defs/Duration"
             }
           },
-          "required": ["run"]
-        },
-        {
-          "type": "string"
+          "required": ["run"],
+          "additionalProperties": false
         }
       ]
     },

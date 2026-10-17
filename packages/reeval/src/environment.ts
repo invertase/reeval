@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import picomatch from 'picomatch'
+import { sandboxProblem } from './contract/docker.ts'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -939,6 +940,8 @@ function checkSandbox(value: unknown, where: string): asserts value is SandboxDe
       `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
     )
   }
+  const problem = sandboxProblem(value as SandboxDescriptor)
+  if (problem) throw new DefinitionError(`sandbox in ${where}: ${problem}`)
 }
 
 export function applied(env: Pick<Environment, 'name' | 'layers'> | undefined): AppliedEnvironment {

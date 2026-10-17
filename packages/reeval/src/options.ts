@@ -1,6 +1,7 @@
 // The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
 import { createHash } from 'node:crypto'
+import { sandboxProblem } from './contract/docker.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
@@ -388,6 +389,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
         `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
       )
     }
+    const problem = sandboxProblem(o.sandbox)
+    if (problem) throw new UsageError(`sandbox in ${where}: ${problem}`)
   }
   if (o.environment !== undefined) {
     if (Array.isArray(o.environment)) {
