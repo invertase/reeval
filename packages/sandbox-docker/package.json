@@ -45,6 +45,6 @@
     "@reeval/harness-opencode": "workspace:0.2.7",
     "@reeval/harness-pi": "workspace:0.2.6",
     "ws": "8.22.0",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   }
 }
