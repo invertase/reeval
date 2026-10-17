@@ -160,6 +160,14 @@ export const CASES: Record<string, Case[]> = {
     ['fakeHarness layout unknown', any(fakeHarness, { layout: 'vim' })],
     ['fakeHarness effort empty', any(fakeHarness, { effort: '' })],
     ['fakeHarness with a typo', any(fakeHarness, { txt: 'x' })],
+    ['fakeHarness text a number', any(fakeHarness, { text: 3 })],
+    ['fakeHarness files not strings', any(fakeHarness, { files: { 'a.txt': 1 } })],
+    [
+      'fakeHarness a tool with an extra key',
+      any(fakeHarness, { tools: [{ tool: 't', input: 1, output: 2, okay: true }] }),
+    ],
+    ['cursor with an empty id', any(cursor, { model: 'm', id: '' })],
+    ['codex with a typo far from any option', any(codex, { model: 'gpt', colour: 'red' })],
     [
       'fakeHarness good',
       any(fakeHarness, { script: [[{ exec: 'ls' }, { mcp: 's/t' }]], layout: 'pi' }),

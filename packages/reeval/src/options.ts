@@ -2,6 +2,7 @@
 
 import { createHash } from 'node:crypto'
 import { sandboxProblem } from './contract/docker.ts'
+import { harnessProblem } from './contract/harness.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
@@ -571,6 +572,8 @@ export function checkHarnesses(list: unknown[], where: string): void {
         throw new UsageError(`startTimeout of harness in ${where}: ${(error as Error).message}`)
       }
     }
+    const problem = harnessProblem(item as HarnessDescriptor)
+    if (problem) throw new UsageError(`harness in ${where}: ${problem}`)
   }
 }
 

@@ -2,6 +2,18 @@
 // each a Zod schema that validates it, describes it and gives its JSON Schema.
 import type { z } from 'zod'
 import { dockerSandboxSchema, fakeSandboxSchema, installStepSchema } from './docker.ts'
+import {
+  antigravityHarnessSchema,
+  claudeCodeHarnessSchema,
+  codexHarnessSchema,
+  cursorHarnessSchema,
+  fakeHarnessSchema,
+  fakeScriptStepSchema,
+  gooseHarnessSchema,
+  harnessDescriptorSchema,
+  opencodeHarnessSchema,
+  piHarnessSchema,
+} from './harness.ts'
 import { durationSchema } from './shared.ts'
 
 /**
@@ -14,4 +26,14 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   DockerSandboxDescriptor: dockerSandboxSchema,
   FakeSandboxDescriptor: fakeSandboxSchema,
   InstallStep: installStepSchema,
+  HarnessDescriptor: harnessDescriptorSchema,
+  FakeHarnessDescriptor: fakeHarnessSchema,
+  FakeScriptStep: fakeScriptStepSchema,
+  CursorHarnessDescriptor: cursorHarnessSchema,
+  ClaudeCodeHarnessDescriptor: claudeCodeHarnessSchema,
+  AntigravityHarnessDescriptor: antigravityHarnessSchema,
+  OpenCodeHarnessDescriptor: opencodeHarnessSchema,
+  GooseHarnessDescriptor: gooseHarnessSchema,
+  PiHarnessDescriptor: piHarnessSchema,
+  CodexHarnessDescriptor: codexHarnessSchema,
 }

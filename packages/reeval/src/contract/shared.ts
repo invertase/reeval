@@ -67,6 +67,44 @@ export function firstIssue(issues: readonly Issue[], order: readonly string[] = 
 
 export type Explain = (issue: Issue, value: unknown) => string
 
+/** An issue's path as it reads in code: `files["a.txt"]`, `tools[0].ok`. */
+export function fieldPath(path: readonly PropertyKey[]): string {
+  return path
+    .map((key, i) =>
+      typeof key === 'number'
+        ? `[${key}]`
+        : /^[A-Za-z_$][\w$]*$/.test(String(key))
+          ? `${i ? '.' : ''}${String(key)}`
+          : `[${JSON.stringify(String(key))}]`,
+    )
+    .join('')
+}
+
+const EXPECTED: Record<string, string> = {
+  string: 'a string',
+  number: 'a number',
+  int: 'a whole number',
+  boolean: 'true or false',
+  object: 'an object',
+  array: 'a list',
+  record: 'an object',
+}
+
+/**
+ * The sentence for an issue no hand-written one covers, naming the field as `call({ field })`:
+ * an unknown key, a value of the wrong type, or Zod's own words for anything else.
+ */
+export function genericProblem(call: string, issue: Issue, value: unknown): string {
+  const at = fieldPath(issue.path)
+  if (issue.code === 'unrecognized_keys') {
+    return `${call}({ ${at} }) has an unknown key "${issue.keys[0]}"`
+  }
+  const v = valueAt(value, issue.path)
+  const expected = issue.code === 'invalid_type' ? EXPECTED[issue.expected] : undefined
+  if (expected) return `${call}({ ${at} }) must be ${expected} (got ${got(v)})`
+  return `${call}({ ${at} }): ${issue.message} (got ${got(v)})`
+}
+
 /**
  * reeval's sentence for what `schema` refuses in `value`, or undefined when it's accepted. Issues
  * under a key in `skip` are left to a later check that names where the value was set.
