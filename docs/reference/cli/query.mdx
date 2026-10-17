@@ -47,15 +47,17 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | Name | Columns |
 |---|---|
 | `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
+| `context_use` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `class`, `calls`, `first_line`, `example` |
 | `contrasts` | `run_id`, `eval_key`, `harness`, `sandbox`, `a_key`, `b_key`, `a_environment`, `b_environment`, `a_pass`, `a_counted`, `b_pass`, `b_counted`, `points`, `lo`, `hi`, `pass_verdict`, `a_tools_median`, `b_tools_median`, `tools_ratio`, `tools_p`, `separated`, `verdict`, `agent_s_ratio`, `time_separated`, `time_verdict`, `tokens_ratio`, `tokens_separated`, `tokens_verdict`, `checks`, `discriminating` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
-| `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `tokens_median`, `tokens_q1`, `tokens_q3`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `control_tokens_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tokens_ratio`, `tools_p`, `agent_s_p`, `tokens_p`, `separated`, `time_separated`, `tokens_separated`, `verdict`, `time_verdict`, `tokens_verdict`, `tokens_note` |
+| `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `tokens_median`, `tokens_q1`, `tokens_q3`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `control_tokens_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tokens_ratio`, `tools_p`, `agent_s_p`, `tokens_p`, `separated`, `time_separated`, `tokens_separated`, `verdict`, `time_verdict`, `tokens_verdict`, `tokens_note`, `context_calls_median`, `dependency_calls_median`, `web_calls_median`, `verify_calls_median`, `workspace_calls_median` |
 | `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `pass_at_1`, `fingerprint` |
 | `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `tokens_note`, `note` |
 | `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `oom_kills`, `first_failed_check` |
 | `family_lift` | `run_id`, `family_id`, `name`, `harness`, `variant`, `cell_key`, `control`, `pairs`, `variant_pass_at_1`, `control_pass_at_1`, `discordant_vc`, `discordant_cv`, `points`, `lo`, `hi`, `method`, `p`, `within_noise`, `verdict`, `min_lift`, `outcome`, `tools_ratio`, `tools_p`, `effort_verdict`, `agent_s_ratio`, `agent_s_p`, `time_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `started_at`, `branch` |
 | `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `pass_at_1`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `variant_pass_at_1`, `control_pass_at_1`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
+| `skill_files` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `path`, `reads`, `first_line` |
 | `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
 | `verdict_flips` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `judgement_key`, `question`, `prev_pass_rate`, `pass_rate`, `n` |
 
@@ -71,6 +73,9 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | `drift` | Run where a cell's fingerprint changed from its previous run, the parts and context paths that changed, and `noise = 1` when only an agent CLI's own runtime state changed |
 | `failing_attempts` | Failed or infra-error attempt, with the skill of its environment (joined by digest), harness, model, error and `oom_kills` (processes killed at the sandbox's memory limit) |
 | `eval_trend` | Eval per run: outcome, pass rate, branch, PR and fingerprint |
+| `contrasts` | Pair of arms on one harness and sandbox in a run, when an eval has two variants or more (a variant against the control, and variant against variant): pass counts, lift of `a` over `b`, effort ratios and verdicts, and the checks that tell them apart |
+| `context_use` | Attempt and tool-call class: `context` (a placed skill, rules file or MCP tool), `dependency` (`node_modules`, `site-packages`, `vendor`, `.venv`, `--help`), `web`, `verify` (a check's command, or a test, build, lint or typecheck) or `workspace`, with the count, the first call's line and an example target. The classes are a heuristic over tool names and paths |
+| `skill_files` | Attempt and file its environment declared (each skill's files, rules and config): how many tool calls opened it, directly or through a glob, and the first one's line (`NULL`: never opened) |
 
 In the text table, `·` is SQL `NULL`; `--json` has `null`. On `factor_effects`, a `pooled` row has `run_id` `NULL` (it spans runs), and a row pooled across evals (with `strata` set and `runs` `NULL`) has `eval_key` and `runs` `NULL` too.
 
@@ -85,17 +90,18 @@ Several views repeat a cell's key across evals in a run, so join `attempts` and 
 |---|---|
 | `artifacts` | `run_id`, `attempt_key`, `kind`, `path`, `sha256`, `bytes` |
 | `assertions` | `run_id`, `attempt_key`, `eval_key`, `cell_key`, `seq`, `label`, `labelled`, `matcher`, `status`, `soft`, `message`, `duration_ms` |
-| `attempt_context` | `run_id`, `attempt_key`, `path`, `sha256`, `runtime` |
+| `attempt_context` | `run_id`, `attempt_key`, `path`, `sha256`, `runtime`, `declared` |
 | `attempts` | `run_id`, `eval_key`, `cell_key`, `key`, `id`, `n`, `seq`, `started_at`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `image_id`, `turns`, `tools`, `file_edits`, `setup_ms`, `agent_ms`, `checks_ms`, `judge_ms`, `last_text`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `served_model`, `oom_kills`, `reasoning_effort`, `served_reasoning_effort` |
 | `cell_checks` | `run_id`, `eval_key`, `cell_key`, `label`, `pass`, `fail`, `error`, `not_run`, `control_pass`, `control_fail`, `control_error`, `control_not_run`, `verdict` |
 | `cells` | `run_id`, `eval_key`, `key`, `role`, `variant`, `harness`, `harness_kind`, `model`, `reasoning_effort`, `environment`, `environment_digest`, `sandbox`, `gate`, `gate_pass_rate`, `fingerprint`, `fp_sources`, `fp_harness`, `fp_environment`, `fp_image`, `fp_agent_cli`, `fp_judge`, `fp_context`, `runs`, `pass`, `fail`, `infra_error`, `skipped`, `pass_at_1`, `outcome`, `lift_vs`, `lift_points`, `lift_lo`, `lift_hi`, `within_noise`, `min_lift`, `comparable` |
+| `context_reads` | `run_id`, `attempt_key`, `line`, `path` |
 | `env_skills` | `run_id`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
 | `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `reeval`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
-| `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms` |
+| `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms`, `class` |
 
 [//]: # (/generated:query-tables)
 

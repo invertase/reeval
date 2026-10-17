@@ -10,6 +10,7 @@ import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
+import { type ClassContext, classifyCall } from './tool-class.ts'
 import { toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
@@ -122,14 +123,21 @@ CREATE TABLE artifacts (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
   sha256 TEXT, bytes INTEGER
 );
--- What the agent could see, by content hash; runtime = 1 for an agent CLI's own session state.
+-- What the agent could see, by content hash; runtime = 1 for an agent CLI's own session state,
+-- declared = 1 for a file the environment declared (its skills' files, rules and config).
 CREATE TABLE attempt_context (
-  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT, runtime INTEGER
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT, runtime INTEGER,
+  declared INTEGER
 );
--- Every tool call in each attempt's transcript: its line in transcript.jsonl (from 1) and target.
+-- Every tool call in each attempt's transcript: its line in transcript.jsonl (from 1), target and
+-- class (context, dependency, web, verify or workspace: a heuristic, see tool-class.ts).
 CREATE TABLE tool_calls (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, turn INTEGER,
-  tool TEXT, target TEXT, ok INTEGER, duration_ms INTEGER
+  tool TEXT, target TEXT, ok INTEGER, duration_ms INTEGER, class TEXT
+);
+-- Each placed file a tool call named (directly or through a glob), by the call's line.
+CREATE TABLE context_reads (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, path TEXT NOT NULL
 );
 -- Every expect / expect.soft matcher call each attempt made, in call order (seq from 1).
 CREATE TABLE assertions (
@@ -148,6 +156,7 @@ CREATE INDEX assertions_by_attempt ON assertions (run_id, attempt_key);
 CREATE INDEX cells_by_eval ON cells (eval_key, key);
 CREATE INDEX tool_calls_by_attempt ON tool_calls (run_id, attempt_key);
 CREATE INDEX context_by_attempt ON attempt_context (run_id, attempt_key);
+CREATE INDEX context_reads_by_attempt ON context_reads (run_id, attempt_key);
 CREATE INDEX attempts_by_cell ON attempts (run_id, eval_key, cell_key);
 CREATE INDEX env_skills_by_digest ON env_skills (run_id, digest);
 `
@@ -206,6 +215,34 @@ CREATE VIEW skill_reads AS
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest;
 
+-- Tool calls per attempt by class: context (a placed skill, rules file or other placed file, a
+-- skill load, an MCP tool of the environment), dependency (node_modules, site-packages, vendor,
+-- --help), web, verify (a command the eval's checks run, or test/build/lint/tsc) and workspace.
+-- A heuristic: shell commands are split into words and exclusions are not counted.
+CREATE VIEW context_use AS
+  SELECT a.run_id, a.eval_key, a.cell_key, c.environment, a.key AS attempt_key, a.id AS attempt_id,
+    t.class, COUNT(*) AS calls, MIN(t.line) AS first_line,
+    (SELECT x.target FROM tool_calls x WHERE x.run_id = a.run_id AND x.attempt_key = a.key
+      AND x.class = t.class ORDER BY x.line LIMIT 1) AS example
+  FROM tool_calls t
+  JOIN attempts a ON a.run_id = t.run_id AND a.key = t.attempt_key
+  JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
+  GROUP BY a.run_id, a.key, t.class;
+
+-- Each file the environment declared (its skills' files, rules), per attempt: how many tool calls
+-- named it, directly or through a glob, and the first one's transcript line (null: never read).
+CREATE VIEW skill_files AS
+  SELECT a.run_id, a.eval_key, a.cell_key, c.environment, a.key AS attempt_key,
+    a.id AS attempt_id, x.path,
+    (SELECT COUNT(*) FROM context_reads r WHERE r.run_id = a.run_id AND r.attempt_key = a.key
+      AND r.path = x.path) AS reads,
+    (SELECT MIN(r.line) FROM context_reads r WHERE r.run_id = a.run_id AND r.attempt_key = a.key
+      AND r.path = x.path) AS first_line
+  FROM attempt_context x
+  JOIN attempts a ON a.run_id = x.run_id AND a.key = x.attempt_key
+  JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
+  WHERE x.declared = 1;
+
 -- Failed attempts and infra errors (an OOM kill among them) with the cell's harness, model, each
 -- of its environment's skills and the label of the first check that failed.
 CREATE VIEW failing_attempts AS
@@ -257,6 +294,8 @@ export const VIEW_NAMES = [
   'contrasts',
   'factor_effects',
   'skill_reads',
+  'context_use',
+  'skill_files',
   'flaky_cells',
   'drift',
   'failing_attempts',
@@ -266,6 +305,20 @@ export const VIEW_NAMES = [
 ]
 
 const json = (value: unknown) => JSON.stringify(value)
+
+/** The agent CLI's home config, which its harness writes (MCP servers, settings), not the eval. */
+const HARNESS_CONFIG = /^~\/.*(^|\/)(config\.(toml|ya?ml|json)|settings(\.local)?\.json|mcp\.json)$/
+
+/**
+ * A placed file the environment declared: under one of its skills, or a rules file outside any
+ * skills directory. Not an agent CLI's own state or home config, its bundled skills or the
+ * adapter's skill index.
+ */
+const declaredContext = (path: string, skills: string[]) =>
+  !isRuntimeState(path) &&
+  !path.endsWith('/.ai-sdk-harness-skills.json') &&
+  !HARNESS_CONFIG.test(path) &&
+  (skills.some((s) => path.includes(`skills/${s}/`)) || !/(^|\/)skills(-[^/]+)?\//.test(path))
 
 /** `attempts.last_text` is the agent's final message, capped: most "why" questions start there. */
 export const LAST_TEXT_LIMIT = 2048
@@ -376,7 +429,9 @@ function insertRun(
       )
     }
   }
+  const envOf = new Map(record.environments.map((env) => [env.digest, env]))
   for (const e of record.evals) {
+    const cellEnv = new Map(e.cells.map((c) => [c.key, c.environmentDigest ?? '']))
     run(
       `INSERT INTO evals VALUES (${Array(14).fill('?').join(', ')})`,
       record.runId,
@@ -488,14 +543,17 @@ function insertRun(
         a.effort ?? null,
         a.servedEffort ?? null,
       )
+      const env = envOf.get(cellEnv.get(a.cell) ?? '')
+      const skills = env?.skills.map((x) => x.name) ?? []
       for (const c of a.context) {
         run(
-          'INSERT INTO attempt_context VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO attempt_context VALUES (?, ?, ?, ?, ?, ?)',
           record.runId,
           a.key,
           c.path,
           c.sha256,
           isRuntimeState(c.path) ? 1 : 0,
+          declaredContext(c.path, skills) ? 1 : 0,
         )
       }
       for (const [i, x] of (a.assertions ?? []).entries()) {
@@ -516,9 +574,16 @@ function insertRun(
         )
       }
       const transcript = transcripts.get(a.key)
+      const ctx: ClassContext = {
+        skills,
+        files: a.context.map((c) => c.path).filter((p) => declaredContext(p, skills)),
+        mcp: env?.mcp ?? [],
+        verify: a.checks.map((c) => c.command),
+      }
       for (const t of transcript ? toolCalls(transcript) : []) {
+        const call = classifyCall(t.tool, t.target, ctx)
         run(
-          'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           record.runId,
           a.key,
           t.line,
@@ -527,7 +592,11 @@ function insertRun(
           t.target,
           t.ok ? 1 : 0,
           t.durationMs,
+          call.class,
         )
+        for (const path of call.files) {
+          run('INSERT INTO context_reads VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, path)
+        }
       }
       for (const j of a.judgements) {
         run(
@@ -648,6 +717,7 @@ const DATA_TABLES = [
   'artifacts',
   'attempt_context',
   'tool_calls',
+  'context_reads',
   'assertions',
   'cell_checks',
 ]

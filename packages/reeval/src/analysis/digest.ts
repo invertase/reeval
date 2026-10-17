@@ -7,6 +7,7 @@ import { commandSummary } from '../cli-spec.ts'
 import { sampleReasons } from '../compare/pairs.ts'
 import type { HistoryDb } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS, LIFT_MIN_COUNTED } from '../history/facts.ts'
+import { TOOL_CLASSES } from '../history/tool-class.ts'
 import type { AttemptRecord, CheckTally, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
@@ -101,6 +102,7 @@ export const RULES = [
   "A criteria fact lists each check (expect label, judges included) per cell: rows only for labels whose rate differs between cells, or is mixed within one; neverMet labels failed on every counted attempt of every cell, alwaysMet passed on all of them. A neverMet or alwaysMet label is the same in every arm: it can't explain a difference between arms.",
   "frame study means every cell in scope is ungated (gate: 'none'): the run measures how its arms differ, so attempts that fail are data, not a failed gate.",
   'setup, rules and cli give context and are not citable: cite facts, evidence and attempts.',
+  "A context-use fact counts each attempt's tool calls by class (context, dependency, web, verify, workspace) and lists which placed files each arm opened: how much an arm leaned on what its environment declared versus digging in installed packages. The classes are a heuristic over tool names and paths; cite them as counts, not as proof of intent.",
   'A contrast fact (kind contrast) is one pair of arms on one harness, a against b, when an eval has two variants or more: pass rate and lift of a over b, the checks that tell them apart (discriminates or mixed; sameOnBoth counts the rest) and effort. It answers how two variants differ from each other, not only from the control; gating stays each variant against its control.',
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
   "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check.",
@@ -404,6 +406,16 @@ export async function buildDigestKeepingDropped(
         medianToolCalls: row.tools_median,
         medianAgentS: row.agent_s_median,
         ...(row.tokens_median != null ? { medianTokens: row.tokens_median } : {}),
+        ...(row.workspace_calls_median != null
+          ? {
+              medianCallsByClass: Object.fromEntries(
+                TOOL_CLASSES.flatMap((k) => {
+                  const m = row[`${k}_calls_median`]
+                  return m ? [[k, m]] : []
+                }),
+              ),
+            }
+          : {}),
         ...(row.control_key
           ? {
               vsControl: {
@@ -560,6 +572,57 @@ export async function buildDigestKeepingDropped(
         read: `${c.read}/${c.attempts}`,
         firstReadAtLines: [...c.lines].sort((a, b) => a - b),
       })),
+    })
+  }
+
+  // What each arm's tool calls were for, per attempt, and which placed files it opened.
+  const classRows = q(
+    `SELECT t.run_id, a.eval_key, a.cell_key, a.n, t.class, COUNT(*) AS calls
+     FROM tool_calls t JOIN attempts a ON a.run_id = t.run_id AND a.key = t.attempt_key
+     WHERE t.run_id IN (${runList}) AND a.eval_key IN (${evalList}) AND a.outcome IN ('pass', 'fail')
+     GROUP BY t.run_id, a.key, t.class ORDER BY t.run_id, a.eval_key, a.cell_key, a.n`,
+  )
+  const fileRows = q(
+    `SELECT run_id, eval_key, cell_key, path, COUNT(*) AS attempts, SUM(reads > 0) AS read
+     FROM skill_files WHERE run_id IN (${runList}) AND eval_key IN (${evalList})
+     GROUP BY run_id, eval_key, cell_key, path ORDER BY run_id, eval_key, cell_key, path`,
+  )
+  type Use = { classes: Map<string, Map<number, number>>; files: string[] }
+  const useOf = new Map<string, Use>()
+  const useEntry = (row: Record<string, unknown>): Use => {
+    const id = `${row.run_id}\0${row.eval_key}\0${row.cell_key}`
+    const entry: Use = useOf.get(id) ?? { classes: new Map(), files: [] }
+    useOf.set(id, entry)
+    return entry
+  }
+  for (const r of classRows) {
+    const entry = useEntry(r)
+    const per = entry.classes.get(r.class as string) ?? new Map<number, number>()
+    per.set(r.n as number, r.calls as number)
+    entry.classes.set(r.class as string, per)
+  }
+  for (const r of fileRows) useEntry(r).files.push(`${r.path} ${r.read}/${r.attempts}`)
+  if (classRows.length) {
+    const attemptNs = new Map<string, number[]>()
+    for (const r of classRows) {
+      const id = `${r.run_id}\0${r.eval_key}\0${r.cell_key}`
+      attemptNs.set(id, [...new Set([...(attemptNs.get(id) ?? []), r.n as number])])
+    }
+    fact('context-use', {
+      note: 'Tool calls per counted attempt by class (context: a placed skill, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.',
+      cells: [...useOf].map(([id, u]) => {
+        const [runId, evalKey, cellKey] = id.split('\0') as [string, string, string]
+        const ns = (attemptNs.get(id) ?? []).sort((a, b) => a - b)
+        return {
+          run: short.get(runId),
+          eval: tagOf(evalKey),
+          cell: cellTag(runId, evalKey, cellKey),
+          perAttempt: Object.fromEntries(
+            [...u.classes].map(([k, per]) => [k, ns.map((n) => per.get(n) ?? 0).join(' ')]),
+          ),
+          ...(u.files.length ? { files: u.files } : {}),
+        }
+      }),
     })
   }
 

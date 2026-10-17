@@ -9,8 +9,9 @@ export function toolTarget(input: unknown, tool?: string): string {
   if (typeof input !== 'object' || input === null) return String(input ?? '').slice(0, 300)
   const i = input as Record<string, unknown>
   if (tool && SKILL_LOAD_TOOLS.has(tool)) {
-    if (typeof i.id === 'string') return i.id.slice(0, 300)
-    if (typeof i.name === 'string') return i.name.slice(0, 300)
+    for (const key of ['id', 'name', 'skill']) {
+      if (typeof i[key] === 'string') return (i[key] as string).slice(0, 300)
+    }
   }
   for (const key of [
     'path',

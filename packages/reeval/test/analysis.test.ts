@@ -2403,6 +2403,13 @@ describe('a study: several arms, every cell ungated', () => {
     const judge = digest.facts.find((f) => f.kind === 'judge')
     assert.equal(judge?.verdicts, 36)
     assert.equal(judge?.failures, undefined, 'which labels failed where is in criteria')
+    const use = digest.facts.find((f) => f.kind === 'context-use') as
+      | { cells: Array<{ cell: string; perAttempt: Record<string, string> }> }
+      | undefined
+    const perAttempt = Object.fromEntries((use?.cells ?? []).map((c) => [c.cell, c.perAttempt]))
+    assert.equal(perAttempt.control?.dependency, '1 1 1', 'no skill: it reads the package types')
+    assert.equal(perAttempt['new-skill']?.context, '1 1 1', 'the new skill: its React reference')
+    assert.equal(perAttempt.control?.context, undefined)
     const effort = digest.facts.find((f) => f.kind === 'effort') as
       | { cells: Array<{ vsControl?: { n: string; separated?: Record<string, boolean> } }> }
       | undefined
