@@ -3,6 +3,7 @@ import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import picomatch from 'picomatch'
+import { dockerSandboxProblem } from './contract/docker.ts'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -933,6 +934,8 @@ function checkSandbox(value: unknown, where: string): asserts value is SandboxDe
       `sandbox in ${where} must come from docker() or fakeSandbox() (got ${JSON.stringify(value)})`,
     )
   }
+  const problem = kind === 'docker' && dockerSandboxProblem(value)
+  if (problem) throw new DefinitionError(`sandbox in ${where}: ${problem}`)
   const max = (value as SandboxDescriptor).maxConcurrent
   if (max !== undefined && !(Number.isInteger(max) && max >= 1)) {
     throw new DefinitionError(

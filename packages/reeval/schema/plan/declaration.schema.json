@@ -400,67 +400,97 @@
     "DockerSandboxDescriptor": {
       "type": "object",
       "properties": {
-        "capabilities": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "cpus": {
-          "type": "number"
-        },
-        "dockerfile": {
-          "type": "string"
-        },
-        "from": {
-          "type": "string"
+        "kind": {
+          "type": "string",
+          "const": "docker"
         },
         "id": {
-          "type": "string"
+          "description": "Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash.",
+          "type": "string",
+          "pattern": "\\S"
         },
         "image": {
-          "type": "string"
+          "description": "An image that already has the harness baked in, used as is.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "from": {
+          "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
+          "type": "string",
+          "pattern": "\\S"
         },
         "install": {
+          "description": "Baked onto the sandbox image in one build container: in order, no secrets, no workspace.",
+          "minItems": 1,
           "type": "array",
           "items": {
             "$ref": "#/$defs/InstallStep"
           }
         },
-        "kind": {
-          "const": "docker"
-        },
         "maxConcurrent": {
-          "type": "number"
-        },
-        "memory": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string"
-            }
-          ]
-        },
-        "pids": {
+          "description": "The most Docker sandboxes at once, across the run, whatever their image.",
           "type": "number"
         },
         "root": {
+          "description": "Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead of the unprivileged `reeval` user. For evals that install system packages at run time.",
           "type": "boolean"
         },
-        "swap": {
+        "capabilities": {
+          "description": "Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(CAP_)?[A-Z_]+$"
+          }
+        },
+        "memory": {
+          "description": "The container's memory: `'4g'` (default), `'512m'`, or bytes.",
           "anyOf": [
             {
-              "type": "number"
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
             },
             {
-              "type": "string"
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
             }
           ]
+        },
+        "swap": {
+          "description": "Swap on top of `memory`, in the same units. Default: as much as `memory`; `0` makes `memory` the hard ceiling. A host without swap has none to give.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "string",
+              "pattern": "^\\d+(\\.\\d+)?[bkmg]?$"
+            }
+          ]
+        },
+        "cpus": {
+          "description": "CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pids": {
+          "description": "Processes and threads at once. Default 1024.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dockerfile": {
+          "description": "An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
+          "type": "string",
+          "pattern": "\\S"
         }
       },
-      "required": ["kind"]
+      "required": ["kind"],
+      "additionalProperties": false,
+      "description": "One local Docker container per attempt."
     },
     "EnvironmentData": {
       "type": "object",
@@ -1637,37 +1667,35 @@
     "InstallStep": {
       "anyOf": [
         {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
           "type": "object",
           "properties": {
             "run": {
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "timeout": {
               "anyOf": [
                 {
-                  "type": "number"
+                  "type": "number",
+                  "exclusiveMinimum": 0
                 },
                 {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "string"
+                  "type": "string",
+                  "pattern": "^(?=.*[1-9])\\d+(\\.\\d+)?(ms|s|m|h)$"
                 }
-              ]
+              ],
+              "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds."
             }
           },
-          "required": ["run"]
-        },
-        {
-          "type": "string"
+          "required": ["run"],
+          "additionalProperties": false
         }
-      ]
+      ],
+      "description": "A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`."
     },
     "JSONValue": {
       "anyOf": [

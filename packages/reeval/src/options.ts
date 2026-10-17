@@ -1,6 +1,7 @@
 // The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
 import { createHash } from 'node:crypto'
+import { dockerSandboxProblem } from './contract/docker.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
@@ -385,6 +386,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
         `sandbox in ${where} must come from docker() or fakeSandbox() (got ${describe(o.sandbox)})`,
       )
     }
+    const problem = kind === 'docker' && dockerSandboxProblem(o.sandbox)
+    if (problem) throw new UsageError(`sandbox in ${where}: ${problem}`)
     const max = o.sandbox.maxConcurrent
     if (max !== undefined && !(Number.isInteger(max) && max >= 1)) {
       throw new UsageError(
