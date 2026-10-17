@@ -1,0 +1,17 @@
+{
+  "start without its attempt": "UsageError: The attempt start's attempt must be an object (got undefined)",
+  "start with run 0": "UsageError: The attempt start's attempt.n: a run number, from 1 (got 0)",
+  "start with a cell typo": "UsageError: The attempt start's attempt.cell has an unknown key \"rol\". Did you mean \"role\"?",
+  "start with an unknown role": "UsageError: The attempt start's attempt.cell.role is 'control' or 'variant' (got \"arm\")",
+  "start with an empty body": "UsageError: The attempt start's body: must not be empty (got \"\")",
+  "abort with an unknown reason": "UsageError: The attempt abort's reason is 'timeout' or 'cancelled' (got \"oom\")",
+  "abort without a message": "UsageError: The attempt abort's message must be a string (got undefined)",
+  "done with a string error": "UsageError: The attempt done's error must be an object (got \"boom\")",
+  "done with an error without a message": "UsageError: The attempt done's error.message must be a string (got undefined)",
+  "done with a typo": "UsageError: The attempt done has an unknown key \"eror\". Did you mean \"error\"?",
+  "good: start": null,
+  "good: start for a variant": null,
+  "good: abort": null,
+  "good: done": null,
+  "good: done with an error": null
+}

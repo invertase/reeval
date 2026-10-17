@@ -135,4 +135,19 @@ export const PROTOCOL_SHAPES: ProtocolShape[] = [
     root: 'AttemptReply',
     where: "reeval's reply to an attempt request",
   },
+  {
+    name: 'attempt-start',
+    root: 'AttemptStart',
+    where: "reeval's message to a runner that starts an attempt's body",
+  },
+  {
+    name: 'attempt-abort',
+    root: 'AttemptAbort',
+    where: "reeval's message to a runner when the attempt is aborted, as c.signal aborts",
+  },
+  {
+    name: 'attempt-done',
+    root: 'AttemptDone',
+    where: "A runner's message when the eval's body has finished, with what it threw",
+  },
 ]

@@ -11,8 +11,11 @@ import { validate } from '../scripts/schema/validate.ts'
 import { zodDefs } from '../scripts/schema/zod.ts'
 import {
   ATTEMPT_SCHEMAS,
+  attemptAbortSchema,
+  attemptDoneSchema,
   attemptReplySchema,
   attemptRequestSchema,
+  attemptStartSchema,
   transcriptEventSchema,
 } from '../src/contract/attempt.ts'
 import { matchers } from '../src/matchers.ts'
@@ -102,6 +105,54 @@ test('every judgement in the record corpus fits a judge reply, in Zod and in the
   const scored = { ...value, verdict: { ...failure, score: 0.4 } }
   assert.equal(attemptReplySchema.safeParse(scored).success, false)
   assert.notDeepEqual(validate(reply, scored), [])
+})
+
+test('every attempt in the record corpus has a start message, in Zod and in the JSON Schema', () => {
+  type Cell = { key: string; harness: string; environment: string; sandbox: string; role: string }
+  type Eval = {
+    file: string
+    name: string
+    cells?: Array<Cell & { variant?: string }>
+    attempts?: Array<{ id: string; cell: string; n: number }>
+  }
+  const starts = corpus().records.flatMap(({ value }) =>
+    ((value.evals ?? []) as Eval[]).flatMap((e) =>
+      (e.attempts ?? []).map((a) => {
+        const found = e.cells?.find((c) => c.key === a.cell)
+        assert.ok(found, `${e.name}: attempt ${a.id}'s cell ${a.cell}`)
+        const { key, harness, environment, sandbox, role, variant } = found
+        const cell = { key, harness, environment, sandbox, role, ...(variant ? { variant } : {}) }
+        return { type: 'start', attempt: { id: a.id, cell, n: a.n }, file: e.file, body: e.name }
+      }),
+    ),
+  )
+  assert.ok(starts.length >= 50, `${starts.length} attempts`)
+  assert.ok(starts.some((s) => s.attempt.cell.role === 'variant'))
+  const schema = snapshot('attempt-start')
+  for (const start of starts) {
+    const parsed = attemptStartSchema.safeParse(start)
+    assert.ok(parsed.success, JSON.stringify(parsed.error?.issues[0]))
+    assert.deepEqual(validate(schema, start), [])
+  }
+  // The canary: a run number as a string.
+  const [first] = starts
+  const text = { ...first, attempt: { ...first?.attempt, n: '1' } }
+  assert.equal(attemptStartSchema.safeParse(text).success, false)
+  assert.notDeepEqual(validate(schema, text), [])
+})
+
+test('abort and done round-trip through JSON unchanged', () => {
+  const abort = { type: 'abort', reason: 'timeout', message: 'Eval timed out after 600s' }
+  const done = { type: 'done', error: { name: 'AssertionError', message: 'expected 1 to be 2' } }
+  for (const [schema, value, name] of [
+    [attemptAbortSchema, abort, 'attempt-abort'],
+    [attemptDoneSchema, done, 'attempt-done'],
+    [attemptDoneSchema, { type: 'done' }, 'attempt-done'],
+  ] as const) {
+    const through = JSON.parse(JSON.stringify(value))
+    assert.deepEqual(schema.parse(through), value)
+    assert.deepEqual(validate(snapshot(name), through), [])
+  }
 })
 
 test('every matcher reeval adds can be named in an expect call', () => {

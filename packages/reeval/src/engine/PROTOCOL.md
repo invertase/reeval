@@ -79,7 +79,13 @@ The calls an eval's body makes on its attempt (`c.send`, `c.exec`, `c.readFile`,
 `c.judge` and each matcher) have their own schemas in `src/contract/attempt.ts`, with JSON Schemas in
 `schema/protocol/` (`attempt-request`, `attempt-reply`). Those calls run inside the worker today,
 so none of them crosses this channel; a runner in another language would send them, numbered by
-`id`, and read reeval's replies.
+`id`, and read reeval's replies. Around them, reeval sends `attempt-start` (`c.attempt`, and the
+file and body to run) and, if the attempt is aborted, `attempt-abort` (as `c.signal` aborts, on
+a timeout or a cancelled run); the runner answers with `attempt-done`, carrying what the body
+threw, if anything. Nothing starts with `attempt-start`: the sandbox and the agent session start
+on the body's first call that needs them (`send`, `exec`, `readFile` or `writeFile`), so the body's
+own code runs first. Calls sent at once share that one start; if it fails, each of them gets an
+error reply and the attempt fails as an infra error.
 
 ## Versions
 

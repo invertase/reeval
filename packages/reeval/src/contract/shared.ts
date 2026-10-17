@@ -149,12 +149,12 @@ export function dataProblem(
     return `${what}'s ${field} is ${oneOf(issue.options as unknown[])} (got ${got(v)})`
   }
   if (issue.code === 'invalid_union') {
-    return `${what}'s ${field || 'value'} matches none of its forms (got ${got(v)})`
+    return `${field ? `${what}'s ${field}` : what} matches none of its forms (got ${got(v)})`
   }
   if (issue.code === 'unrecognized_keys') {
     const near = closest(issue.keys[0] as string, keysAt(v as Record<string, unknown>))
     const hint = near ? `. Did you mean "${near}"?` : ''
-    return `${what}'s ${field || 'value'} has an unknown key "${issue.keys[0]}"${hint}`
+    return `${field ? `${what}'s ${field}` : what} has an unknown key "${issue.keys[0]}"${hint}`
   }
   return `${what}'s ${genericProblem('', issue, value)}`
 }

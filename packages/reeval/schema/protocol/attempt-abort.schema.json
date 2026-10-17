@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from AttemptAbort in src/contract/attempt.ts by `pnpm schema:update`; don't edit. reeval's message to a runner when the attempt is aborted, as c.signal aborts.",
+  "title": "AttemptAbort",
+  "$ref": "#/$defs/AttemptAbort",
+  "$defs": {
+    "AttemptAbort": {
+      "description": "reeval to the runner: the attempt was aborted, as `c.signal` aborts. Calls in flight reply with errors; the runner should stop the body and send `done`.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "description": "reeval's sentence, e.g. `Eval timed out after 600s`.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "`timeout`: the eval's `timeout` ran out. `cancelled`: the run was stopped.",
+          "type": "string",
+          "enum": ["timeout", "cancelled"]
+        },
+        "type": {
+          "type": "string",
+          "const": "abort"
+        }
+      },
+      "required": ["message", "reason", "type"],
+      "additionalProperties": false
+    }
+  }
+}

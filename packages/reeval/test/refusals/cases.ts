@@ -5,7 +5,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseYamlConfig, resolveConfig, resolveConfigData } from '../../src/config.ts'
-import { attemptRequestProblem } from '../../src/contract/attempt.ts'
+import {
+  attemptAbortProblem,
+  attemptDoneProblem,
+  attemptRequestProblem,
+  attemptStartProblem,
+} from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
@@ -72,6 +77,25 @@ const request =
     const problem = attemptRequestProblem({ id, call })
     if (problem) throw new UsageError(problem)
   }
+const lifecycle = (problemOf: (value: unknown) => string | undefined, value: unknown) => () => {
+  const problem = problemOf(value)
+  if (problem) throw new UsageError(problem)
+}
+const cell = {
+  key: 'fake-plain-docker-98d88a',
+  harness: 'fake',
+  environment: 'plain',
+  sandbox: 'docker',
+  role: 'control',
+}
+const start = (o: object = {}) =>
+  lifecycle(attemptStartProblem, {
+    type: 'start',
+    attempt: { id: 'a1b2', cell, n: 1 },
+    file: 'evals/greet.eval.ts',
+    body: 'greets',
+    ...o,
+  })
 const expectCall = (o: object = {}) => ({
   op: 'expect',
   subject: { attempt: true },
@@ -847,6 +871,56 @@ environment:
         evalNode({ family: { name: 'case %#', case: 1, cases: 2 } }),
         { type: 'todo', name: 'later' },
       ]),
+    ],
+  ],
+  lifecycle: [
+    ['start without its attempt', start({ attempt: undefined })],
+    ['start with run 0', start({ attempt: { id: 'a1b2', cell, n: 0 } })],
+    ['start with a cell typo', start({ attempt: { id: 'a', cell: { ...cell, rol: 'x' }, n: 1 } })],
+    [
+      'start with an unknown role',
+      start({ attempt: { id: 'a', cell: { ...cell, role: 'arm' }, n: 1 } }),
+    ],
+    ['start with an empty body', start({ body: '' })],
+    [
+      'abort with an unknown reason',
+      lifecycle(attemptAbortProblem, { type: 'abort', reason: 'oom', message: 'x' }),
+    ],
+    [
+      'abort without a message',
+      lifecycle(attemptAbortProblem, { type: 'abort', reason: 'timeout' }),
+    ],
+    ['done with a string error', lifecycle(attemptDoneProblem, { type: 'done', error: 'boom' })],
+    [
+      'done with an error without a message',
+      lifecycle(attemptDoneProblem, { type: 'done', error: { name: 'Error' } }),
+    ],
+    [
+      'done with a typo',
+      lifecycle(attemptDoneProblem, { type: 'done', eror: { name: 'E', message: 'm' } }),
+    ],
+    ['good: start', start()],
+    [
+      'good: start for a variant',
+      start({
+        attempt: { id: 'a', cell: { ...cell, role: 'variant', variant: 'with-skill' }, n: 2 },
+      }),
+    ],
+    [
+      'good: abort',
+      lifecycle(attemptAbortProblem, {
+        type: 'abort',
+        reason: 'timeout',
+        message: 'Eval timed out after 600s',
+      }),
+    ],
+    ['good: done', lifecycle(attemptDoneProblem, { type: 'done' })],
+    [
+      'good: done with an error',
+      lifecycle(attemptDoneProblem, {
+        type: 'done',
+        error: { name: 'AssertionError', message: 'expected 1 to be 2', stack: 'at …' },
+      }),
     ],
   ],
   protocol: [

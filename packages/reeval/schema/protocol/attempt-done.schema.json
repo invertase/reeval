@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from AttemptDone in src/contract/attempt.ts by `pnpm schema:update`; don't edit. A runner's message when the eval's body has finished, with what it threw.",
+  "title": "AttemptDone",
+  "$ref": "#/$defs/AttemptDone",
+  "$defs": {
+    "AttemptDone": {
+      "description": "The runner to reeval: the eval's body has finished. The attempt's checks and record follow.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "What the body threw, if it threw. A failed `expect` (not soft) is one.",
+          "$ref": "#/$defs/AttemptError"
+        },
+        "type": {
+          "type": "string",
+          "const": "done"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    "AttemptError": {
+      "description": "Why a call failed, in reeval's words.",
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "name": {
+          "description": "The error's class, e.g. `UsageError` or `AssertionError`.",
+          "type": "string"
+        }
+      },
+      "required": ["message", "name"],
+      "additionalProperties": {}
+    }
+  }
+}
