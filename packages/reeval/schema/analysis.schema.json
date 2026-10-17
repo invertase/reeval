@@ -38,6 +38,7 @@
           "type": "string"
         },
         "verify": {
+          "description": "An `reeval` command that shows the effect; null when the model's didn't parse as reeval's CLI.",
           "anyOf": [
             {
               "type": "null"
@@ -48,6 +49,7 @@
           ]
         },
         "verifyProblem": {
+          "description": "Why the model's verify command was rejected.",
           "type": "string"
         }
       },
@@ -79,6 +81,7 @@
           "type": "string"
         },
         "unverifiedNumbers": {
+          "description": "Numbers in the text that no cited fact or evidence contains.",
           "type": "array",
           "items": {
             "type": "string"
@@ -142,6 +145,7 @@
       "type": "object",
       "properties": {
         "cites": {
+          "description": "Fact (`F3`), evidence (`E2`, `E2:L39`), attempt (`r2/scaffold/reeval-good#1`) or check ids.",
           "type": "array",
           "items": {
             "type": "string"
@@ -151,6 +155,7 @@
           "$ref": "#/$defs/Confidence"
         },
         "quotes": {
+          "description": "Exact spans from the cited evidence; a claim whose quote isn't there is dropped.",
           "type": "array",
           "items": {
             "type": "string"
@@ -160,6 +165,7 @@
           "type": "string"
         },
         "unverifiedNumbers": {
+          "description": "Numbers in the text that no cited fact or evidence contains.",
           "type": "array",
           "items": {
             "type": "string"
@@ -175,9 +181,11 @@
           "$ref": "#/$defs/AnalysisBody"
         },
         "anchor": {
+          "description": "The run the analysis belongs to: the scope's head.",
           "type": "string"
         },
         "attempts": {
+          "description": "Short attempt ids used in citations, and where each attempt is.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -201,6 +209,7 @@
           "type": "string"
         },
         "cited": {
+          "description": "Each cited fact or evidence id, summarised in one line.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -212,6 +221,7 @@
           "type": "string"
         },
         "error": {
+          "description": "Why `analysis.agent`'s run summary failed; its `analysis` is then empty. `reeval analyze` treats a cached one as a miss and calls the model again.",
           "type": "string"
         },
         "inputs": {
@@ -326,6 +336,7 @@
       "type": "object",
       "properties": {
         "base": {
+          "description": "Resolved once, so a nearer ancestor recorded later doesn't change what this analysed.",
           "anyOf": [
             {
               "type": "null"
@@ -336,6 +347,7 @@
           ]
         },
         "evals": {
+          "description": "An eval filter (substring of the eval id), or null for every eval.",
           "anyOf": [
             {
               "type": "null"
@@ -358,12 +370,14 @@
       "type": "object",
       "properties": {
         "citations": {
+          "description": "Citations checked, and those that named nothing in the digest.",
           "type": "number"
         },
         "commands": {
           "type": "number"
         },
         "dropped": {
+          "description": "Claims, anomalies and actions dropped for a bad citation, invented quote, wrong judge score, or rejected verify.",
           "type": "number"
         },
         "invalid": {

@@ -5,9 +5,11 @@
   "$ref": "#/$defs/AnalysisNote",
   "$defs": {
     "AnalysisNote": {
+      "description": "`analysis.agent`'s note on one eval and harness of a run, written once that harness's attempts finish: `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.",
       "type": "object",
       "properties": {
         "attempts": {
+          "description": "The attempt ids (`<cell key>#<n>`) the note covers.",
           "type": "array",
           "items": {
             "type": "string"
@@ -17,12 +19,14 @@
           "type": "string"
         },
         "error": {
+          "description": "Why the call failed; the run's outcomes don't change.",
           "type": "string"
         },
         "evalId": {
           "type": "string"
         },
         "harness": {
+          "description": "The harness id, as in the cell key.",
           "type": "string"
         },
         "kind": {
@@ -48,6 +52,7 @@
           "const": 1
         },
         "text": {
+          "description": "Empty when the call failed.",
           "type": "string"
         },
         "usage": {

@@ -9,4 +9,4 @@ image docker · claude-code · 1 evals
 image docker · 1 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
 image docker · pi · 1 evals
-  base  reeval-sandbox:pi-0.2.6  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:pi-0.2.7  (reeval's image: built when missing or when its base changed)

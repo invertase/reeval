@@ -5,9 +5,11 @@
   "$ref": "#/$defs/CliInvocation",
   "$defs": {
     "CliInvocation": {
+      "description": "One `reeval` command, as the CLI logs it when it ends: redacted and path-scrubbed on disk too.",
       "type": "object",
       "properties": {
         "argv": {
+          "description": "The arguments after `reeval`, with every flag value and argument replaced by `<value>` or `<arg>`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -17,6 +19,7 @@
           "type": "string"
         },
         "command": {
+          "description": "`run`, `studio build`, …; null when the command line didn't parse.",
           "anyOf": [
             {
               "type": "null"
@@ -30,6 +33,7 @@
           "type": "number"
         },
         "error": {
+          "description": "What ended the command with an error: a usage error, one reeval expects, or a crash.",
           "anyOf": [
             {
               "type": "null"
@@ -68,6 +72,7 @@
           "type": "string"
         },
         "runId": {
+          "description": "The run `reeval run` wrote, when it got that far.",
           "anyOf": [
             {
               "type": "null"
@@ -78,6 +83,7 @@
           ]
         },
         "unhandledErrors": {
+          "description": "Errors the run reported that no eval owned.",
           "type": "array",
           "items": {
             "type": "string"
