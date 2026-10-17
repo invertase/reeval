@@ -1,0 +1,16 @@
+{
+  "threshold above 1": "UsageError: judge.threshold must be between 0 and 1 (got 2) in evals/a.eval.ts › e",
+  "threshold a string": "UsageError: judge.threshold must be between 0 and 1 (got 0.5) in evals/a.eval.ts › e",
+  "maxConcurrent 0": "UsageError: maxConcurrent must be a whole number of at least 1 (got 0) for judge in evals/a.eval.ts › e",
+  "include not a list": "UsageError: judge.include must be a list of non-empty strings (got \"src/\") in evals/a.eval.ts › e",
+  "include with an empty pattern": "UsageError: judge.include must be a list of non-empty strings (got [\"src/\",\" \"]) in evals/a.eval.ts › e",
+  "files not a list": "UsageError: judge.files must be a list of non-empty strings (got \"a.ts\") in evals/a.eval.ts › e",
+  "a typo": null,
+  "good": null,
+  "config: model without a provider": "UsageError: config.judge: Judge model \"jev\" needs a provider prefix, e.g. \"typesafe-ai/jev-1.13.0\" or \"google/jev\"",
+  "config: model an object": "UsageError: config.judge.model must be a \"provider/model\" string or fakeJudge(). Pass model objects per group, eval or call instead.",
+  "config: fake judge score function": "UsageError: config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.",
+  "config: threshold above 1": "UsageError: judge.threshold must be between 0 and 1 (got 1.5) in reeval.config.ts",
+  "config: files with an empty path": "UsageError: judge.files must be a list of non-empty strings (got [\"\"]) in reeval.config.ts",
+  "config: good": null
+}

@@ -4,6 +4,7 @@
 import { join } from 'node:path'
 import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
 import { PACKAGE_DIR, type PersistedShape, type PlanShape, SHAPES } from './shapes.ts'
+import { withZodDefs } from './zod.ts'
 
 export type Schema = {
   /** The TSDoc comment of the type alias, interface or property it was generated from. */
@@ -180,7 +181,10 @@ export function generate(
         $comment: `Generated from ${shape.type} in ${shape.file} by \`pnpm schema:update\`; don't edit. ${shape.where}.`,
         title: shape.type,
         $ref: root.$ref ?? '',
-        $defs: Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b))),
+        // Persisted shapes stay generated from their types; plan shapes take the contract's defs.
+        $defs: SHAPES.includes(shape as PersistedShape)
+          ? Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b)))
+          : withZodDefs(Object.fromEntries(gen.defs)),
       }
       const field = 'versionField' in shape ? shape.versionField : undefined
       const version = field && resolve(doc, root).properties?.[field]
