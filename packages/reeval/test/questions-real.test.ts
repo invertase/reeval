@@ -158,7 +158,7 @@ test('examples/hello --profile questions: every pair is voted in both orders; no
   for (const c of claims) {
     assert.ok(c.cites.length > 0, 'every kept claim cites something')
     for (const id of c.cites.filter((x) => /^r\d+\//.test(x))) {
-      assert.ok(known.has(id.replace(/:check\d+$/, '')), `${id} is an attempt of the run`)
+      assert.ok(known.has(id.replace(/:exec\d+$/, '')), `${id} is an attempt of the run`)
     }
   }
   const analyze = await runCli(

@@ -51,6 +51,7 @@ import { parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 import { REAL_HARNESSES, type RealAttempt, realAttempts } from './support/real-runs.ts'
+import { type StudyOptions, studyFiles } from './support/study.ts'
 
 type Row = Record<string, unknown>
 const FIXTURES = join(pkgRoot, 'test/fixtures/analysis')
@@ -796,6 +797,7 @@ describe('reeval analyze', () => {
     const digest: AnalysisDigest = {
       digestVersion: 5,
       scope: { kind: 'run', head: 'r1', base: null, evals: null },
+      frame: 'gate',
       runs: { r1: { runId: 'r1', commit: null, branch: null, status: 'complete', summary: '0/1' } },
       setup: {
         harnesses: ['fake'],
@@ -1258,6 +1260,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
     const digest: AnalysisDigest = {
       digestVersion: 3,
       scope: { kind: 'run', head: 'run1', base: null, evals: null },
+      frame: 'gate',
       runs: {},
       setup: { harnesses: [], judge: '', environments: [], evals: [] },
       rules: RULES,
@@ -1275,8 +1278,8 @@ evaluate('greets', { runs: 1 }, async (c) => {
           outcome: 'pass',
           tools: 1,
           agentS: 1,
-          judge: 0.87,
-          checks: 1,
+          judges: { tidy: 0.87 },
+          execs: 1,
           artifacts: null,
         },
       },
@@ -1285,7 +1288,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
           id: 'F1',
           kind: 'failure',
           attempt,
-          judge: { question: 'Is it tidy?', score: 0.87, threshold: 0.8 },
+          judges: [{ label: 'tidy', question: 'Is it tidy?', score: 0.87, threshold: 0.8 }],
         },
         { id: 'F2', kind: 'saturation', evals: [], saturated: ['greets'] },
       ],
@@ -2310,4 +2313,102 @@ describe("analysis.agent: the run's summary after reeval run", () => {
       'the same key, now without the error',
     )
   })
+})
+
+/** A study's digest: the run, then `reeval analyze --context` on it alone. */
+async function studyDigest(name: string, options: StudyOptions = {}) {
+  const p = await project(name, studyFiles(options))
+  const run = await runCli(p.dir)
+  assert.equal(run.code, options.gate === 'none' ? 0 : 1, run.stdout + run.stderr)
+  return { p, run, ...(await digestOf(p.dir, ['--vs', 'none'])) }
+}
+
+describe('a study: several arms, every cell ungated', () => {
+  test('the digest frames it as a study: criteria say what differs, never-met labels once, evidence for every arm', async () => {
+    const { p, digest, text } = await studyDigest('study-digest', {
+      gate: 'none',
+      instructions: 'Compare both skills against no skill and against each other.',
+      output: `(d) => {
+        const criteria = d.facts.find((f) => f.kind === 'criteria')
+        return { tldr: criteria.rows.map((r) => r.label).join(', ') + ' separates the arms; ' + criteria.neverMet.join(' and ') + ' are never met in any arm.', whatHappened: [{ text: 'Social OAuth separates the arms.', cites: [criteria.id], confidence: 'high' }], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'medium', why: 'n = 3' } }
+      }`,
+    })
+    const d = digest as Digest & { frame: string }
+    assert.equal(d.frame, 'study')
+    const criteria = digest.facts.find((f) => f.kind === 'criteria')
+    assert.deepEqual(criteria?.rows, [
+      {
+        label: 'Social OAuth',
+        cells: {
+          control: '3/3 · 0.94',
+          'current-skill': '0/3 · 0.12',
+          'new-skill': '3/3 · 0.94',
+        },
+      },
+    ])
+    assert.deepEqual(criteria?.neverMet, ['Anonymous upgrade', 'MFA'])
+    assert.deepEqual(criteria?.alwaysMet, ['build', 'Email sign-in'])
+    const judge = digest.facts.find((f) => f.kind === 'judge')
+    assert.equal(judge?.verdicts, 36)
+    assert.equal(judge?.failures, undefined, 'which labels failed where is in criteria')
+    const current = digest.attempts['r1/auth/current-skill#1']
+    assert.deepEqual(
+      [current?.checks, current?.failed, current?.judges, current?.execs],
+      [
+        '2/5',
+        ['Social OAuth', 'Anonymous upgrade', 'MFA'],
+        { 'Email sign-in': 0.94, 'Social OAuth': 0.12, 'Anonymous upgrade': 0.12, MFA: 0.12 },
+        1,
+      ],
+    )
+    const failures = digest.facts.filter((f) => f.kind === 'failure')
+    assert.deepEqual(
+      failures.map((f) => f.attempt),
+      ['r1/auth/control#1', 'r1/auth/current-skill#1', 'r1/auth/new-skill#1'],
+      'one failure per arm, not eight from the first',
+    )
+    assert.deepEqual(failures[1]?.failed, ['Social OAuth', 'Anonymous upgrade', 'MFA'])
+    assert.deepEqual(
+      digest.evidence.filter((e) => e.ref.startsWith('attempt:')).map((e) => e.ref),
+      [
+        'attempt:r1/auth/control#1',
+        'attempt:r1/auth/current-skill#1',
+        'attempt:r1/auth/new-skill#1',
+      ],
+      'evidence for every arm, the current skill failing the label that separates it',
+    )
+    assert.ok(
+      digest.evidence[1]?.lines.includes('judge Social OAuth: Does it implement social sign-in?'),
+    )
+    assert.match(text, /This run is a study: every cell is ungated/)
+    assert.ok(
+      text.indexOf('## Project instructions') < text.indexOf('## How reeval decided'),
+      'the project instructions come before the rules',
+    )
+    const analyzed = await runCli(p.dir, ['analyze', '--vs', 'none'])
+    assert.equal(analyzed.code, 0, analyzed.stderr)
+    assert.match(
+      analyzed.stdout,
+      /Social OAuth separates the arms; Anonymous upgrade and MFA are never met in any arm\./,
+    )
+  })
+
+  test('canary: the same arms with gated variants are not a study', async () => {
+    const { digest, text } = await studyDigest('study-gated', { gate: 'variants' })
+    assert.equal((digest as Digest & { frame: string }).frame, 'gate')
+    assert.doesNotMatch(text, /This run is a study/)
+    assert.equal(
+      digest.facts.filter((f) => f.kind === 'failure').length,
+      8,
+      'a gate lists up to eight failures',
+    )
+  })
+})
+
+test('the prompt and rules say a study compares arms, and a label no arm meets explains nothing', () => {
+  assert.match(SYSTEM_PROMPT, /When the digest's frame is study/)
+  assert.match(SYSTEM_PROMPT, /never make one a why/)
+  assert.match(SYSTEM_PROMPT, /setup, rules and cli are context, not citable/)
+  assert.ok(RULES.some((r) => r.includes("can't explain a difference between arms")))
+  assert.ok(RULES.some((r) => r.startsWith('frame study means')))
 })
