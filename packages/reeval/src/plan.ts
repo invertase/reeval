@@ -118,7 +118,10 @@ export async function buildPlan(options: {
   const descriptors = new Map<string, HarnessDescriptor>()
   const harnesses = new Set<string>()
   // A filter can leave out some of an eval's cells: each row counts what it actually plans.
-  const counted = new Map<string, { harnesses: Set<string>; variants: Set<string>; n: number }>()
+  const counted = new Map<
+    string,
+    { harnesses: Set<string>; variants: Set<string>; n: number; gated: boolean }
+  >()
   let attempts = 0
   let estimateMs = 0
   for (const { id, attempt } of planned) {
@@ -142,8 +145,14 @@ export async function buildPlan(options: {
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
     harnesses.add(attempt.cell.harness)
-    const row = counted.get(id) ?? { harnesses: new Set(), variants: new Set(), n: 0 }
+    const row = counted.get(id) ?? {
+      harnesses: new Set(),
+      variants: new Set(),
+      n: 0,
+      gated: false,
+    }
     row.harnesses.add(attempt.cell.harness)
+    if (attempt.gate !== 'none') row.gated = true
     if (attempt.cell.variant !== undefined) row.variants.add(attempt.cell.variant)
     row.n++
     counted.set(id, row)
@@ -177,7 +186,10 @@ export async function buildPlan(options: {
     sandboxWarnings: [...sandboxWarnings.values()].sort(
       (a, b) => Number(a.kind !== 'root') - Number(b.kind !== 'root'),
     ),
-    hints: [...gateHint([...rows.values()]), ...effortHint([...rows.values()])],
+    hints: [
+      ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
+      ...effortHint([...rows.values()]),
+    ],
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
@@ -233,6 +245,7 @@ function questionLines(members: PlanRow[], questionModel: string | null): string
 }
 
 /** One line when evals run several times under the default gate, which every attempt must pass. */
+/** Rows with a gated cell left at the default gate; a study whose cells are all `'none'` has none. */
 function gateHint(rows: PlanRow[]): string[] {
   const n = rows.filter((r) => !r.plan.skip && r.plan.runs > 1 && r.plan.gate === undefined).length
   if (n === 0) return []

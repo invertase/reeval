@@ -211,6 +211,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'gate.hint',
+    area: 'Config and selection',
+    name: "The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'`",
+    plan: ['compare/study', 'compare/control-and-variants'],
+    tests: [
+      options(
+        "'all' by default, { passRate } per eval or group, with a hint when runs > 1 and no gate",
+      ),
+    ],
+  },
+  {
     id: 'profiles',
     area: 'Config and selection',
     name: 'Profiles: `defaults`, `limit`, `pin`, selection and typos',
