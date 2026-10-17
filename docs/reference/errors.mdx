@@ -38,6 +38,7 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` | Use a model string in the config. |
 | `Unknown judge option "include" in reeval.config.ts. Did you mean "state.diff"?` | Use the suggested key. See [Judges](/reference/judges#what-the-judge-is-given). |
 | `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` | Use the suggested key. A bad value names what the key takes, such as `judge.state.turns must be 'last' or 'all' (got "first")`. |
+| `judge.providerOptions maps each provider to an object of JSON values, …` | Key `providerOptions` by provider, each an object: `{ google: { thinkingConfig: { thinkingBudget: 0 } } }`. |
 | `The defineConfig callback in reeval.config.ts returned a Promise. …` | Make the callback synchronous. |
 | `Config file not found: nope.ts` | Check the `--config` path. |
 | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.` | `reeval run` and `reeval image build` need a config file. Run `reeval init`, or pass `--config`. A parent-directory config still counts. |

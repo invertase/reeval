@@ -3,6 +3,7 @@ import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { configDataProblem } from './contract/config.ts'
+import { judgeProblem } from './contract/judge.ts'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import { environmentFrom, helpersFor, isEnvironment, isSecret } from './environment.ts'
@@ -17,7 +18,6 @@ import {
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
-import { judgeProblem } from './judge/state-options.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
@@ -599,26 +599,9 @@ function resolveJudge(
   judge: ReevalConfig['judge'] = {},
   where = 'config.judge',
 ): ResolvedConfig['judge'] {
-  const { model } = judge
-  if (typeof model === 'string') {
-    const problem = checkModelString(model)
-    if (problem) throw new UsageError(`${where}: ${problem}`)
-  } else if (model !== undefined && (typeof model !== 'object' || model?.kind !== 'fake-judge')) {
-    throw new UsageError(
-      `${where}.model must be a "provider/model" string or fakeJudge(). ` +
-        'Pass model objects per group, eval or call instead.',
-    )
-  } else if (model !== undefined && typeof model.score !== 'number') {
-    throw new UsageError(
-      `${where}.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.`,
-    )
-  }
-  const problem = judgeProblem(judge, ` in ${where}`)
+  const problem = judgeProblem(judge, { at: 'config', where })
   if (problem) throw new UsageError(problem)
   const threshold = judge.threshold ?? DEFAULT_THRESHOLD
-  if (!(threshold >= 0 && threshold <= 1)) {
-    throw new UsageError(`${where}.threshold must be between 0 and 1`)
-  }
   return { ...judge, threshold }
 }
 

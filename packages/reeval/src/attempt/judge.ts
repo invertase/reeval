@@ -1,3 +1,4 @@
+import { judgeProblem } from '../contract/judge.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { workspaceFiles } from '../diff.ts'
 import { getRunContext, SUBJECT } from '../engine/runtime.ts'
@@ -14,7 +15,7 @@ import { judgeDiff } from '../judge/patch.ts'
 import { isApiError, type RetriedError } from '../judge/retry.ts'
 import { withInputSize } from '../judge/size.ts'
 import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
-import { judgeProblem, mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
+import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -138,14 +139,7 @@ export function judgeCaller(
         `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
       )
     }
-    const { threshold } = call
-    if (
-      threshold !== undefined &&
-      !(typeof threshold === 'number' && threshold >= 0 && threshold <= 1)
-    ) {
-      throw new Error(`c.judge() threshold must be between 0 and 1 (got ${String(threshold)})`)
-    }
-    const problem = judgeProblem(call, ' in c.judge()', true)
+    const problem = judgeProblem(call, { at: 'call' })
     if (problem) throw new Error(problem)
     const badArts = badJudgeArtifacts(call.artifacts)
     if (badArts) throw new Error(`c.judge() artifacts ${badArts}`)

@@ -14,11 +14,18 @@
   "state.turns unknown": "UsageError: judge.state.turns must be 'last' or 'all' (got \"first\") in evals/a.eval.ts › e",
   "state.checks a string": "UsageError: judge.state.checks must be true, false or a list of commands (got \"npm test\") in evals/a.eval.ts › e",
   "a typo": "UsageError: Unknown judge option \"treshold\" in evals/a.eval.ts › e. Did you mean \"threshold\"?",
+  "not an object": "UsageError: judge must be an object such as { threshold: 0.8 } (got \"google/gemini-3.8-flash\") in evals/a.eval.ts › e",
+  "maxConcurrent fractional": "UsageError: maxConcurrent must be a whole number of at least 1 (got 1.5) for judge in evals/a.eval.ts › e",
+  "providerOptions not an object": "UsageError: judge.providerOptions maps each provider to an object of JSON values, e.g. { google: { thinkingConfig: { thinkingBudget: 0 } } } (got \"fast\") in evals/a.eval.ts › e",
+  "providerOptions with a non-object provider": "UsageError: judge.providerOptions maps each provider to an object of JSON values, e.g. { google: { thinkingConfig: { thinkingBudget: 0 } } } (got {\"google\":\"fast\"}) in evals/a.eval.ts › e",
+  "providerOptions good": null,
   "good": null,
   "config: model without a provider": "UsageError: config.judge: Judge model \"jev\" needs a provider prefix, e.g. \"typesafe-ai/jev-1.13.0\" or \"google/jev\"",
   "config: model an object": "UsageError: config.judge.model must be a \"provider/model\" string or fakeJudge(). Pass model objects per group, eval or call instead.",
   "config: fake judge score function": "UsageError: config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.",
   "config: threshold above 1": "UsageError: judge.threshold must be between 0 and 1 (got 1.5) in reeval.config.ts",
+  "config: fake judge": null,
+  "config: a typo": "UsageError: Unknown judge option \"modle\" in reeval.config.ts. Did you mean \"model\"?",
   "config: state.contents with an empty path": "UsageError: judge.state.contents must be a list of paths or patterns (got [\"\"]) in reeval.config.ts",
   "config: good": null
 }
