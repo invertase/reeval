@@ -4,6 +4,7 @@ import {
   listenForCaptureWait,
   resolveCaptureCall,
   resolveCaptureWait,
+  trackNetwork,
 } from '../src/capture/index.ts'
 
 const viewport = { width: 1280, height: 720 }
@@ -105,4 +106,40 @@ test('listenForCaptureWait load timeout names load', async () => {
   const page = listenForCaptureWait(cdp, 'load')
   page.arm()
   await assert.rejects(page.ready(undefined, 20), /c\.capture\(\) timed out waiting for load/)
+})
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+test('trackNetwork quiet waits out a request that starts inside the quiet window', async () => {
+  const cdp = fakeCdp()
+  const network = trackNetwork(cdp, 100)
+  const started = Date.now()
+  const quiet = network.quiet(2_000)
+  await sleep(60)
+  cdp.emit('Network.requestWillBeSent', { requestId: 'late' })
+  await sleep(30)
+  cdp.emit('Network.loadingFinished', { requestId: 'late' })
+  await quiet
+  assert.ok(Date.now() - started >= 190, 'the quiet window restarts when the request ends')
+})
+
+test('trackNetwork quiet holds while more than two requests are in flight', async () => {
+  const cdp = fakeCdp()
+  const network = trackNetwork(cdp, 50)
+  for (const requestId of ['a', 'b', 'c']) cdp.emit('Network.requestWillBeSent', { requestId })
+  let settled = false
+  const quiet = network.quiet(2_000).then(() => {
+    settled = true
+  })
+  await sleep(120)
+  assert.equal(settled, false)
+  cdp.emit('Network.loadingFailed', { params: { requestId: 'c' } })
+  await quiet
+})
+
+test('trackNetwork quiet times out naming networkAlmostIdle', async () => {
+  const cdp = fakeCdp()
+  const network = trackNetwork(cdp, 50)
+  for (const requestId of ['a', 'b', 'c']) cdp.emit('Network.requestWillBeSent', { requestId })
+  await assert.rejects(network.quiet(30), /c\.capture\(\) timed out waiting for networkAlmostIdle/)
 })

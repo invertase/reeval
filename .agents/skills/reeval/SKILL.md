@@ -160,8 +160,9 @@ group('hello', () => {
   `artifacts/<name>.png`. The first argument is the container port or a `ServeHandle`;
   default `path` is `/`, default `name` comes from the path. `wait` is once, before the
   first model shot or the saved PNG (`'load'`, `'idle'`, or `{ ms }`). `instructions` is
-  a journey of goal strings and `{ wait }` beats — no selectors; the model clicks
-  pixels. `viewport: 'full-page'` is the saved shot (default window + tall PNG).
+  a journey of goal strings and `{ wait }` beats (`{ wait: 'idle' }` waits for the
+  network to go quiet from that beat, so it covers a click that only fetches) — no
+  selectors; the model clicks pixels. `viewport: 'full-page'` is the saved shot (default window + tall PNG).
   `capture.model` cascades like `question`; the call may override. Default is the
   analysis model when it accepts images; never Jev. Fixture evals import
   `fakeInstructions` from `reeval/testing` and pass it as `instructions`.

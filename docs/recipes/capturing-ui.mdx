@@ -86,7 +86,9 @@ await c.capture(server, {
 ```
 
 Top-level `wait` runs once, before the first model shot. `{ wait }` between
-strings is the authored beat. `viewport: 'full-page'` keeps the default
+strings is the authored beat. A `{ wait: 'idle' }` beat waits from that moment
+until at most two requests have been in flight for 500ms, so it also covers a
+click that only fetches. `viewport: 'full-page'` keeps the default
 window and saves a tall PNG. Typed secrets are plain text: they can appear
 in the PNG and in debug.
 

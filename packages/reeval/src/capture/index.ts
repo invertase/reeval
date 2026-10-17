@@ -33,6 +33,7 @@ export {
   pickPageDebuggerUrl,
   removeChromeProfile,
   screenshotWithChrome,
+  trackNetwork,
   waitForPage,
   waitTimeout,
   withChrome,
