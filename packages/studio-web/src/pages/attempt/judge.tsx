@@ -150,9 +150,11 @@ export function Judge({ record, attempt }: { record: RunRecord; attempt: Attempt
                       <span className="font-medium">{input.question}</span>
                       <span className="ml-2 font-mono text-muted-foreground">{input.model}</span>
                     </div>
+                    {input.sees ? <Sees sees={input.sees} /> : null}
                     {Object.entries(input.state).map(([k, v]) => (
                       <Field key={k} name={k} value={v} />
                     ))}
+                    {input.dropped?.length ? <Field name="Left out" value={input.dropped} /> : null}
                   </div>
                 ))}
               </div>

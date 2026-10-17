@@ -229,6 +229,8 @@ describe('studio in a browser', () => {
     await page.getByRole('button', { name: /greet\.test\.js/ }).waitFor()
     await page.getByRole('tab', { name: /^Judge/ }).click()
     await page.getByText('What the judge saw').waitFor()
+    await page.getByText('task · output · files · diff · transcript (tools)').first().waitFor()
+    await page.getByText('off: contents, checks').first().waitFor()
     await page.getByRole('tab', { name: /^State/ }).click()
     await page.getByText('Package versions').waitFor()
     assert.equal(
