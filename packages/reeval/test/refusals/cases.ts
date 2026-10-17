@@ -243,6 +243,14 @@ export const CASES: Record<string, Case[]> = {
     ['state.turns unknown', options({ judge: { state: { turns: 'first' } } })],
     ['state.checks a string', options({ judge: { state: { checks: 'npm test' } } })],
     ['a typo', options({ judge: { treshold: 0.5 } })],
+    ['not an object', options({ judge: 'google/gemini-3.8-flash' })],
+    ['maxConcurrent fractional', options({ judge: { maxConcurrent: 1.5 } })],
+    ['providerOptions not an object', options({ judge: { providerOptions: 'fast' } })],
+    [
+      'providerOptions with a non-object provider',
+      options({ judge: { providerOptions: { google: 'fast' } } }),
+    ],
+    ['providerOptions good', options({ judge: { providerOptions: { google: { a: [1] } } } })],
     [
       'good',
       options({
@@ -260,6 +268,8 @@ export const CASES: Record<string, Case[]> = {
       config({ judge: { model: { kind: 'fake-judge', score: () => 1 } } }),
     ],
     ['config: threshold above 1', config({ judge: { threshold: 1.5 } })],
+    ['config: fake judge', config({ judge: { model: { kind: 'fake-judge', score: 0.9 } } })],
+    ['config: a typo', config({ judge: { modle: 'google/gemini-3.8-flash' } })],
     ['config: state.contents with an empty path', config({ judge: { state: { contents: [''] } } })],
     ['config: good', config({ judge: { model: 'google/gemini-3.8-flash', threshold: 0.7 } })],
   ],

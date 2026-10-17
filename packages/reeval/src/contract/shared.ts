@@ -3,10 +3,24 @@
 // one sentence per refusal.
 import { z } from 'zod'
 import { parseDuration } from '../duration.ts'
-import type { Duration } from '../types.ts'
+import type { Duration, JSONValue } from '../types.ts'
 
 /** A string with something other than whitespace in it. */
 export const nonEmpty = () => z.string().regex(/\S/)
+
+// Described through the registry, not `.describe()`: a described copy would leave the recursion
+// pointing at an unnamed schema in the JSON Schema.
+export const jsonValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
+  ]),
+)
+z.globalRegistry.add(jsonValueSchema, { description: 'Any JSON value.' })
 
 // More than zero, so at least one non-zero digit.
 const DURATION = /^(?=.*[1-9])\d+(\.\d+)?(ms|s|m|h)$/
