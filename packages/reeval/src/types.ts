@@ -54,7 +54,12 @@ export type WebEventType = 'web-search' | 'web-fetch'
 export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 
 /** Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`. */
-export type CaptureWindow = { width: number; height: number }
+export type CaptureWindow = {
+  /** In CSS pixels. */
+  width: number
+  /** In CSS pixels. */
+  height: number
+}
 
 /**
  * Author camera. `{ width, height }` is the live window and the saved PNG.
@@ -94,6 +99,7 @@ export type CaptureUse = { model: string } | { fake: CaptureUseScript }
  * pass it as the first argument to `c.capture`.
  */
 export type CaptureOptions = {
+  /** The window and saved PNG size, or `'full-page'`. Default 1280×720. */
   viewport?: Viewport
   /** How long to poll before failing. Default `'60s'`. */
   timeout?: Duration
@@ -197,6 +203,7 @@ export type Turn = TurnData & {
   readFile(path: string): Promise<string | null>
 }
 
+/** Any JSON value. */
 export type JSONValue =
   | null
   | boolean
@@ -239,6 +246,7 @@ export type JudgeArtifactRef = {
  */
 export type FakeJudgeModel = {
   kind: 'fake-judge'
+  /** The score (0–1) every call gets, or a function of the state it would see. */
   score: number | ((state: JudgeState) => number)
 }
 
@@ -250,9 +258,11 @@ export type JudgeModel = string | FakeJudgeModel | { readonly specificationVersi
 
 /** Merged field by field down the cascade, so per-model settings can join as new fields. */
 export type JudgeOptions = {
+  /** The model that grades. */
   model?: JudgeModel
   /** Minimum score (0–1) for a `pass` verdict. */
   threshold?: number
+  /** AI SDK provider options for the judge's calls, keyed by provider. */
   providerOptions?: Record<string, Record<string, JSONValue>>
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
@@ -343,12 +353,14 @@ export type AttemptContext = {
 }
 export type EvalFn = (c: AttemptContext) => Promise<void>
 
+/** A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`. */
 export type FakeHarnessDescriptor = {
   kind: 'fake'
   /** Cell id; defaults to `fake`. */
   id?: string
   /** Files the fake agent writes into the sandbox on every turn. */
   files?: Record<string, string>
+  /** The fake agent's final message on every turn; default `Done.`. */
   text?: string
   /** Simulated turn length, honours the abort signal. */
   delayMs?: number
@@ -586,16 +598,20 @@ export type AgentHarnessDescriptor =
   | GooseHarnessDescriptor
   | PiHarnessDescriptor
   | CodexHarnessDescriptor
+/** The agent an attempt runs: a real harness, or the fake one. */
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
+/** A temp directory on the host instead of a container, made by `fakeSandbox()`. */
 export type FakeSandboxDescriptor = {
   kind: 'fake'
+  /** Cell id; defaults to `fake`. */
   id?: string
   /** Parent directory for the per-eval workspace (defaults to the OS temp dir). */
   dir?: string
   /** The most attempts on this sandbox kind at once, across the run. */
   maxConcurrent?: number
 }
+/** A local Docker container, made by `docker()`. */
 export type DockerSandboxDescriptor = {
   kind: 'docker'
   /** Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash. */
@@ -663,12 +679,22 @@ export type SecretOptions = {
   in?: readonly SubstituteIn[]
 }
 /** `secret.template('Bearer ${TOKEN}')`: host variables substituted into a string, for MCP headers. */
-export type SecretTemplate = { kind: 'secret-template'; template: string }
+export type SecretTemplate = {
+  kind: 'secret-template'
+  /** The string, with `${NAME}` for each host variable to substitute. */
+  template: string
+}
+/** A variable's value: a literal string, or a host secret. */
 export type EnvValue = string | Secret
+/** Environment variables by name. */
 export type EnvVars = Record<string, EnvValue>
 
 /** A file on the host, read when an attempt starts. Made by the `file` helper. */
-export type HostFile = { kind: 'file'; path: string }
+export type HostFile = {
+  kind: 'file'
+  /** Its absolute path on the host. */
+  path: string
+}
 
 /** Options for the `directory` helper. */
 export type DirectoryOptions = {
@@ -686,44 +712,106 @@ export type DirectoryOptions = {
   defaultIgnores?: boolean
 }
 
+/** An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL. */
 export type McpServer =
-  | { kind: 'mcp'; transport: 'stdio'; command: string; args: string[]; env: EnvVars }
   | {
       kind: 'mcp'
+      transport: 'stdio'
+      /** The command that starts the server in the sandbox. */
+      command: string
+      args: string[]
+      /** Variables the server process gets. */
+      env: EnvVars
+    }
+  | {
+      kind: 'mcp'
+      /** Streamable HTTP, or the older SSE transport. */
       transport: 'http' | 'sse'
       url: string
+      /** Request headers, with secrets brokered by the egress gateway. */
       headers: Record<string, string | Secret | SecretTemplate>
     }
 
 /** `harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir. */
 export type SkillPlacement = 'harness' | 'workspace'
 
+/** Skills to place for the agent, made by the `skill` helper. */
 export type SkillSource = { kind: 'skill'; placement: SkillPlacement } & (
-  | { source: 'local'; path: string; only?: string[]; exclude?: string[] }
   | {
-      source: 'git'
-      repo: string
-      ref?: string
-      path?: string
+      source: 'local'
+      /** A host directory with a `SKILL.md`, or a directory of them. */
+      path: string
+      /** The skill names to keep; default every one found. */
       only?: string[]
+      /** Paths in each skill directory to leave out, gitignore-style. */
       exclude?: string[]
     }
-  | { source: 'registry'; id: string; version?: string }
-  | { source: 'npm'; spec: string; path: string; only?: string[]; exclude?: string[] }
+  | {
+      source: 'git'
+      /** As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. */
+      repo: string
+      /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+      ref?: string
+      /** The directory in the repository to read skills from. */
+      path?: string
+      /** The skill names to keep; default every one found. */
+      only?: string[]
+      /** Paths in each skill directory to leave out, gitignore-style. */
+      exclude?: string[]
+    }
+  | {
+      source: 'registry'
+      /** A skills.sh id, `owner/repo@skill`. */
+      id: string
+      /** A git ref of the skill's repository. */
+      version?: string
+    }
+  | {
+      source: 'npm'
+      /** A pinned npm package spec. */
+      spec: string
+      /** The directory in the package to read skills from; default `skills`. */
+      path: string
+      /** The skill names to keep; default every one found. */
+      only?: string[]
+      /** Paths in each skill directory to leave out, gitignore-style. */
+      exclude?: string[]
+    }
   | {
       source: 'inline'
+      /** The skill's name, as in `SKILL.md`'s frontmatter. */
       name: string
+      /** The skill's description, as in `SKILL.md`'s frontmatter. */
       description: string
+      /** The body of `SKILL.md`. */
       content: string
+      /** Other files in the skill directory, by relative path. */
       files: Record<string, string>
     }
 )
 
 /** A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`. */
-export type InstallStep = string | { run: string; timeout?: Duration }
-/** Runs in every attempt before the agent starts, with secrets, outside the eval timeout. */
-/** A shell command, or `{ run, timeout?, cwd? }`; `cwd` is relative to the workspace or absolute. */
-export type SetupStep = string | { run: string; timeout?: Duration; cwd?: string }
+export type InstallStep =
+  | string
+  | {
+      /** The shell command. */
+      run: string
+      timeout?: Duration
+    }
+/**
+ * Runs in every attempt before the agent starts, with secrets, outside the eval timeout: a shell
+ * command, or `{ run, timeout?, cwd? }`.
+ */
+export type SetupStep =
+  | string
+  | {
+      /** The shell command. */
+      run: string
+      /** Default 5m. */
+      timeout?: Duration
+      /** Relative to the workspace, or absolute; default the workspace. */
+      cwd?: string
+    }
 
 /**
  * Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or
@@ -741,6 +829,7 @@ export type GitWorkspace = {
   kind: 'git'
   /** As written: a URL, `github:owner/repo`, or a local path. */
   repo: string
+  /** What reeval fetches: the clone URL, or an absolute path for a local repository. */
   url: string
   /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
   ref?: string
@@ -766,6 +855,7 @@ export type EnvironmentSpec = {
   sandbox?: SandboxDescriptor
   /** The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's. */
   workspace?: GitWorkspace
+  /** Variables and secrets for the sandbox, merged by name over the parent's. */
   env?: EnvVars
   /** Replaces the inherited policy; an `extend` child's replaces its parent's. */
   egress?: EgressPolicy
@@ -773,13 +863,21 @@ export type EnvironmentSpec = {
   files?: Record<string, string | HostFile>
   /** Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code. */
   rules?: string | HostFile
+  /** Shell commands run in every attempt before the agent starts; a child's run after its parent's. */
   setup?: SetupStep[]
+  /** Skills placed for the agent. */
   skills?: SkillSource[]
+  /** MCP servers the agent gets, by name. */
   mcp?: Record<string, McpServer>
 }
 
 /** One environment in an `extend` chain. */
-export type EnvironmentLayer = { name: string; spec: EnvironmentSpec }
+export type EnvironmentLayer = {
+  /** The name passed to `defineEnvironment` or `extend`. */
+  name: string
+  /** The spec as that layer wrote it, before merging. */
+  spec: EnvironmentSpec
+}
 
 /**
  * What an eval runs in: the sandbox, skills, MCP servers, files, rules, variables, secrets and
@@ -787,7 +885,9 @@ export type EnvironmentLayer = { name: string; spec: EnvironmentSpec }
  */
 export type Environment = {
   readonly kind: 'environment'
+  /** The name it was defined or extended under, which names its cells. */
   readonly name: string
+  /** Its `extend` chain, root first. */
   readonly layers: readonly EnvironmentLayer[]
   /**
    * A child environment layered on this one; wherever it sets a key this one has, it wins.
@@ -927,7 +1027,15 @@ export type CompareOptions<E = Environment> = {
  * `across` is the factor it varies when pairing; without it (and without a one-factor
  * `compare.across`) both pair kinds run.
  */
-export type CompareQuestion = string | { question: string; model?: string; across?: PairFactor }
+export type CompareQuestion =
+  | string
+  | {
+      question: string
+      /** `'provider/model'` that answers it. */
+      model?: string
+      /** The factor it varies when pairing. */
+      across?: PairFactor
+    }
 
 /**
  * A compare question as planned: its text, the model it names itself, if any, and the one
@@ -976,6 +1084,7 @@ export type CompareAnswer = {
   error?: string
 }
 
+/** An option a profile's `limit` can narrow, and `pin` can protect. */
 export type PinnableKey = 'harness' | 'runs' | 'compare'
 
 /**
@@ -993,7 +1102,7 @@ export type CompareSpec<E = Environment> = CompareOptions<E>
 
 /** Options other than `environment` and `compare`, which are exclusive of each other. */
 type EvalOptionFields = {
-  /** The only list: each harness is its own cell. */
+  /** Which agents run the eval; each harness is its own cell. */
   harness?: HarnessOption
   /**
    * The default machine when the resolved environment omits `sandbox`. Cascades like `harness`.
@@ -1011,11 +1120,13 @@ type EvalOptionFields = {
    * environment, then groups and the eval.
    */
   egress?: EgressPolicy
+  /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: JudgeOptions
   /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
   capture?: CaptureOptions
   /** Per attempt. */
   timeout?: Duration
+  /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
   tags?: string[]
   /** Keys a profile's `limit` may not narrow for this group or eval. */
   pin?: PinnableKey[]
@@ -1036,11 +1147,13 @@ type EnvironmentOrCompare<E> =
   | {
       /** Forbidden beside `compare.baseline`, which names the control. */
       environment?: never
+      /** Environments to run side by side; `baseline` is the control. */
       compare: CompareSpec<E> & { baseline: E }
     }
   | {
       /** The control: the compare has no `baseline`. */
       environment?: E
+      /** Environments to run side by side against `environment`, the control. */
       compare: CompareSpec<E> & { baseline?: undefined }
     }
 
@@ -1053,7 +1166,9 @@ export type GroupOptions = EvalOptions
  * object split as `EvalOptions`.
  */
 export type EvalOptionsData = Omit<EvalOptionFields, 'harness' | 'judge'> & {
+  /** Which agents run the eval; each harness is its own cell. */
   harness?: HarnessData
+  /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
 } & EnvironmentOrCompare<EnvironmentData>
 
@@ -1061,7 +1176,10 @@ export type EvalOptionsData = Omit<EvalOptionFields, 'harness' | 'judge'> & {
 export type EnvironmentData = Omit<Environment, 'extendEnvironment' | 'extend'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
-export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
+export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & {
+  /** `'provider/model'`, or a fake judge. */
+  model?: string | FakeJudgeModel
+}
 
 export type HistoryConfig = {
   /** Committed history folder (default: `.history` in the directory the evals live in). */

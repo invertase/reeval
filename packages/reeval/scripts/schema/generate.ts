@@ -1,10 +1,13 @@
 // Generates a JSON Schema of each shape reeval persists and later reads back, from the TypeScript types
-// that write and read them, with TypeScript 7's (unstable) checker API.
+// that write and read them, with TypeScript 7's (unstable) checker API. Each named type's and
+// property's TSDoc comment becomes its `description`.
 import { join } from 'node:path'
 import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
 import { PACKAGE_DIR, type PersistedShape, type PlanShape, SHAPES } from './shapes.ts'
 
 export type Schema = {
+  /** The TSDoc comment of the type alias, interface or property it was generated from. */
+  description?: string
   $ref?: string
   type?: 'string' | 'number' | 'boolean' | 'null' | 'array' | 'object'
   const?: string | number | boolean
@@ -45,8 +48,14 @@ class Generator {
     this.srcDir = srcDir
   }
 
-  /** The name a type is kept under in `$defs`: a type alias or interface declared in reeval's `src/`. */
-  #nameOf(type: Any): string | null {
+  /** A symbol's TSDoc comment on one line, for `description`. */
+  #doc(symbol: Any): string | undefined {
+    const text = this.checker.getDocumentationCommentOfSymbol(symbol).trim()
+    return text ? text.replace(/\s*\n\s*/g, ' ') : undefined
+  }
+
+  /** The symbol a type is kept under in `$defs`: a type alias or interface declared in reeval's `src/`. */
+  #symbolOf(type: Any): Any {
     const alias = type.getAliasSymbol()
     const symbol =
       alias && type.getAliasTypeArguments().length === 0
@@ -57,12 +66,13 @@ class Generator {
     if (!symbol) return null
     const path = String(symbol.declarations?.[0]?.path ?? '')
     if (!path.startsWith(this.srcDir)) return null
-    return symbol.name
+    return symbol
   }
 
   schema(type: Any): Schema {
-    const name = this.#nameOf(type)
-    if (!name) return this.#inline(type)
+    const symbol = this.#symbolOf(type)
+    if (!symbol) return this.#inline(type)
+    const name: string = symbol.name
     let key = this.#named.get(type.id)
     if (!key) {
       key = name
@@ -72,7 +82,8 @@ class Generator {
       this.#names.set(key, type.id)
       this.#named.set(type.id, key)
       this.defs.set(key, {})
-      this.defs.set(key, this.#inline(type))
+      const description = this.#doc(symbol)
+      this.defs.set(key, description ? { description, ...this.#inline(type) } : this.#inline(type))
     }
     return { $ref: `#/$defs/${key}` }
   }
@@ -131,7 +142,8 @@ class Generator {
       if ((prop.flags as number) & (TypeFlags.Undefined | TypeFlags.Never | TypeFlags.Void)) {
         continue
       }
-      properties[p.name] = this.schema(prop)
+      const description = this.#doc(p)
+      properties[p.name] = description ? { description, ...this.schema(prop) } : this.schema(prop)
       if (!(p.flags & SymbolFlags.Optional)) required.push(p.name)
     }
     const schema: Schema = { type: 'object', properties, required }

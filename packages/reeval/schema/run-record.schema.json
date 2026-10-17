@@ -8,18 +8,22 @@
       "enum": ["all", "failures", "none"]
     },
     "ArtifactRef": {
+      "description": "A generic attempt file from `c.capture()` (and later video).",
       "type": "object",
       "properties": {
         "bytes": {
           "type": "number"
         },
         "capture": {
+          "description": "Set when the file came from `c.capture()`.",
           "type": "object",
           "properties": {
             "fullPage": {
+              "description": "Saved PNG used `captureBeyondViewport`.",
               "type": "boolean"
             },
             "instructions": {
+              "description": "Goal strings only; wait beats omitted.",
               "type": "array",
               "items": {
                 "type": "string"
@@ -44,6 +48,7 @@
               "required": ["model", "moves"]
             },
             "viewport": {
+              "description": "The live window, never the string `'full-page'`.",
               "type": "object",
               "properties": {
                 "height": {
@@ -74,33 +79,41 @@
       "required": ["bytes", "mediaType", "name", "path", "sha256"]
     },
     "AssertionRecord": {
+      "description": "One `expect` or `expect.soft` matcher call an attempt made.",
       "type": "object",
       "properties": {
         "durationMs": {
+          "description": "Async matchers only (`toHaveFile`, `toSucceed`, `.resolves`, `expect.poll`).",
           "type": "number"
         },
         "label": {
+          "description": "`expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.",
           "type": "string"
         },
         "labelled": {
+          "description": "The eval gave the label.",
           "type": "boolean"
         },
         "matcher": {
+          "description": "`toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`.",
           "type": "string"
         },
         "message": {
+          "description": "Why it failed or couldn't answer, cut at 1 KB.",
           "type": "string"
         },
         "soft": {
           "type": "boolean"
         },
         "status": {
+          "description": "`error`: the matcher couldn't answer (a subject it can't read, an event the harness doesn't report).",
           "enum": ["error", "fail", "pass"]
         }
       },
       "required": ["label", "labelled", "matcher", "soft", "status"]
     },
     "AttemptError": {
+      "description": "Why an attempt failed; `prepare` when its sandbox couldn't be prepared, `resource` when it ran out of one.",
       "type": "object",
       "properties": {
         "kind": {
@@ -122,6 +135,7 @@
       "type": "object",
       "properties": {
         "artifacts": {
+          "description": "PNGs from `c.capture()`, under `artifacts/<name>.png`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ArtifactRef"
@@ -134,9 +148,11 @@
           "$ref": "#/$defs/FileRef"
         },
         "rawTranscript": {
+          "description": "Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.",
           "$ref": "#/$defs/FileRef"
         },
         "setupLog": {
+          "description": "Each environment setup step's command, exit code, duration and output.",
           "$ref": "#/$defs/FileRef"
         },
         "transcript": {
@@ -149,6 +165,7 @@
       "type": "object",
       "properties": {
         "activity": {
+          "description": "Counts from the transcript, so a run's shape is visible without reading it. `webSearches` includes refused searches.",
           "type": "object",
           "properties": {
             "fileEdits": {
@@ -171,6 +188,7 @@
               ]
             },
             "webSearches": {
+              "description": "Every `web-search` event, including refused ones. Null when a turn with none couldn't report them (`unreported`).",
               "anyOf": [
                 {
                   "type": "null"
@@ -184,12 +202,14 @@
           "required": ["fileEdits", "reasoningMs", "tools", "webFetches", "webSearches"]
         },
         "assertions": {
+          "description": "Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/AssertionRecord"
           }
         },
         "captureUse": {
+          "description": "Tokens the capture vision loop used. Infrastructure only: never folded into `usage`, effort, compare or lift.",
           "type": "object",
           "properties": {
             "model": {
@@ -212,9 +232,11 @@
           "required": ["model", "moves", "usage"]
         },
         "cell": {
+          "description": "The cell's key; see `EvalEntry.cells`.",
           "type": "string"
         },
         "changedFiles": {
+          "description": "Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`.",
           "type": "array",
           "items": {
             "type": "object",
@@ -254,6 +276,7 @@
           }
         },
         "context": {
+          "description": "Skills, rules and MCP config visible to the agent in its sandbox, by content hash.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ContextFile"
@@ -263,6 +286,7 @@
           "type": "number"
         },
         "effort": {
+          "description": "The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`); null when the factory left it unset. Fast is not this.",
           "anyOf": [
             {
               "type": "null"
@@ -273,6 +297,7 @@
           ]
         },
         "egress": {
+          "description": "The egress policy and, when the sandbox records it, the hosts contacted and refused; null if it never ran.",
           "anyOf": [
             {
               "$ref": "#/$defs/EgressRecord"
@@ -283,6 +308,7 @@
           ]
         },
         "env": {
+          "description": "Names of the variables and secrets set in the sandbox, and the brokered ones; never values.",
           "type": "object",
           "properties": {
             "brokered": {
@@ -320,9 +346,11 @@
           "$ref": "#/$defs/AttemptFiles"
         },
         "id": {
+          "description": "`<cell key>#<n>`: unique in its eval.",
           "type": "string"
         },
         "imageId": {
+          "description": "The image the container started from, in `stack.images`; null for the fake sandbox.",
           "anyOf": [
             {
               "type": "null"
@@ -339,15 +367,18 @@
           }
         },
         "key": {
+          "description": "`<eval key> # <cell key>#<n>`: unique in the run.",
           "type": "string"
         },
         "n": {
+          "description": "Run number within the cell, from 1.",
           "type": "number"
         },
         "outcome": {
           "$ref": "#/$defs/Outcome"
         },
         "seq": {
+          "description": "Start order across the run, from 1; null for attempts that never started.",
           "anyOf": [
             {
               "type": "null"
@@ -358,6 +389,7 @@
           ]
         },
         "servedEffort": {
+          "description": "The reasoning effort the harness's API said it ran at, from `servedModels` / each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those labels name none. Fast (`[fast=true]`) is not this.",
           "anyOf": [
             {
               "type": "null"
@@ -368,6 +400,7 @@
           ]
         },
         "servedModels": {
+          "description": "The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.",
           "anyOf": [
             {
               "type": "array",
@@ -391,6 +424,7 @@
           ]
         },
         "startRetries": {
+          "description": "Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).",
           "type": "array",
           "items": {
             "$ref": "#/$defs/StartRetry"
@@ -400,6 +434,7 @@
           "$ref": "#/$defs/PhaseTimings"
         },
         "turns": {
+          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.",
           "type": "array",
           "items": {
             "type": "object",
@@ -408,6 +443,7 @@
                 "type": "number"
               },
               "error": {
+                "description": "The turn's first error, such as a provider's billing or auth error, cut at 1 KB; else null.",
                 "anyOf": [
                   {
                     "type": "null"
@@ -418,6 +454,7 @@
                 ]
               },
               "model": {
+                "description": "The model the harness says served the turn; null when it reports none.",
                 "anyOf": [
                   {
                     "type": "null"
@@ -440,12 +477,14 @@
                 "type": "string"
               },
               "unreported": {
+                "description": "Event types the harness can't report; see `Turn.unreported`.",
                 "type": "array",
                 "items": {
                   "$ref": "#/$defs/WebEventType"
                 }
               },
               "usage": {
+                "description": "Tokens the turn used; null when the harness reports none.",
                 "anyOf": [
                   {
                     "$ref": "#/$defs/TokenUsage"
@@ -470,6 +509,7 @@
           }
         },
         "usage": {
+          "description": "Tokens across the attempt's turns; null when the harness reported none.",
           "anyOf": [
             {
               "$ref": "#/$defs/TokenUsage"
@@ -508,6 +548,7 @@
       ]
     },
     "CellCheck": {
+      "description": "One check over a cell's counted attempts. `verdict` (variant cells): `discriminates` when it passes on every counted attempt of one side and none of the other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them apart; `mixed` otherwise.",
       "type": "object",
       "properties": {
         "control": {
@@ -535,6 +576,7 @@
       "required": ["error", "fail", "label", "notRun", "pass"]
     },
     "CellGate": {
+      "description": "A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's).",
       "anyOf": [
         {
           "enum": ["all", "none"]
@@ -551,15 +593,18 @@
       ]
     },
     "CellRecord": {
+      "description": "One harness and environment of an eval, and how its attempts went.",
       "type": "object",
       "properties": {
         "checks": {
+          "description": "Each check (assertion label) seen in any attempt of the eval, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CellCheck"
           }
         },
         "effort": {
+          "description": "The reasoning effort the harness factory asked for; null when it left it unset. Fast is not this.",
           "anyOf": [
             {
               "type": "null"
@@ -573,6 +618,7 @@
           "type": "string"
         },
         "environmentDigest": {
+          "description": "The environment's digest: the join key into `RunRecord.environments`; null for none.",
           "anyOf": [
             {
               "type": "null"
@@ -586,12 +632,14 @@
           "type": "number"
         },
         "fingerprint": {
+          "description": "`sha256` of `fingerprintParts`; results are comparable only when it matches.",
           "type": "string"
         },
         "fingerprintParts": {
           "$ref": "#/$defs/FingerprintParts"
         },
         "gate": {
+          "description": "How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval.",
           "$ref": "#/$defs/CellGate"
         },
         "harness": {
@@ -610,6 +658,7 @@
           "$ref": "#/$defs/Lift"
         },
         "model": {
+          "description": "The configured harness model, when it has one.",
           "anyOf": [
             {
               "type": "null"
@@ -620,9 +669,11 @@
           ]
         },
         "outcome": {
+          "description": "By `gate`. `'all'` (pass^k: every counted attempt passes) matches `{ passRate: 1 }`; `{ passRate }` is a pass@1 threshold. Infra only when nothing counted; `'none'` reports the worst outcome. A variant below its `minLift` fails too.",
           "$ref": "#/$defs/Outcome"
         },
         "overrides": {
+          "description": "Environment keys the variant replaced on the control's (or a child on its parent's).",
           "type": "array",
           "items": {
             "type": "string"
@@ -632,6 +683,7 @@
           "type": "number"
         },
         "passRate": {
+          "description": "pass@1: pass / (pass + fail); infra errors and skips excluded.",
           "anyOf": [
             {
               "type": "null"
@@ -654,6 +706,7 @@
           "type": "number"
         },
         "variant": {
+          "description": "The variant's name, for variant cells.",
           "type": "string"
         }
       },
@@ -684,6 +737,7 @@
       "enum": ["control", "variant"]
     },
     "CheckTally": {
+      "description": "How often one check passed: a counted attempt that never reached it counts it `notRun`.",
       "type": "object",
       "properties": {
         "error": {
@@ -702,18 +756,22 @@
       "required": ["error", "fail", "notRun", "pass"]
     },
     "CompareAnswer": {
+      "description": "A compare question's answer: every vote, and each side's wins over decided votes per cut.",
       "type": "object",
       "properties": {
         "error": {
+          "description": "Why some or all of its votes are missing: the model call failed. Outcomes never change.",
           "type": "string"
         },
         "model": {
+          "description": "`'provider/model'`, or `fake` for `fakeAnalysis()`.",
           "type": "string"
         },
         "question": {
           "type": "string"
         },
         "rates": {
+          "description": "Wins over decided pairs, per named side, per cut.",
           "type": "array",
           "items": {
             "type": "object",
@@ -735,6 +793,7 @@
           }
         },
         "resolvedModel": {
+          "description": "The model id the provider says served the calls, when it reports one.",
           "type": "string"
         },
         "votes": {
@@ -747,6 +806,7 @@
       "required": ["model", "question", "rates", "votes"]
     },
     "CompareCut": {
+      "description": "Which pairs a vote is over: two environments on one harness, or two harnesses on one environment.",
       "enum": ["across", "within"]
     },
     "ContextFile": {
@@ -762,9 +822,11 @@
       "required": ["path", "sha256"]
     },
     "Cost": {
+      "description": "The tokens the run used, as the harnesses count them; reeval prices nothing.",
       "type": "object",
       "properties": {
         "inputTokens": {
+          "description": "Prompt tokens, cache reads and writes included.",
           "anyOf": [
             {
               "type": "null"
@@ -788,6 +850,7 @@
           "enum": ["reported", "unreported"]
         },
         "usage": {
+          "description": "The same totals split as each turn reports them.",
           "anyOf": [
             {
               "$ref": "#/$defs/TokenUsage"
@@ -801,6 +864,7 @@
       "required": ["inputTokens", "outputTokens", "source", "usage"]
     },
     "EgressPolicy": {
+      "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
       "anyOf": [
         {
           "enum": ["allow-all", "deny-all"]
@@ -820,6 +884,7 @@
       ]
     },
     "EgressRecord": {
+      "description": "An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.",
       "type": "object",
       "properties": {
         "allowed": {
@@ -911,18 +976,22 @@
       "required": ["allowed", "blocked", "contacted", "expectedBlocked", "policy", "recorded"]
     },
     "EnvironmentRecord": {
+      "description": "An environment as it was applied, without secret values.",
       "type": "object",
       "properties": {
         "brokered": {
+          "description": "Secrets the sandbox only had placeholders for, swapped in by the egress gateway.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "digest": {
+          "description": "Covers every field but the rules file's path; secret names are included, values never are. The image is the sandbox's.",
           "type": "string"
         },
         "egress": {
+          "description": "The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`.",
           "$ref": "#/$defs/EgressPolicy"
         },
         "files": {
@@ -950,12 +1019,14 @@
           "type": "string"
         },
         "overrides": {
+          "description": "Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "parent": {
+          "description": "The previous `extendEnvironment` layer's name, else null.",
           "anyOf": [
             {
               "type": "null"
@@ -993,6 +1064,7 @@
                 ]
               },
               "excluded": {
+                "description": "Paths left out of the sandbox by `exclude` (directories end in `/`); `.git` isn't listed.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -1015,6 +1087,7 @@
           }
         },
         "unset": {
+          "description": "Optional secrets whose host variable was unset, so they weren't injected.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1027,12 +1100,14 @@
           }
         },
         "workspace": {
+          "description": "The git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to and the hash of the tree that was copied in, which is in the digest.",
           "type": "object",
           "properties": {
             "commit": {
               "type": "string"
             },
             "init": {
+              "description": "`init: true`: the workspace had a `.git` with one commit of the tree.",
               "type": "boolean"
             },
             "path": {
@@ -1085,12 +1160,14 @@
       "enum": ["aborted", "assertion", "infra", "judge", "timeout"]
     },
     "EvalCompareMeta": {
+      "description": "Which environment ran as the control, so the studio can show it.",
       "type": "object",
       "properties": {
         "baseline": {
           "type": "string"
         },
         "from": {
+          "description": "Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or an empty environment named `baseline` when there was none.",
           "enum": ["empty", "environment"]
         }
       },
@@ -1100,6 +1177,7 @@
       "type": "object",
       "properties": {
         "answers": {
+          "description": "The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons).",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CompareAnswer"
@@ -1118,9 +1196,11 @@
           }
         },
         "compare": {
+          "description": "The baseline environment, when the eval uses `compare`.",
           "$ref": "#/$defs/EvalCompareMeta"
         },
         "family": {
+          "description": "Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite.",
           "type": "object",
           "properties": {
             "case": {
@@ -1142,6 +1222,7 @@
           "type": "string"
         },
         "fingerprint": {
+          "description": "Results are comparable only when fingerprints match.",
           "type": "string"
         },
         "group": {
@@ -1151,18 +1232,22 @@
           }
         },
         "id": {
+          "description": "`file › group › … › name`, as shown.",
           "type": "string"
         },
         "key": {
+          "description": "What the eval is matched on across runs; currently the same as `id`.",
           "type": "string"
         },
         "name": {
           "type": "string"
         },
         "outcome": {
+          "description": "Over gated cells: `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.",
           "$ref": "#/$defs/Outcome"
         },
         "passRate": {
+          "description": "pass@1, pass / (pass + fail), over the gated cells' attempts; infra errors and skips excluded.",
           "anyOf": [
             {
               "type": "null"
@@ -1173,9 +1258,11 @@
           ]
         },
         "slug": {
+          "description": "Directory name inside the artifact directory, from `key`.",
           "type": "string"
         },
         "sources": {
+          "description": "The eval file and every local file it imports, directly or not, by content hash.",
           "type": "array",
           "items": {
             "type": "object",
@@ -1197,6 +1284,7 @@
           }
         },
         "todo": {
+          "description": "A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`.",
           "type": "boolean"
         }
       },
@@ -1218,12 +1306,14 @@
       ]
     },
     "FamilyEffort": {
+      "description": "The variant's effort against the control's, paired by case.",
       "type": "object",
       "properties": {
         "agentMs": {
           "$ref": "#/$defs/FamilyEffortMetric"
         },
         "tokens": {
+          "description": "Over the cases where every counted attempt reported usage; omitted when none did.",
           "$ref": "#/$defs/FamilyEffortMetric"
         },
         "tools": {
@@ -1233,9 +1323,11 @@
       "required": ["agentMs", "tools"]
     },
     "FamilyEffortMetric": {
+      "description": "One effort metric over a family's paired cases.",
       "type": "object",
       "properties": {
         "p": {
+          "description": "Wilcoxon signed-rank over the per-case differences; null when every difference is 0.",
           "anyOf": [
             {
               "type": "null"
@@ -1246,9 +1338,11 @@
           ]
         },
         "pairs": {
+          "description": "Cases with a value on both sides.",
           "type": "number"
         },
         "ratio": {
+          "description": "The median over cases of the variant's per-case median, over the control's; null at 0.",
           "anyOf": [
             {
               "type": "null"
@@ -1259,12 +1353,14 @@
           ]
         },
         "verdict": {
+          "description": "`insufficient` below 6 non-zero differences, where the exact test can't reach 0.05.",
           "enum": ["fewer", "insufficient", "more", "noise"]
         }
       },
       "required": ["p", "pairs", "ratio", "verdict"]
     },
     "FamilyInterval": {
+      "description": "A 95% interval on a pooled rate or difference.",
       "type": "object",
       "properties": {
         "hi": {
@@ -1277,18 +1373,21 @@
           "type": "number"
         },
         "method": {
+          "description": "`wilson` / `newcombe-paired`: one counted attempt a case and side, so each case is one Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with attempts within a case never counted as independent.",
           "enum": ["newcombe-paired", "t-cases", "wilson"]
         }
       },
       "required": ["hi", "level", "lo", "method"]
     },
     "FamilyLift": {
+      "description": "A variant cell against its control over a family's cases, paired by case.",
       "type": "object",
       "properties": {
         "controlRate": {
           "type": "number"
         },
         "discordant": {
+          "description": "Set at one attempt a case and side: pairs where only one side passed.",
           "type": "object",
           "properties": {
             "controlOnly": {
@@ -1307,12 +1406,15 @@
           "$ref": "#/$defs/FamilyInterval"
         },
         "minLift": {
+          "description": "The compare's `minLift`: on a family it gates this lower bound, not each case's.",
           "type": "number"
         },
         "outcome": {
+          "description": "`fail` when `interval.lo` is below `minLift`.",
           "enum": ["fail", "pass"]
         },
         "p": {
+          "description": "McNemar's exact p (one attempt a case), else Wilcoxon signed-rank over the cases.",
           "anyOf": [
             {
               "type": "null"
@@ -1323,24 +1425,30 @@
           ]
         },
         "pairs": {
+          "description": "Cases with counted attempts on both sides.",
           "type": "number"
         },
         "points": {
+          "description": "Variant minus control, from -1 to 1.",
           "type": "number"
         },
         "variant": {
+          "description": "The variant cell's key.",
           "type": "string"
         },
         "variantRate": {
+          "description": "Mean pass@1 over the paired cases on each side.",
           "type": "number"
         },
         "verdict": {
           "$ref": "#/$defs/FamilyVerdict"
         },
         "vs": {
+          "description": "The control cell's key.",
           "type": "string"
         },
         "withinNoise": {
+          "description": "The interval spans 0.",
           "type": "boolean"
         }
       },
@@ -1359,12 +1467,15 @@
       ]
     },
     "FamilyRate": {
+      "description": "One cell's pass@1 over a family's cases.",
       "type": "object",
       "properties": {
         "cases": {
+          "description": "Cases with at least one counted attempt in this cell.",
           "type": "number"
         },
         "cell": {
+          "description": "The cell's key, the same in every case.",
           "type": "string"
         },
         "counted": {
@@ -1374,18 +1485,22 @@
           "$ref": "#/$defs/FamilyInterval"
         },
         "pass": {
+          "description": "Passes and counted attempts over those cases.",
           "type": "number"
         },
         "rate": {
+          "description": "The mean of the cases' pass@1; at one attempt a case, `pass / counted`.",
           "type": "number"
         }
       },
       "required": ["cases", "cell", "counted", "interval", "pass", "rate"]
     },
     "FamilyRecord": {
+      "description": "A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an eval.",
       "type": "object",
       "properties": {
         "cases": {
+          "description": "Cases in the list.",
           "type": "number"
         },
         "file": {
@@ -1398,24 +1513,30 @@
           }
         },
         "id": {
+          "description": "`file › group › … › template`.",
           "type": "string"
         },
         "lifts": {
+          "description": "One per variant cell, with `compare`.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/FamilyLift"
           }
         },
         "name": {
+          "description": "The name template, e.g. `fixes $id`.",
           "type": "string"
         },
         "outcome": {
+          "description": "`fail` when a lift is below its `minLift`. The cases still pass or fail on their own.",
           "enum": ["fail", "pass"]
         },
         "ran": {
+          "description": "Cases with an eval in this run; fewer when a filter or tag left some out.",
           "type": "number"
         },
         "rates": {
+          "description": "One per cell.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/FamilyRate"
@@ -1425,9 +1546,11 @@
       "required": ["cases", "file", "group", "id", "lifts", "name", "outcome", "ran", "rates"]
     },
     "FamilyVerdict": {
+      "description": "`lift` / `drop`: the interval excludes 0. `noise`: it doesn't. `insufficient`: fewer than 6 discordant pairs (one attempt a case) or 6 paired cases (several), where no test can decide.",
       "enum": ["drop", "insufficient", "lift", "noise"]
     },
     "FileRef": {
+      "description": "`path` is relative to the run's artifact directory; `sha256` is of the bytes on disk.",
       "type": "object",
       "properties": {
         "bytes": {
@@ -1443,6 +1566,7 @@
       "required": ["bytes", "path", "sha256"]
     },
     "FingerprintParts": {
+      "description": "Each input of a cell fingerprint, hashed on its own, so a change can be named.",
       "type": "object",
       "properties": {
         "agentCli": {
@@ -1456,6 +1580,7 @@
           ]
         },
         "context": {
+          "description": "Over the attempt's context files.",
           "type": "string"
         },
         "environment": {
@@ -1469,6 +1594,7 @@
           ]
         },
         "harness": {
+          "description": "Over the harness descriptor, less concurrency caps.",
           "type": "string"
         },
         "image": {
@@ -1482,9 +1608,11 @@
           ]
         },
         "judge": {
+          "description": "Over the judge's model, threshold and version.",
           "type": "string"
         },
         "sources": {
+          "description": "Over `EvalEntry.sources`.",
           "type": "string"
         }
       },
@@ -1507,6 +1635,7 @@
           "type": "string"
         },
         "diffHash": {
+          "description": "sha256 of the uncommitted changes (tracked and untracked, as a binary patch), when dirty.",
           "anyOf": [
             {
               "type": "null"
@@ -1517,9 +1646,11 @@
           ]
         },
         "dirty": {
+          "description": "Uncommitted changes, outside `.reeval/` and the history folder, when the run started.",
           "type": "boolean"
         },
         "remote": {
+          "description": "The `origin` URL with any credentials removed.",
           "anyOf": [
             {
               "type": "null"
@@ -1530,12 +1661,14 @@
           ]
         },
         "sha": {
+          "description": "The commit the run executed at: HEAD when `reeval run` started. The later commit that adds the history file is a different, descendant commit.",
           "type": "string"
         },
         "shallow": {
           "type": "boolean"
         },
         "worktreePatch": {
+          "description": "Those changes as `worktree.patch` in the artifact dir; apply on `sha` to reproduce.",
           "anyOf": [
             {
               "$ref": "#/$defs/FileRef"
@@ -1546,6 +1679,7 @@
           ]
         },
         "worktreePatchNote": {
+          "description": "Why a dirty run has no `worktree.patch`: too large, artifacts: 'none', or it looked like it held a secret (then where, and which rule, never the value).",
           "anyOf": [
             {
               "type": "null"
@@ -1569,6 +1703,7 @@
       ]
     },
     "JudgeArtifactRef": {
+      "description": "A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.",
       "type": "object",
       "properties": {
         "bytes": {
@@ -1581,6 +1716,7 @@
           "type": "string"
         },
         "path": {
+          "description": "`artifacts/<name>.png` under the attempt directory.",
           "type": "string"
         },
         "sha256": {
@@ -1593,12 +1729,14 @@
       "type": "object",
       "properties": {
         "artifacts": {
+          "description": "Captures this call sent the judge as file parts, when any.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/JudgeArtifactRef"
           }
         },
         "key": {
+          "description": "`<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series).",
           "type": "string"
         },
         "model": {
@@ -1608,9 +1746,11 @@
           "type": "string"
         },
         "resolvedModel": {
+          "description": "The model id the provider says served the call, when it reports one.",
           "type": "string"
         },
         "retries": {
+          "description": "Transient provider errors retried before this verdict, with the backoff before each retry.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/JudgeRetry"
@@ -1629,6 +1769,7 @@
       "required": ["key", "model", "question", "score", "threshold", "verdict"]
     },
     "JudgeRetry": {
+      "description": "One failed judge try that was retried, and the backoff before the next.",
       "type": "object",
       "properties": {
         "delayMs": {
@@ -1641,9 +1782,11 @@
       "required": ["delayMs", "error"]
     },
     "Lift": {
+      "description": "A variant cell's pass@1 against the control's, on the same harness and sandbox.",
       "type": "object",
       "properties": {
         "control": {
+          "description": "Passes out of counted attempts (passes and fails) on each side.",
           "type": "object",
           "properties": {
             "counted": {
@@ -1656,6 +1799,7 @@
           "required": ["counted", "pass"]
         },
         "interval": {
+          "description": "95% interval on the difference, by Newcombe's hybrid score method from two Wilson intervals.",
           "type": "object",
           "properties": {
             "hi": {
@@ -1674,9 +1818,11 @@
           "required": ["hi", "level", "lo", "method"]
         },
         "minLift": {
+          "description": "Set when the compare has a `minLift`; the cell fails when `interval.lo` is below it.",
           "type": "number"
         },
         "points": {
+          "description": "Variant pass@1 minus control pass@1, from -1 to 1.",
           "type": "number"
         },
         "variant": {
@@ -1692,9 +1838,11 @@
           "required": ["counted", "pass"]
         },
         "vs": {
+          "description": "The control cell's key.",
           "type": "string"
         },
         "withinNoise": {
+          "description": "The interval spans 0: the attempts can't tell the variant from the control.",
           "type": "boolean"
         }
       },
@@ -1704,12 +1852,15 @@
       "enum": ["fail", "infra_error", "pass", "skipped"]
     },
     "PairVote": {
+      "description": "One judgement of one pair of attempts, in one order.",
       "type": "object",
       "properties": {
         "a": {
+          "description": "The two sides by name: arms within a harness, harness ids across.",
           "type": "string"
         },
         "arm": {
+          "description": "Set on a cross-harness pair: the arm (environment) both harnesses ran.",
           "type": "string"
         },
         "b": {
@@ -1719,27 +1870,33 @@
           "$ref": "#/$defs/CompareCut"
         },
         "harness": {
+          "description": "Set on a within-harness pair: the harness both arms ran on.",
           "type": "string"
         },
         "question": {
           "type": "string"
         },
         "reason": {
+          "description": "The model's short reason for this pick; omitted when it gave none. Capped.",
           "type": "string"
         },
         "run": {
+          "description": "The run number both attempts share, from 1.",
           "type": "number"
         },
         "swapped": {
+          "description": "True for the repeat that showed `b` first.",
           "type": "boolean"
         },
         "winner": {
+          "description": "`a`, `b` or `'tie'`, mapped back from the blinded labels.",
           "type": "string"
         }
       },
       "required": ["a", "b", "cut", "question", "run", "swapped", "winner"]
     },
     "PhaseTimings": {
+      "description": "Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes.",
       "type": "object",
       "properties": {
         "agentMs": {
@@ -1761,6 +1918,7 @@
       "required": ["agentMs", "checksMs", "diffMs", "judgeMs", "setupMs"]
     },
     "PrepareFailureRecord": {
+      "description": "The sandbox an attempt needed that couldn't be prepared before the run, on each attempt that needed it: its provider's stage (Docker's `image`, `from`, `dockerfile`, `harness` or `install`, or `workspace` for a git workspace, whose `ref` is `repo#ref:path`), what was being made, the class (`config`, `transient` after the retries, or `resource`), a named cause (`enospc`, `oom`), the build log, and the levels that set it.",
       "type": "object",
       "properties": {
         "cause": {
@@ -1809,6 +1967,7 @@
       "required": ["cause", "class", "log", "ref", "setBy", "stage"]
     },
     "ResourceFailureRecord": {
+      "description": "The sandbox ran out of a resource during the attempt: `oom` is the kernel killing `kills` processes at its memory limit. The attempt is then an infra error, whatever its checks said.",
       "type": "object",
       "properties": {
         "cause": {
@@ -1839,6 +1998,7 @@
               "const": "ci"
             },
             "pr": {
+              "description": "The pull request a CI run built, when the provider says (GitHub Actions).",
               "anyOf": [
                 {
                   "type": "null"
@@ -1905,6 +2065,7 @@
       "type": "object",
       "properties": {
         "artifacts": {
+          "description": "Which artifacts sit next to this record. Refs to files that weren't kept are removed.",
           "$ref": "#/$defs/ArtifactLevel"
         },
         "author": {
@@ -1940,6 +2101,7 @@
           "type": "object",
           "properties": {
             "concurrency": {
+              "description": "Attempts that ran at once; not part of `configHash`, since it doesn't change results.",
               "type": "number"
             },
             "configHash": {
@@ -1996,6 +2158,7 @@
           "type": "object",
           "properties": {
             "lockfiles": {
+              "description": "Lockfiles in the project root (and the repo root, if different), by content hash.",
               "type": "array",
               "items": {
                 "type": "object",
@@ -2020,6 +2183,7 @@
           "type": "string"
         },
         "environments": {
+          "description": "Each environment the run applied, fingerprinted; secret values are never included.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/EnvironmentRecord"
@@ -2032,6 +2196,7 @@
           }
         },
         "families": {
+          "description": "Each pooled `evaluate.each` that ran; unset when none did.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/FamilyRecord"
@@ -2051,6 +2216,7 @@
           "const": "es-run"
         },
         "plan": {
+          "description": "What the run planned before it started, and each level whose sandbox ran as root or with capabilities added back.",
           "type": "object",
           "properties": {
             "attempts": {
@@ -2075,6 +2241,7 @@
           "required": ["attempts", "cells", "estimateMs", "evals", "sandboxWarnings"]
         },
         "profile": {
+          "description": "The profile the run was sized with, and why it was chosen.",
           "anyOf": [
             {
               "type": "null"
@@ -2171,6 +2338,7 @@
           "required": ["version"]
         },
         "runId": {
+          "description": "Also the file name: `<UTC start>_<short sha>_<author or ci>`.",
           "type": "string"
         },
         "runner": {
@@ -2186,6 +2354,7 @@
           "type": "string"
         },
         "status": {
+          "description": "`budget` when `budget.duration` stopped new attempts from starting.",
           "enum": ["budget", "complete", "interrupted"]
         },
         "summary": {
@@ -2218,6 +2387,7 @@
       ]
     },
     "RunSummary": {
+      "description": "Counts attempts, except `evals`.",
       "type": "object",
       "properties": {
         "attempts": {
@@ -2227,12 +2397,14 @@
           "type": "number"
         },
         "fail": {
+          "description": "Every failed attempt, including `notGated` ones.",
           "type": "number"
         },
         "infraError": {
           "type": "number"
         },
         "notGated": {
+          "description": "Failed attempts in ungated cells (controls, by default), which don't fail the run.",
           "type": "number"
         },
         "pass": {
@@ -2245,15 +2417,18 @@
       "required": ["attempts", "evals", "fail", "infraError", "notGated", "pass", "skipped"]
     },
     "SandboxWarning": {
+      "description": "A sandbox with more privilege than the default `reeval` user: `docker({ root: true })`, or `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.",
       "type": "object",
       "properties": {
         "capabilities": {
+          "description": "The capabilities added back, for `capabilities`.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "file": {
+          "description": "The eval file that sets it, for a group or eval; null for the config or a profile.",
           "anyOf": [
             {
               "type": "null"
@@ -2267,27 +2442,33 @@
           "enum": ["capabilities", "root"]
         },
         "level": {
+          "description": "Which level set the sandbox.",
           "enum": ["config", "eval", "group", "profile"]
         },
         "message": {
+          "description": "The line reeval prints, after `WARNING: ` (root) or `warning: ` (capabilities).",
           "type": "string"
         },
         "where": {
+          "description": "That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group(\"net\")` or `evaluate(\"installs deps\")`.",
           "type": "string"
         }
       },
       "required": ["file", "kind", "level", "message", "where"]
     },
     "SkillPlacement": {
+      "description": "`harness` (default): the agent's own skills, via its adapter. `workspace`: its repo skill dir.",
       "enum": ["harness", "workspace"]
     },
     "Stack": {
+      "description": "What ran and graded the agents: the machine, images, harnesses and judge.",
       "type": "object",
       "properties": {
         "arch": {
           "type": "string"
         },
         "context": {
+          "description": "Union of every attempt's context files.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ContextFile"
@@ -2297,17 +2478,20 @@
           "type": "string"
         },
         "fingerprintScope": {
+          "description": "What eval fingerprints hash; fingerprints from different scopes aren't comparable.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "harnesses": {
+          "description": "Each harness: its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.",
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "effort": {
+                "description": "The reasoning effort the harness factory asked for; null when it left it unset. Fast is not this.",
                 "anyOf": [
                   {
                     "type": "null"
@@ -2324,6 +2508,7 @@
                 "type": "string"
               },
               "model": {
+                "description": "The configured model, when the harness has one.",
                 "anyOf": [
                   {
                     "type": "null"
@@ -2334,12 +2519,14 @@
                 ]
               },
               "resolvedEffort": {
+                "description": "Reasoning-effort suffixes those served models named (`medium` from `gpt-5.6-luna[effort=medium]`); empty when they name none. Fast is not this.",
                 "type": "array",
                 "items": {
                   "type": "string"
                 }
               },
               "resolvedModels": {
+                "description": "The models the harness reported serving, across every turn in the run, with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5` with no `params`); empty when it reports none.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -2350,6 +2537,7 @@
           }
         },
         "images": {
+          "description": "Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed.",
           "type": "array",
           "items": {
             "type": "object",
@@ -2365,9 +2553,11 @@
                 ]
               },
               "base": {
+                "description": "The harness image `install` was baked onto: `ref` itself without `install`.",
                 "type": "string"
               },
               "dockerfile": {
+                "description": "`docker({ dockerfile })`: the path from the project root and the build context's hash.",
                 "anyOf": [
                   {
                     "type": "null"
@@ -2387,6 +2577,7 @@
                 ]
               },
               "from": {
+                "description": "`docker({ from })`: the base as written and the digest the image was built on (a local-only base's image id); `reeval image build` rebuilds it when the tag has moved since.",
                 "type": "object",
                 "properties": {
                   "digest": {
@@ -2406,9 +2597,11 @@
                 "required": ["digest", "ref"]
               },
               "id": {
+                "description": "Content-addressed image id (`sha256:…`).",
                 "type": "string"
               },
               "install": {
+                "description": "The `docker({ install })` commands, in order.",
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -2428,9 +2621,11 @@
           }
         },
         "judge": {
+          "description": "The run's judge: the config's, with what the profile's `judge` and `defaults.judge` set over it. `config.judgeModel` and `config.threshold` name the same one.",
           "type": "object",
           "properties": {
             "model": {
+              "description": "Its model; groups, evals and calls may use others (see each verdict).",
               "anyOf": [
                 {
                   "type": "null"
@@ -2441,6 +2636,7 @@
               ]
             },
             "resolvedModels": {
+              "description": "Model ids the provider reported serving, across every judge call in the run.",
               "type": "array",
               "items": {
                 "type": "string"
@@ -2450,12 +2646,14 @@
               "type": "number"
             },
             "version": {
+              "description": "Changes when reeval, the AI SDK or the provider adapter (and so the judge prompt) change.",
               "type": "string"
             }
           },
           "required": ["model", "resolvedModels", "threshold", "version"]
         },
         "language": {
+          "description": "The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its toolchain when the runner reports one. Absent in runs recorded before it.",
           "type": "object",
           "properties": {
             "name": {
@@ -2468,12 +2666,14 @@
           "required": ["name"]
         },
         "node": {
+          "description": "`process.versions.node`: under Bun or Deno, the Node version they're compatible with.",
           "type": "string"
         },
         "os": {
           "type": "string"
         },
         "packages": {
+          "description": "Exact versions of the packages that run and grade the agent.",
           "type": "object",
           "properties": {},
           "required": [],
@@ -2482,6 +2682,7 @@
           }
         },
         "runtime": {
+          "description": "The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in runs recorded before it, which ran on Node.",
           "type": "object",
           "properties": {
             "name": {
@@ -2508,18 +2709,22 @@
       ]
     },
     "StartRetry": {
+      "description": "A harness session start that timed out and was started again.",
       "type": "object",
       "properties": {
         "error": {
+          "description": "`<harness kind>: session did not become ready within <startTimeout>`.",
           "type": "string"
         },
         "waitedMs": {
+          "description": "How long it waited before giving up on that start.",
           "type": "number"
         }
       },
       "required": ["error", "waitedMs"]
     },
     "TokenUsage": {
+      "description": "The tokens one turn used, as its harness reported them. `input` excludes cache reads and writes (so the prompt was `input + cacheRead + cacheWrite`); `reasoning` is part of `output`.",
       "type": "object",
       "properties": {
         "cacheRead": {
@@ -2551,6 +2756,7 @@
       "enum": ["aborted", "completed", "error"]
     },
     "WebEventType": {
+      "description": "The transcript events a harness may be unable to report.",
       "enum": ["web-fetch", "web-search"]
     }
   },
