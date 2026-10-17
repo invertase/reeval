@@ -62,10 +62,6 @@ export function valueAt(value: unknown, path: readonly PropertyKey[]): unknown {
   return at
 }
 
-/** The first unknown key an issue reports, if it's an unknown-key issue. */
-export const unknownKey = (issue: Issue): string | undefined =>
-  issue.code === 'unrecognized_keys' ? issue.keys[0] : undefined
-
 /**
  * The issue a refusal explains: an unknown key at the top first, then the issue whose path starts
  * at the earliest key in `order` (the order the hand-written checks ran in), then Zod's order.

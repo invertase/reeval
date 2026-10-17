@@ -12,8 +12,6 @@ import {
 } from './assert.ts'
 import type { ExecResult, JudgeFailure, Verdict } from './types.ts'
 
-export { HarnessCapabilityError } from './assert.ts'
-
 type Result = { pass: boolean; message: () => string }
 
 /** The last `lines` lines, and at most `chars` characters of them: one line can be megabytes. */

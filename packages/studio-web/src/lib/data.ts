@@ -48,11 +48,6 @@ export const studioQuery = queryOptions({
   staleTime: 60_000,
 })
 
-export const manifestQuery = queryOptions({
-  queryKey: ['index', manifestPath],
-  queryFn: () => fetchJson<IndexManifest>(manifestPath),
-})
-
 /** Every run header, newest first, from all month shards. */
 export const headersQuery = queryOptions({
   queryKey: ['index', 'headers'],

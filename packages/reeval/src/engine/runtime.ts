@@ -8,7 +8,7 @@ import type { DebugLine } from '../view/debug.ts'
 
 import type { AssertionResult } from './expect.ts'
 
-export { type AssertionResult, expect, extendExpect, type Matchers, SUBJECT } from './expect.ts'
+export { type AssertionResult, SUBJECT } from './expect.ts'
 
 export type TestHandle = {
   file: string

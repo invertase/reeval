@@ -12,8 +12,6 @@ const GENERATED = /\.(?:map|tsbuildinfo)$/
 /** A changed line this long is a minified bundle or generated data, not code anyone wrote. */
 export const MINIFIED_LINE_CHARS = 1000
 
-export const isNoisePath = (path: string) => DEPENDENCY_DIR.test(path) || LOCKFILE.test(path)
-
 export type Collapsed<T> = { kept: T[]; dirs: Array<{ dir: string; count: number }> }
 
 /** Replaces every file under a dependency directory with one `{ dir, count }` entry. */
