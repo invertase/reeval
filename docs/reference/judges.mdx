@@ -39,31 +39,27 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   The most judge calls at once to this model's provider, across the run. A whole number of at least 1.
 </Property>
 
-<Property name="maxInputTokens" type="number" optional>
-  The most estimated tokens of state the judge gets, at four characters a token. A whole number of at least 1. Default: the model's [budget](#budget).
+<Property name="state" type="JudgeStateOptions" optional>
+  What the judge is given beside your question: the judge's state, not the workspace's or the attempt's. An object keyed by the state's fields, described in [What the judge is given](#what-the-judge-is-given). It merges key by key, so a call's `state: { transcript: 'tools' }` keeps the config's `diff` patterns. A key's value replaces the outer one whole; lists aren't concatenated.
 </Property>
 
-<Property name="sees" type="JudgeSees" optional>
-  What the judge gets beside your question: an object keyed by the state's fields, described in [What the judge sees](#what-the-judge-sees). It merges key by key, so a call's `sees: { transcript: 'tools' }` keeps the config's `diff` patterns. A key's value replaces the outer one whole; lists aren't concatenated.
-</Property>
-
-`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). `on` with a value and `sees: { output: false }` is refused. `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
+`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). `on` with a value and `state: { output: false }` is refused. `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
 
 <Property name="artifacts" type="Array<Capture | string>" optional>
   Captures this call sends the judge. A handle from `c.capture()` or that capture's `name`. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
 </Property>
 
-## What the judge sees
+## What the judge is given
 
 ```ts
 const verdict = await c.judge('Does sign-in handle a wrong password?', {
-  sees: { diff: ['src/', '!**/*.test.ts'], contents: ['README.md'] },
+  state: { diff: ['src/', '!**/*.test.ts'], contents: ['README.md'] },
 })
 ```
 
-The judge gets a JSON state and your question. With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
+The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`; the resolved option is beside it as `stateOptions`. With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
 
-| `sees` key | Type | Default | What the state holds |
+| `state` key | Type | Default | What the state holds |
 |---|---|---|---|
 | `task` | `boolean` | `true` | The graded turn's prompt |
 | `output` | `boolean` | `true` | The graded turn's final message, or `on`'s value |
@@ -94,41 +90,15 @@ The diff leaves out what nobody wrote by hand, each file or directory replaced b
 | Minified files | A changed line of more than 1,000 characters |
 | Binaries | Anything git diffs as binary |
 
-What was left out, and why, is the judge input's `dropped` in `judge-input.json`, such as `dist/ (3 files): build output` or `notes.md: not in sees.diff`. Its `sees` is the resolved selection, every key set. The workspace's own `.gitignore` keeps the rest of the noise out of the diff; see [Environment](/reference/environment#fields).
-
-## Budget
-
-```json
-"dropped": [
-  "transcript: 36 events, over the judge's budget of 300 tokens"
-]
-```
-
-Every call's state is held to a budget of estimated tokens, so a big diff or a long transcript is cut and named instead of failing at the provider. `maxInputTokens` sets it; otherwise it's the model's:
-
-| Judge model | Budget |
-|---|---|
-| `typesafe-ai/jev-*` | 32,000 tokens |
-| Any other model | 100,000 tokens |
-| `fakeJudge()` | None |
-
-The question, `task`, `output` and `files` are always kept. Over budget, reeval cuts in this order, each cut a `[reeval: dropped …]` marker in the state and a line in `dropped`:
-
-1. Clips `'full'` transcript tool output to 300 characters.
-2. Drops transcript events from the middle, keeping the first and last.
-3. Drops the largest files from the diff.
-4. Clears check output, keeping each command and exit code.
-5. Drops the largest `contents` files.
-
-When the kept parts alone are over, the call is a [failed call](#failed-calls) and the judge isn't asked: `The judge's input is ~2k tokens (estimated) after every cut, over typesafe-ai/jev-1.13.0's budget of 1k: task 2k. Leave a part out with sees, e.g. { sees: { output: false } }, or raise judge.maxInputTokens.`
+What was left out, and why, is the judge input's `dropped` in `judge-input.json`, such as `dist/ (3 files): build output` or `notes.md: not in state.diff`. The workspace's own `.gitignore` keeps the rest of the noise out of the diff; see [Environment](/reference/environment#fields).
 
 ## Provider errors
 
-When a judge call fails with an error from the provider's API, the message keeps the provider's wording and adds what the input held: its estimated size, at four characters a token, and its biggest parts and files. reeval doesn't keep a table of model limits or read the provider's message, so this comes with every provider error: a refused input, a bad key or a rate limit.
+reeval sends the judge everything `state` selects, uncut. When the provider refuses it, or a judge call fails with any other error from the provider's API, the message keeps the provider's wording and adds one line: the input's estimated size, at four characters a token, its biggest parts and files, and the `state` keys that were on, largest first. reeval knows no model's limit and doesn't read the provider's message, so the line comes with every provider error.
 
 ```text
 judge failed for "Is it done?" (typesafe.evaluation/jev-under-test): {"error_type":"max_tokens_exceeded"}
-The judge's input was ~29k tokens (estimated): diff 28k, of which src/pages/SignIn.tsx is 17k, src/pages/MfaEnroll.tsx is 9k, src/firebase.ts is 2k. Narrow what the judge sees with sees, e.g. c.judge(question, { sees: { diff: ['src/'] } }), or set judge.maxInputTokens to cut it to the model's limit.
+The judge's input was ~22k tokens (estimated): diff 19k, of which src/pages/SignIn.tsx is 17k, src/firebase.ts is 2k; transcript 3k. Narrow state.diff, state.transcript, state.files, state.task or state.output.
 ```
 
 ## Failed calls
@@ -139,7 +109,7 @@ A call that fails (a provider error after its retries, or a missing key) doesn't
 { verdict: 'error', score: null, threshold, question, model, error }
 ```
 
-`toPass()` and `.not.toPass()` both fail on it, with the call's error. `c.judge()` still throws on a mistake in the call itself (no model, an empty question, a bad threshold, an unknown option or `sees` key, a `sees.checks` command it hasn't run) and when the run is cancelled or times out.
+`toPass()` and `.not.toPass()` both fail on it, with the call's error. `c.judge()` still throws on a mistake in the call itself (no model, an empty question, a bad threshold, an unknown option or `state` key, a `state.checks` command it hasn't run) and when the run is cancelled or times out.
 
 ## Providers and keys
 
@@ -218,13 +188,11 @@ analysis: {
 | A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in reeval.config.ts`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
 | An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
-| An unknown option | `Unknown judge option "include" in reeval.config.ts. Did you mean "sees.diff"?`; on a call, `… in c.judge(). …`. `on` outside a call: `on is per call: c.judge(question, { on }).` |
-| An unknown `sees` key | `Unknown judge.sees key "transcipt" in reeval.config.ts. Did you mean "transcript"?` |
-| A bad `sees` value | `judge.sees.turns must be 'last' or 'all' (got "first") in evals/a.eval.ts › lands`; `sees` itself must be an object such as `{ transcript: 'tools' }` |
-| A bad `maxInputTokens` | `judge.maxInputTokens must be a whole number of at least 1 (got 0) in reeval.config.ts` |
-| A check it hasn't run | `c.judge() sees.checks names a command this attempt hasn't run: "npm tset"` |
-| `on` with no output | `c.judge() on gives the output, but sees.output is false` |
-| Over the budget after every cut | `The judge's input is ~2k tokens (estimated) after every cut, over …'s budget of 1k: task 2k. …`, as a failed call |
+| An unknown option | `Unknown judge option "include" in reeval.config.ts. Did you mean "state.diff"?`; on a call, `… in c.judge(). …`. `on` outside a call: `on is per call: c.judge(question, { on }).` |
+| An unknown `state` key | `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` |
+| A bad `state` value | `judge.state.turns must be 'last' or 'all' (got "first") in evals/a.eval.ts › lands`; `state` itself must be an object such as `{ transcript: 'tools' }` |
+| A check it hasn't run | `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` |
+| `on` with no output | `c.judge() on gives the output, but state.output is false` |
 | A bad `artifacts` | `c.judge() artifacts must be a list of capture handles or names (got "form")` |
 | An unknown capture name | `c.judge() artifacts names a capture this attempt doesn't have: "form"` |
 | A score function in the config | `config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.` |

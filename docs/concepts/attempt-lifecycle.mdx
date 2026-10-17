@@ -63,7 +63,7 @@ flowchart TD
 | Harness | The agent's session starts, with `skills` and `mcp` servers placed where it reads them | Yes |
 | Turns | Each `c.send` runs one turn; reeval diffs the workspace after each | It's the agent |
 | Checks | Each `c.exec` runs in the sandbox; `to: 'checks'` secrets are swapped in only now | No |
-| Judge | Each `c.judge` sends what its `sees` picks (by default the task, final message, changed files and diff) to the judge model | No |
+| Judge | Each `c.judge` sends the state its `state` option picks (by default the task, final message, changed files and diff) to the judge model | No |
 | Teardown | Session closed, egress recorded, sandbox destroyed, record written | No |
 
 The sandbox and session start on the first `c.send` (or `c.sandbox()`), so the eval body's own code runs first. Whatever happens, teardown runs, and the record is written.

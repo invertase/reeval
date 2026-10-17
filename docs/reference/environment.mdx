@@ -78,7 +78,7 @@ It returns a frozen `Environment` with `name`, `layers` and `extend` / `extendEn
 <Property name="files" type="Record<string, string | HostFile>" optional>
   Files to write before the agent starts. Keys are workspace-relative paths, or `~/` paths in the sandbox's home, with forward slashes; an absolute path or a `..` segment is refused. Values are the content, or `file(path)` for a host file, copied byte for byte. Spread `directory(path)` to seed a whole host directory; a later key overrides.
 
-  The workspace needs its own `.gitignore`: your project's isn't copied in unless you list it here or it's in the `workspace` repository. It decides what counts as the agent's change, so without one the build output and caches the agent creates land in the diff the [judge](/reference/judges#what-the-judge-sees) reads.
+  The workspace needs its own `.gitignore`: your project's isn't copied in unless you list it here or it's in the `workspace` repository. It decides what counts as the agent's change, so without one the build output and caches the agent creates land in the diff the [judge](/reference/judges#what-the-judge-is-given) reads.
 </Property>
 
 <Property name="rules" type="string | HostFile" optional>

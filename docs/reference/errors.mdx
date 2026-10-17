@@ -36,8 +36,8 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `env.API_KEY in reeval.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` | Use the callback form and `secret()` or `secret.fromEnv()`. |
 | `files["../x"] in defineEnvironment("e"): paths are relative to the workspace, or start with ~/ for the home directory, and never use ..` | Write the file inside the workspace or home; an absolute path or `..` would land outside the sandbox's folders (on the fake sandbox, on your machine). Backslashes get `use forward slashes (docs/api.md)`. |
 | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` | Use a model string in the config. |
-| `Unknown judge option "include" in reeval.config.ts. Did you mean "sees.diff"?` | Use the suggested key. See [Judges](/reference/judges#what-the-judge-sees). |
-| `Unknown judge.sees key "transcipt" in reeval.config.ts. Did you mean "transcript"?` | Use the suggested key. A bad value names what the key takes, such as `judge.sees.turns must be 'last' or 'all' (got "first")`. |
+| `Unknown judge option "include" in reeval.config.ts. Did you mean "state.diff"?` | Use the suggested key. See [Judges](/reference/judges#what-the-judge-is-given). |
+| `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` | Use the suggested key. A bad value names what the key takes, such as `judge.state.turns must be 'last' or 'all' (got "first")`. |
 | `The defineConfig callback in reeval.config.ts returned a Promise. …` | Make the callback synchronous. |
 | `Config file not found: nope.ts` | Check the `--config` path. |
 | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs) here or above. Run reeval init.` | `reeval run` and `reeval image build` need a config file. Run `reeval init`, or pass `--config`. A parent-directory config still counts. |
@@ -164,9 +164,8 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 | `No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()` | Send a turn or `await c.sandbox()` first. |
 | `c.judge() has no turn to grade: call c.send() first` | Send a turn first, or pass `on`. |
 | `c.judge() has no model. …` | Set `judge.model` in the config, group, eval or call. |
-| `c.judge() sees.checks names a command this attempt hasn't run: "npm tset"` | Name the command exactly as you passed it to `c.exec`, after running it. |
-| `c.judge() on gives the output, but sees.output is false` | Drop `output: false`, or drop `on`. |
-| `The judge's input is ~2k tokens (estimated) after every cut, over …'s budget of 1k: …` | A judge error: the parts reeval always keeps are too big. Leave one out with `sees`, or raise `judge.maxInputTokens`. See [Budget](/reference/judges#budget). |
+| `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` | Name the command exactly as you passed it to `c.exec`, after running it. |
+| `c.judge() on gives the output, but state.output is false` | Drop `output: false`, or drop `on`. |
 | `expected file greet.js to exist` | The agent didn't create it. Check the transcript. |
 | `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. |
 | `expect(…).toSucceed() wasn't awaited. …` | Write `await expect(…)`. The eval fails even when the check passes. |
