@@ -8,7 +8,6 @@ import { z } from 'zod'
 import type {
   AssertionRecord,
   Capture,
-  CaptureWindow,
   Diff,
   ExecResult,
   FileChange,
@@ -21,6 +20,7 @@ import type {
   Verdict,
   WebEventType,
 } from '../types.ts'
+import { captureWindowSchema } from './config.ts'
 import {
   fakeJudgeDataSchema,
   judgeFields,
@@ -176,14 +176,11 @@ export const assertionRecordSchema = z
   })
   .describe('One `expect` or `expect.soft` matcher call an attempt made.')
 
-export const captureWindowSchema = z
-  .strictObject({
-    width: z.number().describe('In CSS pixels.'),
-    height: z.number().describe('In CSS pixels.'),
-  })
-  .describe(
-    'Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`.',
-  )
+const turnIndex = z
+  .number()
+  .int('a turn index, from 0')
+  .min(0, 'a turn index, from 0')
+  .describe("The turn's index, from 0.")
 
 export const captureSchema = z
   .strictObject({
@@ -241,7 +238,6 @@ export const judgeFailureSchema = z
   )
 
 export type _SameAsSchema = [
-  Assert<Same<z.infer<typeof captureWindowSchema>, CaptureWindow>>,
   Assert<Same<z.infer<typeof captureSchema>, Capture>>,
   Assert<Same<z.infer<typeof judgeArtifactRefSchema>, JudgeArtifactRef>>,
   Assert<Same<z.infer<typeof verdictSchema>, Verdict>>,
@@ -287,7 +283,7 @@ export const matcherArgSchema = z
 
 export const matcherSubjectSchema = z
   .union([
-    z.strictObject({ turn: z.number().int().min(0).describe("The turn's index, from 0.") }),
+    z.strictObject({ turn: turnIndex }),
     z.strictObject({ attempt: z.literal(true).describe('The attempt itself, `c`.') }),
     z.strictObject({ value: jsonValueSchema.describe('A value the eval passes as it is.') }),
   ])
@@ -306,7 +302,7 @@ export const judgeCallDataSchema = z
     ...judgeFields,
     on: z
       .union([
-        z.strictObject({ turn: z.number().int().min(0).describe("The turn's index, from 0.") }),
+        z.strictObject({ turn: turnIndex }),
         z.strictObject({ value: jsonValueSchema.describe('Graded as the output.') }),
       ])
       .optional()

@@ -835,6 +835,24 @@ profiles:
         options: { artifacts: [{ name: 'home', port: 3000, path: '/', viewport: 'full-page' }] },
       }),
     ],
+    [
+      'judge with a capture viewport that is not whole',
+      request({
+        op: 'judge',
+        question: 'ok?',
+        options: {
+          artifacts: [
+            {
+              name: 'home',
+              port: 3000,
+              path: '/',
+              viewport: { width: 10.5, height: 10 },
+              file: { path: 'artifacts/home.png', sha256: 'ab', bytes: 10 },
+            },
+          ],
+        },
+      }),
+    ],
     ['send without a prompt', request({ op: 'send' })],
     ['exec with a typo', request({ op: 'exec', cmd: 'ls' })],
     ['exec with an empty command', request({ op: 'exec', command: '' })],

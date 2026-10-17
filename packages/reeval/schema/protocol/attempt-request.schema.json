@@ -214,17 +214,22 @@
       "properties": {
         "height": {
           "description": "In CSS pixels.",
-          "type": "number"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "width": {
           "description": "In CSS pixels.",
-          "type": "number"
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       },
       "required": ["height", "width"],
       "additionalProperties": false
     },
-    "FakeJudgeModel": {
+    "FakeJudgeData": {
+      "description": "`fakeJudge()` as data: the score every call gets.",
       "type": "object",
       "properties": {
         "kind": {
@@ -232,7 +237,10 @@
           "const": "fake-judge"
         },
         "score": {
-          "type": "number"
+          "description": "The score (0–1) every call gets.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
         }
       },
       "required": ["kind", "score"],
@@ -303,7 +311,7 @@
               "pattern": "\\/"
             },
             {
-              "$ref": "#/$defs/FakeJudgeModel"
+              "$ref": "#/$defs/FakeJudgeData"
             }
           ]
         },
