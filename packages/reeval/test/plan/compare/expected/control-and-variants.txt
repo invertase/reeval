@@ -12,4 +12,4 @@ evals/variants.eval.ts › every cell gated, with a minimum lift  a/base/docker 
                                                                 b/skilled/docker  variant skilled  gated    ×2  minLift 0.2
 excluded: —
 image docker · 2 evals
-  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

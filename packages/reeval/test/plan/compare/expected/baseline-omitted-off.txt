@@ -7,4 +7,4 @@ evals/omitted.eval.ts › its own environment               a/base/docker      c
                                                           b/base/docker      control  ungated  ×1
 excluded: —
 image docker · 3 evals
-  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
