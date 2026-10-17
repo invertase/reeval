@@ -20,6 +20,16 @@ import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/fam
 import { runHeader } from '../view/header.ts'
 import { labelledJudgements } from '../view/judgements.ts'
 
+/** A history query's row: the columns the digest reads, as their table declares them. */
+type Row<Columns> = Columns & Record<string, unknown>
+type EffortRow = Row<{
+  run_id: string
+  eval_key: string
+  cell_key: string
+  control_key: string | null
+  tools_ratio: number | null
+}>
+
 export type DigestFact = { id: string; kind: string } & Record<string, unknown>
 export type DigestEvidence = {
   id: string
@@ -342,7 +352,8 @@ export async function buildDigestKeepingDropped(
   const facts: DigestFact[] = []
   const fact = (kind: string, body: Record<string, unknown>) =>
     facts.push({ id: `F${facts.length + 1}`, kind, ...body })
-  const q = (sql: string) => db.query(sql).rows
+  const q = <Columns = Record<string, unknown>>(sql: string) =>
+    db.query(sql).rows as Array<Row<Columns>>
   const list = (values: string[]) => values.map((v) => `'${v.replace(/'/g, "''")}'`).join(', ')
   const runList = list(runIds)
   const evalList = list([...evalKeys])
@@ -403,22 +414,22 @@ export async function buildDigestKeepingDropped(
   }
 
   // Effort per run and eval: every cell, and each variant against its control.
-  const effort = q(
+  const effort = q<EffortRow>(
     `SELECT * FROM effort_m WHERE run_id IN (${runList}) AND eval_key IN (${evalList}) ORDER BY run_id, rowid`,
   )
-  const effortGroups = new Map<string, Array<Record<string, unknown>>>()
+  const effortGroups = new Map<string, EffortRow[]>()
   for (const row of effort) {
     const id = `${row.run_id}\0${row.eval_key}`
     effortGroups.set(id, [...(effortGroups.get(id) ?? []), row])
   }
   for (const rows of effortGroups.values()) {
-    const first = rows[0] as Record<string, unknown>
-    const runId = first.run_id as string
+    const first = rows[0] as EffortRow
+    const runId = first.run_id
     fact('effort', {
       run: short.get(runId),
-      eval: tagOf(first.eval_key as string),
+      eval: tagOf(first.eval_key),
       cells: rows.map((row) => ({
-        cell: cellTag(runId, row.eval_key as string, row.cell_key as string),
+        cell: cellTag(runId, row.eval_key, row.cell_key),
         n: row.n,
         medianToolCalls: row.tools_median,
         medianAgentS: row.agent_s_median,
@@ -478,7 +489,20 @@ export async function buildDigestKeepingDropped(
     }
   }
   const harnesses = [...new Set(runs.flatMap((r) => r.record.stack.harnesses.map((h) => h.id)))]
-  const factors = q(
+  const factors = q<{
+    tier: string
+    level: string
+    baseline: string
+    context: string | null
+    run_id: string | null
+    eval_key: string | null
+    strata: number | null
+    variant_counted: number
+    control_counted: number
+    points: number
+    lo: number
+    hi: number
+  }>(
     `SELECT * FROM factor_effects WHERE
       (tier = 'pooled' AND (eval_key IS NULL OR eval_key IN (${evalList})))
       OR (tier = 'controlled' AND factor != 'environment' AND run_id IN (${runList}) AND eval_key IN (${evalList}))
@@ -488,7 +512,9 @@ export async function buildDigestKeepingDropped(
        factor, level, eval_key`,
   ).filter(
     (f) =>
-      f.tier !== 'pooled' || f.factor !== 'environment' || harnesses.includes(f.context as string),
+      f.tier !== 'pooled' ||
+      f.factor !== 'environment' ||
+      (f.context !== null && harnesses.includes(f.context)),
   )
   for (const f of factors) {
     // Pooled and observed rows name other runs. With no base they are not this run alone.
@@ -499,20 +525,19 @@ export async function buildDigestKeepingDropped(
     }
     // A pooled row that includes an eval-changed pair is not a contrast of the thing under test.
     if (f.tier === 'pooled') {
-      if (f.eval_key && changedEvalKeys.has(f.eval_key as string)) continue
+      if (f.eval_key && changedEvalKeys.has(f.eval_key)) continue
       if (!f.eval_key && changedEvalKeys.size) continue
     }
     const notComparable = f.pass_verdict === 'not_comparable' || f.factor === 'sources'
     fact('factor', {
       tier: f.tier,
       factor: f.factor,
-      level: f.tier === 'observed' ? (short.get(f.level as string) ?? f.level) : f.level,
-      baseline:
-        f.tier === 'observed' ? (short.get(f.baseline as string) ?? f.baseline) : f.baseline,
+      level: f.tier === 'observed' ? (short.get(f.level) ?? f.level) : f.level,
+      baseline: f.tier === 'observed' ? (short.get(f.baseline) ?? f.baseline) : f.baseline,
       ...(f.tier === 'observed' ? {} : { context: f.context }),
-      eval: f.eval_key ? tagOf(f.eval_key as string) : 'all evals',
-      ...(f.run_id && f.tier !== 'observed' ? { run: short.get(f.run_id as string) } : {}),
-      ...(f.strata && (f.strata as number) > 1 ? { strata: f.strata } : {}),
+      eval: f.eval_key ? tagOf(f.eval_key) : 'all evals',
+      ...(f.run_id && f.tier !== 'observed' ? { run: short.get(f.run_id) } : {}),
+      ...(f.strata && f.strata > 1 ? { strata: f.strata } : {}),
       ...(f.runs ? { runs: f.runs } : {}),
       ...(notComparable
         ? {
@@ -521,13 +546,7 @@ export async function buildDigestKeepingDropped(
           }
         : {
             passRate: `${f.variant_pass}/${f.variant_counted} vs ${f.control_pass}/${f.control_counted}`,
-            lift: digestLift(
-              f.variant_counted as number,
-              f.control_counted as number,
-              f.points as number,
-              f.lo as number,
-              f.hi as number,
-            ),
+            lift: digestLift(f.variant_counted, f.control_counted, f.points, f.lo, f.hi),
             passVerdict: f.pass_verdict,
           }),
       toolCalls: f.tools_ratios,
@@ -541,7 +560,7 @@ export async function buildDigestKeepingDropped(
           }
         : {}),
       ...(f.tokens_note ? { unreportedUsage: f.tokens_note } : {}),
-      ...(f.strata && (f.strata as number) > 1
+      ...(f.strata && f.strata > 1
         ? {
             consistentStrata: `${f.consistent}/${f.strata}`,
             separatedStrata: `${f.separated}/${f.strata}`,
@@ -552,7 +571,14 @@ export async function buildDigestKeepingDropped(
   }
 
   // Did each attempt read the skills its environment placed?
-  const reads = q(
+  const reads = q<{
+    run_id: string
+    eval_key: string
+    cell_key: string
+    skill: string
+    attempts: number
+    read: number
+  }>(
     `SELECT run_id, eval_key, cell_key, skill, COUNT(*) AS attempts, SUM(read_line IS NOT NULL) AS read,
        GROUP_CONCAT(DISTINCT read_line) AS lines
      FROM skill_reads WHERE run_id IN (${runList}) AND eval_key IN (${evalList})
@@ -563,17 +589,17 @@ export async function buildDigestKeepingDropped(
     { cell: string; skill: string; attempts: number; read: number; lines: Set<number> }
   >()
   for (const r of reads) {
-    const cell = cellTag(r.run_id as string, r.eval_key as string, r.cell_key as string)
+    const cell = cellTag(r.run_id, r.eval_key, r.cell_key)
     const id = `${cell}\0${r.skill}`
     const entry = byCell.get(id) ?? {
       cell,
-      skill: r.skill as string,
+      skill: r.skill,
       attempts: 0,
       read: 0,
       lines: new Set(),
     }
-    entry.attempts += r.attempts as number
-    entry.read += r.read as number
+    entry.attempts += r.attempts
+    entry.read += r.read
     for (const l of String(r.lines ?? '')
       .split(',')
       .filter(Boolean))
@@ -593,7 +619,7 @@ export async function buildDigestKeepingDropped(
   }
 
   // What each arm's tool calls were for, per attempt, and which placed files it opened.
-  const classRows = q(
+  const classRows = q<{ n: number; class: string; calls: number }>(
     `SELECT t.run_id, a.eval_key, a.cell_key, a.n, t.class, COUNT(*) AS calls
      FROM tool_calls t JOIN attempts a ON a.run_id = t.run_id AND a.key = t.attempt_key
      WHERE t.run_id IN (${runList}) AND a.eval_key IN (${evalList}) AND a.outcome IN ('pass', 'fail')
@@ -614,16 +640,16 @@ export async function buildDigestKeepingDropped(
   }
   for (const r of classRows) {
     const entry = useEntry(r)
-    const per = entry.classes.get(r.class as string) ?? new Map<number, number>()
-    per.set(r.n as number, r.calls as number)
-    entry.classes.set(r.class as string, per)
+    const per = entry.classes.get(r.class) ?? new Map<number, number>()
+    per.set(r.n, r.calls)
+    entry.classes.set(r.class, per)
   }
   for (const r of fileRows) useEntry(r).files.push(`${r.path} ${r.read}/${r.attempts}`)
   if (classRows.length) {
     const attemptNs = new Map<string, number[]>()
     for (const r of classRows) {
       const id = `${r.run_id}\0${r.eval_key}\0${r.cell_key}`
-      attemptNs.set(id, [...new Set([...(attemptNs.get(id) ?? []), r.n as number])])
+      attemptNs.set(id, [...new Set([...(attemptNs.get(id) ?? []), r.n])])
     }
     fact('context-use', {
       note: 'Tool calls per counted attempt by class (context: a placed skill, rules or MCP tool; dependency: node_modules, site-packages, vendor, --help; web; verify: a check command or test/build/lint; workspace: the rest), a heuristic. files: each placed file, opened in k/n attempts.',
@@ -756,14 +782,16 @@ export async function buildDigestKeepingDropped(
   }
 
   // Flaky cells over comparable runs.
-  for (const f of q(`SELECT * FROM flaky_cells WHERE eval_key IN (${evalList})`)) {
-    const cell = cellTag(head.record.runId, f.eval_key as string, f.cell_key as string)
+  for (const f of q<{ eval_key: string; cell_key: string; lo: number; hi: number }>(
+    `SELECT * FROM flaky_cells WHERE eval_key IN (${evalList})`,
+  )) {
+    const cell = cellTag(head.record.runId, f.eval_key, f.cell_key)
     fact('flaky', {
-      eval: tagOf(f.eval_key as string),
+      eval: tagOf(f.eval_key),
       cell,
       pass: `${f.pass}/${f.counted}`,
       runs: f.runs,
-      wilson95: `${Math.round((f.lo as number) * 100)}…${Math.round((f.hi as number) * 100)}%`,
+      wilson95: `${Math.round(f.lo * 100)}…${Math.round(f.hi * 100)}%`,
       verdict: f.verdict,
       cause: f.cause,
     })
@@ -1034,8 +1062,7 @@ export async function buildDigestKeepingDropped(
         row.control_key &&
         (row.verdict === 'fewer' ||
           row.verdict === 'more' ||
-          (row.tools_ratio !== null &&
-            ((row.tools_ratio as number) <= 0.5 || (row.tools_ratio as number) >= 2))),
+          (row.tools_ratio !== null && (row.tools_ratio <= 0.5 || row.tools_ratio >= 2))),
     )
     if (!contrast) continue
     strips++

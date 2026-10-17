@@ -64,6 +64,8 @@ export const FLAGS = {
 
 export type FlagName = keyof typeof FLAGS
 
+export const isFlagName = (name: string): name is FlagName => name in FLAGS
+
 type FlagValue<S extends FlagSpec> = S extends { type: 'string' }
   ? S extends { multiple: true }
     ? string[]
@@ -470,9 +472,9 @@ function checkOne(
       const flag = arg.startsWith('--')
         ? raw
         : Object.entries(FLAGS).find(([, s]) => 'short' in s && s.short === raw)?.[0]
-      if (!flag || !(flag in FLAGS)) return `${arg} isn't a reeval flag`
+      if (!flag || !isFlagName(flag)) return `${arg} isn't a reeval flag`
       if (!allowed.has(flag)) return `--${flag} isn't an option of ${name}`
-      const spec = FLAGS[flag as FlagName]
+      const spec = FLAGS[flag]
       const type = spec.type
       if (type === 'string' && eq === -1) {
         const value = args[i + 1]

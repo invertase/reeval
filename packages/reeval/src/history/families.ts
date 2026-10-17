@@ -101,8 +101,8 @@ function effortOf(pairs: Array<[Side, Side]>): FamilyEffort {
     pairs.flatMap(([v, c]): Array<[number, number]> => {
       const vs = v.samples.map(pick)
       const cs = c.samples.map(pick)
-      if (vs.some((x) => x === undefined) || cs.some((x) => x === undefined)) return []
-      return [[median(vs as number[]) ?? 0, median(cs as number[]) ?? 0]]
+      if (!vs.every((x) => x !== undefined) || !cs.every((x) => x !== undefined)) return []
+      return [[median(vs) ?? 0, median(cs) ?? 0]]
     })
   const tokens = per((s) => s.tokens)
   return {

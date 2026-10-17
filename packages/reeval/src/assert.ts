@@ -1,5 +1,6 @@
 import picomatch from 'picomatch'
 import { SKILL_LOAD_TOOLS, toolTarget } from './history/tool-target.ts'
+import { isObjectLike } from './object.ts'
 import type { AttemptContext, FileChange, TranscriptEvent, Turn, WebEventType } from './types.ts'
 
 export type Result = { pass: boolean; message: () => string }
@@ -16,13 +17,10 @@ type ToolEvent = Extract<TranscriptEvent, { type: 'tool' }>
 type Subject = Pick<Turn, 'transcript' | 'unreported'>
 
 const isTurn = (value: unknown): value is Subject =>
-  typeof value === 'object' &&
-  value !== null &&
-  Array.isArray((value as Turn).transcript) &&
-  Array.isArray((value as Turn).unreported)
+  isObjectLike(value) && Array.isArray(value.transcript) && Array.isArray(value.unreported)
 
 const isContext = (value: unknown): value is Pick<AttemptContext, 'turns'> =>
-  typeof value === 'object' && value !== null && Array.isArray((value as AttemptContext).turns)
+  isObjectLike(value) && Array.isArray(value.turns)
 
 /** A turn from `c.send()`, or `c` (every turn so far). */
 export function transcriptSubject(actual: unknown, matcher: string): Subject {
@@ -45,8 +43,7 @@ const listed = (values: string[]) => (values.length ? JSON.stringify(values) : '
 const targetOf = (pattern: RegExp | string | undefined) =>
   pattern === undefined ? '' : ` matching ${pattern}`
 
-const record = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+const record = (value: unknown): Record<string, unknown> => (isObjectLike(value) ? value : {})
 
 const toolsOf = (transcript: TranscriptEvent[]) =>
   transcript.flatMap((e) => (e.type === 'tool' ? [e] : []))
@@ -81,10 +78,9 @@ export function inputMatches(input: unknown, expected?: ToolInputMatch): boolean
   const text = typeof input === 'string' ? input : JSON.stringify(input ?? '')
   if (typeof expected === 'string') return text.includes(expected)
   if (expected instanceof RegExp) return expected.test(text)
-  if (typeof input !== 'object' || input === null) return false
-  const rec = input as Record<string, unknown>
+  if (!isObjectLike(input)) return false
   return Object.entries(expected).every(([key, value]) => {
-    const actual = rec[key]
+    const actual = input[key]
     if (value instanceof RegExp) return value.test(String(actual ?? ''))
     if (typeof value === 'string') {
       return actual === value || String(actual ?? '').includes(value)
@@ -241,12 +237,12 @@ export function edited(actual: unknown, path?: RegExp | string): Result {
 export type PathMatch = string | RegExp | ReadonlyArray<string | RegExp>
 
 const hasDiff = (value: unknown): value is Pick<Turn, 'diff'> =>
-  typeof value === 'object' && value !== null && Array.isArray((value as Turn).diff?.files)
+  isObjectLike(value) && isObjectLike(value.diff) && Array.isArray(value.diff.files)
 
 /** A turn's changed files, or `c`'s as of its latest turn: the diff is cumulative. */
 function changedFiles(actual: unknown): FileChange[] {
   if (hasDiff(actual)) return actual.diff.files
-  if (isContext(actual)) return (actual.turns.at(-1) as Turn | undefined)?.diff.files ?? []
+  if (isContext(actual)) return actual.turns.at(-1)?.diff.files ?? []
   throw new TypeError('toHaveChanged() expects a turn from c.send(), or c')
 }
 

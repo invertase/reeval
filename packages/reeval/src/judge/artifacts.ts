@@ -1,4 +1,5 @@
 import { sha256 } from '../ids.ts'
+import { isObjectLike } from '../object.ts'
 import type {
   Capture,
   JudgeArtifactRef,
@@ -9,9 +10,12 @@ import type {
 
 /** A capture handle: a name plus the file the attempt wrote. */
 export function isCaptureHandle(value: unknown): value is Capture {
-  if (typeof value !== 'object' || value === null) return false
-  const v = value as Capture
-  return typeof v.name === 'string' && typeof v.file?.path === 'string'
+  return (
+    isObjectLike(value) &&
+    typeof value.name === 'string' &&
+    isObjectLike(value.file) &&
+    typeof value.file.path === 'string'
+  )
 }
 
 /** The first `artifacts` value that isn't a list of capture handles or names. */

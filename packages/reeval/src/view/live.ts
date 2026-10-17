@@ -2,6 +2,7 @@
 // `.reeval/staging/<runId>/live.json` (a `LiveProgress`) and replaces it whole on every change; it's
 // never part of a run record, and it goes when the record lands.
 
+import { isOneOf } from '../object.ts'
 import { fillDefaults } from './record.ts'
 
 /** The progress file's name inside the run's staging directory. */
@@ -86,24 +87,25 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 const str = (v: unknown): v is string => typeof v === 'string'
 const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
-const orNull = <T>(v: unknown, is: (x: unknown) => x is T) => v === null || v === undefined || is(v)
+const orNull = <T>(v: unknown, is: (x: unknown) => x is T): v is T | null | undefined =>
+  v === null || v === undefined || is(v)
 
 function readableAttempt(v: unknown): LiveAttempt | null {
   if (!isObj(v)) return null
   const { key, evalId, name, file, cell, n, status, startedAt, durationMs } = v
-  if (![key, evalId, name, file, cell].every(str) || !num(n)) return null
-  if (!STATUSES.includes(status as LiveStatus)) return null
+  if (!str(key) || !str(evalId) || !str(name) || !str(file) || !str(cell) || !num(n)) return null
+  if (!isOneOf(STATUSES, status)) return null
   if (!orNull(startedAt, str) || !orNull(durationMs, num)) return null
   return {
-    key: key as string,
-    evalId: evalId as string,
-    name: name as string,
-    file: file as string,
-    cell: cell as string,
+    key,
+    evalId,
+    name,
+    file,
+    cell,
     n,
-    status: status as LiveStatus,
-    startedAt: (startedAt as string | undefined) ?? null,
-    durationMs: (durationMs as number | undefined) ?? null,
+    status,
+    startedAt: startedAt ?? null,
+    durationMs: durationMs ?? null,
   }
 }
 
@@ -115,19 +117,18 @@ export function readableLiveProgress(value: unknown): LiveProgress | null {
   if (!isObj(value) || value.schemaVersion !== LIVE_SCHEMA_VERSION) return null
   fillDefaults('live-progress', value)
   const { runId, startedAt, pid, host, heartbeatAt, phase, attempts } = value
-  if (![runId, startedAt, host, heartbeatAt].every(str) || !num(pid)) return null
-  if (!PHASES.includes(phase as LivePhase) || !Array.isArray(attempts)) return null
-  const read = attempts.map(readableAttempt)
-  if (read.some((a) => a === null)) return null
-  const list = read as LiveAttempt[]
+  if (!str(runId) || !str(startedAt) || !str(host) || !str(heartbeatAt) || !num(pid)) return null
+  if (!isOneOf(PHASES, phase) || !Array.isArray(attempts)) return null
+  const list = attempts.map(readableAttempt)
+  if (!list.every((a) => a !== null)) return null
   return {
     schemaVersion: LIVE_SCHEMA_VERSION,
-    runId: runId as string,
-    startedAt: startedAt as string,
+    runId,
+    startedAt,
     pid,
-    host: host as string,
-    heartbeatAt: heartbeatAt as string,
-    phase: phase as LivePhase,
+    host,
+    heartbeatAt,
+    phase,
     planned: list.length,
     counts: liveCounts(list),
     attempts: list,

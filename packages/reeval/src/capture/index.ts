@@ -2,6 +2,7 @@ import { createServer } from 'node:net'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseDuration } from '../duration.ts'
+import { isOneOf } from '../object.ts'
 import { cacheDir } from '../root.ts'
 import type {
   CaptureCall,
@@ -62,7 +63,7 @@ export function isCaptureWindow(viewport: Viewport): viewport is CaptureWindow {
 /** `'load'` when the call omits `wait`. `'load'`, `'idle'` or `{ ms }`. */
 export function resolveWait(wait: CaptureCall['wait']): Wait {
   if (wait === undefined) return 'load'
-  if ((CAPTURE_WAITS as readonly string[]).includes(wait as string)) return wait as CaptureWait
+  if (isOneOf(CAPTURE_WAITS, wait)) return wait
   if (
     typeof wait === 'object' &&
     wait !== null &&

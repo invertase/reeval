@@ -18,6 +18,7 @@ import {
 } from './contract/plain.ts'
 import { genericProblem, got, type Issue, refusal } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
+import { isObjectLike } from './object.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
 import type {
@@ -80,21 +81,16 @@ const SPEC_HINTS: Record<string, string> = {
 }
 
 export const isSecret = (value: unknown): value is Secret =>
-  typeof value === 'object' && value !== null && (value as Secret).kind === 'secret'
+  isObjectLike(value) && value.kind === 'secret'
 
 export const isSecretTemplate = (value: unknown): value is SecretTemplate =>
-  typeof value === 'object' &&
-  value !== null &&
-  (value as SecretTemplate).kind === 'secret-template'
+  isObjectLike(value) && value.kind === 'secret-template'
 
 export const isHostFile = (value: unknown): value is HostFile =>
-  typeof value === 'object' && value !== null && (value as HostFile).kind === 'file'
+  isObjectLike(value) && value.kind === 'file'
 
 export const isEnvironment = (value: unknown): value is Environment =>
-  typeof value === 'object' &&
-  value !== null &&
-  (value as Environment).kind === 'environment' &&
-  Array.isArray((value as Environment).layers)
+  isObjectLike(value) && value.kind === 'environment' && Array.isArray(value.layers)
 
 // reeval's own files, so a stack trace's first frame outside them is the file that called us.
 // Compiled, all of reeval's code is one module at the root of the executable's filesystem.

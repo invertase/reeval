@@ -10,6 +10,7 @@ import {
   searched,
   type ToolInputMatch,
 } from './assert.ts'
+import { isObjectLike } from './object.ts'
 import type { ExecResult, JudgeFailure, Verdict } from './types.ts'
 
 export { HarnessCapabilityError } from './assert.ts'
@@ -27,7 +28,7 @@ const tail = (s: string, lines = 20, chars = 2000) => {
 type HasFiles = { readFile(path: string): Promise<string | null> }
 
 const hasFiles = (value: unknown): value is HasFiles =>
-  typeof value === 'object' && value !== null && typeof (value as HasFiles).readFile === 'function'
+  isObjectLike(value) && typeof value.readFile === 'function'
 
 export const matchers = {
   async toHaveFile(actual: unknown, path: string, pattern?: RegExp | string): Promise<Result> {

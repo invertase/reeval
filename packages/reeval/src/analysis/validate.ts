@@ -37,7 +37,7 @@ export function citations(digest: Digest) {
     }
     const line = LINE.exec(c)
     if (line) {
-      const [, id, n] = line as unknown as [string, string, string]
+      const [, id = '', n = ''] = line
       if (!lines.get(id)?.has(Number(n))) return null
       return (
         digest.evidence.find((e) => e.id === id)?.lines.find((l) => l.startsWith(`L${n} `)) ?? null
@@ -45,7 +45,7 @@ export function citations(digest: Digest) {
     }
     const transcript = TRANSCRIPT.exec(c)
     if (transcript) {
-      const [, attempt, n] = transcript as unknown as [string, string, string]
+      const [, attempt = '', n = ''] = transcript
       for (const id of evidenceOf(attempt)) {
         if (lines.get(id)?.has(Number(n))) return resolve(`${id}:L${n}`)
       }
@@ -53,7 +53,7 @@ export function citations(digest: Digest) {
     }
     const exec = EXEC.exec(c)
     if (exec) {
-      const [, attempt, n] = exec as unknown as [string, string, string]
+      const [, attempt = '', n = ''] = exec
       const a = digest.attempts[attempt]
       return a && Number(n) >= 1 && Number(n) <= a.execs ? JSON.stringify(a) : null
     }

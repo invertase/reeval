@@ -89,10 +89,7 @@ function Verdict({ j }: { j: JudgementRecord }) {
 }
 
 function Field({ name, value }: { name: string; value: unknown }) {
-  const ref =
-    value && typeof value === 'object' && '$ref' in (value as Record<string, unknown>)
-      ? String((value as Record<string, unknown>).$ref)
-      : null
+  const ref = value && typeof value === 'object' && '$ref' in value ? String(value.$ref) : null
   return (
     <div className="border-b px-4 py-3 last:border-b-0">
       <div className="mb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">

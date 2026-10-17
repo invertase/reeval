@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { mergeOutcome } from '../../history/assemble.ts'
 import type { AttemptRecord } from '../../history/types.ts'
 import { recordFileName } from '../../ids.ts'
+import { isObjectLike } from '../../object.ts'
 import { clip } from '../../text.ts'
 import type { EvalRecord, Outcome, TranscriptEvent } from '../../types.ts'
 import type { EvalResult } from '../../ui/events.ts'
@@ -43,10 +44,9 @@ const INPUT_KEYS = [
 /** A tool call's input in a few words: its command or path when it has one. */
 function inputSummary(input: unknown): string {
   if (typeof input === 'string') return clip(input.replace(/\s+/g, ' '), 120)
-  if (typeof input !== 'object' || input === null) return ''
-  const fields = input as Record<string, unknown>
+  if (!isObjectLike(input)) return ''
   for (const key of INPUT_KEYS) {
-    const value = fields[key]
+    const value = input[key]
     if (typeof value === 'string' && value) return clip(value.replace(/\s+/g, ' '), 120)
     if (Array.isArray(value) && value.every((v) => typeof v === 'string'))
       return clip(value.join(' '), 120)

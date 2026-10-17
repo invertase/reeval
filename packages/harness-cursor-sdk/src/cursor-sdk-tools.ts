@@ -90,10 +90,9 @@ export const CURSOR_SDK_BUILTIN_TOOLS = {
 
 export type CursorSdkBuiltinTools = typeof CURSOR_SDK_BUILTIN_TOOLS
 
-const record = (value: unknown): Record<string, unknown> =>
+const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {}
+const record = (value: unknown): Record<string, unknown> => (isRecord(value) ? value : {})
 const str = (value: unknown) => (typeof value === 'string' ? value : undefined)
 
 const BY_NATIVE_NAME = new Map<string, string>(
