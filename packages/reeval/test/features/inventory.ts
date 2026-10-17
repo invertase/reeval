@@ -53,6 +53,8 @@ const analysis = (name: string) => `reeval/test/analysis.test.ts › ${name}`
 const workspace = (name: string) => `reeval/test/workspace.test.ts › ${name}`
 const checks = (name: string) => `reeval/test/checks.test.ts › ${name}`
 const engineExpect = (name: string) => `reeval/test/engine-expect.test.ts › ${name}`
+const judgeState = (name: string) => `reeval/test/judge-state.test.ts › ${name}`
+const history = (name: string) => `reeval/test/history.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -1235,12 +1237,29 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.scope',
     area: 'Judges and matchers',
-    name: 'What the judge sees: build output, source maps, build info and minified files dropped from its diff, `judge.include` and `judge.files` from the config to the call',
-    fixtures: ['judge/build-output', 'judge/include', 'judge/files'],
+    name: 'What the judge is given: `judge.state` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff',
+    fixtures: [
+      'judge/build-output',
+      'judge/state-diff',
+      'judge/state-contents',
+      'judge/state-contents-glob',
+      'judge/state-off',
+      'judge/state-transcript',
+      'judge/state-turns',
+      'judge/state-checks',
+      'judge/state-cascade',
+    ],
     tests: [
       unit('the judge drops build output, source maps, build info and minified files'),
-      unit("the judge's include filters its diff and files"),
-      engine('judge include and files cascade from the config to the call'),
+      unit("the judge's state.diff patterns filter its diff and files"),
+      engine('judge state cascades key by key from the config to the call'),
+      engine(
+        "c.judge refuses an unknown option, a command it hasn't run and on without state.output",
+      ),
+      judgeState('the transcript renders one compact entry per event, by mode'),
+      judgeState('state resolves every key to its default, and merges key by key'),
+      judgeState('judge options name an unknown key, a misspelt state key and a bad value'),
+      history("the config's judge.state is in the record and the fingerprint"),
     ],
   },
   {
@@ -1257,9 +1276,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.input-size',
     area: 'Judges and matchers',
-    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint",
+    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `state` keys that were on, largest first; reeval sends what `state` selects, uncut",
     tests: [
       unit("a provider's error keeps its wording and adds what fills the judge's input"),
+      judgeState("a provider error keeps the provider's message and names the state keys"),
+      engine('the judge gets all of what state selects, however big'),
       engine("a provider's error keeps its wording and names what filled the judge's input"),
     ],
   },

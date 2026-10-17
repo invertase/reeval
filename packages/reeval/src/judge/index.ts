@@ -34,21 +34,6 @@ export function checkModelString(model: string): string | undefined {
   return `Judge model "${model}" needs a provider prefix, e.g. "${RECOMMENDED_JUDGE_MODEL}" or "google/${model}"`
 }
 
-/** The first of `include` and `files` that isn't a list of non-empty strings, with its value. */
-export function badJudgeList(judge: {
-  include?: unknown
-  files?: unknown
-}): { key: 'include' | 'files'; got: string } | undefined {
-  for (const key of ['include', 'files'] as const) {
-    const value = judge[key]
-    if (value === undefined) continue
-    if (!Array.isArray(value) || value.some((p) => typeof p !== 'string' || !p.trim())) {
-      return { key, got: JSON.stringify(value) ?? String(value) }
-    }
-  }
-  return undefined
-}
-
 const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 
 /** Environment variables the judge model needs, as alternatives: any one of them is enough. */

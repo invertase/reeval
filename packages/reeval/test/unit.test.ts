@@ -687,7 +687,7 @@ test('the judge drops build output, source maps, build info and minified files, 
   ])
 })
 
-test("the judge's include filters its diff and files, the last match winning; files leave the diff", () => {
+test("the judge's state.diff patterns filter its diff and files, the last match winning; contents leave the diff", () => {
   const paths = ['src/app.ts', 'src/app.test.ts', 'src/secret/key.ts', 'README.md', 'dist/a.js']
   const diff = {
     patch: paths.map((p) => added(p, `// ${p}`)).join(''),
@@ -703,9 +703,9 @@ test("the judge's include filters its diff and files, the last match winning; fi
     'nothing outside include, not even a marker',
   )
   assert.deepEqual(only.dropped, [
-    'src/app.test.ts: not in include',
-    'README.md: not in include',
-    'dist/a.js: not in include',
+    'src/app.test.ts: not in state.diff',
+    'README.md: not in state.diff',
+    'dist/a.js: not in state.diff',
   ])
   const without = judgeDiff(diff, { include: ['!README.md'] })
   assert.deepEqual(without.files, [
@@ -774,7 +774,10 @@ test("a provider's error keeps its wording and adds what fills the judge's input
     message,
     /^\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~312k tokens \(estimated\): diff 302k, of which src\/huge\.ts is 300k, src\/app\.ts is 2k; contents 10k, of which README\.md is 10k\. Narrow /,
   )
-  assert.match(message, /include: \['src\/'\]/)
+  assert.match(
+    message,
+    /\. Narrow state\.diff, state\.contents, state\.files, state\.task or state\.output\.$/,
+  )
   const small = withInputSize('Bad request', { task: 't', diff: '' }, 'q?')
   assert.match(
     small,

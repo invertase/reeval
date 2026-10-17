@@ -55,3 +55,11 @@ export async function diffSinceSnapshot(sandbox: Sandbox, signal?: AbortSignal):
     })
   return { patch: patch.stdout, files }
 }
+
+/** Every file in the workspace as git sees it (its `.gitignore` applies), sorted. */
+export async function workspaceFiles(sandbox: Sandbox, signal?: AbortSignal): Promise<string[]> {
+  const r = await sandbox.exec(`${SNAPSHOT_ENV} && ${GIT} add -A && ${GIT} ls-files -z`, { signal })
+  if (r.exitCode !== 0)
+    throw new InfraError(`Failed to list the workspace's files: ${r.stderr.trim()}`)
+  return r.stdout.split('\0').filter(Boolean).sort()
+}

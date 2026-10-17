@@ -23,7 +23,8 @@ import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
-import { badJudgeList, checkModelString } from './judge/index.ts'
+import { checkModelString } from './judge/index.ts'
+import { judgeProblem, mergeJudge } from './judge/state-options.ts'
 import type {
   CaptureOptions,
   Cell,
@@ -372,12 +373,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
       `judge.threshold must be between 0 and 1 (got ${String(threshold)}) in ${where}`,
     )
   }
-  const badList = o.judge && badJudgeList(o.judge)
-  if (badList) {
-    throw new UsageError(
-      `judge.${badList.key} must be a list of non-empty strings (got ${badList.got}) in ${where}`,
-    )
-  }
+  const judgeIssue = o.judge && judgeProblem(o.judge, ` in ${where}`)
+  if (judgeIssue) throw new UsageError(judgeIssue)
   if (o.sandbox !== undefined) {
     const kind = (o.sandbox as { kind?: string }).kind
     if (kind !== 'docker' && kind !== 'fake') {
@@ -693,7 +690,7 @@ function applyLevel(
   if (options.gate !== undefined) out.gate = options.gate
   if (options.timeout !== undefined) out.timeout = options.timeout
   Object.assign(out.env, options.env)
-  Object.assign(out.judge, options.judge)
+  out.judge = mergeJudge(out.judge, options.judge)
   if (options.capture !== undefined) {
     const { viewport, ...rest } = options.capture
     out.capture = { ...out.capture, ...rest }
@@ -704,10 +701,8 @@ function applyLevel(
 }
 
 /** What a profile sets over the config's judge: its `judge`, then its `defaults.judge`. */
-export const profileJudge = (profile: ResolvedProfile): ConfigJudgeOptions => ({
-  ...profile.judge,
-  ...profile.defaults.judge,
-})
+export const profileJudge = (profile: ResolvedProfile): ConfigJudgeOptions =>
+  mergeJudge(profile.judge, profile.defaults.judge)
 
 export type ResolvedEval = {
   resolved: Resolved

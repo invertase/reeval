@@ -62,12 +62,20 @@ export function describeSize(state: Record<string, JSONValue>, question: string)
     .join('; ')
 }
 
-const HINT =
-  "Narrow what the judge sees with include, e.g. c.judge(question, { include: ['src/'] }), or set judge: { include } in the config; files shows chosen files in full."
+/** `Narrow state.diff, state.transcript or state.output.`: the state's parts, largest first. */
+function stateHint(state: Record<string, JSONValue>, question: string): string {
+  const keys = partsOf(state, question)
+    .filter((p) => p.name !== 'question')
+    .map((p) => `state.${p.name}`)
+  if (!keys.length) return ''
+  const last = keys.pop()
+  return ` Narrow ${keys.length ? `${keys.join(', ')} or ${last}` : last}.`
+}
 
 /**
  * A provider's error, as the provider worded it, then what the judge's input held: its estimated
- * size and biggest parts and files, and how to narrow it.
+ * size and biggest parts and files, and the `state` keys that were on, largest first. reeval knows
+ * no model's limit, so this follows every provider error.
  */
 export const withInputSize = (
   message: string,
@@ -75,4 +83,4 @@ export const withInputSize = (
   question: string,
 ) =>
   `${message}\nThe judge's input was ~${k(inputTokens(state, question))} tokens (estimated): ` +
-  `${describeSize(state, question)}. ${HINT}`
+  `${describeSize(state, question)}.${stateHint(state, question)}`

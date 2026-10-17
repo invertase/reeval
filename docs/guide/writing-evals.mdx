@@ -149,7 +149,7 @@ const verdict = await c.judge('Is the change minimal?', { threshold: 0.9 })
 expect(verdict).toPass()
 ```
 
-The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff, without build output or minified files; `include` and `files` narrow it further. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `reeval.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions and [what the judge sees](/concepts/judges#narrow-what-the-judge-sees).
+The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff, without build output or minified files; its `state` option changes that, such as `{ state: { transcript: 'tools' } }` to add its tool calls. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `reeval.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions and [what the judge is given](/concepts/judges#choose-what-the-judge-is-given).
 
 ## Choose checks or the judge
 
@@ -211,7 +211,7 @@ const verdict = await c.judge('Does it say 3 orders totalling 50?', {
 expect(verdict).toPass()
 ```
 
-**Judge what the code does** when the behaviour is the outcome. The judge sees the diff, not what the code prints, so pass the output with `on` in place of the final message.
+**Judge what the code does** when the behaviour is the outcome. The judge sees the diff, not what the code prints, so pass the output with `on` in place of the final message. To show the command and its exit code too, use `state: { checks: ['node summary.js'] }`.
 
 <Info>
   Checks run in the agent's container, as the same user. That suits evals of how an agent works with your tools, but it isn't a sealed verifier for adversarial benchmarks.

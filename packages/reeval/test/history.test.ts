@@ -479,6 +479,32 @@ describe('recording runs into evals/.history', () => {
     )
   })
 
+  test("the config's judge.state is in the record and the fingerprint; its defaults change neither", async () => {
+    const run = async (name: string, judge: string) => {
+      const p = await project(name, {
+        'evals/agent.eval.ts': agent(),
+        'reeval.config.ts': fakeConfig({ harness: harness(), judge }),
+      })
+      const r = await runCli(p.dir)
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      return readRun(p.dir).run
+    }
+    const plain = await run('state-none', '{ model: fakeJudge({ score: 0.9 }) }')
+    const defaults = await run(
+      'state-defaults',
+      '{ model: fakeJudge({ score: 0.9 }), state: { diff: true } }',
+    )
+    const narrowed = await run(
+      'state-diff',
+      "{ model: fakeJudge({ score: 0.9 }), state: { diff: ['src/'] } }",
+    )
+    const part = (r: typeof plain) => r.evals[0]?.cells[0]?.fingerprintParts.judge
+    assert.equal(part(defaults), part(plain), 'the defaults are the same measurement')
+    assert.equal(defaults.stack.judge.state, undefined)
+    assert.notEqual(part(narrowed), part(plain), 'a narrower judge is a new measurement')
+    assert.deepEqual(narrowed.stack.judge.state?.diff, ['src/'])
+  })
+
   test('a project reached through another spelling of its path records like any other', async () => {
     // A symlink here; on Windows an 8.3 short name (C:\\Users\\RUNNER~1). git reports its top
     // level canonically, so paths reeval works out against it must be spelled from the project's root.

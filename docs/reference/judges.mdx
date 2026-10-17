@@ -39,41 +39,47 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   The most judge calls at once to this model's provider, across the run. A whole number of at least 1.
 </Property>
 
-<Property name="include" type="string[]" optional>
-  Which changed files the judge's diff and file list show: gitignore-style patterns over workspace paths, matched like [`directory()`'s `glob`](/reference/helpers#directory). The last matching pattern wins and a `!pattern` excludes; with only `!` patterns, everything else stays in. Default: every changed file. A call's `include` replaces the config's, and `include: []` shows everything again.
+<Property name="state" type="JudgeStateOptions" optional>
+  What the judge is given beside your question: the judge's state, not the workspace's or the attempt's. An object keyed by the state's fields, described in [What the judge is given](#what-the-judge-is-given). It merges key by key, so a call's `state: { transcript: 'tools' }` keeps the config's `diff` patterns. A key's value replaces the outer one whole; lists aren't concatenated.
 </Property>
 
-<Property name="files" type="string[]" optional>
-  Workspace files the judge sees whole, as they are when you call `c.judge()`, whether or not the agent changed them. They go in the state's `contents`, keyed by path, `null` for a missing file. A path in both `files` and the diff appears once, in `contents`. Works with `include`.
-</Property>
-
-`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
+`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). `on` with a value and `state: { output: false }` is refused. `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
 
 <Property name="artifacts" type="Array<Capture | string>" optional>
   Captures this call sends the judge. A handle from `c.capture()` or that capture's `name`. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
 </Property>
 
-## What the judge sees
+## What the judge is given
 
 ```ts
 const verdict = await c.judge('Does sign-in handle a wrong password?', {
-  include: ['src/', '!**/*.test.ts'],
-  files: ['README.md'],
+  state: { diff: ['src/', '!**/*.test.ts'], contents: ['README.md'] },
 })
 ```
 
-The judge gets a JSON state and your question. With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
+The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`; the resolved option is beside it as `stateOptions`. With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
 
-| State field | What it holds |
-|---|---|
-| `task` | The turn's prompt |
-| `output` | The agent's final message, or `on` |
-| `files` | The changed files, `status path`, filtered by `include`; dependency and build directories as one line each |
-| `diff` | The diff since the eval started, filtered by `include`, without the paths in `files` |
-| `contents` | With `files`: each file whole, keyed by path |
-| file parts | With `artifacts`: each capture as `{ type: 'file', mediaType: 'image/png', data }` |
+| `state` key | Type | Default | What the state holds |
+|---|---|---|---|
+| `task` | `boolean` | `true` | The graded turn's prompt |
+| `output` | `boolean` | `true` | The graded turn's final message, or `on`'s value |
+| `files` | `boolean` | `true` | The changed files, `status path`, filtered by `diff`'s patterns; dependency and build directories as one line each |
+| `diff` | `boolean \| string[]` | `true` | The diff since the eval started, without the paths in `contents`. A list is gitignore-style patterns over workspace paths, matched like [`directory()`'s `glob`](/reference/helpers#directory): the last match wins and `!pattern` excludes |
+| `contents` | `string[]` | `[]` | Workspace files whole, as they are when you call `c.judge()`, changed or not, keyed by path in path order. Exact paths or the same patterns as `diff`. A missing exact path is `null`; a pattern that matches nothing adds nothing |
+| `transcript` | `boolean \| 'tools' \| 'full'` | `false` | The graded turn's transcript as text lines: `true` messages and tool calls, `'tools'` tool calls only, `'full'` reasoning and unclipped tool output too |
+| `turns` | `'last' \| 'all'` | `'last'` | `'all'` moves `task`, `output` and `transcript` into `turns`, one entry per turn up to the graded one |
+| `checks` | `boolean \| string[]` | `false` | The `c.exec` results so far as `{ command, exitCode, stdout, stderr }`; a list keeps only those commands, as passed to `c.exec` |
+| file parts | | | With `artifacts`: each capture as `{ type: 'file', mediaType: 'image/png', data }` |
 
-The diff leaves out what nobody wrote by hand, each file or directory replaced by a `[reeval: dropped …]` marker. To show one anyway, name it in `files`.
+A key that's off leaves its field out of the state. Patterns in `contents` expand over the workspace as git sees it, so its `.gitignore` applies, and a binary file's value is `[reeval: dropped binary file]`. Transcript lines clip each tool's output to 300 characters, except under `'full'`:
+
+```text
+tool shell: npm test → ok · 0ms
+  14 passing
+edit src/app.ts (create, +1 −0) · 1ms
+```
+
+The diff leaves out what nobody wrote by hand, each file or directory replaced by a `[reeval: dropped …]` marker. To show one anyway, name it in `contents`.
 
 | Left out | Matched by |
 |---|---|
@@ -84,15 +90,15 @@ The diff leaves out what nobody wrote by hand, each file or directory replaced b
 | Minified files | A changed line of more than 1,000 characters |
 | Binaries | Anything git diffs as binary |
 
-What was left out, and why, is the judge input's `dropped` in `judge-input.json`, such as `dist/ (3 files): build output` or `notes.md: not in include`. The workspace's own `.gitignore` keeps the rest of the noise out of the diff; see [Environment](/reference/environment#fields).
+What was left out, and why, is the judge input's `dropped` in `judge-input.json`, such as `dist/ (3 files): build output` or `notes.md: not in state.diff`. The workspace's own `.gitignore` keeps the rest of the noise out of the diff; see [Environment](/reference/environment#fields).
 
 ## Provider errors
 
-When a judge call fails with an error from the provider's API, the message keeps the provider's wording and adds what the input held: its estimated size, at four characters a token, and its biggest parts and files. reeval doesn't keep a table of model limits or read the provider's message, so this comes with every provider error: a refused input, a bad key or a rate limit.
+reeval sends the judge everything `state` selects, uncut. When the provider refuses it, or a judge call fails with any other error from the provider's API, the message keeps the provider's wording and adds one line: the input's estimated size, at four characters a token, its biggest parts and files, and the `state` keys that were on, largest first. reeval knows no model's limit and doesn't read the provider's message, so the line comes with every provider error.
 
 ```text
 judge failed for "Is it done?" (typesafe.evaluation/jev-under-test): {"error_type":"max_tokens_exceeded"}
-The judge's input was ~29k tokens (estimated): diff 28k, of which src/pages/SignIn.tsx is 17k, src/pages/MfaEnroll.tsx is 9k, src/firebase.ts is 2k. Narrow what the judge sees with include, e.g. c.judge(question, { include: ['src/'] }), or set judge: { include } in the config; files shows chosen files in full.
+The judge's input was ~22k tokens (estimated): diff 19k, of which src/pages/SignIn.tsx is 17k, src/firebase.ts is 2k; transcript 3k. Narrow state.diff, state.transcript, state.files, state.task or state.output.
 ```
 
 ## Failed calls
@@ -103,7 +109,7 @@ A call that fails (a provider error after its retries, or a missing key) doesn't
 { verdict: 'error', score: null, threshold, question, model, error }
 ```
 
-`toPass()` and `.not.toPass()` both fail on it, with the call's error. `c.judge()` still throws on a mistake in the call itself (no model, an empty question, a bad threshold, `include` or `files`) and when the run is cancelled or times out.
+`toPass()` and `.not.toPass()` both fail on it, with the call's error. `c.judge()` still throws on a mistake in the call itself (no model, an empty question, a bad threshold, an unknown option or `state` key, a `state.checks` command it hasn't run) and when the run is cancelled or times out.
 
 ## Providers and keys
 
@@ -182,7 +188,11 @@ analysis: {
 | A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in reeval.config.ts`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
 | An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
-| A bad `include` or `files` | `judge.include must be a list of non-empty strings (got "src/") in group("g")`; on a call, `c.judge() include must be a list of non-empty strings (got "src/")` |
+| An unknown option | `Unknown judge option "include" in reeval.config.ts. Did you mean "state.diff"?`; on a call, `… in c.judge(). …`. `on` outside a call: `on is per call: c.judge(question, { on }).` |
+| An unknown `state` key | `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` |
+| A bad `state` value | `judge.state.turns must be 'last' or 'all' (got "first") in evals/a.eval.ts › lands`; `state` itself must be an object such as `{ transcript: 'tools' }` |
+| A check it hasn't run | `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` |
+| `on` with no output | `c.judge() on gives the output, but state.output is false` |
 | A bad `artifacts` | `c.judge() artifacts must be a list of capture handles or names (got "form")` |
 | An unknown capture name | `c.judge() artifacts names a capture this attempt doesn't have: "form"` |
 | A score function in the config | `config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.` |

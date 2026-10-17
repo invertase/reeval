@@ -239,20 +239,6 @@
       "description": "The config file is plain data sent to workers, so its judge model can't be an object.",
       "type": "object",
       "properties": {
-        "files": {
-          "description": "Workspace files the judge sees whole, as they are now, whether or not the agent changed them.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "include": {
-          "description": "Which changed files the judge's diff shows: gitignore-style patterns over workspace paths, where the last matching pattern wins and a `!` pattern excludes. Default: every changed file.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "number"
@@ -281,6 +267,10 @@
               "$ref": "#/$defs/JSONValue"
             }
           }
+        },
+        "state": {
+          "description": "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
+          "$ref": "#/$defs/JudgeStateOptions"
         },
         "threshold": {
           "description": "Minimum score (0–1) for a `pass` verdict.",
@@ -1090,6 +1080,75 @@
         }
       ]
     },
+    "JudgeStateOptions": {
+      "description": "What the judge is given: each key is a key of the state in `judge-input.json`. An unset key keeps its default, which is what the judge gets with no `state` option at all.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "`c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "contents": {
+          "description": "Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing. These files leave the diff. Default none.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "diff": {
+          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "files": {
+          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default true.",
+          "type": "boolean"
+        },
+        "output": {
+          "description": "The graded turn's final message, or `on`'s value. Default true.",
+          "type": "boolean"
+        },
+        "task": {
+          "description": "The graded turn's prompt. Default true.",
+          "type": "boolean"
+        },
+        "transcript": {
+          "description": "The graded turn's transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. Default false.",
+          "anyOf": [
+            {
+              "enum": ["full", "tools"]
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "turns": {
+          "description": "`'all'`: every turn up to the graded one under `turns`, each with its task, output and (with `transcript`) transcript. Default `'last'`.",
+          "enum": ["all", "last"]
+        }
+      },
+      "required": []
+    },
     "McpServer": {
       "description": "An MCP server the agent gets, made by the `mcp` helper: a command in the sandbox, or a URL.",
       "anyOf": [
@@ -1579,20 +1638,6 @@
         "judge": {
           "type": "object",
           "properties": {
-            "files": {
-              "description": "Workspace files the judge sees whole, as they are now, whether or not the agent changed them.",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "include": {
-              "description": "Which changed files the judge's diff shows: gitignore-style patterns over workspace paths, where the last matching pattern wins and a `!` pattern excludes. Default: every changed file.",
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
             "maxConcurrent": {
               "description": "The most judge calls to this model's provider at once, across the run.",
               "type": "number"
@@ -1621,6 +1666,10 @@
                   "$ref": "#/$defs/JSONValue"
                 }
               }
+            },
+            "state": {
+              "description": "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
+              "$ref": "#/$defs/JudgeStateOptions"
             },
             "threshold": {
               "description": "Minimum score (0–1) for a `pass` verdict.",

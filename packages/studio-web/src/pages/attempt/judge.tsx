@@ -5,7 +5,38 @@ import { EmptyState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
-type JudgeInput = { question: string; model: string; state: Record<string, unknown> }
+type JudgeInput = {
+  question: string
+  model: string
+  stateOptions?: Record<string, unknown>
+  state: Record<string, unknown>
+}
+
+const seen = (value: unknown) =>
+  value === true ? null : Array.isArray(value) ? value.join(', ') : String(value)
+
+/** `task · output · diff (src/) · transcript (tools)`, then the keys that are off. */
+function StateOptions({ options }: { options: Record<string, unknown> }) {
+  const entries = Object.entries(options)
+  const on = entries.filter(
+    ([k, v]) =>
+      v !== false && !(Array.isArray(v) && v.length === 0) && !(k === 'turns' && v === 'last'),
+  )
+  const off = entries.filter(([, v]) => v === false || (Array.isArray(v) && v.length === 0))
+  return (
+    <div className="border-b px-4 py-2 text-xs">
+      <span className="mr-2 text-muted-foreground">State</span>
+      <span className="font-mono">
+        {on.map(([k, v]) => (seen(v) === null ? k : `${k} (${seen(v)})`)).join(' · ')}
+      </span>
+      {off.length ? (
+        <span className="ml-3 font-mono text-muted-foreground">
+          off: {off.map(([k]) => k).join(', ')}
+        </span>
+      ) : null}
+    </div>
+  )
+}
 
 function ScoreBar({ score, threshold, pass }: { score: number; threshold: number; pass: boolean }) {
   return (
@@ -119,6 +150,7 @@ export function Judge({ record, attempt }: { record: RunRecord; attempt: Attempt
                       <span className="font-medium">{input.question}</span>
                       <span className="ml-2 font-mono text-muted-foreground">{input.model}</span>
                     </div>
+                    {input.stateOptions ? <StateOptions options={input.stateOptions} /> : null}
                     {Object.entries(input.state).map(([k, v]) => (
                       <Field key={k} name={k} value={v} />
                     ))}

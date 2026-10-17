@@ -128,9 +128,9 @@
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 4 | — | — | — | — |
-| What the judge sees: build output, source maps, build info and minified files dropped from its diff, `judge.include` and `judge.files` from the config to the call | ✓ 3 | — | ● 3 | — | — |
+| What the judge is given: `judge.state` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff | ✓ 8 | — | ● 9 | — | — |
 | `c.judge({ artifacts })` sends captures as AI SDK file parts; JSON-only calls stay an object | ✓ 3 | — | ● 1 | ● 1 | — |
-| A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint | ✓ 2 | — | — | — | — |
+| A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `state` keys that were on, largest first; reeval sends what `state` selects, uncut | ✓ 4 | — | — | — | — |
 | A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run | ✓ 2 | — | — | — | — |
 | A real judge model call | ✓ 1 | — | — | — | — |
 | `toHaveFile`, `toSucceed` and `toPass` | ✓ 5 | — | — | — | — |
