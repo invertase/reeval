@@ -298,13 +298,12 @@ evaluate(
   'puts rules where Claude Code reads them',
   { environment: houseRules },
   async (c) => {
-    const box = await c.sandbox()
-    expect(await box.readFile('CLAUDE.md')).toContain('Ahoy')
+    expect(await c.readFile('CLAUDE.md')).toContain('Ahoy')
   },
 )
 ```
 
-`c.sandbox()` starts the sandbox without a turn, so the check sees only what the environment set up.
+No turn runs, so the check sees only what the environment set up: `c.readFile` starts the sandbox.
 
 ## The fake sandbox and judge
 

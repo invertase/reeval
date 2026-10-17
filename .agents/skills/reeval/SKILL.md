@@ -177,8 +177,10 @@ group('hello', () => {
   places a file after a turn (a hidden test the agent never saw) instead of seeding it in
   `files`; later turns' `diff` leaves it out but shows any change the agent makes to it, even
   under `.gitignore`. Don't place grading files with a `c.exec` heredoc: the next turn's diff
-  (and the judge) would count them as the agent's. `await c.sandbox()` starts the
-  sandbox without a turn, to check what the environment set up. `c.attempt.cell.role` is
+  (and the judge) would count them as the agent's. The sandbox and session start on the first
+  call that needs them (`c.send`, `c.exec`, `c.readFile`, `c.writeFile`, `c.serve`,
+  `c.capture`), so a check before any turn sees what the environment set up.
+  `c.attempt.cell.role` is
   `'control'` or `'variant'`.
 - `await c.judge(question, { threshold?, model?, on?, state?, artifacts? })`: by
   default the judge sees the prompt, the final message, the changed files and the diff, not what

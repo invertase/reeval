@@ -3,7 +3,6 @@ import { tokens } from './env.ts'
 
 // A `to: 'checks'` secret reaches c.exec, with the host variable's value.
 evaluate('lands', { environment: tokens }, async (c) => {
-  const box = await c.sandbox()
-  const seen = (await box.exec('printf %s "$CHECK_TOKEN"')).stdout
+  const seen = (await c.exec('printf %s "$CHECK_TOKEN"')).stdout
   expect(seen).toBe(process.env.REEVAL_FIXTURE_TOKEN)
 })

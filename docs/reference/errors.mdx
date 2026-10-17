@@ -166,7 +166,6 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 
 | Message | Fix |
 |---|---|
-| `No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()` | Send a turn or `await c.sandbox()` first. |
 | `c.judge() has no turn to grade: call c.send() first` | Send a turn first, or pass `on`. |
 | `c.judge() has no model. …` | Set `judge.model` in the config, group, eval or call. |
 | `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` | Name the command exactly as you passed it to `c.exec`, after running it. |

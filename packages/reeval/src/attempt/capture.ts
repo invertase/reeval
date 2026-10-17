@@ -28,7 +28,7 @@ import type {
   ServeHandle,
 } from '../types.ts'
 import { addUsage } from '../usage.ts'
-import { asCheck, requireSandbox } from './checks.ts'
+import { asCheck, sandboxFor } from './checks.ts'
 import type { Attempt } from './state.ts'
 
 const BG_LOG = '/tmp/reeval-bg.log'
@@ -71,9 +71,10 @@ function resolveUse(resolved: ResolvedCaptureCall, fakeSandbox: boolean): Captur
 export async function startBackground(
   a: Attempt,
   command: string,
+  who: string,
   extraEnv: Record<string, string> = {},
 ): Promise<BackgroundHandle> {
-  const box = requireSandbox(a)
+  const box = await sandboxFor(a, who)
   const wrapped = `${command} >${BG_LOG} 2>&1 & echo $!`
   const r = await asCheck(a, () =>
     box.exec(wrapped, {
@@ -111,7 +112,7 @@ export async function serveCommand(
   port?: number,
 ): Promise<ServeHandle> {
   const bound = port ?? (await allocatePort())
-  const handle = await startBackground(a, command, { PORT: String(bound) })
+  const handle = await startBackground(a, command, 'c.serve()', { PORT: String(bound) })
   return { ...handle, port: bound }
 }
 
@@ -126,7 +127,7 @@ export async function capturePage(
   if (a.captureNames.has(resolved.name)) {
     throw new Error(`c.capture() reused the name "${resolved.name}"`)
   }
-  const box = requireSandbox(a, 'c.capture()')
+  const box = await sandboxFor(a, 'c.capture()')
   if (!box.getPortEndpoint) {
     throw new Error('c.capture() needs a sandbox that can tunnel a port')
   }

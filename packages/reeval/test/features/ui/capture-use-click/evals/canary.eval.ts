@@ -3,7 +3,6 @@ import { fakeInstructions } from 'reeval/testing'
 import { ui } from './env.ts'
 
 evaluate('canary', { environment: ui }, async (c) => {
-  await c.sandbox()
   const server = await c.serve('node server.mjs')
   await c.capture(server, {
     name: 'after',

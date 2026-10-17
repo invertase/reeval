@@ -356,8 +356,12 @@ export type JudgeFailure = Omit<Verdict, 'verdict' | 'score' | 'resolvedModel'> 
   error: string
 }
 
+/**
+ * What an eval's body gets. The sandbox and the agent session start on the first call that needs
+ * them (`send`, `exec`, `readFile`, `writeFile`, `serve` or `capture`), once however many ask.
+ */
 export type AttemptContext = {
-  /** Sends the next turn of this eval's agent session, starting the sandbox on first use. */
+  /** Sends the next turn of this eval's agent session. */
   send(prompt: string): Promise<Turn>
   /**
    * Asks the judge a yes/no question about the latest turn (or `options.on`).
@@ -376,7 +380,6 @@ export type AttemptContext = {
    * Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`.
    * First argument is the container port or a `ServeHandle` from `c.serve`.
    * `instructions` runs a vision journey on that same tab first.
-   * Needs a sandbox, same as `c.exec`.
    */
   capture(target: number | ServeHandle, options?: CaptureCall): Promise<Capture>
   /** Workspace-relative, or `~/` for the home directory; `null` when there's no such file. */
@@ -384,14 +387,9 @@ export type AttemptContext = {
   /**
    * Writes a file into the sandbox (workspace-relative, or `~/`), creating its directories.
    * Later turns' `diff` leaves it out, as it does the environment's files, but shows any change
-   * made to it afterwards. Needs a sandbox, same as `c.exec`.
+   * made to it afterwards.
    */
   writeFile(path: string, contents: string | Uint8Array): Promise<void>
-  /**
-   * Starts the sandbox and the agent session without a turn, for checks on what the environment
-   * set up. `c.send()` starts them too; calling both starts them once.
-   */
-  sandbox(): Promise<Pick<AttemptContext, 'exec' | 'readFile'>>
   /** Every turn so far, oldest first. */
   readonly turns: readonly Turn[]
   /** Aborted on timeout or Ctrl-C. */

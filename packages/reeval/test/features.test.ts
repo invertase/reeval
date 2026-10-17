@@ -822,6 +822,30 @@ export const features: Feature[] = [
     canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
   },
   {
+    dir: 'sandbox/read-before-send',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    canary: /expected 'from the environment\\n' to be 'from the agent\\n'/,
+    record: ({ run }) => {
+      const [attempt] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(attempt?.turns, [], 'no turn was sent')
+      assert.ok((attempt?.timings.setupMs ?? 0) > 0, 'the start is timed as setup')
+    },
+  },
+  {
+    dir: 'sandbox/concurrent-first-use',
+    tiers: ['fake', 'docker'],
+    env: 'notes',
+    canary: /expected 'written' to be 'from the agent\\n'/,
+    record: ({ run }) => {
+      const [attempt] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        attempt?.checks.map((x) => [x.command, x.exitCode]),
+        [['test -f notes.txt', 0]],
+      )
+    },
+  },
+  {
     dir: 'sandbox/write-file',
     tiers: ['fake', 'docker'],
     env: 'greeting',

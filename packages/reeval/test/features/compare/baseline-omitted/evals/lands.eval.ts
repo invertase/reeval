@@ -5,7 +5,6 @@ import { inherited, variant } from './env.ts'
 group('parent', { environment: inherited }, () => {
   evaluate('lands', { compare: { variants: [variant], gate: 'all' } }, async (c) => {
     if (c.attempt.cell.role !== 'control') return
-    const box = await c.sandbox()
-    expect(await box.readFile('from-inherited.txt')).toBe('inherited')
+    expect(await c.readFile('from-inherited.txt')).toBe('inherited')
   })
 })

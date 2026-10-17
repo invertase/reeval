@@ -205,13 +205,11 @@ evaluate('layered', { environment: tools.extend('layered', { sandbox: docker({ i
         'evals/root.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { docker } from 'reeval/sandbox'
 evaluate('installs deps', { environment: defineEnvironment('installs-deps', { sandbox: docker({ root: true }) }) }, async (c) => {
-  await c.sandbox()
   expect((await c.exec('id -u')).stdout.trim()).toBe('0')
 })
 `,
         'evals/plain.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('stays unprivileged', async (c) => {
-  await c.sandbox()
   expect((await c.exec('id -u')).stdout.trim()).toBe('10001')
 })
 `,
@@ -293,7 +291,7 @@ evaluate('broken', { environment: defineEnvironment('broken', { sandbox: docker(
         'reeval.config.ts': config('{}'),
         'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-const body = async (c) => { await c.sandbox() }
+const body = async (c) => { await c.exec('true') }
 evaluate('disk', { environment: defineEnvironment('disk', { sandbox: docker({ install: ['echo filling && dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'] }) }) }, body)
 evaluate('oom', { environment: defineEnvironment('oom', { sandbox: docker({ install: ['echo dying && kill -9 $$'] }) }) }, body)
 evaluate('plain', { environment: defineEnvironment('plain', { sandbox: docker({ install: ['echo plain && exit 4'] }) }) }, body)
@@ -326,8 +324,8 @@ evaluate('plain', { environment: defineEnvironment('plain', { sandbox: docker({ 
         'evals/bad.Dockerfile': 'FROM debian:bookworm-slim\nCOPYY a b\n',
         'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-evaluate('syntax', { environment: defineEnvironment('syntax', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }) }, async (c) => { await c.sandbox() })
-evaluate('alpine', { environment: defineEnvironment('alpine', { sandbox: docker({ from: 'alpine:3.20' }) }) }, async (c) => { await c.sandbox() })
+evaluate('syntax', { environment: defineEnvironment('syntax', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }) }, async (c) => { await c.exec('true') })
+evaluate('alpine', { environment: defineEnvironment('alpine', { sandbox: docker({ from: 'alpine:3.20' }) }) }, async (c) => { await c.exec('true') })
 `,
       })
       const r = await runCli(p.dir, ['run', '--ui', 'plain'], { timeoutMs: 600_000 })
@@ -357,11 +355,11 @@ evaluate('alpine', { environment: defineEnvironment('alpine', { sandbox: docker(
         'evals/run.Dockerfile': 'FROM debian:bookworm-slim\nRUN echo broken && exit 42\n',
         'evals/net.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-evaluate('net', { environment: defineEnvironment('net', { sandbox: docker({ from: 'registry.invalid.example:5000/reeval/none:1' }) }) }, async (c) => { await c.sandbox() })
+evaluate('net', { environment: defineEnvironment('net', { sandbox: docker({ from: 'registry.invalid.example:5000/reeval/none:1' }) }) }, async (c) => { await c.exec('true') })
 `,
         'evals/run.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-evaluate('run', { environment: defineEnvironment('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }) }, async (c) => { await c.sandbox() })
+evaluate('run', { environment: defineEnvironment('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }) }, async (c) => { await c.exec('true') })
 `,
       })
       const counter = countBuilds(p.dir)
@@ -429,15 +427,14 @@ evaluate('run', { environment: defineEnvironment('run', { sandbox: docker({ dock
       const broken = `import { defineEnvironment, evaluate, group } from 'reeval'
 import { docker } from 'reeval/sandbox'
 group('broken tools', { environment: defineEnvironment('broken-tools', { sandbox: docker({ install: ['echo nope && exit 5'] }) }) }, () => {
-  evaluate('a', { runs: 2 }, async (c) => { await c.sandbox() })
-  evaluate('b', async (c) => { await c.sandbox() })
+  evaluate('a', { runs: 2 }, async (c) => { await c.exec('true') })
+  evaluate('b', async (c) => { await c.exec('true') })
 })
 `
       const p = await project('docker-prepare-scoped', {
         'reeval.config.ts': config('{}'),
         'evals/ok.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('ok', async (c) => {
-  await c.sandbox()
   expect((await c.exec('echo fine')).stdout).toBe('fine\\n')
 })
 `,
@@ -525,8 +522,8 @@ export default defineConfig({
 })
 `,
         'evals/a.eval.ts': `import { evaluate } from 'reeval'
-evaluate('a', async (c) => { await c.sandbox() })
-evaluate('b', async (c) => { await c.sandbox() })
+evaluate('a', async (c) => { await c.exec('true') })
+evaluate('b', async (c) => { await c.exec('true') })
 `,
       })
       const r = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
@@ -572,9 +569,9 @@ export default defineConfig({
         'reeval.config.ts': config('{}'),
         'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-evaluate('one', { environment: defineEnvironment('one', { sandbox: docker({ from: 'alpine:3.20', install: ['echo one'] }) }) }, async (c) => { await c.sandbox() })
-evaluate('two', { environment: defineEnvironment('two', { sandbox: docker({ from: 'alpine:3.20', install: ['echo two'] }) }) }, async (c) => { await c.sandbox() })
-evaluate('plain', { environment: defineEnvironment('plain', { sandbox: docker({ from: 'alpine:3.20' }) }) }, async (c) => { await c.sandbox() })
+evaluate('one', { environment: defineEnvironment('one', { sandbox: docker({ from: 'alpine:3.20', install: ['echo one'] }) }) }, async (c) => { await c.exec('true') })
+evaluate('two', { environment: defineEnvironment('two', { sandbox: docker({ from: 'alpine:3.20', install: ['echo two'] }) }) }, async (c) => { await c.exec('true') })
+evaluate('plain', { environment: defineEnvironment('plain', { sandbox: docker({ from: 'alpine:3.20' }) }) }, async (c) => { await c.exec('true') })
 `,
       })
       const counter = countBuilds(p.dir, '-base')
@@ -602,9 +599,9 @@ evaluate('plain', { environment: defineEnvironment('plain', { sandbox: docker({ 
         'evals/bad.Dockerfile': 'FROM debian:bookworm-slim\nRUN echo broken && exit 42\n',
         'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-evaluate('plain', async (c) => { await c.sandbox() })
-evaluate('bad', { environment: defineEnvironment('bad', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }) }, async (c) => { await c.sandbox() })
-evaluate('nope', { environment: defineEnvironment('nope', { sandbox: docker({ from: 'nonexistent-reeval-image-${process.pid}:1' }) }) }, async (c) => { await c.sandbox() })
+evaluate('plain', async (c) => { await c.exec('true') })
+evaluate('bad', { environment: defineEnvironment('bad', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }) }, async (c) => { await c.exec('true') })
+evaluate('nope', { environment: defineEnvironment('nope', { sandbox: docker({ from: 'nonexistent-reeval-image-${process.pid}:1' }) }) }, async (c) => { await c.exec('true') })
 `,
       })
       const dry = await runCli(p.dir, ['image', 'build', '--dry-run'])
@@ -672,7 +669,6 @@ evaluate('nope', { environment: defineEnvironment('nope', { sandbox: docker({ fr
         'evals/a.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { docker } from 'reeval/sandbox'
 evaluate('base', { environment: defineEnvironment('base', { sandbox: docker({ from: '${tag}' }) }) }, async (c) => {
-  await c.sandbox()
   expect((await c.exec('cat /etc/reeval-version')).stdout).toBe('v1\\n')
 })
 `,
@@ -881,7 +877,6 @@ evaluate('bakes', { environment: bookworm }, async (c) => {
   expect((await c.exec('pwd')).stdout).toBe('/reeval/workspace\\n')
 })
 evaluate('canary', { environment: bookworm }, async (c) => {
-  await c.sandbox()
   expect((await c.exec('grep -c trixie /etc/os-release')).stdout).toBe('1\\n')
 })
 `,
@@ -1123,7 +1118,7 @@ const keys = defineEnvironment('keys', ({ secret }) => ({
   sandbox: docker({ image: 'busybox:1.37', root: true }),
   env: { GEMINI_API_KEY: secret.fromEnv('REEVAL_DOCKER_SECRET', { hosts: secret.hosts.gemini }) },
 }))
-evaluate('hi', { environment: keys }, async (c) => { await c.sandbox() })
+evaluate('hi', { environment: keys }, async (c) => { await c.exec('true') })
 `,
       })
       const r = await runCli(p.dir, ['run'], { env: { REEVAL_DOCKER_SECRET: value } })
@@ -1209,7 +1204,6 @@ const tarballEnv = defineEnvironment('reeval-tarball', ({ file }) => ({
   files: { 'reeval.tgz': file(${JSON.stringify(join(out, tarball))}) },
 }))
 evaluate('installs', { environment: tarballEnv, timeout: '6m' }, async (c) => {
-  await c.sandbox()
   await expect(c.exec('npm install --no-audit --no-fund ./reeval.tgz')).toSucceed()
   expect((await c.exec('npx --no-install reeval --version')).stdout.trim()).toBe('${version}')
 })

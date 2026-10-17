@@ -11,12 +11,9 @@ import type { Attempt } from './state.ts'
 export const asCheck = <T>(a: Attempt, fn: () => Promise<T>) =>
   a.phases ? a.phases.checks(fn) : fn()
 
-export function requireSandbox(a: Attempt, who = 'c.exec() or c.readFile()'): Sandbox {
-  if (!a.sandbox) {
-    throw new Error(`No sandbox yet: call c.send() or await c.sandbox() before ${who}`)
-  }
-  return a.sandbox
-}
+/** The attempt's sandbox, started (with its session) by the first call that needs it. */
+export const sandboxFor = async (a: Attempt, who: string): Promise<Sandbox> =>
+  (await a.start(who))[0]
 
 /**
  * `c.exec` runs with the checks' variables and secrets, each run recorded and
@@ -25,7 +22,7 @@ export function requireSandbox(a: Attempt, who = 'c.exec() or c.readFile()'): Sa
 export function createChecks(a: Attempt) {
   const checkEnv = () => (a.env?.checkVars ?? {}) as Record<string, string>
   const execForeground = async (command: string) => {
-    const box = requireSandbox(a)
+    const box = await sandboxFor(a, 'c.exec()')
     const start = performance.now()
     a.report({ kind: 'check-start', command })
     const r = await a.timed('checksMs', () =>
@@ -57,14 +54,15 @@ export function createChecks(a: Attempt) {
     options?: { background?: boolean },
   ): Promise<ExecResult | BackgroundHandle> {
     if (options?.background) {
-      return import('./capture.ts').then(({ startBackground }) => startBackground(a, command))
+      return import('./capture.ts').then(({ startBackground }) =>
+        startBackground(a, command, 'c.exec({ background: true })'),
+      )
     }
     // Names its command in `expect(c.exec(…)).toSucceed()`'s default label.
     return Object.defineProperty(execForeground(command), SUBJECT, { value: command })
   }
-  const readFile = (path: string) => requireSandbox(a).readFile(path)
+  const readFile = async (path: string) => (await sandboxFor(a, 'c.readFile()')).readFile(path)
   const writeFile = async (path: string, contents: string | Uint8Array) => {
-    const box = requireSandbox(a, 'c.writeFile()')
     const home = path.startsWith('~/')
     const normal = posix.normalize((home ? path.slice(2) : path).replaceAll('\\', '/'))
     if (normal === '.' || /^([a-zA-Z]:)?\//.test(normal) || /^\.\.(\/|$)/.test(normal)) {
@@ -72,6 +70,7 @@ export function createChecks(a: Attempt) {
         `c.writeFile() takes a workspace-relative path or ~/…, not ${JSON.stringify(path)}`,
       )
     }
+    const box = await sandboxFor(a, 'c.writeFile()')
     a.signal.throwIfAborted()
     await box.writeFile(home ? `~/${normal}` : normal, contents)
     if (!home) await acceptIntoSnapshot(box, normal, a.signal)

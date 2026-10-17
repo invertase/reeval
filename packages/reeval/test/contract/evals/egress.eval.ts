@@ -11,7 +11,6 @@ evaluate('egress', { environment: closed }, async (c) => {
 
 // Must fail: the blocked host is refused without a turn too, so it never answers 200.
 evaluate('egress canary', { environment: closed }, async (c) => {
-  await c.sandbox()
   await c.exec(`${reach(BLOCKED_HOST)} || true`)
   expect(await trimmed(c.readFile, 'blocked.txt')).toMatch(/^200 /)
 })

@@ -548,7 +548,7 @@ evaluate('fine', async () => {})
       'reeval.config.ts': fakeConfig(),
       'evals/dies.eval.ts': `import { evaluate } from 'reeval'
 evaluate('killed', async (c) => {
-  await c.sandbox()
+  await c.exec('true')
   process.kill(process.pid, 'SIGKILL')
 })
 `,
@@ -569,6 +569,33 @@ evaluate('killed', async (c) => {
         ['evals/lives.eval.ts › math', 'pass'],
       ],
     )
+  })
+
+  test('a sandbox start the body swallows, or that concurrent first calls share, is still the infra error', async () => {
+    const p = await project('start-swallowed', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/broken.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const broken = defineEnvironment('broken', { setup: ['exit 7'] })
+evaluate('swallowed', { environment: broken }, async (c) => {
+  await c.readFile('x').catch(() => null)
+  expect.soft(await c.exec('true').catch(() => ({ exitCode: 1 }))).toBeTruthy()
+})
+evaluate('concurrent', { environment: broken }, async (c) => {
+  await Promise.allSettled([c.readFile('a'), c.exec('true'), c.writeFile('b', 'c')])
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    for (const e of readRun(p.dir).evals) {
+      const [attempt] = e.attempts
+      assert.equal(attempt?.outcome, 'infra_error', e.name)
+      assert.match(
+        attempt?.error?.message ?? '',
+        /setup step 1\/1 "exit 7" in environment broken exited 7/,
+      )
+      assert.deepEqual(attempt?.checks, [], `${e.name}: no check ran`)
+    }
   })
 
   test('a worker that runs out of memory fails its attempts too', async () => {
@@ -1317,8 +1344,7 @@ evaluate('noisy check', async (c) => {
   await c.send('go')
   await expect(c.exec('head -c 3000000 /dev/zero | tr "\\\\0" b; echo boom >&2; exit 3')).toSucceed()
 })
-evaluate('huge diff', async (c) => {
-  await c.sandbox()
+evaluate('huge diff', async () => {
   expect('a'.repeat(3_000_000)).toBe('x')
 })
 `,

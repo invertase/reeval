@@ -5,9 +5,8 @@ import { baseline, ignored, variant } from './env.ts'
 group('parent', { environment: ignored }, () => {
   evaluate('lands', { compare: { baseline, variants: [variant] } }, async (c) => {
     if (c.attempt.cell.role !== 'variant') return
-    const box = await c.sandbox()
-    expect(await box.readFile('from-variant.txt')).toBe('variant-only')
-    expect(await box.readFile('from-baseline.txt')).toBe(null)
-    expect(await box.readFile('from-ignored.txt')).toBe(null)
+    expect(await c.readFile('from-variant.txt')).toBe('variant-only')
+    expect(await c.readFile('from-baseline.txt')).toBe(null)
+    expect(await c.readFile('from-ignored.txt')).toBe(null)
   })
 })

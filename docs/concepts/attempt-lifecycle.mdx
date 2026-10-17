@@ -66,7 +66,7 @@ flowchart TD
 | Judge | Each `c.judge` sends the state its `state` option picks (by default the task, final message, changed files and diff) to the judge model | No |
 | Teardown | Session closed, egress recorded, sandbox destroyed, record written | No |
 
-The sandbox and session start on the first `c.send` (or `c.sandbox()`), so the eval body's own code runs first. Whatever happens, teardown runs, and the record is written.
+The sandbox and session start on the first call that needs them (`c.send`, `c.exec`, `c.readFile`, `c.writeFile`, `c.serve` or `c.capture`), so the eval body's own code runs first. Whatever happens, teardown runs, and the record is written.
 
 ## What the timeout covers
 

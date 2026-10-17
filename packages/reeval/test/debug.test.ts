@@ -297,7 +297,6 @@ const env = defineEnvironment('sentry', ({ secret }) => ({
   env: { SENTRY_DSN: secret.fromEnv('REEVAL_DEBUG_DSN') },
 }))
 evaluate('prints the dsn', { environment: env }, async (c) => {
-  await c.sandbox()
   const dsn = (await c.exec('printenv SENTRY_DSN')).stdout.trim()
   console.log('logged', dsn)
   console.error('warned', dsn)

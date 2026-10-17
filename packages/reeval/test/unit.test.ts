@@ -191,7 +191,11 @@ test('c.writeFile refuses absolute paths and paths that leave the workspace', as
   const box = await createFakeSandbox({ kind: 'fake' })
   try {
     await snapshot(box)
-    const a = { sandbox: box, signal: new AbortController().signal } as unknown as Attempt
+    const a = {
+      sandbox: box,
+      signal: new AbortController().signal,
+      start: async () => [box, {}],
+    } as unknown as Attempt
     const { writeFile } = createChecks(a)
     for (const path of ['/etc/passwd', '../outside.txt', 'a/../../x', '~/../x', 'C:\\x', '.']) {
       await assert.rejects(writeFile(path, 'x'), {

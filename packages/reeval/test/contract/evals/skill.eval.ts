@@ -10,6 +10,5 @@ evaluate('skill', { environment: skilled }, async (c) => {
 
 // Must fail: with no turn, nothing has written the proof.
 evaluate('skill canary', { environment: skilled }, async (c) => {
-  await c.sandbox()
   expect(await trimmed(c.readFile, 'skill-proof.txt')).toBe(SKILL_PROOF)
 })
