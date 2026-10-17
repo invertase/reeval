@@ -13,7 +13,7 @@ import {
   isAgentKind,
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
-import { esJiti } from './jiti.ts'
+import { reevalJiti } from './jiti.ts'
 import {
   badJudgeList,
   checkModelString,
@@ -141,7 +141,7 @@ export async function loadConfig(
   const configPath = configLabel(path)
   let user: ReevalConfig = {}
   if (existsSync(path)) {
-    const jiti = await esJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
+    const jiti = await reevalJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
     const module = (await jiti.import(path)) as Record<string, unknown>
     // Without this, a config that forgets `export default` would run the default harness for real.
     if (!module || typeof module !== 'object' || !('default' in module)) {
