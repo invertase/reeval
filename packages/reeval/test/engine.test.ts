@@ -571,6 +571,33 @@ evaluate('killed', async (c) => {
     )
   })
 
+  test('a sandbox start the body swallows, or that concurrent first calls share, is still the infra error', async () => {
+    const p = await project('start-swallowed', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/broken.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const broken = defineEnvironment('broken', { setup: ['exit 7'] })
+evaluate('swallowed', { environment: broken }, async (c) => {
+  await c.readFile('x').catch(() => null)
+  expect.soft(await c.exec('true').catch(() => ({ exitCode: 1 }))).toBeTruthy()
+})
+evaluate('concurrent', { environment: broken }, async (c) => {
+  await Promise.allSettled([c.readFile('a'), c.exec('true'), c.writeFile('b', 'c')])
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    for (const e of readRun(p.dir).evals) {
+      const [attempt] = e.attempts
+      assert.equal(attempt?.outcome, 'infra_error', e.name)
+      assert.match(
+        attempt?.error?.message ?? '',
+        /setup step 1\/1 "exit 7" in environment broken exited 7/,
+      )
+      assert.deepEqual(attempt?.checks, [], `${e.name}: no check ran`)
+    }
+  })
+
   test('a worker that runs out of memory fails its attempts too', async () => {
     const p = await project('worker-oom', {
       'reeval.config.ts': fakeConfig(),
