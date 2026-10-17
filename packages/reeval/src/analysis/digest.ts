@@ -4,7 +4,7 @@
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
-import { sampleReasons } from '../compare/pairs.ts'
+import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
 import type { HistoryDb } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS, LIFT_MIN_COUNTED } from '../history/facts.ts'
 import { TOOL_CLASSES } from '../history/tool-class.ts'
@@ -105,7 +105,7 @@ export const RULES = [
   "A context-use fact counts each attempt's tool calls by class (context, dependency, web, verify, workspace) and lists which placed files each arm opened: how much an arm leaned on what its environment declared versus digging in installed packages. The classes are a heuristic over tool names and paths; cite them as counts, not as proof of intent.",
   'A contrast fact (kind contrast) is one pair of arms on one harness, a against b, when an eval has two variants or more: pass rate and lift of a over b, the checks that tell them apart (discriminates or mixed; sameOnBoth counts the rest) and effort. It answers how two variants differ from each other, not only from the control; gating stays each variant against its control.',
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
-  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check.",
+  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates.",
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -804,6 +804,8 @@ export async function buildDigestKeepingDropped(
       for (const a of e.answers ?? []) {
         const ties = a.votes.filter((v) => v.winner === 'tie').length
         const reasons = sampleReasons(a.votes)
+        const splits = splitsLabel(pairTallies(a.votes))
+        const headToHead = headToHeadLines(a.votes)
         fact('compare-question', {
           run: short.get(r.record.runId),
           eval: tagOf(e.key),
@@ -821,6 +823,8 @@ export async function buildDigestKeepingDropped(
                 })),
               }
             : {}),
+          ...(splits ? { splits } : {}),
+          ...(headToHead.length ? { headToHead } : {}),
           ...(a.error ? { error: clip(a.error, 200) } : {}),
           ...(a.votes.length === 0 && a.error === undefined
             ? { note: 'no pairs to judge: attempts that failed their checks are left out' }

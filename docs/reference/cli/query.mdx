@@ -57,6 +57,7 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | `family_lift` | `run_id`, `family_id`, `name`, `harness`, `variant`, `cell_key`, `control`, `pairs`, `variant_pass_at_1`, `control_pass_at_1`, `discordant_vc`, `discordant_cv`, `points`, `lo`, `hi`, `method`, `p`, `within_noise`, `verdict`, `min_lift`, `outcome`, `tools_ratio`, `tools_p`, `effort_verdict`, `agent_s_ratio`, `agent_s_p`, `time_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `started_at`, `branch` |
 | `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `pass_at_1`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `variant_pass_at_1`, `control_pass_at_1`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
+| `question_pairs` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
 | `skill_files` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `path`, `reads`, `first_line` |
 | `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
 | `verdict_flips` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `judgement_key`, `question`, `prev_pass_rate`, `pass_rate`, `n` |
@@ -74,6 +75,7 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | `failing_attempts` | Failed or infra-error attempt, with the skill of its environment (joined by digest), harness, model, error and `oom_kills` (processes killed at the sandbox's memory limit) |
 | `eval_trend` | Eval per run: outcome, pass rate, branch, PR and fingerprint |
 | `contrasts` | Pair of arms on one harness and sandbox in a run, when an eval has two variants or more (a variant against the control, and variant against variant): pass counts, lift of `a` over `b`, effort ratios and verdicts, and the checks that tell them apart |
+| `question_pairs` | Compare question and pair of sides (arms within a harness, `held`; harnesses across an arm): runs voted, wins when both orders agree (or one ties), ties, and `splits`, pairs whose two orders picked opposite sides (`splits_first`: to the side shown first both times) |
 | `context_use` | Attempt and tool-call class: `context` (a placed skill, rules file or MCP tool), `dependency` (`node_modules`, `site-packages`, `vendor`, `.venv`, `--help`), `web`, `verify` (a check's command, or a test, build, lint or typecheck) or `workspace`, with the count, the first call's line and an example target. The classes are a heuristic over tool names and paths |
 | `skill_files` | Attempt and file its environment declared (each skill's files, rules and config): how many tool calls opened it, directly or through a glob, and the first one's line (`NULL`: never opened) |
 
@@ -100,8 +102,10 @@ Several views repeat a cell's key across evals in a run, so join `attempts` and 
 | `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
+| `question_pairs_m` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `reeval`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
 | `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms`, `class` |
+| `votes` | `run_id`, `eval_key`, `question`, `cut`, `held`, `pair_run`, `a`, `b`, `winner`, `swapped`, `reason` |
 
 [//]: # (/generated:query-tables)
 

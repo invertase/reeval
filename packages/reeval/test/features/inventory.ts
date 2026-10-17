@@ -1495,6 +1495,16 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'questions.splits',
+    area: 'Records and studio',
+    name: 'Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest',
+    tests: [
+      "reeval/test/results.test.ts › head to head: a pair whose two orders disagree is a split, not a win each (Ben's UX votes)",
+      'reeval/test/results.test.ts › canary: two arms get no head-to-head line, and orders that agree split nothing',
+      options('three arms: head to head per pair, and pairs the order decided are splits'),
+    ],
+  },
+  {
     id: 'query.context-use',
     area: 'Records and studio',
     name: 'Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest\u2019s `context-use` fact',

@@ -49,7 +49,7 @@ Ctrl-C to stop.
 | `query` | `sql`, `limit` | The same, for one `SELECT` or `WITH` statement |
 | `query_schema` | none | `reeval query --schema --json`, as `objects` |
 
-There's one `query_<view>` tool per [view](/reference/cli/query#views): `query_lift`, `query_family_lift`, `query_effort`, `query_contrasts`, `query_factor_effects`, `query_skill_reads`, `query_context_use`, `query_skill_files`, `query_flaky_cells`, `query_drift`, `query_failing_attempts`, `query_eval_trend`, `query_verdict_flips` and `query_check_discrimination`. Its `where` takes the view's columns, each equal to a value (`null` matches `NULL`). Rows default to 100 and stop at 1000; `truncated` says there were more.
+There's one `query_<view>` tool per [view](/reference/cli/query#views): `query_lift`, `query_family_lift`, `query_effort`, `query_contrasts`, `query_question_pairs`, `query_factor_effects`, `query_skill_reads`, `query_context_use`, `query_skill_files`, `query_flaky_cells`, `query_drift`, `query_failing_attempts`, `query_eval_trend`, `query_verdict_flips` and `query_check_discrimination`. Its `where` takes the view's columns, each equal to a value (`null` matches `NULL`). Rows default to 100 and stop at 1000; `truncated` says there were more.
 
 A `run` is a [run reference](/reference/cli#run-references), `latest` by default. An `attempt` is its key from `show` (`evals/a.eval.ts › writes ok # fake/-/fake#1`), or its id (`fake/-/fake#1`) when only one eval has it.
 

@@ -385,6 +385,11 @@ group(
   compare and never gate: pass, fail and the exit code stay the checks'.
   `reeval analyze` puts each answer in the digest (rates by pair kind, votes,
   ties, a failed call, a sample of reasons) as annotation, not a results line.
+  Each pair is voted in both orders; one whose orders disagree is a split (the
+  position decided), counted on the summary line (`2/9 pairs split by order`).
+  With three arms or more, read the head-to-head line (`no-skill 2–0
+  current-skill (1 split)`) or `reeval query question_pairs`, not the pooled
+  rates, which count a split as a win for each side.
   A vote may carry a short `reason` (capped); do not gate on its wording. Their
   model is the entry's `model`, else `analysis.model`, else the judge's when
   it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2
