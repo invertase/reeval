@@ -46,7 +46,9 @@ exec and judge checks stay on `expect` as `toHaveFile`, `toSucceed` and
 `toHaveCalledSkill(name)` passes when a tool loaded that skill: `skill`,
 `Skill` or `load_skill` with `input.id` or `input.name` equal to `name`, or
 any tool whose target contains `skills/<name>/` (a Read or a `sed` of
-`SKILL.md`). That is "opened or loaded", not "followed". Keep a file or
+`SKILL.md`). That is "opened or loaded", not "followed".
+
+Keep a file or
 `c.exec` check for the outcome. A silent inject (skill text in the system
 prompt, no tool) cannot be asserted.
 
@@ -61,17 +63,23 @@ expect(turn).toHaveCalledTool('mcp__stamp__house_stamp')
 expect(turn).toHaveCalledTool(/^mcp__stamp__/)
 ```
 
-After adapters and the normaliser, that string is the same on every harness.
-Claude Code may `ToolSearch` `select:mcp__stamp__house_stamp` first; that is
-a different tool. OpenCode and Goose keep `acp_tool_<id>` if the first ACP
-update or Goose `_meta` is missing. pi turns `-` in a **tool** name into `_`
-(write `latest_version`, not `latest-version`); a hyphenated **server** is
-remapped when unambiguous. Goose, OpenCode, pi and Codex refuse `mcp.sse`
-at plan time; stdio MCP plans on all of them, including pi.
+After adapters and the normaliser, that string is the same on every harness,
+with these exceptions:
+
+| Harness | Tool name |
+|---|---|
+| Claude Code | May call `ToolSearch` with `select:mcp__stamp__house_stamp` first, a different tool |
+| OpenCode, Goose | `acp_tool_<id>` if the first ACP update or Goose's `_meta` is missing |
+| pi | `-` in a tool name becomes `_` (write `latest_version`); a hyphenated server is remapped when unambiguous |
+
+Goose, OpenCode, pi and Codex refuse `mcp.sse` at plan time; stdio MCP plans
+on all of them.
 
 `toHaveCalledTool(name, input?)` looks at `type: 'tool'` events only. `name`
 is an exact string or a RegExp. `input` is an optional substring, RegExp, or
-object matched against the recorded input. Successful `edit` / `write` /
+object matched against the recorded input.
+
+Successful `edit` / `write` /
 `delete` are `file-edit` events: use `toHaveEdited`, not
 `toHaveCalledTool('edit')`. Web tools are `web-search` / `web-fetch`: use
 `toHaveSearched` / `toHaveFetched`.
@@ -263,7 +271,7 @@ import { evaluate, expect } from '{{ pkg }}'
 
 evaluate('looks up the latest Node.js LTS', async (c) => {
   const turn = await c.send(
-    'Search the web for the current Node.js LTS release line and tell me its name.',
+    'Search the web for the current Node.js LTS line and tell me its name.',
   )
 
   expect(turn).toHaveSearched(/node/i)

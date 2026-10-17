@@ -70,7 +70,9 @@ The other fields are `at`, `method`, `url`, `host`, `port`, `status` (when there
 
 ## trace.ndjson
 
-A flight recorder. During the attempt reeval keeps raw payloads in memory: prompts, every transcript event, judge inputs and provider responses, request headers, DNS decisions and docker commands. The buffer holds `debug.traceBufferMb` megabytes, dropping the oldest entries first. It's written to disk only when the attempt doesn't pass, or for every attempt with `-vv` (`--trace`).
+A flight recorder. During the attempt reeval keeps raw payloads in memory: prompts, every transcript event, judge inputs and provider responses, request headers, DNS decisions and docker commands.
+
+The buffer holds `debug.traceBufferMb` megabytes, dropping the oldest entries first. It's written to disk only when the attempt doesn't pass, or for every attempt with `-vv` (`--trace`).
 
 ```text
 {"kind":"trace","startedAt":"2026-09-26T17:15:36.464Z","limitBytes":8388608,"dropped":0}

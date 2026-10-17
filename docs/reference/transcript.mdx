@@ -117,7 +117,9 @@ Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()
   The model the harness says served the turn. Cursor's includes its parameters, such as `composer-2.5[fast=true]`. It can differ from the model you asked for.
 </Property>
 
-Each attempt sums its turns' `usage`, and the run's `cost` has the total; reeval prices no models, so there's no USD. `reeval query`'s `attempts` table has the same numbers as `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` and `served_model`. The run summary and the studio show them on each attempt line and, summed over counted attempts, on each cell. A harness that reports none (`goose()`) leaves the field blank, never `0`.
+Each attempt sums its turns' `usage`, and the run's `cost` has the total; reeval prices no models, so there's no USD.
+
+`reeval query`'s `attempts` table has the same numbers as `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` and `served_model`. The run summary and the studio show them on each attempt line and, summed over counted attempts, on each cell. A harness that reports none (`goose()`) leaves the field blank, never `0`.
 
 ## Large outputs
 
@@ -128,6 +130,10 @@ A tool output over 128 KB keeps its first 96 KB and last 16 KB, with a marker be
 ```
 
 ## Raw transcripts
+
+```bash
+REEVAL_RAW_TRANSCRIPT=1 npx reeval run greet
+```
 
 With `REEVAL_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how reeval reads a harness, and it can be large.
 

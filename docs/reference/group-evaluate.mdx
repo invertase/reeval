@@ -161,9 +161,20 @@ const brief = await readFile(new URL('./brief.md', import.meta.url), 'utf8')
 
 Eval files are TypeScript or JavaScript, ESM or CommonJS, loaded with no build step. Imports may leave out the extension, and JSON imports work. Each eval file loads in a fresh process of its own, so module state and globals never leak from one file to another; `reeval run` loads each file twice, once for the plan and once to run.
 
-The nearest `tsconfig.json` must load: one that isn't valid JSON (comments and trailing commas are fine) or extends a missing file stops the run. Its `paths` aliases aren't applied. Decorators are TypeScript's legacy ones. npm, pnpm, Yarn 1 and Yarn's Plug'n'Play all work.
+The nearest `tsconfig.json` must load: one that isn't valid JSON (comments and trailing commas are fine) or extends a missing file stops the run. Its `paths` aliases aren't applied.
+
+Decorators are TypeScript's legacy ones. npm, pnpm, Yarn 1 and Yarn's Plug'n'Play all work.
 
 ## Timeouts
+
+```ts
+evaluate('build', {
+  timeout: '5m',
+  harness: cursor({ startTimeout: '2m' }),
+}, async (c) => {
+  // …
+})
+```
 
 `timeout` covers one attempt's body. Starting the sandbox, running setup steps and starting the harness pause the clock; the harness's start has its own `startTimeout` (default 90s, retried once). An attempt that runs out fails with `Eval timed out after 300s`, and `c.signal` aborts so you can stop work early.
 

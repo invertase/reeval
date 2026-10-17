@@ -14,7 +14,9 @@ const python = defineEnvironment('python', {
 })
 const jq = defineEnvironment('jq', {
   sandbox: docker({
-    install: ['apt-get update && apt-get install -y --no-install-recommends jq'],
+    install: [
+      'apt-get update && apt-get install -y --no-install-recommends jq',
+    ],
   }),
 })
 
@@ -109,17 +111,21 @@ There's one line per environment that set the sandbox: the config's `environment
 Each harness has its own sandbox image. `reeval image build` builds the images the config's evals need that are missing or stale; `reeval image build --dry-run` lists them and how each step stands (`✓` ready, `+` to build, `~` stale, `✗` missing), building and pulling nothing:
 
 ```text
-images  4 sandbox images (nothing built: --dry-run)
-docker · 15 evals
-  ✓ base  reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+images  7 sandbox images (nothing built: --dry-run)
+docker · 23 evals
+  + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+docker · claude-code · 1 eval
+  + base  reeval-sandbox:claude-code-1.0.152-patch.8edc594f  (to build: not built yet)
+…
 docker+0ab0e263 + install · 1 eval
-  ✓ base               reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
+…
 docker:sqlite · 1 eval
-  + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-6030a60be3d263ca))
-  ✓ harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (ready: reeval-sandbox:cursor-0.1.0 built (e04d443bc8e2))
+  + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-9efec1fbf61588d3))
+  + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.5 not built yet)
 ```
 
 | Image | Tag | Rebuilt when |
@@ -133,7 +139,17 @@ docker:sqlite · 1 eval
 
 A rebuild removes the image its tag pointed at before, unless a container or another tag still uses it, and a `from` build drops its intermediate `…-base` tag once the harness is committed, so rebuilds leave no dangling images behind.
 
-Adapter versions: Cursor `0.1.5` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.38), Claude Code `1.0.152` (patched, so its tag is `1.0.152-patch.8edc594f`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
+| Harness | Adapter version in the tag |
+|---|---|
+| Cursor | `0.1.5` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.38) |
+| Claude Code | `1.0.152-patch.8edc594f` (1.0.152, patched) |
+| Antigravity | `0.1.7` |
+| OpenCode | `0.2.8` |
+| Goose | `0.1.3` |
+| pi | `0.2.7` |
+| Codex | `0.1.7` |
+
+A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
 What reeval adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `reeval` user, the workspace at `/reeval/workspace`, and `/etc/profile.d/00-reeval-path.sh` (see [Inside the container](#inside-the-container)). That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.reeval/cache/images/<tag>.log`.
 
@@ -141,16 +157,21 @@ Image builds don't count toward the eval timeout.
 
 ## Inside the container
 
-Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The agent, setup steps and checks run as `reeval` (uid 10001, home `/home/reeval`, which is where `~/` paths go), with every capability dropped, `no-new-privileges`, and the limits above. An egress gateway runs with it, as root: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image reeval builds has.
+| Runs | As | With |
+|---|---|---|
+| The agent, setup steps and checks | `reeval` (uid 10001, home `/home/reeval`, where `~/` paths go) | Every capability dropped, `no-new-privileges` and the limits above |
+| The egress gateway | root | Node, which every image reeval builds has |
 
-Login shells keep the image's `PATH`. Cursor and Codex run the agent's commands through one, and Debian's `/etc/profile` resets `PATH` there, dropping what an `ENV PATH` added, such as `dart:stable`'s `/usr/lib/dart/bin`. Every image reeval builds has `/etc/profile.d/00-reeval-path.sh`, which puts the `PATH` the shell started with back in front, so the agent finds the same tools as your checks.
+Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The gateway enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests.
 
 ```bash
 # the agent's shell in docker({ from: 'dart:stable' })
 $ sh -lc 'echo $PATH; dart --version'
-/home/reeval/.local/bin:/usr/lib/dart/bin:/root/.pub-cache/bin:/usr/local/sbin:…:/usr/games
-Dart SDK version: 3.13.5 (stable) (Tue Sep 29 01:00:52 2026 -0700) on "linux_x64"
+/home/reeval/.local/bin:/usr/lib/dart/bin:/root/.pub-cache/bin:…
+Dart SDK version: 3.13.5 (stable) … on "linux_x64"
 ```
+
+Login shells keep the image's `PATH`. Cursor and Codex run the agent's commands through one, and Debian's `/etc/profile` resets `PATH` there, dropping what an `ENV PATH` added, such as `dart:stable`'s `/usr/lib/dart/bin`. Every image reeval builds has `/etc/profile.d/00-reeval-path.sh`, which puts the `PATH` the shell started with back in front, so the agent finds the same tools as your checks.
 
 Every image reeval builds has the `reeval` user. `docker({ image })` with an image that doesn't fails with `<image> has no reeval user to run the sandbox as. …`: rebuild it with reeval, or pass `root: true`.
 

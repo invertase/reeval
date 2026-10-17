@@ -34,7 +34,9 @@ evals/.history/                            commit this
   history.db                               reeval query's projection
 ```
 
-The record is `kind: "reeval-run"`, `schemaVersion: 1`. While reeval is pre-release the schema changes in place, and an older record may not parse. Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
+The record is `kind: "reeval-run"`, `schemaVersion: 1`. The schema only grows: a newer reeval reads an older record, and an older reeval skips a record with a higher `schemaVersion`, saying to upgrade.
+
+Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
 
 ## Reading one
 
@@ -46,8 +48,15 @@ Start at `evals[]` where `outcome != "pass"`, then its `cells[]` for pass@1 (`pa
   "schemaVersion": 1,
   "runId": "20260926T170558Z_bd6205e_ada-lovelace_sycz",
   "status": "complete",
-  "summary": { "evals": 1, "attempts": 4, "pass": 2, "fail": 2, "notGated": 2, "infraError": 0, "skipped": 0 },
-  "evals": [{ "id": "evals/skill.eval.ts › house greeting › greets in the house style", "outcome": "pass", "…": "…" }]
+  "summary": {
+    "evals": 1, "attempts": 4, "pass": 2, "fail": 2,
+    "notGated": 2, "infraError": 0, "skipped": 0
+  },
+  "evals": [{
+    "id": "evals/skill.eval.ts › house greeting › greets in the house style",
+    "outcome": "pass",
+    "…": "…"
+  }]
 }
 ```
 
@@ -72,7 +81,15 @@ The type definitions are in `packages/reeval/src/history/types.ts`; the environm
 
 `runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
 
-An attempt's `error` is `{ kind, message, prepare?, resource? }`. `prepare` is set when its sandbox couldn't be prepared before the run: `{ class, stage, ref, cause, log, setBy }`, with `class` one of `config`, `transient` or `resource`, and the same on every attempt that needed that sandbox (see [Sandbox providers](/reference/sandbox/providers)). A git `workspace` that couldn't be fetched sets it too, with `stage: "workspace"` and the workspace as `ref`, such as `../repo#v9`. Such an attempt never started, so it has no artifacts directory. `resource` is `{ cause: 'oom', kills }` when the kernel killed `kills` processes at the sandbox's memory limit during the attempt: its `kind` is then `infra` and its outcome `infra_error`, whatever its checks said, so it's left out of pass rates and lift.
+An attempt's `error` is `{ kind, message, prepare?, resource? }`:
+
+| Field | Set when | Shape |
+|---|---|---|
+| `prepare` | Its sandbox couldn't be prepared before the run (see [Sandbox providers](/reference/sandbox/providers)), the same on every attempt that needed it | `{ class, stage, ref, cause, log, setBy }`, `class` one of `config`, `transient` or `resource` |
+| `prepare` | A git `workspace` couldn't be fetched | `stage: "workspace"`, the workspace as `ref`, such as `../repo#v9` |
+| `resource` | The kernel killed `kills` processes at the sandbox's memory limit | `{ cause: 'oom', kills }` |
+
+An attempt with `prepare` never started, so it has no artifacts directory. One with `resource` has `kind: infra` and outcome `infra_error`, whatever its checks said, so it's left out of pass rates and lift.
 
 [//]: # (generated:record-types)
 
@@ -940,7 +957,14 @@ Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` readi
 
 ## What a record can't pin down
 
-Each record lists these: sampled agent output, provider-side model updates, network-dependent results such as web search and package registries, and locally built images.
+| Not pinned | Why |
+|---|---|
+| The agent's output | It's sampled |
+| The model behind a name | Providers update models in place |
+| Web search, package registries | Network-dependent |
+| Locally built images | They have an image id but no registry digest |
+
+A rerun can differ on any of these even when every fingerprint matches.
 
 ## Related
 

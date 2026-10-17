@@ -143,7 +143,9 @@ parent.extendEnvironment(name, (helpers) => spec)
 | `egress` | The child's replaces the parent's |
 | `setup` | Concatenated, parent first |
 
-Every key the child replaced is listed in the environment's `overrides` in the record (`sandbox`, `env.NODE_ENV`, `files.src/a.ts`, `rules`, `workspace`, `skills.house-style`, `mcp.docs`, `egress`). Call it before `compare`. A variant cell then runs as that environment alone. `extend` is an alias of `extendEnvironment`.
+Every key the child replaced is listed in the environment's `overrides` in the record (`sandbox`, `env.NODE_ENV`, `files.src/a.ts`, `rules`, `workspace`, `skills.house-style`, `mcp.docs`, `egress`).
+
+Call it before `compare`. A variant cell then runs as that environment alone. `extend` is an alias of `extendEnvironment`.
 
 ## Refused fields
 
