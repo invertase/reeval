@@ -1432,9 +1432,8 @@ export const features: Feature[] = [
     },
     canary: /expected 'completed' to be 'aborted'/,
     record: ({ run }) => assert.equal(landed(run)?.turns[0]?.status, 'aborted'),
-    // Lands waits a 4s eval timeout; the canary waits the 10s fake delay. Windows
-    // CI runs four fixtures at once, so this pair needs more than the default 50s
-    // runCli bound.
+    // Lands waits a 4s eval timeout; the canary waits the 10s fake delay, on top of
+    // FAKE_TIMEOUT_MS's Windows load.
     timeoutMs: { fake: 180_000 },
   },
   {
@@ -1891,10 +1890,15 @@ function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string |
   return false
 }
 
+// Windows CI runs four fake fixtures at once on a slower runner: a typical one takes 20s
+// there, and the slowest reach 60s.
+const FAKE_TIMEOUT_MS = process.platform === 'win32' ? 150_000 : 60_000
+
 function fixtureTests(tiers: Tier[]) {
   for (const f of features) {
     for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
-      const timeout = f.timeoutMs?.[tier] ?? { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
+      const timeout =
+        f.timeoutMs?.[tier] ?? { fake: FAKE_TIMEOUT_MS, docker: 240_000, real: 600_000 }[tier]
       test(`${f.dir} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
         timeout,
