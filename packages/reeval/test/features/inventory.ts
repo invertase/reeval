@@ -50,6 +50,7 @@ const prepareContract = (name: string) => `reeval/test/sandbox-prepare-contract.
 const debug = (name: string) => `reeval/test/debug.test.ts › ${name}`
 const studio = (name: string) => `reeval/test/studio.test.ts › ${name}`
 const analysis = (name: string) => `reeval/test/analysis.test.ts › ${name}`
+const query = (name: string) => `reeval/test/query.test.ts › ${name}`
 const workspace = (name: string) => `reeval/test/workspace.test.ts › ${name}`
 const checks = (name: string) => `reeval/test/checks.test.ts › ${name}`
 const engineExpect = (name: string) => `reeval/test/engine-expect.test.ts › ${name}`
@@ -1491,6 +1492,20 @@ export const inventory: InventoryFeature[] = [
         'show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side',
       ),
       analysis('canary: with one variant there is no variant-against-variant row'),
+    ],
+  },
+  {
+    id: 'query.context-use',
+    area: 'Records and studio',
+    name: 'Tool calls classed as context, dependency, web, verify or workspace (`context_use`), the declared files each attempt opened (`skill_files`), and the digest\u2019s `context-use` fact',
+    tests: [
+      query('a read of a placed file is context, by absolute path, ~ or a glob'),
+      query('digging in installed packages is dependency; an exclusion of them is not'),
+      query('checks, builds and the web have their own classes; the rest is workspace'),
+      query('each harness opened its placed SKILL.md; web and MCP calls have their classes'),
+      analysis(
+        'the digest frames it as a study: criteria say what differs, never-met labels once, evidence for every arm',
+      ),
     ],
   },
   {

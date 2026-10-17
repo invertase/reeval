@@ -356,6 +356,9 @@ group(
   don't overlap prints `(×0.68, no overlap)`: a direction, not an effect.
   With two variants or more, `contrasts` (summary, `reeval show`, `reeval query contrasts`) set every
   pair of arms side by side, variant against variant too.
+  `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each
+  attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
+  (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
 - **Label each requirement** with `expect`'s second argument:

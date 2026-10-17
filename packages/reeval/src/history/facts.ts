@@ -4,7 +4,7 @@
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
-import { liftInterval, round3, wilson } from '../stats.ts'
+import { liftInterval, median, round3, wilson } from '../stats.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
   contrastEffort,
@@ -13,6 +13,7 @@ import {
   type EffortVerdict,
   effortOf,
 } from '../view/effort.ts'
+import { TOOL_CLASSES } from './tool-class.ts'
 import type { CheckTally } from './types.ts'
 
 /** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
@@ -36,7 +37,9 @@ CREATE TABLE effort_m (
   tools_ratio REAL, agent_s_ratio REAL, agent_s_delta REAL, tokens_ratio REAL,
   tools_p REAL, agent_s_p REAL, tokens_p REAL,
   separated INTEGER, time_separated INTEGER, tokens_separated INTEGER,
-  verdict TEXT, time_verdict TEXT, tokens_verdict TEXT, tokens_note TEXT
+  verdict TEXT, time_verdict TEXT, tokens_verdict TEXT, tokens_note TEXT,
+  context_calls_median REAL, dependency_calls_median REAL, web_calls_median REAL,
+  verify_calls_median REAL, workspace_calls_median REAL
 );
 CREATE TABLE contrasts_m (
   run_id TEXT, eval_key TEXT, harness TEXT, sandbox TEXT, a_key TEXT, b_key TEXT,
@@ -339,6 +342,35 @@ export function deriveFacts(db: DatabaseSync): void {
   const find = (run: string, evalKey: string, key: string) =>
     cells.find((c) => c.run_id === run && c.eval_key === evalKey && c.key === key)
 
+  // Tool calls by class per counted attempt, for each cell's per-class medians; null for a
+  // cell none of whose attempts had a transcript to read calls from.
+  const classCounts = new Map<string, Map<string, number>>()
+  for (const r of db
+    .prepare(
+      'SELECT run_id, attempt_key, class, COUNT(*) AS n FROM tool_calls GROUP BY run_id, attempt_key, class',
+    )
+    .all() as Array<{ run_id: string; attempt_key: string; class: string; n: number }>) {
+    const id = `${r.run_id}\0${r.attempt_key}`
+    const m = classCounts.get(id) ?? new Map<string, number>()
+    m.set(r.class, r.n)
+    classCounts.set(id, m)
+  }
+  const classMedians = (c: Cell): Row => {
+    const counted = (byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []).filter(
+      (a) => a.outcome === 'pass' || a.outcome === 'fail',
+    )
+    const known = counted.flatMap((a) => {
+      const m = classCounts.get(`${a.run_id}\0${a.key}`)
+      return m ? [m] : []
+    })
+    return Object.fromEntries(
+      TOOL_CLASSES.map((k) => [
+        `${k}_calls_median`,
+        known.length ? (median(known.map((m) => m.get(k) ?? 0)) ?? null) : null,
+      ]),
+    )
+  }
+
   // effort: every cell, and a variant against its control in the same run.
   const effortRows: Row[] = cells.map((c) => {
     const own = effortOf(side(c).samples)
@@ -382,6 +414,7 @@ export function deriveFacts(db: DatabaseSync): void {
       time_verdict: vs?.timeVerdict ?? null,
       tokens_verdict: vs?.tokensVerdict ?? null,
       tokens_note: vs?.tokensNote ?? null,
+      ...classMedians(c),
     }
   })
   insertAll(db, 'effort_m', effortRows)
