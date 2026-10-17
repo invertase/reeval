@@ -15,7 +15,7 @@ import type {
 import { citable, type Digest } from './digest.ts'
 import type { AnalysisOutput } from './schema.ts'
 
-const CHECK = /^(.+):check(\d+)$/
+const EXEC = /^(.+):exec(\d+)$/
 const LINE = /^(E\d+):L(\d+)$/
 const TRANSCRIPT = /^transcript:(.+)#L(\d+)$/
 
@@ -51,11 +51,11 @@ export function citations(digest: Digest) {
       }
       return null
     }
-    const check = CHECK.exec(c)
-    if (check) {
-      const [, attempt, n] = check as unknown as [string, string, string]
+    const exec = EXEC.exec(c)
+    if (exec) {
+      const [, attempt, n] = exec as unknown as [string, string, string]
       const a = digest.attempts[attempt]
-      return a && Number(n) >= 1 && Number(n) <= a.checks ? JSON.stringify(a) : null
+      return a && Number(n) >= 1 && Number(n) <= a.execs ? JSON.stringify(a) : null
     }
     return null
   }
@@ -64,7 +64,7 @@ export function citations(digest: Digest) {
 
 const ANY_NUMBER = /[−-]?\d+(?:\.\d+)?/g
 const FRACTION = /(\d+)\/(\d+)/g
-const ATTEMPT_CITE = /:check\d+$|:L\d+$/
+const ATTEMPT_CITE = /:exec\d+$|:L\d+$/
 
 /** A decimal in [0, 1]: the form a judge score or threshold takes in the digest. */
 const looksLikeScore = (raw: string) => {
@@ -79,7 +79,8 @@ const addScore = (scores: number[], n: unknown) => {
 
 /**
  * Recorded judge scores (and thresholds) on the cited attempt, fact or evidence. The digest stores
- * them as `attempt.judge`, `judge: { score, threshold }` on a failure, and `judge score:` lines.
+ * them as an attempt's `judges`, a failure's `judges: [{ score, threshold }]`, a criteria row's mean
+ * scores, and `judge score:` lines.
  */
 function citedJudgeScores(cites: string[], digest: Digest): number[] {
   const scores: number[] = []
@@ -88,18 +89,22 @@ function citedJudgeScores(cites: string[], digest: Digest): number[] {
       .trim()
       .replace(/^\[|\]$/g, '')
       .replace(ATTEMPT_CITE, '')
-    addScore(scores, digest.attempts[id]?.judge)
+    for (const s of Object.values(digest.attempts[id]?.judges ?? {})) addScore(scores, s)
     const fact = digest.facts.find((f) => f.id === id)
     if (fact) {
-      const j = fact.judge
-      if (typeof j === 'number') addScore(scores, j)
-      else if (j && typeof j === 'object') {
-        addScore(scores, (j as { score?: unknown }).score)
-        addScore(scores, (j as { threshold?: unknown }).threshold)
+      if (Array.isArray(fact.judges)) {
+        for (const row of fact.judges) {
+          if (!row || typeof row !== 'object') continue
+          addScore(scores, (row as { score?: unknown }).score)
+          addScore(scores, (row as { threshold?: unknown }).threshold)
+        }
       }
-      if (Array.isArray(fact.failures)) {
-        for (const row of fact.failures) {
-          if (row && typeof row === 'object') addScore(scores, (row as { score?: unknown }).score)
+      if (Array.isArray(fact.rows)) {
+        for (const row of fact.rows as Array<{ cells?: Record<string, unknown> }>) {
+          for (const v of Object.values(row?.cells ?? {})) {
+            const mean = / · (\d+(?:\.\d+)?)$/.exec(String(v))
+            if (mean) addScore(scores, Number(mean[1]))
+          }
         }
       }
       if (Array.isArray(fact.threshold)) for (const t of fact.threshold) addScore(scores, t)

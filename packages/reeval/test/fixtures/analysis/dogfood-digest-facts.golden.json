@@ -619,12 +619,6 @@
     "pass": 35,
     "scoresAtLeast098": 35,
     "nearThreshold": 0,
-    "failures": [
-      {
-        "attempt": "r2/fix-config/control#1",
-        "score": 0.1
-      }
-    ],
     "reasons": "not recorded"
   },
   {
@@ -635,12 +629,15 @@
     "errorKind": "judge",
     "message": "judge score 0.10 is below 0.8 for \"Pass only if the final message names all three mistakes correctly: compare cannot be set in es.config.ts (it goes on the group or eval); environment takes one environment, not a list, and there is no baseline export (compare against the inherited environment…",
     "gated": false,
-    "judge": {
-      "question": "Pass only if the final message names all three mistakes correctly: compare cannot be set in es.config.ts (it goes on the group or eval); environment takes one environment, not a list, and there is no baseline export (compare against the inherited environment instead); and the option is runs, not repeat.",
-      "score": 0.1,
-      "threshold": 0.8
-    },
-    "failingChecks": []
+    "judges": [
+      {
+        "label": "Pass only if the final message names all three mistakes…",
+        "question": "Pass only if the final message names all three mistakes correctly: compare cannot be set in es.config.ts (it goes on the group or eval); environment takes one environment, not a list, and there is no baseline export (compare against the inherited environment instead); and the option is runs, not…",
+        "score": 0.1,
+        "threshold": 0.8
+      }
+    ],
+    "failingExecs": []
   },
   {
     "id": "F28",

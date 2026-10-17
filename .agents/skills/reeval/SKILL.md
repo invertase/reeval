@@ -435,6 +435,8 @@ reeval analyze           (one checked LLM reading of a run; --vs none for this r
                          TL;DR is one sentence; confidence is capped after citation/command checks
                          (not high if any check failed; low if a claim dropped or a command rejected)
                          anomalies are number-checked; a cited judge score that disagrees is dropped
+                         every cell gate: 'none' reads as a study: how the arms differ, check by check
+                         (label your expects); analysis.instructions is the question it answers
                          analysis: { agent: true } also notes each eval × harness during reeval run
                          (.reeval/analysis/<run>/notes/) and caches the run's summary for reeval analyze
                          (a model call each, off by default; never gates)

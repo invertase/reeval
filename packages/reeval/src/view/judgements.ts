@@ -226,6 +226,31 @@ export function collapsedJudgeLabel(judgements: readonly JudgementRecord[]): str
   return parts.join(' · ')
 }
 
+const JUDGE_ERROR = /^judge failed for /
+
+/**
+ * Each judgement's `expect` label, by position: the attempt's `toPass` assertions (less those on a
+ * failed judge call, which recorded no judgement) in call order, when they are exactly as many as
+ * its judgements. `check` is that assertion's label, the key of its check; a judgement no label
+ * reaches is named by its question.
+ */
+export function labelledJudgements(
+  a: Pick<AttemptRecord, 'judgements' | 'assertions'>,
+): Array<{ judgement: JudgementRecord; label: string; check?: string }> {
+  const passes = (a.assertions ?? []).filter(
+    (x) => /(^|\.)toPass$/.test(x.matcher) && !JUDGE_ERROR.test(x.message ?? ''),
+  )
+  const zip = passes.length === a.judgements.length
+  return a.judgements.map((judgement, i) => {
+    const x = zip ? passes[i] : undefined
+    return {
+      judgement,
+      label: x?.labelled ? x.label : judgeText(judgement.question),
+      ...(x ? { check: x.label } : {}),
+    }
+  })
+}
+
 /** Sum of counted attempts' usage; null when none of them reported any. */
 export function cellUsage(e: Pick<EvalEntry, 'attempts'>, cellKey: string): TokenUsage | null {
   return sumUsage(e.attempts.filter((a) => a.cell === cellKey && counted(a)).map((a) => a.usage))
