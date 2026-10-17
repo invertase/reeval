@@ -7,15 +7,26 @@
 import { z } from 'zod'
 import type {
   AssertionRecord,
+  Capture,
   Diff,
   ExecResult,
   FileChange,
+  JudgeArtifactRef,
+  JudgeFailure,
   TokenUsage,
   TranscriptEvent,
   TurnData,
   TurnStatus,
+  Verdict,
   WebEventType,
 } from '../types.ts'
+import { captureWindowSchema } from './config.ts'
+import {
+  fakeJudgeDataSchema,
+  judgeFields,
+  judgeModelNameSchema,
+  judgeStateSchema,
+} from './judge.ts'
 import { type Assert, dataProblem, jsonValueSchema, type Same } from './shared.ts'
 
 const nullableNumber = z.number().nullable()
@@ -165,7 +176,72 @@ export const assertionRecordSchema = z
   })
   .describe('One `expect` or `expect.soft` matcher call an attempt made.')
 
+const turnIndex = z
+  .number()
+  .int('a turn index, from 0')
+  .min(0, 'a turn index, from 0')
+  .describe("The turn's index, from 0.")
+
+export const captureSchema = z
+  .strictObject({
+    name: z.string(),
+    port: z.number().describe('Container port that was tunneled.'),
+    path: z.string().describe('Path on the app, as passed in.'),
+    viewport: z
+      .union([captureWindowSchema, z.literal('full-page')])
+      .describe("What the author asked, including `'full-page'`."),
+    file: z
+      .strictObject({ path: z.string(), sha256: z.string(), bytes: z.number() })
+      .describe('`artifacts/<name>.png` under the attempt directory.'),
+  })
+  .describe('What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`.')
+
+export const judgeArtifactRefSchema = z
+  .strictObject({
+    name: z.string(),
+    path: z.string().describe('`artifacts/<name>.png` under the attempt directory.'),
+    sha256: z.string(),
+    bytes: z.number(),
+    mediaType: z.literal('image/png'),
+  })
+  .describe('A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.')
+
+const verdictFields = {
+  threshold: z.number(),
+  question: z.string(),
+  model: z.string(),
+  artifacts: z
+    .array(judgeArtifactRefSchema)
+    .optional()
+    .describe('Captures this call sent the judge as file parts, when any.'),
+}
+
+export const verdictSchema = z.strictObject({
+  verdict: z.enum(['pass', 'fail']),
+  score: z.number().describe("The judge's probability that the answer is yes, from 0 to 1."),
+  ...verdictFields,
+  resolvedModel: z
+    .string()
+    .optional()
+    .describe('The model id the provider says served the call, when it reports one.'),
+})
+
+export const judgeFailureSchema = z
+  .strictObject({
+    verdict: z.literal('error'),
+    score: z.null(),
+    ...verdictFields,
+    error: z.string(),
+  })
+  .describe(
+    "What `c.judge()` returns when the call failed (the provider's error, after any retries): the attempt fails as a judge error once the eval's body has finished, so the judges and checks after it still run.",
+  )
+
 export type _SameAsSchema = [
+  Assert<Same<z.infer<typeof captureSchema>, Capture>>,
+  Assert<Same<z.infer<typeof judgeArtifactRefSchema>, JudgeArtifactRef>>,
+  Assert<Same<z.infer<typeof verdictSchema>, Verdict>>,
+  Assert<Same<z.infer<typeof judgeFailureSchema>, JudgeFailure>>,
   Assert<Same<z.infer<typeof tokenUsageSchema>, TokenUsage>>,
   Assert<Same<z.infer<typeof fileChangeSchema>, FileChange>>,
   Assert<Same<z.infer<typeof diffSchema>, Diff>>,
@@ -207,7 +283,7 @@ export const matcherArgSchema = z
 
 export const matcherSubjectSchema = z
   .union([
-    z.strictObject({ turn: z.number().int().min(0).describe("The turn's index, from 0.") }),
+    z.strictObject({ turn: turnIndex }),
     z.strictObject({ attempt: z.literal(true).describe('The attempt itself, `c`.') }),
     z.strictObject({ value: jsonValueSchema.describe('A value the eval passes as it is.') }),
   ])
@@ -216,6 +292,31 @@ export const matcherSubjectSchema = z
   )
 
 const nonEmpty = z.string().regex(/\S/, 'must not be empty')
+
+export const judgeCallDataSchema = z
+  .strictObject({
+    model: z
+      .union([judgeModelNameSchema, fakeJudgeDataSchema])
+      .optional()
+      .describe("`'provider/model'`, or a fake judge with a numeric score."),
+    ...judgeFields,
+    on: z
+      .union([
+        z.strictObject({ turn: turnIndex }),
+        z.strictObject({ value: jsonValueSchema.describe('Graded as the output.') }),
+      ])
+      .optional()
+      .describe('What to grade instead of the latest turn: an earlier turn, or a value.'),
+    artifacts: z
+      .array(z.union([nonEmpty, captureSchema]))
+      .optional()
+      .describe(
+        'Captures this call sends the judge as image file parts: a capture `c.capture` returned, or its name. The provider that cannot take files fails the call.',
+      ),
+  })
+  .describe(
+    "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, plus the call-only `on` and `artifacts`.",
+  )
 
 export const attemptCallSchema = z
   .discriminatedUnion('op', [
@@ -270,8 +371,19 @@ export const attemptCallSchema = z
       .describe(
         'A matcher call: `expect(subject, label).not?.matcher(...args)`. Replies with its record.',
       ),
+    z
+      .strictObject({
+        op: z.literal('judge'),
+        question: nonEmpty.describe('A yes/no question about the graded turn or value.'),
+        options: judgeCallDataSchema.optional(),
+      })
+      .describe(
+        '`c.judge(question, options)`. Replies with its verdict, or a judge failure when the provider failed.',
+      ),
   ])
-  .describe("One call an eval's body makes on its attempt.")
+  .describe(
+    "One call an eval's body makes on its attempt. The sandbox and the agent session start on the first call that needs them; there's no call to start them.",
+  )
 
 export const attemptErrorSchema = z
   .looseObject({
@@ -304,11 +416,17 @@ export const attemptReplySchema = z
         op: z.literal('expect'),
         assertion: assertionRecordSchema,
       }),
+      z.strictObject({
+        id,
+        ok: z.literal(true),
+        op: z.literal('judge'),
+        verdict: z.union([verdictSchema, judgeFailureSchema]),
+      }),
     ]),
     z.strictObject({
       id,
       ok: z.literal(false),
-      op: z.enum(['send', 'exec', 'readFile', 'writeFile', 'expect']),
+      op: z.enum(['send', 'exec', 'readFile', 'writeFile', 'expect', 'judge']),
       error: attemptErrorSchema,
     }),
   ])
@@ -319,7 +437,18 @@ export const attemptReplySchema = z
 const CALL_KEYS = Object.fromEntries(
   attemptCallSchema.options.map((o) => [o.shape.op.value, Object.keys(o.shape)]),
 )
-const OTHER_KEYS = ['id', 'call', 'turn', 'attempt', 'value', 'regexp', 'flags']
+const OTHER_KEYS = [
+  'id',
+  'call',
+  'turn',
+  'attempt',
+  'value',
+  'regexp',
+  'flags',
+  ...Object.keys(judgeCallDataSchema.shape),
+  ...Object.keys(judgeStateSchema.shape),
+  ...Object.keys(captureSchema.shape),
+]
 
 /** What's wrong with an attempt request a runner sent, by the field's path, or undefined. */
 export const attemptRequestProblem = (value: unknown): string | undefined =>
@@ -350,6 +479,14 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   FileChange: fileChangeSchema,
   ExecResult: execResultSchema,
   AssertionRecord: assertionRecordSchema,
+  JudgeCallData: judgeCallDataSchema,
+  JudgeStateOptions: judgeStateSchema,
+  FakeJudgeData: fakeJudgeDataSchema,
+  Verdict: verdictSchema,
+  JudgeFailure: judgeFailureSchema,
+  JudgeArtifactRef: judgeArtifactRefSchema,
+  Capture: captureSchema,
+  CaptureWindow: captureWindowSchema,
 }
 
 /** The schemas `ATTEMPT_SCHEMAS` shares with a hand-written type in src/types.ts, by its name. */
@@ -363,4 +500,11 @@ export const ATTEMPT_TYPES = [
   'FileChange',
   'ExecResult',
   'AssertionRecord',
+  'JudgeStateOptions',
+  'FakeJudgeData',
+  'Verdict',
+  'JudgeFailure',
+  'JudgeArtifactRef',
+  'Capture',
+  'CaptureWindow',
 ] as const

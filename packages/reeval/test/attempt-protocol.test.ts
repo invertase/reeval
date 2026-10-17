@@ -73,6 +73,37 @@ test('every turn in the record corpus fits a send reply, in Zod and in the JSON 
   assert.equal(transcriptEventSchema.safeParse(event).success, false)
 })
 
+test('every judgement in the record corpus fits a judge reply, in Zod and in the JSON Schema', () => {
+  const judgements = corpus().records.flatMap(({ value }) =>
+    ((value.evals ?? []) as Array<{ attempts?: Array<{ judgements?: unknown[] }> }>).flatMap((e) =>
+      (e.attempts ?? []).flatMap((a) => a.judgements ?? []),
+    ),
+  ) as Array<Record<string, unknown>>
+  assert.ok(judgements.length >= 10, `${judgements.length} judgements`)
+  const reply = snapshot('attempt-reply')
+  for (const [i, { key: _, retries: __, ...verdict }] of judgements.entries()) {
+    const value = { id: String(i), ok: true, op: 'judge', verdict }
+    const parsed = attemptReplySchema.safeParse(value)
+    assert.ok(parsed.success, JSON.stringify(parsed.error?.issues[0]))
+    assert.deepEqual(validate(reply, value), [])
+  }
+  const failure = {
+    verdict: 'error',
+    score: null,
+    threshold: 0.8,
+    question: 'Does greet.js export greet?',
+    model: 'google/gemini-3.8-flash',
+    error: '503 Service Unavailable',
+  }
+  const value = { id: 'f', ok: true, op: 'judge', verdict: failure }
+  assert.ok(attemptReplySchema.safeParse(value).success)
+  assert.deepEqual(validate(reply, value), [])
+  // The canary: a failure that still carries a score.
+  const scored = { ...value, verdict: { ...failure, score: 0.4 } }
+  assert.equal(attemptReplySchema.safeParse(scored).success, false)
+  assert.notDeepEqual(validate(reply, scored), [])
+})
+
 test('every matcher reeval adds can be named in an expect call', () => {
   const names = Object.keys(matchers)
   assert.ok(names.includes('toHaveFile') && names.includes('toSucceed'), names.join(', '))
