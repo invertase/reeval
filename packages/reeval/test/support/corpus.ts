@@ -4,4 +4,5 @@ export {
   type CorpusRun,
   corpus,
   corpusEntries,
+  HISTORY_DIR,
 } from '../../scripts/schema/corpus.ts'
