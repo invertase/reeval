@@ -168,13 +168,13 @@ test('the gateway swaps the key into each header the provider uses, on each of i
     },
     {
       matchUrl: 'https://opencode.ai',
-      matchHeaders: { 'x-api-key': 'ph' },
-      transformHeaders: { 'x-extra': '1', 'x-api-key': 'real' },
+      matchHeaders: { 'x-goog-api-key': 'ph' },
+      transformHeaders: { 'x-extra': '1', 'x-goog-api-key': 'real' },
     },
     {
       matchUrl: 'https://opencode.ai',
-      matchHeaders: { 'x-goog-api-key': 'ph' },
-      transformHeaders: { 'x-extra': '1', 'x-goog-api-key': 'real' },
+      matchHeaders: { 'x-api-key': 'ph' },
+      transformHeaders: { 'x-extra': '1', 'x-api-key': 'real' },
     },
   ])
 })
@@ -227,9 +227,9 @@ test("the gateway reads the response of each model call whose URL doesn't name t
   assert.deepEqual(
     providerModelResponses(zen).map((e) => e.path),
     [
-      { exact: '/zen/v1/chat/completions' },
-      { exact: '/zen/v1/messages' },
-      { exact: '/zen/v1/responses' },
+      { exact: '/inference/anthropic/v1/messages' },
+      { exact: '/inference/openai/v1/chat/completions' },
+      { exact: '/inference/openai/v1/responses' },
     ],
   )
   assert.equal(providerEndpoints(zen).length, 5)
