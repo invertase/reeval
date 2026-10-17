@@ -12,6 +12,9 @@ evaluate('canary', { environment: app }, async (c) => {
       return 1
     },
   })
-  await c.judge('Did the agent write the app?', { model: look, sees: { diff: ['src/', '!*.test.ts'] } })
+  await c.judge('Did the agent write the app?', {
+    model: look,
+    sees: { diff: ['src/', '!*.test.ts'] },
+  })
   expect(files).toEqual(['added src/app.test.ts', 'added src/app.ts'])
 })

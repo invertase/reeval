@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { type Draft, draftTranscript, fitBudget, stateBudget, stateOf } from '../src/judge/budget.ts'
+import {
+  type Draft,
+  draftTranscript,
+  fitBudget,
+  stateBudget,
+  stateOf,
+} from '../src/judge/budget.ts'
 import { judgeProblem, mergeJudge, resolveSees } from '../src/judge/sees.ts'
 import { transcriptForJudge } from '../src/judge/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
@@ -29,8 +35,22 @@ const events = [
     removed: 4,
     durationMs: null,
   },
-  { ...at, type: 'web-fetch', toolCallId: 't3', url: 'https://example.com/a', ok: false, durationMs: null },
-  { ...at, type: 'web-search', toolCallId: 't4', query: 'firebase auth', references: 3, durationMs: null },
+  {
+    ...at,
+    type: 'web-fetch',
+    toolCallId: 't3',
+    url: 'https://example.com/a',
+    ok: false,
+    durationMs: null,
+  },
+  {
+    ...at,
+    type: 'web-search',
+    toolCallId: 't4',
+    query: 'firebase auth',
+    references: 3,
+    durationMs: null,
+  },
   { ...at, type: 'error', message: 'rate limited' },
 ] as unknown as TranscriptEvent[]
 
@@ -127,7 +147,10 @@ test('the budget cuts the transcript first, then the largest diff files, and nam
         task: 'do it',
         output: 'done',
         transcript: draftTranscript(
-          Array.from({ length: 30 }, (_, i) => ({ ...events[2], toolCallId: `t${i}` })) as TranscriptEvent[],
+          Array.from({ length: 30 }, (_, i) => ({
+            ...events[2],
+            toolCallId: `t${i}`,
+          })) as TranscriptEvent[],
           'full',
         ),
       },

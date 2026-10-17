@@ -43,7 +43,10 @@ export type Draft = {
   checks?: Array<{ command: string } & ExecResult>
 }
 
-export const draftTranscript = (events: readonly TranscriptEvent[], mode: Mode): DraftTranscript => ({
+export const draftTranscript = (
+  events: readonly TranscriptEvent[],
+  mode: Mode,
+): DraftTranscript => ({
   events,
   mode,
   lines: transcriptForJudge(events, mode),
@@ -95,7 +98,12 @@ export type Fit = { dropped: string[] } | { error: string }
  * then whole diff files, check output and file contents, largest first. Each cut is named. The
  * question, task, output and changed files are never cut: when they alone are over, it's an error.
  */
-export function fitBudget(d: Draft, question: string, budget: number | undefined, model: string): Fit {
+export function fitBudget(
+  d: Draft,
+  question: string,
+  budget: number | undefined,
+  model: string,
+): Fit {
   const dropped: string[] = []
   if (budget === undefined) return { dropped }
   const over = () => sizeOf(d, question) > budget
@@ -119,7 +127,8 @@ export function fitBudget(d: Draft, question: string, budget: number | undefined
         t.omitted++
       }
     }
-    if (t.omitted) dropped.push(`${label(i)}: ${t.omitted} event${t.omitted === 1 ? '' : 's'}, ${why}`)
+    if (t.omitted)
+      dropped.push(`${label(i)}: ${t.omitted} event${t.omitted === 1 ? '' : 's'}, ${why}`)
   }
   if (d.diff && over()) {
     const parts = diffParts(d.diff)
@@ -150,7 +159,8 @@ export function fitBudget(d: Draft, question: string, budget: number | undefined
       .sort((a, b) => b[1].length - a[1].length)
     for (const [path, text] of order) {
       if (!over()) break
-      contents[path] = `[reeval: dropped: ~${k(tokensOf(text.length))} tokens, over the judge's budget]`
+      contents[path] =
+        `[reeval: dropped: ~${k(tokensOf(text.length))} tokens, over the judge's budget]`
       dropped.push(`contents ${path}: ~${k(tokensOf(text.length))} tokens, ${why}`)
     }
   }

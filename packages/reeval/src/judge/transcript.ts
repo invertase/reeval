@@ -53,7 +53,9 @@ export function transcriptForJudge(
         break
       }
       case 'web-search':
-        out.push(`search ${JSON.stringify(e.query)} → ${e.ok === false ? 'failed' : 'ok'}${took(e.durationMs)}`)
+        out.push(
+          `search ${JSON.stringify(e.query)} → ${e.ok === false ? 'failed' : 'ok'}${took(e.durationMs)}`,
+        )
         break
       case 'web-fetch':
         out.push(`fetch ${e.url} → ${e.ok ? 'ok' : 'failed'}${took(e.durationMs)}`)

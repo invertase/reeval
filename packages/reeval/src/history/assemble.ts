@@ -927,7 +927,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const out = new Artifacts()
   const runJudge = profile ? mergeJudge(config.judge, profileJudge(profile)) : config.judge
   const runSees = runJudge.sees && resolveSees(runJudge.sees)
-  const ownSees = runSees && JSON.stringify(runSees) !== JSON.stringify(resolveSees({})) ? runSees : undefined
+  const ownSees =
+    runSees && JSON.stringify(runSees) !== JSON.stringify(resolveSees({})) ? runSees : undefined
   const judgeModel = runJudge.model === undefined ? null : judgeModelName(runJudge.model)
   const configHash = sha256(
     JSON.stringify({

@@ -1253,7 +1253,9 @@ export const inventory: InventoryFeature[] = [
       unit('the judge drops build output, source maps, build info and minified files'),
       unit("the judge's sees.diff patterns filter its diff and files"),
       engine('judge sees cascades key by key from the config to the call'),
-      engine("c.judge refuses an unknown option, a command it hasn't run and on without sees.output"),
+      engine(
+        "c.judge refuses an unknown option, a command it hasn't run and on without sees.output",
+      ),
       judgeSees('the transcript renders one compact entry per event, by mode'),
       judgeSees('sees resolves every key to its default, and merges key by key'),
       judgeSees('judge options name an unknown key, a misspelt sees key and a bad value'),

@@ -1112,7 +1112,11 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.deepEqual(fromCall?.dropped, ['dist/ (1 file): build output'])
 
     assert.deepEqual(missing?.state.contents, { 'gone.txt': null })
-    assert.deepEqual(missing?.state.files, ['added src/app.ts'], 'the config sees.diff still applies')
+    assert.deepEqual(
+      missing?.state.files,
+      ['added src/app.ts'],
+      'the config sees.diff still applies',
+    )
   })
 
   test("a provider's error keeps its wording and names what filled the judge's input", async () => {
@@ -1229,8 +1233,14 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /Unknown judge option "include" in c\.judge\(\)\. Did you mean "sees\.diff"\?/)
-    assert.match(r.stdout, /c\.judge\(\) sees\.checks names a command this attempt hasn't run: "npm tset"/)
+    assert.match(
+      r.stdout,
+      /Unknown judge option "include" in c\.judge\(\)\. Did you mean "sees\.diff"\?/,
+    )
+    assert.match(
+      r.stdout,
+      /c\.judge\(\) sees\.checks names a command this attempt hasn't run: "npm tset"/,
+    )
     assert.match(r.stdout, /c\.judge\(\) on gives the output, but sees\.output is false/)
     const judged = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),

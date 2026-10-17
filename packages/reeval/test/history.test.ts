@@ -490,8 +490,14 @@ describe('recording runs into evals/.history', () => {
       return readRun(p.dir).run
     }
     const plain = await run('sees-none', '{ model: fakeJudge({ score: 0.9 }) }')
-    const defaults = await run('sees-defaults', '{ model: fakeJudge({ score: 0.9 }), sees: { diff: true } }')
-    const narrowed = await run('sees-diff', "{ model: fakeJudge({ score: 0.9 }), sees: { diff: ['src/'] } }")
+    const defaults = await run(
+      'sees-defaults',
+      '{ model: fakeJudge({ score: 0.9 }), sees: { diff: true } }',
+    )
+    const narrowed = await run(
+      'sees-diff',
+      "{ model: fakeJudge({ score: 0.9 }), sees: { diff: ['src/'] } }",
+    )
     const part = (r: typeof plain) => r.evals[0]?.cells[0]?.fingerprintParts.judge
     assert.equal(part(defaults), part(plain), 'the defaults are the same measurement')
     assert.equal(defaults.stack.judge.sees, undefined)

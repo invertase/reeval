@@ -14,11 +14,7 @@ import {
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
-import {
-  checkModelString,
-  DEFAULT_THRESHOLD,
-  judgeCredentials,
-} from './judge/index.ts'
+import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { judgeProblem } from './judge/sees.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
 import { ownFileURL } from './root.ts'

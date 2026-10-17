@@ -6,21 +6,34 @@ const pattern = z.string().refine((s) => s.trim().length > 0)
 /** `JudgeSees` as data: the same shape for a config object, a declaration tree or another language. */
 export const judgeSeesSchema = z.strictObject({
   task: z.boolean().optional().describe("The graded turn's prompt. Default true."),
-  output: z.boolean().optional().describe("The graded turn's final message, or `on`'s value. Default true."),
-  files: z.boolean().optional().describe('`status path` lines for the changed files. Default true.'),
+  output: z
+    .boolean()
+    .optional()
+    .describe("The graded turn's final message, or `on`'s value. Default true."),
+  files: z
+    .boolean()
+    .optional()
+    .describe('`status path` lines for the changed files. Default true.'),
   diff: z
     .union([z.boolean(), z.array(pattern).min(1)])
     .optional()
-    .describe('The diff since the eval started, or gitignore-style patterns over it. Default true.'),
+    .describe(
+      'The diff since the eval started, or gitignore-style patterns over it. Default true.',
+    ),
   contents: z
     .array(pattern)
     .optional()
-    .describe('Workspace files shown whole: exact paths or gitignore-style patterns. Default none.'),
+    .describe(
+      'Workspace files shown whole: exact paths or gitignore-style patterns. Default none.',
+    ),
   transcript: z
     .union([z.boolean(), z.enum(['tools', 'full'])])
     .optional()
     .describe("The graded turn's transcript: true, 'tools' or 'full'. Default false."),
-  turns: z.enum(['last', 'all']).optional().describe("'all': every turn up to the graded one. Default 'last'."),
+  turns: z
+    .enum(['last', 'all'])
+    .optional()
+    .describe("'all': every turn up to the graded one. Default 'last'."),
   checks: z
     .union([z.boolean(), z.array(pattern)])
     .optional()
@@ -62,7 +75,14 @@ export function mergeJudge<T extends JudgeOptions>(outer: T, inner: Partial<T> |
   return out
 }
 
-const JUDGE_KEYS = ['model', 'threshold', 'providerOptions', 'maxConcurrent', 'maxInputTokens', 'sees']
+const JUDGE_KEYS = [
+  'model',
+  'threshold',
+  'providerOptions',
+  'maxConcurrent',
+  'maxInputTokens',
+  'sees',
+]
 const CALL_KEYS = [...JUDGE_KEYS, 'on', 'artifacts']
 
 const JUDGE_HINTS: Record<string, string> = {
@@ -126,10 +146,7 @@ export function judgeProblem(judge: object, loc: string, call = false): string |
     return `Unknown judge option "${key}"${loc}.${why}`
   }
   const { maxInputTokens, sees } = judge as JudgeOptions
-  if (
-    maxInputTokens !== undefined &&
-    !(Number.isInteger(maxInputTokens) && maxInputTokens >= 1)
-  ) {
+  if (maxInputTokens !== undefined && !(Number.isInteger(maxInputTokens) && maxInputTokens >= 1)) {
     return `judge.maxInputTokens must be a whole number of at least 1 (got ${shown(maxInputTokens)})${loc}`
   }
   if (sees === undefined) return undefined

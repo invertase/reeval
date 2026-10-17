@@ -13,5 +13,5 @@ evaluate('lands', { environment: app }, async (c) => {
     },
   })
   await c.judge('Did the agent run the tests?', { model: look, sees: { transcript: 'tools' } })
-  expect(state.transcript).toMatch(/^tool shell: npm test → ok.*\n  14 passing$/m)
+  expect(state.transcript).toMatch(/^tool shell: npm test → ok.*\n {2}14 passing$/m)
 })

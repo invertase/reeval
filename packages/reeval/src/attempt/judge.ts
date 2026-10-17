@@ -1,5 +1,7 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
+import { workspaceFiles } from '../diff.ts'
 import { getRunContext, SUBJECT } from '../engine/runtime.ts'
+import { globFilter } from '../environment.ts'
 import {
   artifactRefsOf,
   badJudgeArtifacts,
@@ -7,14 +9,19 @@ import {
   filePartsOf,
   resolveJudgeArtifacts,
 } from '../judge/artifacts.ts'
-import { type Draft, type DraftTurn, draftTranscript, fitBudget, stateBudget, stateOf } from '../judge/budget.ts'
+import {
+  type Draft,
+  type DraftTurn,
+  draftTranscript,
+  fitBudget,
+  stateBudget,
+  stateOf,
+} from '../judge/budget.ts'
 import { judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { isApiError, type RetriedError } from '../judge/retry.ts'
 import { judgeProblem, mergeJudge, resolveSees } from '../judge/sees.ts'
 import { withInputSize } from '../judge/size.ts'
-import { workspaceFiles } from '../diff.ts'
-import { globFilter } from '../environment.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
 import type {
@@ -167,7 +174,8 @@ export function judgeCaller(
       sees,
       checks: a.record.checks,
       readFile,
-      listFiles: () => workspaceFiles(requireSandbox(a, 'c.judge() sees.contents patterns'), a.signal),
+      listFiles: () =>
+        workspaceFiles(requireSandbox(a, 'c.judge() sees.contents patterns'), a.signal),
     })
     const name = judgeModelName(model)
     const fit = fitBudget(draft, question, stateBudget(name, maxInputTokens), name)

@@ -16,5 +16,9 @@ evaluate('canary', { environment: app }, async (c) => {
     model: look,
     sees: { contents: ['src/**', '!**/*.test.ts', 'docs/**'] },
   })
-  expect(Object.keys(state.contents as object)).toEqual(['src/app.test.ts', 'src/app.ts', 'src/util.ts'])
+  expect(Object.keys(state.contents as object)).toEqual([
+    'src/app.test.ts',
+    'src/app.ts',
+    'src/util.ts',
+  ])
 })

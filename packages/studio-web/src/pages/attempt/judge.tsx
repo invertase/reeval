@@ -20,7 +20,8 @@ const seen = (value: unknown) =>
 function Sees({ sees }: { sees: Record<string, unknown> }) {
   const entries = Object.entries(sees)
   const on = entries.filter(
-    ([k, v]) => v !== false && !(Array.isArray(v) && v.length === 0) && !(k === 'turns' && v === 'last'),
+    ([k, v]) =>
+      v !== false && !(Array.isArray(v) && v.length === 0) && !(k === 'turns' && v === 'last'),
   )
   const off = entries.filter(([, v]) => v === false || (Array.isArray(v) && v.length === 0))
   return (

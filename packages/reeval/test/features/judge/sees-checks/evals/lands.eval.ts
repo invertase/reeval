@@ -15,5 +15,7 @@ evaluate('lands', { environment: app }, async (c) => {
     },
   })
   await c.judge('Did the second check pass?', { model: look, sees: { checks: ['echo second'] } })
-  expect(state.checks).toEqual([{ command: 'echo second', exitCode: 0, stdout: 'second\n', stderr: '' }])
+  expect(state.checks).toEqual([
+    { command: 'echo second', exitCode: 0, stdout: 'second\n', stderr: '' },
+  ])
 })

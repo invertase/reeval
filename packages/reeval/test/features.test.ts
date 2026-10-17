@@ -1502,7 +1502,11 @@ export const features: Feature[] = [
     canary: /expected \[ 'src\/app\.ts', 'src\/util\.ts' \] to deeply equal/,
     record: ({ run, runDir }) => {
       const { state } = judgeInputOf(run, runDir)
-      assert.doesNotMatch(String(state.diff), /export const twice/, 'shown in full, not in the diff')
+      assert.doesNotMatch(
+        String(state.diff),
+        /export const twice/,
+        'shown in full, not in the diff',
+      )
     },
   },
   {
@@ -1527,8 +1531,7 @@ export const features: Feature[] = [
     tiers: ['fake'],
     env: 'transcript-app',
     canary: /expected '.*' to contain 'thinking it over'/s,
-    record: ({ run, runDir }) =>
-      assert.equal(judgeInputOf(run, runDir).sees?.transcript, 'tools'),
+    record: ({ run, runDir }) => assert.equal(judgeInputOf(run, runDir).sees?.transcript, 'tools'),
   },
   {
     dir: 'judge/sees-turns',
@@ -1648,7 +1651,11 @@ export const features: Feature[] = [
     canary: /to deeply equal \{ 'README\.md': 'Run npm test\\n'/,
     record: ({ run, runDir }) => {
       const { state } = judgeInputOf(run, runDir)
-      assert.deepEqual(Object.keys(state.contents as object), ['README.md', 'missing.md', 'src/app.ts'])
+      assert.deepEqual(Object.keys(state.contents as object), [
+        'README.md',
+        'missing.md',
+        'src/app.ts',
+      ])
       assert.doesNotMatch(String(state.diff), /export const app/, 'shown in full, not in the diff')
     },
   },
