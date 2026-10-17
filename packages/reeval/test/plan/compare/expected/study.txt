@@ -1,5 +1,4 @@
 no profile · 1 evals · 6 cells · 18 attempts
-hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 hint: 1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
 evals/study.eval.ts › a study: every cell ungated, three runs a cell  a/base/docker     control          ungated  ×3
                                                                       a/skilled/docker  variant skilled  ungated  ×3
