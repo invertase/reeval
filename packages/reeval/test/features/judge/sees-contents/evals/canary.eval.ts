@@ -14,10 +14,11 @@ evaluate('canary', { environment: app }, async (c) => {
   })
   await c.judge('Does the README match the app?', {
     model: look,
-    files: ['README.md', 'src/app.ts'],
+    sees: { contents: ['README.md', 'src/app.ts', 'missing.md'] },
   })
   expect(contents).toEqual({
     'README.md': 'Run npm test\n',
+    'missing.md': null,
     'src/app.ts': 'export const app = () => "hello"\n',
   })
 })

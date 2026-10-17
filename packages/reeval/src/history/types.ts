@@ -12,6 +12,7 @@ import type {
   JudgeArtifactRef,
   Outcome,
   PhaseTimings,
+  ResolvedJudgeSees,
   SandboxWarning,
   StartRetry,
   TokenUsage,
@@ -371,7 +372,7 @@ export type FingerprintParts = {
   environment: string | null
   image: string | null
   agentCli: string | null
-  /** Over the judge's model, threshold and version. */
+  /** Over the judge's model, threshold and version, and the config's `sees` when it sets one. */
   judge: string
   /** Over the attempt's context files. */
   context: string
@@ -588,6 +589,8 @@ export type Stack = {
     threshold: number
     /** Changes when reeval, the AI SDK or the provider adapter (and so the judge prompt) change. */
     version: string
+    /** What the judge sees by default, every key resolved; absent when the config and profile leave `sees` at its defaults. */
+    sees?: ResolvedJudgeSees
   }
   /** Union of every attempt's context files. */
   context: ContextFile[]

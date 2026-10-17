@@ -63,7 +63,7 @@ export function describeSize(state: Record<string, JSONValue>, question: string)
 }
 
 const HINT =
-  "Narrow what the judge sees with include, e.g. c.judge(question, { include: ['src/'] }), or set judge: { include } in the config; files shows chosen files in full."
+  "Narrow what the judge sees with sees, e.g. c.judge(question, { sees: { diff: ['src/'] } }), or set judge.maxInputTokens to cut it to the model's limit."
 
 /**
  * A provider's error, as the provider worded it, then what the judge's input held: its estimated

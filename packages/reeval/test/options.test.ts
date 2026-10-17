@@ -1407,9 +1407,9 @@ describe('common mistakes', () => {
       /judge\.threshold must be between 0 and 1 \(got 2\) in group\("g"\)/,
     ],
     [
-      'a judge include as one string on a group',
-      `group('g', { judge: { include: 'src/' as never } }, () => { evaluate('e', async () => {}) })`,
-      /judge\.include must be a list of non-empty strings \(got "src\/"\) in group\("g"\)/,
+      'a judge.sees.diff pattern as one string on a group',
+      `group('g', { judge: { sees: { diff: 'src/' as never } } }, () => { evaluate('e', async () => {}) })`,
+      /judge\.sees\.diff must be true, false or a non-empty list of patterns \(got "src\/"\) in group\("g"\)/,
     ],
     [
       'a file path that climbs out of the workspace',
@@ -1728,9 +1728,39 @@ ${body}
       /judge\.threshold must be between 0 and 1 \(got 0\.8\) in reeval\.config\.ts/,
     ],
     [
-      'an empty path in the judge files in the config',
-      `judge: { model: fakeJudge({ score: 0.9 }), files: ['README.md', ''] },`,
-      /judge\.files must be a list of non-empty strings \(got \["README\.md",""\]\)/,
+      'the judge include option, which is sees.diff',
+      `judge: { model: fakeJudge({ score: 0.9 }), include: ['src/'] },`,
+      /Unknown judge option "include" in reeval\.config\.ts\. Did you mean "sees\.diff"\?/,
+    ],
+    [
+      'the judge files option, which is sees.contents',
+      `judge: { model: fakeJudge({ score: 0.9 }), files: ['README.md'] },`,
+      /Unknown judge option "files" in reeval\.config\.ts\. Did you mean "sees\.contents"\?/,
+    ],
+    [
+      'a misspelt judge.sees key',
+      `judge: { model: fakeJudge({ score: 0.9 }), sees: { transcipt: true } as never },`,
+      /Unknown judge\.sees key "transcipt" in reeval\.config\.ts\. Did you mean "transcript"\?/,
+    ],
+    [
+      'a judge.sees.transcript that is not a mode',
+      `judge: { model: fakeJudge({ score: 0.9 }), sees: { transcript: 'all' as never } },`,
+      /judge\.sees\.transcript must be true, false, 'tools' or 'full' \(got "all"\) in reeval\.config\.ts/,
+    ],
+    [
+      'an empty path in judge.sees.contents',
+      `judge: { model: fakeJudge({ score: 0.9 }), sees: { contents: ['README.md', ''] } },`,
+      /judge\.sees\.contents must be a list of paths or patterns \(got \["README\.md",""\]\) in reeval\.config\.ts/,
+    ],
+    [
+      'judge.sees as a list',
+      `judge: { model: fakeJudge({ score: 0.9 }), sees: ['transcript'] as never },`,
+      /judge\.sees must be an object such as \{ transcript: 'tools' \} \(got \["transcript"\]\) in reeval\.config\.ts/,
+    ],
+    [
+      'a judge maxInputTokens of zero',
+      `judge: { model: fakeJudge({ score: 0.9 }), maxInputTokens: 0 },`,
+      /judge\.maxInputTokens must be a whole number of at least 1 \(got 0\) in reeval\.config\.ts/,
     ],
     [
       'a fake judge scoring with a function in the config',

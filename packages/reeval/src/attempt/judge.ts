@@ -7,10 +7,14 @@ import {
   filePartsOf,
   resolveJudgeArtifacts,
 } from '../judge/artifacts.ts'
-import { badJudgeList, judgeModelName, runJudge } from '../judge/index.ts'
+import { type Draft, type DraftTurn, draftTranscript, fitBudget, stateBudget, stateOf } from '../judge/budget.ts'
+import { judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { isApiError, type RetriedError } from '../judge/retry.ts'
+import { judgeProblem, mergeJudge, resolveSees } from '../judge/sees.ts'
 import { withInputSize } from '../judge/size.ts'
+import { workspaceFiles } from '../diff.ts'
+import { globFilter } from '../environment.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
 import type {
@@ -18,10 +22,10 @@ import type {
   JSONValue,
   JudgeFailure,
   JudgeInput,
-  JudgeJsonState,
-  JudgeOptions,
+  ResolvedJudgeSees,
   Turn,
 } from '../types.ts'
+import { requireSandbox } from './checks.ts'
 import type { Attempt } from './state.ts'
 
 const noJudgeModel = (configFile: string) =>
@@ -33,28 +37,86 @@ const isTurn = (value: unknown): value is Turn =>
 
 const workspacePath = (path: string) => path.replace(/^\.\//, '')
 
+/** A `contents` entry that names one file rather than matching many. */
+const isExactPath = (entry: string) => !entry.startsWith('!') && !/[*?[\]{}]/.test(entry)
+
+type StateSources = {
+  turns: readonly Turn[]
+  subject: Turn
+  output: JSONValue
+  sees: ResolvedJudgeSees
+  checks: Attempt['record']['checks']
+  readFile: (path: string) => Promise<string | null>
+  listFiles: () => Promise<string[]>
+}
+
 /**
- * The turn's task and output, its changed files and diff as `judgeDiff` shows them, and the whole
- * current content of each of `files` (null when there's no such file).
+ * The judge's state for what `sees` chose: the graded turn's task and output (or every turn's),
+ * its changed files and diff as `judgeDiff` shows them, files whole, `c.exec` results and the
+ * transcript.
  */
-async function judgeState(
-  turn: Turn,
-  output: JSONValue,
-  { include, files }: Pick<JudgeOptions, 'include' | 'files'>,
-  readFile: (path: string) => Promise<string | null>,
-): Promise<{ state: JudgeJsonState; dropped: string[] }> {
-  const inFull = files?.length ? files : undefined
-  const shown = judgeDiff(turn.diff, {
-    ...(include ? { include } : {}),
-    ...(inFull ? { inFull: new Set(inFull.map(workspacePath)) } : {}),
+async function draftState(src: StateSources): Promise<{ draft: Draft; dropped: string[] }> {
+  const { subject, sees } = src
+  const at = src.turns.indexOf(subject)
+  const graded = sees.turns === 'all' && at >= 0 ? src.turns.slice(0, at + 1) : [subject]
+  const turns: DraftTurn[] = graded.map((turn) => ({
+    ...(sees.task ? { task: turn.prompt } : {}),
+    ...(sees.output ? { output: turn === subject ? src.output : turn.text } : {}),
+    ...(sees.transcript ? { transcript: draftTranscript(turn.transcript, sees.transcript) } : {}),
+  }))
+  const contents = await filesWhole(sees.contents, src)
+  const shown = judgeDiff(subject.diff, {
+    ...(Array.isArray(sees.diff) ? { include: sees.diff } : {}),
+    ...(contents ? { inFull: new Set(Object.keys(contents)) } : {}),
   })
-  const state: JudgeJsonState = { task: turn.prompt, output, files: shown.files, diff: shown.patch }
-  if (inFull) {
-    const contents: { [path: string]: string | null } = {}
-    for (const path of inFull) contents[workspacePath(path)] = await readFile(path)
-    state.contents = contents
+  const checks = checksShown(sees.checks, src.checks)
+  const draft: Draft = {
+    all: sees.turns === 'all',
+    turns,
+    ...(sees.files ? { files: shown.files } : {}),
+    ...(sees.diff !== false ? { diff: shown.patch } : {}),
+    ...(contents ? { contents } : {}),
+    ...(checks ? { checks } : {}),
   }
-  return { state, dropped: shown.dropped }
+  return { draft, dropped: sees.diff !== false ? shown.dropped : [] }
+}
+
+/** Exact paths (`null` when missing) and every workspace file the patterns match, in path order. */
+async function filesWhole(
+  entries: readonly string[],
+  src: Pick<StateSources, 'readFile' | 'listFiles'>,
+): Promise<Record<string, string | null> | undefined> {
+  if (!entries.length) return undefined
+  const exact = entries.filter(isExactPath).map(workspacePath)
+  const matches = globFilter(entries.map(workspacePath))
+  const matched = entries.some((e) => !isExactPath(e))
+    ? (await src.listFiles()).filter((path) => matches(path))
+    : []
+  const paths = [...new Set([...exact, ...matched])].sort()
+  const contents: Record<string, string | null> = {}
+  for (const path of paths) {
+    const text = await src.readFile(path)
+    contents[path] = text?.includes('\u0000') ? '[reeval: dropped binary file]' : text
+  }
+  return contents
+}
+
+function checksShown(
+  which: ResolvedJudgeSees['checks'],
+  ran: Attempt['record']['checks'],
+): Draft['checks'] {
+  if (which === false) return undefined
+  if (which !== true) {
+    const missing = which.find((command) => !ran.some((r) => r.command === command))
+    if (missing !== undefined) {
+      throw new Error(
+        `c.judge() sees.checks names a command this attempt hasn't run: ${JSON.stringify(missing)}`,
+      )
+    }
+  }
+  return ran
+    .filter((r) => which === true || which.includes(r.command))
+    .map(({ command, exitCode, stdout, stderr }) => ({ command, exitCode, stdout, stderr }))
 }
 
 /**
@@ -80,29 +142,44 @@ export function judgeCaller(
     ) {
       throw new Error(`c.judge() threshold must be between 0 and 1 (got ${String(threshold)})`)
     }
-    const bad = badJudgeList(call)
-    if (bad)
-      throw new Error(`c.judge() ${bad.key} must be a list of non-empty strings (got ${bad.got})`)
+    const problem = judgeProblem(call, ' in c.judge()', true)
+    if (problem) throw new Error(problem)
     const badArts = badJudgeArtifacts(call.artifacts)
     if (badArts) throw new Error(`c.judge() artifacts ${badArts}`)
     const subject = isTurn(on) ? on : a.turns.at(-1)
     if (!subject) throw new Error('c.judge() has no turn to grade: call c.send() first')
-    const options = { ...a.spec.judge, ...call }
+    const options = mergeJudge(a.spec.judge, call)
     const { model } = options
     if (model === undefined) {
       a.judgeErrored = true
       throw new Error(noJudgeModel(getRunContext().config.file))
     }
-    const { include, files, maxConcurrent, ...judgeOptions } = options
+    const sees = resolveSees(options.sees)
+    if (on !== undefined && !isTurn(on) && !sees.output) {
+      throw new Error('c.judge() on gives the output, but sees.output is false')
+    }
+    const { sees: _sees, maxInputTokens, maxConcurrent, ...judgeOptions } = options
     const output = on === undefined || isTurn(on) ? subject.text : on
-    const { state, dropped } = await judgeState(subject, output, { include, files }, readFile)
+    const { draft, dropped } = await draftState({
+      turns: a.turns,
+      subject,
+      output,
+      sees,
+      checks: a.record.checks,
+      readFile,
+      listFiles: () => workspaceFiles(requireSandbox(a, 'c.judge() sees.contents patterns'), a.signal),
+    })
+    const name = judgeModelName(model)
+    const fit = fitBudget(draft, question, stateBudget(name, maxInputTokens), name)
+    if ('dropped' in fit) dropped.push(...fit.dropped)
+    const state = stateOf(draft)
     const resolved = resolveJudgeArtifacts(call.artifacts, a.artifactBlobs)
     const refs = artifactRefsOf(resolved)
     const decide = decideState(state, filePartsOf(resolved))
-    const name = judgeModelName(model)
     const input: JudgeInput = {
       question,
       model: name,
+      sees,
       state,
       ...(refs.length ? { artifacts: refs } : {}),
       ...(dropped.length ? { dropped } : {}),
@@ -142,6 +219,7 @@ export function judgeCaller(
       }
     }
 
+    if ('error' in fit) return failed(fit.error)
     const provider = name.split('/')[0]
     try {
       const { verdict, retries } = await a.timed('judgeMs', () =>

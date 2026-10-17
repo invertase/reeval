@@ -267,12 +267,62 @@ export type JudgeOptions = {
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
   /**
-   * Which changed files the judge's diff shows: gitignore-style patterns over workspace paths,
-   * where the last matching pattern wins and a `!` pattern excludes. Default: every changed file.
+   * The most estimated tokens (4 characters each) of state the judge gets. Default: the model's
+   * budget, 32k for `typesafe-ai/jev-*` and 100k for other models; a fake judge has none.
    */
-  include?: string[]
-  /** Workspace files the judge sees whole, as they are now, whether or not the agent changed them. */
-  files?: string[]
+  maxInputTokens?: number
+  /** What the judge sees beside the question. Merged key by key down the cascade. */
+  sees?: JudgeSees
+}
+
+/**
+ * What the judge sees: each key is a key of the judge's state. An unset key keeps its default,
+ * which is what the judge sees with no `sees` at all.
+ */
+export type JudgeSees = {
+  /** The graded turn's prompt. Default true. */
+  task?: boolean
+  /** The graded turn's final message, or `on`'s value. Default true. */
+  output?: boolean
+  /** `status path` lines for the changed files, under `diff`'s patterns. Default true. */
+  files?: boolean
+  /**
+   * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
+   * the last matching pattern wins and `!` excludes. Default true.
+   */
+  diff?: boolean | string[]
+  /**
+   * Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style
+   * patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in
+   * the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing.
+   * These files leave the diff. Default none.
+   */
+  contents?: string[]
+  /**
+   * The graded turn's transcript as text lines: `true` is messages and tool calls with tool
+   * output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output.
+   * Default false.
+   */
+  transcript?: boolean | 'tools' | 'full'
+  /**
+   * `'all'`: every turn up to the graded one under `turns`, each with its task, output and (with
+   * `transcript`) transcript. Default `'last'`.
+   */
+  turns?: 'last' | 'all'
+  /** `c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false. */
+  checks?: boolean | string[]
+}
+
+/** `JudgeSees` with every key set: what one judge call saw. */
+export type ResolvedJudgeSees = {
+  task: boolean
+  output: boolean
+  files: boolean
+  diff: boolean | string[]
+  contents: string[]
+  transcript: boolean | 'tools' | 'full'
+  turns: 'last' | 'all'
+  checks: boolean | string[]
 }
 
 export type JudgeCallOptions = JudgeOptions & {
@@ -1542,6 +1592,8 @@ export type AttemptImage = {
 export type JudgeInput = {
   question: string
   model: string
+  /** What the call chose to see, every key resolved. */
+  sees?: ResolvedJudgeSees
   state: { [key: string]: JSONValue }
   /** Captures sent as file parts; refs only, never the PNG bytes. */
   artifacts?: JudgeArtifactRef[]

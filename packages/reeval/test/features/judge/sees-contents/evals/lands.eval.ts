@@ -2,7 +2,8 @@ import { evaluate, expect } from 'reeval'
 import { fakeJudge } from 'reeval/judge'
 import { app } from './env.ts'
 
-// files shows the judge each file whole as it is now: one the agent wrote, one it didn't touch.
+// sees.contents shows each file whole as it is now: one the agent wrote, one it didn't touch,
+// and one that isn't there.
 evaluate('lands', { environment: app }, async (c) => {
   await c.send('write the app')
   let contents: unknown
@@ -14,10 +15,11 @@ evaluate('lands', { environment: app }, async (c) => {
   })
   await c.judge('Does the README match the app?', {
     model: look,
-    files: ['README.md', 'src/app.ts'],
+    sees: { contents: ['README.md', 'src/app.ts', 'missing.md'] },
   })
   expect(contents).toEqual({
     'README.md': 'Run npm start\n',
+    'missing.md': null,
     'src/app.ts': 'export const app = () => "hello"\n',
   })
 })

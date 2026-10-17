@@ -1065,11 +1065,11 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     )
   })
 
-  test('judge include and files cascade from the config to the call; build output is dropped', async () => {
+  test('judge sees cascades key by key from the config to the call; build output is dropped', async () => {
     const p = await project('judge-scope', {
       'reeval.config.ts': fakeConfig({
         harness: `{ files: { 'src/app.ts': 'export const app = 1\\n', 'notes.md': 'notes\\n', 'dist/app.js': 'bundle\\n' } }`,
-        judge: `{ model: fakeJudge({ score: 0.9 }), include: ['src/'] }`,
+        judge: `{ model: fakeJudge({ score: 0.9 }), sees: { diff: ['src/'] } }`,
       }),
       'evals/scope.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -1077,8 +1077,8 @@ const env = defineEnvironment('scoped', { sandbox: fakeSandbox(), files: { 'READ
 evaluate('scope', { environment: env }, async (c) => {
   await c.send('go')
   expect(await c.judge('from the config')).toPass()
-  expect(await c.judge('from the call', { include: [], files: ['README.md', './src/app.ts'] })).toPass()
-  expect(await c.judge('a missing file', { files: ['gone.txt'] })).toPass()
+  expect(await c.judge('from the call', { sees: { diff: true, contents: ['README.md', './src/app.ts'] } })).toPass()
+  expect(await c.judge('a missing file', { sees: { contents: ['gone.txt'] } })).toPass()
 })
 `,
     })
@@ -1089,8 +1089,8 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.match(String(fromConfig?.state.diff), /\+export const app = 1/)
     assert.doesNotMatch(String(fromConfig?.state.diff), /notes|dist/)
     assert.deepEqual(fromConfig?.dropped, [
-      'dist/app.js: not in include',
-      'notes.md: not in include',
+      'dist/app.js: not in sees.diff',
+      'notes.md: not in sees.diff',
     ])
     assert.equal(fromConfig?.state.contents, undefined)
 
@@ -1112,7 +1112,7 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.deepEqual(fromCall?.dropped, ['dist/ (1 file): build output'])
 
     assert.deepEqual(missing?.state.contents, { 'gone.txt': null })
-    assert.deepEqual(missing?.state.files, ['added src/app.ts'], 'the config include still applies')
+    assert.deepEqual(missing?.state.files, ['added src/app.ts'], 'the config sees.diff still applies')
   })
 
   test("a provider's error keeps its wording and names what filled the judge's input", async () => {
@@ -1144,7 +1144,7 @@ evaluate('agent eval', async (c) => {
       assert.equal(e?.error?.kind, 'judge')
       assert.match(
         e?.error?.message ?? '',
-        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): .*include/,
+        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): .*sees/,
       )
       assert.equal(judgeInputs(e)[0]?.retries, undefined, 'not retried')
     } finally {
@@ -1215,6 +1215,49 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it 
     )
     // The canary: a valid call is judged, so a count of 0 means the bad ones never reached it.
     assert.deepEqual(judged, { empty: 0, 'over one': 0, fine: 1 })
+  })
+
+  test("c.judge refuses an unknown option, a command it hasn't run and on without sees.output", async () => {
+    const p = await project('judge-sees-call', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('unknown', async (c) => { await c.send('go'); await c.judge('ok?', { include: ['src/'] } as never) })
+evaluate('not run', async (c) => { await c.send('go'); await c.judge('ok?', { sees: { checks: ['npm tset'] } }) })
+evaluate('on off', async (c) => { await c.send('go'); await c.judge('ok?', { on: 'x', sees: { output: false } }) })
+evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', { sees: { output: false } })).toPass() })
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /Unknown judge option "include" in c\.judge\(\)\. Did you mean "sees\.diff"\?/)
+    assert.match(r.stdout, /c\.judge\(\) sees\.checks names a command this attempt hasn't run: "npm tset"/)
+    assert.match(r.stdout, /c\.judge\(\) on gives the output, but sees\.output is false/)
+    const judged = Object.fromEntries(
+      readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
+    )
+    // The canary: a valid call is judged, so a count of 0 means the bad ones never reached it.
+    assert.deepEqual(judged, { unknown: 0, 'not run': 0, 'on off': 0, fine: 1 })
+  })
+
+  test("a judge call whose kept parts are over the budget is a judge error, and the judge isn't asked", async () => {
+    const p = await project('judge-over-budget', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('over', async (c) => {
+  await c.send('x'.repeat(4000))
+  expect.soft(await c.judge('ok?', { maxInputTokens: 100 })).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const [attempt] = readRun(p.dir).evals[0]?.attempts ?? []
+    assert.equal(attempt?.error?.kind, 'judge')
+    assert.match(
+      attempt?.error?.message ?? '',
+      /The judge's input is ~1k tokens \(estimated\) after every cut, over fake's budget of 100: task 1k/,
+    )
+    assert.equal(attempt?.judgements.length, 0)
   })
 
   test('c.judge artifacts must be a capture handle or name on this attempt', async () => {

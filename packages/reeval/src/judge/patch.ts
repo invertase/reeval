@@ -58,7 +58,7 @@ export type JudgeDiffOptions = {
  * The diff text and changed files the judge can actually grade. Source files are kept whole;
  * dependencies, build output, lockfiles, binaries, source maps, build info and minified files are
  * each replaced by a marker naming them (a directory by one marker with its file count), and paths
- * `include` leaves out are gone. `git apply` skips the marker lines.
+ * `include` (`sees.diff`'s patterns) leaves out are gone. `git apply` skips the marker lines.
  */
 export function judgeDiff(
   diff: { patch: string; files: Array<{ path: string; status: string }> },
@@ -67,7 +67,7 @@ export function judgeDiff(
   const included = include?.length ? globFilter(include) : () => true
   const dropped: string[] = []
   const files = diff.files.filter((f) => included(f.path))
-  for (const f of diff.files) if (!included(f.path)) dropped.push(`${f.path}: not in include`)
+  for (const f of diff.files) if (!included(f.path)) dropped.push(`${f.path}: not in sees.diff`)
   const deps = collapse(files, (f) => f.path, DEPENDENCY_DIR)
   const built = collapse(deps.kept, (f) => f.path, BUILD_DIR)
   const fileLines = [

@@ -5,7 +5,38 @@ import { EmptyState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
-type JudgeInput = { question: string; model: string; state: Record<string, unknown> }
+type JudgeInput = {
+  question: string
+  model: string
+  sees?: Record<string, unknown>
+  state: Record<string, unknown>
+  dropped?: string[]
+}
+
+const seen = (value: unknown) =>
+  value === true ? null : Array.isArray(value) ? value.join(', ') : String(value)
+
+/** `task · output · diff (src/) · transcript (tools)`, then the keys that are off. */
+function Sees({ sees }: { sees: Record<string, unknown> }) {
+  const entries = Object.entries(sees)
+  const on = entries.filter(
+    ([k, v]) => v !== false && !(Array.isArray(v) && v.length === 0) && !(k === 'turns' && v === 'last'),
+  )
+  const off = entries.filter(([, v]) => v === false || (Array.isArray(v) && v.length === 0))
+  return (
+    <div className="border-b px-4 py-2 text-xs">
+      <span className="mr-2 text-muted-foreground">Sees</span>
+      <span className="font-mono">
+        {on.map(([k, v]) => (seen(v) === null ? k : `${k} (${seen(v)})`)).join(' · ')}
+      </span>
+      {off.length ? (
+        <span className="ml-3 font-mono text-muted-foreground">
+          off: {off.map(([k]) => k).join(', ')}
+        </span>
+      ) : null}
+    </div>
+  )
+}
 
 function ScoreBar({ score, threshold, pass }: { score: number; threshold: number; pass: boolean }) {
   return (

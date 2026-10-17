@@ -15,11 +15,11 @@ import {
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
 import {
-  badJudgeList,
   checkModelString,
   DEFAULT_THRESHOLD,
   judgeCredentials,
 } from './judge/index.ts'
+import { judgeProblem } from './judge/sees.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
@@ -530,10 +530,8 @@ function resolveJudge(
       `${where}.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.`,
     )
   }
-  const bad = badJudgeList(judge)
-  if (bad) {
-    throw new UsageError(`${where}.${bad.key} must be a list of non-empty strings (got ${bad.got})`)
-  }
+  const problem = judgeProblem(judge, ` in ${where}`)
+  if (problem) throw new UsageError(problem)
   const threshold = judge.threshold ?? DEFAULT_THRESHOLD
   if (!(threshold >= 0 && threshold <= 1)) {
     throw new UsageError(`${where}.threshold must be between 0 and 1`)
