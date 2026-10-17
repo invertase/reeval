@@ -13,6 +13,7 @@ import {
   type EffortVerdict,
   effortOf,
 } from '../view/effort.ts'
+import { rowsOf } from './rows.ts'
 import { TOOL_CLASSES } from './tool-class.ts'
 import type { CheckTally } from './types.ts'
 
@@ -277,7 +278,7 @@ const merge = (sides: Side[]): Side => ({
 
 function insertAll(db: DatabaseSync, table: string, rows: Row[]): void {
   if (rows.length === 0) return
-  const cols = (db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>).map(
+  const cols = rowsOf<{ name: string }>(db.prepare(`PRAGMA table_info("${table}")`)).map(
     (c) => c.name,
   )
   const statement = db.prepare(
@@ -289,25 +290,23 @@ function insertAll(db: DatabaseSync, table: string, rows: Row[]): void {
 /** Recomputes every derived table from the projected rows; run inside the sync's transaction. */
 export function deriveFacts(db: DatabaseSync): void {
   for (const table of DERIVED) db.exec(`DELETE FROM ${table}`)
-  const cells = db
-    .prepare(
+  const cells = rowsOf<Cell>(
+    db.prepare(
       'SELECT c.*, r.started_at FROM cells c JOIN runs r USING (run_id) ORDER BY c.run_id, c.rowid',
-    )
-    .all() as Cell[]
-  const attempts = db
-    .prepare(
+    ),
+  )
+  const attempts = rowsOf<Attempt>(
+    db.prepare(
       `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, tools, agent_ms, file_edits,
         input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens
        FROM attempts ORDER BY run_id, rowid`,
-    )
-    .all() as Attempt[]
+    ),
+  )
   const nearThreshold = new Set(
-    (
-      db
-        .prepare(
-          `SELECT DISTINCT run_id, attempt_key FROM judgements WHERE verdict = 'fail' AND ABS(score - threshold) <= ${JUDGE_MARGIN}`,
-        )
-        .all() as Array<{ run_id: string; attempt_key: string }>
+    rowsOf<{ run_id: string; attempt_key: string }>(
+      db.prepare(
+        `SELECT DISTINCT run_id, attempt_key FROM judgements WHERE verdict = 'fail' AND ABS(score - threshold) <= ${JUDGE_MARGIN}`,
+      ),
     ).map((r) => `${r.run_id}\0${r.attempt_key}`),
   )
   const samples = new Map<string, EffortSample[]>()
@@ -345,11 +344,11 @@ export function deriveFacts(db: DatabaseSync): void {
   // Tool calls by class per counted attempt, for each cell's per-class medians; null for a
   // cell none of whose attempts had a transcript to read calls from.
   const classCounts = new Map<string, Map<string, number>>()
-  for (const r of db
-    .prepare(
+  for (const r of rowsOf<{ run_id: string; attempt_key: string; class: string; n: number }>(
+    db.prepare(
       'SELECT run_id, attempt_key, class, COUNT(*) AS n FROM tool_calls GROUP BY run_id, attempt_key, class',
-    )
-    .all() as Array<{ run_id: string; attempt_key: string; class: string; n: number }>) {
+    ),
+  )) {
     const id = `${r.run_id}\0${r.attempt_key}`
     const m = classCounts.get(id) ?? new Map<string, number>()
     m.set(r.class, r.n)
@@ -420,11 +419,7 @@ export function deriveFacts(db: DatabaseSync): void {
   insertAll(db, 'effort_m', effortRows)
 
   // contrasts: each pair of arms on one harness and sandbox, when an eval has two variants or more.
-  const checkRows = db
-    .prepare(
-      'SELECT run_id, eval_key, cell_key, label, pass, fail, error, not_run FROM cell_checks',
-    )
-    .all() as Array<{
+  const checkRows = rowsOf<{
     run_id: string
     eval_key: string
     cell_key: string
@@ -433,7 +428,11 @@ export function deriveFacts(db: DatabaseSync): void {
     fail: number
     error: number
     not_run: number
-  }>
+  }>(
+    db.prepare(
+      'SELECT run_id, eval_key, cell_key, label, pass, fail, error, not_run FROM cell_checks',
+    ),
+  )
   const checksOf = new Map<string, Map<string, CheckTally>>()
   for (const k of checkRows) {
     const id = cellId(k.run_id, k.eval_key, k.cell_key)
@@ -621,9 +620,9 @@ export function deriveFacts(db: DatabaseSync): void {
 
   // Paired: a pooled evaluate.each's variant against its control over the cases of one run, each
   // case a paired sample, as its record computed it.
-  const familyLifts = db
-    .prepare(`SELECT ${FAMILY_COLUMNS.join(', ')} FROM family_lift_m`)
-    .all() as Array<Record<(typeof FAMILY_COLUMNS)[number], SQLInputValue>>
+  const familyLifts = rowsOf<Record<(typeof FAMILY_COLUMNS)[number], SQLInputValue>>(
+    db.prepare(`SELECT ${FAMILY_COLUMNS.join(', ')} FROM family_lift_m`),
+  )
   for (const f of familyLifts) {
     factorRows.push({
       factor: 'environment',
@@ -665,7 +664,7 @@ export function deriveFacts(db: DatabaseSync): void {
   const cellContext = (c: Cell) => {
     const files = new Map<string, string>()
     for (const a of byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []) {
-      for (const f of contextOf.all(c.run_id, a.key) as Array<{ path: string; sha256: string }>) {
+      for (const f of rowsOf<{ path: string; sha256: string }>(contextOf, c.run_id, a.key)) {
         files.set(f.path, f.sha256)
       }
     }
