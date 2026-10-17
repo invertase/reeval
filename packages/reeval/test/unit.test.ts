@@ -774,7 +774,10 @@ test("a provider's error keeps its wording and adds what fills the judge's input
     message,
     /^\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~312k tokens \(estimated\): diff 302k, of which src\/huge\.ts is 300k, src\/app\.ts is 2k; contents 10k, of which README\.md is 10k\. Narrow /,
   )
-  assert.match(message, /sees: \{ diff: \['src\/'\] \}/)
+  assert.match(
+    message,
+    /\. Narrow sees\.diff, sees\.contents, sees\.files, sees\.task or sees\.output\.$/,
+  )
   const small = withInputSize('Bad request', { task: 't', diff: '' }, 'q?')
   assert.match(
     small,

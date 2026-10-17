@@ -9,19 +9,13 @@ import {
   filePartsOf,
   resolveJudgeArtifacts,
 } from '../judge/artifacts.ts'
-import {
-  type Draft,
-  type DraftTurn,
-  draftTranscript,
-  fitBudget,
-  stateBudget,
-  stateOf,
-} from '../judge/budget.ts'
 import { judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { isApiError, type RetriedError } from '../judge/retry.ts'
 import { judgeProblem, mergeJudge, resolveSees } from '../judge/sees.ts'
 import { withInputSize } from '../judge/size.ts'
+import { type Draft, type DraftTurn, stateOf } from '../judge/state.ts'
+import { transcriptForJudge } from '../judge/transcript.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
 import type {
@@ -69,7 +63,9 @@ async function draftState(src: StateSources): Promise<{ draft: Draft; dropped: s
   const turns: DraftTurn[] = graded.map((turn) => ({
     ...(sees.task ? { task: turn.prompt } : {}),
     ...(sees.output ? { output: turn === subject ? src.output : turn.text } : {}),
-    ...(sees.transcript ? { transcript: draftTranscript(turn.transcript, sees.transcript) } : {}),
+    ...(sees.transcript
+      ? { transcript: transcriptForJudge(turn.transcript, sees.transcript).join('\n') }
+      : {}),
   }))
   const contents = await filesWhole(sees.contents, src)
   const shown = judgeDiff(subject.diff, {
@@ -165,7 +161,7 @@ export function judgeCaller(
     if (on !== undefined && !isTurn(on) && !sees.output) {
       throw new Error('c.judge() on gives the output, but sees.output is false')
     }
-    const { sees: _sees, maxInputTokens, maxConcurrent, ...judgeOptions } = options
+    const { sees: _sees, maxConcurrent, ...judgeOptions } = options
     const output = on === undefined || isTurn(on) ? subject.text : on
     const { draft, dropped } = await draftState({
       turns: a.turns,
@@ -178,8 +174,6 @@ export function judgeCaller(
         workspaceFiles(requireSandbox(a, 'c.judge() sees.contents patterns'), a.signal),
     })
     const name = judgeModelName(model)
-    const fit = fitBudget(draft, question, stateBudget(name, maxInputTokens), name)
-    if ('dropped' in fit) dropped.push(...fit.dropped)
     const state = stateOf(draft)
     const resolved = resolveJudgeArtifacts(call.artifacts, a.artifactBlobs)
     const refs = artifactRefsOf(resolved)
@@ -227,7 +221,6 @@ export function judgeCaller(
       }
     }
 
-    if ('error' in fit) return failed(fit.error)
     const provider = name.split('/')[0]
     try {
       const { verdict, retries } = await a.timed('judgeMs', () =>

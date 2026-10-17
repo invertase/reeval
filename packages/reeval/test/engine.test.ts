@@ -1148,7 +1148,7 @@ evaluate('agent eval', async (c) => {
       assert.equal(e?.error?.kind, 'judge')
       assert.match(
         e?.error?.message ?? '',
-        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): .*sees/,
+        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): [^\n]*\. Narrow (sees\.\w+, )*sees\.\w+ or sees\.\w+\.$/,
       )
       assert.equal(judgeInputs(e)[0]?.retries, undefined, 'not retried')
     } finally {
@@ -1249,25 +1249,25 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', 
     assert.deepEqual(judged, { unknown: 0, 'not run': 0, 'on off': 0, fine: 1 })
   })
 
-  test("a judge call whose kept parts are over the budget is a judge error, and the judge isn't asked", async () => {
-    const p = await project('judge-over-budget', {
-      'reeval.config.ts': fakeConfig(),
+  test('the judge gets all of what sees selects, however big', async () => {
+    const big = 'x'.repeat(400_000)
+    const p = await project('judge-big-input', {
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'big.txt': '${big}' } }` }),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('over', async (c) => {
-  await c.send('x'.repeat(4000))
-  expect.soft(await c.judge('ok?', { maxInputTokens: 100 })).toPass()
+import { fakeJudge } from 'reeval/judge'
+evaluate('big', async (c) => {
+  await c.send('x'.repeat(40_000))
+  let size = 0
+  const look = fakeJudge({ score: (s) => ((size = JSON.stringify(s).length), 1) })
+  expect(await c.judge('ok?', { model: look, sees: { contents: ['**'] } })).toPass()
+  expect(size).toBeGreaterThan(440_000)
 })
 `,
     })
     const r = await runCli(p.dir)
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    const [attempt] = readRun(p.dir).evals[0]?.attempts ?? []
-    assert.equal(attempt?.error?.kind, 'judge')
-    assert.match(
-      attempt?.error?.message ?? '',
-      /The judge's input is ~1k tokens \(estimated\) after every cut, over fake's budget of 100: task 1k/,
-    )
-    assert.equal(attempt?.judgements.length, 0)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [input] = judgeInputs(readRun(p.dir).evals[0])
+    assert.equal(input?.dropped, undefined)
   })
 
   test('c.judge artifacts must be a capture handle or name on this attempt', async () => {

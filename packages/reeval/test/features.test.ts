@@ -1557,27 +1557,6 @@ export const features: Feature[] = [
     record: ({ run }) => assert.deepEqual(run.stack.judge.sees?.diff, ['src/']),
   },
   {
-    dir: 'judge/budget',
-    tiers: ['fake'],
-    env: 'budget-app',
-    canary: /not to match \/\\\[reeval: dropped/,
-    record: ({ run, runDir }) =>
-      assert.match(
-        judgeInputOf(run, runDir).dropped?.join('\n') ?? '',
-        /^transcript: \d+ events, over the judge's budget of 300 tokens$/,
-      ),
-  },
-  {
-    dir: 'judge/budget-contents',
-    tiers: ['fake'],
-    env: 'budget-contents-app',
-    canary: /to have property "big\.txt"/,
-    record: ({ run, runDir }) =>
-      assert.deepEqual(judgeInputOf(run, runDir).dropped, [
-        "contents big.txt: ~1k tokens, over the judge's budget of 300 tokens",
-      ]),
-  },
-  {
     dir: 'assert/labelled',
     tiers: ['fake', 'docker'],
     env: 'plain',

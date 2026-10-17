@@ -1263,18 +1263,6 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'judge.budget',
-    area: 'Judges and matchers',
-    name: "The judge's state budget per model (32k for Jev, 100k otherwise, `judge.maxInputTokens` to override): tool output clipped, then transcript events, diff files, check output and contents cut, largest first, each named in `dropped`",
-    fixtures: ['judge/budget', 'judge/budget-contents'],
-    tests: [
-      judgeSees('each model has its state budget'),
-      judgeSees('the budget cuts the transcript first'),
-      judgeSees('a state whose kept parts alone are over the budget is an error naming them'),
-      engine('a judge call whose kept parts are over the budget is a judge error'),
-    ],
-  },
-  {
     id: 'judge.artifacts',
     area: 'Judges and matchers',
     name: '`c.judge({ artifacts })` sends captures as AI SDK file parts; JSON-only calls stay an object',
@@ -1288,9 +1276,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.input-size',
     area: 'Judges and matchers',
-    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `sees` hint",
+    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `sees` keys that were on, largest first; reeval sends what `sees` selects, uncut",
     tests: [
       unit("a provider's error keeps its wording and adds what fills the judge's input"),
+      judgeSees("a provider error keeps the provider's message and names the sees keys"),
+      engine('the judge gets all of what sees selects, however big'),
       engine("a provider's error keeps its wording and names what filled the judge's input"),
     ],
   },

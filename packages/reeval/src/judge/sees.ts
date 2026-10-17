@@ -75,14 +75,7 @@ export function mergeJudge<T extends JudgeOptions>(outer: T, inner: Partial<T> |
   return out
 }
 
-const JUDGE_KEYS = [
-  'model',
-  'threshold',
-  'providerOptions',
-  'maxConcurrent',
-  'maxInputTokens',
-  'sees',
-]
+const JUDGE_KEYS = ['model', 'threshold', 'providerOptions', 'maxConcurrent', 'sees']
 const CALL_KEYS = [...JUDGE_KEYS, 'on', 'artifacts']
 
 const JUDGE_HINTS: Record<string, string> = {
@@ -95,7 +88,6 @@ const JUDGE_HINTS: Record<string, string> = {
   shows: 'sees',
   show: 'sees',
   input: 'sees',
-  maxTokens: 'maxInputTokens',
 }
 
 const VALUES: Record<keyof JudgeSees, string> = {
@@ -145,10 +137,7 @@ export function judgeProblem(judge: object, loc: string, call = false): string |
           : ''
     return `Unknown judge option "${key}"${loc}.${why}`
   }
-  const { maxInputTokens, sees } = judge as JudgeOptions
-  if (maxInputTokens !== undefined && !(Number.isInteger(maxInputTokens) && maxInputTokens >= 1)) {
-    return `judge.maxInputTokens must be a whole number of at least 1 (got ${shown(maxInputTokens)})${loc}`
-  }
+  const { sees } = judge as JudgeOptions
   if (sees === undefined) return undefined
   if (typeof sees !== 'object' || sees === null || Array.isArray(sees)) {
     return `judge.sees must be an object such as { transcript: 'tools' } (got ${shown(sees)})${loc}`

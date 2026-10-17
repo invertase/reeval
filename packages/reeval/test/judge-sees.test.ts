@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import {
-  type Draft,
-  draftTranscript,
-  fitBudget,
-  stateBudget,
-  stateOf,
-} from '../src/judge/budget.ts'
 import { judgeProblem, mergeJudge, resolveSees } from '../src/judge/sees.ts'
+import { withInputSize } from '../src/judge/size.ts'
+import { type Draft, stateOf } from '../src/judge/state.ts'
 import { transcriptForJudge } from '../src/judge/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 
@@ -128,57 +123,23 @@ test('judge options name an unknown key, a misspelt sees key and a bad value', (
   assert.equal(judgeProblem({ sees: { contents: ['**', '!dist/'], checks: true } }, loc), undefined)
 })
 
-test('each model has its state budget, maxInputTokens overrides it, and a fake judge has none', () => {
-  assert.equal(stateBudget('typesafe-ai/jev-1.13.0'), 32_000)
-  assert.equal(stateBudget('google/gemini-3.8-flash'), 100_000)
-  assert.equal(stateBudget('fake'), undefined)
-  assert.equal(stateBudget('fake', 500), 500)
-  assert.equal(stateBudget('typesafe-ai/jev-1.13.0', 8000), 8000)
-})
-
 const patch = (path: string, body: string) =>
   `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1 @@\n+${body}\n`
 
-test('the budget cuts the transcript first, then the largest diff files, and names each cut', () => {
-  const draft: Draft = {
+test("a provider error keeps the provider's message and names the sees keys that were on, largest first", () => {
+  const state = stateOf({
     all: false,
-    turns: [
-      {
-        task: 'do it',
-        output: 'done',
-        transcript: draftTranscript(
-          Array.from({ length: 30 }, (_, i) => ({
-            ...events[2],
-            toolCallId: `t${i}`,
-          })) as TranscriptEvent[],
-          'full',
-        ),
-      },
-    ],
-    files: ['added big.ts', 'added small.ts'],
-    diff: patch('big.ts', 'b'.repeat(6000)) + patch('small.ts', 'small'),
-  }
-  const fit = fitBudget(draft, 'ok?', 400, 'fake')
-  assert.ok('dropped' in fit)
-  assert.deepEqual(fit.dropped, [
-    "transcript: tool input and output clipped, over the judge's budget of 400 tokens",
-    `transcript: ${draft.turns[0]?.transcript?.omitted} events, over the judge's budget of 400 tokens`,
-    "big.ts: over the judge's budget of 400 tokens",
-  ])
-  const state = stateOf(draft)
-  assert.match(String(state.diff), /\[reeval: dropped big\.ts: over the judge's budget\]/)
-  assert.match(String(state.diff), /\+small/, 'the smaller file stays')
-  assert.match(String(state.transcript), /\[reeval: dropped \d+ events: over the judge's budget\]/)
-  assert.ok(JSON.stringify(state).length / 4 <= 400)
-})
-
-test('a state whose kept parts alone are over the budget is an error naming them', () => {
-  const draft: Draft = { all: false, turns: [{ task: 't'.repeat(8000), output: 'done' }] }
-  const fit = fitBudget(draft, 'ok?', 1000, 'typesafe-ai/jev-1.13.0')
-  assert.ok('error' in fit)
+    turns: [{ task: 'do it', output: 'done', transcript: 't'.repeat(8000) }],
+    files: ['added big.ts'],
+    diff: patch('big.ts', 'b'.repeat(20_000)),
+  })
+  const message = withInputSize('{"error_type":"max_tokens_exceeded"}', state, 'ok?')
+  const [provider, hint, ...rest] = message.split('\n')
+  assert.equal(provider, '{"error_type":"max_tokens_exceeded"}')
+  assert.deepEqual(rest, [])
   assert.match(
-    fit.error,
-    /^The judge's input is ~2k tokens \(estimated\) after every cut, over typesafe-ai\/jev-1\.13\.0's budget of 1k: task 2k\. Leave a part out with sees/,
+    hint ?? '',
+    /^The judge's input was ~7k tokens \(estimated\): diff 5k, of which big\.ts is 5k; transcript 2k\. Narrow sees\.diff, sees\.transcript, sees\.files, sees\.task or sees\.output\.$/,
   )
 })
 

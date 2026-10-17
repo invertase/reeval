@@ -243,10 +243,6 @@
           "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "number"
         },
-        "maxInputTokens": {
-          "description": "The most estimated tokens (4 characters each) of state the judge gets. Default: the model's budget, 32k for `typesafe-ai/jev-*` and 100k for other models; a fake judge has none.",
-          "type": "number"
-        },
         "model": {
           "description": "`'provider/model'`, or a fake judge.",
           "anyOf": [
@@ -1644,10 +1640,6 @@
           "properties": {
             "maxConcurrent": {
               "description": "The most judge calls to this model's provider at once, across the run.",
-              "type": "number"
-            },
-            "maxInputTokens": {
-              "description": "The most estimated tokens (4 characters each) of state the judge gets. Default: the model's budget, 32k for `typesafe-ai/jev-*` and 100k for other models; a fake judge has none.",
               "type": "number"
             },
             "model": {

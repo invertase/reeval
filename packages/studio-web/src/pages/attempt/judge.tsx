@@ -10,7 +10,6 @@ type JudgeInput = {
   model: string
   sees?: Record<string, unknown>
   state: Record<string, unknown>
-  dropped?: string[]
 }
 
 const seen = (value: unknown) =>
@@ -155,7 +154,6 @@ export function Judge({ record, attempt }: { record: RunRecord; attempt: Attempt
                     {Object.entries(input.state).map(([k, v]) => (
                       <Field key={k} name={k} value={v} />
                     ))}
-                    {input.dropped?.length ? <Field name="Left out" value={input.dropped} /> : null}
                   </div>
                 ))}
               </div>

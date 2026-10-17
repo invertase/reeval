@@ -266,11 +266,6 @@ export type JudgeOptions = {
   providerOptions?: Record<string, Record<string, JSONValue>>
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
-  /**
-   * The most estimated tokens (4 characters each) of state the judge gets. Default: the model's
-   * budget, 32k for `typesafe-ai/jev-*` and 100k for other models; a fake judge has none.
-   */
-  maxInputTokens?: number
   /** What the judge sees beside the question. Merged key by key down the cascade. */
   sees?: JudgeSees
 }

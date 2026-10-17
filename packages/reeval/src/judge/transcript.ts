@@ -30,13 +30,9 @@ const indent = (block: string) =>
  * `true` shows messages and tool calls, `'tools'` tool calls only, `'full'` adds reasoning and
  * leaves tool input and output whole.
  */
-export function transcriptForJudge(
-  events: readonly TranscriptEvent[],
-  mode: Mode,
-  clipped = mode !== 'full',
-): string[] {
+export function transcriptForJudge(events: readonly TranscriptEvent[], mode: Mode): string[] {
   const full = mode === 'full'
-  const cut = (s: string) => (clipped ? clip(s, TOOL_OUTPUT_CHARS) : s)
+  const cut = (s: string) => (full ? s : clip(s, TOOL_OUTPUT_CHARS))
   const took = (ms: number | null) => (ms === null ? '' : ` · ${formatDuration(ms)}`)
   const out: string[] = []
   for (const e of events) {

@@ -1758,11 +1758,6 @@ ${body}
       /judge\.sees must be an object such as \{ transcript: 'tools' \} \(got \["transcript"\]\) in reeval\.config\.ts/,
     ],
     [
-      'a judge maxInputTokens of zero',
-      `judge: { model: fakeJudge({ score: 0.9 }), maxInputTokens: 0 },`,
-      /judge\.maxInputTokens must be a whole number of at least 1 \(got 0\) in reeval\.config\.ts/,
-    ],
-    [
       'a fake judge scoring with a function in the config',
       `judge: { model: fakeJudge({ score: () => 1 }) },`,
       /fakeJudge\(\{ score \}\) in the config takes a number\. Pass a score function per group, eval or call instead\./,
