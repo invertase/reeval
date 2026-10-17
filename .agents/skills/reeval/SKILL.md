@@ -175,12 +175,16 @@ group('hello', () => {
   (and the judge) would count them as the agent's. `await c.sandbox()` starts the
   sandbox without a turn, to check what the environment set up. `c.attempt.cell.role` is
   `'control'` or `'variant'`.
-- `await c.judge(question, { threshold?, model?, on?, include?, files?, artifacts? })`: the judge sees the
-  prompt, the final message, the changed files and the diff, not what the agent ran. The diff
-  leaves out dependencies, build output (`dist/`, `.next/`, top-level `build/` and `out/`),
-  lockfiles, `*.map`, `*.tsbuildinfo` and minified files. `include: ['src/', '!**/*.test.ts']`
-  (gitignore-style, last match wins) narrows the diff; `files: ['README.md']` shows files whole,
-  changed or not. Both work as `judge` defaults in the config, a group or an eval. `artifacts`
+- `await c.judge(question, { threshold?, model?, on?, sees?, maxInputTokens?, artifacts? })`: by
+  default the judge sees the prompt, the final message, the changed files and the diff, not what
+  the agent ran. The diff leaves out dependencies, build output (`dist/`, `.next/`, top-level
+  `build/` and `out/`), lockfiles, `*.map`, `*.tsbuildinfo` and minified files. `sees` picks
+  what else, keyed by the state's fields:
+  `{ sees: { diff: ['src/', '!**/*.test.ts'] } }` (gitignore-style, last match wins) narrows the
+  diff; `{ sees: { contents: ['README.md', 'src/**'] } }` shows files whole, changed or not;
+  `{ sees: { transcript: 'tools' } }` adds the turn's tool calls; `{ sees: { checks: ['npm test'] } }`
+  adds that `c.exec` result; `turns: 'all'` gives every turn; `task: false` and `output: false`
+  leave those out. `sees` cascades like every other option, key by key. `artifacts`
   is call-only: a `c.capture()` handle or its name, sent as a file part. Ask about facts in the
   picture, not whether it "looks great". A provider that cannot take files fails that call.
   Prefer deterministic checks for what can be checked; use the judge for quality, with plain
@@ -196,9 +200,12 @@ group('hello', () => {
   `c.judge(q, { on: (await c.exec('node app.js')).stdout })`. Checks run in the agent's
   container as the same user, which suits AX evals but isn't a sealed verifier.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
-  runs a build otherwise fills the judge's diff with its output. Jev takes 32k tokens of state and
-  question. A judge call's provider error keeps the provider's wording and adds the input's
-  estimated size and biggest files; scope a big input with `include`.
+  runs a build otherwise fills the judge's diff with its output. Every call is held to the judge
+  model's budget (Jev 32k tokens, other models 100k, `judge.maxInputTokens` to set it): reeval
+  cuts transcript events, then the largest diff files, check output and `contents`, and names
+  each cut in `judge-input.json`'s `dropped`. A judge call's provider error keeps the provider's
+  wording and adds the input's estimated size and biggest files; scope a big input with
+  `sees: { diff: ['src/'] }`.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
   Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
@@ -474,7 +481,8 @@ recorded `*.log` files; `reeval record` warns if git still ignores a file it wro
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `c.judge() has no model` | Set one, or `fakeJudge()` |
-| The judge's provider refuses a big input | The provider's message, then `The judge's input was ~…k tokens (estimated): diff …, of which …` | Add a `.gitignore` to the environment, or `include: ['src/']` |
+| The judge's provider refuses a big input | The provider's message, then `The judge's input was ~…k tokens (estimated): diff …, of which …` | Add a `.gitignore` to the environment, or `sees: { diff: ['src/'] }` |
+| `include` or `files` on a judge | `Unknown judge option "include" … Did you mean "sees.diff"?` | `sees: { diff: […] }`, `sees: { contents: […] }` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |

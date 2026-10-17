@@ -85,7 +85,7 @@ A judge call that hits a transient error (a 429, a 5xx, "high demand", a dropped
 
 ## What the judge sees
 
-The judge sees four things: the latest turn's prompt as `task`, the agent's final message as `output`, the changed files and the diff since the eval started. Each call is saved in the attempt's `judge-input.json`. From a real Cursor attempt of the multi-turn eval above:
+By default the judge sees four things: the latest turn's prompt as `task`, the agent's final message as `output`, the changed files and the diff since the eval started. Each call is saved in the attempt's `judge-input.json`. From a real Cursor attempt of the multi-turn eval above:
 
 ```text
 [
@@ -107,14 +107,14 @@ The judge sees four things: the latest turn's prompt as `task`, the agent's fina
 ]
 ```
 
-| Sees | Doesn't see |
+| Sees by default | Sees only when `sees` asks |
 |---|---|
-| The latest turn's prompt | Earlier prompts |
-| The agent's final message | Its reasoning and intermediate messages |
-| Changed files, dependency and build folders collapsed | The transcript: commands it ran, tool calls, web fetches |
-| The diff since the eval started, without build output, lockfiles, source maps and minified files | Your checks and their output |
+| The latest turn's prompt | Earlier turns: `turns: 'all'` |
+| The agent's final message | The transcript: `transcript: true`, `'tools'` or `'full'` |
+| Changed files, dependency and build folders collapsed | Unchanged files whole: `contents` |
+| The diff since the eval started, without build output, lockfiles, source maps and minified files | Your checks and their output: `checks` |
 
-So the judge can't tell whether the agent ran the tests; check that with `c.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message. `{ artifacts: [image] }` adds a `c.capture()` PNG as a file part; ask about facts in the picture, not whether it "looks great".
+So by default the judge can't tell whether the agent ran the tests; check that with `c.exec`, or show it the transcript. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message. `{ artifacts: [image] }` adds a `c.capture()` PNG as a file part; ask about facts in the picture, not whether it "looks great".
 
 ## Judge what the code prints
 
@@ -139,21 +139,51 @@ const verdict = await c.judge('Does it say 3 orders totalling 50?', {
 
 The diff shows the code, not what it does. When the behaviour is the outcome, run the code and pass its output with `on`. In `judge-input.json` it replaces the final message as `output`, and the task, files and diff stay. [Make the eval trustworthy](/guide/writing-evals#make-the-eval-trustworthy) has the whole eval.
 
-## Narrow what the judge sees
+## Choose what the judge sees
 
 ```ts title="evals/sign-in.eval.ts"
 const flow = await c.judge('Does this change implement email sign-in?', {
-  include: ['src/', '!**/*.test.ts'],
-  files: ['src/firebase.ts'],
+  sees: { diff: ['src/', '!**/*.test.ts'], contents: ['src/firebase.ts'] },
 })
 expect.soft(flow, 'Email sign-in').toPass()
 ```
 
-`include` keeps the diff to the files a question is about, and `files` shows files whole, changed or not. Set either on `judge` in the config, a group or an eval as a default; a call's own replaces it. A smaller state fits the model's context, and the judge grades better without the noise.
+`sees` picks the evidence beside the graded output, and its keys are the state's fields. `diff` patterns keep the diff to the files a question is about, and `contents` shows files whole, changed or not. A smaller state fits the model's budget, and the judge grades better without the noise.
+
+```ts
+c.judge('Is this code idiomatic?', { sees: { task: false } })
+c.judge('Is the change correct?', { sees: { output: false } })
+c.judge('Can a user add a todo?', { sees: { contents: ['src/**'] } })
+```
+
+Leave the prompt out when it would anchor a generic question, and the final message when a confident summary shouldn't sway a judge grading the diff. `contents` takes patterns too, for when you can't know the filenames. `sees` cascades like every other option, key by key.
 
 <Warning>
-  The diff is what changed in the workspace, so give the workspace its own `.gitignore`: an agent that runs `npm run build` leaves its output there. A Vite bundle once filled 97% of a 310k-token state and failed every call on Jev's 32k limit.
+  The diff is what changed in the workspace, so give the workspace its own `.gitignore`: an agent that runs `npm run build` leaves its output there. reeval drops known build folders and holds every call to the model's [budget](/reference/judges#budget), but what's cut is what the judge doesn't see.
 </Warning>
+
+## Show the judge what the agent did
+
+```ts title="evals/tests.eval.ts"
+await c.exec('npm test')
+const ran = await c.judge('Did the agent run the tests before finishing?', {
+  sees: { transcript: 'tools', checks: ['npm test'] },
+})
+```
+
+```text
+      "checks": [
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "stdout": "\n> test\n> echo 14 passing\n\n14 passing\n",
+          "stderr": ""
+        }
+      ],
+      "transcript": "tool shell: npm test → ok · 0ms\n  14 passing\nedit src/app.ts (create, +1 −0) · 2ms\n…"
+```
+
+`transcript` adds the graded turn's tool calls as text lines, and `checks` adds your `c.exec` results with their exit codes and output. `turns: 'all'` gives every turn's prompt and final message, for a question about the whole conversation. A long transcript is cut from the middle to fit the budget, and `judge-input.json`'s `dropped` says what went.
 
 A provider error on a judge call says how big the input was and names its biggest files. See [Provider errors](/reference/judges#provider-errors).
 

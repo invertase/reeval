@@ -206,7 +206,7 @@ What ran and graded the agents: the machine, images, harnesses and judge.
   Each harness: its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.
 </Property>
 
-<Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string}">
+<Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string; sees?: ResolvedJudgeSees}">
   The run's judge: the config's, with what the profile's `judge` and `defaults.judge` set over it. `config.judgeModel` and `config.threshold` name the same one.
 </Property>
 
@@ -605,7 +605,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="agentCli" type="string | null"></Property>
 
 <Property name="judge" type="string">
-  Over the judge's model, threshold and version.
+  Over the judge's model, threshold and version, and the config's `sees` when it sets one.
 </Property>
 
 <Property name="context" type="string">

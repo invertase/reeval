@@ -45,7 +45,7 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session.
 </Property>
 
 <Property name="judge" type="(question: string, options?: JudgeCallOptions) => Promise<Verdict>">
-  Asks the judge a yes/no question about the latest turn: its task, final message, changed files and diff. `options` takes `model`, `threshold`, `providerOptions` and `maxConcurrent` for this call, `on` (a `Turn` or any JSON value to grade instead), and `artifacts` (capture handles or names, sent as file parts). Without a turn it throws `c.judge() has no turn to grade: call c.send() first`. See [Judges](/reference/judges).
+  Asks the judge a yes/no question about the latest turn: by default its task, final message, changed files and diff. `options` takes `model`, `threshold`, `providerOptions`, `maxConcurrent`, `maxInputTokens` and `sees` (what the judge sees, such as `{ transcript: 'tools' }`) for this call, `on` (a `Turn` or any JSON value to grade instead), and `artifacts` (capture handles or names, sent as file parts). Without a turn it throws `c.judge() has no turn to grade: call c.send() first`. See [Judges](/reference/judges).
 </Property>
 
 <Property name="sandbox" type="() => Promise<{ exec, readFile }>">
