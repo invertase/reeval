@@ -22,7 +22,7 @@ import type {
 import { prepareAll } from './preflight.ts'
 import { imageHarness, installSteps, projectPath, usesReevalBase } from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
-import { createProviders, dockerKey } from './providers.ts'
+import { attemptImage, createProviders, dockerKey } from './providers.ts'
 
 /**
  * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, plus
@@ -313,7 +313,7 @@ export async function buildImages(
   return targets.map((t, i) => {
     const o = outcomes[i] as (typeof outcomes)[number]
     return o.ok
-      ? { ...t, ok: true, image: o.handle as unknown as AttemptImage, ms: o.ms }
+      ? { ...t, ok: true, image: attemptImage(o.handle), ms: o.ms }
       : { ...t, ok: false, failure: o.failure, ms: o.ms }
   })
 }
