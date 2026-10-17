@@ -800,7 +800,42 @@ profiles:
   ],
   protocol: [
     ['an empty id', request({ op: 'send', prompt: 'hi' }, '')],
-    ['an unknown op', request({ op: 'judge', question: 'ok?' })],
+    ['an unknown op', request({ op: 'teleport', to: 'mars' })],
+    ['judge without a question', request({ op: 'judge' })],
+    ['judge with an empty question', request({ op: 'judge', question: ' ' })],
+    [
+      'judge with a model without a provider',
+      request({ op: 'judge', question: 'ok?', options: { model: 'jev' } }),
+    ],
+    [
+      'judge with a fake score function',
+      request({ op: 'judge', question: 'ok?', options: { model: { kind: 'fake-judge' } } }),
+    ],
+    [
+      'judge with a threshold above 1',
+      request({ op: 'judge', question: 'ok?', options: { threshold: 2 } }),
+    ],
+    [
+      'judge with a state typo',
+      request({ op: 'judge', question: 'ok?', options: { state: { transcrpt: true } } }),
+    ],
+    [
+      'judge on a turn that is not an index',
+      request({ op: 'judge', question: 'ok?', options: { on: { turn: -1 } } }),
+    ],
+    [
+      'judge with an empty artifact name',
+      request({ op: 'judge', question: 'ok?', options: { artifacts: [''] } }),
+    ],
+    [
+      'judge with a capture missing its file',
+      request({
+        op: 'judge',
+        question: 'ok?',
+        options: { artifacts: [{ name: 'home', port: 3000, path: '/', viewport: 'full-page' }] },
+      }),
+    ],
+    ['sandbox with an argument', request({ op: 'sandbox', start: true })],
     ['send without a prompt', request({ op: 'send' })],
     ['exec with a typo', request({ op: 'exec', cmd: 'ls' })],
     ['exec with an empty command', request({ op: 'exec', command: '' })],
@@ -818,6 +853,40 @@ profiles:
     ],
     ['expect with a label that is a number', request(expectCall({ label: 3 }))],
     ['good: send', request({ op: 'send', prompt: 'Write greet.js.' })],
+    ['good: sandbox', request({ op: 'sandbox' })],
+    ['good: judge', request({ op: 'judge', question: 'Does greet.js export greet?' })],
+    [
+      'good: judge with options',
+      request({
+        op: 'judge',
+        question: 'Does the page show a greeting?',
+        options: {
+          model: 'google/gemini-3.8-flash',
+          threshold: 0.7,
+          providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+          state: { transcript: 'tools', turns: 'all', checks: ['npm test'] },
+          on: { turn: 0 },
+          artifacts: [
+            'home',
+            {
+              name: 'about',
+              port: 3000,
+              path: '/about',
+              viewport: { width: 1280, height: 720 },
+              file: { path: 'artifacts/about.png', sha256: 'ab', bytes: 10 },
+            },
+          ],
+        },
+      }),
+    ],
+    [
+      'good: judge on a value with a fake judge',
+      request({
+        op: 'judge',
+        question: 'Is it polite?',
+        options: { model: { kind: 'fake-judge', score: 0.9 }, on: { value: { text: 'Hi' } } },
+      }),
+    ],
     ['good: exec', request({ op: 'exec', command: 'node greet.js' })],
     ['good: readFile', request({ op: 'readFile', path: '~/notes.md' })],
     [

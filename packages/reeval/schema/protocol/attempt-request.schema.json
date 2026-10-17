@@ -121,6 +121,38 @@
           },
           "required": ["args", "matcher", "not", "op", "soft", "subject"],
           "additionalProperties": false
+        },
+        {
+          "description": "`c.judge(question, options)`. Replies with its verdict, or a judge failure when the provider failed.",
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "judge"
+            },
+            "options": {
+              "$ref": "#/$defs/JudgeCallData"
+            },
+            "question": {
+              "description": "A yes/no question about the graded turn or value.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["op", "question"],
+          "additionalProperties": false
+        },
+        {
+          "description": "`c.sandbox()`: starts the sandbox and the agent session without a turn.",
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "sandbox"
+            }
+          },
+          "required": ["op"],
+          "additionalProperties": false
         }
       ]
     },
@@ -138,6 +170,84 @@
         }
       },
       "required": ["call", "id"],
+      "additionalProperties": false
+    },
+    "Capture": {
+      "description": "What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "`artifacts/<name>.png` under the attempt directory.",
+          "type": "object",
+          "properties": {
+            "bytes": {
+              "type": "number"
+            },
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": ["bytes", "path", "sha256"],
+          "additionalProperties": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Path on the app, as passed in.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Container port that was tunneled.",
+          "type": "number"
+        },
+        "viewport": {
+          "description": "What the author asked, including `'full-page'`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureWindow"
+            },
+            {
+              "type": "string",
+              "const": "full-page"
+            }
+          ]
+        }
+      },
+      "required": ["file", "name", "path", "port", "viewport"],
+      "additionalProperties": false
+    },
+    "CaptureWindow": {
+      "description": "Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`.",
+      "type": "object",
+      "properties": {
+        "height": {
+          "description": "In CSS pixels.",
+          "type": "number"
+        },
+        "width": {
+          "description": "In CSS pixels.",
+          "type": "number"
+        }
+      },
+      "required": ["height", "width"],
+      "additionalProperties": false
+    },
+    "FakeJudgeModel": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "fake-judge"
+        },
+        "score": {
+          "type": "number"
+        }
+      },
+      "required": ["kind", "score"],
       "additionalProperties": false
     },
     "JSONValue": {
@@ -171,6 +281,176 @@
           }
         }
       ]
+    },
+    "JudgeCallData": {
+      "description": "`c.judge()`'s options as data: the judge options, with the model by name or a fake judge's numeric score, plus the call-only `on` and `artifacts`.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "Captures this call sends the judge as image file parts: a capture `c.capture` returned, or its name. The provider that cannot take files fails the call.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "\\S"
+              },
+              {
+                "$ref": "#/$defs/Capture"
+              }
+            ]
+          }
+        },
+        "maxConcurrent": {
+          "description": "The most judge calls to this model's provider at once, across the run.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "model": {
+          "description": "`'provider/model'`, or a fake judge with a numeric score.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "\\/"
+            },
+            {
+              "$ref": "#/$defs/FakeJudgeModel"
+            }
+          ]
+        },
+        "on": {
+          "description": "What to grade instead of the latest turn: an earlier turn, or a value.",
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "turn": {
+                  "description": "The turn's index, from 0.",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": ["turn"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "description": "Graded as the output.",
+                  "$ref": "#/$defs/JSONValue"
+                }
+              },
+              "required": ["value"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "providerOptions": {
+          "description": "AI SDK provider options for the judge's calls, keyed by provider.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "$ref": "#/$defs/JSONValue"
+            }
+          }
+        },
+        "state": {
+          "description": "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
+          "$ref": "#/$defs/JudgeStateOptions"
+        },
+        "threshold": {
+          "description": "Minimum score (0–1) for a `pass` verdict.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "JudgeStateOptions": {
+      "description": "What the judge is given: each key is a key of the state in `judge-input.json`. An unset key keeps its default, which is what the judge gets with no `state` option at all.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "`c.exec` results so far; a list shows only those commands, as passed to `c.exec`. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "contents": {
+          "description": "Workspace files shown whole, as they are now, changed or not: exact paths or gitignore-style patterns (`'**'`, `'src/**'`; the last match wins, `!` excludes) over the files git sees in the workspace. A missing exact path is `null`; a pattern that matches nothing adds nothing. These files leave the diff. Default none.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "\\S"
+          }
+        },
+        "diff": {
+          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "files": {
+          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default true.",
+          "type": "boolean"
+        },
+        "output": {
+          "description": "The graded turn's final message, or `on`'s value. Default true.",
+          "type": "boolean"
+        },
+        "task": {
+          "description": "The graded turn's prompt. Default true.",
+          "type": "boolean"
+        },
+        "transcript": {
+          "description": "The graded turn's transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": ["tools", "full"]
+            }
+          ]
+        },
+        "turns": {
+          "description": "`'all'`: every turn up to the graded one under `turns`, each with its task, output and (with `transcript`) transcript. Default `'last'`.",
+          "type": "string",
+          "enum": ["last", "all"]
+        }
+      },
+      "additionalProperties": false
     },
     "MatcherArg": {
       "description": "One argument to a matcher: a JSON value, or a regular expression as `{ regexp, flags? }`.",

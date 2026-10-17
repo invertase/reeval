@@ -172,6 +172,56 @@
               },
               "required": ["assertion", "id", "ok", "op"],
               "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "judge"
+                },
+                "verdict": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Verdict"
+                    },
+                    {
+                      "$ref": "#/$defs/JudgeFailure"
+                    }
+                  ]
+                }
+              },
+              "required": ["id", "ok", "op", "verdict"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "sandbox"
+                }
+              },
+              "required": ["id", "ok", "op"],
+              "additionalProperties": false
             }
           ]
         },
@@ -192,7 +242,7 @@
             },
             "op": {
               "type": "string",
-              "enum": ["send", "exec", "readFile", "writeFile", "expect"]
+              "enum": ["send", "exec", "readFile", "writeFile", "expect", "judge", "sandbox"]
             }
           },
           "required": ["error", "id", "ok", "op"],
@@ -244,6 +294,65 @@
         }
       },
       "required": ["path", "status"],
+      "additionalProperties": false
+    },
+    "JudgeArtifactRef": {
+      "description": "A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "number"
+        },
+        "mediaType": {
+          "type": "string",
+          "const": "image/png"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "`artifacts/<name>.png` under the attempt directory.",
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": ["bytes", "mediaType", "name", "path", "sha256"],
+      "additionalProperties": false
+    },
+    "JudgeFailure": {
+      "description": "What `c.judge()` returns when the call failed (the provider's error, after any retries): the attempt fails as a judge error once the eval's body has finished, so the judges and checks after it still run.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "Captures this call sent the judge as file parts, when any.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgeArtifactRef"
+          }
+        },
+        "error": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "score": {
+          "type": "null"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "verdict": {
+          "type": "string",
+          "const": "error"
+        }
+      },
+      "required": ["error", "model", "question", "score", "threshold", "verdict"],
       "additionalProperties": false
     },
     "TokenUsage": {
@@ -558,6 +667,41 @@
     "TurnStatus": {
       "type": "string",
       "enum": ["completed", "aborted", "error"]
+    },
+    "Verdict": {
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "Captures this call sent the judge as file parts, when any.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgeArtifactRef"
+          }
+        },
+        "model": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "resolvedModel": {
+          "description": "The model id the provider says served the call, when it reports one.",
+          "type": "string"
+        },
+        "score": {
+          "description": "The judge's probability that the answer is yes, from 0 to 1.",
+          "type": "number"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["pass", "fail"]
+        }
+      },
+      "required": ["model", "question", "score", "threshold", "verdict"],
+      "additionalProperties": false
     },
     "WebEventType": {
       "description": "The transcript events a harness may be unable to report.",

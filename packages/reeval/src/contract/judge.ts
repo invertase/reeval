@@ -69,8 +69,8 @@ export const judgeStateSchema = z
 export const judgeFields = {
   threshold: z
     .number()
-    .min(0)
-    .max(1)
+    .min(0, 'between 0 and 1')
+    .max(1, 'between 0 and 1')
     .optional()
     .describe('Minimum score (0–1) for a `pass` verdict.'),
   providerOptions: z
@@ -96,6 +96,10 @@ export const fakeJudgeDataSchema = z
     score: z.number().min(0).max(1).describe('The score (0–1) every call gets.'),
   })
   .describe('`fakeJudge()` as data: the score every call gets.')
+
+export const judgeModelNameSchema = z
+  .string()
+  .regex(/\//, "a 'provider/model' string, e.g. 'google/gemini-3.8-flash'")
 
 export const configJudgeDataSchema = z
   .strictObject({
