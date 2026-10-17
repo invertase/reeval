@@ -1233,7 +1233,7 @@ evaluate('slow', { runs: 4 }, async (c) => { await c.send('x') })
   })
 })
 
-describe('common mistakes', () => {
+describe('common mistakes', { concurrency: 4 }, () => {
   const cases: Array<[string, string, RegExp]> = [
     [
       'a list of environments',
