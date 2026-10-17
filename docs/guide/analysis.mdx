@@ -64,6 +64,8 @@ evals/skill.eval.ts › house greeting › greets in the house…  antigravity:g
 
 `effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap. `tokens_verdict` is null when either side has no usage sample: omitted, not insufficient. A Goose cell does not blank `tokens_verdict` on Cursor cells in the same study.
 
+`separated`, `time_separated` and `tokens_separated` are 1 when the variant's and control's ranges don't overlap on tool calls, agent time or tokens. At three attempts a side or more, that's a direction the summary prints as `no overlap`, though the test is still `insufficient`.
+
 ## Pool runs to separate the factors
 
 ```bash

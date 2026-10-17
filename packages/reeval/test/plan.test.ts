@@ -24,6 +24,7 @@ export const cases: PlanCase[] = [
   { dir: 'compare', name: 'each-pooled', args: ['evals/each.eval.ts'] },
   { dir: 'compare', name: 'each-filtered', args: ['evals/each.eval.ts', 'grace'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
+  { dir: 'compare', name: 'study', args: ['evals/study.eval.ts'] },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
   { dir: 'compare', name: 'questions', args: ['evals/questions.eval.ts'] },
   {

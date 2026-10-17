@@ -19,6 +19,7 @@ import type {
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
+import { EFFORT_ALPHA, EFFORT_MIN_RUNS } from './view/effort.ts'
 
 /** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
@@ -176,7 +177,7 @@ export async function buildPlan(options: {
     sandboxWarnings: [...sandboxWarnings.values()].sort(
       (a, b) => Number(a.kind !== 'root') - Number(b.kind !== 'root'),
     ),
-    hints: gateHint([...rows.values()]),
+    hints: [...gateHint([...rows.values()]), ...effortHint([...rows.values()])],
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
@@ -237,6 +238,22 @@ function gateHint(rows: PlanRow[]): string[] {
   if (n === 0) return []
   return [
     `${plural(n, 'eval')} ${n === 1 ? 'runs' : 'run'} more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead`,
+  ]
+}
+
+/** One line when compares run too few times per cell for effort's test to ever reach p < 0.05. */
+function effortHint(rows: PlanRow[]): string[] {
+  const few = rows.filter(
+    (r) =>
+      !r.plan.skip &&
+      (r.plan.variants?.run ?? 0) > 0 &&
+      r.plan.runs >= 2 &&
+      r.plan.runs < EFFORT_MIN_RUNS,
+  )
+  if (few.length === 0) return []
+  const runs = [...new Set(few.map((r) => r.plan.runs))].sort((a, b) => a - b).join(' or ')
+  return [
+    `${plural(few.length, 'compare')} ${few.length === 1 ? 'runs' : 'run'} ${runs} times per cell; effort can't reach p < ${EFFORT_ALPHA} below ${EFFORT_MIN_RUNS} vs ${EFFORT_MIN_RUNS} (runs: ${EFFORT_MIN_RUNS})`,
   ]
 }
 

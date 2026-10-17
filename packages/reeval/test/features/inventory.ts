@@ -1450,6 +1450,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'effort.separation',
+    area: 'Records and studio',
+    name: 'Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) and the plan hint below 4 runs a cell',
+    plan: ['compare/study'],
+    tests: [
+      analysis('3 against 3 with no overlap on any metric is directional, never an effect'),
+      analysis('3 against 3 that overlaps says nothing beyond too few attempts'),
+      analysis('2 against 2 is never directional, separated or not'),
+      analysis('effort needs 4 runs a cell to be testable'),
+    ],
+  },
+  {
     id: 'summary.judge-keys',
     area: 'Records and studio',
     name: 'Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts',

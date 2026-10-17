@@ -46,7 +46,7 @@ import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import type { EvalResult } from '../src/ui/events.ts'
 import { type AnalysisNote, analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
-import { contrastEffort, effortLabel } from '../src/view/effort.ts'
+import { contrastEffort, directional, EFFORT_MIN_RUNS, effortLabel } from '../src/view/effort.ts'
 import { parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
@@ -415,6 +415,58 @@ describe('effort next to lift', () => {
     assert.equal(c.tokensNote, 'some cells did not report usage')
     assert.match(effortLabel(c), /tokens 100 vs 1000/)
     assert.doesNotMatch(effortLabel(c), /insufficient/)
+  })
+
+  // A three-arm skill study's per-attempt values at 3 runs a cell: tools, tokens (k), agent (s).
+  const arm = (tools: number[], tokensK: number[], agentS: number[]) =>
+    tools.map((t, i) => ({
+      tools: t,
+      agentMs: (agentS[i] ?? 0) * 1000,
+      fileEdits: 1,
+      tokens: (tokensK[i] ?? 0) * 1000,
+    }))
+  const noSkill = arm([38, 55, 35], [908, 1117, 1094], [97, 110, 98])
+  const current = arm([28, 26, 26], [576, 430, 394], [69, 59, 63])
+  const fresh = arm([13, 19, 14], [221, 463, 279], [47, 69, 56])
+
+  test('3 against 3 with no overlap on any metric is directional, never an effect', () => {
+    const c = contrastEffort(current, noSkill)
+    assert.ok(c)
+    assert.deepEqual(
+      [c.verdict, c.timeVerdict, c.tokensVerdict],
+      ['insufficient', 'insufficient', 'insufficient'],
+    )
+    assert.deepEqual([c.separated, c.timeSeparated, c.tokensSeparated], [true, true, true])
+    assert.deepEqual(directional(c), ['tools', 'agentS', 'tokens'])
+    assert.equal(
+      effortLabel(c),
+      'tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430000 vs 1094000 (×0.39, no overlap): too few attempts to test (n = 3 vs 3)',
+    )
+  })
+
+  test('3 against 3 that overlaps says nothing beyond too few attempts', () => {
+    const c = contrastEffort(fresh, current)
+    assert.ok(c)
+    assert.deepEqual([c.separated, c.timeSeparated, c.tokensSeparated], [true, false, false])
+    assert.deepEqual(directional(c), ['tools'])
+    assert.equal(
+      effortLabel(c),
+      'tools 14 vs 26 (×0.54, no overlap), agent 56s vs 1m 03s (×0.89), tokens 279000 vs 430000 (×0.65): too few attempts to test (n = 3 vs 3)',
+    )
+  })
+
+  test('2 against 2 is never directional, separated or not', () => {
+    const c = contrastEffort(current.slice(0, 2), noSkill.slice(0, 2))
+    assert.ok(c)
+    assert.equal(c.separated, true)
+    assert.deepEqual(directional(c), [])
+    assert.doesNotMatch(effortLabel(c), /no overlap/)
+  })
+
+  test('effort needs 4 runs a cell to be testable', () => {
+    assert.equal(EFFORT_MIN_RUNS, 4)
+    assert.ok(minimumP(3, 3) >= 0.05)
+    assert.ok(minimumP(4, 4) < 0.05)
   })
 
   test('reeval run, summary.md and reeval compare show each variant cell\u2019s effort beside its lift', async () => {
@@ -2351,6 +2403,15 @@ describe('a study: several arms, every cell ungated', () => {
     const judge = digest.facts.find((f) => f.kind === 'judge')
     assert.equal(judge?.verdicts, 36)
     assert.equal(judge?.failures, undefined, 'which labels failed where is in criteria')
+    const effort = digest.facts.find((f) => f.kind === 'effort') as
+      | { cells: Array<{ vsControl?: { n: string; separated?: Record<string, boolean> } }> }
+      | undefined
+    const vs = effort?.cells.flatMap((c) => (c.vsControl ? [c.vsControl] : [])) ?? []
+    assert.equal(vs.length, 2)
+    for (const v of vs) {
+      assert.equal(v.n, '3 vs 3')
+      assert.deepEqual(Object.keys(v.separated ?? {}).slice(0, 2), ['tools', 'agentS'])
+    }
     const current = digest.attempts['r1/auth/current-skill#1']
     assert.deepEqual(
       [current?.checks, current?.failed, current?.judges, current?.execs],
