@@ -5,7 +5,9 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolveConfig } from '../../src/config.ts'
+import { declarationProblem } from '../../src/contract/declaration.ts'
 import { defineEnvironment } from '../../src/environment.ts'
+import { UsageError } from '../../src/errors.ts'
 import {
   antigravity,
   claudeCode,
@@ -43,6 +45,20 @@ export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
 writeFileSync(join(DIR, 'a.txt'), 'a')
 writeFileSync(join(DIR, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
 mkdirSync(join(DIR, 'empty'))
+
+/** What `declareTree` checks before it declares anything. */
+const tree = (children: unknown) => () => {
+  const problem = declarationProblem(children)
+  if (problem) throw new UsageError(problem)
+}
+const evalNode = (o: object = {}) => ({
+  type: 'eval',
+  name: 'e',
+  mode: 'run',
+  options: {},
+  body: 'b1',
+  ...o,
+})
 
 const e1 = defineEnvironment('one', {})
 const e2 = defineEnvironment('two', {})
@@ -590,5 +606,43 @@ export const CASES: Record<string, Case[]> = {
       options({ environment: { kind: 'environment', name: 'a b', layers: [] } }),
     ],
     ['data: good', options({ environment: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
+  ],
+  declaration: [
+    ['not a list', tree({ type: 'eval' })],
+    ['a node that is not one', tree(['e'])],
+    ['an unknown node type', tree([evalNode({ type: 'test' })])],
+    ['a node without a type', tree([{ name: 'e' }])],
+    ['an eval without a body', tree([{ type: 'eval', name: 'e', mode: 'run', options: {} }])],
+    ['an eval with a bad mode', tree([evalNode({ mode: 'focus' })])],
+    ['an eval with an unknown key', tree([evalNode({ timeout: '1m' })])],
+    ['an eval whose options are a list', tree([evalNode({ options: [] })])],
+    ['an eval whose name is a number', tree([evalNode({ name: 3 })])],
+    ['a family without its cases', tree([evalNode({ family: { name: 'e', case: 0 } })])],
+    [
+      'a family with a fractional case',
+      tree([evalNode({ family: { name: 'e', case: 0.5, cases: 2 } })]),
+    ],
+    [
+      'a nested eval with a typo',
+      tree([
+        {
+          type: 'group',
+          name: 'g',
+          mode: 'run',
+          options: {},
+          children: [evalNode(), evalNode({ bdy: 'b2' })],
+        },
+      ]),
+    ],
+    ['a group without children', tree([{ type: 'group', name: 'g', mode: 'run', options: {} }])],
+    ['a todo with options', tree([{ type: 'todo', name: 't', options: {} }])],
+    [
+      'good',
+      tree([
+        { type: 'group', name: 'g', mode: 'skip', options: { runs: 2 }, children: [evalNode()] },
+        evalNode({ family: { name: 'case %#', case: 1, cases: 2 } }),
+        { type: 'todo', name: 'later' },
+      ]),
+    ],
   ],
 }

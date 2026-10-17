@@ -298,7 +298,8 @@
           }
         }
       },
-      "required": ["children"]
+      "required": ["children"],
+      "additionalProperties": false
     },
     "DeclaredEval": {
       "description": "An `evaluate`: one eval, planned into a test per attempt.",
@@ -324,10 +325,12 @@
           "$ref": "#/$defs/EvalOptionsData"
         },
         "type": {
+          "type": "string",
           "const": "eval"
         }
       },
-      "required": ["body", "mode", "name", "options", "type"]
+      "required": ["body", "mode", "name", "options", "type"],
+      "additionalProperties": false
     },
     "DeclaredFamily": {
       "description": "Where a case of a pooled `evaluate.each` sits in its list.",
@@ -335,18 +338,23 @@
       "properties": {
         "case": {
           "description": "The case's index, from 0.",
-          "type": "number"
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "cases": {
           "description": "How many cases the list has.",
-          "type": "number"
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 9007199254740991
         },
         "name": {
           "description": "The name template passed to `evaluate.each`.",
           "type": "string"
         }
       },
-      "required": ["case", "cases", "name"]
+      "required": ["case", "cases", "name"],
+      "additionalProperties": false
     },
     "DeclaredGroup": {
       "description": "A `group`: options its evals and groups inherit, and its children in declaration order.",
@@ -370,18 +378,21 @@
           "$ref": "#/$defs/EvalOptionsData"
         },
         "type": {
+          "type": "string",
           "const": "group"
         }
       },
-      "required": ["children", "mode", "name", "options", "type"]
+      "required": ["children", "mode", "name", "options", "type"],
+      "additionalProperties": false
     },
     "DeclaredMode": {
       "description": "How a group or eval was declared: `group`/`evaluate`, `.skip` or `.only`.",
-      "enum": ["only", "run", "skip"]
+      "type": "string",
+      "enum": ["run", "skip", "only"]
     },
     "DeclaredNode": {
       "description": "One node of the tree: a group, an eval or a todo.",
-      "anyOf": [
+      "oneOf": [
         {
           "$ref": "#/$defs/DeclaredEval"
         },
@@ -402,10 +413,12 @@
           "type": "string"
         },
         "type": {
+          "type": "string",
           "const": "todo"
         }
       },
-      "required": ["name", "type"]
+      "required": ["name", "type"],
+      "additionalProperties": false
     },
     "DockerSandboxDescriptor": {
       "description": "A local Docker container, made by `docker()`.",

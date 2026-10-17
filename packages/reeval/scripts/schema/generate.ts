@@ -10,10 +10,12 @@ export type Schema = {
   /** The TSDoc comment of the type alias, interface or property it was generated from. */
   description?: string
   $ref?: string
-  type?: 'string' | 'number' | 'boolean' | 'null' | 'array' | 'object'
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'null' | 'array' | 'object'
   const?: string | number | boolean
   enum?: Array<string | number | boolean>
   anyOf?: Schema[]
+  /** Zod's discriminated unions; the types' own unions are `anyOf`. */
+  oneOf?: Schema[]
   items?: Schema
   properties?: Record<string, Schema>
   required?: string[]

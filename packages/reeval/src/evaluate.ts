@@ -1,4 +1,5 @@
 import { runAttempt } from './attempt/index.ts'
+import { declarationProblem } from './contract/declaration.ts'
 import type {
   DeclarationTree,
   DeclaredFamily,
@@ -262,15 +263,22 @@ export const evaluate: EvaluateFn & {
 
 /**
  * Declares a tree's groups and evals as the calls that made it would, in the file being
- * collected; `bodyFor` gives each eval's body by its id.
+ * collected; `bodyFor` gives each eval's body by its id. A tree from another language is
+ * checked against the contract first.
  */
 export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string) => EvalFn): void {
+  const problem = declarationProblem(nodes)
+  if (problem) throw new UsageError(problem)
+  declareNodes(nodes, bodyFor)
+}
+
+function declareNodes(nodes: readonly DeclaredNode[], bodyFor: (id: string) => EvalFn): void {
   for (const node of nodes) {
     if (node.type === 'todo') registerTodo(node.name)
     else if (node.type === 'group') {
       const children = node.children
       defineGroup(node.mode)(node.name, optionsFrom(node.options, `group("${node.name}")`), () =>
-        declareTree(children, bodyFor),
+        declareNodes(children, bodyFor),
       )
     } else if (node.family) {
       const options = optionsFrom(node.options, `evaluate("${node.name}")`)
