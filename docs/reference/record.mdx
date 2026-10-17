@@ -34,7 +34,7 @@ evals/.history/                            commit this
   history.db                               reeval query's projection
 ```
 
-The record is `kind: "es-run"`, `schemaVersion: 1`. While reeval is pre-release the schema changes in place, and an older record may not parse. Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
+The record is `kind: "reeval-run"`, `schemaVersion: 1`. While reeval is pre-release the schema changes in place, and an older record may not parse. Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
 
 ## Reading one
 
@@ -42,7 +42,7 @@ Start at `evals[]` where `outcome != "pass"`, then its `cells[]` for pass@1 (`pa
 
 ```json title="evals/.history/<runId>.json (trimmed)"
 {
-  "kind": "es-run",
+  "kind": "reeval-run",
   "schemaVersion": 1,
   "runId": "20260926T170558Z_bd6205e_ada-lovelace_sycz",
   "status": "complete",
@@ -78,7 +78,7 @@ An attempt's `error` is `{ kind, message, prepare?, resource? }`. `prepare` is s
 
 ### RunRecord
 
-<Property name="kind" type="'es-run'"></Property>
+<Property name="kind" type="'reeval-run'"></Property>
 
 <Property name="schemaVersion" type="typeof SCHEMA_VERSION"></Property>
 
@@ -174,7 +174,9 @@ An attempt's `error` is `{ kind, message, prepare?, resource? }`. `prepare` is s
 
 What ran and graded the agents: the machine, images, harnesses and judge.
 
-<Property name="es" type="string"></Property>
+<Property name="reeval" type="string">
+  The reeval version that wrote the run.
+</Property>
 
 <Property name="node" type="string">
   `process.versions.node`: under Bun or Deno, the Node version they're compatible with.

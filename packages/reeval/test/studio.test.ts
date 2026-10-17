@@ -736,7 +736,7 @@ describe('studio server', () => {
     app = createStudioApp({
       source,
       appDir: await fakeApp(),
-      es: 'test',
+      reeval: 'test',
       project: 'studio',
       token: TOKEN,
       hosts: [HOST, 'localhost:4984'],
@@ -870,7 +870,7 @@ describe('studio server', () => {
     const recordedOnly = createStudioApp({
       source: { ...source, scratch: false },
       appDir: await fakeApp(),
-      es: 'test',
+      reeval: 'test',
       project: 'studio',
       token: null,
       hosts: [],
@@ -915,7 +915,7 @@ describe('a record landing while the studio lists runs', () => {
       const app = createStudioApp({
         source: fresh,
         appDir: await fakeApp(),
-        es: 'test',
+        reeval: 'test',
         project: 'studio',
         token: TOKEN,
         hosts: [HOST],
@@ -967,7 +967,7 @@ describe('reeval studio build', () => {
     const app = createStudioApp({
       source: { ...source, historyDir: source.historyDir },
       appDir: join(pkgRoot, 'dist/studio-app'),
-      es: 'test',
+      reeval: 'test',
       project: 'studio',
       token: null,
       hosts: [],
@@ -1026,7 +1026,7 @@ evaluate('writes', async (c) => {
     const app = createStudioApp({
       source: { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true },
       appDir: join(pkgRoot, 'dist/studio-app'),
-      es: 'test',
+      reeval: 'test',
       project: 'studio',
       token: null,
       hosts: [],

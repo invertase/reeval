@@ -13,7 +13,7 @@ import {
   isAgentKind,
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
-import { esJiti } from './jiti.ts'
+import { reevalJiti } from './jiti.ts'
 import {
   badJudgeList,
   checkModelString,
@@ -27,9 +27,9 @@ import type {
   Budget,
   ConfigHelpers,
   EnvVars,
-  EsConfig,
   HarnessDescriptor,
   Profile,
+  ReevalConfig,
   ResolvedConfig,
   ResolvedProfile,
 } from './types.ts'
@@ -73,7 +73,7 @@ const DEFAULTS_KEYS = [
 ]
 const LIMIT_KEYS = ['runs', 'compare', 'harness']
 
-export type ConfigInput = EsConfig | ((helpers: ConfigHelpers) => EsConfig)
+export type ConfigInput = ReevalConfig | ((helpers: ConfigHelpers) => ReevalConfig)
 
 /**
  * The config: a plain object, or a callback that destructures the helpers it needs, e.g.
@@ -139,9 +139,9 @@ export async function loadConfig(
   if (path === undefined) return resolveConfig({}, process.cwd(), DEFAULT_CONFIG_FILE)
   const root = dirname(path)
   const configPath = configLabel(path)
-  let user: EsConfig = {}
+  let user: ReevalConfig = {}
   if (existsSync(path)) {
-    const jiti = await esJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
+    const jiti = await reevalJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
     const module = (await jiti.import(path)) as Record<string, unknown>
     // Without this, a config that forgets `export default` would run the default harness for real.
     if (!module || typeof module !== 'object' || !('default' in module)) {
@@ -151,7 +151,7 @@ export async function loadConfig(
         `${configPath} has no default export${exportsNote}. Write export default defineConfig({…}).`,
       )
     }
-    let exported = module.default as ConfigInput | Promise<EsConfig>
+    let exported = module.default as ConfigInput | Promise<ReevalConfig>
     if (typeof exported === 'function') {
       const hostEnv = process.env
       exported = exported({ ...helpersFor(root), ci: inCI(hostEnv), command, hostEnv, profile })
@@ -312,7 +312,7 @@ export function selectProfile(
 }
 
 export function resolveConfig(
-  user: EsConfig,
+  user: ReevalConfig,
   root: string,
   file: string = DEFAULT_CONFIG_FILE,
 ): ResolvedConfig {
@@ -392,7 +392,7 @@ export function resolveConfig(
 
 export const ANALYSIS_DEFAULTS = { maxInputTokens: 20_000, maxOutputTokens: 8_000 } as const
 
-function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis'] {
+function checkAnalysis(analysis: ReevalConfig['analysis']): ResolvedConfig['analysis'] {
   if (analysis === undefined) return { ...ANALYSIS_DEFAULTS }
   if (typeof analysis !== 'object' || analysis === null) {
     throw new UsageError(
@@ -441,7 +441,7 @@ function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis
 /** Runs whose local debug data `.reeval/debug` keeps, and the trace buffer per attempt. */
 export const DEBUG_DEFAULTS = { keep: 20, traceBufferMb: 8 } as const
 
-function checkDebug(debug: EsConfig['debug']): ResolvedConfig['debug'] {
+function checkDebug(debug: ReevalConfig['debug']): ResolvedConfig['debug'] {
   if (debug === undefined) {
     return { keep: DEBUG_DEFAULTS.keep, traceBufferBytes: DEBUG_DEFAULTS.traceBufferMb * 2 ** 20 }
   }
@@ -461,7 +461,7 @@ function checkDebug(debug: EsConfig['debug']): ResolvedConfig['debug'] {
   return { keep, traceBufferBytes: Math.round(traceBufferMb * 2 ** 20) }
 }
 
-function checkSecrets(secrets: EsConfig['secrets']): ResolvedConfig['secrets'] {
+function checkSecrets(secrets: ReevalConfig['secrets']): ResolvedConfig['secrets'] {
   if (secrets === undefined) return { unbrokered: 'warn' }
   if (typeof secrets !== 'object' || secrets === null) {
     throw new UsageError("config.secrets must be an object like { unbrokered: 'error' }")
@@ -513,7 +513,7 @@ export async function resolveConcurrency(
 }
 
 function resolveJudge(
-  judge: EsConfig['judge'] = {},
+  judge: ReevalConfig['judge'] = {},
   where = 'config.judge',
 ): ResolvedConfig['judge'] {
   const { model } = judge

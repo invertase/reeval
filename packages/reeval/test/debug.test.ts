@@ -239,7 +239,7 @@ describe('local debug data', () => {
   })
 
   test('redaction holds on screen, in debug.log and in trace.ndjson, encoded forms included', async () => {
-    const LEAKY = 'es dbg/7c+1d"9a&b?0=e4f2'
+    const LEAKY = 'reeval dbg/7c+1d"9a&b?0=e4f'
     const forms = [
       LEAKY,
       Buffer.from(LEAKY).toString('base64'),

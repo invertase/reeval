@@ -203,8 +203,8 @@ describe('command', () => {
   })
 
   test("paths are quoted, so a quote can't break out", () => {
-    const command = buildAntigravityCommand({ ...base, workDir: "/es/it's here" })
-    assert.match(command, /'\/es\/it'\\''s here'/)
+    const command = buildAntigravityCommand({ ...base, workDir: "/reeval/it's here" })
+    assert.match(command, /'\/reeval\/it'\\''s here'/)
   })
 
   test('read-only turns plan', () => {

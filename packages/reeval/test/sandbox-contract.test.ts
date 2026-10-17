@@ -70,9 +70,9 @@ for (const kind of kinds) {
     test('writeFile then exec reads it, in the workspace and in ~/', async () => {
       const s = await sandbox()
       await s.writeFile('nested/dir/w.txt', 'workspace\n')
-      await s.writeFile('~/.config/es/h.txt', 'home\n')
+      await s.writeFile('~/.config/reeval/h.txt', 'home\n')
       assert.equal((await s.exec('cat nested/dir/w.txt')).stdout, 'workspace\n')
-      assert.equal((await s.exec('cat ~/.config/es/h.txt')).stdout, 'home\n')
+      assert.equal((await s.exec('cat ~/.config/reeval/h.txt')).stdout, 'home\n')
       await sameDir(s, '"$HOME"', s.home)
     })
 

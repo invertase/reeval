@@ -107,7 +107,7 @@ type Feature = {
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
 /** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
-const LEAKY = 'es leak/7c+1d"9a&b?0=e4f2'
+const LEAKY = 'reeval leak/7c+1d"9a&b?0=e4f2'
 
 /** Each way the redaction-coverage agent prints LEAKY, and each of those inside a JSON string. */
 const leakyForms = () => {

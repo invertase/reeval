@@ -6,7 +6,7 @@ import type { OutputOptions } from './mode.ts'
 import { PlainRenderer } from './plain.ts'
 import type { AttemptDir } from './summary.ts'
 
-export type { EsEvent, EvalResult, Progress, Renderer } from './events.ts'
+export type { EvalResult, Progress, ReevalEvent, Renderer } from './events.ts'
 export { formatDuration } from './format.ts'
 export { type OutputOptions, resolveOutput } from './mode.ts'
 

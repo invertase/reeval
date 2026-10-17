@@ -1,5 +1,5 @@
 {
-  "kind": "es-run",
+  "kind": "reeval-run",
   "schemaVersion": 1,
   "runId": "20260929T033538Z_nogit_runner_f3z3",
   "status": "complete",
@@ -16,7 +16,7 @@
     "lockfiles": []
   },
   "stack": {
-    "es": "0.0.1",
+    "reeval": "0.0.1",
     "node": "24.21.0",
     "os": "linux",
     "arch": "x64",

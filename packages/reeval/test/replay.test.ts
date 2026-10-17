@@ -38,16 +38,17 @@ const events = (lines: Line[]) =>
   )
 
 const text = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? ''))
-const tools = (es: TranscriptEvent[]) => es.flatMap((e) => (e.type === 'tool' ? [e] : []))
-const edits = (es: TranscriptEvent[]) => es.flatMap((e) => (e.type === 'file-edit' ? [e] : []))
+const tools = (events: TranscriptEvent[]) => events.flatMap((e) => (e.type === 'tool' ? [e] : []))
+const edits = (events: TranscriptEvent[]) =>
+  events.flatMap((e) => (e.type === 'file-edit' ? [e] : []))
 
 /** What each captured behaviour's stream must still say once normalised: robust signals only. */
-const signals: Record<string, (es: TranscriptEvent[]) => void> = {
-  skill(es) {
+const signals: Record<string, (events: TranscriptEvent[]) => void> = {
+  skill(events) {
     // It read the file, or loaded it with its skill tool (OpenCode's `skill`, Goose's
     // `load_skill`).
     assert.ok(
-      tools(es).some(
+      tools(events).some(
         (t) =>
           text(t.input).includes('contract-probe/SKILL.md') ||
           ((t.tool === 'skill' || t.tool === 'load_skill') &&
@@ -55,17 +56,17 @@ const signals: Record<string, (es: TranscriptEvent[]) => void> = {
       ),
       'the agent read the skill',
     )
-    assert.ok(edits(es).some((e) => e.path === 'skill-proof.txt'))
+    assert.ok(edits(events).some((e) => e.path === 'skill-proof.txt'))
   },
-  mcp(es) {
-    assert.ok(tools(es).some((t) => t.tool === 'mcp__stamp__house_stamp'))
+  mcp(events) {
+    assert.ok(tools(events).some((t) => t.tool === 'mcp__stamp__house_stamp'))
   },
-  'edit-and-run'(es) {
-    assert.ok(edits(es).some((e) => e.path === 'notes.txt' && e.kind === 'modify'))
-    assert.ok(tools(es).some((t) => text(t.output).includes('contract-42')))
+  'edit-and-run'(events) {
+    assert.ok(edits(events).some((e) => e.path === 'notes.txt' && e.kind === 'modify'))
+    assert.ok(tools(events).some((t) => text(t.output).includes('contract-42')))
   },
-  egress(es) {
-    assert.ok(tools(es).some((t) => text(t.input).includes('https://example.com/')))
+  egress(events) {
+    assert.ok(tools(events).some((t) => text(t.input).includes('https://example.com/')))
   },
 }
 

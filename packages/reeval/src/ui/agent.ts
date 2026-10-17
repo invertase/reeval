@@ -6,7 +6,7 @@ import { answersLabel, undiscriminating, undiscriminatingLabel } from '../histor
 import { sandboxWarningLine } from '../text.ts'
 import { familyHeadLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { colors } from './colors.ts'
-import type { EsEvent, EvalResult, OutputStream, Renderer } from './events.ts'
+import type { EvalResult, OutputStream, ReevalEvent, Renderer } from './events.ts'
 import {
   attemptAxes,
   capLines,
@@ -77,7 +77,7 @@ export class AgentRenderer implements Renderer {
     if (!result.meta?.prepare) this.#write(`  record: ${this.#o.attemptDir(result.id, cell, n)}`)
   }
 
-  onEvent(e: EsEvent): void {
+  onEvent(e: ReevalEvent): void {
     switch (e.type) {
       case 'plan':
         for (const line of e.lines) this.#write(line)

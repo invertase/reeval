@@ -65,11 +65,11 @@
             }
           ]
         },
-        "es": {
-          "type": "string"
-        },
         "exitCode": {
           "type": "number"
+        },
+        "reeval": {
+          "type": "string"
         },
         "runId": {
           "description": "The run `reeval run` wrote, when it got that far.",
@@ -96,8 +96,8 @@
         "command",
         "durationMs",
         "error",
-        "es",
         "exitCode",
+        "reeval",
         "runId",
         "unhandledErrors"
       ]

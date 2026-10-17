@@ -1276,7 +1276,7 @@ export type AnalysisConfig = {
   maxOutputTokens?: number
 }
 
-export type EsConfig = {
+export type ReevalConfig = {
   include?: string[]
   harness?: HarnessDescriptor | HarnessDescriptor[]
   /**

@@ -45,7 +45,7 @@ export type IndexManifest = {
 
 export type StudioInfo = {
   mode: 'live' | 'static'
-  es: string
+  reeval: string
   project: string
   generatedAt: string
   /** `debug`: local debug data (`.reeval/debug`) can be read; never in a static build. */

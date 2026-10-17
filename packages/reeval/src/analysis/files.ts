@@ -25,7 +25,7 @@ const warned = new Set<string>()
 const parse = (text: string, file: string): AnalysisDoc | null => {
   try {
     const doc = JSON.parse(text) as AnalysisDoc
-    return doc?.kind === 'es-analysis' ? readableAnalysis(doc, file) : null
+    return doc?.kind === 'reeval-analysis' ? readableAnalysis(doc, file) : null
   } catch (error) {
     if (error instanceof NewerSchemaError && !warned.has(file)) {
       warned.add(file)

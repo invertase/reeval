@@ -177,11 +177,11 @@ test("the fake sandbox's shell: sh, or on Windows the sh.exe on PATH or Git for 
 test('the fake sandbox reads and writes ~/ paths in its home', async () => {
   const box = await createFakeSandbox({ kind: 'fake' })
   try {
-    await box.writeFile('~/.config/es/hint.txt', 'from home')
-    assert.equal(await box.readFile('~/.config/es/hint.txt'), 'from home')
-    assert.equal(readFileSync(join(box.home, '.config/es/hint.txt'), 'utf8'), 'from home')
-    assert.equal(await box.readFile('.config/es/hint.txt'), null, 'not in the workspace')
-    assert.equal((await box.exec('cat ~/.config/es/hint.txt')).stdout, 'from home')
+    await box.writeFile('~/.config/reeval/hint.txt', 'from home')
+    assert.equal(await box.readFile('~/.config/reeval/hint.txt'), 'from home')
+    assert.equal(readFileSync(join(box.home, '.config/reeval/hint.txt'), 'utf8'), 'from home')
+    assert.equal(await box.readFile('.config/reeval/hint.txt'), null, 'not in the workspace')
+    assert.equal((await box.exec('cat ~/.config/reeval/hint.txt')).stdout, 'from home')
   } finally {
     await box.destroy()
   }

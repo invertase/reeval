@@ -28,7 +28,7 @@ export const jitiTransform: Transform = (options) => {
  * A jiti that imports from `id`. Compiled, a file's imports of reeval itself get this reeval's own
  * modules: a copy on disk would register evals, and hold state, the executable can't see.
  */
-export async function esJiti(id: string, options: JitiOptions = {}): Promise<Jiti> {
+export async function reevalJiti(id: string, options: JitiOptions = {}): Promise<Jiti> {
   const virtualModules = COMPILED ? await ownModules() : undefined
   return createJiti(id, {
     transform: jitiTransform,

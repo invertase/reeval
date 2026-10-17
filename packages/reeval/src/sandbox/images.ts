@@ -20,7 +20,7 @@ import type {
   SandboxDescriptor,
 } from '../types.ts'
 import { prepareAll } from './preflight.ts'
-import { imageHarness, installSteps, projectPath, usesEsBase } from './prepare.ts'
+import { imageHarness, installSteps, projectPath, usesReevalBase } from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
 import { createProviders, dockerKey } from './providers.ts'
 
@@ -116,7 +116,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
       detail: info ? `built (${short(info.id)})` : 'not built yet',
     }
   }
-  const esBase = async () => {
+  const reevalBase = async () => {
     const info = await imageInfo(imageFor(harness))
     if (!info) return { info, status: 'build' as StageStatus, detail: 'not built yet' }
     return info.labels[LABEL.context] === contextHash()
@@ -151,27 +151,27 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
       ...status,
     })
   } else if (sandbox.dockerfile) {
-    const onEs = usesEsBase(sandbox.dockerfile)
-    const es = onEs ? await esBase() : null
-    const real = dockerfileTag(sandbox.dockerfile, harness, es?.info?.id ?? null).tag
+    const onReeval = usesReevalBase(sandbox.dockerfile)
+    const base = onReeval ? await reevalBase() : null
+    const real = dockerfileTag(sandbox.dockerfile, harness, base?.info?.id ?? null).tag
     // Its tag hashes reeval's image id, which is this machine's, so the plan names it by kind.
-    const tag = onEs ? real.replace(/-[0-9a-f]{16}$/, '-<context + reeval image id>') : real
+    const tag = onReeval ? real.replace(/-[0-9a-f]{16}$/, '-<context + reeval image id>') : real
     const built = await exists(real)
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
       ref: tag,
       action: 'docker build (layer cache), tagged by content hash',
       status: built.status,
-      detail: built.info || !onEs ? built.detail : `${built.detail} (${real})`,
+      detail: built.info || !onReeval ? built.detail : `${built.detail} (${real})`,
     })
-    if (onEs) {
+    if (onReeval) {
       parent = built.info?.id ?? null
       stages.push({
         what: 'harness',
         ref: tag,
         action: `inherited: FROM \${${REEVAL_BASE_ARG}}, which is ${imageFor(harness)}`,
-        status: es?.status ?? 'build',
-        detail: `${imageFor(harness)} ${es?.detail ?? ''}`.trim(),
+        status: base?.status ?? 'build',
+        detail: `${imageFor(harness)} ${base?.detail ?? ''}`.trim(),
       })
     } else {
       const baked = await exists(harnessImageFor(harness, real))
@@ -185,14 +185,14 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
       })
     }
   } else {
-    const es = await esBase()
-    parent = es.status === 'ready' ? (es.info?.id ?? null) : null
+    const base = await reevalBase()
+    parent = base.status === 'ready' ? (base.info?.id ?? null) : null
     stages.push({
       what: 'base',
       ref: imageFor(harness),
       action: "reeval's image: built when missing or when its base changed",
-      status: es.status,
-      detail: es.detail,
+      status: base.status,
+      detail: base.detail,
     })
   }
   const steps = installSteps(sandbox)
@@ -210,12 +210,12 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
 }
 
 /** reeval's harness images the targets need: used directly, or as a Dockerfile's `REEVAL_BASE`. */
-export const esImages = (targets: ImageTarget[]): BakedHarness[] => [
+export const reevalImages = (targets: ImageTarget[]): BakedHarness[] => [
   ...new Set(
     targets
       .filter(
         ({ sandbox: s }) =>
-          (!s.image && !s.from && !s.dockerfile) || (s.dockerfile && usesEsBase(s.dockerfile)),
+          (!s.image && !s.from && !s.dockerfile) || (s.dockerfile && usesReevalBase(s.dockerfile)),
       )
       .map((t) => t.harness),
   ),

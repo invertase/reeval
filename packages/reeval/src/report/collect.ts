@@ -257,7 +257,7 @@ export async function collectReport(
     kind: 'reeval-report',
     version: 1,
     createdAt: deps.now().toISOString(),
-    es: PACKAGE_VERSION,
+    reeval: PACKAGE_VERSION,
     node: deps.nodeVersion,
     npm: await deps.npmVersion(),
     os: { platform: deps.platform, release: deps.release, arch: deps.arch },

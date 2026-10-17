@@ -33,7 +33,7 @@ const commit = (message, who) => {
   git('add', '-A', '--', '.', ':!evals/.history')
   git('commit', '-qm', message)
 }
-const es = (args, env) => {
+const reeval = (args, env) => {
   const r = sh(process.execPath, [cli, ...args], env)
   const last = r.stdout.trim().split('\n').slice(-3).join('\n')
   console.log(`$ reeval ${args.join(' ')}  (exit ${r.status})\n${last}\n`)
@@ -156,7 +156,7 @@ await writeFile(join(dir, 'reeval.demo.config.ts'), config({ include, harnesses:
 git('init', '-q', '-b', 'main')
 git('config', 'user.email', 'demo@example.com')
 commit('feat: greet module evals', 'Ada Lovelace')
-es(['run', '--config', 'reeval.demo.config.ts', '--record'])
+reeval(['run', '--config', 'reeval.demo.config.ts', '--record'])
 
 // A regression with the same agent: a stricter judge fails every judged eval. Fingerprints
 // match, so reeval compare calls these regressed rather than not comparable.
@@ -166,11 +166,11 @@ await writeFile(
 )
 git('checkout', '-q', '-b', 'stricter-judge')
 commit('test: try a stricter judge', 'Grace Hopper')
-es(['run', '--config', 'reeval.demo.config.ts', '--record'])
+reeval(['run', '--config', 'reeval.demo.config.ts', '--record'])
 
 // Back on main, from CI.
 git('checkout', '-q', 'main')
-es(['run', '--config', 'reeval.demo.config.ts', '--record'], {
+reeval(['run', '--config', 'reeval.demo.config.ts', '--record'], {
   CI: '1',
   GITHUB_ACTIONS: 'true',
   GITHUB_SERVER_URL: 'https://github.com',
@@ -222,7 +222,7 @@ await writeFile(
   }),
 )
 commit('feat: compare agents with and without the house-greeting skill', 'Ada Lovelace')
-es(['run', '--config', 'reeval.matrix.config.ts', '--record'])
+reeval(['run', '--config', 'reeval.matrix.config.ts', '--record'])
 
 // An unrecorded run with uncommitted changes: shows up as scratch. Its analysis.agent summary
 // fails, so the studio shows the error in place of the empty Analysis tab.
@@ -239,7 +239,7 @@ await writeFile(
       },`,
   }),
 )
-es(['run', '--config', 'reeval.scratch.config.ts'])
+reeval(['run', '--config', 'reeval.scratch.config.ts'])
 
 console.log(
   `Demo project: ${dir}\nRun: node ${cli} studio --config ${join(dir, 'reeval.demo.config.ts')}`,

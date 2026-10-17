@@ -2213,7 +2213,7 @@
           ]
         },
         "kind": {
-          "const": "es-run"
+          "const": "reeval-run"
         },
         "plan": {
           "description": "What the run planned before it started, and each level whose sandbox ran as root or with capabilities added back.",
@@ -2474,9 +2474,6 @@
             "$ref": "#/$defs/ContextFile"
           }
         },
-        "es": {
-          "type": "string"
-        },
         "fingerprintScope": {
           "description": "What eval fingerprints hash; fingerprints from different scopes aren't comparable.",
           "type": "array",
@@ -2681,6 +2678,10 @@
             "type": "string"
           }
         },
+        "reeval": {
+          "description": "The reeval version that wrote the run.",
+          "type": "string"
+        },
         "runtime": {
           "description": "The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in runs recorded before it, which ran on Node.",
           "type": "object",
@@ -2698,14 +2699,14 @@
       "required": [
         "arch",
         "context",
-        "es",
         "fingerprintScope",
         "harnesses",
         "images",
         "judge",
         "node",
         "os",
-        "packages"
+        "packages",
+        "reeval"
       ]
     },
     "StartRetry": {

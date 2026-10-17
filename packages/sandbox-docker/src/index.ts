@@ -29,7 +29,7 @@ export {
   pruneImages,
   REEVAL_BASE_ARG,
   resolveFrom,
-  usesEsBase,
+  usesReevalBase,
 } from './build-image.ts'
 export {
   type DockerResult,

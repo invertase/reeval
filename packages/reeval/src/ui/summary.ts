@@ -32,7 +32,7 @@ import {
 } from '../view/judgements.ts'
 import { formatUsage, hasUngatedCells, isUngatedMiss } from '../view/model.ts'
 import { type Colors, colors } from './colors.ts'
-import type { EsEvent, EvalResult } from './events.ts'
+import type { EvalResult, ReevalEvent } from './events.ts'
 import {
   attemptOutcome,
   failureLines,
@@ -42,7 +42,7 @@ import {
   type Outcome,
 } from './format.ts'
 
-type RunEnd = Extract<EsEvent, { type: 'run-end' }>
+type RunEnd = Extract<ReevalEvent, { type: 'run-end' }>
 export type AttemptDir = (id: string, cell: string, n: number) => string
 
 const FAILURE_LINES = 30

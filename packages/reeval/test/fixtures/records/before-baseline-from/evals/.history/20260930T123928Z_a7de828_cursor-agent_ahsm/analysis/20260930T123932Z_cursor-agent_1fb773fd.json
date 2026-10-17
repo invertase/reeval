@@ -1,5 +1,5 @@
 {
-  "kind": "es-analysis",
+  "kind": "reeval-analysis",
   "schemaVersion": 1,
   "scope": {
     "kind": "run",

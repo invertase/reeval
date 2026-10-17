@@ -260,13 +260,13 @@ export async function checkImages(
   deps: DoctorDeps,
 ): Promise<{ checks: Check[]; missing: string[] }> {
   const { imageFor } = await import('@reeval/sandbox-docker')
-  const { imageTargets, esImages } = await import('./sandbox/images.ts')
+  const { imageTargets, reevalImages } = await import('./sandbox/images.ts')
   const targets = imageTargets(
     configuredUses(config).map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
   )
   const checks: Check[] = []
   const missing: string[] = []
-  for (const harness of esImages(targets)) {
+  for (const harness of reevalImages(targets)) {
     const ref = imageFor(harness)
     if (await deps.imageExists(ref)) {
       checks.push({ id: 'image', status: 'ok', summary: `${ref} (${harness})` })

@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { stripVTControlCharacters } from 'node:util'
-import { codeFrame, comparable, esFrames, formatError } from '../src/engine/errors.ts'
+import { codeFrame, comparable, formatError, reevalFrames } from '../src/engine/errors.ts'
 import { tempDir } from './helpers.ts'
 
 const root = tempDir('errors')
@@ -24,8 +24,8 @@ writeFileSync(
     '',
   ].join('\n'),
 )
-const es = join(root, 'node_modules/reeval')
-const hide = esFrames(es)
+const pkg = join(root, 'node_modules/reeval')
+const hide = reevalFrames(pkg)
 const plain = (error: unknown, columns?: number) =>
   stripVTControlCharacters(formatError(error, { root, hide, ...(columns ? { columns } : {}) }))
 const stack = (...frames: string[]) => ['Error: x', ...frames.map((f) => `    at ${f}`)].join('\n')
@@ -37,7 +37,7 @@ describe('formatError', () => {
       message: 'expected 1 to be 2',
       diff: '- Expected\n+ Received\n\n- 2\n+ 1',
       stack: stack(
-        `run (${es}/dist/index.js:1:1)`,
+        `run (${pkg}/dist/index.js:1:1)`,
         `Object.toBe (${root}/node_modules/chai/index.js:3:3)`,
         `load (${root}/node_modules/jiti/dist/jiti.cjs:1:1)`,
         `helper (${root}/node_modules/some-lib/index.js:9:9)`,
@@ -129,14 +129,14 @@ describe('formatError', () => {
   })
 
   test('frames compare with forward slashes, and on Windows in any case', () => {
-    assert.equal(comparable('C:\\Es\\dist\\x.js', true), 'c:/es/dist/x.js')
+    assert.equal(comparable('C:\\Reeval\\dist\\x.js', true), 'c:/reeval/dist/x.js')
     assert.equal(comparable('/Es/dist\\x.js', false), '/Es/dist/x.js')
     assert.equal(comparable('/p/x.js'), '/p/x.js')
   })
 
-  test('esFrames names src/ and dist/, with or without a trailing separator', () => {
-    assert.deepEqual(esFrames('/p'), [`/p${sep}src${sep}`, `/p${sep}dist${sep}`])
-    assert.deepEqual(esFrames(`/p${sep}`), [`/p${sep}src${sep}`, `/p${sep}dist${sep}`])
+  test('reevalFrames names src/ and dist/, with or without a trailing separator', () => {
+    assert.deepEqual(reevalFrames('/p'), [`/p${sep}src${sep}`, `/p${sep}dist${sep}`])
+    assert.deepEqual(reevalFrames(`/p${sep}`), [`/p${sep}src${sep}`, `/p${sep}dist${sep}`])
   })
 })
 

@@ -32,7 +32,7 @@ const harness = () => {
     case 'codex':
       return codex({ model })
     default:
-      return fakeHarness({ script: [[{ write: { 'hello.txt': 'hello from es\n' } }]] })
+      return fakeHarness({ script: [[{ write: { 'hello.txt': 'hello from reeval\n' } }]] })
   }
 }
 

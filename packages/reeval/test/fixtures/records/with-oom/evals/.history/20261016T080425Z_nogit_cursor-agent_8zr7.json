@@ -1,5 +1,5 @@
 {
-  "kind": "es-run",
+  "kind": "reeval-run",
   "schemaVersion": 1,
   "runId": "20261016T080425Z_nogit_cursor-agent_8zr7",
   "status": "complete",
@@ -16,7 +16,7 @@
     "lockfiles": []
   },
   "stack": {
-    "es": "0.8.0",
+    "reeval": "0.8.0",
     "node": "22.14.0",
     "runtime": {
       "name": "node",

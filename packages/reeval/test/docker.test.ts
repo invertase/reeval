@@ -357,7 +357,7 @@ evaluate('alpine', { environment: defineEnvironment('alpine', { sandbox: docker(
         'evals/run.Dockerfile': 'FROM debian:bookworm-slim\nRUN echo broken && exit 42\n',
         'evals/net.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-evaluate('net', { environment: defineEnvironment('net', { sandbox: docker({ from: 'registry.invalid.example:5000/es/none:1' }) }) }, async (c) => { await c.sandbox() })
+evaluate('net', { environment: defineEnvironment('net', { sandbox: docker({ from: 'registry.invalid.example:5000/reeval/none:1' }) }) }, async (c) => { await c.sandbox() })
 `,
         'evals/run.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
@@ -393,7 +393,7 @@ evaluate('run', { environment: defineEnvironment('run', { sandbox: docker({ dock
           [
             'commit',
             '--change',
-            `LABEL ${ours ? LABEL.harness : 'es.test.other'}="${nonce}-${n}"`,
+            `LABEL ${ours ? LABEL.harness : 'reeval.test.other'}="${nonce}-${n}"`,
             container,
             `reeval-clean-test-${ours ? 'ours' : 'theirs'}:${nonce}`,
           ],
@@ -647,7 +647,7 @@ evaluate('nope', { environment: defineEnvironment('nope', { sandbox: docker({ fr
   }, async () => {
     const name = `reeval-registry-${process.pid}`
     const port = 5100 + (process.pid % 800)
-    const tag = `localhost:${port}/es/base:1`
+    const tag = `localhost:${port}/reeval/base:1`
     const push = (version: string) => {
       execFileSync('docker', ['build', '-q', '-t', tag, '-'], {
         input: `FROM debian:bookworm-slim\nRUN echo ${version} > /etc/reeval-version\n`,
@@ -1205,12 +1205,12 @@ evaluate('context', { environment: house }, async (c) => { await c.send('go') })
     const p = await project('docker-npm-tarball', {
       'reeval.config.ts': config('{}'),
       'evals/d.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const es = defineEnvironment('reeval-tarball', ({ file }) => ({
-  files: { 'es.tgz': file(${JSON.stringify(join(out, tarball))}) },
+const tarballEnv = defineEnvironment('reeval-tarball', ({ file }) => ({
+  files: { 'reeval.tgz': file(${JSON.stringify(join(out, tarball))}) },
 }))
-evaluate('installs', { environment: es, timeout: '6m' }, async (c) => {
+evaluate('installs', { environment: tarballEnv, timeout: '6m' }, async (c) => {
   await c.sandbox()
-  await expect(c.exec('npm install --no-audit --no-fund ./es.tgz')).toSucceed()
+  await expect(c.exec('npm install --no-audit --no-fund ./reeval.tgz')).toSucceed()
   expect((await c.exec('npx --no-install reeval --version')).stdout.trim()).toBe('${version}')
 })
 `,

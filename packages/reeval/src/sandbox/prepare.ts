@@ -16,7 +16,7 @@ import {
   installLayerTag,
   LABEL,
   resolveFrom,
-  usesEsBase,
+  usesReevalBase,
 } from '@reeval/sandbox-docker'
 import { parseDuration } from '../config.ts'
 import '../debug/docker.ts'
@@ -39,7 +39,7 @@ export const installSteps = (sandbox: DockerSandboxDescriptor): InstallStep[] =>
         },
   )
 
-export { usesEsBase }
+export { usesReevalBase }
 
 export const projectPath = (root: string, path: string) =>
   relative(root, path).split(sep).join('/') || '.'
@@ -99,7 +99,12 @@ const built = async (ref: string) => {
 }
 
 /** reeval's image for the harness: built when it's missing, or when reeval's base context changed. */
-export const esImage = (harness: BakedHarness, root: string, signal: AbortSignal, b: Builds) => {
+export const reevalImage = (
+  harness: BakedHarness,
+  root: string,
+  signal: AbortSignal,
+  b: Builds,
+) => {
   const ref = imageFor(harness)
   return b.once(ref, async () => {
     const info = await imageInfo(ref)
@@ -167,8 +172,10 @@ async function harnessBase(
   }
   if (sandbox.dockerfile) {
     const path = sandbox.dockerfile
-    const esBase = usesEsBase(path) ? (await esImage(harness, root, signal, b)).id : null
-    const { tag, sha256 } = dockerfileTag(path, harness, esBase)
+    const reevalBase = usesReevalBase(path)
+      ? (await reevalImage(harness, root, signal, b)).id
+      : null
+    const { tag, sha256 } = dockerfileTag(path, harness, reevalBase)
     const dockerfile = { path: projectPath(root, path), sha256 }
     const info = await b.once(tag, async () => {
       const cached = b.refresh === 'force' ? null : await imageInfo(tag)
@@ -178,7 +185,7 @@ async function harnessBase(
       await b.retry(() =>
         buildDockerfile(path, {
           harness,
-          esBase,
+          reevalBase,
           name: dockerfile.path,
           signal,
           output,
@@ -196,7 +203,7 @@ async function harnessBase(
     return { ref: harnessImageFor(harness, tag), info: await bake(tag), dockerfile }
   }
   const ref = imageFor(harness)
-  return { ref, info: await esImage(harness, root, signal, b), dockerfile: null }
+  return { ref, info: await reevalImage(harness, root, signal, b), dockerfile: null }
 }
 
 /**

@@ -98,14 +98,14 @@ async function cliCommands() {
   return out
 }
 
-function esVariables() {
+function reevalVariables() {
   const found = new Set()
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name)
       if (entry.isDirectory()) walk(path)
       else if (/\.tsx?$/.test(entry.name)) {
-        for (const m of read(path).matchAll(/\bES_[A-Z][A-Z0-9_]*\b/g)) found.add(m[0])
+        for (const m of read(path).matchAll(/\bREEVAL_[A-Z][A-Z0-9_]*\b/g)) found.add(m[0])
       }
     }
   }
@@ -459,7 +459,7 @@ for (const key of [
 }
 
 const envPage = page('reference/env-vars')
-for (const name of esVariables()) {
+for (const name of reevalVariables()) {
   if (!mentions(envPage, `\`${name}\``))
     problems.push(`${name} is read in src/ but not on reference/env-vars`)
 }

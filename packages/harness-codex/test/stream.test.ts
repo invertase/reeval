@@ -150,11 +150,11 @@ test('a real web turn: the page Codex opened is a web fetch of its URL, known wh
         id: 'w',
         type: 'web_search',
         query: 'q',
-        action: { type: 'search', query: 'es evals' },
+        action: { type: 'search', query: 'reeval evals' },
       },
     }),
   )
   const call = search.find((p) => p.type === 'tool-call')
   assert.equal(call?.type === 'tool-call' && call.toolName, 'webSearch')
-  assert.deepEqual(call?.type === 'tool-call' && JSON.parse(call.input), { query: 'es evals' })
+  assert.deepEqual(call?.type === 'tool-call' && JSON.parse(call.input), { query: 'reeval evals' })
 })

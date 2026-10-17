@@ -78,7 +78,7 @@ export type CollectedEval = {
 /** What a line about an attempt needs to name it. */
 export type AttemptRef = { id: string; key: string; attempt: AttemptMeta | undefined }
 
-export type EsEvent =
+export type ReevalEvent =
   | {
       type: 'run-start'
       at: number
@@ -120,7 +120,7 @@ export type EsEvent =
     }
 
 export interface Renderer {
-  onEvent(event: EsEvent): void
+  onEvent(event: ReevalEvent): void
   close(): void
 }
 

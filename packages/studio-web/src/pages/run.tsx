@@ -916,7 +916,7 @@ export function RunPage() {
       </Tabs>
       <p className="text-xs text-muted-foreground">
         Started {timeAgo(record.startedAt)} · artifacts: {record.artifacts} · reeval{' '}
-        {record.stack.es}
+        {record.stack.reeval}
       </p>
     </div>
   )

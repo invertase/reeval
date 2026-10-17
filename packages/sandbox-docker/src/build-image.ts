@@ -573,22 +573,22 @@ export function contextFiles(context: string, dockerfile: string): string[] {
 }
 
 /** Whether the Dockerfile starts from reeval's sandbox image, which then has to exist first. */
-export const usesEsBase = (dockerfile: string) =>
+export const usesReevalBase = (dockerfile: string) =>
   new RegExp(`\\$\\{?${REEVAL_BASE_ARG}\\b`).test(readFileSync(dockerfile, 'utf8'))
 
 /**
  * The tag of a `docker({ dockerfile })` build for a harness: a hash of the Dockerfile, every file
  * of its build context (its directory, less `.dockerignore`) and, for a Dockerfile `FROM
  * ${REEVAL_BASE}`, the id of the harness's image it names, so an edit to any of them, or a rebuilt reeval
- * image, builds anew. `esBase` is that id (null when it isn't built).
+ * image, builds anew. `reevalBase` is that id (null when it isn't built).
  */
 export function dockerfileTag(
   dockerfile: string,
   harness: BakedHarness,
-  esBase: string | null = null,
+  reevalBase: string | null = null,
 ): { tag: string; sha256: string } {
   const context = dirname(dockerfile)
-  const base = usesEsBase(dockerfile) ? `${imageFor(harness)}@${esBase ?? 'unbuilt'}` : ''
+  const base = usesReevalBase(dockerfile) ? `${imageFor(harness)}@${reevalBase ?? 'unbuilt'}` : ''
   const hash = createHash('sha256').update(`${REEVAL_BASE_ARG}=${base}\0`)
   for (const path of contextFiles(context, dockerfile)) {
     const full = join(context, path)
@@ -607,7 +607,7 @@ export function dockerfileTag(
 
 /**
  * Builds the user's Dockerfile with plain `docker build` (so Docker's layer cache applies), from
- * its directory, with `REEVAL_BASE` set to the harness's sandbox image (whose id is `esBase`).
+ * its directory, with `REEVAL_BASE` set to the harness's sandbox image (whose id is `reevalBase`).
  * Rebuilds even when the tag exists with `force`, as `reeval image build` does, and then removes the
  * image the tag pointed at before. `name` is the path failures name.
  */
@@ -615,7 +615,7 @@ export async function buildDockerfile(
   dockerfile: string,
   options: {
     harness: BakedHarness
-    esBase?: string | null
+    reevalBase?: string | null
     name?: string
     signal?: AbortSignal
     output?: BuildOutput
@@ -625,7 +625,7 @@ export async function buildDockerfile(
   },
 ): Promise<string> {
   const { harness, signal } = options
-  const { tag } = dockerfileTag(dockerfile, harness, options.esBase ?? null)
+  const { tag } = dockerfileTag(dockerfile, harness, options.reevalBase ?? null)
   const previous = (await imageInfo(tag))?.id
   if (previous && !options.force) return tag
   const build = await docker(

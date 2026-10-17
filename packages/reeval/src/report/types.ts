@@ -4,7 +4,7 @@
 /** One `reeval` command, as the CLI logs it when it ends: redacted and path-scrubbed on disk too. */
 export type CliInvocation = {
   at: string
-  es: string
+  reeval: string
   /** The arguments after `reeval`, with every flag value and argument replaced by `<value>` or `<arg>`. */
   argv: string[]
   /** `run`, `studio build`, …; null when the command line didn't parse. */
@@ -44,7 +44,7 @@ export type ReportBundle = {
   kind: 'reeval-report'
   version: 1
   createdAt: string
-  es: string
+  reeval: string
   node: string
   npm: string | null
   os: { platform: string; release: string; arch: string }

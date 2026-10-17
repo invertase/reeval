@@ -37,7 +37,7 @@ const dim = paint(2, 22)
 const POINTER = '❯'
 
 /** reeval's own directories; their frames are noise in an eval's stack. */
-export const esFrames = (packageDir: string) => [
+export const reevalFrames = (packageDir: string) => [
   `${packageDir}${packageDir.endsWith(sep) ? '' : sep}src${sep}`,
   `${packageDir}${packageDir.endsWith(sep) ? '' : sep}dist${sep}`,
 ]

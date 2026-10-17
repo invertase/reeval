@@ -31,7 +31,7 @@ export async function studioCommand({ config, flags, version, build }: Args): Pr
       appDir: APP_DIR,
       out,
       artifacts,
-      es: version,
+      reeval: version,
       project,
     })
     console.log(
@@ -57,7 +57,7 @@ export async function studioCommand({ config, flags, version, build }: Args): Pr
     host,
     port,
     token,
-    es: version,
+    reeval: version,
     project,
   })
   console.log(`reeval studio · ${project} · ${rel(config.history.dir)}/`)

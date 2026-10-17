@@ -6,7 +6,7 @@ import type { EvalEntry, JudgementRecord, RunRecord } from '../src/history/types
 import type { AttemptMeta, CompareAnswer, TokenUsage } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
-import type { EsEvent, EvalResult, Progress } from '../src/ui/events.ts'
+import type { EvalResult, Progress, ReevalEvent } from '../src/ui/events.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
 import { renderSummary } from '../src/ui/summary.ts'
@@ -40,8 +40,8 @@ const attempt = (name: string, group: string[]): AttemptMeta => ({
   plan: { harnesses: 1, variants: null, runs: 1, attempts: 1, notes: [], warnings: [] },
 })
 
-const progress = (id: string, at: number, p: Omit<Progress, 'at'>): EsEvent =>
-  ({ type: 'eval-progress', key: keyOf(id), progress: { at, ...p } }) as EsEvent
+const progress = (id: string, at: number, p: Omit<Progress, 'at'>): ReevalEvent =>
+  ({ type: 'eval-progress', key: keyOf(id), progress: { at, ...p } }) as ReevalEvent
 
 const greetResult: EvalResult = {
   id: GREET,
@@ -122,7 +122,7 @@ const record = {
 } as unknown as RunRecord
 
 /** Two attempts running at once, interleaved as they'd arrive with two workers. */
-const interleaved: EsEvent[] = [
+const interleaved: ReevalEvent[] = [
   {
     type: 'run-start',
     at: T0,
@@ -238,7 +238,7 @@ const options = (overrides: Partial<OutputOptions> = {}): OutputOptions => ({
 })
 
 /** Feeds events to a renderer on a fake non-TTY stream, ticking the heartbeat between them. */
-function render(events: EsEvent[], output: OutputOptions, color = false): string {
+function render(events: ReevalEvent[], output: OutputOptions, color = false): string {
   let text = ''
   let now = T0
   const out = { isTTY: false, write: (chunk: string) => (text += chunk) }
@@ -406,7 +406,7 @@ describe('plain renderer', () => {
 })
 
 /** The same run with the first eval's compare questions answered, one of them failed. */
-const answered: EsEvent[] = interleaved.map((e) => {
+const answered: ReevalEvent[] = interleaved.map((e) => {
   if (e.type !== 'run-end') return e
   const [first, ...rest] = e.record.evals
   const answers: CompareAnswer[] = [
@@ -713,7 +713,7 @@ test('browser-download names the binary, version, size and cache', () => {
     received: 128 * 1024 * 1024,
     cache: '~/.cache/reeval',
   }
-  const events: EsEvent[] = [
+  const events: ReevalEvent[] = [
     {
       type: 'run-start',
       at: T0,

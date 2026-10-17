@@ -161,7 +161,7 @@ describe('the record corpus', () => {
         await ok(['compare', run.runId], [0, 1])
         await ok(['analyze', run.runId, '--dry-run'])
         if (run.analyses)
-          assert.match(await ok(['analyze', run.runId, '--json']), /"kind": "es-analysis"/)
+          assert.match(await ok(['analyze', run.runId, '--json']), /"kind": "reeval-analysis"/)
       }
       for (const [i, id] of ids.entries()) {
         if (i === 0) continue

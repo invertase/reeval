@@ -9,7 +9,7 @@ import { attemptKey, evalId, relativeFile } from '../ids.ts'
 import { ownVersion, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
 import { Scheduler } from '../scheduler/core.ts'
 import { capMiddle } from '../text.ts'
-import { esFrames, formatError, type SerializedError } from './errors.ts'
+import { formatError, reevalFrames, type SerializedError } from './errors.ts'
 import { DEFAULT_EXCLUDE, filterFiles, findEvalFiles, matchesFilter } from './files.ts'
 import {
   describeExit,
@@ -72,7 +72,7 @@ export async function runEngine(
   // Attempts wait on the network, not the CPU, so a few workers run many attempts each.
   const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
   const entry = workerEntry(root, PACKAGE_NAMES)
-  const hide = [...esFrames(PACKAGE_DIR), ...esFrames(join(entry, '..', '..'))]
+  const hide = [...reevalFrames(PACKAGE_DIR), ...reevalFrames(join(entry, '..', '..'))]
   const matchesName = (e: { id: string; attempt?: EngineEval['attempt'] }) =>
     nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f))
   const run = options.run

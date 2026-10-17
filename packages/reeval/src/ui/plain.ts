@@ -3,7 +3,14 @@
 import { sandboxWarningLine } from '../text.ts'
 import type { SandboxWarning } from '../types.ts'
 import { type Colors, colors, stripAnsi } from './colors.ts'
-import type { AttemptRef, EsEvent, EvalResult, OutputStream, Progress, Renderer } from './events.ts'
+import type {
+  AttemptRef,
+  EvalResult,
+  OutputStream,
+  Progress,
+  ReevalEvent,
+  Renderer,
+} from './events.ts'
 import {
   attemptAxes,
   debugLines,
@@ -55,7 +62,7 @@ type Attempt = {
   label: string
   startedAt: number
   lines: Line[]
-  last: EsEvent | undefined
+  last: ReevalEvent | undefined
   /** In an ungated cell, whose misses don't fail the run, so they aren't painted red. */
   ungated: boolean
 }
@@ -130,7 +137,7 @@ export class PlainRenderer implements Renderer {
     if (this.#streaming) this.#write(this.#detail(a, line, true))
   }
 
-  onEvent(e: EsEvent): void {
+  onEvent(e: ReevalEvent): void {
     const c = this.#c
     switch (e.type) {
       case 'run-start': {

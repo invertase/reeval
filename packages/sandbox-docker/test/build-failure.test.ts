@@ -178,17 +178,17 @@ describe('retrying transient failures', () => {
 
 describe('Dockerfile tags', () => {
   const dir = mkdtempSync(join(tmpdir(), 'reeval-tag-'))
-  const esBase = join(dir, 'es', 'Dockerfile')
+  const reevalBase = join(dir, 'reeval', 'Dockerfile')
   const plain = join(dir, 'plain', 'Dockerfile')
-  mkdirSync(join(dir, 'es'))
+  mkdirSync(join(dir, 'reeval'))
   mkdirSync(join(dir, 'plain'))
-  writeFileSync(esBase, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
+  writeFileSync(reevalBase, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
   writeFileSync(plain, 'FROM debian:bookworm-slim\n')
 
   test("FROM $REEVAL_BASE: a rebuilt reeval image (a new id) is a new tag; the same id isn't", () => {
-    const a = dockerfileTag(esBase, 'cursor', 'sha256:aaa').tag
-    assert.notEqual(dockerfileTag(esBase, 'cursor', 'sha256:bbb').tag, a)
-    assert.equal(dockerfileTag(esBase, 'cursor', 'sha256:aaa').tag, a)
+    const a = dockerfileTag(reevalBase, 'cursor', 'sha256:aaa').tag
+    assert.notEqual(dockerfileTag(reevalBase, 'cursor', 'sha256:bbb').tag, a)
+    assert.equal(dockerfileTag(reevalBase, 'cursor', 'sha256:aaa').tag, a)
   })
 
   test("canary: another base ignores reeval's image id", () => {

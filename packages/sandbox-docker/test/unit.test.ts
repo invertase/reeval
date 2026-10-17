@@ -165,7 +165,7 @@ describe('request transformations', () => {
     assert.equal(open.headers['x-api-key'], REAL, 'without endpoints, the rule alone decides')
     const tagging: RequestTransformation = {
       match: { host: 'api.anthropic.com' },
-      transform: { headers: { 'x-tag': 'es' } },
+      transform: { headers: { 'x-tag': 'reeval' } },
     }
     const tagged = applyTransformations(
       [tagging],
@@ -571,8 +571,8 @@ test('only registry-qualified or namespaced digests count as pushed', () => {
   assert.equal(isRegistryDigest(`reeval-env${d}`), false)
   assert.equal(isRegistryDigest(`busybox${d}`), false)
   assert.equal(isRegistryDigest(`invertase/reeval-sandbox${d}`), true)
-  assert.equal(isRegistryDigest(`ghcr.io/invertase/es${d}`), true)
-  assert.equal(isRegistryDigest(`localhost:5000/es${d}`), true)
+  assert.equal(isRegistryDigest(`ghcr.io/invertase/reeval${d}`), true)
+  assert.equal(isRegistryDigest(`localhost:5000/reeval${d}`), true)
 })
 
 describe('package boundary', () => {
@@ -709,11 +709,11 @@ describe('image recipes', () => {
       dockerfileTag(file, 'cursor').tag,
       'a Dockerfile without REEVAL_BASE builds the same for every harness (each gets its CLI baked on)',
     )
-    const onEs = join(dir, 'es.Dockerfile')
-    writeFileSync(onEs, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
+    const onReeval = join(dir, 'reeval.Dockerfile')
+    writeFileSync(onReeval, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
     assert.notEqual(
-      dockerfileTag(onEs, 'claude-code', 'sha256:a').tag,
-      dockerfileTag(onEs, 'cursor', 'sha256:a').tag,
+      dockerfileTag(onReeval, 'claude-code', 'sha256:a').tag,
+      dockerfileTag(onReeval, 'cursor', 'sha256:a').tag,
       "REEVAL_BASE is the harness's image, so each harness builds its own",
     )
   })

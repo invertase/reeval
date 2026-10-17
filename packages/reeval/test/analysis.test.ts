@@ -1431,7 +1431,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
     const app = createStudioApp({
       source: { root: p.dir, historyDir: history, scratch: false },
       appDir: join(pkgRoot, 'dist/studio-app'),
-      es: 'test',
+      reeval: 'test',
       project: 'analysis',
       token: null,
       hosts: [],
@@ -2241,7 +2241,7 @@ describe("analysis.agent: the run's summary after reeval run", () => {
     assert.deepEqual(
       [doc.kind, doc.scope, doc.anchor, doc.error, doc.model],
       [
-        'es-analysis',
+        'reeval-analysis',
         { kind: 'run', head: runId, base: null, evals: null },
         runId,
         undefined,

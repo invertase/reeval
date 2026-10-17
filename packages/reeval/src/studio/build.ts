@@ -17,7 +17,7 @@ export type BuildOptions = {
   out: string
   /** Copy transcripts, diffs, logs and judge inputs; false writes records and the index only. */
   artifacts: boolean
-  es: string
+  reeval: string
   project: string
 }
 
@@ -60,7 +60,7 @@ export async function buildStudio(options: BuildOptions): Promise<BuildResult> {
   const generatedAt = new Date().toISOString()
   const info: StudioInfo = {
     mode: 'static',
-    es: options.es,
+    reeval: options.reeval,
     project: options.project,
     generatedAt,
     features: { live: false, scratch: source.scratch, artifacts: options.artifacts, debug: false },

@@ -1354,7 +1354,7 @@
           ]
         },
         "kind": {
-          "const": "es-run"
+          "const": "reeval-run"
         },
         "plan": {
           "type": "object",
@@ -1559,7 +1559,7 @@
             "$ref": "#/$defs/ContextFile"
           }
         },
-        "es": {
+        "reeval": {
           "type": "string"
         },
         "fingerprintScope": {
@@ -1698,7 +1698,7 @@
       "required": [
         "arch",
         "context",
-        "es",
+        "reeval",
         "fingerprintScope",
         "harnesses",
         "images",

@@ -194,7 +194,7 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
 
       <Section title="Stack">
         <Row k="reeval">
-          {[stack.es, runtimeLabel(stack), languageLabel(stack), `${stack.os}/${stack.arch}`]
+          {[stack.reeval, runtimeLabel(stack), languageLabel(stack), `${stack.os}/${stack.arch}`]
             .filter(Boolean)
             .join(' · ')}
         </Row>

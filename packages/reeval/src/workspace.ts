@@ -136,7 +136,7 @@ async function prepareOne(
     if (known.code === 0) commit = known.text
   }
   if (!commit) {
-    const temp = `refs/es/fetch/${process.pid}-${randomBytes(4).toString('hex')}`
+    const temp = `refs/reeval/fetch/${process.pid}-${randomBytes(4).toString('hex')}`
     const filter = w.path ? ['--filter=blob:none'] : []
     await fetch(['--depth', '1', ...filter, 'origin', `+${w.ref ?? 'HEAD'}:${temp}`])
     const resolved = await gitIn(dir, ['rev-parse', '--verify', '-q', `${temp}^{commit}`])
@@ -150,7 +150,7 @@ async function prepareOne(
     commit = resolved.text
   }
   // Keeps the commit's objects from being pruned, so a pinned SHA reruns offline.
-  await gitIn(dir, ['update-ref', `refs/es/commits/${commit}`, commit])
+  await gitIn(dir, ['update-ref', `refs/reeval/commits/${commit}`, commit])
 
   const tree = await treeAt(dir, commit, w, what)
   const tar = join(cacheDir(root), 'trees', `${tree}.tar`)

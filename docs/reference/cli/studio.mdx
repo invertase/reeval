@@ -66,7 +66,7 @@ Serve it from any static host. Anyone who can open it can read every included fi
 The server and the static build serve the same paths:
 
 ```text
-studio.json                               { mode: live|static, es, project, generatedAt, features }
+studio.json                               { mode: live|static, reeval, project, generatedAt, features }
 data/index/manifest.json                  { shards: [{ id: "2026-09", runs }], latest, evals }
 data/index/<YYYY-MM>.json                 run headers started that UTC month, newest first
 data/runs/<runId>.json                    the record, byte for byte

@@ -16,7 +16,7 @@ const HISTORY = 'evals/.history'
 const VIEWS = ['lift', 'flaky_cells', 'drift', 'failing_attempts', 'eval_trend', 'verdict_flips']
 
 const git = (cwd: string, ...args: string[]) =>
-  execFileSync('git', ['-c', 'user.name=e2e', '-c', 'user.email=e2e@es.test', ...args], {
+  execFileSync('git', ['-c', 'user.name=e2e', '-c', 'user.email=e2e@reeval.test', ...args], {
     cwd,
     encoding: 'utf8',
   }).trim()

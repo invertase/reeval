@@ -129,7 +129,7 @@ export const BUILD_ID = `${PACKAGE_VERSION}:${statSync(COMPILED ? process.execPa
  * The command that runs the `reeval` at `cli` (a package's `dist/cli.js`) with `args`: Node with
  * `nodeArgs` and the file, or, compiled, this executable, which runs its own code.
  */
-export function esCommand(
+export function reevalCommand(
   cli: string,
   args: readonly string[],
   nodeArgs: readonly string[] = [],

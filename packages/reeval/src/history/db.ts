@@ -58,7 +58,7 @@ CREATE TABLE files (run_id TEXT PRIMARY KEY, path TEXT NOT NULL, size INTEGER NO
 CREATE TABLE runs (
   run_id TEXT PRIMARY KEY, recorded INTEGER NOT NULL, status TEXT, started_at TEXT, ended_at TEXT,
   duration_ms INTEGER, author TEXT, git_sha TEXT, branch TEXT, dirty INTEGER, runner TEXT,
-  ci_provider TEXT, ci_url TEXT, pr_number INTEGER, pr_base TEXT, es TEXT, judge_model TEXT,
+  ci_provider TEXT, ci_url TEXT, pr_number INTEGER, pr_base TEXT, reeval TEXT, judge_model TEXT,
   judge_version TEXT, profile TEXT, evals INTEGER, attempts INTEGER, pass INTEGER, fail INTEGER,
   not_gated INTEGER, infra_error INTEGER, skipped INTEGER
 );
@@ -336,7 +336,7 @@ function insertRun(
     runner.kind === 'ci' ? runner.runUrl : null,
     runner.kind === 'ci' ? (runner.pr?.number ?? null) : null,
     runner.kind === 'ci' ? (runner.pr?.baseRef ?? null) : null,
-    record.stack.es,
+    record.stack.reeval,
     record.stack.judge.model,
     record.stack.judge.version,
     record.profile?.name ?? null,

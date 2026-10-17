@@ -205,7 +205,7 @@ export async function prepareAnalysis(
 export type ToolReads = { evidence: DigestEvidence[]; text: string }
 
 const docBase = async (config: ResolvedConfig, p: PreparedAnalysis) => ({
-  kind: 'es-analysis' as const,
+  kind: 'reeval-analysis' as const,
   schemaVersion: 1 as const,
   scope: p.scope,
   anchor: p.head.runId,

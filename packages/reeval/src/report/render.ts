@@ -10,7 +10,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 export function versionsLine(b: ReportBundle): string {
   const pm = b.packageManager
   return [
-    `reeval ${b.es}`,
+    `reeval ${b.reeval}`,
     `Node ${b.node}`,
     b.npm ? `npm ${b.npm}` : 'no npm',
     ...(pm ? [`${pm.name}${pm.version ? ` ${pm.version}` : ''}`] : []),
@@ -127,7 +127,7 @@ export function renderMarkdown(b: ReportBundle, attachedFiles: string[]): string
     '',
     '| | |',
     '|---|---|',
-    `| reeval | ${b.es} |`,
+    `| reeval | ${b.reeval} |`,
     `| Node | ${b.node} |`,
     `| npm | ${b.npm ?? 'not found'} |`,
     `| Package manager | ${b.packageManager ? `${b.packageManager.name} ${b.packageManager.version ?? ''} (from ${b.packageManager.from})` : 'unknown'} |`,

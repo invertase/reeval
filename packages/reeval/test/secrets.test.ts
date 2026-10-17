@@ -377,7 +377,7 @@ describe('unbrokered secrets', () => {
 })
 
 describe('redacting encoded forms', () => {
-  const value = 'es unit/leak+7c"1d&9a?0b'
+  const value = 'reeval unit/leak+7c"1d&9a?0b'
   registerSecret(value)
   const cases: Array<[string, string]> = [
     ['raw', value],
