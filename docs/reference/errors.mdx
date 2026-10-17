@@ -3,11 +3,22 @@ title: Errors
 description: Common reeval error messages, what each one means, and how to fix it.
 ---
 
-reeval errors say what's wrong and, usually, what to do. This page groups the common ones by when they happen, with the fix.
+reeval errors name what's wrong, where it was set and the fix. This page groups the common ones by when they happen.
 
 ```text
 reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
+reeval: judge.threshold in evals/a.eval.ts › e must be between 0 and 1 (got 2)
 ```
+
+## Reading an error
+
+| Part | Example | What it tells you |
+|---|---|---|
+| The field | `judge.threshold`, `profiles.pr.limit.runs`, `files["a.txt"]` | The option path, as you'd write it in code |
+| Where | `in reeval.yaml`, `in evals/a.eval.ts › e`, `in defineEnvironment("base")` | The config file, eval or helper call that set it |
+| The problem | `must be between 0 and 1`, `is missing`, `has an unknown key "rf"` | What the value should be |
+| What you passed | `(got 2)` | The value reeval saw, as JSON |
+| The fix | `Did you mean "ref"?`, `Set it in the environment or .env.local.` | The next step, when there's one to name |
 
 ## When they happen
 
@@ -22,10 +33,20 @@ reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 
 Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts: …`). See [reeval run](/reference/cli/run) for exit codes in full.
 
-## Installing
+## reeval doctor
 
-| Message | Fix |
-|---|---|
+`reeval doctor` runs the same checks before a run, and puts each problem's fix on the line under it:
+
+```text
+✗ config     Unknown option "limits" in profiles.pr in reeval.config.ts. Did you mean "limit"?
+             fix: edit reeval.config.ts, then reeval run --dry-run
+✗ key        CURSOR_API_KEY for cursor:composer-2.5: not set
+             fix: add CURSOR_API_KEY=... to .env.local
+…
+2 problems, 0 warnings. Fix them and run reeval doctor again.
+```
+
+See [reeval doctor](/reference/cli/doctor) for every check.
 
 ## Config and options
 
@@ -35,16 +56,18 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `compare can't be set in reeval.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.` | Move `compare` to a group or eval; narrow it per profile with `limit.compare`. |
 | `env.API_KEY in reeval.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` | Use the callback form and `secret()` or `secret.fromEnv()`. |
 | `files["../x"] in defineEnvironment("e"): paths are relative to the workspace, or start with ~/ for the home directory, and never use ..` | Write the file inside the workspace or home; an absolute path or `..` would land outside the sandbox's folders (on the fake sandbox, on your machine). Backslashes get `use forward slashes (docs/api.md)`. |
-| `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` | Use a model string in the config. |
+| `judge.model in reeval.config.ts must be a "provider/model" string or fakeJudge(). Pass a model object per group, eval or call instead.` | Use a model string in the config. |
+| `judge.model in reeval.yaml needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/jev" (got "jev")` | Name the provider before the model. |
 | `Unknown judge option "diff" in reeval.config.ts. Did you mean "state.diff"?` | Use the suggested key. See [Judges](/reference/judges#what-the-judge-is-given). |
-| `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` | Use the suggested key. A bad value names what the key takes, such as `judge.state.turns must be 'last' or 'all' (got "first")`. |
+| `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` | Use the suggested key. A bad value names what the key takes, such as `judge.state.turns in reeval.config.ts must be 'last' or 'all' (got "first")`. |
 | `judge.providerOptions maps each provider to an object of JSON values, …` | Key `providerOptions` by provider, each an object: `{ google: { thinkingConfig: { thinkingBudget: 0 } } }`. |
 | `The defineConfig callback in reeval.config.ts returned a Promise. …` | Make the callback synchronous. |
 | `Config file not found: nope.ts` | Check the `--config` path. |
 | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.` | `reeval run` and `reeval image build` need a config file. Run `reeval init`, or pass `--config`. A parent-directory config still counts. |
 | `reeval.config.ts and reeval.yaml are both in .: reeval reads one config per directory. Keep one, or pass --config.` | A directory has a script config and a `reeval.yaml` (or both `reeval.yaml` and `reeval.yml`). Delete one, or name the one to read with `--config`. |
 | `sandbox.dockerfile in reeval.yaml: /project/docker/Dockerfile doesn't exist. Paths in reeval.yaml are relative to its directory.` | A relative path in a config, `reeval.yaml` or `reeval.config.ts`, resolves against the config's directory, not the one you run `reeval` from. Fix the path, or add the Dockerfile there. The same Dockerfile written as data in `defineEnvironment` says `sandbox.dockerfile in defineEnvironment("e"): … Paths are relative to the file that defines the environment.` |
-| `reeval.config.ts has no default export (it exports config). Write export default defineConfig({…}).` | Export the config as the default: `export default defineConfig({ … })`. |
+| `reeval.config.ts has no default export (it exports config). Write export default defineConfig({…}).` | Export the config as the default: `export default defineConfig({ … })`. A default export that isn't a config gets `reeval.config.ts's default export must be defineConfig({…}) (got …)`. |
+| `Unknown option "limits" in profiles.pr in reeval.config.ts. Did you mean "limit"?` | Use the suggested key. The same goes for `budget`, `debug`, `secrets`, `analysis` and `defaultProfile`; without a close match, the message lists the keys. |
 | `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` | Use `ms`, `s`, `m` or `h`, or a number of milliseconds. |
 | `Invalid duration 0. A duration is more than zero: …` | A timeout or budget of zero (or less) would stop every attempt at once. Give a positive duration. |
 | `evaluate("e") is declared twice in this file. …` | Give each eval its own name. For `evaluate.each`, put `$key`, `%s` or `%#` in the name. |
@@ -54,7 +77,7 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `evaluate("x") got two functions. Options must be a plain object; …` | Options are a plain object. Put secrets in an environment or the config's `env`. |
 | `sandbox takes one sandbox, not a list (…). Different toolchains need different checks, so write a separate eval per sandbox.` | One sandbox per eval. |
 | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.` | Use `compare`. |
-| `compare must be an object in evaluate("e"). Use compare: { baseline, variants: [...] }.` | Pass `{ baseline, variants }`, not a bare array. |
+| `compare in evaluate("e") must be an object, not a list. Use compare: { baseline, variants: [...] }.` | Pass `{ baseline, variants }`, not a bare array. |
 | `compare.baseline in evaluate("e") must be an environment from defineEnvironment (got "a"). …` | Set `baseline` to an environment, or leave it out to make the eval's environment the control. Variants are not layered on it. |
 | `compare in evaluate("g › e") lists a, which is the control: compare has no baseline, so the eval's environment is. …` | Drop that variant: without a `baseline`, the cascaded `environment` is already the control. |
 | `compare in evaluate("e") lists a variant named baseline, the name of the empty control …` | Rename the variant, or set `compare.baseline`. |
@@ -69,6 +92,7 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `compare.questions "Which?" in evaluate("e") names typesafe-ai/jev-1.13.0, an evaluation model: …` | Give the question a language model, e.g. `'google/gemini-3.8-flash'`. A model without a provider prefix is refused too. |
 | `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. The hint names `from` for a base image string and `install` for a list of steps. |
 | `Unknown cursor() option "modle". Did you mean "model"?` | Every harness factory refuses a key it doesn't take. Use the suggested one. See the harness's page under [Harnesses](/reference/harness/cursor). |
+| `call.options.artifacts[0].file is missing: it must be an object` | Data from another language that misses a field, or has one of the wrong type, names the field's full path. A value that can take several forms is explained against the form it came closest to. |
 | `harness in evals/a.eval.ts › e: Unknown cursor() option "modle". …` | A harness, sandbox, secret, skill, MCP server, file, workspace or environment built as plain data (by hand, or by an SDK in another language) is checked as its helper's result is, and named by where it sits: `sandbox in …`, `env.A_KEY in …`, `skills[0] in …`, `mcp.s in …`, `files["a.txt"] in …`, `workspace in …`. Build it with the helper, or fix the named field. |
 | `Unknown field "setpu" in layer "x" of environment "x" in evals/a.eval.ts › e.` | An environment as data has each layer's spec checked as `defineEnvironment` checks it. Fix the named field. |
 | `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (c) => { … })`. |
@@ -80,7 +104,9 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 |---|---|
 | `Unknown profile "nigthly". Profiles in reeval.config.ts: smoke, nightly.` | Check the name in `--profile` or `REEVAL_PROFILE`. |
 | `this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)` | Narrow the run, raise `budget.attempts`, or pass `--force`. |
-| `profiles.pr.budget.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` | Cap with `attempts` or `duration` (`budget.tokens` gets the same message). |
+| `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (profiles: smoke, nightly). Add it under profiles, or name one that's there.` | Fix the name, or add the profile. |
+| `profiles.pr.limit.runs in reeval.config.ts must be a whole number of at least 1 (got 0)` | Every profile key names its path and file the same way. |
+| `profiles.pr.budget.usd in reeval.config.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` | Cap with `attempts` or `duration` (`budget.tokens` gets the same message). |
 
 See [Profiles and budgets](/reference/profiles).
 
@@ -90,13 +116,15 @@ See [Profiles and budgets](/reference/profiles).
 |---|---|
 | `No evals matched evals/hello.eval.ts, … with filter "nope"` | Check the filter: it matches file paths, eval names and cell keys. |
 | `filter "x" matches no eval file, eval name or cell in …` | One of several filter words matched nothing. |
-| `No eval files match evals/**/*.eval.ts (config.include) in /path/to/project. …` | No file matches `include`: check the file names, or set `include` in `reeval.config.ts`. |
+| `No eval files in /path/to/project match include: evals/**/*.eval.ts. …` | No file matches `include`: check the file names, or set `include` in `reeval.config.ts`. |
 | `3 eval files failed to load:` then `evals/a.eval.ts, …: <error>` | A file threw, imported something missing, had a syntax error (with its position and a code frame), or its `tsconfig.json` isn't valid JSON or extends a file that isn't there (as in a copied example). Nothing runs until every file loads. |
 | `cursor: session did not become ready within 90s (tried twice)` | The harness's session start (its bootstrap) hung twice. The attempt is an infra error, its sandbox is destroyed and the other attempts carry on. Raise the harness's `startTimeout` if it's legitimately slow. |
 | `The worker running evals/a.eval.ts exited unexpectedly (signal SIGKILL)` | The process running that file died: killed, or out of memory. Its unfinished attempts fail and the run exits 1. |
 | `The reeval at <path> runs eval files with engine protocol N, but this reeval speaks M` | The project resolves another version of reeval than the `reeval` you ran. Run the project's own: `npx reeval`. |
 | `reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.` | Add `--dry-run`, or use `reeval show --json` after the run. |
 | `--runs must be a whole number of at least 1 (got 0)` | Pass a positive whole number. |
+| `--json doesn't take a value: pass --json on its own.` | Drop the `=…` after a yes/no flag. A flag that needs a value and has none gets `--runs needs a value (--runs <n>)`. |
+| `No run matches "abc". Pass latest, latest~N, a run id or a git SHA; reeval history lists them.` | `reeval show`, `compare` and the other history commands take one of those. |
 | `Unknown command "image foo". Did you mean reeval image build?` | Use `reeval image build`. |
 | `Unknown command "frob". Run reeval --help.` | See [CLI](/reference/cli). |
 | `Refusing to record <run>: 1 file(s) look like they contain a secret:` then `<run>/…/transcript.jsonl line 4: the value of DEPLOY_TOKEN` | A file still holds a secret after redaction, often because the variable was set only after the run. Check the named line. If it's a false positive, `reeval record --skip-secret-scan`. See [the secret scan](/reference/cli/record#the-secret-scan). |
@@ -136,7 +164,7 @@ See [Profiles and budgets](/reference/profiles).
 | `killed (exit 137): usually out of memory; …` | Give Docker more memory, or lower `--concurrency`. |
 | `Baking the <harness> CLI onto <base> failed: …` | Usually the network; reeval already retried it twice. |
 | `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (…). …` | The image has no Node for the egress gateway. Use `docker({ from })` or `docker({ dockerfile })`. |
-| `The Cursor harness needs the Docker sandbox` | Real harnesses run only in `docker()`. |
+| `The Cursor harness needs the Docker sandbox: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()` | Real harnesses run only in `docker()`. |
 
 See [docker()](/reference/sandbox/docker).
 

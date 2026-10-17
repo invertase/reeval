@@ -515,5 +515,5 @@ recorded `*.log` files; `reeval record` warns if git still ignores a file it wro
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
 | `workspace: 'https://…'` | `must come from the git helper` | `({ git }) => ({ workspace: git('https://…', { ref }) })` |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |
-| Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.eval.ts` under `evals/` |
+| Test file named `*.test.ts` | `No eval files in … match include: …` (exit 2) | `*.eval.ts` under `evals/` |
 | `.env.local` outside the config's directory | `Missing credentials: …` | Put it next to `reeval.config.ts` |

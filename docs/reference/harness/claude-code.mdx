@@ -97,7 +97,7 @@ Each turn records the tokens the CLI reports for each model call, cache reads an
 |---|---|
 | No `model` | `claudeCode() needs a model, e.g. claudeCode({ model: 'claude-sonnet-5' })` |
 | No key when the attempt starts | `ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate. Set it in the environment or .env.local.` |
-| A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox` |
+| A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox: set sandbox: docker() …` |
 | The CLI doesn't start | `Claude Code harness failed to start: …` |
 
 A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the failure and `summary.md` show the API's message, without `-v`:

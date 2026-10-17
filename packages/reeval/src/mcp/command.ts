@@ -25,7 +25,8 @@ const stopped = () =>
 export async function mcpCommand({ config, flags, version }: Args): Promise<number> {
   if (!flags.http) {
     for (const name of ['port', 'host', 'token'] as const) {
-      if (flags[name] !== undefined) throw new UsageError(`--${name} needs --http`)
+      if (flags[name] !== undefined)
+        throw new UsageError(`--${name} needs --http: reeval mcp serves over stdio without it`)
     }
   }
   const factory = await serverFactory(config, version)
@@ -67,7 +68,8 @@ async function serveHttp(
   }
   // Off by default: bound to loopback behind the Host and Origin checks, like any local dev server.
   const token = flags.token ?? (process.env.REEVAL_MCP_TOKEN || undefined)
-  if (token !== undefined && !token.trim()) throw new UsageError('--token needs a value')
+  if (token !== undefined && !token.trim())
+    throw new UsageError('--token needs a value: --token <secret>, or REEVAL_MCP_TOKEN')
   registerSecret(token)
   const { createMcpHandler } = await import('@modelcontextprotocol/server')
   const { Hono } = await import('hono')
@@ -98,7 +100,9 @@ async function serveHttp(
     const s = serve({ fetch: app.fetch, hostname: host, port })
     s.once('error', (error: NodeJS.ErrnoException) =>
       reject(
-        error.code === 'EADDRINUSE' ? new UsageError(`Port ${port} is in use; pass --port`) : error,
+        error.code === 'EADDRINUSE'
+          ? new UsageError(`Port ${port} is in use: pass another with --port`)
+          : error,
       ),
     )
     s.once('listening', () => resolve(s))

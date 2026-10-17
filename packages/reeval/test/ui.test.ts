@@ -802,7 +802,10 @@ describe('output mode', () => {
     assert.deepEqual([resolve({}).requested, resolve({}).mode], ['live', 'plain'])
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor').mode, 'plain')
     assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor', { ui: 'agent' }).mode, 'agent')
-    assert.throws(() => resolve({}, true, undefined, { ui: 'fancy' }), /--ui must be one of/)
+    assert.throws(
+      () => resolve({}, true, undefined, { ui: 'fancy' }),
+      /--ui is one of .* \(got fancy\)/,
+    )
   })
 
   test('log order is grouped in CI and stream elsewhere, as in Turborepo', () => {

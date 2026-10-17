@@ -280,13 +280,13 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | An empty `hosts` | `secret(): hosts must list the hosts the secret is sent to, e.g. hosts: ['api.example.com'] or secret.hosts.gemini (got [])` |
 | `in` without `hosts` | `secret(): in only applies to a brokered secret; add hosts, e.g. { hosts: ['api.example.com'], in: ["query"] }` |
 | A bad `in` | `secret(): in lists where the gateway substitutes: 'header', 'query' and/or 'body' (got ["cookie"])` |
-| A bad `to` | `secret(): to must be 'agent' or 'checks'` |
-| A bad variable name | `secret.fromEnv("my-var") needs a host variable name` |
-| A bad placement | `skill placement must be 'harness' or 'workspace' (got home)` |
-| `exclude` not a list | `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.eval.ts'] (got "/evals/")` |
-| A bad registry id | `skill.registry("genkit") needs an id like owner/repo@skill` |
-| No repository | `skill.git() needs a repository URL` |
-| No command | `mcp.stdio() needs a command` |
+| A bad `to` | `secret(): to is 'agent' or 'checks' (got "host")` |
+| A bad variable name | `secret.fromEnv("my-var") needs a host variable name: letters, digits and _, not starting with a digit, e.g. secret.fromEnv('API_KEY')` |
+| A bad placement | `skill({ placement }) is 'harness' or 'workspace' (got "home")` |
+| `exclude` not a list | `skill({ exclude }) must be a list of paths or globs, e.g. ['/evals/', '*.eval.ts'] (got "/evals/")` |
+| A bad registry id | `skill.registry("genkit") needs an id like owner/repo@skill, e.g. skill.registry('acme/skills@review')` |
+| No repository | `skill.git() needs a repository URL, e.g. skill.git('https://github.com/acme/skills') (got "")` |
+| No command | `mcp.stdio() needs a command, e.g. mcp.stdio('npx', ['-y', 'server']) (got "")` |
 | A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |
 | A bad `path` | `git("github:acme/app"): path is a directory in the repository, relative, with forward slashes and no . or .. (got "../secrets")` |
 | The token itself as `token` | `git("github:acme/app"): token names the host variable that holds the token, e.g. token: 'GITHUB_TOKEN'. Don't put the token itself in the eval.` (the value isn't echoed) |
@@ -294,7 +294,7 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | An unknown option | `git("github:acme/app"): unknown option "branch"; it takes ref, path, init and token. Use ref for a branch, tag or commit.` |
 | A missing directory | `directory("../fixture"): /path/to/fixture doesn't exist` |
 | A file for `directory()` | `directory("./notes.md"): /path/to/notes.md is a file, not a directory. Use file("./notes.md") for one file.` |
-| No files left | `directory("../fixture"): no files in /path/to/fixture match (glob ["*.md"], after DEFAULT_DIRECTORY_IGNORES). Empty directories aren't seeded; create one with a setup step.` |
+| No files left | `directory("../fixture"): no files in /path/to/fixture match (glob ["*.md"], after the default ignores such as node_modules/ and dist/; defaultIgnores: false keeps them). Empty directories aren't seeded; create one with a setup step.` |
 | `ignore` for `directory()` | `directory("../fixture"): unknown option "ignore"; it takes into, glob and defaultIgnores. Exclude with a '!' pattern in glob, e.g. glob: ['!dist/'].` |
 | A bad `into` | `directory("../fixture"): into is a directory relative to the workspace (or ~/…), with forward slashes and no .. (got "../app")` |
 | A broken symlink | `directory("../fixture"): bin/tool is a symlink to something that doesn't exist. Remove it, or leave it out with glob: ['!bin/tool'].` |

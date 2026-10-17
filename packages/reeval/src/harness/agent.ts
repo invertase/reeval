@@ -123,7 +123,9 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
         ...(skills.length ? { skills } : {}),
       })
       if (!isDockerSandbox(sandbox)) {
-        throw new InfraError(`The ${catalog.name} harness needs the Docker sandbox`)
+        throw new InfraError(
+          `The ${catalog.name} harness needs the Docker sandbox: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()`,
+        )
       }
       let session: Awaited<ReturnType<typeof agent.createSession>>
       try {

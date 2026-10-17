@@ -70,7 +70,7 @@ const rel = (path: string) => fromCwd(path) || path
 export function parseLevel(value: string | undefined, fallback: ArtifactLevel): ArtifactLevel {
   if (value === undefined) return fallback
   if (value === 'all' || value === 'failures' || value === 'none') return value
-  throw new CommandError('--artifacts must be all, failures or none')
+  throw new CommandError(`--artifacts is all, failures or none (got ${value})`)
 }
 
 export async function record(
@@ -130,7 +130,8 @@ export async function historyView(
 ) {
   const entries = options.all ? await allRuns(config) : await recorded(config)
   const limit = options.limit ?? 20
-  if (!(limit > 0)) throw new CommandError('--limit must be a positive number')
+  if (!(limit > 0))
+    throw new CommandError(`--limit must be a number above 0 (got ${options.limit})`)
   const reach = await reachability(config.root)
   return history(entries, { filter: options.filter || undefined, limit, reach })
 }

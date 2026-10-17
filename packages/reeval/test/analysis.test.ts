@@ -1532,7 +1532,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
       ],
       [
         "analysis: { model: 'typesafe-ai/jev-1.13.0' },",
-        /is an evaluation model: it scores yes\/no questions/,
+        /analysis\.model in reeval\.config\.ts is "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions/,
       ],
       [
         "analysis: { model: 'google/gemini-3.8-flash' },",
@@ -1540,17 +1540,20 @@ evaluate('greets', { runs: 1 }, async (c) => {
       ],
       [
         "analysis: { model: 'gemini' },",
-        /config\.analysis\.model "gemini" needs a provider prefix/,
+        /analysis\.model in reeval\.config\.ts needs a provider prefix, e\.g\. "google\/gemini" \(got "gemini"\)/,
       ],
       [
         'analysis: { maxInputTokens: 10 },',
-        /maxInputTokens must be a whole number of at least 1000/,
+        /analysis\.maxInputTokens in reeval\.config\.ts must be a whole number of at least 1000 \(got 10\)/,
       ],
       [
         'analysis: { maxOutputTokens: 10 },',
-        /maxOutputTokens must be a whole number of at least 500/,
+        /analysis\.maxOutputTokens in reeval\.config\.ts must be a whole number of at least 500 \(got 10\)/,
       ],
-      ['analysis: { maxCostUsd: 0.25 },', /Unknown option "maxCostUsd" in config\.analysis/],
+      [
+        'analysis: { maxCostUsd: 0.25 },',
+        /Unknown option "maxCostUsd" in analysis in reeval\.config\.ts/,
+      ],
     ]
     for (const [analysis, message] of cases) {
       const p = await historyProject('analyze-errors', 'dogfood', analysis)
@@ -2087,11 +2090,11 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
     const cases: Array<[string, RegExp]> = [
       [
         'analysis: { agent: true },',
-        /config\.analysis\.agent needs a language model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't write an analysis\), or turn agent off\./,
+        /analysis\.agent in reeval\.config\.ts needs a language model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't write an analysis\), or turn agent off\./,
       ],
       [
         "analysis: { agent: true, model: 'typesafe-ai/jev-1.13.0' },",
-        /config\.analysis\.model "typesafe-ai\/jev-1\.13\.0" is an evaluation model/,
+        /analysis\.model in reeval\.config\.ts is "typesafe-ai\/jev-1\.13\.0", an evaluation model/,
       ],
       [
         "analysis: { agent: true, model: 'google/gemini-3.8-flash' },",

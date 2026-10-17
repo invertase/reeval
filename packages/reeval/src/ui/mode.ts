@@ -59,13 +59,16 @@ function pick<T extends string>(
 ): T | 'auto' | undefined {
   if (value === undefined || value === '') return undefined
   if (value === 'auto' || isOneOf(allowed, value)) return value
-  throw new UsageError(`${name} must be one of ${[...allowed, 'auto'].join(', ')}`)
+  throw new UsageError(`${name} is one of ${[...allowed, 'auto'].join(', ')} (got ${value})`)
 }
 
 function parseHeartbeat(value: string | undefined): number {
   if (!value) return 60_000
   const match = /^(\d+(?:\.\d+)?)(ms|s|m)?$/.exec(value)
-  if (!match) throw new UsageError(`REEVAL_HEARTBEAT must be a duration like 30s or 0`)
+  if (!match)
+    throw new UsageError(
+      `REEVAL_HEARTBEAT must be a duration like 30s, or 0 for none (got ${value})`,
+    )
   const unit = { ms: 1, s: 1000, m: 60_000 }[match[2] ?? 's'] ?? 1000
   return Number(match[1]) * unit
 }

@@ -28,10 +28,17 @@ export function judgeModelName(model: JudgeModel): string {
   return m.provider && m.modelId ? `${m.provider}/${m.modelId}` : 'custom'
 }
 
-/** Checks a model string's shape; returns an error message, or undefined when it's valid. */
-export function checkModelString(model: string): string | undefined {
+/**
+ * Checks a model string's shape; returns an error message naming it as `what` (with where it was
+ * set), or undefined when it's valid.
+ */
+export function checkModelString(
+  model: string,
+  what = 'The judge model',
+  examples = [RECOMMENDED_JUDGE_MODEL, `google/${model}`],
+): string | undefined {
   if (model.includes('/')) return undefined
-  return `Judge model "${model}" needs a provider prefix, e.g. "${RECOMMENDED_JUDGE_MODEL}" or "google/${model}"`
+  return `${what} needs a provider prefix, e.g. ${examples.map((e) => `"${e}"`).join(' or ')} (got "${model}")`
 }
 
 const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
@@ -53,8 +60,8 @@ export function judgeRoute(model: string, env: NodeJS.ProcessEnv = process.env):
   if (direct && env[direct.key]) return { kind: 'direct', provider, pkg: direct.pkg }
   if (GATEWAY_KEYS.some((k) => env[k])) return { kind: 'gateway' }
   const options = direct
-    ? `Set ${direct.key} to call ${direct.pkg} directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.`
-    : 'Set AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.'
+    ? `Set ${direct.key} to call ${direct.pkg} directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway, in the environment or .env.local.`
+    : 'Set AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway, in the environment or .env.local.'
   throw new Error(`No credentials for judge model "${model}". ${options}`)
 }
 

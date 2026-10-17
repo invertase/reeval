@@ -336,20 +336,20 @@ export function descriptorProblem(
 }
 
 const GATE_SHAPE =
-  "gate is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 }"
+  "is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 }"
 
 /** reeval's sentence for a gate that isn't one, or undefined. */
 export const gateProblem = (value: unknown, where: string) =>
-  refusal(gatePolicySchema, value, () => `${GATE_SHAPE} (got ${got(value)}) in ${where}`)
+  refusal(gatePolicySchema, value, () => `gate in ${where} ${GATE_SHAPE} (got ${got(value)})`)
 
-const EGRESS_SHAPE = `egress is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
+const EGRESS_SHAPE = `is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
 
 /** reeval's sentence for an egress policy that isn't one, or undefined. */
 export function egressProblem(value: unknown, where: string): string | undefined {
   return refusal(egressPolicySchema, value, () => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
       const list = Array.isArray(value) ? ` For a list of hosts, use { allow: ${got(value)} }.` : ''
-      return `${EGRESS_SHAPE} (got ${got(value)}) in ${where}.${list}`
+      return `egress in ${where} ${EGRESS_SHAPE} (got ${got(value)}).${list}`
     }
     const key = Object.keys(value).find((k) => k !== 'allow')
     if (key !== undefined) {
@@ -358,11 +358,11 @@ export function egressProblem(value: unknown, where: string): string | undefined
           ? " A policy lists what's allowed; everything else is refused."
           : key === 'hosts' || key === 'allowedHosts'
             ? ' Did you mean "allow"?'
-            : ''
+            : " A policy is { allow: ['api.example.com'] }."
       return `Unknown egress key "${key}" in ${where}.${hint}`
     }
     const allow = (value as { allow?: unknown }).allow
-    if (!Array.isArray(allow)) return `${EGRESS_SHAPE} (got ${got(value)}) in ${where}`
+    if (!Array.isArray(allow)) return `egress in ${where} ${EGRESS_SHAPE} (got ${got(value)})`
     return `egress.allow in ${where}: ${allow.map(badHost).find(Boolean)}`
   })
 }

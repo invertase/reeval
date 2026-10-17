@@ -69,8 +69,8 @@ export const judgeStateSchema = z
 export const judgeFields = {
   threshold: z
     .number()
-    .min(0, 'between 0 and 1')
-    .max(1, 'between 0 and 1')
+    .min(0, 'must be between 0 and 1')
+    .max(1, 'must be between 0 and 1')
     .optional()
     .describe('Minimum score (0–1) for a `pass` verdict.'),
   providerOptions: z
@@ -99,7 +99,7 @@ export const fakeJudgeDataSchema = z
 
 export const judgeModelNameSchema = z
   .string()
-  .regex(/\//, "a 'provider/model' string, e.g. 'google/gemini-3.8-flash'")
+  .regex(/\//, "must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash'")
 
 export const configJudgeDataSchema = z
   .strictObject({
@@ -137,11 +137,12 @@ export const STATE_KEYS = Object.keys(judgeStateSchema.shape) as Array<keyof Jud
 
 /**
  * Where judge options are checked, which decides the sentence: an eval's or group's options
- * (`where` names them), the config or a profile (`where` is e.g. `config.judge`), or `c.judge()`.
+ * (`where` names them), the config or a profile (`path` is `judge` or `profiles.<name>.judge` in
+ * `file`), or `c.judge()`.
  */
 export type JudgeSite =
   | { at: 'options'; where: string }
-  | { at: 'config'; where: string }
+  | { at: 'config'; path: string; file: string }
   | { at: 'call' }
 
 const JUDGE_HINTS: Record<string, string> = {
@@ -186,15 +187,26 @@ const shown = (value: unknown) => JSON.stringify(value) ?? String(value)
  * the order each site has always run them, so a value with several problems names the same one.
  */
 export function judgeProblem(judge: unknown, site: JudgeSite): string | undefined {
-  const loc = site.at === 'call' ? ' in c.judge()' : ` in ${site.where}`
+  /** A judge field and where it was set: `judge.threshold in evals/a.eval.ts › e`. */
+  const field = (key?: string) => {
+    if (site.at === 'call') return `c.judge() ${key ?? 'options'}`
+    const base = site.at === 'config' ? site.path : 'judge'
+    return `${key ? `${base}.${key}` : base} in ${site.at === 'config' ? site.file : site.where}`
+  }
+  const loc =
+    site.at === 'call'
+      ? ' in c.judge()'
+      : site.at === 'options'
+        ? ` in ${site.where}`
+        : ` in ${site.path === 'judge' ? '' : `${site.path.replace(/\.judge$/, '')} in `}${site.file}`
   if (typeof judge !== 'object' || judge === null || Array.isArray(judge)) {
-    return `judge must be an object such as { threshold: 0.8 } (got ${shown(judge)})${loc}`
+    return `${field()} must be an object such as { threshold: 0.8 } (got ${shown(judge)})`
   }
   const value = judge as Record<string, unknown>
   const model = value.model as { kind?: unknown; score?: unknown } | string | null | undefined
   if (site.at === 'config' && typeof model === 'string') {
-    const problem = checkModelString(model)
-    if (problem) return `${site.where}: ${problem}`
+    const problem = checkModelString(model, field('model'))
+    if (problem) return problem
   }
   const schema =
     site.at === 'call'
@@ -218,23 +230,17 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
   const modelProblem = () => {
     if (site.at !== 'config' || !at('model')) return undefined
     if (typeof model === 'object' && model?.kind === 'fake-judge') {
-      return `${site.where}.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.`
+      return `${field('model')} must be fakeJudge({ score }) with a number. Pass a score function per group, eval or call instead.`
     }
-    return `${site.where}.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.`
+    return `${field('model')} must be a "provider/model" string or fakeJudge(). Pass a model object per group, eval or call instead.`
   }
   const maxConcurrentProblem = () => {
     if (site.at === 'config' || !at('maxConcurrent')) return undefined
-    const got = String(value.maxConcurrent)
-    return site.at === 'call'
-      ? `c.judge() maxConcurrent must be a whole number of at least 1 (got ${got})`
-      : `maxConcurrent must be a whole number of at least 1 (got ${got}) for judge in ${site.where}`
+    return `${field('maxConcurrent')} must be a whole number of at least 1 (got ${shown(value.maxConcurrent)})`
   }
   const thresholdProblem = () => {
     if (!at('threshold')) return undefined
-    const got = String(value.threshold)
-    if (site.at === 'call') return `c.judge() threshold must be between 0 and 1 (got ${got})`
-    if (site.at === 'config') return `${site.where}.threshold must be between 0 and 1`
-    return `judge.threshold must be between 0 and 1 (got ${got}) in ${site.where}`
+    return `${field('threshold')} must be between 0 and 1 (got ${shown(value.threshold)})`
   }
   const keyProblem = () => {
     const key = issues.find((i) => i.code === 'unrecognized_keys' && i.path.length === 0)
@@ -257,7 +263,7 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
     if (!issue) return undefined
     const { state } = value
     if (typeof state !== 'object' || state === null || Array.isArray(state)) {
-      return `judge.state must be an object such as { transcript: 'tools' } (got ${shown(state)})${loc}`
+      return `${field('state')} must be an object such as { transcript: 'tools' } (got ${shown(state)})`
     }
     if (issue.code === 'unrecognized_keys' && issue.path.length === 1) {
       const key = issue.keys[0] ?? ''
@@ -265,11 +271,11 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
       return `Unknown judge.state key "${key}"${loc}.${hint ? ` Did you mean "${hint}"?` : ''}`
     }
     const key = issue.path[1] as keyof JudgeStateOptions
-    return `judge.state.${key} must be ${VALUES[key]} (got ${shown((state as JudgeStateOptions)[key])})${loc}`
+    return `${field(`state.${String(key)}`)} must be ${VALUES[key]} (got ${shown((state as JudgeStateOptions)[key])})`
   }
   const providerOptionsProblem = () =>
     at('providerOptions')
-      ? `judge.providerOptions maps each provider to an object of JSON values, e.g. { google: { thinkingConfig: { thinkingBudget: 0 } } } (got ${shown(value.providerOptions)})${loc}`
+      ? `${field('providerOptions')} must map each provider to an object of JSON values, e.g. { google: { thinkingConfig: { thinkingBudget: 0 } } } (got ${shown(value.providerOptions)})`
       : undefined
   const artifactsProblem = () =>
     at('artifacts') ? `c.judge() artifacts ${badJudgeArtifacts(value.artifacts)}` : undefined
@@ -297,5 +303,5 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
     const problem = check()
     if (problem) return problem
   }
-  return `judge options${loc} are not valid: ${issues[0]?.message ?? 'unknown problem'}`
+  return `judge options${loc} aren't valid: ${issues[0]?.message ?? 'unknown problem'}`
 }

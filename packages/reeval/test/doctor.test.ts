@@ -471,7 +471,10 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), judge:
       text.stdout,
       /fix: add \.env\* and \.reeval\/ to \.gitignore \(reeval init adds them\)/,
     )
-    assert.match(text.stdout, /problems?, \d+ warnings?\. Fix them and run reeval doctor again\./)
+    assert.match(
+      text.stdout,
+      /problems?, \d+ warnings?\. Fix (it|them) and run reeval doctor again\./,
+    )
   })
 
   test('no config, a broken config and a bad flag', async () => {

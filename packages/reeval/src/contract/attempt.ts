@@ -183,8 +183,8 @@ export const assertionRecordSchema = z
 
 const turnIndex = z
   .number()
-  .int('a turn index, from 0')
-  .min(0, 'a turn index, from 0')
+  .int('must be a turn index, from 0')
+  .min(0, 'must be a turn index, from 0')
   .describe("The turn's index, from 0.")
 
 export const captureSchema = z
@@ -269,7 +269,7 @@ export const patternSchema = z
     regexp: z.string().describe("The pattern's source, as `RegExp.prototype.source` gives it."),
     flags: z
       .string()
-      .regex(/^[dgimsuvy]*$/, 'only the flags d, g, i, m, s, u, v and y')
+      .regex(/^[dgimsuvy]*$/, 'must use only the flags d, g, i, m, s, u, v and y')
       .optional()
       .describe('Its flags, e.g. `i`.'),
   })
@@ -447,7 +447,7 @@ export const attemptCallSchema = z
           .string()
           .regex(
             /^[a-z][A-Za-z]*$/,
-            'a matcher name such as toHaveFile, without "not." (set not: true instead)',
+            'must be a matcher name such as toHaveFile, without "not." (set not: true instead)',
           )
           .describe("The matcher's name, e.g. `toHaveFile` or `toBe`, without `not.`."),
         args: z.array(matcherArgSchema).describe("The matcher's arguments."),

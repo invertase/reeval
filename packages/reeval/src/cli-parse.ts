@@ -51,13 +51,17 @@ export function parseCli(argv: string[]): ParsedCli {
       subcommand.argument('[args...]').action(() => {
         // commander hands the parent its own flags wherever they are, as it does `--config`.
         const [stray] = Object.keys(valuesOf(command, spec.flags))
-        if (stray) throw new UsageError(`--${stray} isn't an option of reeval ${name} ${subName}`)
+        if (stray) {
+          throw new UsageError(
+            `--${stray} isn't an option of reeval ${name} ${subName}. Run reeval --help.`,
+          )
+        }
         parsed = done(program, subcommand, [name, subName], sub.flags, sub.positionals)
       })
     }
   }
   program.parse(argv, { from: 'user' })
-  if (!parsed) throw new UsageError('Run reeval --help.')
+  if (!parsed) throw new UsageError("reeval couldn't read that command line. Run reeval --help.")
   return parsed
 }
 
@@ -126,11 +130,16 @@ function usageError(error: CommanderError, command: string): UsageError {
       ? flag
       : Object.entries(FLAGS).find(([, s]) => 'short' in s && s.short === flag)?.[0]
     if (known && value !== undefined && known.type === 'boolean') {
-      return new UsageError(`Option '--${flag}' does not take an argument`)
+      return new UsageError(`--${flag} doesn't take a value: pass --${flag} on its own.`)
     }
     if (known) return new UsageError(`--${long} isn't an option of ${command}. Run reeval --help.`)
     const hint = rest.join(' ').replace(/^\(|\)$/g, '')
     return new UsageError(`Unknown option '${arg}'. ${hint ? `${hint} ` : ''}Run reeval --help.`)
+  }
+  if (error.code === 'commander.optionMissingArgument') {
+    const usage = /'([^']+)'/.exec(first)?.[1] ?? ''
+    const flag = usage.split(/[ ,]/).find((part) => part.startsWith('--')) ?? usage
+    return new UsageError(`${flag} needs a value, e.g. ${usage}. Run reeval --help.`)
   }
   return new UsageError(first.charAt(0).toUpperCase() + first.slice(1))
 }

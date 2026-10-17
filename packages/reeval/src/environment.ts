@@ -16,7 +16,7 @@ import {
   skillSourceSchema,
   VAR,
 } from './contract/plain.ts'
-import { genericProblem, got, type Issue, refusal } from './contract/shared.ts'
+import { closest, genericProblem, got, type Issue, refusal } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
 import { isObjectLike } from './object.ts'
 import { SECRET_NAME } from './redact.ts'
@@ -153,7 +153,7 @@ export const SECRET_HOSTS: SecretHelper['hosts'] = Object.freeze({
 function secretOptions(options: SecretOptions, what: string): Omit<Secret, 'kind' | 'from'> {
   const to = options.to ?? 'agent'
   if (to !== 'agent' && to !== 'checks') {
-    throw new DefinitionError(`${what}: to must be 'agent' or 'checks'`)
+    throw new DefinitionError(`${what}: to is 'agent' or 'checks' (got ${JSON.stringify(to)})`)
   }
   const { hosts } = options
   if (hosts !== undefined) {
@@ -289,7 +289,7 @@ function secretHelper(): SecretHelper {
   secret.fromEnv = (host, options = {}) => {
     if (typeof host !== 'string' || !VAR.test(host)) {
       throw new DefinitionError(
-        `secret.fromEnv(${JSON.stringify(host)}) needs a host variable name`,
+        `secret.fromEnv(${JSON.stringify(host)}) needs a host variable name: letters, digits and _, not starting with a digit, e.g. secret.fromEnv('API_KEY')`,
       )
     }
     return { kind: 'secret', from: host, ...secretOptions(options, `secret.fromEnv("${host}")`) }
@@ -437,13 +437,15 @@ export const DEFAULT_SKILL_EXCLUDE: readonly string[] = ['/evals/', '.history/',
 function skillHelper(base: string): SkillHelper {
   const placement = (p: string | undefined) => {
     if (p === undefined || p === 'harness' || p === 'workspace') return p ?? 'harness'
-    throw new DefinitionError(`skill placement must be 'harness' or 'workspace' (got ${p})`)
+    throw new DefinitionError(
+      `skill({ placement }) is 'harness' or 'workspace' (got ${JSON.stringify(p)})`,
+    )
   }
   const exclude = (e: readonly string[] | undefined) => {
     if (e === undefined) return {}
     if (!Array.isArray(e) || e.some((p) => typeof p !== 'string' || !p.replace(/\//g, ''))) {
       throw new DefinitionError(
-        `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.eval.ts'] (got ${JSON.stringify(e)})`,
+        `skill({ exclude }) must be a list of paths or globs, e.g. ['/evals/', '*.eval.ts'] (got ${JSON.stringify(e)})`,
       )
     }
     return { exclude: [...e] }
@@ -459,7 +461,9 @@ function skillHelper(base: string): SkillHelper {
     }),
     git: (repo, o = {}) => {
       if (typeof repo !== 'string' || !repo) {
-        throw new DefinitionError('skill.git() needs a repository URL')
+        throw new DefinitionError(
+          `skill.git() needs a repository URL, e.g. skill.git('https://github.com/acme/skills') (got ${JSON.stringify(repo)})`,
+        )
       }
       const parsed = parseGitRepo(repo)
       const ref = o.ref ?? parsed.ref
@@ -477,7 +481,9 @@ function skillHelper(base: string): SkillHelper {
     },
     registry: (id, o = {}) => {
       if (!/^[\w.-]+\/[\w.-]+@[a-z0-9-]+$/.test(id)) {
-        throw new DefinitionError(`skill.registry("${id}") needs an id like owner/repo@skill`)
+        throw new DefinitionError(
+          `skill.registry(${JSON.stringify(id)}) needs an id like owner/repo@skill, e.g. skill.registry('acme/skills@review')`,
+        )
       }
       return {
         kind: 'skill',
@@ -655,7 +661,7 @@ function directoryHelper(base: string): EnvironmentHelpers['directory'] {
     walk(root, '', [realpathSync(root)])
     if (Object.keys(files).length === 0) {
       throw new DefinitionError(
-        `${what}: no files in ${root}${glob.length || defaultIgnores ? ` match (glob ${JSON.stringify(glob)}${defaultIgnores ? ', after DEFAULT_DIRECTORY_IGNORES' : ''})` : ''}. Empty directories aren't seeded; create one with a setup step.`,
+        `${what}: no files in ${root}${glob.length || defaultIgnores ? ` match (glob ${JSON.stringify(glob)}${defaultIgnores ? ', after the default ignores such as node_modules/ and dist/; defaultIgnores: false keeps them' : ''})` : ''}. Empty directories aren't seeded; create one with a setup step.`,
       )
     }
     return files
@@ -665,7 +671,9 @@ function directoryHelper(base: string): EnvironmentHelpers['directory'] {
 const mcpHelper: McpHelper = {
   stdio: (command, args = [], o = {}) => {
     if (typeof command !== 'string' || !command) {
-      throw new DefinitionError('mcp.stdio() needs a command')
+      throw new DefinitionError(
+        `mcp.stdio() needs a command, e.g. mcp.stdio('npx', ['-y', 'server']) (got ${JSON.stringify(command)})`,
+      )
     }
     return { kind: 'mcp', transport: 'stdio', command, args: [...args], env: { ...o.env } }
   },
@@ -688,17 +696,24 @@ export function helpersFor(base: string): EnvironmentHelpers {
 /** Throws on env variables that aren't strings or secrets, or look like literal secrets. */
 export function checkEnv(env: unknown, where: string, Err = DefinitionError): void {
   if (typeof env !== 'object' || env === null || Array.isArray(env)) {
-    throw new Err(`env must be an object of variables in ${where}`)
+    throw new Err(
+      `env in ${where} must be an object of variables, e.g. env: { NODE_ENV: 'test' } (got ${JSON.stringify(env)})`,
+    )
   }
   for (const [name, value] of Object.entries(env)) {
-    if (!VAR.test(name)) throw new Err(`env.${name} in ${where} isn't a valid variable name`)
+    if (!VAR.test(name))
+      throw new Err(
+        `env.${name} in ${where} isn't a valid variable name: use letters, digits and _, not starting with a digit`,
+      )
     if (isSecret(value)) {
       const problem = descriptorProblem(secretSchema, value, 'secret')
       if (problem) throw new Err(`env.${name} in ${where}: ${problem}`)
       continue
     }
     if (typeof value !== 'string') {
-      throw new Err(`env.${name} in ${where} must be a string or secret.fromEnv()`)
+      throw new Err(
+        `env.${name} in ${where} must be a string or secret.fromEnv() (got ${JSON.stringify(value)})`,
+      )
     }
     if (SECRET_NAME.test(name)) {
       throw new Err(
@@ -713,7 +728,9 @@ export const stepCommand = (step: string | { run: string }) =>
 
 function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   if (typeof spec !== 'object' || spec === null || Array.isArray(spec)) {
-    throw new DefinitionError(`${where} must be an object or a callback that returns one`)
+    throw new DefinitionError(
+      `${where} must be an object or a callback that returns one (got ${JSON.stringify(spec)})`,
+    )
   }
   for (const key of Object.keys(spec)) {
     if (SPEC_KEYS.includes(key)) continue
@@ -725,7 +742,8 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
         `"${key}" isn't an environment field (${where}). Put the image on the sandbox: sandbox: docker({ ${as}: … }).`,
       )
     }
-    const hint = SPEC_HINTS[key] ? ` Did you mean "${SPEC_HINTS[key]}"?` : ''
+    const near = SPEC_HINTS[key] ?? closest(key, SPEC_KEYS)
+    const hint = near ? ` Did you mean "${near}"?` : ''
     throw new DefinitionError(`Unknown field "${key}" in ${where}.${hint}`)
   }
   const s = spec as EnvironmentSpec
@@ -743,17 +761,24 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   if (s.egress !== undefined) checkEgress(s.egress, where)
   const list = <T>(key: 'setup' | 'skills', value: T[] | undefined): T[] => {
     if (value !== undefined && !Array.isArray(value)) {
-      throw new DefinitionError(`${key} in ${where} must be a list`)
+      throw new DefinitionError(`${key} in ${where} must be a list (got ${JSON.stringify(value)})`)
     }
     return value ?? []
   }
-  for (const step of list('setup', s.setup)) {
-    const shape = `Steps in ${where} are strings or { run, timeout?, cwd? } objects`
+  for (const [i, step] of list('setup', s.setup).entries()) {
     const run = typeof step === 'string' ? step : isObjectLike(step) ? step.run : undefined
-    if (typeof run !== 'string' || !run.trim()) throw new DefinitionError(shape)
+    if (typeof run !== 'string' || !run.trim()) {
+      throw new DefinitionError(
+        `setup[${i}] in ${where} must be a command string or { run, timeout?, cwd? } (got ${JSON.stringify(step)})`,
+      )
+    }
     if (typeof step === 'string') continue
     const extra = Object.keys(step).filter((k) => !['run', 'timeout', 'cwd'].includes(k))
-    if (extra.length) throw new DefinitionError(`${shape} (got "${extra.join('", "')}")`)
+    if (extra.length) {
+      throw new DefinitionError(
+        `setup step "${run}" in ${where} has an unknown key "${extra[0]}"; a step is a string or { run, timeout?, cwd? }.`,
+      )
+    }
     const { cwd, timeout } = step
     if (timeout !== undefined) {
       try {
@@ -781,7 +806,7 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   for (const [name, server] of Object.entries(s.mcp ?? {})) {
     if (server?.kind !== 'mcp') {
       throw new DefinitionError(
-        `mcp.${name} in ${where} must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server'])`,
+        `mcp.${name} in ${where} must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server']) (got ${JSON.stringify(server)})`,
       )
     }
     const call = `mcp.${String(server.transport)}`
@@ -801,13 +826,17 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
       )
     }
     if (typeof value !== 'string' && !isHostFile(value)) {
-      throw new DefinitionError(`${key} must be a string or file(path)`)
+      throw new DefinitionError(
+        `${key} must be a string or file(path) (got ${JSON.stringify(value)})`,
+      )
     }
     const problem = isHostFile(value) && descriptorProblem(hostFileSchema, value, 'file')
     if (problem) throw new DefinitionError(`${key}: ${problem}`)
   }
   if (s.rules !== undefined && typeof s.rules !== 'string' && !isHostFile(s.rules)) {
-    throw new DefinitionError(`rules in ${where} must be markdown or file(path)`)
+    throw new DefinitionError(
+      `rules in ${where} must be markdown or file(path) (got ${JSON.stringify(s.rules)})`,
+    )
   }
   const rules = isHostFile(s.rules) && descriptorProblem(hostFileSchema, s.rules, 'file')
   if (rules) throw new DefinitionError(`rules in ${where}: ${rules}`)

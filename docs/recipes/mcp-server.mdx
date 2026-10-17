@@ -80,7 +80,7 @@ evals/docs-mcp.eval.ts › acme docs MCP › looks up the latest SDK…  1      
 A restricted [egress policy](/concepts/egress) allows the server's host automatically, so the variant still reaches it under `egress: 'deny-all'`.
 
 <Warning>
-  An unset `ACME_TOKEN` doesn't stop the plan. The variant's attempts fail with `secret.template needs ACME_TOKEN for …, and it isn't set`. Put it in `.env.local` next to your harness key.
+  An unset `ACME_TOKEN` doesn't stop the plan. The variant's attempts fail with `secret.template for … needs ACME_TOKEN, which isn't set. Set it in the environment or .env.local.`. Put it in `.env.local` next to your harness key.
 </Warning>
 
 ## Run it

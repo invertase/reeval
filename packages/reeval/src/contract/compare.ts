@@ -12,7 +12,7 @@ import type {
   PairFactor,
 } from '../types.ts'
 import { FACTORY, harnessDescriptorSchema, harnessProblem } from './harness.ts'
-import { type Assert, type Issue, nonEmpty, refusal, type Same } from './shared.ts'
+import { type Assert, type Issue, nonEmpty, oneOf, refusal, type Same } from './shared.ts'
 
 export const pairFactorSchema = z
   .enum(['environment', 'harness'])
@@ -107,7 +107,7 @@ function questionProblem(item: unknown, where: string): string {
   const issues = questionObjectSchema.safeParse(item).error?.issues ?? []
   const at = (key: string) => issues.find((i) => i.path[0] === key)
   if (at('question')) {
-    return `compare.questions in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`
+    return `compare.questions in ${where} has an entry without its question${question === undefined ? '' : ` (got ${describe(question)})`}, e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`
   }
   if (at('across')) {
     return `compare.questions "${question}" in ${where}: across is ${ACROSS_HINT} (got ${describe(across)}). Leave it out to vary both.`
@@ -128,7 +128,7 @@ function explain(where: string) {
           ? `. Did you mean "questions"? It's a list: ${QUESTION_EXAMPLE}.`
           : key === 'cut' || key === 'cuts'
             ? `.${ACROSS_MEAN}`
-            : ''
+            : `. compare takes ${Object.keys(compareSchema(z.any()).shape).join(', ')}.`
       return `Unknown compare option "${key}" in ${where}${hint}`
     }
     const [key, index] = issue.path as [string, number?]
@@ -136,7 +136,7 @@ function explain(where: string) {
     switch (key) {
       case 'questions':
         if (issue.code === 'custom' && index === undefined) {
-          return `compare.questions in ${where} asks "${twice((v as unknown[]).map(questionText))}" twice`
+          return `compare.questions in ${where} asks "${twice((v as unknown[]).map(questionText))}" twice. Ask each question once.`
         }
         if (index !== undefined) return questionProblem((v as unknown[])[index], where)
         return Array.isArray(v)
@@ -149,15 +149,15 @@ function explain(where: string) {
         }
         const bad = list.findIndex((f) => !pairFactorSchema.safeParse(f).success)
         return bad === -1
-          ? `compare.across in ${where} lists "${twice(list)}" twice`
+          ? `compare.across in ${where} lists "${twice(list)}" twice. List each factor once.`
           : `compare.across in ${where} is ${ACROSS_HINT}, or a list of those (got ${describe(list[bad])}).`
       }
       case 'baseline':
         return `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(v)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environment as the control.`
       case 'gate':
-        return `compare.gate must be one of ${compareGateSchema.options.join(', ')} in ${where}`
+        return `compare.gate in ${where} is ${oneOf(compareGateSchema.options)} (got ${describe(v)})`
       case 'minLift':
-        return `compare.minLift is points from -1 to 1 (got ${String(v)}) in ${where}`
+        return `compare.minLift in ${where} is points from -1 to 1, e.g. minLift: 0.1 (got ${describe(v)})`
       case 'harness': {
         const item = index === undefined ? undefined : (v as unknown[])[index]
         const kind = (item as { kind?: string } | null)?.kind
@@ -165,12 +165,12 @@ function explain(where: string) {
           kind && kind in FACTORY ? harnessProblem(item as HarnessDescriptor) : undefined
         return problem
           ? `compare.harness in ${where}: ${problem}`
-          : `compare.harness must be a list of harness ids in ${where}`
+          : `compare.harness in ${where} must be a list of harness ids, e.g. harness: ['cursor:composer-2.5'] (got ${describe(index === undefined ? v : item)})`
       }
       default:
         return index === undefined
           ? `compare has no variants in ${where}. Give at least one environment.`
-          : `compare takes environments (got ${describe((v as unknown[])[index])}) in ${where}. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval.`
+          : `compare.variants in ${where} must be environments from defineEnvironment (got ${describe((v as unknown[])[index])}). Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval.`
     }
   }
 }
@@ -184,10 +184,10 @@ const ORDER = ['questions', 'across', 'baseline', 'gate', 'minLift', 'harness', 
  */
 export function compareProblem(value: unknown, where: string, environment: z.ZodType) {
   if (Array.isArray(value)) {
-    return `compare must be an object in ${where}. Use compare: { baseline, variants: [...] }.`
+    return `compare in ${where} must be an object, not a list. Use compare: { baseline, variants: [...] }.`
   }
   if (!isObjectLike(value) || !Array.isArray(value.variants)) {
-    return `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions?, across? }.`
+    return `compare in ${where} takes { variants, baseline? } (got ${describe(value)}). Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions?, across? }.`
   }
   return refusal(compareSchema(environment), value, explain(where), { order: ORDER })
 }

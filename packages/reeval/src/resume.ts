@@ -270,7 +270,7 @@ function matchRef(candidates: Candidate[], ref: string): Candidate | undefined {
   const byId = candidates.filter((c) => c.runId.startsWith(ref))
   if (byId.length === 1) return byId[0]
   if (byId.length > 1) {
-    throw new RefError(`"${ref}" matches ${byId.length} runs; use more of the id`)
+    throw new RefError(`"${ref}" matches ${byId.length} runs: use more of the id`)
   }
   return undefined
 }
@@ -304,11 +304,18 @@ export async function resolveResume(root: string, ref?: string): Promise<ResumeT
   const back = /^latest~(\d+)$/.exec(ref)
   if (back) {
     const entry = open[open.length - 1 - Number(back[1])]
-    if (!entry) throw new RefError(`There are only ${open.length} resumable runs`)
+    if (!entry)
+      throw new RefError(
+        `There ${open.length === 1 ? 'is only 1 resumable run' : `are only ${open.length} resumable runs`}, so ${ref} names none. reeval run --resume resumes the newest.`,
+      )
     return toTarget(entry)
   }
   const found = matchRef(candidates, ref)
-  if (!found) throw new RefError(`No run matches "${ref}"`)
+  if (!found) {
+    throw new RefError(
+      `No run matches "${ref}". Pass a run id or a unique prefix of one, or leave --resume empty for the newest stopped run.`,
+    )
+  }
   if (found.live) throw stillRunning(found.runId)
   if (found.complete || !resumable(found)) {
     throw new UsageError(

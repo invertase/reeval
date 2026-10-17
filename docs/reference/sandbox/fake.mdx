@@ -48,7 +48,7 @@ On Windows, `sh` is [Git for Windows](https://git-scm.com/download/win)' `sh.exe
 
 | Feature | In `fakeSandbox()` |
 |---|---|
-| Real harnesses | Refused: `The Cursor harness needs the Docker sandbox` |
+| Real harnesses | Refused: `The Cursor harness needs the Docker sandbox: set sandbox: docker() …` |
 | Egress policy | Not enforced. A plan with `'deny-all'` or an allowlist stops before it runs. |
 | Egress record | Not recorded: the record's `egress.recorded` is `false` |
 | Credential brokering | No gateway, so a brokered secret's placeholder is never swapped for its value |
