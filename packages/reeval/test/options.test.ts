@@ -1885,7 +1885,7 @@ ${body}
   test('no reeval.config.* here or above exits 2 with a fix', async () => {
     const p = await project('no-config', {})
     const missing =
-      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs\) here or above\. Run reeval init\.\n$/
+      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs, reeval\.yaml, reeval\.yml\) here or above\. Run reeval init\.\n$/
     for (const argv of [
       ['run'],
       ['run', '--dry-run'],
@@ -1896,6 +1896,26 @@ ${body}
       assert.equal(r.code, 2, `${argv.join(' ') || 'run'}\n${r.stdout}${r.stderr}`)
       assert.match(r.stderr, missing, argv.join(' ') || 'run')
     }
+  })
+
+  test('a reeval.yaml mistake, or a reeval.yaml beside reeval.config.ts, exits 2', async () => {
+    const p = await project('yaml-mistake', {
+      'reeval.yaml': 'harness: { kind: fake }\nsandbox: { kind: fake }\nhistory: { dirr: runs }\n',
+      'evals/a.eval.ts': "import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n",
+    })
+    const typo = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(typo.code, 2, typo.stdout + typo.stderr)
+    assert.match(
+      typo.stderr,
+      /^reeval: Unknown option "dirr" in history in reeval\.yaml\. Did you mean "dir"\?\n$/,
+    )
+    writeFileSync(join(p.dir, 'reeval.config.ts'), 'export default {}\n')
+    const both = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(both.code, 2, both.stdout + both.stderr)
+    assert.match(
+      both.stderr,
+      /^reeval: reeval\.config\.ts and reeval\.yaml are both in \.: reeval reads one config per directory\. Keep one, or pass --config\.\n$/,
+    )
   })
 
   test('config errors name the config file that was read, as typed from the current directory', async () => {
@@ -2576,7 +2596,7 @@ evaluate('tools', { tags: ['tools'], environment: defineEnvironment('tools', { s
     assert.equal(noConfig.code, 2, noConfig.stdout + noConfig.stderr)
     assert.match(
       noConfig.stderr,
-      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs\) here or above\. Run reeval init\.\n$/,
+      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs, reeval\.yaml, reeval\.yml\) here or above\. Run reeval init\.\n$/,
     )
   })
 })

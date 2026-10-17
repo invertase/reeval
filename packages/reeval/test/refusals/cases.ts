@@ -4,7 +4,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resolveConfig } from '../../src/config.ts'
+import { parseYamlConfig, resolveConfig, resolveConfigData } from '../../src/config.ts'
 import { attemptRequestProblem } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
 import { defineEnvironment } from '../../src/environment.ts'
@@ -32,6 +32,8 @@ const harnesses =
   () =>
     checkHarnesses(list, WHERE)
 const config = (c: unknown) => () => resolveConfig(c as never, '/project', 'reeval.config.ts')
+const yaml = (text: string) => () =>
+  resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), '/project', 'reeval.yaml')
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
@@ -624,6 +626,129 @@ export const CASES: Record<string, Case[]> = {
       options({ environment: { kind: 'environment', name: 'a b', layers: [] } }),
     ],
     ['data: good', options({ environment: envData({ setup: ['ls'], files: { 'a.txt': 'a' } }) })],
+  ],
+  config: [
+    ['yaml: empty', yaml('')],
+    ['yaml: not YAML', yaml('harness: [a\n')],
+    ['yaml: a repeated key', yaml('runs: 1\nruns: 2\n')],
+    ['yaml: a list', yaml('- runs: 1\n')],
+    ['yaml: a scalar', yaml('runs\n')],
+    ['yaml: an unknown key', yaml('harnesses: []\n')],
+    ['yaml: runs 0', yaml('runs: 0\n')],
+    ['yaml: runs null', yaml('runs:\n')],
+    ['yaml: include null', yaml('include:\n')],
+    ['yaml: a typo in history', yaml('history:\n  dirr: runs\n')],
+    ['yaml: history.dir a number', yaml('history:\n  dir: 3\n')],
+    ['yaml: a typo in debug', yaml('debug:\n  keepRuns: 3\n')],
+    ['yaml: defaultProfile null', yaml('defaultProfile:\n')],
+    ['yaml: compare', yaml('compare:\n  variants: []\n')],
+    ['yaml: a literal secret', yaml('env:\n  API_KEY: abc\n')],
+    [
+      'yaml: a secret as data',
+      yaml('env:\n  API_KEY:\n    kind: secret\n    hosts: [api.example.com]\n'),
+    ],
+    [
+      'yaml: a secret with a typo',
+      yaml('env:\n  API_KEY:\n    kind: secret\n    host: [api.example.com]\n'),
+    ],
+    ['yaml: a harness without a kind', yaml('harness:\n  model: composer-2.5\n')],
+    [
+      'yaml: a harness with a typo',
+      yaml('harness:\n  kind: cursor\n  model: composer-2.5\n  modle: x\n'),
+    ],
+    ['yaml: an empty harness list', yaml('harness: []\n')],
+    [
+      'yaml: a fake judge with a string score',
+      yaml('judge:\n  model:\n    kind: fake-judge\n    score: high\n'),
+    ],
+    ['yaml: a fake judge above 1', yaml('judge:\n  model:\n    kind: fake-judge\n    score: 2\n')],
+    ['yaml: a judge model without a provider', yaml('judge:\n  model: jev\n')],
+    ['yaml: a typo in judge.state', yaml('judge:\n  state:\n    transcrpt: true\n')],
+    [
+      'yaml: providerOptions as data',
+      yaml(
+        'judge:\n  model: google/gemini-3.8-flash\n  providerOptions:\n    google:\n      thinkingConfig: { thinkingBudget: 0 }\n',
+      ),
+    ],
+    ['yaml: environment a name', yaml('environment: base\n')],
+    ['yaml: environment without layers', yaml('environment:\n  kind: environment\n  name: base\n')],
+    [
+      'yaml: environment layer with a typo',
+      yaml(
+        'environment:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec: { file: {} }\n',
+      ),
+    ],
+    [
+      'yaml: environment as data',
+      yaml(
+        'environment:\n  kind: environment\n  name: base\n  layers:\n    - name: base\n      spec:\n        files: { a.txt: hi }\n        setup: [ls]\n',
+      ),
+    ],
+    ['yaml: a profile with an unknown key', yaml('profiles:\n  pr:\n    limits: { runs: 1 }\n')],
+    ['yaml: a profile limit runs 0', yaml('profiles:\n  pr:\n    limit: { runs: 0 }\n')],
+    [
+      'yaml: a profile limit with a typo',
+      yaml('profiles:\n  pr:\n    limit: { compare: { maxVariant: 1 } }\n'),
+    ],
+    [
+      'yaml: a profile defaults environment a name',
+      yaml('profiles:\n  pr:\n    defaults: { environment: base }\n'),
+    ],
+    ['yaml: a profile null', yaml('profiles:\n  pr:\n')],
+    ['yaml: defaultProfile not in profiles', yaml('defaultProfile: { ci: pr }\n')],
+    [
+      'yaml: analysis fake with a typo',
+      yaml('analysis:\n  model: { kind: fake-analysis, votes: tie }\n'),
+    ],
+    [
+      'yaml: capture viewport not whole',
+      yaml('capture:\n  viewport: { width: 10.5, height: 10 }\n'),
+    ],
+    ['yaml: a budget with a typo', yaml('budget: { attempt: 3 }\n')],
+    [
+      'yaml: good',
+      yaml(`include: ['evals/**/*.eval.ts']
+harness:
+  - { kind: fake, id: a }
+  - { kind: cursor, model: composer-2.5 }
+sandbox: { kind: fake }
+runs: 2
+gate: { passRate: 0.5 }
+timeout: 90s
+env:
+  TOKEN: { kind: secret, from: HOST_TOKEN, hosts: [api.example.com] }
+egress: { allow: [api.example.com] }
+judge:
+  model: { kind: fake-judge, score: 0.9 }
+  threshold: 0.7
+  state: { transcript: tools }
+capture: { viewport: full-page, timeout: 30s }
+concurrency: 2
+record: manual
+history: { dir: .history, artifacts: failures }
+budget: { attempts: 20, duration: 1h }
+defaultProfile: { ci: pr }
+secrets: { unbrokered: error }
+debug: { keep: 5, traceBufferMb: 2 }
+analysis:
+  model: { kind: fake-analysis, note: fine, vote: { winner: A, reason: shorter } }
+  maxInputTokens: 4000
+profiles:
+  pr:
+    limit: { runs: 1, compare: false, harness: [a] }
+    budget: { attempts: 5 }
+    tags: ['!slow']
+  nightly:
+    defaults:
+      runs: 3
+      environment:
+        kind: environment
+        name: nightly
+        layers: [{ name: nightly, spec: { files: { a.txt: hi } } }]
+    judge: { model: google/gemini-3.8-flash }
+    record: always
+`),
+    ],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

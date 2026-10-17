@@ -3,6 +3,21 @@
 import type { z } from 'zod'
 import { compareQuestionSchema, pairFactorSchema } from './compare.ts'
 import {
+  analysisConfigDataSchema,
+  budgetSchema,
+  captureOptionsSchema,
+  captureWindowSchema,
+  configJudgeDataSchema,
+  fakeAnalysisDataSchema,
+  fakeJudgeDataSchema,
+  historyConfigSchema,
+  jsonValueSchema,
+  profileDataSchema,
+  profileDefaultsDataSchema,
+  profileLimitSchema,
+  reevalConfigDataSchema,
+} from './config.ts'
+import {
   declarationTreeSchema,
   declaredEvalSchema,
   declaredFamilySchema,
@@ -96,6 +111,18 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   DeclaredFamily: declaredFamilySchema,
   DeclaredTodo: declaredTodoSchema,
   DeclaredMode: declaredModeSchema,
+  ReevalConfigData: reevalConfigDataSchema,
+  ProfileData: profileDataSchema,
+  ProfileDefaultsData: profileDefaultsDataSchema,
+  ProfileLimit: profileLimitSchema,
+  Budget: budgetSchema,
+  HistoryConfig: historyConfigSchema,
+  ConfigJudgeData: configJudgeDataSchema,
+  FakeJudgeData: fakeJudgeDataSchema,
+  CaptureOptions: captureOptionsSchema,
+  CaptureWindow: captureWindowSchema,
+  AnalysisConfigData: analysisConfigDataSchema,
+  FakeAnalysisData: fakeAnalysisDataSchema,
 }
 
 /**
@@ -104,4 +131,5 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
  */
 export const CONTRACT_REFS: Record<string, z.ZodType> = {
   EvalOptionsData: evalOptionsDataSchema,
+  JSONValue: jsonValueSchema,
 }

@@ -89,6 +89,12 @@ export const PLAN_SHAPES: PlanShape[] = [
     where: "An eval file's groups and evals as declared, with their options as data",
   },
   {
+    name: 'config',
+    file: 'src/types.ts',
+    type: 'ReevalConfigData',
+    where: 'reeval.yaml, or the config as data from another language',
+  },
+  {
     name: 'wire-test',
     file: 'src/engine/protocol.ts',
     type: 'WireTest',

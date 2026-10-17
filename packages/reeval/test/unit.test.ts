@@ -593,7 +593,37 @@ test('findConfig takes the nearest config at or above the directory, like Vitest
       'reeval.config.js',
       'reeval.config.mjs',
       'reeval.config.cjs',
+      'reeval.yaml',
+      'reeval.yml',
     ])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('findConfig takes a reeval.yaml, and refuses it beside another config', () => {
+  const root = mkdtempSync(join(tmpdir(), 'reeval-yaml-'))
+  try {
+    mkdirSync(join(root, 'app'))
+    writeFileSync(join(root, 'reeval.yml'), '')
+    assert.equal(findConfig(join(root, 'app')), join(root, 'reeval.yml'), '.yml too')
+    writeFileSync(join(root, 'app', 'reeval.yaml'), '')
+    assert.equal(
+      findConfig(join(root, 'app')),
+      join(root, 'app', 'reeval.yaml'),
+      'the nearest wins',
+    )
+    writeFileSync(join(root, 'app', 'reeval.config.ts'), '')
+    assert.throws(
+      () => findConfig(join(root, 'app')),
+      (e: unknown) =>
+        e instanceof UsageError &&
+        /^reeval\.config\.ts and reeval\.yaml are both in .*app: reeval reads one config per directory\. Keep one, or pass --config\.$/.test(
+          e.message,
+        ),
+    )
+    writeFileSync(join(root, 'reeval.yaml'), '')
+    assert.throws(() => findConfig(root), /^UsageError: reeval\.yaml and reeval\.yml are both in /)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
@@ -608,7 +638,7 @@ test('requireConfig refuses a missing file with the config names doctor lists an
   )
   assert.equal(
     missingConfigMessage(),
-    'No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs) here or above. Run reeval init.',
+    'No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.',
   )
 })
 

@@ -1,0 +1,8 @@
+no profile · 3 evals · 4 cells · 12 attempts
+hint: 3 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+hint: 1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
+evals/y.eval.ts › inherits             staging/-/fake         control          gated    ×3
+evals/y.eval.ts › compared             staging/baseline/fake  control          ungated  ×3
+                                       staging/skilled/fake   variant skilled  gated    ×3
+evals/y.eval.ts › slow [nightly-only]  staging/-/fake         control          gated    ×3
+excluded: —

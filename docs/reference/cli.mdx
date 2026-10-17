@@ -38,7 +38,7 @@ reeval: reeval show takes at most 1 argument (got latest extra)
 ## Shared flags
 
 <Property name="--config" type="string" optional>
-  The config file every command reads, relative to the current directory. Without it, reeval uses the nearest `reeval.config.ts` (or `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`) in the current directory or above: see [Loading](/reference/config#loading). An explicit path that doesn't exist fails with `Config file not found`. `reeval run` and `reeval image build` fail if none is found (`No reeval.config.ts … here or above. Run reeval init.`); other commands then use their defaults in the current directory.
+  The config file every command reads, relative to the current directory. Without it, reeval uses the nearest `reeval.config.ts` (or `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`, or a `reeval.yaml` or `reeval.yml`) in the current directory or above: see [Loading](/reference/config#loading). An explicit path that doesn't exist fails with `Config file not found`. `reeval run` and `reeval image build` fail if none is found (`No reeval.config.ts … here or above. Run reeval init.`); other commands then use their defaults in the current directory.
 </Property>
 
 <Property name="-h, --help" type="boolean" optional>
@@ -49,8 +49,8 @@ reeval: reeval show takes at most 1 argument (got latest extra)
 
 ```text
 Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
-Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs or .cjs,
-in the current directory or above)
+Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
+or reeval.yaml, in the current directory or above)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
 143 terminated (SIGTERM)
 ```

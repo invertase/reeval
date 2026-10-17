@@ -12,6 +12,7 @@ import {
   configPathFor,
   defaultConcurrency,
   loadConfig,
+  UsageError,
 } from './config.ts'
 import { unenforceable } from './egress.ts'
 import { loadEnvFiles } from './env.ts'
@@ -588,10 +589,19 @@ export async function doctor(
   deps: DoctorDeps,
 ): Promise<{ report: DoctorReport; config?: ResolvedConfig; missingImages: string[] }> {
   const checks: Check[] = [checkRuntime(deps.runtime, deps.nodeVersion)]
-  const configPath = configPathFor(flags.config)
+  let configPath: string | undefined
   let config: ResolvedConfig | undefined
   let missingImages: string[] = []
-  if (!configPath) {
+  let ambiguous: string | undefined
+  try {
+    configPath = configPathFor(flags.config)
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error
+    ambiguous = error.message
+  }
+  if (ambiguous) {
+    checks.push({ id: 'config', status: 'fail', summary: ambiguous, fix: 'delete one of them' })
+  } else if (!configPath) {
     checks.push({
       id: 'config',
       status: 'fail',

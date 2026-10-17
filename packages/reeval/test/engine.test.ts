@@ -379,7 +379,7 @@ evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'
     assert.equal(noConfig.code, 2)
     assert.match(
       noConfig.stderr,
-      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs\) here or above\. Run reeval init\.\n$/,
+      /^reeval: No reeval\.config\.ts \(or reeval\.config\.mts, reeval\.config\.cts, reeval\.config\.js, reeval\.config\.mjs, reeval\.config\.cjs, reeval\.yaml, reeval\.yml\) here or above\. Run reeval init\.\n$/,
     )
 
     const empty = await project('empty', { 'reeval.config.ts': fakeConfig() })
