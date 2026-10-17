@@ -1,6 +1,6 @@
 ---
 title: defineConfig
-description: Every key of reeval.config.ts, its default and type, the callback's helpers, and the errors reeval raises for a bad config.
+description: Every key of reeval.config.ts and reeval.yaml, its default and type, the callback's helpers, and the errors reeval raises for a bad config.
 ---
 
 `reeval.config.ts` default-exports `defineConfig(…)`: the project's defaults, profiles and run settings.
@@ -31,13 +31,14 @@ my-project/
     src/lib/
 ```
 
-Without `--config`, `reeval` looks in the current directory, then in each parent up to the filesystem root, and uses the first config it finds, as Vitest and ESLint do. In each directory it tries `reeval.config.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs`, in that order. A git or workspace root doesn't stop the search, so a nested project with its own config uses it, and a project without one uses its parent's.
+Without `--config`, `reeval` looks in the current directory, then in each parent up to the filesystem root, and uses the first config it finds, as Vitest and ESLint do. In each directory it tries `reeval.config.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs`, in that order, and then [`reeval.yaml`](#reevalyaml) or `reeval.yml`. A directory with a YAML config and another config is an error. A git or workspace root doesn't stop the search, so a nested project with its own config uses it, and a project without one uses its parent's.
 
 | You run | reeval reads |
 |---|---|
 | `reeval run` in `my-project/evals` | `my-project/reeval.config.ts` |
 | `reeval run` in `packages/app/src/lib` | `packages/app/reeval.config.mjs` |
 | `reeval run --config ../reeval.claude.config.ts` | that file, relative to the current directory |
+| `reeval run --config reeval.staging.yml` | that YAML config |
 
 `--config` always wins, and names like `reeval.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`). `reeval run` and `reeval image build` also fail when no config is found (`No reeval.config.ts … here or above. Run reeval init.`). Other commands then use each key's default in the current directory.
 
@@ -90,6 +91,42 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 `defineConfig` itself does nothing at runtime: it returns what you pass, and exists for types.
+
+## reeval.yaml
+
+```yaml title="reeval.yaml"
+harness: { kind: cursor, model: composer-2.5 }
+judge: { model: typesafe-ai/jev-1.13.0 }
+env:
+  NPM_TOKEN: { kind: secret, hosts: [registry.npmjs.org] }
+environment:
+  kind: environment
+  name: base
+  layers: [{ name: base, spec: { setup: [npm ci] } }]
+defaultProfile: { ci: pr }
+profiles:
+  pr: { limit: { runs: 1, compare: false } }
+```
+
+A project without TypeScript can write its config as YAML. It takes the same keys, each in its data form: what the helpers return, written out. Eval files stay TypeScript.
+
+| In `reeval.config.ts` | In `reeval.yaml` |
+|---|---|
+| `cursor({ model: 'composer-2.5' })` | `{ kind: cursor, model: composer-2.5 }`, and so on for each harness |
+| `docker({ from: 'node:24' })`, `fakeSandbox()` | `{ kind: docker, from: 'node:24' }`, `{ kind: fake }` |
+| `secret({ hosts: [...] })`, `secret.fromEnv('X')` | `{ kind: secret, hosts: [...] }`, `{ kind: secret, from: X }` |
+| `defineEnvironment('base', spec)` | `{ kind: environment, name: base, layers: [{ name: base, spec }] }` |
+| `fakeJudge({ score: 0.9 })` | `{ kind: fake-judge, score: 0.9 }` |
+| `fakeAnalysis({ note, vote })` | `{ kind: fake-analysis, note, vote }`, with fixed values |
+
+There is no callback, so `ci`, `hostEnv` and the helpers aren't available. Paths in data, such as a host file's, are absolute. AI SDK model objects and score functions stay TypeScript only. Its shape is a JSON Schema, `packages/reeval/schema/plan/config.schema.json` in reeval's repository, which a YAML language server can check the file against.
+
+An empty file is an empty config. A YAML syntax error names the line and column. Every key gets the checks `reeval.config.ts` gets, and the config contract then refuses anything else that isn't its data form, naming the field:
+
+```text
+reeval: Unknown option "dirr" in history in reeval.yaml. Did you mean "dir"?
+reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
+```
 
 ## Keys
 
@@ -195,7 +232,10 @@ reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 | `analysis.agent` with no language model | `config.analysis.agent needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in reeval.config.ts …, or turn agent off.` |
 | A missing default profile | `defaultProfile names "pr", which isn't in profiles (none)` |
 | A `Promise` from the callback | `The defineConfig callback in reeval.config.ts returned a Promise. …` |
-| No `reeval.config.*` here or above | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs) here or above. Run reeval init.` |
+| No `reeval.config.*` here or above | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.` |
+| A `reeval.yaml` beside another config | `reeval.config.ts and reeval.yaml are both in .: reeval reads one config per directory. Keep one, or pass --config.` |
+| A YAML syntax error | `reeval.yaml isn't valid YAML: Map keys must be unique at line 2, column 1: …` |
+| A `null` or a misspelt nested key in `reeval.yaml` | `include in reeval.yaml must be a list (got null)`, `Unknown option "dirr" in history in reeval.yaml. Did you mean "dir"?` |
 
 More messages, with fixes, are on [Errors](/reference/errors).
 

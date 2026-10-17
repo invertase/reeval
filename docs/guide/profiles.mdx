@@ -117,6 +117,22 @@ reeval: budget.usd isn't supported yet: reeval records the tokens harnesses repo
 
 `cursor()`, `claudeCode()`, `antigravity()`, `pi()` and `codex()` report tokens (`opencode()` and `goose()` can't), and the summary prints the total, but reeval has no model prices to turn them into a cost.
 
+## Write the config as YAML
+
+```yaml title="reeval.yaml"
+defaultProfile: { ci: pr }
+profiles:
+  pr:
+    limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] }
+    budget: { attempts: 20 }
+  nightly:
+    defaults: { runs: 3 }
+    record: always
+    budget: { attempts: 80, duration: 2h }
+```
+
+A project without TypeScript can put the same config in `reeval.yaml`, with profiles and `--profile` working the same way. Harnesses, secrets and environments are written as data; see [reeval.yaml](/reference/config#reevalyaml).
+
 ## Next
 
 <CardGroup cols={2}>

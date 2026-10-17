@@ -73,6 +73,11 @@ export default defineConfig({
 })
 ```
 
+A project without TypeScript can write `reeval.yaml` (or `.yml`) instead: the same keys in their
+data forms (`harness: { kind: cursor, model: composer-2.5 }`, `{ kind: secret, hosts: [...] }`,
+`{ kind: fake-judge, score: 0.9 }`, environments as `{ kind: environment, name, layers: [{ name, spec }] }`),
+no callback, and absolute paths. A `reeval.yaml` beside a `reeval.config.*` is an error.
+
 Without an `environment`, the attempt uses the cascaded `sandbox` option, else implicit Docker (reeval's image: Node 22, git, pnpm, the agent CLI). `defineConfig({ sandbox })` is the default machine when the resolved env omits `sandbox`; it is not an environment. A named env is a total override: no skills, files or sandbox inherit from the config environment. `.extend()` keeps the parent env's sandbox when the child omits it. A fake config puts `sandbox: fakeSandbox()` on `defineConfig` so `plain` / skill variants run without Docker. Do not put `fakeSandbox()` on `plain` itself: real Cursor runs need Docker.
 
 - Harnesses (`reeval/harness`): `cursor({ model, params?, effort? })` (`CURSOR_API_KEY`;
@@ -468,7 +473,7 @@ return the same JSON as `--json`, and `query_failing_attempts` or `compare` then
 the quickest way from "it failed" to what the agent did.
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
-(`reeval run skill antigravity`). Every command uses the nearest `reeval.config.*` in the current directory or
+(`reeval run skill antigravity`). Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above (paths resolve from its directory), or `--config <path>`. `reeval run` and `reeval image build`
 fail with no config (`No reeval.config.ts … here or above. Run reeval init.`); there is no hidden
 default harness or include. Exit codes: 0 pass (and
