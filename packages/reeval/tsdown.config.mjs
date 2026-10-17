@@ -222,7 +222,7 @@ export default defineConfig({
           "studio-web isn't built; reeval studio will have no app. Run pnpm build from the repo root.",
         )
       // The published package's README is the repo-root README, copied so the
-      // tarball has the same file. It is handwritten; `pnpm docs` does not write it.
+      // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
       cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))
       const shadcn = markedFiles(join(studioWeb, 'src'), 'shadcn/ui', join(here, '../..'))
       writeFileSync(

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Keeps the docs.page site (docs.json, docs/) in step with the code.
 //
-//   pnpm docs              rewrite every generated block in docs/
+//   pnpm docs:gen          rewrite every generated block in docs/
 //   pnpm docs:check        fail if a block is stale or the reference misses something
-//   pnpm docs --print      list the blocks; --print <name> prints one
+//   pnpm docs:gen --print  list the blocks; --print <name> prints one
 //
 // Generated blocks sit between `[//]: # (generated:<name>)` and `[//]: # (/generated:<name>)` in
 // the .mdx files; everything outside them is hand-written. The CLI help and the query schema
@@ -404,7 +404,7 @@ for (const file of mdxFiles()) {
     return `${open}\n\n${generated.get(name)}\n\n${close}`
   })
   if (next !== text) {
-    if (check) problems.push(`${relative(root, file)} is out of date: run node scripts/docs.mjs`)
+    if (check) problems.push(`${relative(root, file)} is out of date: run pnpm docs:gen`)
     else writeFileSync(file, next)
   }
 }

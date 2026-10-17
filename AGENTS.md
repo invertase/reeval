@@ -135,7 +135,7 @@ An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, 
 root of `reeval`, beside `dist/` as in their own package, so a `../docker` from one of
 its modules resolves in both; list each in `reeval`'s `files` and `.gitignore`.
 The published package's README is the repo-root README, copied here at build so the tarball
-has it. README.md is handwritten; `pnpm docs` does not write it.
+has it. README.md is handwritten; `pnpm docs:gen` does not write it.
 
 **Third-party notices.** The build writes `packages/reeval/THIRD_PARTY_NOTICES.md`, which ships
 in the tarball: every third-party package whose code the tarball inlines (tsdown's bundle, the
@@ -370,7 +370,7 @@ a fixture, how to run and debug the tiers, and what "done" means.
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable
 updates its page in the docs' Reference tab (`docs/reference/`), and a change to how people use
-reeval also updates the Guide or a Recipe. Then run `pnpm build && pnpm docs` and `pnpm docs:check`
+reeval also updates the Guide or a Recipe. Then run `pnpm build && pnpm docs:gen` and `pnpm docs:check`
 (below). If the change affects how agents should write evals, update the reeval skill in
 `.agents/skills/reeval/SKILL.md` too.
 
@@ -395,7 +395,7 @@ The user docs are a [docs.page](https://use.docs.page) site: `docs.json` (tabs, 
 - Guide, Concepts and Recipes pages end with `## Next` and one to three cards.
 
 ```bash
-pnpm build && pnpm docs         # regenerate the generated blocks from the code
+pnpm build && pnpm docs:gen     # regenerate the generated blocks from the code
 pnpm docs:check                 # stale blocks, coverage, sidebar and package-name checks
 npx @docs.page/cli preview      # local preview in the browser
 npx @docs.page/cli check        # links, assets and frontmatter

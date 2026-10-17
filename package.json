@@ -26,7 +26,7 @@
     "format": "biome check --write .",
     "example": "pnpm --filter hello-example reeval run",
     "smoke:real": "bash scripts/real-smoke.sh",
-    "docs": "node --experimental-strip-types --no-warnings scripts/docs.mjs",
+    "docs:gen": "node --experimental-strip-types --no-warnings scripts/docs.mjs",
     "docs:check": "node --experimental-strip-types --no-warnings scripts/docs.mjs --check"
   },
   "devDependencies": {
