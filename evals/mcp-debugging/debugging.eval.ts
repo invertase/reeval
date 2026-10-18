@@ -65,10 +65,23 @@ const parseAnswer = (text: string | null): Record<string, unknown> => {
   }
 }
 
-/** The eval names an answer lists, matched loosely: `evals/pad.eval.ts › pads a string` names `pads a string`. */
+/** The toolkit's eval files, by eval name: an answer may name an eval either way. */
+const evalFiles: Record<string, string> = {
+  'chunks an array': 'chunk.eval.ts',
+  'clamps a number': 'clamp.eval.ts',
+  'pads a string': 'pad.eval.ts',
+  'builds the report': 'report.eval.ts',
+  'sums a list': 'sum.eval.ts',
+  'title-cases a phrase': 'title-case.eval.ts',
+  'removes duplicates': 'uniq.eval.ts',
+}
+
+/** The eval names an answer lists, matched loosely: `evals/pad.eval.ts › pads a string` and `pad.eval.ts` name `pads a string`. */
 const named = (value: unknown, names: string[]) => {
-  const given = Array.isArray(value) ? value.map(String) : []
-  return names.filter((name) => given.some((g) => g.toLowerCase().includes(name)))
+  const given = Array.isArray(value) ? value.map((g) => String(g).toLowerCase()) : []
+  return names.filter((name) =>
+    given.some((g) => g.includes(name) || g.includes(evalFiles[name] ?? name)),
+  )
 }
 
 // A study, not a gate: the numbers are each side's pass rate, the lift and the effort.
