@@ -78,6 +78,7 @@ function configLevel(config: ResolvedConfig): Resolved {
     egress: config.egress !== undefined ? { inherited: config.egress } : {},
     judge: config.judge,
     capture: config.capture,
+    question: config.question,
     timeout: undefined,
     tags: [],
     pin: [],

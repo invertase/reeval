@@ -1,0 +1,3889 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261018T103114Z_db594e0_cursor-agent_57k0",
+  "status": "complete",
+  "startedAt": "2026-10-18T10:31:14.948Z",
+  "endedAt": "2026-10-18T10:31:44.019Z",
+  "durationMs": 29071,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "db594e05c808917ba8d3c47425a9129b4a8c938e",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-10-18T10:31:14+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.9.0",
+    "node": "22.14.0",
+    "runtime": {
+      "name": "node",
+      "version": "22.14.0"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.5",
+        "id": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+        "agentCli": "@cursor/sdk 1.0.38",
+        "base": "reeval-sandbox:cursor-0.1.5",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.8",
+      "@reeval/harness-opencode": "0.2.8",
+      "@reeval/harness-goose": "0.1.3",
+      "@reeval/harness-pi": "0.2.7",
+      "@reeval/harness-cursor-sdk": "0.1.5",
+      "@ai-sdk/harness-claude-code": "1.0.152-patch.8edc594f",
+      "@reeval/harness-codex": "0.1.7",
+      "ai": "7.0.140",
+      "@ai-sdk/harness": "1.0.148",
+      "@ai-sdk/google": "4.0.93",
+      "@ai-sdk/typesafe-ai": "3.0.18"
+    },
+    "harnesses": [
+      {
+        "id": "broken",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      },
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [
+          "fake-1[fast=true]"
+        ],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": "fake",
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "c333ac5c17b5"
+    },
+    "context": [
+      {
+        "path": "~/.agents/skills/house-greeting/SKILL.md",
+        "sha256": "e09034ea26b758dfaaf86fd3fa328bad2ac5195ba099d519a3b1dfe0c8764aa7"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "fake",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "plain",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "with-house-greeting",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+      "setup": [],
+      "skills": [
+        {
+          "name": "house-greeting",
+          "source": "local:skills/house-greeting",
+          "commit": null,
+          "sha256": "b3cc390db85e3b6ac9f5fab60d09ae27a39e67b35f074ce598fe36df08bd645b",
+          "placement": "harness",
+          "excluded": []
+        }
+      ],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 9,
+    "cells": 26,
+    "attempts": 26,
+    "estimateMs": 26000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": "fake",
+    "runs": 1,
+    "judgeModel": "fake",
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "b7440f74882898e6099f4dd50eea39a890182084c967cf58769bcf81b21dbe4f"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 11,
+    "attempts": 29,
+    "pass": 8,
+    "fail": 5,
+    "notGated": 3,
+    "infraError": 13,
+    "skipped": 3
+  },
+  "evals": [
+    {
+      "id": "evals/cases.eval.ts › greets Ada",
+      "key": "evals/cases.eval.ts › greets Ada",
+      "slug": "evals-cases-eval-ts-greets-ada-8fa89b",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "greets Ada",
+      "tags": [],
+      "compare": {
+        "baseline": "plain"
+      },
+      "family": {
+        "id": "evals/cases.eval.ts › greets %s",
+        "name": "greets %s",
+        "case": 0,
+        "cases": 2
+      },
+      "fingerprint": "8d57caa282dedd62298319e1833244ca534e8db88ea89c039d534b2d1013a98c",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "da2bc8026933f067dd79611fa6cf981ac0f46641d0dc752076441ad4d932111e"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/plain/docker",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "80c362f7078d7c040625b9837e0a931b4a0ce2f45fa530e13432ace40360dff1",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/with-house-greeting/docker",
+          "harness": "fake",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "28518644381d56f97a6accdff612eac34c2e3e4f5fb39b1c511b22e6d20422e3",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "c34de83490183aebaebc29a1c9a43ff5b803726981f854d5ecd6dc6c02714aae"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 0,
+                "fail": 1,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "discriminates"
+            }
+          ],
+          "lift": {
+            "vs": "fake/plain/docker",
+            "control": {
+              "pass": 0,
+              "counted": 1
+            },
+            "variant": {
+              "pass": 1,
+              "counted": 1
+            },
+            "points": 1,
+            "interval": {
+              "lo": -0.122,
+              "hi": 1,
+              "level": 0.95,
+              "method": "newcombe-wilson"
+            },
+            "withinNoise": true
+          }
+        },
+        {
+          "key": "broken/plain/docker",
+          "harness": "broken",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "fd35dc6a4f752729727be4fee59b9d56ccd97de54e2d59c91e0cc9df47c3cfd5",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        },
+        {
+          "key": "broken/with-house-greeting/docker",
+          "harness": "broken",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "4b9142753c0fc28334d1fd40a5eff0be4e45b8bd50f799d7f5703a367f5a98e0",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › greets Ada # fake/plain/docker#1",
+          "id": "fake/plain/docker#1",
+          "cell": "fake/plain/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-18T10:31:35.438Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 2358,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets Ada in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:37.069Z",
+              "durationMs": 220,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1629,
+            "agentMs": 220,
+            "diffMs": 86,
+            "checksMs": 54,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 55
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Ahoy greet.js",
+              "exitCode": 1,
+              "durationMs": 54,
+              "log": {
+                "path": "evals-cases-eval-ts-greets-ada-8fa89b/fake-plain-docker-98d88a/1/checks/1.log",
+                "sha256": "28837b7a041ca8b52f963e4b3d1ffc4e31bdae5ca555315daddcaf96022f2067",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-greets-ada-8fa89b/fake-plain-docker-98d88a/1/transcript.jsonl",
+              "sha256": "0ee190948cec107877f5181d55fbd91f8aed9ec92bfc575d0bc278ef3e67f449",
+              "bytes": 1135
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-greets-ada-8fa89b/fake-plain-docker-98d88a/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            }
+          }
+        },
+        {
+          "key": "evals/cases.eval.ts › greets Ada # fake/with-house-greeting/docker#1",
+          "id": "fake/with-house-greeting/docker#1",
+          "cell": "fake/with-house-greeting/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-10-18T10:31:35.440Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/house-greeting/SKILL.md",
+              "sha256": "e09034ea26b758dfaaf86fd3fa328bad2ac5195ba099d519a3b1dfe0c8764aa7"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2425,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets Ada in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:37.136Z",
+              "durationMs": 115,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js in the house style."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1694,
+            "agentMs": 115,
+            "diffMs": 86,
+            "checksMs": 54,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 54
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Ahoy greet.js",
+              "exitCode": 0,
+              "durationMs": 54,
+              "log": {
+                "path": "evals-cases-eval-ts-greets-ada-8fa89b/fake-with-house-greeting-docker-a9116f/1/checks/1.log",
+                "sha256": "9e95f3ed2f3310d34b2070f258292e1e0040c07c34d501fc0f6267a14627ad00",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-greets-ada-8fa89b/fake-with-house-greeting-docker-a9116f/1/transcript.jsonl",
+              "sha256": "af08500fd2bfd4b927bc923b3d3f408e0c86d63decec7ecd6dbdb0f7b54f383b",
+              "bytes": 1103
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-greets-ada-8fa89b/fake-with-house-greeting-docker-a9116f/1/diff.patch",
+              "sha256": "8037ad3f19242c79dc4fd1610bb5ff7333686bf2224983df22fbb935312f7d54",
+              "bytes": 174
+            }
+          }
+        },
+        {
+          "key": "evals/cases.eval.ts › greets Ada # broken/plain/docker#1",
+          "id": "broken/plain/docker#1",
+          "cell": "broken/plain/docker",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-10-18T10:31:35.445Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 1993,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1636,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        },
+        {
+          "key": "evals/cases.eval.ts › greets Ada # broken/with-house-greeting/docker#1",
+          "id": "broken/with-house-greeting/docker#1",
+          "cell": "broken/with-house-greeting/docker",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-10-18T10:31:35.447Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 2099,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1618,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/cases.eval.ts › greets Grace",
+      "key": "evals/cases.eval.ts › greets Grace",
+      "slug": "evals-cases-eval-ts-greets-grace-76447a",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "greets Grace",
+      "tags": [],
+      "compare": {
+        "baseline": "plain"
+      },
+      "family": {
+        "id": "evals/cases.eval.ts › greets %s",
+        "name": "greets %s",
+        "case": 1,
+        "cases": 2
+      },
+      "fingerprint": "8d57caa282dedd62298319e1833244ca534e8db88ea89c039d534b2d1013a98c",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "da2bc8026933f067dd79611fa6cf981ac0f46641d0dc752076441ad4d932111e"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/plain/docker",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "80c362f7078d7c040625b9837e0a931b4a0ce2f45fa530e13432ace40360dff1",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/with-house-greeting/docker",
+          "harness": "fake",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "28518644381d56f97a6accdff612eac34c2e3e4f5fb39b1c511b22e6d20422e3",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "c34de83490183aebaebc29a1c9a43ff5b803726981f854d5ecd6dc6c02714aae"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 0,
+                "fail": 1,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "discriminates"
+            }
+          ],
+          "lift": {
+            "vs": "fake/plain/docker",
+            "control": {
+              "pass": 0,
+              "counted": 1
+            },
+            "variant": {
+              "pass": 1,
+              "counted": 1
+            },
+            "points": 1,
+            "interval": {
+              "lo": -0.122,
+              "hi": 1,
+              "level": 0.95,
+              "method": "newcombe-wilson"
+            },
+            "withinNoise": true
+          }
+        },
+        {
+          "key": "broken/plain/docker",
+          "harness": "broken",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "fd35dc6a4f752729727be4fee59b9d56ccd97de54e2d59c91e0cc9df47c3cfd5",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        },
+        {
+          "key": "broken/with-house-greeting/docker",
+          "harness": "broken",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "4b9142753c0fc28334d1fd40a5eff0be4e45b8bd50f799d7f5703a367f5a98e0",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › greets Grace # fake/plain/docker#1",
+          "id": "fake/plain/docker#1",
+          "cell": "fake/plain/docker",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-10-18T10:31:37.441Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 2251,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets Grace in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:38.843Z",
+              "durationMs": 244,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1402,
+            "agentMs": 244,
+            "diffMs": 116,
+            "checksMs": 48,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 48
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Ahoy greet.js",
+              "exitCode": 1,
+              "durationMs": 48,
+              "log": {
+                "path": "evals-cases-eval-ts-greets-grace-76447a/fake-plain-docker-98d88a/1/checks/1.log",
+                "sha256": "28837b7a041ca8b52f963e4b3d1ffc4e31bdae5ca555315daddcaf96022f2067",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-greets-grace-76447a/fake-plain-docker-98d88a/1/transcript.jsonl",
+              "sha256": "9f4cfb91c1f7460eabb0e0544131afe063f6eccd5f09517cae22bc5d0850b482",
+              "bytes": 1140
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-greets-grace-76447a/fake-plain-docker-98d88a/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            }
+          }
+        },
+        {
+          "key": "evals/cases.eval.ts › greets Grace # fake/with-house-greeting/docker#1",
+          "id": "fake/with-house-greeting/docker#1",
+          "cell": "fake/with-house-greeting/docker",
+          "n": 1,
+          "seq": 6,
+          "startedAt": "2026-10-18T10:31:37.546Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/house-greeting/SKILL.md",
+              "sha256": "e09034ea26b758dfaaf86fd3fa328bad2ac5195ba099d519a3b1dfe0c8764aa7"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2316,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets Grace in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:39.091Z",
+              "durationMs": 102,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js in the house style."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1544,
+            "agentMs": 103,
+            "diffMs": 122,
+            "checksMs": 55,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed grep -q Ahoy greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 55
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Ahoy greet.js",
+              "exitCode": 0,
+              "durationMs": 55,
+              "log": {
+                "path": "evals-cases-eval-ts-greets-grace-76447a/fake-with-house-greeting-docker-a9116f/1/checks/1.log",
+                "sha256": "9e95f3ed2f3310d34b2070f258292e1e0040c07c34d501fc0f6267a14627ad00",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-greets-grace-76447a/fake-with-house-greeting-docker-a9116f/1/transcript.jsonl",
+              "sha256": "275a18985559a531bce6fde8e775bc9560359780d41b9fb9599083659094575b",
+              "bytes": 1107
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-greets-grace-76447a/fake-with-house-greeting-docker-a9116f/1/diff.patch",
+              "sha256": "8037ad3f19242c79dc4fd1610bb5ff7333686bf2224983df22fbb935312f7d54",
+              "bytes": 174
+            }
+          }
+        },
+        {
+          "key": "evals/cases.eval.ts › greets Grace # broken/plain/docker#1",
+          "id": "broken/plain/docker#1",
+          "cell": "broken/plain/docker",
+          "n": 1,
+          "seq": 7,
+          "startedAt": "2026-10-18T10:31:37.792Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 1814,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1433,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        },
+        {
+          "key": "evals/cases.eval.ts › greets Grace # broken/with-house-greeting/docker#1",
+          "id": "broken/with-house-greeting/docker#1",
+          "cell": "broken/with-house-greeting/docker",
+          "n": 1,
+          "seq": 8,
+          "startedAt": "2026-10-18T10:31:37.866Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 1927,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1432,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/cases.eval.ts › writes greet.js for Ada",
+      "key": "evals/cases.eval.ts › writes greet.js for Ada",
+      "slug": "evals-cases-eval-ts-writes-greet-js-for-ada-4d85b3",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "writes greet.js for Ada",
+      "tags": [],
+      "fingerprint": "44a47e1c14104a6579f5de7156b33c11bffd3e10301293581315804c0e0a3995",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "da2bc8026933f067dd79611fa6cf981ac0f46641d0dc752076441ad4d932111e"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "658492b178dfb957b9b4aa2a9ace2aff0a293b9cbd0f13eda73c9de3163adc92",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "broken/fake/fake",
+          "harness": "broken",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "e82d78179638ba52a9e1f9bd3e0738ff23545ae9062016d0856900d43e1ea3a1",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › writes greet.js for Ada # fake/fake/fake#1",
+          "id": "fake/fake/fake#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 9,
+          "startedAt": "2026-10-18T10:31:39.607Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 28,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets Ada.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:39.619Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 11,
+            "agentMs": 1,
+            "diffMs": 10,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 0
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-writes-greet-js-for-ada-4d85b3/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "5ad8bd278532220c6738acab71c967b444ace76a75aac89c84ed4043186ed38c",
+              "bytes": 1086
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-writes-greet-js-for-ada-4d85b3/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            }
+          }
+        },
+        {
+          "key": "evals/cases.eval.ts › writes greet.js for Ada # broken/fake/fake#1",
+          "id": "broken/fake/fake#1",
+          "cell": "broken/fake/fake",
+          "n": 1,
+          "seq": 10,
+          "startedAt": "2026-10-18T10:31:39.635Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 14,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 9,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/cases.eval.ts › writes greet.js for Grace",
+      "key": "evals/cases.eval.ts › writes greet.js for Grace",
+      "slug": "evals-cases-eval-ts-writes-greet-js-for-grace-d92d65",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "writes greet.js for Grace",
+      "tags": [],
+      "fingerprint": "44a47e1c14104a6579f5de7156b33c11bffd3e10301293581315804c0e0a3995",
+      "sources": [
+        {
+          "path": "evals/cases.eval.ts",
+          "sha256": "da2bc8026933f067dd79611fa6cf981ac0f46641d0dc752076441ad4d932111e"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "658492b178dfb957b9b4aa2a9ace2aff0a293b9cbd0f13eda73c9de3163adc92",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "broken/fake/fake",
+          "harness": "broken",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "e82d78179638ba52a9e1f9bd3e0738ff23545ae9062016d0856900d43e1ea3a1",
+          "fingerprintParts": {
+            "sources": "d3656350dccb5e851f4833497bf37993d4d6b7e12807ed4e7a349fdf5db758a7",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/cases.eval.ts › writes greet.js for Grace # fake/fake/fake#1",
+          "id": "fake/fake/fake#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 11,
+          "startedAt": "2026-10-18T10:31:39.649Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 28,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets Grace.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:39.662Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 12,
+            "agentMs": 1,
+            "diffMs": 9,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 1
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-cases-eval-ts-writes-greet-js-for-grace-d92d65/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "efe74dc3bd248a0c40df37510b80ee3dd6895530621216aef28d5846500c58d5",
+              "bytes": 1090
+            },
+            "diff": {
+              "path": "evals-cases-eval-ts-writes-greet-js-for-grace-d92d65/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            }
+          }
+        },
+        {
+          "key": "evals/cases.eval.ts › writes greet.js for Grace # broken/fake/fake#1",
+          "id": "broken/fake/fake#1",
+          "cell": "broken/fake/fake",
+          "n": 1,
+          "seq": 12,
+          "startedAt": "2026-10-18T10:31:39.678Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 18,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 10,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › writes greet.js",
+      "key": "evals/greet.eval.ts › writes greet.js",
+      "slug": "evals-greet-eval-ts-writes-greet-js-df720a",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "writes greet.js",
+      "tags": [],
+      "fingerprint": "271e779ae3a5f75b276ec83cdb45c87806299c0e165f6206c1dfff5edf7eb86f",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "ba33bc0d7f6129c3a55cc6e7580525cbbb9417ac779a89cb0a467aa831417b59"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "149884f94d159a00e760a5620098a4d4e15c9bd78eeaafb2f10f1cefc972c59d",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "toPass Does greet.js export greet?",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "broken/fake/fake",
+          "harness": "broken",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "90234c7b73870e812b4efd7c34f1811448cc783ae26220855605394ea732fada",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › writes greet.js # fake/fake/fake#1",
+          "id": "fake/fake/fake#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 13,
+          "startedAt": "2026-10-18T10:31:39.698Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 69,
+          "turns": [
+            {
+              "prompt": "Write greet.js exporting greet(name).",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:39.722Z",
+              "durationMs": 2,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 21,
+            "agentMs": 3,
+            "diffMs": 20,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 0.8,
+              "threshold": 0.8,
+              "question": "Does greet.js export greet?",
+              "model": "fake",
+              "key": "0:a94d5076e400"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 3
+            },
+            {
+              "label": "toPass Does greet.js export greet?",
+              "labelled": false,
+              "matcher": "toPass",
+              "status": "pass",
+              "soft": false
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-ts-writes-greet-js-df720a/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "9a11e4f5eb69cc6749b484865b1f731100f247ce4bf223e7141a8a41aeed2656",
+              "bytes": 1098
+            },
+            "diff": {
+              "path": "evals-greet-eval-ts-writes-greet-js-df720a/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            },
+            "judgeInput": {
+              "path": "evals-greet-eval-ts-writes-greet-js-df720a/fake-fake-fake-dc13e2/1/judge-input.json",
+              "sha256": "aeb902c22d8ccbe325739be15ebd9c4bfe2d67750cbf20a3009b57d0d539e3e7",
+              "bytes": 619
+            }
+          }
+        },
+        {
+          "key": "evals/greet.eval.ts › writes greet.js # broken/fake/fake#1",
+          "id": "broken/fake/fake#1",
+          "cell": "broken/fake/fake",
+          "n": 1,
+          "seq": 14,
+          "startedAt": "2026-10-18T10:31:39.704Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 40,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 14,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › fails its check",
+      "key": "evals/greet.eval.ts › fails its check",
+      "slug": "evals-greet-eval-ts-fails-its-check-e6642c",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "fails its check",
+      "tags": [],
+      "fingerprint": "271e779ae3a5f75b276ec83cdb45c87806299c0e165f6206c1dfff5edf7eb86f",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "ba33bc0d7f6129c3a55cc6e7580525cbbb9417ac779a89cb0a467aa831417b59"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "149884f94d159a00e760a5620098a4d4e15c9bd78eeaafb2f10f1cefc972c59d",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toSucceed grep -q Bonjour greet.js",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "broken/fake/fake",
+          "harness": "broken",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "90234c7b73870e812b4efd7c34f1811448cc783ae26220855605394ea732fada",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › fails its check # fake/fake/fake#1",
+          "id": "fake/fake/fake#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 15,
+          "startedAt": "2026-10-18T10:31:39.743Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 45,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in French.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:39.756Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 13,
+            "agentMs": 1,
+            "diffMs": 15,
+            "checksMs": 3,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed grep -q Bonjour greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 3
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Bonjour greet.js",
+              "exitCode": 1,
+              "durationMs": 3,
+              "log": {
+                "path": "evals-greet-eval-ts-fails-its-check-e6642c/fake-fake-fake-dc13e2/1/checks/1.log",
+                "sha256": "d3165a4ecb4cdee34a22e406dadb2acebfc9db90b8cc0cd62ad55b918c898ed4",
+                "bytes": 56
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-ts-fails-its-check-e6642c/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "62ad9072f5da1c793b326daa1eb97a7cfe4ca26bb9a4ae6356818bdbdcdf554a",
+              "bytes": 1098
+            },
+            "diff": {
+              "path": "evals-greet-eval-ts-fails-its-check-e6642c/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            }
+          }
+        },
+        {
+          "key": "evals/greet.eval.ts › fails its check # broken/fake/fake#1",
+          "id": "broken/fake/fake#1",
+          "cell": "broken/fake/fake",
+          "n": 1,
+          "seq": 16,
+          "startedAt": "2026-10-18T10:31:39.763Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 21,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 12,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › fails its judge",
+      "key": "evals/greet.eval.ts › fails its judge",
+      "slug": "evals-greet-eval-ts-fails-its-judge-d8c87c",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "fails its judge",
+      "tags": [],
+      "fingerprint": "271e779ae3a5f75b276ec83cdb45c87806299c0e165f6206c1dfff5edf7eb86f",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "ba33bc0d7f6129c3a55cc6e7580525cbbb9417ac779a89cb0a467aa831417b59"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "149884f94d159a00e760a5620098a4d4e15c9bd78eeaafb2f10f1cefc972c59d",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "toPass Is greet.js perfect?",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "broken/fake/fake",
+          "harness": "broken",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "90234c7b73870e812b4efd7c34f1811448cc783ae26220855605394ea732fada",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › fails its judge # fake/fake/fake#1",
+          "id": "fake/fake/fake#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": 17,
+          "startedAt": "2026-10-18T10:31:39.785Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "judge",
+            "message": "judge score 0.80 is below 0.95 for \"Is greet.js perfect?\" (fake)"
+          },
+          "durationMs": 37,
+          "turns": [
+            {
+              "prompt": "Write greet.js.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:39.798Z",
+              "durationMs": 3,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 12,
+            "agentMs": 3,
+            "diffMs": 11,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "fail",
+              "score": 0.8,
+              "threshold": 0.95,
+              "question": "Is greet.js perfect?",
+              "model": "fake",
+              "key": "0:fbb01216d639"
+            }
+          ],
+          "assertions": [
+            {
+              "label": "toPass Is greet.js perfect?",
+              "labelled": false,
+              "matcher": "toPass",
+              "status": "fail",
+              "soft": false,
+              "message": "judge score 0.80 is below 0.95 for \"Is greet.js perfect?\" (fake)"
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-ts-fails-its-judge-d8c87c/fake-fake-fake-dc13e2/1/transcript.jsonl",
+              "sha256": "4232849b07d304e2108c6d910cc367cce6f19ba5702e0e62b1411346d8733222",
+              "bytes": 1054
+            },
+            "diff": {
+              "path": "evals-greet-eval-ts-fails-its-judge-d8c87c/fake-fake-fake-dc13e2/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            },
+            "judgeInput": {
+              "path": "evals-greet-eval-ts-fails-its-judge-d8c87c/fake-fake-fake-dc13e2/1/judge-input.json",
+              "sha256": "405692d28ca7c0c3e00e7714457dde3feaec84caa9e093c3bfcd988d8b619591",
+              "bytes": 590
+            }
+          }
+        },
+        {
+          "key": "evals/greet.eval.ts › fails its judge # broken/fake/fake#1",
+          "id": "broken/fake/fake#1",
+          "cell": "broken/fake/fake",
+          "n": 1,
+          "seq": 18,
+          "startedAt": "2026-10-18T10:31:39.788Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 19,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 12,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › is skipped for now",
+      "key": "evals/greet.eval.ts › is skipped for now",
+      "slug": "evals-greet-eval-ts-is-skipped-for-now-9cda2b",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "is skipped for now",
+      "tags": [],
+      "fingerprint": "a6cd0be8cd0f2d3e9f1452ba5ca79ff321abdf3d083e5aa555bdbcdf36575612",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "ba33bc0d7f6129c3a55cc6e7580525cbbb9417ac779a89cb0a467aa831417b59"
+        }
+      ],
+      "outcome": "skipped",
+      "todo": false,
+      "passRate": null,
+      "cells": [
+        {
+          "key": "fake/fake/fake",
+          "harness": "fake",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "37462c923681869fe5347874e90b1235d3bf81a9fe40b60a3ed56be6d4aad7a5",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": null,
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": null,
+          "outcome": "skipped"
+        },
+        {
+          "key": "broken/fake/fake",
+          "harness": "broken",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "adbf4c5437dc05e5a58a88c611dba0131ac58a512f70b0f22ecb3b116028b776",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": null,
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": null,
+          "outcome": "skipped"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › is skipped for now # fake/fake/fake#1",
+          "id": "fake/fake/fake#1",
+          "cell": "fake/fake/fake",
+          "n": 1,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 0,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        },
+        {
+          "key": "evals/greet.eval.ts › is skipped for now # broken/fake/fake#1",
+          "id": "broken/fake/fake#1",
+          "cell": "broken/fake/fake",
+          "n": 1,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 0,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › greets in Welsh",
+      "key": "evals/greet.eval.ts › greets in Welsh",
+      "slug": "evals-greet-eval-ts-greets-in-welsh-bd390d",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "greets in Welsh",
+      "tags": [],
+      "fingerprint": "bc1795a5de7119418ddd64897a67cb772bf3068c4766dbf5e5b0efb7c58ac482",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "ba33bc0d7f6129c3a55cc6e7580525cbbb9417ac779a89cb0a467aa831417b59"
+        }
+      ],
+      "outcome": "skipped",
+      "todo": true,
+      "passRate": null,
+      "cells": [
+        {
+          "key": "unknown",
+          "harness": "unknown",
+          "environment": "unknown",
+          "sandbox": "unknown",
+          "role": "control",
+          "fingerprint": "ec5e85603b964893a2619b3656268ee484d11b4ce92f5829f1b206859499a565",
+          "fingerprintParts": {
+            "sources": "f12badb576d250869e0fa6da670e2374e08b1a6d3cf1735fc1ad546a5936aeb9",
+            "harness": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "environment": null,
+            "image": null,
+            "agentCli": null,
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "unknown",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": null,
+          "outcome": "skipped"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › greets in Welsh # unknown#1",
+          "id": "unknown#1",
+          "cell": "unknown",
+          "n": 1,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 0,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › house greeting › greets in the house style",
+      "key": "evals/skill.eval.ts › house greeting › greets in the house style",
+      "slug": "evals-skill-eval-ts-house-greeting-greets-in-the-house-style-81811f",
+      "file": "evals/skill.eval.ts",
+      "group": [
+        "house greeting"
+      ],
+      "name": "greets in the house style",
+      "tags": [],
+      "compare": {
+        "baseline": "plain"
+      },
+      "fingerprint": "6e6917a3ec9308147d90e81d6afc5c14dd2ed3382e8895620a812fe110d5c537",
+      "sources": [
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "7f130c153d2bda3bf15bea28183b99fa7c5947a61138c81f9a02333a42013d72"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/plain/docker",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "da10b4878f4ed82b96f87d207be4440208496ab57d3ce95c5c4ac69169a8d481",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "writes greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "house greeting",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/with-house-greeting/docker",
+          "harness": "fake",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "2394ee977ce7502de1c1f1d0ac358d883cf3b54621643ce7b780ec9c035b3e25",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "c34de83490183aebaebc29a1c9a43ff5b803726981f854d5ecd6dc6c02714aae"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "writes greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 1,
+                "fail": 0,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "both-pass"
+            },
+            {
+              "label": "house greeting",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 0,
+                "fail": 1,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "discriminates"
+            }
+          ],
+          "lift": {
+            "vs": "fake/plain/docker",
+            "control": {
+              "pass": 0,
+              "counted": 1
+            },
+            "variant": {
+              "pass": 1,
+              "counted": 1
+            },
+            "points": 1,
+            "interval": {
+              "lo": -0.122,
+              "hi": 1,
+              "level": 0.95,
+              "method": "newcombe-wilson"
+            },
+            "withinNoise": true
+          }
+        },
+        {
+          "key": "broken/plain/docker",
+          "harness": "broken",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "3b4de6e416d89875ab925f526eb1fda523e49fbb782b8c346466d1aff61bfd88",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        },
+        {
+          "key": "broken/with-house-greeting/docker",
+          "harness": "broken",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "e994f0a61585ea926cb567364c284a3782ded6bf7829d656bf224f6377642575",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › house greeting › greets in the house style # fake/plain/docker#1",
+          "id": "fake/plain/docker#1",
+          "cell": "fake/plain/docker",
+          "n": 1,
+          "seq": 19,
+          "startedAt": "2026-10-18T10:31:39.798Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "house greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 2241,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:41.226Z",
+              "durationMs": 260,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1427,
+            "agentMs": 260,
+            "diffMs": 101,
+            "checksMs": 50,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "writes greet.js",
+              "labelled": true,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": true,
+              "durationMs": 44
+            },
+            {
+              "label": "house greeting",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "house greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 51
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Ahoy greet.js",
+              "exitCode": 1,
+              "durationMs": 50,
+              "log": {
+                "path": "evals-skill-eval-ts-house-greeting-greets-in-the-house-style-81811f/fake-plain-docker-98d88a/1/checks/1.log",
+                "sha256": "28837b7a041ca8b52f963e4b3d1ffc4e31bdae5ca555315daddcaf96022f2067",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-skill-eval-ts-house-greeting-greets-in-the-house-style-81811f/fake-plain-docker-98d88a/1/transcript.jsonl",
+              "sha256": "6c85d63c9c222c3e8377d8c2993d7a0e231c3b89d0ccf86ea195dacc353c95f1",
+              "bytes": 1128
+            },
+            "diff": {
+              "path": "evals-skill-eval-ts-house-greeting-greets-in-the-house-style-81811f/fake-plain-docker-98d88a/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            }
+          }
+        },
+        {
+          "key": "evals/skill.eval.ts › house greeting › greets in the house style # fake/with-house-greeting/docker#1",
+          "id": "fake/with-house-greeting/docker#1",
+          "cell": "fake/with-house-greeting/docker",
+          "n": 1,
+          "seq": 20,
+          "startedAt": "2026-10-18T10:31:39.809Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/house-greeting/SKILL.md",
+              "sha256": "e09034ea26b758dfaaf86fd3fa328bad2ac5195ba099d519a3b1dfe0c8764aa7"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2156,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:41.297Z",
+              "durationMs": 124,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js in the house style."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1488,
+            "agentMs": 124,
+            "diffMs": 83,
+            "checksMs": 59,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "writes greet.js",
+              "labelled": true,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": true,
+              "durationMs": 40
+            },
+            {
+              "label": "house greeting",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 60
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Ahoy greet.js",
+              "exitCode": 0,
+              "durationMs": 59,
+              "log": {
+                "path": "evals-skill-eval-ts-house-greeting-greets-in-the-house-style-81811f/fake-with-house-greeting-docker-a9116f/1/checks/1.log",
+                "sha256": "9e95f3ed2f3310d34b2070f258292e1e0040c07c34d501fc0f6267a14627ad00",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-skill-eval-ts-house-greeting-greets-in-the-house-style-81811f/fake-with-house-greeting-docker-a9116f/1/transcript.jsonl",
+              "sha256": "8282e285079dc4ac812e7b6b8d7b8b8097719efac94c80d4e7eb7ece30a5c5f7",
+              "bytes": 1095
+            },
+            "diff": {
+              "path": "evals-skill-eval-ts-house-greeting-greets-in-the-house-style-81811f/fake-with-house-greeting-docker-a9116f/1/diff.patch",
+              "sha256": "8037ad3f19242c79dc4fd1610bb5ff7333686bf2224983df22fbb935312f7d54",
+              "bytes": 174
+            }
+          }
+        },
+        {
+          "key": "evals/skill.eval.ts › house greeting › greets in the house style # broken/plain/docker#1",
+          "id": "broken/plain/docker#1",
+          "cell": "broken/plain/docker",
+          "n": 1,
+          "seq": 21,
+          "startedAt": "2026-10-18T10:31:39.827Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 1902,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1392,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        },
+        {
+          "key": "evals/skill.eval.ts › house greeting › greets in the house style # broken/with-house-greeting/docker#1",
+          "id": "broken/with-house-greeting/docker#1",
+          "cell": "broken/with-house-greeting/docker",
+          "n": 1,
+          "seq": 22,
+          "startedAt": "2026-10-18T10:31:39.871Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 1789,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1350,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ],
+      "answers": [
+        {
+          "question": "Which greeting reads more like our house style?",
+          "model": "fake",
+          "votes": [],
+          "rates": []
+        },
+        {
+          "question": "Which greeting handles a missing name?",
+          "model": "fake",
+          "votes": [],
+          "rates": []
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › house greeting › writes a greeting",
+      "key": "evals/skill.eval.ts › house greeting › writes a greeting",
+      "slug": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c",
+      "file": "evals/skill.eval.ts",
+      "group": [
+        "house greeting"
+      ],
+      "name": "writes a greeting",
+      "tags": [],
+      "compare": {
+        "baseline": "plain"
+      },
+      "fingerprint": "6e6917a3ec9308147d90e81d6afc5c14dd2ed3382e8895620a812fe110d5c537",
+      "sources": [
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "7f130c153d2bda3bf15bea28183b99fa7c5947a61138c81f9a02333a42013d72"
+        }
+      ],
+      "outcome": "infra_error",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/plain/docker",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "da10b4878f4ed82b96f87d207be4440208496ab57d3ce95c5c4ac69169a8d481",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        },
+        {
+          "key": "fake/with-house-greeting/docker",
+          "harness": "fake",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "2394ee977ce7502de1c1f1d0ac358d883cf3b54621643ce7b780ec9c035b3e25",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "642d78996d1c994b8142a7b01d30e3e4ade1ebd7d7dfdb9975b15ae2f09598d4",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "c34de83490183aebaebc29a1c9a43ff5b803726981f854d5ecd6dc6c02714aae"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toHaveFile greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0,
+              "control": {
+                "pass": 1,
+                "fail": 0,
+                "error": 0,
+                "notRun": 0
+              },
+              "verdict": "both-pass"
+            }
+          ],
+          "lift": {
+            "vs": "fake/plain/docker",
+            "control": {
+              "pass": 1,
+              "counted": 1
+            },
+            "variant": {
+              "pass": 1,
+              "counted": 1
+            },
+            "points": 0,
+            "interval": {
+              "lo": -0.793,
+              "hi": 0.793,
+              "level": 0.95,
+              "method": "newcombe-wilson"
+            },
+            "withinNoise": true
+          }
+        },
+        {
+          "key": "broken/plain/docker",
+          "harness": "broken",
+          "environment": "plain",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "3b4de6e416d89875ab925f526eb1fda523e49fbb782b8c346466d1aff61bfd88",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        },
+        {
+          "key": "broken/with-house-greeting/docker",
+          "harness": "broken",
+          "environment": "with-house-greeting",
+          "sandbox": "docker",
+          "role": "variant",
+          "variant": "with-house-greeting",
+          "fingerprint": "e994f0a61585ea926cb567364c284a3782ded6bf7829d656bf224f6377642575",
+          "fingerprintParts": {
+            "sources": "ff29a8860736ee3a2a8e9bd07a5a9baf045ca1507fb7cddad52898e4acfdc690",
+            "harness": "56f4a8cafc082ff97f149d37dc365bde3f78ddea9758aa48ff1bfcfe429cefd5",
+            "environment": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+            "image": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "58965c07958aed1cc20becd71c2d1dbcf2f760ea1dc017d580946580a3b15215",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:7b5dd0e29b0dce7a2b796abca66e941ba97b932c7ddbf22e4efc09f381b2a5f7",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 1,
+          "skipped": 0,
+          "passRate": null,
+          "outcome": "infra_error"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › house greeting › writes a greeting # fake/plain/docker#1",
+          "id": "fake/plain/docker#1",
+          "cell": "fake/plain/docker",
+          "n": 1,
+          "seq": 23,
+          "startedAt": "2026-10-18T10:31:41.661Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2115,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:43.025Z",
+              "durationMs": 187,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1363,
+            "agentMs": 187,
+            "diffMs": 118,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 53
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c/fake-plain-docker-98d88a/1/transcript.jsonl",
+              "sha256": "5dcb2726f6e336ccdc789946d1d0a288e9e30b113452e4e7d2c4f2cc4d91e0ee",
+              "bytes": 1127
+            },
+            "diff": {
+              "path": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c/fake-plain-docker-98d88a/1/diff.patch",
+              "sha256": "50adc7359804ce506aeffd648cd876a80478418f8ab8c7f8a80e8702cefc91e2",
+              "bytes": 329
+            }
+          }
+        },
+        {
+          "key": "evals/skill.eval.ts › house greeting › writes a greeting # fake/with-house-greeting/docker#1",
+          "id": "fake/with-house-greeting/docker#1",
+          "cell": "fake/with-house-greeting/docker",
+          "n": 1,
+          "seq": 24,
+          "startedAt": "2026-10-18T10:31:41.729Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/house-greeting/SKILL.md",
+              "sha256": "e09034ea26b758dfaaf86fd3fa328bad2ac5195ba099d519a3b1dfe0c8764aa7"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 2276,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-18T10:31:43.206Z",
+              "durationMs": 86,
+              "usage": null,
+              "model": "fake-1[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js in the house style."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1476,
+            "agentMs": 86,
+            "diffMs": 137,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toHaveFile greet.js",
+              "labelled": false,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 49
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c/fake-with-house-greeting-docker-a9116f/1/transcript.jsonl",
+              "sha256": "f7c9bf532489f49b17523a8b1d0a575e31c3d3b3ce62411e781cf5351dbfb037",
+              "bytes": 1091
+            },
+            "diff": {
+              "path": "evals-skill-eval-ts-house-greeting-writes-a-greeting-2c149c/fake-with-house-greeting-docker-a9116f/1/diff.patch",
+              "sha256": "8037ad3f19242c79dc4fd1610bb5ff7333686bf2224983df22fbb935312f7d54",
+              "bytes": 174
+            }
+          }
+        },
+        {
+          "key": "evals/skill.eval.ts › house greeting › writes a greeting # broken/plain/docker#1",
+          "id": "broken/plain/docker#1",
+          "cell": "broken/plain/docker",
+          "n": 1,
+          "seq": 25,
+          "startedAt": "2026-10-18T10:31:41.966Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 1730,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1358,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        },
+        {
+          "key": "evals/skill.eval.ts › house greeting › writes a greeting # broken/with-house-greeting/docker#1",
+          "id": "broken/with-house-greeting/docker#1",
+          "cell": "broken/with-house-greeting/docker",
+          "n": 1,
+          "seq": 26,
+          "startedAt": "2026-10-18T10:31:42.036Z",
+          "imageId": "sha256:62094fab5dbcfbe4ae1a06891e0a62cacc5006a22b679a4f272dc69a8e8e2825",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "infra_error",
+          "error": {
+            "kind": "infra",
+            "message": "the fake sandbox fell over"
+          },
+          "durationMs": 1853,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1344,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ],
+      "answers": [
+        {
+          "question": "Which greeting reads more like our house style?",
+          "model": "fake",
+          "votes": [
+            {
+              "question": "Which greeting reads more like our house style?",
+              "cut": "within",
+              "harness": "fake",
+              "run": 1,
+              "a": "plain",
+              "b": "with-house-greeting",
+              "winner": "with-house-greeting",
+              "swapped": false
+            },
+            {
+              "question": "Which greeting reads more like our house style?",
+              "cut": "within",
+              "harness": "fake",
+              "run": 1,
+              "a": "plain",
+              "b": "with-house-greeting",
+              "winner": "with-house-greeting",
+              "swapped": true
+            }
+          ],
+          "rates": [
+            {
+              "cut": "within",
+              "name": "plain",
+              "wins": 0,
+              "n": 2
+            },
+            {
+              "cut": "within",
+              "name": "with-house-greeting",
+              "wins": 2,
+              "n": 2
+            }
+          ]
+        },
+        {
+          "question": "Which greeting handles a missing name?",
+          "model": "fake",
+          "votes": [],
+          "rates": [],
+          "error": "Rate limit exceeded (429)"
+        }
+      ]
+    }
+  ],
+  "families": [
+    {
+      "id": "evals/cases.eval.ts › greets %s",
+      "file": "evals/cases.eval.ts",
+      "group": [],
+      "name": "greets %s",
+      "cases": 2,
+      "ran": 2,
+      "rates": [
+        {
+          "cell": "fake/plain/docker",
+          "cases": 2,
+          "pass": 0,
+          "counted": 2,
+          "rate": 0,
+          "interval": {
+            "lo": 0,
+            "hi": 0.658,
+            "level": 0.95,
+            "method": "wilson"
+          }
+        },
+        {
+          "cell": "fake/with-house-greeting/docker",
+          "cases": 2,
+          "pass": 2,
+          "counted": 2,
+          "rate": 1,
+          "interval": {
+            "lo": 0.342,
+            "hi": 1,
+            "level": 0.95,
+            "method": "wilson"
+          }
+        }
+      ],
+      "lifts": [
+        {
+          "variant": "fake/with-house-greeting/docker",
+          "vs": "fake/plain/docker",
+          "pairs": 2,
+          "variantRate": 1,
+          "controlRate": 0,
+          "discordant": {
+            "variantOnly": 2,
+            "controlOnly": 0
+          },
+          "points": 1,
+          "interval": {
+            "lo": 0.07,
+            "hi": 1,
+            "level": 0.95,
+            "method": "newcombe-paired"
+          },
+          "p": 0.5,
+          "withinNoise": false,
+          "verdict": "insufficient",
+          "minLift": 0.2,
+          "outcome": "fail",
+          "effort": {
+            "tools": {
+              "pairs": 2,
+              "ratio": 1,
+              "p": null,
+              "verdict": "insufficient"
+            },
+            "agentMs": {
+              "pairs": 2,
+              "ratio": 0.47,
+              "p": 0.5,
+              "verdict": "insufficient"
+            }
+          }
+        }
+      ],
+      "outcome": "fail"
+    }
+  ]
+}

@@ -119,7 +119,7 @@ test('judge options name an unknown key, a misspelt state key and a bad value', 
   )
   assert.equal(
     judgeProblem({ artifacts: 'form' }, { at: 'call' }),
-    'c.judge() artifacts must be a list of capture handles or names (got "form")',
+    'c.judge() artifacts must be true or a list of capture handles or names (got "form")',
   )
   assert.equal(
     judgeProblem({ model: { kind: 'fake-judge', score: () => 1 } }, { at: 'call' }),

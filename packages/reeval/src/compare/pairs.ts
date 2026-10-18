@@ -2,7 +2,19 @@
 // each is shown in, and how the blinded picks map back to names and win rates. A run's staging
 // records and recorded runs both feed it.
 import { clip } from '../text.ts'
-import type { CompareAnswer, CompareCut, FakeVote, PairFactor, PairVote } from '../types.ts'
+import type {
+  CompareAnswer,
+  CompareCut,
+  ExecResult,
+  FakeVote,
+  FileChange,
+  PairFactor,
+  PairVote,
+  TranscriptEvent,
+} from '../types.ts'
+
+/** One turn of a side: its prompt, final message and transcript, when the record has them. */
+export type PairTurn = { prompt: string; text?: string; transcript?: readonly TranscriptEvent[] }
 
 /** One attempt, as a compare question sees it. */
 export type PairAttempt = {
@@ -14,12 +26,18 @@ export type PairAttempt = {
   run: number
   /** The workspace changes, as a unified diff; empty when the agent changed nothing. */
   diff: string
+  /** The changed files, for `state.files`; unset where only the patch is known. */
+  files?: FileChange[]
   /** Passed, or failed only on a judge: its deterministic checks held. */
   checksPassed: boolean
   /** The compare's baseline arm, which goes first within a harness. */
   control?: boolean
-  /** The prompts it was sent, for the task both sides were given. */
-  prompts?: string[]
+  /** The turns it ran, for the task both sides were given and what `state` shows of each. */
+  turns?: PairTurn[]
+  /** Its `c.exec` results, in call order. */
+  checks?: Array<{ command: string } & ExecResult>
+  /** Its captures, in capture order, with each PNG's bytes when it was read. */
+  captures?: Array<{ name: string; data: Uint8Array }>
   /** The attempt's id, e.g. `cursor/-/docker#1`; never shown to the model. */
   id?: string
 }

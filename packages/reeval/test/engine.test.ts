@@ -1356,7 +1356,10 @@ evaluate('fine', async (c) => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /c\.judge\(\) artifacts must be a list of capture handles or names/)
+    assert.match(
+      r.stdout,
+      /c\.judge\(\) artifacts must be true or a list of capture handles or names/,
+    )
     assert.match(r.stdout, /artifacts names a capture this attempt doesn't have: "missing"/)
     const judged = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),

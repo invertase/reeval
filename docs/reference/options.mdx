@@ -41,6 +41,7 @@ group(
 | [`egress`](#egress) | ✓ | ✓ | ✓ |  |
 | [`judge`](#judge) | ✓ | ✓ | ✓ |  |
 | [`capture`](#capture) | ✓ | ✓ | ✓ |  |
+| [`question`](#question) | ✓ | ✓ | ✓ |  |
 | [`timeout`](#timeout) | ✓ | ✓ | ✓ |  |
 | [`concurrency`](#concurrency) | ✓ |  |  |  |
 | [`record`](#record) | ✓ |  |  |  |
@@ -81,7 +82,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
   - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it. On a pooled `evaluate.each`, it gates the family's paired lift over the cases, not each case's lift.
   - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.
-  - `questions`: a list of strings and `{ question, model?, across? }` entries (never a single value), asked of pairs of attempts after the run. Questions annotate the compare and never change pass, fail or the exit code. An entry's `model` is a `'provider/model'` language model; without one, `analysis.model` answers, else the judge's model when it's a language model. `across` is the matrix factor the question varies when pairing: `'environment'` (two environments, same harness) or `'harness'` (two harnesses, same environment). Without it, and without a one-factor `compare.across`, both pair kinds run. `reeval run` exits 2 at plan time when a question has no language model or would get an evaluation model; `--dry-run` names each question, the factor it varies when it varies one, and how many pairs it will ask (assuming every attempt passes its checks). An empty string or list, a value that isn't a list, an unknown entry key and the same question twice are errors. A profile's limit that leaves the baseline alone drops the questions.
+  - `questions`: a list of strings and `{ question, model?, across?, state?, artifacts? }` entries (never a single value), asked of pairs of attempts after the run. Questions annotate the compare and never change pass, fail or the exit code. An entry's `model` is a `'provider/model'` language model; without one, `analysis.model` answers, else the judge's model when it's a language model. `across` is the matrix factor the question varies when pairing: `'environment'` (two environments, same harness) or `'harness'` (two harnesses, same environment). Without it, and without a one-factor `compare.across`, both pair kinds run. `reeval run` exits 2 at plan time when a question has no language model or would get an evaluation model; `--dry-run` names each question, the factor it varies when it varies one, and how many pairs it will ask (assuming every attempt passes its checks). An entry's `state` and `artifacts` choose what each side shows, over the cascaded [`question`](#question) option. An empty string or list, a value that isn't a list, an unknown entry key and the same question twice are errors. A profile's limit that leaves the baseline alone drops the questions.
   - `across`: `'environment'`, `'harness'`, or a list of those. Every question that does not name its own `across` varies these factors. The default is both. A question's `across` wins when both are set.
 </Property>
 
@@ -103,6 +104,15 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 
 <Property name="judge" type="{ model?, threshold?, maxConcurrent?, providerOptions? }">
   Judge settings. **Merges field by field**, so overriding `threshold` keeps the model. No default model; `threshold` defaults to 0.8. See [Judges](/reference/judges).
+</Property>
+
+<Property name="question" type="{ state?, artifacts? }">
+  What each side of a compare question shows the model. **Merges**: `state` key by key, `artifacts` replaced. Cascades config → profile `defaults` → group → eval → the `compare.questions` entry. `judge.state` never reaches a question.
+
+  - `state`: the judge's [`state`](/reference/judges#state) keys, per side, except `contents` (a question runs after the attempts, when their workspaces are gone). The defaults differ from the judge's: `task: true`, `output: false`, `files: false`, `diff: true`, `transcript: false`, `turns: 'all'`, `checks: false`. A task both sides were given goes in the prompt once; different prompts go in each side. `checks` names a command, and a side that didn't run it shows it as not run.
+  - `artifacts`: `true` for every capture each side took, in capture order, or a non-empty list of capture names. Each side sends its own capture of that name as a PNG file part, labelled only by its position (`Attempt A, screenshot 1 of 1`); a name one side lacks is `not captured` there. Default none.
+
+  A question that shows nothing (every key off and no `artifacts`) exits 2. One that shows `transcript` and pairs two harnesses gets a plan warning: the tool names say which agent each side is. `model` and `across` are per entry, not here. The answer records `stateOptions` and `artifacts`, and each vote the captures each named side sent. A name or command no paired attempt has fails that answer with `error`.
 </Property>
 
 <Property name="capture" type="{ viewport?, timeout?, browser?, model? }">

@@ -1389,6 +1389,10 @@
           "description": "Defaults for `c.judge()`, merged field by field over the config's.",
           "$ref": "#/$defs/ConfigJudgeOptions"
         },
+        "question": {
+          "description": "Defaults for every compare question, merged over the config's.",
+          "$ref": "#/$defs/QuestionOptions"
+        },
         "runs": {
           "description": "Attempts per cell.",
           "type": "number"
@@ -1464,6 +1468,101 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "QuestionOptions": {
+      "description": "Defaults for every compare question: `state` merged key by key, `artifacts` replaced.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "Each side's own captures, by name; `true` sends all of them. Default none.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "state": {
+          "description": "What each side shows.",
+          "$ref": "#/$defs/QuestionStateOptions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "QuestionStateOptions": {
+      "description": "What each side of a compare question shows: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default, which is what a question shows with no `state` at all: the task and the diff.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "`c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "diff": {
+          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "files": {
+          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default false.",
+          "type": "boolean"
+        },
+        "output": {
+          "description": "The final message: the agent's own account of its work. Default false.",
+          "type": "boolean"
+        },
+        "task": {
+          "description": "The prompts the attempt was sent, once for both sides when they match. Default true.",
+          "type": "boolean"
+        },
+        "transcript": {
+          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": ["tools", "full"]
+            }
+          ]
+        },
+        "turns": {
+          "description": "`'all'`: every turn under `turns`, each with its task, output and (with `transcript`) transcript; `'last'`: the last turn only. Default `'all'`.",
+          "type": "string",
+          "enum": ["last", "all"]
         }
       },
       "additionalProperties": false
@@ -1669,6 +1768,9 @@
             "$ref": "#/$defs/Profile"
           }
         },
+        "question": {
+          "$ref": "#/$defs/QuestionOptions"
+        },
         "record": {
           "$ref": "#/$defs/RecordMode"
         },
@@ -1711,6 +1813,7 @@
         "include",
         "judge",
         "profiles",
+        "question",
         "record",
         "root",
         "runs",

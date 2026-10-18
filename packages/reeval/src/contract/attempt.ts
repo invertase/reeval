@@ -371,10 +371,10 @@ export const judgeCallDataSchema = z
       .optional()
       .describe('What to grade instead of the latest turn: an earlier turn, or a value.'),
     artifacts: z
-      .array(z.union([nonEmpty, captureSchema]))
+      .union([z.literal(true), z.array(z.union([nonEmpty, captureSchema]))])
       .optional()
       .describe(
-        'Captures this call sends the judge as image file parts: a capture `c.capture` returned, or its name. The provider that cannot take files fails the call.',
+        'Captures this call sends the judge as image file parts: a capture `c.capture` returned, or its name, or `true` for every capture so far. The provider that cannot take files fails the call.',
       ),
   })
   .describe(

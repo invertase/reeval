@@ -327,10 +327,11 @@ export type JudgeCallOptions = JudgeOptions & {
   /** What to grade instead of the latest turn: another turn, or a value used as the output. */
   on?: Turn | JSONValue
   /**
-   * Captures this call sends the judge as file parts. A `c.capture()` handle or its name.
-   * Call-only: the bytes are on this attempt. The provider that cannot take files fails the call.
+   * Captures this call sends the judge as file parts: `c.capture()` handles or their names, or
+   * `true` for every capture so far. Call-only: the bytes are on this attempt. The provider that
+   * cannot take files fails the call.
    */
-  artifacts?: Array<Capture | string>
+  artifacts?: true | Array<Capture | string>
 }
 
 export type Verdict = {
@@ -365,7 +366,7 @@ export type AttemptContext = {
   send(prompt: string): Promise<Turn>
   /**
    * Asks the judge a yes/no question about the latest turn (or `options.on`).
-   * `options.artifacts` is a list of `c.capture()` handles or names.
+   * `options.artifacts` is a list of `c.capture()` handles or names, or `true` for all of them.
    */
   judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   exec(command: string): Promise<ExecResult>
@@ -1071,7 +1072,7 @@ export type CompareOptions<E = Environment> = {
  * A question for pairwise judgement: its text, or the text and the `'provider/model'` that
  * answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model.
  * `across` is the factor it varies when pairing; without it (and without a one-factor
- * `compare.across`) both pair kinds run.
+ * `compare.across`) both pair kinds run. `state` and `artifacts` choose what each side shows.
  */
 export type CompareQuestion =
   | string
@@ -1081,13 +1082,74 @@ export type CompareQuestion =
       model?: string
       /** The factor it varies when pairing. */
       across?: PairFactor
+      /** What each side shows, over the cascaded `question.state`, key by key. */
+      state?: QuestionStateOptions
+      /** Each side's own captures, by name; `true` sends all of them. Replaces `question.artifacts`. */
+      artifacts?: true | string[]
     }
 
 /**
- * A compare question as planned: its text, the model it names itself, if any, and the one
- * factor it varies when it doesn't ask both pair kinds.
+ * What each side of a compare question shows: the keys of `judge.state` but `contents` (the
+ * attempts' workspaces are gone when questions are asked). An unset key keeps its default, which
+ * is what a question shows with no `state` at all: the task and the diff.
  */
-export type PlannedQuestion = { question: string; model?: string; across?: PairFactor }
+export type QuestionStateOptions = {
+  /** The prompts the attempt was sent, once for both sides when they match. Default true. */
+  task?: boolean
+  /** The final message: the agent's own account of its work. Default false. */
+  output?: boolean
+  /** `status path` lines for the changed files, under `diff`'s patterns. Default false. */
+  files?: boolean
+  /**
+   * The diff since the eval started. A list is gitignore-style patterns over workspace paths:
+   * the last matching pattern wins and `!` excludes. Default true.
+   */
+  diff?: boolean | string[]
+  /**
+   * The transcript as text lines: `true` is messages and tool calls with tool output clipped,
+   * `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
+   * harness's tools, so a pair of two harnesses isn't blind. Default false.
+   */
+  transcript?: boolean | 'tools' | 'full'
+  /**
+   * `'all'`: every turn under `turns`, each with its task, output and (with `transcript`)
+   * transcript; `'last'`: the last turn only. Default `'all'`.
+   */
+  turns?: 'last' | 'all'
+  /** `c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false. */
+  checks?: boolean | string[]
+}
+
+/** `QuestionStateOptions` with every key set: what each side of one question showed. */
+export type ResolvedQuestionStateOptions = {
+  task: boolean
+  output: boolean
+  files: boolean
+  diff: boolean | string[]
+  transcript: boolean | 'tools' | 'full'
+  turns: 'last' | 'all'
+  checks: boolean | string[]
+}
+
+/** Defaults for every compare question: `state` merged key by key, `artifacts` replaced. */
+export type QuestionOptions = {
+  /** What each side shows. */
+  state?: QuestionStateOptions
+  /** Each side's own captures, by name; `true` sends all of them. Default none. */
+  artifacts?: true | string[]
+}
+
+/**
+ * A compare question as planned: its text, the model it names itself, if any, the one factor it
+ * varies when it doesn't ask both pair kinds, and what each side shows, cascaded, when set.
+ */
+export type PlannedQuestion = {
+  question: string
+  model?: string
+  across?: PairFactor
+  state?: QuestionStateOptions
+  artifacts?: true | string[]
+}
 
 /** A matrix factor a compare question varies when pairing; the others are held. */
 export type PairFactor = 'environment' | 'harness'
@@ -1114,6 +1176,8 @@ export type PairVote = {
   swapped: boolean
   /** The model's short reason for this pick; omitted when it gave none. Capped. */
   reason?: string
+  /** The captures each named side showed, by name; set when the question sends `artifacts`. */
+  artifacts?: { a: string[]; b: string[] }
 }
 
 /** A compare question's answer: every vote, and each side's wins over decided votes per cut. */
@@ -1123,6 +1187,10 @@ export type CompareAnswer = {
   model: string
   /** The model id the provider says served the calls, when it reports one. */
   resolvedModel?: string
+  /** What each side showed, every key resolved; unset on answers from before questions took `state`, which showed the defaults. */
+  stateOptions?: ResolvedQuestionStateOptions
+  /** The captures it sent of each side, as asked: `true` for all, or their names. */
+  artifacts?: true | string[]
   votes: PairVote[]
   /** Wins over decided pairs, per named side, per cut. */
   rates: Array<{ cut: CompareCut; name: string; wins: number; n: number }>
@@ -1170,6 +1238,8 @@ type EvalOptionFields = {
   judge?: JudgeOptions
   /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
   capture?: CaptureOptions
+  /** Defaults for every compare question: `state` merged key by key down the cascade. */
+  question?: QuestionOptions
   /** Per attempt. */
   timeout?: Duration
   /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
@@ -1264,6 +1334,8 @@ export type ProfileDefaults = {
   timeout?: Duration
   /** Screenshot defaults for `c.capture()`, shallow-merged over the config's. */
   capture?: CaptureOptions
+  /** Defaults for every compare question, merged over the config's. */
+  question?: QuestionOptions
 }
 
 /** Over every eval, and it can only narrow; `pin` on a group or eval skips it. */
@@ -1321,8 +1393,35 @@ export type FakeVote = 'A' | 'B' | 'tie'
 /** A fake compare-question pick, optionally with a reason. */
 export type FakePick = FakeVote | { winner: FakeVote; reason?: string }
 
-/** What a compare question's model is shown: the prompt, and the two diffs in slot order. */
-export type BlindPair = { question: string; prompt: string; a: string; b: string }
+/** What a compare question's model is shown: the prompt, and the two sides in slot order. */
+export type BlindPair = { question: string; prompt: string; a: BlindSide; b: BlindSide }
+
+/** A turn of one side, with the keys its question's `state` turned on. */
+export type BlindTurn = { task?: string; output?: string; transcript?: string }
+
+/**
+ * One side of a blinded pair: only the keys its question's `state` turned on. With
+ * `turns: 'all'`, `task`, `output` and `transcript` are under `turns`; a task both sides share is
+ * the pair's prompt's, not either side's.
+ */
+export type BlindSide = BlindTurn & {
+  turns?: BlindTurn[]
+  files?: string[]
+  /** The diff as the model sees it: dependency and binary noise dropped. */
+  diff?: string
+  /** A command the other side ran and this one didn't is `{ command, notRun: true }`. */
+  checks?: Array<
+    | { command: string; exitCode: number; stdout: string; stderr: string }
+    | {
+        command: string
+        notRun: true
+      }
+  >
+  /** Its captures, in the order sent, labelled by position; a name it lacks is `missing`. */
+  artifacts?: Array<
+    { label: string; mediaType: 'image/png'; bytes: number } | { label: string; missing: true }
+  >
+}
 
 /** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
@@ -1370,6 +1469,8 @@ export type ReevalConfig = {
    * binary when `c.capture()` runs; it does not change this object.
    */
   capture?: CaptureOptions
+  /** Defaults for every compare question: what each side shows. Merged key by key down the cascade. */
+  question?: QuestionOptions
   /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number
   /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
@@ -1506,6 +1607,7 @@ export type ResolvedConfig = {
   judge: ConfigJudgeOptions & { threshold: number }
   timeoutMs: number
   capture: CaptureOptions
+  question: QuestionOptions
   /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
   concurrency: number | undefined
   record: RecordMode

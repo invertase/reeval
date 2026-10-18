@@ -26,18 +26,52 @@ evaluate('greets by name', {
 plan  profile questions (--profile) · 1 eval · 4 cells · 4 attempts · …
 eval                                      harnesses  variants  runs  attempts  notes
 evals/questions.eval.ts › greets by name  2          1         1     4
-  question 1/1  Which greet.js handles a missing or empty name better? · after the run · environment · 2 pairs · google/gemini-3.8-flash
+  question 1/1  Which greet.js handles a missing or empty name better? · after the run · shows task, diff · environment · 2 pairs · google/gemini-3.8-flash
 ```
 
-`reeval run --dry-run` lists each question, the model that will answer it, and how many pairs it will ask, assuming every attempt passes its checks. A profile that leaves only the baseline drops them.
+`reeval run --dry-run` lists each question, what each side shows, the model that will answer it, and how many pairs it will ask, assuming every attempt passes its checks. A profile that leaves only the baseline drops them.
 
 | Field | What it does |
 |---|---|
 | `question` | The question. An entry can also be a plain string |
 | `model` | The model that answers. Default `analysis.model`, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time |
 | `across` | The factor you vary when pairing: `'environment'` holds the harness (Auth vs Firebase UI), `'harness'` holds the environment (Cursor vs Antigravity). A list of both, or none, asks both pair kinds |
+| `state` | What each side shows: the judge's keys but `contents`. Default the task and the diff |
+| `artifacts` | Captures each side sends as images: `true` for all, or their names. Default none |
 
 `compare.across: 'environment'` sets the default `across` for every question that doesn't name its own.
+
+## Choose what each side shows
+
+```ts title="evals/sign-in.eval.ts"
+compare: {
+  baseline: plain,
+  variants: [withDesignSystem],
+  questions: [
+    'Which change is simpler?', // the task and the diff
+    {
+      question: 'Which sign-in page follows the design system more closely?',
+      state: { diff: ['src/**/*.tsx'] },
+      artifacts: ['sign-in'], // each side's own "sign-in" capture
+    },
+    {
+      question: 'Which agent verified its work?',
+      state: { transcript: 'tools', checks: ['npm test'] },
+      across: 'environment',
+    },
+  ],
+}
+```
+
+`state` takes the judge's keys (`task`, `output`, `files`, `diff`, `transcript`, `turns` and `checks`), and `artifacts` sends captures as images. A capture name picks each side's own capture of that name, labelled only by its position.
+
+```text
+  question 1/3  Which change is simpler? · after the run · shows task, diff · 1 pair · google/gemini-3.8-flash
+  question 2/3  Which sign-in page follows … · after the run · shows task, diff, artifacts · 1 pair · …
+  question 3/3  Which agent verified its work? · after the run · shows task, diff, transcript, checks · environment · 1 pair · …
+```
+
+The defaults leave out the final message: side by side, the more confident summary wins on wording, not on the work. `transcript` names each agent's tools, so `reeval run` warns when a question that shows it pairs two harnesses. The [`question`](/reference/options#question) option sets defaults for every question below it, merged key by key from the config to the entry.
 
 ## Read the answers
 

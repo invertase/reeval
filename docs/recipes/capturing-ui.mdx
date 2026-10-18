@@ -109,7 +109,22 @@ await c.judge('it has visual feedback for a failed form', {
 })
 ```
 
-A provider that can't take files fails that call with its own error. A judge call without `artifacts` sends no image.
+A provider that can't take files fails that call with its own error. A judge call without `artifacts` sends no image, and `artifacts: true` sends every capture the attempt has taken so far.
+
+## Compare two arms' screenshots
+
+```ts
+compare: {
+  baseline: plain,
+  variants: [withDesignSystem],
+  questions: [{
+    question: 'Which sign-in page follows the design system more closely?',
+    artifacts: ['sign-in'],
+  }],
+}
+```
+
+Each attempt calls `c.capture(server, { name: 'sign-in' })`. After the run, the question sends each side's own `sign-in` capture beside its task and diff, labelled only by position (`Attempt A, screenshot 1 of 1`). See [Choose what each side shows](/guide/questions#choose-what-each-side-shows).
 
 ## What you get
 

@@ -18,16 +18,16 @@ export function isCaptureHandle(value: unknown): value is Capture {
   )
 }
 
-/** The first `artifacts` value that isn't a list of capture handles or names. */
+/** The first `artifacts` value that isn't `true` or a list of capture handles or names. */
 export function badJudgeArtifacts(artifacts: unknown): string | undefined {
-  if (artifacts === undefined) return undefined
+  if (artifacts === undefined || artifacts === true) return undefined
   if (!Array.isArray(artifacts)) {
-    return `must be a list of capture handles or names (got ${JSON.stringify(artifacts)})`
+    return `must be true or a list of capture handles or names (got ${JSON.stringify(artifacts)})`
   }
   for (const item of artifacts) {
     if (typeof item === 'string' && item.trim()) continue
     if (isCaptureHandle(item)) continue
-    return `must be a list of capture handles or names (got ${JSON.stringify(item)})`
+    return `must be true or a list of capture handles or names (got ${JSON.stringify(item)})`
   }
   return undefined
 }
@@ -37,15 +37,17 @@ export type ResolvedJudgeArtifact = JudgeArtifactRef & { data: Uint8Array }
 const nameOf = (item: Capture | string) => (typeof item === 'string' ? item.trim() : item.name)
 
 /**
- * Resolves call `artifacts` (a capture handle or its name) to PNG bytes this attempt captured.
- * Unknown names throw: a mistake in the call, before the provider is asked.
+ * Resolves call `artifacts` (capture handles or their names, or `true` for every capture so far,
+ * in capture order) to PNG bytes this attempt captured. Unknown names throw: a mistake in the
+ * call, before the provider is asked.
  */
 export function resolveJudgeArtifacts(
-  artifacts: Array<Capture | string> | undefined,
+  artifacts: true | Array<Capture | string> | undefined,
   blobs: Map<string, Buffer>,
 ): ResolvedJudgeArtifact[] {
-  if (!artifacts?.length) return []
-  return artifacts.map((item) => {
+  const items = artifacts === true ? [...blobs.keys()] : artifacts
+  if (!items?.length) return []
+  return items.map((item) => {
     const name = nameOf(item)
     const data = blobs.get(name)
     if (!data) {

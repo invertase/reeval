@@ -2,7 +2,8 @@
 
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import { compareProblem, isEvaluationModel } from './contract/compare.ts'
+import { mergeQuestion, showsNothing, withQuestionDefaults } from './compare/state.ts'
+import { compareProblem, isEvaluationModel, questionOptionsProblem } from './contract/compare.ts'
 import { sandboxProblem } from './contract/docker.ts'
 import { harnessProblem } from './contract/harness.ts'
 import { judgeProblem } from './contract/judge.ts'
@@ -55,6 +56,7 @@ import type {
   PinnableKey,
   PlannedEgress,
   PlannedQuestion,
+  QuestionOptions,
   ResolvedProfile,
   SandboxDescriptor,
   SandboxWarning,
@@ -71,6 +73,7 @@ const KNOWN = [
   'egress',
   'judge',
   'capture',
+  'question',
   'timeout',
   'tags',
   'pin',
@@ -268,6 +271,8 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     }
   }
   if (o.capture !== undefined) checkCapture(o.capture, where)
+  const questionIssue = o.question !== undefined && questionOptionsProblem(o.question, where)
+  if (questionIssue) throw new UsageError(questionIssue)
 }
 
 const CAPTURE_KEYS = ['viewport', 'timeout', 'browser', 'model']
@@ -488,6 +493,8 @@ const plannedQuestions = (
       question: q.question,
       ...(q.model !== undefined ? { model: q.model } : {}),
       ...(across ? { across } : {}),
+      ...(q.state ? { state: q.state } : {}),
+      ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
     }
   })
 
@@ -504,6 +511,8 @@ export type Resolved = {
   egress: { inherited?: EgressPolicy; own?: EgressPolicy }
   judge: JudgeOptions
   capture: CaptureOptions
+  /** Defaults for every compare question; applied to the compare's own once the cascade ends. */
+  question: QuestionOptions
   timeout: Duration | undefined
   tags: string[]
   pin: PinnableKey[]
@@ -553,6 +562,7 @@ function applyLevel(
     out.capture = { ...out.capture, ...rest }
     if (viewport !== undefined) out.capture.viewport = viewport
   }
+  out.question = mergeQuestion(out.question, options.question)
   for (const tag of options.tags ?? []) if (!out.tags.includes(tag)) out.tags.push(tag)
   for (const key of options.pin ?? []) if (!out.pin.includes(key)) out.pin.push(key)
 }
@@ -585,6 +595,7 @@ export function cascade(
     egress: { ...base.egress },
     judge: { ...base.judge },
     capture: { ...base.capture },
+    question: { ...base.question },
     tags: [...base.tags],
     pin: [...base.pin],
   }
@@ -601,6 +612,16 @@ export function cascade(
   for (const { options: own, where: at } of levels) applyLevel(out, own, at)
   if (out.compare?.from && out.environment) {
     out.compare = { ...out.compare, baseline: out.environment, from: 'environment' }
+  }
+  if (out.compare?.questions.length) {
+    const questions = out.compare.questions.map((q) => withQuestionDefaults(q, out.question))
+    const blank = questions.find(showsNothing)
+    if (blank) {
+      throw new UsageError(
+        `compare.questions "${blank.question}" in ${where} shows the model nothing: every state key is off and it sends no artifacts. Turn on a state key, such as state: { diff: true }, or send artifacts.`,
+      )
+    }
+    out.compare = { ...out.compare, questions }
   }
   checkUnique(out.harness, where)
   if (profile?.defaults.harness !== undefined && levels.some((l) => l.options.harness)) {
@@ -983,6 +1004,7 @@ export function evalPlan(
     ...(skip ? { skip } : {}),
     warnings: [
       ...environmentWarnings(attempts),
+      ...(skip ? [] : questionWarnings(resolved)),
       ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
     ],
     sandboxWarnings: skip ? [] : sandboxWarnings(attempts, resolved, origin),
@@ -998,6 +1020,18 @@ export function evalPlan(
     ],
     ...(capture ? { capture: resolved.capture } : {}),
   }
+}
+
+/** A question that shows each side's transcript, asked of two harnesses: tool names unblind it. */
+function questionWarnings(resolved: Resolved): string[] {
+  const { compare } = resolved
+  if (!compare || resolved.harness.length < 2) return []
+  return compare.questions
+    .filter((q) => q.across !== 'environment' && q.state?.transcript)
+    .map(
+      (q) =>
+        `compare question "${q.question}" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.`,
+    )
 }
 
 function captureNote(c: CaptureOptions): string | undefined {

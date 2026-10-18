@@ -9,6 +9,8 @@
   "judge with a state typo": "UsageError: The attempt request's call.options.state has an unknown key \"transcrpt\". Did you mean \"transcript\"?",
   "judge on a turn that is not an index": "UsageError: The attempt request's call.options.on.turn must be a turn index, from 0 (got -1)",
   "judge with an empty artifact name": "UsageError: The attempt request's call.options.artifacts[0] must not be empty (got \"\")",
+  "judge with artifacts false": "UsageError: The attempt request's call.options.artifacts matches none of its forms (got false)",
+  "good: judge with every artifact": null,
   "judge with a capture missing its file": "UsageError: The attempt request's call.options.artifacts[0].file is missing: it must be an object",
   "judge with a capture viewport that is not whole": "UsageError: The attempt request's call.options.artifacts[0].viewport.width must be a whole number (got 10.5)",
   "send without a prompt": "UsageError: The attempt request's call.prompt is missing: it must be a string",

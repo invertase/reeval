@@ -1,0 +1,20 @@
+no profile · 3 evals · 12 cells · 12 attempts
+warning: compare question "Which agent verified its work?" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. Ask it with across: 'environment', or leave the transcript out.
+evals/questions-state.eval.ts › transcript across harnesses  a/base/docker     control          ungated  ×1
+                                                             a/skilled/docker  variant skilled  gated    ×1
+                                                             b/base/docker     control          ungated  ×1
+                                                             b/skilled/docker  variant skilled  gated    ×1
+                                                             question: Which agent verified its work? · shows task, diff, transcript · 4 pairs · no language model
+evals/questions-state.eval.ts › transcript within a harness  a/base/docker     control          ungated  ×1
+                                                             a/skilled/docker  variant skilled  gated    ×1
+                                                             b/base/docker     control          ungated  ×1
+                                                             b/skilled/docker  variant skilled  gated    ×1
+                                                             question: Which arm verified its work? · shows task, diff, transcript · environment · 2 pairs · no language model
+evals/questions-state.eval.ts › screenshots                  a/base/docker     control          ungated  ×1
+                                                             a/skilled/docker  variant skilled  gated    ×1
+                                                             b/base/docker     control          ungated  ×1
+                                                             b/skilled/docker  variant skilled  gated    ×1
+                                                             question: Which page looks better? · shows task, artifacts · 4 pairs · no language model
+excluded: —
+image docker · 3 evals
+  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

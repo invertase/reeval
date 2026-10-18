@@ -467,19 +467,27 @@
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "Captures this call sends the judge as image file parts: a capture `c.capture` returned, or its name. The provider that cannot take files fails the call.",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "\\S"
-              },
-              {
-                "$ref": "#/$defs/Capture"
+          "description": "Captures this call sends the judge as image file parts: a capture `c.capture` returned, or its name, or `true` for every capture so far. The provider that cannot take files fails the call.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  {
+                    "$ref": "#/$defs/Capture"
+                  }
+                ]
               }
-            ]
-          }
+            }
+          ]
         },
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",

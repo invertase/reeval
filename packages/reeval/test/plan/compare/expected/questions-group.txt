@@ -4,12 +4,12 @@ evals/questions-group.eval.ts › asked by the group › inherits the question  
                                                                             a/skilled/docker  variant skilled  gated               ×1
                                                                             b/base/docker     control          ungated             ×1
                                                                             b/skilled/docker  variant skilled  gated               ×1
-                                                                            question: Which handles state more cleanly? · 4 pairs · no language model
+                                                                            question: Which handles state more cleanly? · shows task, diff · 4 pairs · no language model
 evals/questions-group.eval.ts › asked by the group › also inherits it       a/base/docker     control          ungated             ×2
                                                                             a/skilled/docker  variant skilled  gated passRate 0.5  ×2
                                                                             b/base/docker     control          ungated             ×2
                                                                             b/skilled/docker  variant skilled  gated passRate 0.5  ×2
-                                                                            question: Which handles state more cleanly? · 8 pairs · no language model
+                                                                            question: Which handles state more cleanly? · shows task, diff · 8 pairs · no language model
 evals/questions-group.eval.ts › asked by the group › replaces the compare   a/base/docker     control          ungated             ×1
                                                                             a/terse/docker    variant terse    gated               ×1
                                                                             b/base/docker     control          ungated             ×1

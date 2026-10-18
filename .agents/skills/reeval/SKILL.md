@@ -244,7 +244,7 @@ group('hello', () => {
   `{ state: { transcript: 'tools' } }` adds the turn's tool calls; `{ state: { checks: ['npm test'] } }`
   adds that `c.exec` result; `turns: 'all'` gives every turn; `task: false` and `output: false`
   leave those out. `state` cascades like every other option, key by key. `artifacts`
-  is call-only: a `c.capture()` handle or its name, sent as a file part. Ask about facts in the
+  is call-only: `true` for every capture so far, or `c.capture()` handles or names, sent as file parts. Ask about facts in the
   picture, not whether it "looks great". A provider that cannot take files fails that call.
   Prefer deterministic checks for what can be checked; use the judge for quality, with plain
   yes/no questions that don't name one specific way of doing it.
@@ -463,7 +463,7 @@ group(
   only when nothing counted.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
   the baseline. `compare: false` on `evaluate` or `group` is an error.
-- `compare.questions` (always a list of strings and `{ question, model?, across? }`)
+- `compare.questions` (always a list of strings and `{ question, model?, across?, state?, artifacts? }`)
   asks which side did better, pair by pair, after the run. `across` is the matrix
   factor you vary when pairing: `'environment'` holds the harness; `'harness'`
   holds the environment. `compare.across: 'environment'` sets that for every
@@ -483,6 +483,15 @@ group(
   at plan time while `--dry-run` still lists them. A profile that leaves only
   the baseline drops them (`questions off (profile …)`). Keep deterministic
   checks for pass or fail, and ask questions only about quality between sides.
+- Each side of a question shows its task and diff by default. An entry's `state`
+  takes the judge's keys but `contents` (`{ diff: ['src/**'] }`,
+  `{ transcript: 'tools', checks: ['npm test'] }`); keep `output` off for pairwise
+  questions, since the more confident summary wins on wording. For UI evals,
+  `artifacts: ['sign-in']` (or `true`) sends each side's own capture of that name
+  as an image. The `question` option (`{ state?, artifacts? }`, config → profile
+  → group → eval → entry, key by key) sets defaults; `judge.state` never reaches
+  questions. A question showing `transcript` across harnesses warns (tool names
+  unblind them): ask it with `across: 'environment'`.
 - Questions are answered on the host once all of an eval's attempts end, from
   their diffs. Attempts that failed their checks (a judge failure doesn't count)
   are left out of the pairs: a question on a compare whose baseline is expected

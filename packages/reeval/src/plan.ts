@@ -1,5 +1,6 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
 import { acrossOf, type PairAttempt, pairsOf, plannedSides } from './compare/pairs.ts'
+import { questionShows, resolveQuestionState } from './compare/state.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
@@ -205,6 +206,8 @@ export type PlanQuestion = {
   across?: PairFactor
   /** Pairs it will ask, assuming every attempt passes its checks. */
   pairs: number
+  /** The parts each side shows: its `state` keys that are on, then `artifacts` when it sends captures. */
+  shows: string[]
 }
 
 /** `environment · 2 pairs` when it varies one factor; `4 pairs` when it asks both. */
@@ -225,6 +228,7 @@ export const planQuestions = (
     model: q.model ?? questionModel,
     ...(q.across ? { across: q.across } : {}),
     pairs: pairsOf(sides, acrossOf(q.across)).length,
+    shows: questionShows(resolveQuestionState(q.state), q.artifacts),
   }))
 
 /** `  question 1/2  Which is cleaner? · after the run · 4 pairs · google/gemini-3.8-flash` */
@@ -240,7 +244,7 @@ function questionLines(members: PlanRow[], questionModel: string | null): string
   }))
   return questions.map(
     (q, i) =>
-      `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · after the run · ${questionPairLabel(q)} · ${q.model ?? 'needs a language model: set analysis.model'}`,
+      `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · after the run · shows ${q.shows.join(', ')} · ${questionPairLabel(q)} · ${q.model ?? 'needs a language model: set analysis.model'}`,
   )
 }
 

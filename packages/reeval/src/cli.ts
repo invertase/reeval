@@ -729,6 +729,8 @@ async function executeRun(
         question: q.question,
         model: models.questionModel(config, q, row.id),
         ...(q.across ? { across: q.across } : {}),
+        ...(q.state ? { state: q.state } : {}),
+        ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
       }))
       for (const q of questions) if (typeof q.model === 'string') questionModels.add(q.model)
       if (questions.length) asked.push({ row, questions })

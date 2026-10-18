@@ -163,7 +163,7 @@
       "additionalProperties": false
     },
     "CompareQuestion": {
-      "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run.",
+      "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run. `state` and `artifacts` choose what each side shows.",
       "anyOf": [
         {
           "type": "string",
@@ -176,6 +176,23 @@
               "description": "The factor it varies when pairing.",
               "$ref": "#/$defs/PairFactor"
             },
+            "artifacts": {
+              "description": "Each side's own captures, by name; `true` sends all of them. Replaces `question.artifacts`.",
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "const": true
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              ]
+            },
             "model": {
               "description": "`'provider/model'` that answers it.",
               "type": "string"
@@ -183,6 +200,10 @@
             "question": {
               "type": "string",
               "pattern": "\\S"
+            },
+            "state": {
+              "description": "What each side shows, over the cascaded `question.state`, key by key.",
+              "$ref": "#/$defs/QuestionStateOptions"
             }
           },
           "required": ["question"],
@@ -923,6 +944,10 @@
                 "$ref": "#/$defs/PinnableKey"
               }
             },
+            "question": {
+              "description": "Defaults for every compare question: `state` merged key by key down the cascade.",
+              "$ref": "#/$defs/QuestionOptions"
+            },
             "runs": {
               "description": "Attempts per cell.",
               "type": "number"
@@ -1203,6 +1228,10 @@
                 "$ref": "#/$defs/PinnableKey"
               }
             },
+            "question": {
+              "description": "Defaults for every compare question: `state` merged key by key down the cascade.",
+              "$ref": "#/$defs/QuestionOptions"
+            },
             "runs": {
               "description": "Attempts per cell.",
               "type": "number"
@@ -1404,6 +1433,10 @@
               "items": {
                 "$ref": "#/$defs/PinnableKey"
               }
+            },
+            "question": {
+              "description": "Defaults for every compare question: `state` merged key by key down the cascade.",
+              "$ref": "#/$defs/QuestionOptions"
             },
             "runs": {
               "description": "Attempts per cell.",
@@ -2098,6 +2131,101 @@
     "PinnableKey": {
       "description": "An option a profile's `limit` can narrow, and `pin` can protect.",
       "enum": ["compare", "harness", "runs"]
+    },
+    "QuestionOptions": {
+      "description": "Defaults for every compare question: `state` merged key by key, `artifacts` replaced.",
+      "type": "object",
+      "properties": {
+        "artifacts": {
+          "description": "Each side's own captures, by name; `true` sends all of them. Default none.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "state": {
+          "description": "What each side shows.",
+          "$ref": "#/$defs/QuestionStateOptions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "QuestionStateOptions": {
+      "description": "What each side of a compare question shows: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default, which is what a question shows with no `state` at all: the task and the diff.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "`c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "diff": {
+          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "files": {
+          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default false.",
+          "type": "boolean"
+        },
+        "output": {
+          "description": "The final message: the agent's own account of its work. Default false.",
+          "type": "boolean"
+        },
+        "task": {
+          "description": "The prompts the attempt was sent, once for both sides when they match. Default true.",
+          "type": "boolean"
+        },
+        "transcript": {
+          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": ["tools", "full"]
+            }
+          ]
+        },
+        "turns": {
+          "description": "`'all'`: every turn under `turns`, each with its task, output and (with `transcript`) transcript; `'last'`: the last turn only. Default `'all'`.",
+          "type": "string",
+          "enum": ["last", "all"]
+        }
+      },
+      "additionalProperties": false
     },
     "SandboxDescriptor": {
       "anyOf": [

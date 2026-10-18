@@ -16,6 +16,7 @@ import type {
   ProfileLimit,
   ReevalConfigData,
 } from '../types.ts'
+import { questionOptionsSchema } from './compare.ts'
 import { environmentDataSchema, sandboxDescriptorSchema } from './environment.ts'
 import { harnessDescriptorSchema } from './harness.ts'
 import { configJudgeDataSchema } from './judge.ts'
@@ -121,6 +122,9 @@ export const profileDefaultsDataSchema = z
     capture: captureOptionsSchema
       .optional()
       .describe("Screenshot defaults for `c.capture()`, shallow-merged over the config's."),
+    question: questionOptionsSchema
+      .optional()
+      .describe("Defaults for every compare question, merged over the config's."),
   })
   .describe('`ProfileDefaults` as data: the environment without `extend`, and the judge as data.')
 
@@ -268,6 +272,11 @@ export const reevalConfigDataSchema = z
       .optional()
       .describe(
         'Screenshot defaults for `c.capture()`. `REEVAL_CAPTURE_BROWSER=0` refuses the host binary when `c.capture()` runs; it does not change this object.',
+      ),
+    question: questionOptionsSchema
+      .optional()
+      .describe(
+        'Defaults for every compare question: what each side shows. Merged key by key down the cascade.',
       ),
     concurrency: count()
       .optional()

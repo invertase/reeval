@@ -78,7 +78,7 @@ export function e2ePairSides(): PairAttempt[] {
       run: 1,
       diff: readFileSync(a.diff as string, 'utf8'),
       checksPassed: a.attempt.outcome === 'pass',
-      prompts: a.attempt.turns.map((t) => t.prompt),
+      turns: a.attempt.turns.map((t) => ({ prompt: t.prompt })),
       id: a.attempt.key,
     }))
   })
@@ -89,7 +89,11 @@ const endsWithNewline = (diff: string) => !diff.includes('No newline at end of f
 
 /** A pick that favours the diff whose hello.txt ends with a newline, and ties otherwise. */
 export const newlineVote = (p: BlindPair): FakeVote =>
-  endsWithNewline(p.a) === endsWithNewline(p.b) ? 'tie' : endsWithNewline(p.a) ? 'A' : 'B'
+  endsWithNewline(p.a.diff ?? '') === endsWithNewline(p.b.diff ?? '')
+    ? 'tie'
+    : endsWithNewline(p.a.diff ?? '')
+      ? 'A'
+      : 'B'
 
 /** A question about the real diffs, answered by `newlineVote` over every pair of them. */
 export const e2eNewlineAnswer = (): Promise<CompareAnswer> =>

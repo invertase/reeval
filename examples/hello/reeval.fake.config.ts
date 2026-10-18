@@ -50,7 +50,11 @@ export default defineConfig({
         `${attempts.filter((a) => a.outcome === 'pass').length} of ${attempts.length} attempts passed on ${harness}.`,
       // skill.eval.ts's compare question: the attempt whose greet.js says Ahoy wins.
       vote: (p) =>
-        p.a.includes('Ahoy') === p.b.includes('Ahoy') ? 'tie' : p.a.includes('Ahoy') ? 'A' : 'B',
+        p.a.diff?.includes('Ahoy') === p.b.diff?.includes('Ahoy')
+          ? 'tie'
+          : p.a.diff?.includes('Ahoy')
+            ? 'A'
+            : 'B',
       // The run's summary, cached once the run is written; reeval analyze shows it.
       output: {
         tldr: 'The house-style skill changes the greeting: its variant passes where the control misses.',

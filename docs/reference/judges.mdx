@@ -45,10 +45,10 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
 
 `c.judge()` also takes `on`: a `Turn` this attempt's `c.send()` returned, to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). Only those `Turn` objects count as turns: a plain object shaped like one is a value, and a copy of a turn (`{ ...turn }`) is refused. `on` with a value and `state: { output: false }` is refused.
 
-`artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
+`artifacts` is call-only: `true` for every capture so far, or a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
 
-<Property name="artifacts" type="Array<Capture | string>" optional>
-  Captures this call sends the judge. A handle from `c.capture()` or that capture's `name`. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
+<Property name="artifacts" type="true | Array<Capture | string>" optional>
+  Captures this call sends the judge: `true` for every capture the attempt has taken so far, in the order it took them, or a list of handles from `c.capture()` or capture `name`s. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
 </Property>
 
 ## What the judge is given
@@ -186,12 +186,12 @@ Its summary of the run reads up to three dropped evidence items and three failin
 ```ts
 analysis: {
   model: fakeAnalysis({
-    vote: (pair) => (pair.a.includes('Ahoy') ? 'A' : 'tie'),
+    vote: (pair) => (pair.a.diff?.includes('Ahoy') ? 'A' : 'tie'),
   }),
 }
 ```
 
-`vote` answers [compare questions](/guide/questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, `{ winner, reason? }` to record a reason, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`.
+`vote` answers [compare questions](/guide/questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, `{ winner, reason? }` to record a reason, or a function of the blinded pair (`{ question, prompt, a, b }`). `a` and `b` are the two sides in the order shown, each holding only the parts its question's [`state`](/reference/options#question) turned on: `task?`, `output?`, `transcript?`, `turns?`, `files?`, `diff?`, `checks?` and `artifacts?` (`{ label, mediaType, bytes }`, or `{ label, missing: true }`). `prompt` is the text the model reads, with a task both sides share. `{ error: '…' }` fails every call, to test an answer's `error`.
 
 Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
 
@@ -211,7 +211,7 @@ Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses 
 | A bad `state` value | `judge.state.turns in evals/a.eval.ts › lands must be 'last' or 'all' (got "first")`; `state` itself must be an object such as `{ transcript: 'tools' }` |
 | A check it hasn't run | `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` |
 | `on` with no output | `c.judge() on gives the output, but state.output is false` |
-| A bad `artifacts` | `c.judge() artifacts must be a list of capture handles or names (got "form")` |
+| A bad `artifacts` | `c.judge() artifacts must be true or a list of capture handles or names (got "form")` |
 | An unknown capture name | `c.judge() artifacts names a capture this attempt doesn't have: "form"` |
 | A score function in the config | `judge.model in reeval.config.ts must be fakeJudge({ score }) with a number. Pass a score function per group, eval or call instead.` |
 | The provider refuses the input | The provider's message, then `The judge's input was ~29k tokens (estimated): diff 28k, of which …`, as a failed call |

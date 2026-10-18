@@ -32,9 +32,9 @@ export default defineConfig({
       // Compare questions favour the attempt whose diff greets with Ahoy; one fails at the model.
       vote: (p) => {
         if (p.question.includes('missing name')) throw new Error('Rate limit exceeded (429)')
-        return p.a.includes('Ahoy') === p.b.includes('Ahoy')
+        return p.a.diff?.includes('Ahoy') === p.b.diff?.includes('Ahoy')
           ? 'tie'
-          : p.a.includes('Ahoy')
+          : p.a.diff?.includes('Ahoy')
             ? 'A'
             : 'B'
       },

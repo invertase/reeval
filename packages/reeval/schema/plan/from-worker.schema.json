@@ -1408,17 +1408,33 @@
       "required": ["auto", "policy"]
     },
     "PlannedQuestion": {
-      "description": "A compare question as planned: its text, the model it names itself, if any, and the one factor it varies when it doesn't ask both pair kinds.",
+      "description": "A compare question as planned: its text, the model it names itself, if any, the one factor it varies when it doesn't ask both pair kinds, and what each side shows, cascaded, when set.",
       "type": "object",
       "properties": {
         "across": {
           "enum": ["environment", "harness"]
+        },
+        "artifacts": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
         },
         "model": {
           "type": "string"
         },
         "question": {
           "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/QuestionStateOptions"
         }
       },
       "required": ["question"]
@@ -1638,6 +1654,73 @@
           "required": ["at", "kind", "turn"]
         }
       ]
+    },
+    "QuestionStateOptions": {
+      "description": "What each side of a compare question shows: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default, which is what a question shows with no `state` at all: the task and the diff.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "description": "`c.exec` results; a list shows only those commands, as passed to `c.exec`. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "diff": {
+          "description": "The diff since the eval started. A list is gitignore-style patterns over workspace paths: the last matching pattern wins and `!` excludes. Default true.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          ]
+        },
+        "files": {
+          "description": "`status path` lines for the changed files, under `diff`'s patterns. Default false.",
+          "type": "boolean"
+        },
+        "output": {
+          "description": "The final message: the agent's own account of its work. Default false.",
+          "type": "boolean"
+        },
+        "task": {
+          "description": "The prompts the attempt was sent, once for both sides when they match. Default true.",
+          "type": "boolean"
+        },
+        "transcript": {
+          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": ["tools", "full"]
+            }
+          ]
+        },
+        "turns": {
+          "description": "`'all'`: every turn under `turns`, each with its task, output and (with `transcript`) transcript; `'last'`: the last turn only. Default `'all'`.",
+          "type": "string",
+          "enum": ["last", "all"]
+        }
+      },
+      "additionalProperties": false
     },
     "Rank": {
       "description": "Where an attempt sits in the run, for ordering. Requests without one are served first come.",
