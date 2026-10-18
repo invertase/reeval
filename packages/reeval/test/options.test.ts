@@ -1797,14 +1797,14 @@ ${body}
       /judge\.threshold must be between 0 and 1 \(got 0\.8\) in reeval\.config\.ts/,
     ],
     [
-      'the judge include option, which is state.diff',
-      `judge: { model: fakeJudge({ score: 0.9 }), include: ['src/'] },`,
-      /Unknown judge option "include" in reeval\.config\.ts\. Did you mean "state\.diff"\?/,
+      'a judge diff option outside state',
+      `judge: { model: fakeJudge({ score: 0.9 }), diff: ['src/'] },`,
+      /Unknown judge option "diff" in reeval\.config\.ts\. Did you mean "state\.diff"\?/,
     ],
     [
-      'the judge files option, which is state.contents',
-      `judge: { model: fakeJudge({ score: 0.9 }), files: ['README.md'] },`,
-      /Unknown judge option "files" in reeval\.config\.ts\. Did you mean "state\.contents"\?/,
+      'a judge contents option outside state',
+      `judge: { model: fakeJudge({ score: 0.9 }), contents: ['README.md'] },`,
+      /Unknown judge option "contents" in reeval\.config\.ts\. Did you mean "state\.contents"\?/,
     ],
     [
       'a misspelt judge.state key',

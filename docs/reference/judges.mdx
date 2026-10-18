@@ -188,7 +188,7 @@ analysis: {
 | A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in reeval.config.ts`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
 | An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
-| An unknown option | `Unknown judge option "include" in reeval.config.ts. Did you mean "state.diff"?`; on a call, `… in c.judge(). …`. `on` outside a call: `on is per call: c.judge(question, { on }).` |
+| An unknown option | `Unknown judge option "diff" in reeval.config.ts. Did you mean "state.diff"?`; on a call, `… in c.judge(). …`. `on` outside a call: `on is per call: c.judge(question, { on }).` |
 | An unknown `state` key | `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` |
 | A bad `state` value | `judge.state.turns must be 'last' or 'all' (got "first") in evals/a.eval.ts › lands`; `state` itself must be an object such as `{ transcript: 'tools' }` |
 | A check it hasn't run | `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` |

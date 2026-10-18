@@ -867,21 +867,21 @@ test("the judge's state.diff patterns filter its diff and files, the last match 
     patch: paths.map((p) => added(p, `// ${p}`)).join(''),
     files: paths.map((path) => ({ path, status: 'added' })),
   }
-  const only = judgeDiff(diff, { include: ['src/', '!*.test.ts', '!src/secret/', 'src/secret/'] })
+  const only = judgeDiff(diff, { patterns: ['src/', '!*.test.ts', '!src/secret/', 'src/secret/'] })
   assert.deepEqual(only.files, ['added src/app.ts', 'added src/secret/key.ts'])
   assert.match(only.patch, /src\/app\.ts/)
   assert.match(only.patch, /src\/secret\/key\.ts/, 'a later pattern includes it again')
   assert.doesNotMatch(
     only.patch,
     /README|app\.test|dist\//,
-    'nothing outside include, not even a marker',
+    'nothing outside the patterns, not even a marker',
   )
   assert.deepEqual(only.dropped, [
     'src/app.test.ts: not in state.diff',
     'README.md: not in state.diff',
     'dist/a.js: not in state.diff',
   ])
-  const without = judgeDiff(diff, { include: ['!README.md'] })
+  const without = judgeDiff(diff, { patterns: ['!README.md'] })
   assert.deepEqual(without.files, [
     'added src/app.ts',
     'added src/app.test.ts',

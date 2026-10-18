@@ -70,7 +70,7 @@ async function draftState(src: StateSources): Promise<{ draft: Draft; dropped: s
   }))
   const contents = await filesWhole(wanted.contents, src)
   const shown = judgeDiff(subject.diff, {
-    ...(Array.isArray(wanted.diff) ? { include: wanted.diff } : {}),
+    ...(Array.isArray(wanted.diff) ? { patterns: wanted.diff } : {}),
     ...(contents ? { inFull: new Set(Object.keys(contents)) } : {}),
   })
   const checks = checksShown(wanted.checks, src.checks)

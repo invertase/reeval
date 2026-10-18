@@ -36,7 +36,7 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `env.API_KEY in reeval.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` | Use the callback form and `secret()` or `secret.fromEnv()`. |
 | `files["../x"] in defineEnvironment("e"): paths are relative to the workspace, or start with ~/ for the home directory, and never use ..` | Write the file inside the workspace or home; an absolute path or `..` would land outside the sandbox's folders (on the fake sandbox, on your machine). Backslashes get `use forward slashes (docs/api.md)`. |
 | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` | Use a model string in the config. |
-| `Unknown judge option "include" in reeval.config.ts. Did you mean "state.diff"?` | Use the suggested key. See [Judges](/reference/judges#what-the-judge-is-given). |
+| `Unknown judge option "diff" in reeval.config.ts. Did you mean "state.diff"?` | Use the suggested key. See [Judges](/reference/judges#what-the-judge-is-given). |
 | `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` | Use the suggested key. A bad value names what the key takes, such as `judge.state.turns must be 'last' or 'all' (got "first")`. |
 | `judge.providerOptions maps each provider to an object of JSON values, …` | Key `providerOptions` by provider, each an object: `{ google: { thinkingConfig: { thinkingBudget: 0 } } }`. |
 | `The defineConfig callback in reeval.config.ts returned a Promise. …` | Make the callback synchronous. |

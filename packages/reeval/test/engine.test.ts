@@ -1252,7 +1252,7 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it 
     const p = await project('judge-state-call', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('unknown', async (c) => { await c.send('go'); await c.judge('ok?', { include: ['src/'] } as never) })
+evaluate('unknown', async (c) => { await c.send('go'); await c.judge('ok?', { diff: ['src/'] } as never) })
 evaluate('not run', async (c) => { await c.send('go'); await c.judge('ok?', { state: { checks: ['npm tset'] } }) })
 evaluate('on off', async (c) => { await c.send('go'); await c.judge('ok?', { on: 'x', state: { output: false } }) })
 evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', { state: { output: false } })).toPass() })
@@ -1262,7 +1262,7 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('ok?', 
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /Unknown judge option "include" in c\.judge\(\)\. Did you mean "state\.diff"\?/,
+      /Unknown judge option "diff" in c\.judge\(\)\. Did you mean "state\.diff"\?/,
     )
     assert.match(
       r.stdout,
