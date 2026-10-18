@@ -332,6 +332,30 @@ evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (c) => {
     const [flaky] = await query(p.dir, 'SELECT pass, counted, verdict, cause FROM flaky_cells')
     assert.deepEqual(flaky, { pass: 3, counted: 6, verdict: 'flaky', cause: 'agent' })
   })
+
+  test('the same change passing and failing its check is caused by the check', async () => {
+    const flips = (harness: string) => ({
+      'reeval.config.ts': fakeConfig({ harness }),
+      'evals/f.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (c) => {
+  await c.send('go')
+  expect(c.attempt.n % 2, 'a racy check').toBe(1)
+})
+`,
+    })
+    const same = await project('flaky-check', flips(`{ files: { 'out.txt': 'same' } }`))
+    assert.equal((await runCli(same.dir)).code, 0)
+    const [flaky] = await query(same.dir, 'SELECT pass, counted, cause FROM flaky_cells')
+    assert.deepEqual(flaky, { pass: 3, counted: 6, cause: 'check' })
+    // Twin: each attempt writes something else, so the agent's work differs and may be why.
+    const differs = await project(
+      'flaky-check-twin',
+      flips(`{ script: [[{ exec: 'date +%s%N > out.txt' }]] }`),
+    )
+    assert.equal((await runCli(differs.dir)).code, 0)
+    const [twin] = await query(differs.dir, 'SELECT cause FROM flaky_cells')
+    assert.deepEqual(twin, { cause: 'agent' })
+  })
 })
 
 describe('effort next to lift', () => {
