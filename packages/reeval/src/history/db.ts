@@ -377,6 +377,19 @@ export function toolCalls(transcript: string): ToolCall[] {
   return calls
 }
 
+/** `classifyCall`, but a call its heuristic can't read counts as workspace: one transcript line can't stop the sync. */
+function classifyOrWorkspace(
+  tool: string,
+  target: string,
+  ctx: ClassContext,
+): ReturnType<typeof classifyCall> {
+  try {
+    return classifyCall(tool, target, ctx)
+  } catch {
+    return { class: 'workspace', files: [] }
+  }
+}
+
 /**
  * What a cell's results can be pooled on across runs: its fingerprint parts, with the context
  * part replaced by the context files that aren't an agent CLI's own runtime state.
@@ -638,7 +651,7 @@ function insertRun(
         verify: a.checks.map((c) => c.command),
       }
       for (const t of transcript ? toolCalls(transcript) : []) {
-        const call = classifyCall(t.tool, t.target, ctx)
+        const call = classifyOrWorkspace(t.tool, t.target, ctx)
         run(
           'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           record.runId,

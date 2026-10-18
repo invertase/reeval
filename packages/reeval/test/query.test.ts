@@ -246,6 +246,32 @@ evaluate('loads', { environment: skilled }, async (c) => {
     assert.deepEqual(rows, [{ skill: 'house-greeting', reads: 1, opened: 1 }])
   })
 
+  test('a shell word with an unbalanced [ is read literally, not as a regex', async () => {
+    const commands = ['echo [foo', 'node -e "a[0"', 'cat {a[0,b}', 'ls {*,b[}']
+    const tools = commands.map((command) => ({ tool: 'shell', input: { command }, output: '' }))
+    const p = await project('query-unbalanced-bracket', {
+      'reeval.config.ts': fakeConfig({ harness: `{ tools: ${JSON.stringify(tools)} }` }),
+      'skills/house-greeting/SKILL.md': skill('house-greeting'),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox: fakeSandbox(),
+  skills: [skill.local('../skills/house-greeting')],
+}))
+evaluate('brackets', { environment: skilled }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const rows = await query(p.dir, 'SELECT target, class FROM tool_calls ORDER BY line')
+    assert.deepEqual(
+      rows,
+      commands.map((target) => ({ target, class: 'workspace' })),
+    )
+    assert.equal((await query(p.dir, 'effort')).length, 1)
+  })
+
   test('failing attempts join skills by environment digest, not name', async () => {
     const p = await project('query-joins', {
       'reeval.config.ts': fakeConfig(),
@@ -429,6 +455,17 @@ describe('tool-call classes', () => {
     assert.equal(cls('web_fetch', 'https://example.com').class, 'web')
     assert.equal(cls('edit', 'src/App.tsx').class, 'workspace')
     assert.equal(cls('read', '~/.agents/skills/other/SKILL.md').class, 'workspace')
+  })
+
+  test('glob words never throw: [ is literal, and braces hold globs, not regexes', () => {
+    for (const command of ['echo [foo', 'cat {a[0,b}', 'ls {x*,b[}', 'cat {?,(}', 'ls *[']) {
+      assert.deepEqual(cls('shell', command), { class: 'workspace', files: [] }, command)
+    }
+    assert.deepEqual(cls('shell', 'cat ~/.agents/skills/fui-new/references/{re*,x}.md'), {
+      class: 'context',
+      files: ['~/.agents/skills/fui-new/references/react.md'],
+    })
+    assert.equal(cls('shell', 'cat AGENTS.m[d]').class, 'workspace')
   })
 })
 
