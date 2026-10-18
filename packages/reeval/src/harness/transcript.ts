@@ -1,4 +1,5 @@
 import { SANDBOX_ROOT, WORKSPACE_DIR } from '@reeval/sandbox-docker'
+import { isObjectLike } from '../object.ts'
 import type { FileEditEvent, TranscriptEvent } from '../types.ts'
 
 /** One stream part and when it arrived, in ms since the turn started. */
@@ -9,8 +10,7 @@ type Pending = { ms: number; part: StampedPart['part'] }
 type Timing = { start?: number; end?: number; at?: number }
 
 const str = (value: unknown) => (typeof value === 'string' ? value : '')
-const record = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+const record = (value: unknown): Record<string, unknown> => (isObjectLike(value) ? value : {})
 
 /** The harness's synthetic "fileChange" twin of every edit, which always says "modify". */
 const isFileChangeEcho = (part: StampedPart['part']) =>

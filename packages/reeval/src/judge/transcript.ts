@@ -1,3 +1,4 @@
+import { isObjectLike } from '../object.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { JudgeStateOptions, TranscriptEvent } from '../types.ts'
 
@@ -10,10 +11,10 @@ const text = (value: unknown) =>
   typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value))
 
 function toolInput(input: unknown): string {
-  if (input && typeof input === 'object') {
-    const o = input as Record<string, unknown>
+  if (isObjectLike(input)) {
     for (const key of ['command', 'cmd', 'path', 'file_path', 'url', 'query', 'pattern']) {
-      if (typeof o[key] === 'string') return o[key]
+      const value = input[key]
+      if (typeof value === 'string') return value
     }
   }
   return text(input)

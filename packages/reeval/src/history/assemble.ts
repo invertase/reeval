@@ -829,15 +829,9 @@ function rollUp(evals: EvalEntry[]): void {
 function sequence(evals: EvalEntry[]): void {
   const started = evals
     .flatMap((e) => e.attempts)
-    .filter((a) => a.startedAt !== null)
+    .filter((a): a is AttemptRecord & { startedAt: string } => a.startedAt !== null)
     .sort((a, b) =>
-      (a.startedAt as string) < (b.startedAt as string)
-        ? -1
-        : (a.startedAt as string) > (b.startedAt as string)
-          ? 1
-          : a.key < b.key
-            ? -1
-            : 1,
+      a.startedAt < b.startedAt ? -1 : a.startedAt > b.startedAt ? 1 : a.key < b.key ? -1 : 1,
     )
   started.forEach((a, i) => {
     a.seq = i + 1

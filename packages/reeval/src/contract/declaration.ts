@@ -15,10 +15,7 @@ import type { EvalOptionsData } from '../types.ts'
 import { type Assert, dataProblem, type Same } from './shared.ts'
 
 /** A node's options: any object, until the cascade checks it. Its JSON Schema is the type's. */
-export const evalOptionsDataSchema = z.record(
-  z.string(),
-  z.unknown(),
-) as unknown as z.ZodType<EvalOptionsData>
+export const evalOptionsDataSchema = z.record(z.string(), z.unknown()) as z.ZodType<EvalOptionsData>
 
 export const declaredModeSchema = z
   .enum(['run', 'skip', 'only'])

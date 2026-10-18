@@ -11,6 +11,7 @@ import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
+import { rowsOf } from './rows.ts'
 import { type ClassContext, classifyCall } from './tool-class.ts'
 import { toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
@@ -786,9 +787,9 @@ function removeRun(db: DatabaseSync, runId: string): void {
 }
 
 function freshSchema(db: DatabaseSync): void {
-  const objects = db
-    .prepare("SELECT type, name FROM sqlite_schema WHERE type IN ('table', 'view')")
-    .all() as Array<{ type: string; name: string }>
+  const objects = rowsOf<{ type: string; name: string }>(
+    db.prepare("SELECT type, name FROM sqlite_schema WHERE type IN ('table', 'view')"),
+  )
   for (const o of objects) {
     if (o.name.startsWith('sqlite_')) continue
     db.exec(`DROP ${o.type === 'view' ? 'VIEW' : 'TABLE'} IF EXISTS "${o.name}"`)
@@ -805,10 +806,10 @@ function freshSchema(db: DatabaseSync): void {
 
 function current(db: DatabaseSync): boolean {
   try {
-    const rows = db.prepare('SELECT key, value FROM meta').all() as Array<{
+    const rows = rowsOf<{
       key: string
       value: string
-    }>
+    }>(db.prepare('SELECT key, value FROM meta'))
     const meta = Object.fromEntries(rows.map((r) => [r.key, r.value]))
     return meta.version === String(DB_VERSION) && meta.build === String(BUILD)
   } catch {
@@ -853,14 +854,12 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
     }
   }
   const known = new Map(
-    (
-      db.prepare('SELECT run_id, path, size, mtime_ms FROM files').all() as Array<{
-        run_id: string
-        path: string
-        size: number
-        mtime_ms: number
-      }>
-    ).map((r) => [r.run_id, r]),
+    rowsOf<{
+      run_id: string
+      path: string
+      size: number
+      mtime_ms: number
+    }>(db.prepare('SELECT run_id, path, size, mtime_ms FROM files')).map((r) => [r.run_id, r]),
   )
   let added = 0
   let removed = 0
@@ -954,16 +953,16 @@ export async function openHistoryDb(
       }
     },
     schema() {
-      const objects = db
-        .prepare(
+      const objects = rowsOf<{ name: string; type: 'table' | 'view' }>(
+        db.prepare(
           `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', 'family_lift_m', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
-        )
-        .all() as Array<{ name: string; type: 'table' | 'view' }>
+        ),
+      )
       return objects.map((o) => ({
         ...o,
-        columns: (
-          db.prepare(`PRAGMA table_info("${o.name}")`).all() as Array<{ name: string }>
-        ).map((c) => c.name),
+        columns: rowsOf<{ name: string }>(db.prepare(`PRAGMA table_info("${o.name}")`)).map(
+          (c) => c.name,
+        ),
       }))
     },
     close: () => db.close(),

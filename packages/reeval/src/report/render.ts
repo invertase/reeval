@@ -1,9 +1,10 @@
 // `reeval report`'s bundle as text: the terminal summary, report.md, and the shorter issue body.
 import type { DoctorReport } from '../doctor.ts'
+import { isObjectLike } from '../object.ts'
 import type { ReportBundle } from './types.ts'
 
 const isDoctor = (value: unknown): value is DoctorReport =>
-  !!value && typeof value === 'object' && Array.isArray((value as DoctorReport).checks)
+  isObjectLike(value) && Array.isArray(value.checks)
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -52,7 +53,9 @@ export function runLine(b: ReportBundle): string | null {
 }
 
 export function doctorLine(b: ReportBundle): string {
-  if (!isDoctor(b.doctor)) return `didn't run (${(b.doctor as { error?: string })?.error ?? '?'})`
+  if (!isDoctor(b.doctor)) {
+    return `didn't run (${(isObjectLike(b.doctor) ? b.doctor.error : undefined) ?? '?'})`
+  }
   const d = b.doctor
   const failing = [...new Set(d.checks.filter((c) => c.status === 'fail').map((c) => c.id))]
   return `${plural(d.problems, 'problem')}${failing.length ? ` (${failing.join(', ')})` : ''}, ${plural(d.warnings, 'warning')}`

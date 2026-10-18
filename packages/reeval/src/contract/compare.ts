@@ -2,6 +2,7 @@
 // object itself. Environments in it are checked by whichever schema the caller passes (an
 // `Environment` from `defineEnvironment`, or environment data from another language).
 import { z } from 'zod'
+import { isObjectLike } from '../object.ts'
 import type {
   CompareGate,
   CompareOptions,
@@ -185,11 +186,7 @@ export function compareProblem(value: unknown, where: string, environment: z.Zod
   if (Array.isArray(value)) {
     return `compare must be an object in ${where}. Use compare: { baseline, variants: [...] }.`
   }
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !Array.isArray((value as { variants?: unknown }).variants)
-  ) {
+  if (!isObjectLike(value) || !Array.isArray(value.variants)) {
     return `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions?, across? }.`
   }
   return refusal(compareSchema(environment), value, explain(where), { order: ORDER })

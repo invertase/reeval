@@ -14,8 +14,9 @@ const BUILTIN_BY_NATIVE = new Map<string, string>([
   ['patch', 'edit'],
 ])
 
-const record = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+const isObjectLike = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+const record = (value: unknown): Record<string, unknown> => (isObjectLike(value) ? value : {})
 
 /** OpenCode's name for an MCP server in its tools' names (`-` becomes `_`). */
 const namespaceOf = (server: string) => server.replace(/[^a-zA-Z0-9]/g, '_')

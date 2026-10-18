@@ -198,7 +198,7 @@ async function readScratch(root: string, runId: string): Promise<RunRecord | nul
 async function listCandidates(root: string, now = Date.now()): Promise<Candidate[]> {
   const found = new Map<string, Candidate>()
   const stagingRoot = join(root, '.reeval', 'staging')
-  const names = await readdir(stagingRoot).catch(() => [] as string[])
+  const names = await readdir(stagingRoot).catch((): string[] => [])
   for (const runId of names.filter((n) => RUN_ID.test(n))) {
     const dir = join(stagingRoot, runId)
     const info = await stat(dir).catch(() => null)
@@ -218,7 +218,7 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
     })
   }
   const scratch = scratchDir(root)
-  const records = (await readdir(scratch).catch(() => [] as string[])).filter(
+  const records = (await readdir(scratch).catch((): string[] => [])).filter(
     (n) => n.endsWith('.json') && RUN_ID.test(n.slice(0, -5)),
   )
   for (const name of records) {

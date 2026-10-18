@@ -110,7 +110,7 @@ export async function listAnalyses(
   const entries: AnalysisEntry[] = []
   for (const dir of historyDirs) {
     const folder = savedAnalysisDir(dir, runId)
-    const names = (await readdir(folder).catch(() => [] as string[])).filter((n) =>
+    const names = (await readdir(folder).catch((): string[] => [])).filter((n) =>
       n.endsWith('.json'),
     )
     for (const name of names.sort().reverse()) {
@@ -122,7 +122,7 @@ export async function listAnalyses(
   }
   if (withCache) {
     const cache = analysisCacheDir(root)
-    for (const name of await readdir(cache).catch(() => [] as string[])) {
+    for (const name of await readdir(cache).catch((): string[] => [])) {
       if (!name.endsWith('.json')) continue
       const file = join(cache, name)
       const doc = parse(await readFile(file, 'utf8').catch(() => ''), file)
@@ -147,7 +147,7 @@ export async function writeNote(root: string, note: AnalysisNote): Promise<strin
 /** A run's notes, by file name; files that aren't notes are skipped, newer ones with a warning. */
 export async function listNotes(root: string, runId: string): Promise<AnalysisNote[]> {
   const dir = notesDir(root, runId)
-  const names = (await readdir(dir).catch(() => [] as string[])).filter((n) => n.endsWith('.json'))
+  const names = (await readdir(dir).catch((): string[] => [])).filter((n) => n.endsWith('.json'))
   const notes: AnalysisNote[] = []
   for (const name of names.sort()) {
     const file = join(dir, name)

@@ -484,6 +484,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   function decrypt(socket: Duplex, target: Target) {
     const server = http2.createSecureServer(
       { ...credentialsFor(target.host), allowHTTP1: true },
+      // HTTP/2's compatibility response takes the same calls; only its overload types differ.
       (req, res) => void onDecrypted(target, req, res as unknown as Response),
     )
     server.on('upgrade', (req: http.IncomingMessage, s: Duplex, head: Buffer) =>

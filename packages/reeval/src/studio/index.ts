@@ -28,7 +28,7 @@ function listen(app: ReturnType<typeof createStudioApp>, host: string, port: num
   return new Promise<Listening>((resolve, reject) => {
     const server = serve({ fetch: app.fetch, hostname: host, port })
     server.once('error', reject)
-    server.once('listening', () => resolve(server as unknown as Listening))
+    server.once('listening', () => resolve(server))
   })
 }
 

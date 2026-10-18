@@ -37,11 +37,11 @@ const pretty = (value: unknown) =>
 function inputSummary(input: unknown): string {
   if (typeof input === 'string') return input
   if (!input || typeof input !== 'object') return ''
-  const o = input as Record<string, unknown>
   for (const key of ['command', 'cmd', 'path', 'file', 'filePath', 'pattern', 'query', 'url']) {
-    if (typeof o[key] === 'string') return o[key] as string
+    const value = (input as Record<string, unknown>)[key]
+    if (typeof value === 'string') return value
   }
-  const first = Object.values(o).find((v) => typeof v === 'string')
+  const first = Object.values(input).find((v) => typeof v === 'string')
   return typeof first === 'string' ? first : ''
 }
 

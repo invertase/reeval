@@ -1,3 +1,4 @@
+import { isObjectLike } from '../object.ts'
 /** Tools that load a skill by name instead of opening `skills/<name>/`. */
 export const SKILL_LOAD_TOOLS = new Set(['skill', 'Skill', 'load_skill'])
 
@@ -6,11 +7,11 @@ export const SKILL_LOAD_TOOLS = new Set(['skill', 'Skill', 'load_skill'])
  * command or URL, else its input, capped.
  */
 export function toolTarget(input: unknown, tool?: string): string {
-  if (typeof input !== 'object' || input === null) return String(input ?? '').slice(0, 300)
-  const i = input as Record<string, unknown>
+  if (!isObjectLike(input)) return String(input ?? '').slice(0, 300)
   if (tool && SKILL_LOAD_TOOLS.has(tool)) {
     for (const key of ['id', 'name', 'skill']) {
-      if (typeof i[key] === 'string') return (i[key] as string).slice(0, 300)
+      const value = input[key]
+      if (typeof value === 'string') return value.slice(0, 300)
     }
   }
   for (const key of [
@@ -23,7 +24,8 @@ export function toolTarget(input: unknown, tool?: string): string {
     'url',
     'query',
   ]) {
-    if (typeof i[key] === 'string') return (i[key] as string).slice(0, 300)
+    const value = input[key]
+    if (typeof value === 'string') return value.slice(0, 300)
   }
   return JSON.stringify(input).slice(0, 300)
 }

@@ -245,5 +245,5 @@ function fakeNoteModel(
     doStream: async () => {
       throw new Error('the fake analysis model does not stream')
     },
-  } as unknown as LanguageModel
+  } as LanguageModel
 }

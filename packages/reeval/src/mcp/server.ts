@@ -242,7 +242,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
         const record = await showRecord(config, run)
         return format === 'md'
           ? { runId: record.runId, markdown: renderSummary(record).trimEnd() }
-          : (record as unknown as Json)
+          : (record as Json)
       }),
     )
 

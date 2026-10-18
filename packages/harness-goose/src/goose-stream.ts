@@ -17,8 +17,9 @@ const NO_USAGE = {
 const GOOSE_ERROR =
   /^Ran into this error: ([\s\S]*?)\.?\n\nPlease retry if you think this is a transient or recoverable error\.$/
 
-const record = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+const isObjectLike = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+const record = (value: unknown): Record<string, unknown> => (isObjectLike(value) ? value : {})
 
 /**
  * Fixes up one Goose turn's parts from `@ai-sdk/harness-acp`:
@@ -46,13 +47,14 @@ export class GooseStreamTranslator {
     if (part.type === 'raw') {
       const update = record(part.rawValue)
       const content = record(update.content)
-      const failure =
+      if (
         update.sessionUpdate === 'agent_message_chunk' &&
         typeof update.messageId === 'string' &&
         typeof content.text === 'string'
-          ? GOOSE_ERROR.exec(content.text)
-          : null
-      if (failure) this.failures.set(update.messageId as string, failure[1] as string)
+      ) {
+        const failure = GOOSE_ERROR.exec(content.text)
+        if (failure) this.failures.set(update.messageId, failure[1] as string)
+      }
       const call = record(record(record(update._meta).goose).toolCall)
       if (
         update.sessionUpdate === 'tool_call' &&
@@ -72,10 +74,11 @@ export class GooseStreamTranslator {
       return part
     }
     if (part.type === 'finish') return { ...part, totalUsage: NO_USAGE }
-    const failure = typeof part.id === 'string' ? this.failures.get(part.id) : undefined
-    if (failure !== undefined) {
-      if (part.type === 'text-delta' && !this.reported.has(part.id as string)) {
-        this.reported.add(part.id as string)
+    const id = part.id
+    const failure = typeof id === 'string' ? this.failures.get(id) : undefined
+    if (typeof id === 'string' && failure !== undefined) {
+      if (part.type === 'text-delta' && !this.reported.has(id)) {
+        this.reported.add(id)
         return { type: 'error', error: new Error(`Goose's model call failed: ${failure}`) }
       }
       if (part.type === 'text-delta') return { type: 'raw', rawValue: { replaced: part } }

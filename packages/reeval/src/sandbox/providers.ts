@@ -2,9 +2,19 @@
 // images; the fake sandbox needs nothing.
 import { type DockerState, dockerState, ImageBuildError, isTransient } from '@reeval/sandbox-docker'
 import { UsageError } from '../errors.ts'
-import type { DockerSandboxDescriptor, FakeSandboxDescriptor, HarnessDescriptor } from '../types.ts'
+import type {
+  AttemptImage,
+  DockerSandboxDescriptor,
+  FakeSandboxDescriptor,
+  HarnessDescriptor,
+} from '../types.ts'
 import type { Refresh } from './prepare.ts'
-import { PrepareError, type PrepareFailure, type SandboxProvider } from './provider.ts'
+import {
+  type PreparedHandle,
+  PrepareError,
+  type PrepareFailure,
+  type SandboxProvider,
+} from './provider.ts'
 
 /** The key of a Docker sandbox's image: what's in it, not the limits or user it runs with. */
 export const dockerKey = (sandbox: DockerSandboxDescriptor, harness: HarnessDescriptor) => {
@@ -90,6 +100,12 @@ export function dockerProvider(
   }
 }
 
+/**
+ * The image a Docker sandbox's `prepare` returned. Handles are opaque to preflight and round-trip
+ * through `prepared.json`, so only the Docker provider's own type says what this one holds.
+ */
+export const attemptImage = (handle: PreparedHandle): AttemptImage => handle as AttemptImage
+
 /** The fake sandbox is a temp directory on the host: nothing to check or prepare. */
 export const fakeProvider = (): SandboxProvider<FakeSandboxDescriptor> => ({
   kind: 'fake',
@@ -107,8 +123,6 @@ export const fakeProvider = (): SandboxProvider<FakeSandboxDescriptor> => ({
 })
 
 /** A fresh set of providers, one per run: each keeps the run's builds. */
-export const createProviders = (options: { refresh?: Refresh } = {}) =>
-  ({ docker: dockerProvider(options), fake: fakeProvider() }) as unknown as Record<
-    string,
-    SandboxProvider
-  >
+export const createProviders = (
+  options: { refresh?: Refresh } = {},
+): Record<string, SandboxProvider> => ({ docker: dockerProvider(options), fake: fakeProvider() })

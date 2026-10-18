@@ -22,7 +22,7 @@ import type {
 import { prepareAll } from './preflight.ts'
 import { imageHarness, installSteps, projectPath, usesReevalBase } from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
-import { createProviders, dockerKey } from './providers.ts'
+import { attemptImage, createProviders, dockerKey } from './providers.ts'
 
 /**
  * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, plus
@@ -108,22 +108,23 @@ async function fromStatus(from: string, ref: string): Promise<Pick<Stage, 'statu
 export async function imageStages(target: ImageTarget, root: string): Promise<Stage[]> {
   const { sandbox, harness } = target
   const stages: Stage[] = []
-  const exists = async (ref: string) => {
+  type Probe = { info: Awaited<ReturnType<typeof imageInfo>>; status: StageStatus; detail: string }
+  const exists = async (ref: string): Promise<Probe> => {
     const info = await imageInfo(ref)
     return {
       info,
-      status: (info ? 'ready' : 'build') as StageStatus,
+      status: info ? 'ready' : 'build',
       detail: info ? `built (${short(info.id)})` : 'not built yet',
     }
   }
-  const reevalBase = async () => {
+  const reevalBase = async (): Promise<Probe> => {
     const info = await imageInfo(imageFor(harness))
-    if (!info) return { info, status: 'build' as StageStatus, detail: 'not built yet' }
+    if (!info) return { info, status: 'build', detail: 'not built yet' }
     return info.labels[LABEL.context] === contextHash()
-      ? { info, status: 'ready' as StageStatus, detail: `built (${short(info.id)})` }
+      ? { info, status: 'ready', detail: `built (${short(info.id)})` }
       : {
           info,
-          status: 'stale' as StageStatus,
+          status: 'stale',
           detail: "reeval's base changed: rebuilt before the run",
         }
   }
@@ -312,7 +313,7 @@ export async function buildImages(
   return targets.map((t, i) => {
     const o = outcomes[i] as (typeof outcomes)[number]
     return o.ok
-      ? { ...t, ok: true, image: o.handle as unknown as AttemptImage, ms: o.ms }
+      ? { ...t, ok: true, image: attemptImage(o.handle), ms: o.ms }
       : { ...t, ok: false, failure: o.failure, ms: o.ms }
   })
 }

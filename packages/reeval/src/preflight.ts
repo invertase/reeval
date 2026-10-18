@@ -11,8 +11,7 @@ import {
 } from './sandbox/preflight.ts'
 import { imageHarness } from './sandbox/prepare.ts'
 import { PrepareError, type SandboxProvider } from './sandbox/provider.ts'
-import { createProviders } from './sandbox/providers.ts'
-import type { AttemptImage } from './types.ts'
+import { attemptImage, createProviders } from './sandbox/providers.ts'
 
 export type SandboxImage = {
   ref: string
@@ -83,7 +82,7 @@ export async function preflight(
   const images: SandboxImage[] = []
   for (const o of outcomes) {
     if (!o.ok || o.target.kind !== 'docker') continue
-    const { ref, id, agentCli } = o.handle as unknown as AttemptImage
+    const { ref, id, agentCli } = attemptImage(o.handle)
     if (images.some((i) => i.id === id)) continue
     const info = await imageInfo(ref)
     images.push({

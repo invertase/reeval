@@ -62,7 +62,7 @@ export async function listLive(
   if (!source.scratch) return []
   const now = options.now ?? Date.now()
   const staleMs = options.staleMs ?? STALE_MS
-  const names = await readdir(stagingRoot(source.root)).catch(() => [] as string[])
+  const names = await readdir(stagingRoot(source.root)).catch((): string[] => [])
   const runs: LiveRun[] = []
   for (const runId of names
     .filter((n) => RUN_ID.test(n))

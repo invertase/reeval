@@ -18,7 +18,7 @@ import { RunsPage } from '@/pages/runs'
 
 const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined)
 const oneOf = <T extends string>(values: readonly T[], v: unknown): T | undefined =>
-  values.includes(v as T) ? (v as T) : undefined
+  values.find((value) => value === v)
 
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: Shell,

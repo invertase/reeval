@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { parseEnv } from 'node:util'
-import { COMMANDS, FLAGS, type FlagName } from '../cli-spec.ts'
+import { COMMANDS, FLAGS, type FlagName, isFlagName } from '../cli-spec.ts'
 import { REDACTED, redactSecrets, registerSecret } from '../redact.ts'
 
 export type Scrubber = {
@@ -113,7 +113,7 @@ export function redactArgv(argv: string[]): string[] {
       const eq = arg.indexOf('=')
       const head = eq === -1 ? arg : arg.slice(0, eq)
       const name = head.startsWith('--') ? head.slice(2) : shortFlag(head.slice(1))
-      const spec = name && name in FLAGS ? FLAGS[name as FlagName] : undefined
+      const spec = name && isFlagName(name) ? FLAGS[name] : undefined
       if (!spec) {
         out.push('<flag>')
         continue

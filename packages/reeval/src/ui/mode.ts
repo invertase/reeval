@@ -1,6 +1,7 @@
 // Picks how `reeval run` prints, following Turborepo's flag names and defaults where they fit
 // (`--log-order`, `--log-prefix`, `--output-logs`) and its CI detection.
 import { UsageError } from '../config.ts'
+import { isOneOf } from '../object.ts'
 
 export type UiMode = 'live' | 'plain' | 'agent'
 /** `stream` prints every line as it happens; `grouped` prints each attempt as one block. */
@@ -57,7 +58,7 @@ function pick<T extends string>(
   allowed: readonly T[],
 ): T | 'auto' | undefined {
   if (value === undefined || value === '') return undefined
-  if (value === 'auto' || (allowed as readonly string[]).includes(value)) return value as T | 'auto'
+  if (value === 'auto' || isOneOf(allowed, value)) return value
   throw new UsageError(`${name} must be one of ${[...allowed, 'auto'].join(', ')}`)
 }
 

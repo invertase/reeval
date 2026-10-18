@@ -126,7 +126,7 @@ export function cannedModel(answer: { text: string } | { error: string }): Langu
     doStream: async () => {
       throw new Error('the fake analysis model does not stream')
     },
-  } as unknown as LanguageModel
+  }
 }
 
 /** A language model that answers with the fake's output. */

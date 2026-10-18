@@ -11,6 +11,7 @@ import { collectingFile, getRunContext, registerGroup, registerTest } from './en
 import { inCI } from './env.ts'
 import { callerDir, environmentFrom, sandboxPaths } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
 import { planEval } from './plan-eval.ts'
 import type {
@@ -211,9 +212,7 @@ function formatName(template: string, item: unknown, index: number): string {
     .replace(/%#/g, String(index))
     .replace(/%s/g, typeof item === 'string' ? item : JSON.stringify(item))
     .replace(/\$([A-Za-z_][A-Za-z0-9_]*)/g, (whole, key: string) =>
-      typeof item === 'object' && item !== null && key in item
-        ? String((item as Record<string, unknown>)[key])
-        : whole,
+      isObjectLike(item) && key in item ? String(item[key]) : whole,
     )
 }
 
@@ -228,10 +227,11 @@ export type EachOptions = {
 
 function checkEachOptions(options: unknown): EachOptions {
   if (options === undefined) return {}
-  const keys = typeof options === 'object' && options !== null ? Object.keys(options) : null
-  const pool = (options as EachOptions | null)?.pool
-  if (keys?.every((k) => k === 'pool') && (pool === undefined || typeof pool === 'boolean'))
-    return options as EachOptions
+  if (isObjectLike(options) && Object.keys(options).every((k) => k === 'pool')) {
+    const { pool } = options
+    if (pool === undefined) return {}
+    if (typeof pool === 'boolean') return { pool }
+  }
   throw new UsageError(
     `evaluate.each(cases, options) takes { pool?: boolean } (got ${JSON.stringify(options)}). Eval options such as compare go after the name: evaluate.each(cases)(name, { compare }, fn).`,
   )
