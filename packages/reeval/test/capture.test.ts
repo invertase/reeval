@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { deflateRawSync } from 'node:zlib'
+import { msysTreeKill } from '../src/attempt/capture.ts'
 import { fakeInstructions } from '../src/capture/fake-instructions.ts'
 import {
   cacheLabel,
@@ -20,6 +22,7 @@ import {
   stubPng,
 } from '../src/capture/index.ts'
 import { unzip } from '../src/capture/zip.ts'
+import { posixShell } from '../src/sandbox/fake.ts'
 
 const viewport = { width: 1280, height: 720 }
 
@@ -249,4 +252,37 @@ test('unzip reads store and deflate entries', () => {
   deflated.copy(def, 30 + name.length)
   assert.equal(unzip(store).get('a.txt')?.toString(), 'hi')
   assert.equal(unzip(def).get('a.txt')?.toString(), 'hi')
+})
+
+test('msysTreeKill stops the pid and its descendants by ppid, each Win32 pid first', () => {
+  const proc = mkdtempSync(join(tmpdir(), 'reeval-proc-'))
+  const entry = (pid: number, ppid: number, winpid: number) => {
+    mkdirSync(join(proc, String(pid)))
+    writeFileSync(join(proc, String(pid), 'ppid'), `${ppid}\n`)
+    writeFileSync(join(proc, String(pid), 'winpid'), `${winpid}\r\n`)
+  }
+  entry(100, 1, 5100)
+  entry(101, 100, 5101)
+  entry(102, 101, 5102)
+  entry(200, 1, 5200)
+  entry(201, 200, 5201)
+  const script = msysTreeKill('100', '90', proc.replaceAll('\\', '/'))
+  const r = spawnSync(
+    posixShell(),
+    [
+      '-c',
+      `exec 3>&1\ntaskkill() { echo "taskkill $3" >&3; }\nkill() { echo "kill $*" >&3; }\n${script}`,
+    ],
+    { encoding: 'utf8' },
+  )
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(r.stdout.trim().split('\n'), [
+    'taskkill 5100',
+    'kill -9 100',
+    'taskkill 5101',
+    'kill -9 101',
+    'taskkill 5102',
+    'kill -9 102',
+    'kill -9 -90',
+  ])
 })
