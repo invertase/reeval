@@ -18,6 +18,7 @@ export type HarnessRow = {
     | 'goose'
     | 'pi'
     | 'codex'
+    | 'grok-build'
     | 'fx'
     | 'fx-gateway'
   /**
@@ -244,6 +245,20 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
+  },
+  {
+    id: 'grok-build',
+    model: 'grok-4.6',
+    key: { name: 'XAI_API_KEY', from: ['XAI_API_KEY'] },
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.x.ai'],
+    apiHost: 'api.x.ai',
+    tokens: true,
+    // Its ACP server names no model; the turn records the one xAI's Responses API answered with.
+    servedModel: /^grok-4\.6/,
+    wireModel: /^grok-4\.6/,
   },
 ]
 

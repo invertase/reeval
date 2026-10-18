@@ -7,6 +7,7 @@ import {
   fakeHarness,
   fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from 'reeval/harness'
@@ -32,6 +33,8 @@ const harness = () => {
       return pi({ model })
     case 'codex':
       return codex({ model })
+    case 'grok-build':
+      return grokBuild({ model })
     case 'fx':
       return fx({ model })
     default:
