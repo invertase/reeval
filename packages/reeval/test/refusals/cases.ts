@@ -22,6 +22,7 @@ import {
   fakeHarness,
   fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from '../../src/harness.ts'
@@ -211,6 +212,10 @@ export const CASES: Record<string, Case[]> = {
     ['pi effort empty', any(pi, { model: 'gemini-3.8-flash', effort: '' })],
     ['codex with a provider', any(codex, { model: 'openai/gpt-5.6-luna' })],
     ['codex without a model', any(codex, {})],
+    ['grokBuild with a provider', any(grokBuild, { model: 'xai/grok-4.6' })],
+    ['grokBuild without a model', any(grokBuild, {})],
+    ['grokBuild effort empty', any(grokBuild, { model: 'grok-4.6', effort: '' })],
+    ['grokBuild good', any(grokBuild, { model: 'grok-4.6', effort: 'high' })],
     ['fx without a model', any(fx, {})],
     ['fx with an empty model', any(fx, { model: '' })],
     ['fx with a typo', any(fx, { model: 'gpt-4.1', efort: 'high' })],
@@ -249,6 +254,7 @@ export const CASES: Record<string, Case[]> = {
     ['data: cursor without a model', harnesses({ kind: 'cursor' })],
     ['data: cursor with a typo', harnesses({ kind: 'cursor', model: 'm', modle: 'x' })],
     [
+      ['data: grok-build with a provider', harnesses({ kind: 'grok-build', model: 'xai/g' })],
       'data: claude-code with a bad effort',
       harnesses({ kind: 'claude-code', model: 'm', effort: 'huge' }),
     ],

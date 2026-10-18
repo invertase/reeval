@@ -39,6 +39,11 @@ import {
   GOOSE_WORKSPACE_SKILLS_DIR,
 } from '@reeval/harness-goose'
 import {
+  GROK_ENDPOINTS,
+  GROK_HOME_SKILLS_DIR,
+  GROK_WORKSPACE_SKILLS_DIR,
+} from '@reeval/harness-grok-build'
+import {
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
   openCodeEndpoints,
@@ -62,6 +67,7 @@ import {
   cursorMcpServers,
   fxMcpServers,
   gooseMcpServers,
+  grokBuildMcpServers,
   LAYOUTS,
   layoutOf,
   opencodeVars,
@@ -78,6 +84,7 @@ import {
   fakeHarness,
   fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from '../src/harness.ts'
@@ -175,6 +182,7 @@ describe('the Claude Code harness', () => {
       goose({ model: 'm' }),
       pi({ model: 'm' }),
       codex({ model: 'm' }),
+      grokBuild({ model: 'm' }),
       fx({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
@@ -183,7 +191,7 @@ describe('the Claude Code harness', () => {
     }
     assert.throws(
       () => fakeHarness({ layout: 'cline' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx' \(got "cline"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx', 'grok-build' \(got "cline"\)/,
     )
   })
 
@@ -638,6 +646,79 @@ describe('the fx harness', () => {
   })
 })
 
+describe('the Grok Build harness', () => {
+  test('is plain data with its own cell id, and needs an xAI model id', () => {
+    const h = grokBuild({ model: 'grok-4.6' })
+    assert.deepEqual(h, { kind: 'grok-build', model: 'grok-4.6' })
+    assert.equal(harnessId(h), 'grok-build:grok-4.6')
+    assert.equal(
+      harnessId(grokBuild({ model: 'grok-4.6', effort: 'high' })),
+      'grok-build:grok-4.6[effort=high]',
+    )
+    for (const model of [undefined, '', 'xai/grok-4.6']) {
+      assert.throws(
+        () => grokBuild({ model } as never),
+        /grokBuild\(\) needs an xAI model id, without a provider, since it runs on an xAI API key, e\.g\. grokBuild\(\{ model: 'grok-4\.6' \}\)/,
+        String(model),
+      )
+    }
+  })
+
+  test('is accepted by the config and needs XAI_API_KEY', () => {
+    const config = resolveConfig({ harness: [grokBuild({ model: 'm' })] }, '/p')
+    assert.deepEqual(missingCredentials(config, {}), ['XAI_API_KEY'])
+    assert.deepEqual(missingCredentials(config, { XAI_API_KEY: 'x' }), [])
+  })
+
+  test('Grok reads rules from AGENTS.md, repo skills from .grok/skills, home skills in its own home', () => {
+    const h = grokBuild({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: GROK_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/${GROK_HOME_SKILLS_DIR}`,
+    })
+    assert.equal(imageHarness(h), 'grok-build')
+    assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
+  })
+
+  test("gets MCP servers in ACP's McpServer shape, a bare stdio command through env", () => {
+    assert.deepEqual(
+      grokBuildMcpServers({
+        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/r' } },
+        local: { transport: 'stdio', command: '/usr/bin/node', args: ['s.mjs'] },
+        docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
+      }),
+      {
+        files: {
+          command: '/usr/bin/env',
+          args: ['npx', 'mcp-files'],
+          env: [{ name: 'ROOT', value: '/r' }],
+        },
+        local: { command: '/usr/bin/node', args: ['s.mjs'], env: [] },
+        docs: {
+          type: 'http',
+          url: 'https://docs.example/mcp',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
+    )
+  })
+
+  test("the served model is what each model call's response names, on api.x.ai only", () => {
+    const brokering = brokeringFor(grokBuild({ model: 'grok-4.6' }))
+    assert.equal(brokering?.credential, 'XAI_API_KEY')
+    assert.deepEqual(
+      brokering?.modelResponses?.map((e) => ('exact' in e.path ? e.path.exact : '')),
+      ['/v1/chat/completions', '/v1/responses'],
+    )
+    const served = brokering?.servedModel
+    const call = { method: 'POST', host: 'api.x.ai', path: '/v1/chat/completions' }
+    assert.equal(served?.({ ...call, responseModel: 'grok-4.6-0709' }), 'grok-4.6-0709')
+    assert.equal(served?.({ ...call, host: 'api.example', responseModel: 'x' }), undefined)
+    assert.equal(served?.(call), undefined)
+  })
+})
+
 describe('mcp.sse', () => {
   test('resolves to an SSE server and reaches every harness in its SSE shape, or is refused by name', async () => {
     const env = defineEnvironment('events', ({ mcp }) => ({
@@ -660,6 +741,13 @@ describe('mcp.sse', () => {
       pi: /^InfraError: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       codex:
         /^InfraError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+      'grok-build': {
+        events: {
+          type: 'sse',
+          url: 'http://events.example/sse',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
       fx: {
         events: {
           type: 'sse',
@@ -1048,6 +1136,7 @@ const HOST_CREDENTIALS = [
   'GOOGLE_API_KEY',
   'GOOGLE_GEMINI_BASE_URL',
   'GOOGLE_GENERATIVE_AI_API_KEY',
+  'XAI_API_KEY',
 ]
 
 /**
@@ -1442,6 +1531,64 @@ describe('credential brokering per agent', () => {
           },
         }),
         /can't broker OPENAI_API_KEY/,
+      )
+      assert.equal(ran, false)
+    })
+  })
+
+  test("Grok Build's adapter brokers only the xAI key, on Authorization, to the xAI API's endpoints", async () => {
+    const rules = await adapterRules('grok-build', { ...everything, XAI_API_KEY: 'xai-real' })
+    assert.equal(rules.length, 1)
+    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
+    assert.match(placeholder, /^Bearer aisdkhc_/)
+    assert.deepEqual(rules[0]?.transform.headers, { Authorization: 'Bearer xai-real' })
+    const endpoints = brokeringFor(grokBuild({ model: 'm' }))?.endpoints
+    const send = (method: string, host: string, path: string) =>
+      applyTransformations(
+        rules,
+        { host, method, path, headers: { authorization: placeholder } },
+        endpoints,
+      )
+    for (const [method, path] of [
+      ['GET', '/v1/models'],
+      ['GET', '/v1/api-key'],
+      ['POST', '/v1/chat/completions'],
+      ['POST', '/v1/responses'],
+    ] as const) {
+      assert.equal(send(method, 'api.x.ai', path).headers.authorization, 'Bearer xai-real', path)
+    }
+    for (const [method, host, path] of [
+      ['POST', 'api.x.ai', '/v1/models'],
+      ['GET', 'api.x.ai', '/v1/files'],
+      ['POST', 'evil.example', '/v1/chat/completions'],
+    ] as const) {
+      const r = send(method, host, path)
+      assert.notEqual(r.headers.authorization, 'Bearer xai-real', `${method} ${host}${path}`)
+    }
+  })
+
+  test("Grok Build fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    await withHostEnv({ XAI_API_KEY: 'xai-real' }, async () => {
+      const agent = AGENTS['grok-build']
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor: grokBuild({ model: 'm' }),
+      })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let ran = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            run: async () => {
+              ran = true
+              throw new Error('ran')
+            },
+          },
+        }),
+        /can't broker XAI_API_KEY/,
       )
       assert.equal(ran, false)
     })

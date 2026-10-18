@@ -64,6 +64,8 @@ const cursorAdapter = (file: string, name: string) =>
 const opencodeAdapter = (file: string, name: string) =>
   `harness-opencode/test/${file}.test.ts › ${name}`
 const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}.test.ts › ${name}`
+const grokAdapter = (file: string, name: string) =>
+  `harness-grok-build/test/${file}.test.ts › ${name}`
 const piAdapter = (file: string, name: string) => `harness-pi/test/${file}.test.ts › ${name}`
 const codexAdapter = (file: string, name: string) => `harness-codex/test/${file}.test.ts › ${name}`
 const fxAdapter = (file: string, name: string) => `harness-fx/test/${file}.test.ts › ${name}`
@@ -386,6 +388,7 @@ export const inventory: InventoryFeature[] = [
       'harness/opencode-home-skills',
       'harness/goose-home-skills',
       'harness/pi-home-skills',
+      'harness/grok-build-home-skills',
       'harness/codex-home-skills',
       'harness/fx-home-skills',
     ],
@@ -403,6 +406,7 @@ export const inventory: InventoryFeature[] = [
       'harness/antigravity-workspace-skills',
       'harness/opencode-workspace-skills',
       'harness/goose-workspace-skills',
+      'harness/grok-build-workspace-skills',
       'harness/pi-workspace-skills',
       'harness/codex-workspace-skills',
       'harness/fx-workspace-skills',
@@ -537,13 +541,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi, Codex and fx, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi, Codex, fx and Grok Build, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
       'harness/claude-code-rules',
       'harness/antigravity-rules',
       'harness/opencode-rules',
+      'harness/grok-build-rules',
       'harness/goose-rules',
       'harness/pi-rules',
       'harness/codex-rules',
@@ -1148,6 +1153,7 @@ export const inventory: InventoryFeature[] = [
       'harness/codex-workspace-skills',
       'harness/codex-home-skills',
       'harness/codex-dockerfile',
+      'harness/grok-build-dockerfile',
     ],
     plan: ['codex/codex'],
     tests: [
@@ -1357,6 +1363,7 @@ export const inventory: InventoryFeature[] = [
       'judge/state-transcript',
       'judge/state-turns',
       'judge/state-checks',
+      docker('grokBuild: the key is brokered on the xAI API only'),
       'judge/state-cascade',
     ],
     tests: [
@@ -1501,6 +1508,36 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.grok-build',
+    area: 'Harnesses',
+    name: "`grokBuild()`: xAI's Grok Build over ACP on a brokered xAI key, its image, rules, skills, MCP servers, tool names and the turn's tokens",
+    fixtures: [
+      'harness/grok-build-rules',
+      'harness/grok-build-workspace-skills',
+      'harness/grok-build-home-skills',
+      'harness/grok-build-dockerfile',
+    ],
+    plan: ['grok-build/grok-build'],
+    tests: [
+      harness(
+        'Grok reads rules from AGENTS.md, repo skills from .grok/skills, home skills in its own home',
+      ),
+      harness(
+        "Grok Build's adapter brokers only the xAI key, on Authorization, to the xAI API's endpoints",
+      ),
+      docker('grokBuild: the key is brokered on the xAI API only'),
+      grokAdapter(
+        'stream',
+        "a use_tool call of an MCP server's tool is mcp__<server>__<tool>, with its input",
+      ),
+      grokAdapter('stream', "the finish part's usage is the turn's sum from the prompt response"),
+      grokAdapter(
+        'unit',
+        "config.toml puts every call on the run's model and turns off the extra calls",
+      ),
+    ],
+  },
+  {
     id: 'history.commands',
     area: 'Records and studio',
     name: '`reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md`',
@@ -1610,6 +1647,7 @@ export const inventory: InventoryFeature[] = [
       analysis('effort needs 4 runs a cell to be testable'),
     ],
   },
+  grokAdapter('unit', "effort is the config's default_reasoning_effort"),
   {
     id: 'contrasts',
     area: 'Records and studio',

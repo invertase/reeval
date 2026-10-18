@@ -1483,6 +1483,54 @@ evaluate('hi', async (c) => {
   )
 
   test(
+    'grokBuild: the key is brokered on the xAI API only, and xAI refusing it names the host variable',
+    harnessImage('grok-build'),
+    async () => {
+      const p = await project('docker-grok-build-refused-key', {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { grokBuild } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+export default defineConfig({ harness: grokBuild({ model: 'grok-4.6' }), timeout: '3m' })
+`,
+        'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('hi', async (c) => {
+  await c.send('Reply with the word hi.')
+  const found = await c.exec('grep -rl not_a_real_key "$HOME" /reeval /tmp 2>/dev/null; true')
+  expect(found.stdout).toBe('')
+  const environ = await c.exec('cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
+  expect(environ.stdout).not.toContain('not_a_real_key')
+  const config = await c.exec(
+    'cat ~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/config.toml',
+  )
+  expect(config.stdout).toContain('session_summary = "grok-4.6"')
+  expect(config.stdout).toContain('telemetry = false')
+})
+`,
+      })
+      // A made-up key: Grok lists the models and checks the key as it starts, and xAI refuses it.
+      const env = { XAI_API_KEY: 'xai-not_a_real_key_0000000000000000', REEVAL_DEBUG: '1' }
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 300_000 })
+      const out = r.stdout + r.stderr
+      for (const path of ['/v1/models', '/v1/api-key']) {
+        assert.match(
+          out,
+          new RegExp(
+            `reeval:egress GET https://api\\.x\\.ai${path} HTTP/[\\d.]+ \\(set authorization\\)`,
+          ),
+          path,
+        )
+      }
+      assert.doesNotMatch(out, /refused/)
+      assert.match(out, /turn 1 error: The API rejected XAI_API_KEY: set a valid key/)
+      const { run, evals } = readRun(p.dir)
+      const trial = evals[0]?.trial
+      assert.equal(trial?.turns[0]?.status, 'error', JSON.stringify(trial?.turns[0]))
+      assert.equal(trial?.outcome, 'pass', 'the sandbox saw only the placeholder')
+      assert.equal(liveContainers(run.runId), '')
+    },
+  )
+
+  test(
     'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',
     claudeImage,
     async () => {

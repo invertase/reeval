@@ -77,6 +77,7 @@ export const cases: PlanCase[] = [
   { dir: 'goose', name: 'goose', args: [] },
   { dir: 'pi', name: 'pi', args: [] },
   { dir: 'codex', name: 'codex', args: [] },
+  { dir: 'grok-build', name: 'grok-build', args: [] },
   { dir: 'fx', name: 'fx', args: [] },
   { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'effort', name: 'effort', args: [] },
