@@ -39,9 +39,10 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
 - `reeval query --schema` lists every view and its columns; `--json` on any query for a program.
-- If your client has a `reeval` MCP server (`reeval mcp`), prefer its tools for reading results: they
-  return the same JSON as `--json`, and `query_failing_attempts` or `compare` then `transcript` is
-  the quickest way from "it failed" to what the agent did.
+- If your client has a `reeval` MCP server (`reeval mcp`), prefer its tools for reading results:
+  `failures` is the quickest way from "it failed" to why (failed checks and judge scores, check
+  logs, the transcript's tail, and whether the cell failed in earlier runs), far smaller than
+  `show` or summary.md; then `transcript` or `compare`. The rest return the same JSON as `--json`.
 
 ## `reeval analyze`
 

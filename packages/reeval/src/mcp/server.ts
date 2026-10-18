@@ -1,6 +1,5 @@
 // `reeval mcp`'s server: run history as read-only MCP tools and resources. The same factory serves
 // stdio and each stateless HTTP request, so it builds a fresh McpServer and holds nothing.
-import { readFile } from 'node:fs/promises'
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { allRuns, compareView, historyView, showRecord } from '../commands.ts'
@@ -11,12 +10,12 @@ import type { RunRecord } from '../history/types.ts'
 import { resolveRun } from '../history/views.ts'
 import { statementCount } from '../query.ts'
 import { redactSecrets } from '../redact.ts'
-import { resolveFile, type StudioSource } from '../studio/source.ts'
+import { resolveFile } from '../studio/source.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { sortAnalyses } from '../view/analysis.ts'
-import type { TranscriptLine } from '../view/model.ts'
 import { RUN_ID } from '../view/paths.ts'
-import { readableTranscriptLine } from '../view/record.ts'
+import { DEFAULT_FAILURES, DEFAULT_TAIL, failuresView } from './failures.ts'
+import { readTranscript, source } from './files.ts'
 
 /** Rows a query returns unless the caller asks for fewer; never more than `MAX_ROWS`. */
 export const DEFAULT_ROWS = 100
@@ -141,55 +140,8 @@ const limitField = (max: number, fallback: number, what: string) =>
     .optional()
     .describe(`At most this many ${what} (default ${fallback}, at most ${max})`)
 
-const source = (config: ResolvedConfig): StudioSource => ({
-  root: config.root,
-  historyDir: config.history.dir,
-  scratch: true,
-})
-
 export const transcriptUri = (runId: string, attemptKey: string) =>
   `reeval://runs/${runId}/transcripts/${encodeURIComponent(attemptKey)}`
-
-/** The attempt `ref` names in `run`: its key, or an attempt id (`<cell>#<n>`) unique in the run. */
-function findAttempt(run: RunRecord, ref: string) {
-  const attempts = run.evals.flatMap((e) => e.attempts)
-  const exact = attempts.find((a) => a.key === ref)
-  if (exact) return exact
-  const byId = attempts.filter((a) => a.id === ref)
-  if (byId.length === 1 && byId[0]) return byId[0]
-  const keys = attempts.map((a) => a.key)
-  const listed = `${keys.slice(0, 20).join('; ')}${keys.length > 20 ? `; … ${keys.length - 20} more` : ''}`
-  throw new Error(
-    byId.length > 1
-      ? `"${ref}" is an attempt of ${byId.length} evals in ${run.runId}; use its key: ${byId.map((a) => a.key).join('; ')}`
-      : `No attempt "${ref}" in ${run.runId}. Attempts: ${listed}`,
-  )
-}
-
-async function readTranscript(config: ResolvedConfig, run: RunRecord, ref: string) {
-  const attempt = findAttempt(run, ref)
-  const path = attempt.files.transcript?.path
-  const file =
-    path &&
-    (await resolveFile(source(config), {
-      kind: 'artifact',
-      runId: run.runId,
-      segments: path.split('/'),
-    }))
-  if (!file) {
-    throw new Error(
-      `${run.runId} kept no transcript for ${attempt.key} (recorded with --artifacts failures or none?)`,
-    )
-  }
-  const lines: TranscriptLine[] = []
-  for (const line of (await readFile(file, 'utf8')).split('\n')) {
-    if (!line.trim()) continue
-    try {
-      lines.push(readableTranscriptLine(JSON.parse(line) as TranscriptLine))
-    } catch {}
-  }
-  return { attempt, lines }
-}
 
 /** Reads the record of a run named by id, recorded or scratch; null if there's none. */
 async function recordById(config: ResolvedConfig, runId: string): Promise<RunRecord | null> {
@@ -198,8 +150,9 @@ async function recordById(config: ResolvedConfig, runId: string): Promise<RunRec
   return file ? readRecord(file) : null
 }
 
-const INSTRUCTIONS = `Read-only access to this project's reeval run history: runs of evals for coding agents, recorded in git and scratch runs in .reeval/runs.
-Start with history (pass/fail per eval over recent runs) or show (one run). compare diffs two runs (regressions, fixes, stack changes). The query_* tools answer common questions across runs (lift, flaky cells, drift, failures); query runs any read-only SQL (query_schema lists tables and columns). transcript reads what an agent did in one attempt. analysis returns saved reeval analyze results. Runs are named latest, latest~N, a run id prefix or a git SHA prefix. Nothing here runs evals: that's reeval run in a terminal.`
+const INSTRUCTIONS = `Read-only access to this project's reeval run history: runs of evals for coding agents, recorded in git and scratch runs in .reeval/runs. Use it to debug a failed, flaky or regressed eval run.
+Why did a run fail? Call failures first: each failed attempt's failing checks and judge scores, error, check logs and the end of its transcript, and whether its cell failed in earlier runs (new or not, since which run, what changed since it last passed). It's far smaller than show or summary.md.
+Then: transcript reads one attempt in full; compare diffs two runs (regressions, fixes, stack changes); history is pass/fail per eval over recent runs; show is one run's whole record. The query_* tools answer questions across runs (flaky_cells, drift, failing_attempts, eval_trend, lift, effort); query runs read-only SQL (query_schema lists tables). analysis returns saved reeval analyze results. Runs are named latest, latest~N, a run id prefix or a git SHA prefix. Nothing here runs evals: reeval run does, in a terminal.`
 
 /** Builds the factory `reeval mcp` serves: one McpServer per connection (stdio) or request (HTTP). */
 export async function serverFactory(config: ResolvedConfig, version: string) {
@@ -211,11 +164,36 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
     )
 
     server.registerTool(
+      'failures',
+      {
+        title: 'Why a run failed',
+        description:
+          'Debug a failed reeval eval run: why each failed or infra-error attempt failed. Per attempt: the failing expect checks with their messages, failed judge scores against thresholds, the error, nonzero check commands with their log tails, the setup log tail for infra errors, changed files, the final message and the last transcript lines (tool calls with targets and output). Per cell: whether the failure is new, the run its failing streak started in, the last run it passed and what changed since (fingerprint parts, eval source files). Start here, before show or transcript.',
+        inputSchema: z.object({
+          run: z.string().optional().describe(RUN_REF),
+          filter: z.string().optional().describe('Only evals whose id contains this'),
+          limit: limitField(100, DEFAULT_FAILURES, 'failed attempts'),
+          tail: z
+            .number()
+            .int()
+            .min(0)
+            .max(100)
+            .optional()
+            .describe(`Transcript lines from the end of each attempt (default ${DEFAULT_TAIL})`),
+        }),
+        annotations: READ_ONLY,
+      },
+      guard(async ({ run, filter, limit, tail }) =>
+        failuresView(config, { run, filter, limit, tail }),
+      ),
+    )
+
+    server.registerTool(
       'history',
       {
         title: 'Run history',
         description:
-          'Pass/fail of each eval over recent runs, oldest first (reeval history --json): runs[] with their ids, commits and summaries, and rows[] with one outcome per run (null when not run) and drift, the runs where the eval or its stack changed.',
+          'Pass/fail of each reeval eval over recent runs, oldest first (reeval history --json): runs[] with their ids, commits and summaries, and rows[] with one outcome per run (null when not run) and drift, the runs where the eval or its stack changed. With no recorded runs it lists the scratch runs, with a note.',
         inputSchema: z.object({
           filter: z.string().optional().describe('Only evals whose id contains this'),
           limit: limitField(500, 20, 'runs'),
@@ -223,7 +201,18 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
         }),
         annotations: READ_ONLY,
       },
-      guard(async ({ filter, limit, all }) => historyView(config, { filter, limit, all })),
+      guard(async ({ filter, limit, all }) => {
+        const view = await historyView(config, { filter, limit, all })
+        if (all || view.runs.length) return view
+        const scratch = await historyView(config, { filter, limit, all: true })
+        if (!scratch.runs.length) {
+          return { ...view, note: 'No runs yet. reeval run, in a terminal, makes one.' }
+        }
+        return {
+          ...scratch,
+          note: 'No recorded runs yet, so these are the scratch runs in .reeval/runs (reeval run without --record). reeval run --record, or reeval record latest, records one.',
+        }
+      }),
     )
 
     server.registerTool(
@@ -231,7 +220,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Show a run',
         description:
-          'One run: its full record (reeval show --json: stack, plan, evals, cells with lift and effort, attempts with verdicts, errors, token usage and file references) or, with format md, its summary.md.',
+          'One reeval run: its full record (reeval show --json: stack, plan, evals, cells with lift and effort, attempts with verdicts, errors, token usage and file references) or, with format md, its summary.md. Large on big runs: to see why a run failed, failures is smaller.',
         inputSchema: z.object({
           run: z.string().optional().describe(RUN_REF),
           format: z.enum(['json', 'md']).optional().describe('json (default) or md'),
@@ -251,7 +240,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Compare two runs',
         description:
-          "Diffs two runs eval by eval (reeval compare --json): each row's base and head outcome and status (regressed, fixed, same, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack. With only head, the base is head's nearest recorded ancestor.",
+          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each row's base and head outcome and status (regressed, fixed, same, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack. With only head, the base is head's nearest recorded ancestor.",
         inputSchema: z.object({
           base: z.string().optional().describe(`${RUN_REF}; needs head too`),
           head: z.string().optional().describe(RUN_REF),
@@ -286,7 +275,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Attempt transcript',
         description:
-          "What the agent did in one attempt: its transcript.jsonl lines (prompts, messages, tool calls with inputs and outputs), a page at a time. Attempt keys are in show's evals[].attempts[].key.",
+          "What the coding agent did in one reeval attempt, to debug it: its transcript.jsonl lines (prompts, messages, tool calls with inputs and outputs), a page at a time. Attempt keys are in show's evals[].attempts[].key.",
         inputSchema: z.object({
           run: z.string().optional().describe(RUN_REF),
           attempt: z
@@ -321,7 +310,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
         `query_${view}`,
         {
           title: `Query ${view}`,
-          description: `The ${view} view of reeval query: one row per ${VIEW_ROWS[view] ?? 'row'}. Columns: ${cols.join(', ')}.`,
+          description: `The ${view} view of reeval query, over the eval run history: one row per ${VIEW_ROWS[view] ?? 'row'}. Columns: ${cols.join(', ')}.`,
           inputSchema: z.object({ where, limit: limitField(MAX_ROWS, DEFAULT_ROWS, 'rows') }),
           annotations: READ_ONLY,
         },

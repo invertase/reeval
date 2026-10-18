@@ -135,6 +135,7 @@ describe('reeval mcp', () => {
     assert.match(modern.getInstructions() ?? '', /Read-only access/)
     const names = (await modern.listTools()).tools.map((t) => t.name)
     assert.deepEqual(names, [
+      'failures',
       'history',
       'show',
       'compare',
@@ -234,6 +235,45 @@ describe('reeval mcp', () => {
     const missing = await call(modern, 'show', { run: 'nope' })
     assert.ok(missing.isError)
     assert.match(textOf(missing), /No run matches "nope"/)
+  })
+
+  test('failures says why each attempt failed, and whether its cell failed before', async () => {
+    const r = await json(modern, 'failures')
+    assert.equal(r.runId, runs[1])
+    assert.equal(r.failing, 2)
+    const attempts = r.attempts as Json[]
+    assert.deepEqual(
+      attempts.map((a) => a.eval),
+      ['evals/a.eval.ts › writes ok', `evals/b.eval.ts › also writes ok ${PLANTED}`],
+    )
+    const [first] = attempts as [Json]
+    assert.equal(first.outcome, 'fail')
+    assert.equal(first.gated, true)
+    assert.deepEqual(
+      (first.failedAssertions as Json[]).map((x) => [x.matcher, x.status]),
+      [['toHaveFile', 'fail']],
+    )
+    assert.match(String((first.failedAssertions as Json[])[0]?.message), /ok\.txt/)
+    const transcript = first.transcript as { lines: number; tail: Json[] }
+    assert.ok(transcript.tail.some((l) => l.prompt === 'go'))
+    assert.ok(transcript.tail.length <= transcript.lines)
+    const cells = r.cells as Json[]
+    assert.equal(cells.length, 2, 'one history per failing cell')
+    for (const c of cells) {
+      assert.equal(c.new, true, 'the cell passed in the run before')
+      assert.equal(c.failingSince, runs[1])
+      assert.equal((c.lastPass as Json).runId, runs[0])
+      assert.deepEqual((c.lastPass as Json).changedSources, [])
+    }
+    assert.match(String(r.next), /transcript/)
+
+    const one = await json(modern, 'failures', { filter: 'also', tail: 1 })
+    assert.equal(one.failing, 1)
+    const [only] = one.attempts as [Json]
+    assert.equal((only.transcript as { tail: Json[] }).tail.length, 1)
+    const clean = await json(modern, 'failures', { run: runs[0] })
+    assert.equal(clean.failing, 0)
+    assert.match(String(clean.note), new RegExp(`Nothing failed in ${runs[0]}.*${runs[1]}`))
   })
 
   test('analysis returns the saved analysis without calling a model', async () => {
@@ -411,6 +451,46 @@ describe('reeval mcp', () => {
       await client.close()
     } finally {
       fromEnv.stop()
+    }
+  })
+
+  test('history falls back to scratch runs with a note; failures follows a streak across them', async () => {
+    const p = await project('mcp-scratch', { 'reeval.config.ts': config, ...evals })
+    const empty = await connect(p.dir, MODERN)
+    try {
+      const none = await json(empty, 'history')
+      assert.deepEqual(none.runs, [])
+      assert.match(String(none.note), /No runs yet/)
+    } finally {
+      await empty.close()
+    }
+    assert.equal((await runCli(p.dir, ['run'])).code, 0)
+    for (let i = 0; i < 2; i++) {
+      assert.equal((await runCli(p.dir, ['run'], { env: { BREAK: '1' } })).code, 1)
+    }
+    const client = await connect(p.dir, MODERN)
+    try {
+      const h = await json(client, 'history')
+      const ids = (h.runs as Json[]).map((r) => r.runId as string)
+      assert.equal(ids.length, 3, 'the scratch runs')
+      assert.match(String(h.note), /No recorded runs yet/)
+      const all = await json(client, 'history', { all: true })
+      assert.equal(all.note, undefined, 'all asks for scratch runs, so no note')
+      const f = await json(client, 'failures', { filter: 'writes ok', limit: 1 })
+      assert.equal(f.shown, 1)
+      const [cell] = f.cells as [Json]
+      assert.equal(cell.new, false, 'it failed in the run before too')
+      assert.equal(cell.failingSince, ids[1])
+      assert.equal((cell.lastPass as Json).runId, ids[0])
+      assert.deepEqual(
+        (cell.earlier as Json[]).map((x) => [x.runId, x.fail]),
+        [
+          [ids[1], 1],
+          [ids[0], 0],
+        ],
+      )
+    } finally {
+      await client.close()
     }
   })
 

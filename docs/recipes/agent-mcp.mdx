@@ -96,7 +96,9 @@ Asked "which evals pass on the latest run?", an agent calls `query_eval_trend` w
 }
 ```
 
-The server's instructions tell it where to start: `history` or `show`, then `compare`, the `query_*` views and `transcript`. Every tool and resource is on the [reeval mcp](/reference/cli/mcp) page.
+The server's instructions tell it where to start: `failures` when a run failed, then `transcript`, `compare`, `history` and the `query_*` views. Every tool and resource is on the [reeval mcp](/reference/cli/mcp) page.
+
+Claude Code defers MCP tools behind a tool search, so an agent that hasn't heard of reeval may never load them. A line in `AGENTS.md` or `CLAUDE.md` fixes that: "To debug a reeval run, use the `reeval` MCP server's `failures` tool first."
 
 <Info>
   `reeval mcp` never runs evals. When the agent should run one, it runs `reeval run` in its terminal, behind your command approval.
@@ -107,8 +109,8 @@ The server's instructions tell it where to start: `history` or `show`, then `com
 | Variation | How |
 |---|---|
 | Another project | Pass `--config path/to/reeval.config.ts` |
-| A narrower agent | Most clients let you turn tools off one by one; `show`, `compare` and `query_failing_attempts` cover a regression hunt |
-| Unrecorded runs | `history` takes `all: true`; `show`, `compare` and the queries already include scratch runs from `.reeval/runs` |
+| A narrower agent | Most clients let you turn tools off one by one; `failures`, `compare` and `transcript` cover a regression hunt |
+| Unrecorded runs | `history` lists them when nothing is recorded, or with `all: true`; `failures`, `show`, `compare` and the queries already include scratch runs from `.reeval/runs` |
 
 ## Next
 

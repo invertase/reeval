@@ -1543,6 +1543,23 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'mcp.debugging',
+    area: 'Records and studio',
+    name: "`reeval mcp` for debugging a failed run: `failures` (each failed attempt's checks, judge scores, error, check logs and transcript tail, and whether its cell failed before) and `history` listing scratch runs, with a note, when nothing is recorded",
+    tests: [
+      'reeval/test/mcp.test.ts › failures says why each attempt failed, and whether its cell failed before',
+      'reeval/test/mcp.test.ts › history falls back to scratch runs with a note',
+    ],
+  },
+  {
+    id: 'summary.study-mark',
+    area: 'Records and studio',
+    name: "An eval whose cells are all `gate: 'none'` is marked ○ and `not gated` in the run summary when its attempts miss, never ✓ beside 0/n",
+    tests: [
+      engine('an eval with not-gated cells labels its pass@1 gated; an all-gated one does not'),
+    ],
+  },
+  {
     id: 'query.facts',
     area: 'Records and studio',
     name: '`reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context`',
@@ -1561,6 +1578,7 @@ export const inventory: InventoryFeature[] = [
       analysis('drift: only Cursor runtime state changed, so it is noise'),
       analysis('a real context file (a skill) that changed is drift, not noise'),
       analysis('mixed outcomes over enough comparable attempts are flaky'),
+      analysis('the same change passing and failing its check is caused by the check'),
       'reeval/test/query.test.ts › drift names the changed part',
     ],
   },

@@ -3,7 +3,7 @@ title: reeval mcp
 description: Serve the run history to other agents over MCP, as read-only tools and resources.
 ---
 
-`reeval mcp` is an MCP server built into the CLI. Cursor, Claude Code or any MCP client launches it and asks the history what `reeval query`, `reeval show`, `reeval compare` and `reeval history` answer.
+`reeval mcp` is an MCP server built into the CLI. Cursor, Claude Code or any MCP client launches it, asks why a run failed, and asks the history what `reeval query`, `reeval show`, `reeval compare` and `reeval history` answer.
 
 ```bash
 npx reeval mcp
@@ -16,8 +16,9 @@ npx reeval mcp --http --port 4986
 
 ```text
 reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
-                              tools for reeval query's views and SQL, history, show, compare,
-                              transcripts and saved analyses, and runs as resources
+                              tools for why a run failed, reeval query's views and SQL,
+                              history, show, compare, transcripts and saved analyses, and runs
+                              as resources
   --http                      Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
                               --port <n> (default 4986), --host <addr>
   --token <value>             With --http, require it as a bearer token (also REEVAL_MCP_TOKEN)
@@ -40,7 +41,8 @@ Ctrl-C to stop.
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `history` | `filter`, `limit`, `all` | `reeval history --json` |
+| `failures` | `run`, `filter`, `limit`, `tail` | Why each failed attempt failed, and whether its cell failed before ([below](#failures)) |
+| `history` | `filter`, `limit`, `all` | `reeval history --json`; with no recorded runs, the scratch runs and a `note` |
 | `show` | `run`, `format` (`json` or `md`) | `reeval show --json`, or `summary.md` as `markdown` |
 | `compare` | `base`, `head` | `reeval compare --json` |
 | `analysis` | `run` | Saved and cached analyses of the run, newest first; never calls a model |
@@ -70,6 +72,64 @@ A `run` is a [run reference](/reference/cli#run-references), `latest` by default
 ```
 
 Each result is that JSON as text and as `structuredContent`. Every tool is marked read-only and idempotent.
+
+## failures
+
+The server's instructions tell an agent to call `failures` first when a run failed. It returns up to `limit` failed and infra-error attempts (10 by default), gated ones first, each with what a debugger reads first:
+
+```json
+{
+  "runId": "20261018T165139Z_nogit_cursor-agent_zx6x",
+  "failing": 1,
+  "attempts": [
+    {
+      "eval": "evals/greet.eval.ts › greeter › creates the greeter",
+      "outcome": "fail",
+      "gated": true,
+      "error": { "kind": "assertion", "message": null },
+      "failedAssertions": [
+        {
+          "label": "greet.js exists",
+          "matcher": "toHaveFile",
+          "message": "greet.js exists: expected file src/greet.js to exist",
+          …
+        }
+      ],
+      "failedJudgements": [],
+      "failedChecks": [],
+      "changedFiles": ["added lib/greet.js"],
+      "finalMessage": "Created lib/greet.js.",
+      "transcript": { "lines": 5, "tail": [{ "line": 3, "edit": "lib/greet.js", … }, …] },
+      …
+    }
+  ],
+  "cells": [
+    {
+      "cell": "fake/-/fake",
+      "new": true,
+      "failingSince": "20261018T165139Z_nogit_cursor-agent_zx6x",
+      "lastPass": null,
+      "earlier": [],
+      …
+    }
+  ],
+  "next": "For the whole story of one attempt, transcript { … }"
+}
+```
+
+| Field | What it holds |
+|---|---|
+| `error` | The attempt's error kind and message; `message` is `null` when it repeats a failed assertion's |
+| `failedAssertions` | Each `expect` that failed or couldn't answer, with its label, matcher and message |
+| `failedJudgements` | Each failed judge question, its score and threshold |
+| `failedChecks` | Each `c.exec` that exited nonzero, and the end of its log |
+| `setupLogTail` | The end of `setup.log`, for an infra error |
+| `transcript` | Its line count and the last `tail` lines (12 by default): prompts, messages, edits, and tool calls with their target and output, cut short |
+| `cells[].new` | `true` when the cell didn't fail in its previous run (or has none) |
+| `cells[].failingSince` | The run the cell's current failing streak started in |
+| `cells[].lastPass` | The last run the cell passed cleanly in, and what changed since: fingerprint parts and eval source files |
+
+On a run with nothing failed it returns `failing: 0` and a `note` naming the latest run that has a failure.
 
 ## Resources
 
