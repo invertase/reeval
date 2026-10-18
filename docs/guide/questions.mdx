@@ -141,10 +141,41 @@ A pair whose two orders pick opposite sides is a split: the position decided it,
 |---|---|
 | The summary, `reeval show`, the studio | Each side's rate, and a vote's short `reason` when it gave one |
 | `evals[].answers` in the record | Every vote, with the rates per pair kind, and a failed call's `error` |
+| `<eval-slug>/questions/<n>.json` | What the model was sent for each pair and order (below) |
 | `reeval query question_pairs`, `votes` | The pairs' tallies, and every vote as a row |
 | `reeval analyze` | The rates, the vote and tie counts, a failed call and a sample of reasons |
 
 A side's rate is its wins over the decided votes it was in. A tie counts for neither side, and a split counts one win for each. A model error prints as a warning, and the outcomes stand.
+
+## See what the model saw
+
+```json title="<runId>/<eval-slug>/questions/1.json (trimmed)"
+{
+  "question": "Which page looks better?",
+  "model": "fake",
+  "artifacts": ["landing"],
+  "calls": [
+    {
+      "cut": "within", "harness": "fake", "run": 1,
+      "a": "baseline", "b": "variant", "swapped": false,
+      "labels": { "A": "baseline", "B": "variant" },
+      "prompt": "Question: Which page looks better?\n\nThe task both …",
+      "screenshots": [
+        {
+          "label": "Attempt A, screenshot 1 of 1",
+          "side": "baseline",
+          "name": "landing",
+          "path": "<eval-slug>/fake-baseline-fake-129211/1/artifacts/landing.png"
+        },
+        …
+      ]
+    },
+    …
+  ]
+}
+```
+
+Each question's answer points at this file (`evals[].answers[].input`), with one call per pair and order. `labels` says which side the model saw as A, and `prompt` is the text it was sent, secrets masked. Screenshots point at the attempts' own PNGs rather than copying them. The summary and the studio link to the file, and `history.artifacts` keeps it or drops it with the eval's other files.
 
 ## Next
 

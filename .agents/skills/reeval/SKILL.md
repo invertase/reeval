@@ -500,8 +500,10 @@ group(
   the model twice, order swapped, labelled A and B; the record's
   `evals[].answers` has every vote and each side's `wins`/`n` over decided
   votes, per pair kind. A model error is stored on the answer as `error` and
-  warned about; it never changes an outcome. Test with
-  `fakeAnalysis({ vote: 'A' | 'B' | 'tie' | (pair) => … | { error } })`.
+  warned about; it never changes an outcome. To see why a question picked a
+  side, open its `input` (`<eval-slug>/questions/<n>.json`): each pair and
+  order's masked prompt, which side was A, and refs to the screenshots sent. Test
+  with `fakeAnalysis({ vote: 'A' | 'B' | 'tie' | (pair) => … | { error } })`.
 
 ## Sandboxes
 

@@ -19,6 +19,7 @@ evals/.history/                            commit this
   <runId>.json                             the record
   <runId>/summary.md                       the run as Markdown
   <runId>/worktree.patch                   uncommitted changes, when the run was dirty
+  <runId>/<eval-slug>/questions/<n>.json   what compare question n's model was sent
   <runId>/<eval-slug>/<cell-slug>/<n>/     one directory per attempt
     transcript.jsonl                       timed agent events (see Transcripts)
     diff.patch                             the agent's changes, dependency noise dropped
@@ -350,7 +351,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 <Property name="attempts" type="AttemptRecord[]"></Property>
 
 <Property name="answers" type="CompareAnswer[]" optional>
-  The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons).
+  The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets masked and screenshots as refs; unset where the eval's files weren't kept.
 </Property>
 
 <Property name="family" type="{id: string; name: string; case: number; cases: number}" optional>
