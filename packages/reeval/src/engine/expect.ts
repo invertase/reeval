@@ -8,6 +8,7 @@ import {
   type ChaiPlugin,
   chai,
   customMatchers,
+  type Matchers as ExpectMatchers,
   type ExpectStatic,
   GLOBAL_EXPECT,
   getState,
@@ -19,6 +20,7 @@ import {
   type Tester,
 } from '@vitest/expect'
 import { processError } from '@vitest/utils/error'
+import type { MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
 import type { AssertionRecord } from '../types.ts'
 
 declare module '@vitest/expect' {
@@ -57,6 +59,21 @@ declare module '@vitest/expect' {
     toPass(): void
   }
 }
+
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+
+/** Each reeval matcher whose signature here differs from its row in MATCHERS. */
+type MatcherDrift = {
+  [K in MatcherName]: Same<Parameters<ExpectMatchers[K]>, MatcherArgs<K>> extends true
+    ? Same<
+        ReturnType<ExpectMatchers[K]>,
+        ReturnType<(typeof MATCHERS)[K]> extends Promise<unknown> ? Promise<void> : void
+      > extends true
+      ? never
+      : K
+    : K
+}[MatcherName]
+type _MatchersAsTable<T extends true = Same<MatcherDrift, never>> = T
 
 export type { ExpectStatic }
 
