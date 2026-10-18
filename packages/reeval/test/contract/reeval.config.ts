@@ -5,6 +5,7 @@ import {
   codex,
   cursor,
   fakeHarness,
+  fx,
   goose,
   opencode,
   pi,
@@ -32,6 +33,8 @@ const harness = () => {
       return pi({ model })
     case 'codex':
       return codex({ model })
+    case 'fx':
+      return fx({ model })
     default:
       return fakeHarness({ layout: 'cursor', script: [fakeScript] })
   }

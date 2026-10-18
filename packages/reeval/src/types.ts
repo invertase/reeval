@@ -454,7 +454,7 @@ export type FakeHarnessDescriptor = {
    * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the
    * fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex'
+  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex' | 'fx'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -636,6 +636,28 @@ export type CodexHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
+/**
+ * fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or
+ * OpenAI's API by the model id, and reports each turn's tokens.
+ */
+export type FxHarnessDescriptor = {
+  kind: 'fx'
+  /**
+   * A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
+   * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
+   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-4.1`.
+   */
+  model: string
+  /** Cell id; defaults to `fx:<model>`. */
+  id?: string
+  /** The most fx attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
@@ -645,6 +667,7 @@ export type AgentHarnessDescriptor =
   | GooseHarnessDescriptor
   | PiHarnessDescriptor
   | CodexHarnessDescriptor
+  | FxHarnessDescriptor
 /** The agent an attempt runs: a real harness, or the fake one. */
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 

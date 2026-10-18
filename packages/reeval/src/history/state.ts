@@ -5,6 +5,7 @@ import { join, relative, resolve, sep } from 'node:path'
 import { VERSION as ANTIGRAVITY_VERSION } from '@reeval/harness-antigravity'
 import { VERSION as CODEX_VERSION } from '@reeval/harness-codex'
 import { VERSION as CURSOR_SDK_VERSION } from '@reeval/harness-cursor-sdk'
+import { VERSION as FX_VERSION } from '@reeval/harness-fx'
 import { VERSION as GOOSE_VERSION } from '@reeval/harness-goose'
 import { VERSION as OPENCODE_VERSION } from '@reeval/harness-opencode'
 import { VERSION as PI_VERSION } from '@reeval/harness-pi'
@@ -93,6 +94,7 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
     '@reeval/harness-cursor-sdk': CURSOR_SDK_VERSION,
     '@ai-sdk/harness-claude-code': adapterVersion('claude-code'),
     '@reeval/harness-codex': CODEX_VERSION,
+    '@reeval/harness-fx': FX_VERSION,
   }
   for (const name of PACKAGES) {
     try {

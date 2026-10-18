@@ -5,7 +5,7 @@
  * whose bridge the image bakes; a test holds it to the patch file.
  */
 export const HARNESS_PACKAGES: Record<
-  'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex',
+  'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex' | 'fx',
   { readonly name: string; readonly version: string; readonly patch?: string }
 > = {
   cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.5' },
@@ -15,6 +15,7 @@ export const HARNESS_PACKAGES: Record<
   goose: { name: '@reeval/harness-goose', version: '0.1.3' },
   pi: { name: '@reeval/harness-pi', version: '0.2.7' },
   codex: { name: '@reeval/harness-codex', version: '0.1.7' },
+  fx: { name: '@reeval/harness-fx', version: '0.1.0' },
 }
 
 /** A harness whose CLI an image can bake. */

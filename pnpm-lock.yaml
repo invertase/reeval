@@ -94,6 +94,24 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
 
+  packages/harness-fx:
+    dependencies:
+      '@ai-sdk/harness':
+        specifier: 1.0.154
+        version: 1.0.154(ws@8.22.0)(zod@4.6.7)
+      '@ai-sdk/harness-acp':
+        specifier: 1.0.93
+        version: 1.0.93(zod@4.6.7)
+      '@ai-sdk/provider':
+        specifier: 4.0.29
+        version: 4.0.29
+      '@ai-sdk/provider-utils':
+        specifier: 5.0.62
+        version: 5.0.62(zod@4.6.7)
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+
   packages/harness-goose:
     dependencies:
       '@ai-sdk/harness':
@@ -226,6 +244,9 @@ importers:
       '@reeval/harness-cursor-sdk':
         specifier: workspace:0.1.5
         version: link:../harness-cursor-sdk
+      '@reeval/harness-fx':
+        specifier: workspace:0.1.0
+        version: link:../harness-fx
       '@reeval/harness-goose':
         specifier: workspace:0.1.3
         version: link:../harness-goose
@@ -265,6 +286,9 @@ importers:
       '@reeval/harness-cursor-sdk':
         specifier: workspace:0.1.5
         version: link:../harness-cursor-sdk
+      '@reeval/harness-fx':
+        specifier: workspace:0.1.0
+        version: link:../harness-fx
       '@reeval/harness-goose':
         specifier: workspace:0.1.3
         version: link:../harness-goose

@@ -18,11 +18,13 @@ export type HarnessRow = {
     | 'goose'
     | 'pi'
     | 'codex'
+    | 'fx'
+    | 'fx-openai'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's.
    */
-  harness?: 'opencode'
+  harness?: 'opencode' | 'fx'
   /** The cheapest model that does the job; null for the fake agent. */
   model: string | null
   /**
@@ -202,6 +204,34 @@ export const harnesses: HarnessRow[] = [
     // catalog doesn't list gets no effort (`effort=none`) and no apply_patch tool.
     servedModel: /^gpt-5\.6-luna\[effort=medium\]$/,
     wireModel: /^gpt-5\.6-luna\[effort=medium\]$/,
+  },
+  {
+    id: 'fx',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /^google\/gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+  },
+  {
+    id: 'fx-openai',
+    harness: 'fx',
+    model: 'gpt-4.1-mini',
+    key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.openai.com'],
+    apiHost: 'api.openai.com',
+    tokens: true,
+    // fx reports the model it asked for; the Chat Completions API answers with a dated snapshot.
+    servedModel: /^gpt-4\.1-mini/,
+    wireModel: /^gpt-4\.1-mini/,
   },
 ]
 

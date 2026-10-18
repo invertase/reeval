@@ -1,5 +1,5 @@
 // The harnesses the examples use, defined once so the config, evals and profile limits share them.
-import { antigravity, claudeCode, codex, cursor, goose, opencode, pi } from 'reeval/harness'
+import { antigravity, claudeCode, codex, cursor, fx, goose, opencode, pi } from 'reeval/harness'
 
 // `fast: 'true'` is the variant Cursor's catalog marks as the default; unset, the SDK takes `false`.
 export const composer = cursor({ model: 'composer-2.5', params: { fast: 'true' } }) // id cursor:composer-2.5
@@ -9,3 +9,4 @@ export const oc = opencode({ model: 'google/gemini-3.8-flash' }) // id opencode:
 export const gs = goose({ model: 'gemini-3.8-flash' }) // id goose:gemini-3.8-flash
 export const pim = pi({ model: 'gemini-3.8-flash' }) // id pi:gemini-3.8-flash
 export const cx = codex({ model: 'gpt-5.6-luna' }) // id codex:gpt-5.6-luna
+export const fxGateway = fx({ model: 'anthropic/claude-sonnet-5' }) // id fx:anthropic/claude-sonnet-5

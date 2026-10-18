@@ -8,6 +8,7 @@ import type {
   CodexHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
+  FxHarnessDescriptor,
   GooseHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
@@ -101,6 +102,14 @@ export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescrip
 export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarnessDescriptor =>
   make('codex', options)
 
+/**
+ * fx, on Vercel AI Gateway or OpenAI's API: `model` is a gateway id, e.g.
+ * `anthropic/claude-sonnet-5`, run with `AI_GATEWAY_API_KEY`, or a bare OpenAI id, e.g. `gpt-4.1`,
+ * run with `OPENAI_API_KEY`. `id` names the cell; it defaults to `fx:<model>`.
+ */
+export const fx = (options: Omit<FxHarnessDescriptor, 'kind'>): FxHarnessDescriptor =>
+  make('fx', options)
+
 /** A fake agent that writes canned files and replies with canned text. For tests and dry runs. */
 export const fakeHarness = (
   options: Omit<FakeHarnessDescriptor, 'kind'> = {},
@@ -114,6 +123,7 @@ export type {
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
   FakeScriptStep,
+  FxHarnessDescriptor,
   GooseHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
