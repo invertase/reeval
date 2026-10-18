@@ -55,3 +55,54 @@ Every attempt installs this checkout's reeval from `evals/skill/vendor/` (`node
 evals/skill/scripts/vendor.mjs` packs it, renders the docs and extracts the pre-split skill).
 `evals/skill/reeval.oracle.config.ts` runs a fake agent that applies a known-good answer to each
 task, so every check must pass there.
+
+## contributing: can an agent contribute to reeval?
+
+[`evals/contributing/`](./contributing) asks a real agent for four merged reeval pull requests
+again, each from its parent commit, and checks the change the way review would. The control has
+`AGENTS.md` and the [feature contract](../packages/reeval/test/features/README.md) deleted; the
+variant has both.
+
+| Task | Merged as | Also checks for |
+|---|---|---|
+| `reeval analyze --vs none` | [#287](https://github.com/invertase/reeval/pull/287) | `--vs none` in `cli-spec.ts` |
+| Reasoning effort in `reeval query` | [#316](https://github.com/invertase/reeval/pull/316) | |
+| A `toHaveChanged` matcher | [#314](https://github.com/invertase/reeval/pull/314) | A feature fixture with a canary, listed in the inventory |
+| `question.model` as a cascading default | [#366](https://github.com/invertase/reeval/pull/366) | Refusal rows and a plan case |
+
+Every attempt must leave tests and docs changed, then pass `pnpm build`, `pnpm lint`, typecheck
+and `pnpm docs:check`. Last, the merged pull request's own tests are copied in, so the agent never
+sees them, and must pass. On Cursor (`composer-2.5`), two runs of each cell:
+
+```text
+✓ a toHaveChanged matcher (#314)                       0/2 · pass@1 – gated  2 attempts
+    cursor:composer-2.5/to-have-changed-no-guides/reeval-repo  control    0/1  pass@1   0%   not gated   1,598k in (792k cached) · 8,743 out
+    cursor:composer-2.5/to-have-changed-guides/reeval-repo     variant    0/1  pass@1   0%   lift +0 pts (95% −79…+79, 0/1 vs 0/1), within noise   4,931k in (2,423k cached) · 13k out
+      effort: tools 65 vs 55 (×1.18), agent 6m 09s vs 1m 50s (×3.37), tokens 4,944k vs 1,606k (×3.08): too few attempts to test
+      checks: updates the docs 1/1 vs 0/1 · adds a feature fixture with a canary 1/1 vs 0/1 · lists it in the feature inventory 1/1 vs 0/1 · … · pnpm lint 0/1 vs 0/1 (doesn't discriminate) · …
+```
+
+| Over 8 attempts an arm | Control | Variant |
+|---|---|---|
+| Every check | 2/8 | 1/8 |
+| Every check but lint | 4/8 | 6/8 |
+| The merged change's tests | 7/8 | 7/8 |
+| Updates the docs | 6/8 | 8/8 |
+| Feature fixture and inventory (#314) | 0/2 | 2/2 |
+
+The agents write working code with or without the guides: the hidden tests pass 7 times in 8 on
+both sides. The guides change whether the rest of the pull request is there, the docs, the
+fixture with its canary and the inventory. What both sides miss is formatting: every lint failure
+is Biome's formatter, because neither arm ran `pnpm format`.
+
+```bash
+node evals/contributing/scripts/lockfiles.mjs   # each task's lockfile, for the image's pnpm store
+pnpm reeval image build
+pnpm reeval run contributing                     # Cursor, with CURSOR_API_KEY in .env.local
+pnpm reeval run --config evals/contributing/reeval.oracle.config.ts   # applies each merged change
+```
+
+Each attempt starts from the task's parent commit (`git('../..', { ref })`) in an image whose
+pnpm store already holds every task's dependencies, so `pnpm install` takes about 3 seconds
+offline. `reeval.oracle.config.ts` runs a fake agent that applies the merged pull request, so
+every check must pass there.
