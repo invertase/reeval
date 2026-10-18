@@ -5,7 +5,7 @@ description: Point Cursor or Claude Code at reeval mcp, so your coding agent can
 
 **Goal:** let the agent you code with answer "what regressed?" or "did the skill help?" from your reeval history, without you pasting output.
 
-`reeval mcp` serves the history as read-only MCP tools. Your agent calls `compare`, `show`, `transcript` or `query_lift` and gets the JSON the CLI prints with `--json`.
+`reeval mcp` serves the history as read-only MCP tools. Your agent calls `compare`, `show`, `transcript` or `query_lift` and gets the JSON the CLI prints with `--json`, trimmed where it repeats itself: `compare` leaves out unchanged evals and `history` each run's eval tree, so long histories fit clients that blank a long tool result.
 
 ## Cursor
 

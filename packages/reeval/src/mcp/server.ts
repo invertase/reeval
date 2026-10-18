@@ -193,7 +193,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Run history',
         description:
-          'Pass/fail of each reeval eval over recent runs, oldest first (reeval history --json): runs[] with their ids, commits and summaries, and rows[] with one outcome per run (null when not run) and drift, the runs where the eval or its stack changed. With no recorded runs it lists the scratch runs, with a note.',
+          "Pass/fail of each reeval eval over recent runs, oldest first (reeval history --json, without each run's evals[], which show has): runs[] with their ids, commits and summaries, and rows[] with one outcome per run (null when not run) and drift, the runs where the eval or its stack changed. With no recorded runs it lists the scratch runs, with a note.",
         inputSchema: z.object({
           filter: z.string().optional().describe('Only evals whose id contains this'),
           limit: limitField(500, 20, 'runs'),
@@ -202,9 +202,9 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
         annotations: READ_ONLY,
       },
       guard(async ({ filter, limit, all }) => {
-        const view = await historyView(config, { filter, limit, all })
+        const view = briefHistory(await historyView(config, { filter, limit, all }))
         if (all || view.runs.length) return view
-        const scratch = await historyView(config, { filter, limit, all: true })
+        const scratch = briefHistory(await historyView(config, { filter, limit, all: true }))
         if (!scratch.runs.length) {
           return { ...view, note: 'No runs yet. reeval run, in a terminal, makes one.' }
         }
@@ -240,16 +240,20 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Compare two runs',
         description:
-          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each row's base and head outcome and status (regressed, fixed, same, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack. With only head, the base is head's nearest recorded ancestor.",
+          "Diffs two reeval runs eval by eval to find a regression (reeval compare --json): each changed row's base and head outcome and status (regressed, fixed, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack; same counts the unchanged evals, which all: true lists too. With only head, the base is head's nearest recorded ancestor.",
         inputSchema: z.object({
           base: z.string().optional().describe(`${RUN_REF}; needs head too`),
           head: z.string().optional().describe(RUN_REF),
+          all: z.boolean().optional().describe('Also list the evals whose outcome is the same'),
         }),
         annotations: READ_ONLY,
       },
-      guard(async ({ base, head }) => {
+      guard(async ({ base, head, all }) => {
         const refs = base ? [base, head ?? 'latest'] : head ? [head] : []
-        return (await compareView(config, refs)).json as Json
+        const { json } = await compareView(config, refs)
+        if (all) return json as Json
+        const rows = json.rows.filter((r) => r.status !== 'same')
+        return { ...json, rows, same: json.rows.length - rows.length } as Json
       }),
     )
 
@@ -432,6 +436,14 @@ const decode = (s: string) => {
   } catch {
     return s
   }
+}
+
+/**
+ * History without each run's evals[], which repeat rows[] with every cell's fingerprint and sources:
+ * kilobytes a run, and some MCP clients show a long tool result as empty.
+ */
+function briefHistory<V extends { runs: { evals: unknown }[] }>(view: V) {
+  return { ...view, runs: view.runs.map(({ evals: _, ...run }) => run) }
 }
 
 function rowsOf(result: { columns: string[]; rows: Json[] }, limit: number) {

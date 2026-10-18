@@ -224,13 +224,35 @@ describe('reeval mcp', () => {
     )
     const md = await json(modern, 'show', { format: 'md' })
     assert.equal(md.markdown, (await runCli(dir, ['show', '--md'])).stdout.trimEnd())
-    assert.deepEqual(await json(modern, 'compare'), await cliJson(dir, ['compare']))
-    const both = await json(modern, 'compare', { base: runs[0], head: runs[1] })
-    assert.deepEqual(both, await cliJson(dir, ['compare', runs[0] as string, runs[1] as string]))
-    assert.deepEqual(await json(modern, 'history'), await cliJson(dir, ['history']))
+    assert.deepEqual(await json(modern, 'compare', { all: true }), await cliJson(dir, ['compare']))
+    const both = await json(modern, 'compare', { base: runs[0], head: runs[1], all: true })
+    const cliBoth = await cliJson(dir, ['compare', runs[0] as string, runs[1] as string])
+    assert.deepEqual(both, cliBoth)
+    assert.deepEqual(await json(modern, 'compare', { base: runs[0], head: runs[1] }), {
+      ...cliBoth,
+      same: 0,
+    })
+    const itself = await cliJson(dir, ['compare', runs[0] as string, runs[0] as string])
+    const rows = itself.rows as Json[]
+    assert.ok(rows.length && rows.every((r) => r.status === 'same'))
+    assert.deepEqual(await json(modern, 'compare', { base: runs[0], head: runs[0] }), {
+      ...itself,
+      rows: [],
+      same: rows.length,
+    })
+    const brief = (view: Json) => ({
+      ...view,
+      runs: (view.runs as Json[]).map(({ evals: _, ...run }) => run),
+    })
+    const h = await json(modern, 'history')
+    assert.ok(
+      (h.runs as Json[]).every((r) => !('evals' in r)),
+      "history leaves out each run's evals",
+    )
+    assert.deepEqual(h, brief(await cliJson(dir, ['history'])))
     assert.deepEqual(
       await json(modern, 'history', { filter: 'also', limit: 1 }),
-      await cliJson(dir, ['history', 'also', '--limit', '1']),
+      brief(await cliJson(dir, ['history', 'also', '--limit', '1'])),
     )
     const missing = await call(modern, 'show', { run: 'nope' })
     assert.ok(missing.isError)

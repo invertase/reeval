@@ -42,9 +42,9 @@ Ctrl-C to stop.
 | Tool | Arguments | Returns |
 |---|---|---|
 | `failures` | `run`, `filter`, `limit`, `tail` | Why each failed attempt failed, and whether its cell failed before ([below](#failures)) |
-| `history` | `filter`, `limit`, `all` | `reeval history --json`; with no recorded runs, the scratch runs and a `note` |
+| `history` | `filter`, `limit`, `all` | `reeval history --json` without each run's `evals` (`show` has them); with no recorded runs, the scratch runs and a `note` |
 | `show` | `run`, `format` (`json` or `md`) | `reeval show --json`, or `summary.md` as `markdown` |
-| `compare` | `base`, `head` | `reeval compare --json` |
+| `compare` | `base`, `head`, `all` | `reeval compare --json`'s changed rows, and `same`, the number of unchanged evals; `all: true` lists them too |
 | `analysis` | `run` | Saved and cached analyses of the run, newest first; never calls a model |
 | `transcript` | `run`, `attempt`, `offset`, `limit` | An attempt's transcript lines (200 by default), `total` and its resource `uri` |
 | `query_<view>` | `where`, `limit` | `{ columns, rows, truncated }` from the view |
