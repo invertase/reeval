@@ -1,0 +1,269 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "pooled across ada",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "minLift": 0.2
+        }
+      },
+      "body": "b1",
+      "family": {
+        "name": "pooled across %s",
+        "case": 0,
+        "cases": 3
+      }
+    },
+    {
+      "type": "eval",
+      "name": "pooled across grace",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "minLift": 0.2
+        }
+      },
+      "body": "b2",
+      "family": {
+        "name": "pooled across %s",
+        "case": 1,
+        "cases": 3
+      }
+    },
+    {
+      "type": "eval",
+      "name": "pooled across linus",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "minLift": 0.2
+        }
+      },
+      "body": "b3",
+      "family": {
+        "name": "pooled across %s",
+        "case": 2,
+        "cases": 3
+      }
+    },
+    {
+      "type": "eval",
+      "name": "each on its own for ada",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "body": "b4"
+    },
+    {
+      "type": "eval",
+      "name": "each on its own for grace",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "body": "b5"
+    },
+    {
+      "type": "eval",
+      "name": "one case is not a family: only",
+      "mode": "run",
+      "options": {},
+      "body": "b6"
+    }
+  ]
+}

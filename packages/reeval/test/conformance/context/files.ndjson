@@ -1,0 +1,20 @@
+{"case":"files","about":"writeFile in utf8 and base64, under the workspace and ~/, readFile of a file and of none, and a path reeval refuses","options":{}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/files.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"writeFile","path":"notes/todo.md","contents":"- buy milk\n"}}}
+{"reeval":{"id":"1","ok":true,"op":"writeFile"}}
+{"runner":{"id":"2","call":{"op":"readFile","path":"notes/todo.md"}}}
+{"reeval":{"id":"2","ok":true,"op":"readFile","contents":"- buy milk\n"}}
+{"runner":{"id":"3","call":{"op":"writeFile","path":"data.txt","contents":"aGVsbG8sIGJ5dGVzCg==","encoding":"base64"}}}
+{"reeval":{"id":"3","ok":true,"op":"writeFile"}}
+{"runner":{"id":"4","call":{"op":"readFile","path":"data.txt"}}}
+{"reeval":{"id":"4","ok":true,"op":"readFile","contents":"hello, bytes\n"}}
+{"runner":{"id":"5","call":{"op":"readFile","path":"missing.txt"}}}
+{"reeval":{"id":"5","ok":true,"op":"readFile","contents":null}}
+{"runner":{"id":"6","call":{"op":"writeFile","path":"~/.config/app.json","contents":"{\"theme\":\"dark\"}\n"}}}
+{"reeval":{"id":"6","ok":true,"op":"writeFile"}}
+{"runner":{"id":"7","call":{"op":"readFile","path":"~/.config/app.json"}}}
+{"reeval":{"id":"7","ok":true,"op":"readFile","contents":"{\"theme\":\"dark\"}\n"}}
+{"runner":{"id":"8","call":{"op":"writeFile","path":"/etc/app.json","contents":"{}"}}}
+{"reeval":{"id":"8","ok":false,"op":"writeFile","error":{"name":"Error","message":"c.writeFile() takes a workspace-relative path or ~/…, not \"/etc/app.json\""}}}
+{"runner":{"type":"done"}}
+{"record":{"outcome":"pass","error":null,"assertions":[],"judgements":[],"checks":[]}}

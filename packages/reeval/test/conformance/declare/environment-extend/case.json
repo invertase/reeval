@@ -1,0 +1,5 @@
+{
+  "eval": "plan/environments/evals/extend.eval.ts",
+  "plan": "plan/environments/expected/extend-replace.txt",
+  "args": ["evals/extend.eval.ts"]
+}

@@ -91,6 +91,7 @@ fails, each of them gets an error reply and the attempt fails as an infra error.
 names a subject reeval can re-read (the attempt, a command or a file), since a runner's value
 can't be read again. `c.judge`'s `on` is tagged the same way: `{ turn }` names a turn by its index, `{ value }`
 carries a JSON value to grade as the output.
+`test/conformance/context/` has whole attempts in these messages, held to the real code.
 
 ## Versions
 

@@ -1,0 +1,14 @@
+{"case":"exec","about":"commands in the sandbox: one that succeeds, one that fails, and one left running in the background, then killed","options":{}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/exec.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"exec","command":"echo hello"}}}
+{"reeval":{"id":"1","ok":true,"op":"exec","result":{"exitCode":0,"stdout":"hello\n","stderr":""}}}
+{"runner":{"id":"2","call":{"op":"exec","command":"echo oops >&2; exit 3"}}}
+{"reeval":{"id":"2","ok":true,"op":"exec","result":{"exitCode":3,"stdout":"","stderr":"oops\n"}}}
+{"runner":{"id":"3","call":{"op":"exec","command":"sleep 30","background":true}}}
+{"reeval":{"id":"3","ok":true,"op":"exec","result":{"handle":"h1"}}}
+{"runner":{"id":"4","call":{"op":"kill","handle":"h1"}}}
+{"reeval":{"id":"4","ok":true,"op":"kill"}}
+{"runner":{"id":"5","call":{"op":"kill","handle":"h1"}}}
+{"reeval":{"id":"5","ok":true,"op":"kill"}}
+{"runner":{"type":"done"}}
+{"record":{"outcome":"pass","error":null,"assertions":[],"judgements":[],"checks":[{"command":"echo hello","exitCode":0},{"command":"echo oops >&2; exit 3","exitCode":3}]}}

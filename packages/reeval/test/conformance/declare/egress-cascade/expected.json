@@ -1,0 +1,201 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "the config policy",
+      "mode": "run",
+      "options": {},
+      "body": "b1"
+    },
+    {
+      "type": "eval",
+      "name": "an environment replaces it",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "closed",
+          "layers": [
+            {
+              "name": "closed",
+              "spec": {
+                "egress": "deny-all"
+              }
+            }
+          ]
+        }
+      },
+      "body": "b2"
+    },
+    {
+      "type": "eval",
+      "name": "an extend child replaces its parent",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "reopened",
+          "layers": [
+            {
+              "name": "closed",
+              "spec": {
+                "egress": "deny-all"
+              }
+            },
+            {
+              "name": "reopened",
+              "spec": {
+                "egress": "allow-all"
+              }
+            }
+          ]
+        }
+      },
+      "body": "b3"
+    },
+    {
+      "type": "eval",
+      "name": "the default list spreads",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "installs",
+          "layers": [
+            {
+              "name": "installs",
+              "spec": {
+                "egress": {
+                  "allow": [
+                    "registry.npmjs.org",
+                    "registry.yarnpkg.com",
+                    "github.com",
+                    "*.github.com",
+                    "*.githubusercontent.com",
+                    "pypi.org",
+                    "files.pythonhosted.org",
+                    "api.example.com"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "body": "b4"
+    },
+    {
+      "type": "eval",
+      "name": "the eval replaces the environment",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "closed",
+          "layers": [
+            {
+              "name": "closed",
+              "spec": {
+                "egress": "deny-all"
+              }
+            }
+          ]
+        },
+        "egress": {
+          "allow": ["eval.example.com"]
+        }
+      },
+      "body": "b5"
+    },
+    {
+      "type": "group",
+      "name": "a group",
+      "mode": "run",
+      "options": {
+        "egress": {
+          "allow": ["group.example.com"]
+        }
+      },
+      "children": [
+        {
+          "type": "eval",
+          "name": "replaces the environment too",
+          "mode": "run",
+          "options": {
+            "environment": {
+              "kind": "environment",
+              "name": "closed",
+              "layers": [
+                {
+                  "name": "closed",
+                  "spec": {
+                    "egress": "deny-all"
+                  }
+                }
+              ]
+            }
+          },
+          "body": "b8"
+        }
+      ]
+    },
+    {
+      "type": "eval",
+      "name": "a variant runs under its own policy",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "plain",
+            "layers": [
+              {
+                "name": "plain",
+                "spec": {}
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "closed",
+              "layers": [
+                {
+                  "name": "closed",
+                  "spec": {
+                    "egress": "deny-all"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "body": "b6"
+    },
+    {
+      "type": "eval",
+      "name": "a fake agent with a layout gets that agent's hosts",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "closed",
+          "layers": [
+            {
+              "name": "closed",
+              "spec": {
+                "egress": "deny-all"
+              }
+            }
+          ]
+        },
+        "harness": {
+          "kind": "fake",
+          "layout": "claude-code"
+        }
+      },
+      "body": "b7"
+    }
+  ]
+}

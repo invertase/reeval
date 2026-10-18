@@ -1,0 +1,5 @@
+{
+  "eval": "plan/compare/evals/variants.eval.ts",
+  "plan": "plan/compare/expected/control-and-variants.txt",
+  "args": ["evals/variants.eval.ts"]
+}

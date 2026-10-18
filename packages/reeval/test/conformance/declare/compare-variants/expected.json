@@ -1,0 +1,125 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "control and two variants",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "kind": "environment",
+              "name": "terse",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "terse",
+                  "spec": {
+                    "env": {
+                      "MODE": "terse"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "body": "b1"
+    },
+    {
+      "type": "eval",
+      "name": "every cell gated, with a minimum lift",
+      "mode": "run",
+      "options": {
+        "compare": {
+          "baseline": {
+            "kind": "environment",
+            "name": "base",
+            "layers": [
+              {
+                "name": "base",
+                "spec": {
+                  "env": {
+                    "MODE": "base"
+                  }
+                }
+              }
+            ]
+          },
+          "variants": [
+            {
+              "kind": "environment",
+              "name": "skilled",
+              "layers": [
+                {
+                  "name": "base",
+                  "spec": {
+                    "env": {
+                      "MODE": "base"
+                    }
+                  }
+                },
+                {
+                  "name": "skilled",
+                  "spec": {
+                    "env": {
+                      "MODE": "skilled"
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "gate": "all",
+          "minLift": 0.2
+        },
+        "runs": 2
+      },
+      "body": "b2"
+    }
+  ]
+}

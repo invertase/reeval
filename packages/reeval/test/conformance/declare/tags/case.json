@@ -1,0 +1,5 @@
+{
+  "eval": "plan/selection/evals/tags.eval.ts",
+  "plan": "plan/selection/expected/tags.txt",
+  "args": ["--tag", "slow", "--tag", "!flaky"]
+}
