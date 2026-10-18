@@ -58,53 +58,87 @@ task, so every check must pass there.
 
 ## mcp-debugging: does `reeval mcp` help an agent debug a failing run?
 
-Five small reeval projects, each broken in one known way: a check that reads the wrong path, a
-judge threshold above the judge's score, an eval that forgot to attach its skill, a check that
-races a background process, and a setup step naming a missing script. Each one's failing run is
-already in its `.reeval/`. The agent is told the latest run failed, has to fix the project so
-`reeval run` passes, and must name the cause in `answer.json`.
+[`evals/mcp-debugging/`](./mcp-debugging) hands the agent a broken reeval project and asks why it
+fails. The control has the CLI; the variant has the same project with `reeval mcp` configured.
+The prompt is the same on both sides and never mentions MCP.
 
 ```ts
 // evals/mcp-debugging/environments.ts
-const control = defineEnvironment(fixture, ({ directory }) => ({
-  files: directory(`./fixtures/${fixture}`),
-  setup: [install, seedTheFailingRun],
+const control = defineEnvironment(fixture, ({ directory, file }) => ({
+  files: { ...directory(`./fixtures/${base}`), '~/.dogfood-seed.mjs': file('./scripts/seed-history.mjs') },
+  setup: [install, `node ~/.dogfood-seed.mjs ${fixture}`],
 }))
 const variant = control.extendEnvironment(`${fixture}-with-mcp`, ({ mcp }) => ({
   mcp: { reeval: mcp.stdio('sh', ['-c', 'cd /reeval/workspace 2>/dev/null; exec node_modules/.bin/reeval mcp']) },
 }))
 ```
 
-Each fixture's eval compares the CLI alone (control) against the same project with `reeval mcp`
-configured (variant). The checks are deterministic: the named cause, `reeval run` exiting 0,
-`reeval.config.ts` untouched, and the eval's checks neither deleted nor skipped.
+| Group | Task | The agent must |
+|---|---|---|
+| debugs a run | `check-path`, `judge-threshold`, `skill-missing`, `flaky-check`, `setup-step` | Fix a project whose latest run failed, name the cause, keep the checks |
+| reads the history | `flaky-since` | Name the eval that turned flaky over 10 recorded runs, the commit that did it, and whether the race is in the check |
+| | `regression` | List the evals that passed at tag `v1.2` and fail in the latest run, 4 batches of changes later, and none that were broken already or recovered |
+| | `is-new` | Split the latest run's failures into new and old |
+| | `big-record` | Fix an 82-attempt run (its `summary.md` is about 485 KB) whose export check moved |
 
-On Cursor (`composer-2.5`, 2 runs a cell) and Claude Code (`claude-sonnet-5`, 1 run a cell),
-every attempt passed:
+The history tasks start from a git repository the setup step writes, with a recorded run for
+each commit. Every check is deterministic: the named eval, commit or cause, `reeval run`
+passing, `reeval.config.ts` untouched, the history unedited, and no check skipped.
+
+### Results
+
+On the five single-run tasks the server changes little: the failure is in `summary.md`, and
+every agent reads it. The history tasks are where it pays off, once its answers are short and
+right. Before is published reeval 0.9.0; after has the `failures` tool, the `history` fallback,
+the `check` cause in `flaky_cells` and trimmed `history` and `compare`
+([#371](https://github.com/invertase/reeval/pull/371)):
+
+| Harness | reeval mcp | Pass, CLI only | Pass, with MCP | Tokens | Tool calls | Agent time |
+|---|---|---|---|---|---|---|
+| Cursor `composer-2.5` | before | 8/8 | 6/8 | ×0.93 | ×0.83 | ×1.03 |
+| | after (3 runs) | 23/24 | 24/24 | ×0.55 | ×0.61 | ×0.78 |
+| Claude Code `claude-sonnet-5` | before | 7/8 | 8/8 | ×0.95 | ×1.06 | ×1.34 |
+| | after | 8/8 | 8/8 | ×0.53 | ×0.45 | ×0.58 |
+
+The ratios are the median attempt with MCP over the median without, across the four history
+tasks. Before, the server misled as often as it helped. Cursor's two misses both copied
+`flaky_cells`' old cause, `agent`, for a race in the check:
 
 ```text
-     ✓ flaky-check          4/4 · pass@1 – gated  4 attempts
-         cursor:composer-2.5/flaky-check/docker           control    2/2  pass@1 100%
-         cursor:composer-2.5/flaky-check-with-mcp/docker  variant    2/2  pass@1 100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise
-           effort: tools 18 vs 17 (×1.06), agent 35s vs 33s (×1.07), tokens 406k vs 354k (×1.15): too few attempts to test
-…
-Attempts  20 passed (20 attempts, 5 evals)
-Duration  3m 42s
+     ○ flaky-since      2/4 · not gated  4 attempts
+         cursor:composer-2.5/flaky-since/docker           control    2/2  pass@1 100%   628k in (286k cached) · 4,930 out
+         cursor:composer-2.5/flaky-since-with-mcp/docker  variant    0/2  pass@1   0%   lift −100 pts (95% −100…−7, 0/2 vs 2/2)   2,878k in (1,397k cached) · 12k out
+           effort: tools 36 vs 23.5 (×1.53), agent 44s vs 29s (×1.51), tokens 1,445k vs 316k (×4.57): too few attempts to test
 ```
 
-So the MCP server didn't change the outcome: 15/15 on each side, lift +0 (95% −20…+20). These
-failures are easy to find without it: the agents ran `reeval run` and read `summary.md`. The
-transcripts showed where the server fell short. Cursor's first call was always `history`, which
-lists recorded runs only, so it came back empty for a project with only scratch runs. Claude
-Code never found the tools, which it keeps behind its tool search. The full write-up and the
-improvements to `reeval mcp` it suggests are in the PR that added this folder.
+After, `failures` answers "is this failure new" in one call:
 
-Check the eval itself without keys: an oracle fixes every fixture and must pass, and a canary
-that skips the failing eval must fail.
+```text
+     ✓ is-new               4/4 · not gated  4 attempts
+         claude-code:claude-sonnet-5/is-new/docker           control    2/2  pass@1 100%   836k in (807k cached) · 6,240 out
+         claude-code:claude-sonnet-5/is-new-with-mcp/docker  variant    2/2  pass@1 100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   270k in (246k cached) · 1,246 out
+           effort: tools 2 vs 10 (×0.20), agent 9.9s vs 39s (×0.25), tokens 136k vs 421k (×0.32): too few attempts to test
+```
+
+With 2 runs a cell, no single cell's effort difference is significant. The direction holds,
+though: after the fixes, the MCP side used fewer tokens in 15 of 16 history cells across both
+harnesses, against 4 of 8 before. Pass rates barely move, since both sides nearly always get
+there.
+
+### Run it
+
+```bash
+pnpm reeval run evals/mcp-debugging --runs 2                        # Cursor, with CURSOR_API_KEY
+REEVAL_DOGFOOD_TARBALL=$PWD/reeval.tgz pnpm reeval run evals/mcp-debugging   # a packed checkout's reeval
+```
+
+The sandbox installs published reeval unless `REEVAL_DOGFOOD_TARBALL` names a `pnpm pack`
+tarball. Check the eval without keys: an oracle that solves every task must pass, and a canary
+that cheats (skips the failing eval, or gives wrong answers) must fail.
 
 ```bash
 cd evals/mcp-debugging
-pnpm reeval run --config reeval.oracle.config.ts                     # 10 passed
-pnpm reeval run --config reeval.oracle.config.ts --profile canary    # 10 fail "keeps the checks"
+pnpm reeval run --config reeval.oracle.config.ts                          # 18 passed
+pnpm reeval run --config reeval.oracle.config.ts --profile canary         # 18 missed
 pnpm reeval run --config reeval.oracle.config.ts --profile mcp with-mcp   # calls reeval mcp
 ```
