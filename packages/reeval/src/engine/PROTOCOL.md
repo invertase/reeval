@@ -89,7 +89,8 @@ on the body's first call that needs them (`send`, `exec`, `readFile`, `writeFile
 fails, each of them gets an error reply and the attempt fails as an infra error. A background
 `exec` or a `serve` replies with a handle id, which `kill` and `capture` name; a polled `expect`
 names a subject reeval can re-read (the attempt, a command or a file), since a runner's value
-can't be read again.
+can't be read again. `c.judge`'s `on` is tagged the same way: `{ turn }` names a turn by its index, `{ value }`
+carries a JSON value to grade as the output.
 
 ## Versions
 

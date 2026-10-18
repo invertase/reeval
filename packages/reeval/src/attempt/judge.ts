@@ -1,3 +1,4 @@
+import type { JudgeOn } from '../contract/attempt.ts'
 import { judgeProblem } from '../contract/judge.ts'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { workspaceFiles } from '../diff.ts'
@@ -22,10 +23,12 @@ import { clip, formatDuration } from '../text.ts'
 import type {
   AttemptContext,
   JSONValue,
+  JudgeCallOptions,
   JudgeFailure,
   JudgeInput,
   ResolvedJudgeStateOptions,
   Turn,
+  Verdict,
 } from '../types.ts'
 import { sandboxFor } from './checks.ts'
 import type { Attempt } from './state.ts'
@@ -34,8 +37,15 @@ const noJudgeModel = (configFile: string) =>
   `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in ${configFile}, ` +
   'on the group or eval, or pass { model } to this call.'
 
-const isTurn = (value: unknown): value is Turn =>
-  typeof value === 'object' && value !== null && 'transcript' in value && 'diff' in value
+/** A turn this attempt sent becomes its index; any other value is graded as the output. */
+function judgeOn(turns: readonly Turn[], on: Turn | JSONValue): JudgeOn {
+  const turn = turns.indexOf(on as Turn)
+  if (turn >= 0) return { turn }
+  if (typeof on === 'object' && typeof (on as Partial<Turn> | null)?.exec === 'function') {
+    throw new Error("c.judge() on is a turn this attempt didn't send")
+  }
+  return { value: on as JSONValue }
+}
 
 const workspacePath = (path: string) => path.replace(/^\.\//, '')
 
@@ -133,7 +143,10 @@ export function judgeCaller(
   a: Attempt,
   readFile: (path: string) => Promise<string | null>,
 ): AttemptContext['judge'] {
-  const ask: AttemptContext['judge'] = async (question, { on, ...call } = {}) => {
+  const ask = async (
+    question: string,
+    { on, ...call }: Omit<JudgeCallOptions, 'on'> & { on?: JudgeOn } = {},
+  ): Promise<Verdict | JudgeFailure> => {
     if (typeof question !== 'string' || !question.trim()) {
       throw new Error(
         `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
@@ -143,8 +156,14 @@ export function judgeCaller(
     if (problem) throw new Error(problem)
     const badArts = badJudgeArtifacts(call.artifacts)
     if (badArts) throw new Error(`c.judge() artifacts ${badArts}`)
-    const subject = isTurn(on) ? on : a.turns.at(-1)
-    if (!subject) throw new Error('c.judge() has no turn to grade: call c.send() first')
+    const subject = on && 'turn' in on ? a.turns[on.turn] : a.turns.at(-1)
+    if (!subject) {
+      throw new Error(
+        on && 'turn' in on
+          ? `c.judge() on names turn ${on.turn}, but this attempt has ${a.turns.length}`
+          : 'c.judge() has no turn to grade: call c.send() first',
+      )
+    }
     const options = mergeJudge(a.spec.judge, call)
     const { model } = options
     if (model === undefined) {
@@ -152,11 +171,11 @@ export function judgeCaller(
       throw new Error(noJudgeModel(getRunContext().config.file))
     }
     const wanted = resolveStateOptions(options.state)
-    if (on !== undefined && !isTurn(on) && !wanted.output) {
+    if (on && 'value' in on && !wanted.output) {
       throw new Error('c.judge() on gives the output, but state.output is false')
     }
     const { state: _state, maxConcurrent, ...judgeOptions } = options
-    const output = on === undefined || isTurn(on) ? subject.text : on
+    const output = on && 'value' in on ? on.value : subject.text
     const { draft, dropped } = await draftState({
       turns: a.turns,
       subject,
@@ -252,6 +271,8 @@ export function judgeCaller(
     }
   }
   // A verdict names its question in `expect(verdict).toPass()`'s default label.
-  return async (question, options) =>
-    Object.defineProperty(await ask(question, options), SUBJECT, { value: question })
+  return async (question, { on, ...options } = {}) => {
+    const call = on === undefined ? options : { ...options, on: judgeOn(a.turns, on) }
+    return Object.defineProperty(await ask(question, call), SUBJECT, { value: question })
+  }
 }

@@ -800,6 +800,45 @@ evaluate('on a value', async (c) => {
     assert.equal(readRun(p.dir).evals[1]?.trial.judgements.length, 2)
   })
 
+  test('c.judge on grades a turn it sent, and a turn-shaped JSON value as a value', async () => {
+    const p = await project('judge-on', {
+      'reeval.config.ts': fakeConfig({ harness: "{ text: 'done' }" }),
+      'evals/j.eval.ts': `import { evaluate } from 'reeval'
+const lookalike = { prompt: 'fake', text: 'fake', transcript: [], diff: { files: [], patch: '' } }
+evaluate('on', async (c) => {
+  const first = await c.send('first')
+  await c.send('second')
+  await c.judge('turn?', { on: first })
+  await c.judge('value?', { on: lookalike })
+})
+evaluate('copy', async (c) => {
+  const first = await c.send('first')
+  await c.judge('copy?', { on: { ...first } })
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /c\.judge\(\) on is a turn this attempt didn't send/)
+    const [on, copy] = readRun(p.dir).evals
+    assert.equal(on?.error, null, r.stdout)
+    const inputs = JSON.parse(on?.read(on.trial.files.judgeInput?.path ?? '') ?? '[]')
+    assert.deepEqual(
+      inputs.map((i: { state: { task: string; output: unknown } }) => [
+        i.state.task,
+        i.state.output,
+      ]),
+      [
+        ['first', 'done'],
+        [
+          'second',
+          { prompt: 'fake', text: 'fake', transcript: [], diff: { files: [], patch: '' } },
+        ],
+      ],
+    )
+    assert.equal(copy?.trial.judgements.length, 0)
+  })
+
   test('plain output streams worker progress and console.log from inside the eval', async () => {
     const p = await project('plain-progress', {
       'reeval.config.ts': fakeConfig({ harness: "{ files: { 'hello.txt': 'hi' } }" }),

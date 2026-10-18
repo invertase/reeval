@@ -355,6 +355,11 @@ export const captureCallDataSchema = z
 
 const handleId = nonEmpty.describe('A background process, as an exec or serve reply named it.')
 
+const judgeOnSchema = z.union([
+  z.strictObject({ turn: turnIndex }),
+  z.strictObject({ value: jsonValueSchema.describe('Graded as the output.') }),
+])
+
 export const judgeCallDataSchema = z
   .strictObject({
     model: z
@@ -362,11 +367,7 @@ export const judgeCallDataSchema = z
       .optional()
       .describe("`'provider/model'`, or a fake judge with a numeric score."),
     ...judgeFields,
-    on: z
-      .union([
-        z.strictObject({ turn: turnIndex }),
-        z.strictObject({ value: jsonValueSchema.describe('Graded as the output.') }),
-      ])
+    on: judgeOnSchema
       .optional()
       .describe('What to grade instead of the latest turn: an earlier turn, or a value.'),
     artifacts: z
@@ -669,6 +670,8 @@ export const attemptDoneProblem = (value: unknown): string | undefined =>
   dataProblem(attemptDoneSchema, value, 'The attempt done', () => LIFECYCLE_KEYS)
 
 export type AttemptCall = z.infer<typeof attemptCallSchema>
+/** `c.judge()`'s `on` as data: a turn by its index, or a value graded as the output. */
+export type JudgeOn = z.infer<typeof judgeOnSchema>
 export type AttemptStart = z.infer<typeof attemptStartSchema>
 export type AttemptAbort = z.infer<typeof attemptAbortSchema>
 export type AttemptDone = z.infer<typeof attemptDoneSchema>
