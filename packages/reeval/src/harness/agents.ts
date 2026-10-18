@@ -762,10 +762,12 @@ export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlock
 /**
  * How the APIs behind the harnesses say they refused a key: an HTTP 401, Anthropic's and OpenAI's
  * wording, Google's (which answers 400), and OpenCode's for any provider's 401 or 403. A bare 403 isn't here: the gateway and MCP servers send
- * those for reasons that have nothing to do with the harness's key.
+ * those for reasons that have nothing to do with the harness's key. Grok Build checks its key as
+ * it starts and, when xAI refuses it (a 400 or 401, not an outage), offers no `xai.api_key`
+ * sign-in, which is all `@ai-sdk/harness-acp` reports.
  */
 const REFUSED_KEY =
-  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b/i
+  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b|\bauthentication method "xai\.api_key" is not advertised\b/i
 
 /** What to do when a harness error says its API refused the key, naming the variable; else undefined. */
 export function authHint(agent: Agent, message: string): string | undefined {
