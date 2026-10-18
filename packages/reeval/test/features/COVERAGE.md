@@ -44,8 +44,8 @@
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| `skill.local`, placed by the harness | — | — | ● 8 | ● 8 | ● 2 |
-| `skill.local` with `placement: 'workspace'` | — | — | ● 10 | ● 10 | — |
+| `skill.local`, placed by the harness | — | — | ● 9 | ● 9 | ● 2 |
+| `skill.local` with `placement: 'workspace'` | — | — | ● 11 | ● 11 | — |
 | `skill.git`: ref, `path`, `only` and the recorded commit | ✓ 2 | — | ● 1 | ● 1 | — |
 | `workspace: git(…)`: a repository or directory at a ref, fetched on the host, with its commit and tree recorded | ✓ 5 | ✓ 1 | ● 4 | ● 4 | — |
 | `git(…, { init: true })`: a `.git` with one commit of the fetched tree | ✓ 1 | — | ● 1 | ● 1 | — |
@@ -60,7 +60,7 @@
 | `mcp.http` | ✓ 1 | — | — | — | — |
 | `mcp.sse` | ✓ 2 | ✓ 1 | — | — | — |
 | `secret.template` in MCP headers | ✓ 2 | — | — | — | — |
-| `rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi, Codex and fx, `CLAUDE.md` for Claude Code | ✓ 1 | — | ● 9 | ● 9 | ● 2 |
+| `rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi, Codex, fx and Grok Build, `CLAUDE.md` for Claude Code | ✓ 1 | — | ● 10 | ● 10 | ● 2 |
 | `files` in the workspace, and `file()`; paths that leave it are refused | ✓ 2 | — | — | — | — |
 | `files` under `~/` | ✓ 1 | — | ● 1 | ● 1 | — |
 | `files` from `file()` are copied as bytes | — | — | ● 1 | ● 1 | — |
@@ -84,7 +84,7 @@
 | Docker: run, diff, and removal, on timeout too | ✓ 3 | — | — | — | — |
 | Sandbox `exec`, `readFile`, `writeFile` and `~/`, fake and Docker | ✓ 2 | — | — | — | — |
 | `docker({ install })` layers | ✓ 3 | ✓ 1 | — | — | — |
-| `docker({ dockerfile })` and `REEVAL_BASE` | ✓ 3 | ✓ 1 | — | ● 7 | — |
+| `docker({ dockerfile })` and `REEVAL_BASE` | ✓ 3 | ✓ 1 | — | ● 8 | — |
 | Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })` | ✓ 7 | — | — | ● 1 | — |
 | Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them | ✓ 4 | ✓ 2 | — | — | — |
 | Login shells keep the image's `PATH` (`/etc/profile.d/00-reeval-path.sh`) | — | — | — | ● 2 | — |
@@ -107,7 +107,7 @@
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| A refused harness key names its variable and how to fix it | ✓ 6 | — | — | — | — |
+| A refused harness key names its variable and how to fix it | ✓ 7 | — | — | — | — |
 | Real Cursor, end to end | — | — | ● 1 | ● 2 | ● 5 |
 | `claudeCode()`: its image, rules, skills and MCP shape | ✓ 1 | ✓ 1 | ● 2 | ● 3 | — |
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — |
@@ -118,7 +118,7 @@
 | `codex()`: Codex in the sandbox (`codex exec --json`) on a brokered OpenAI key, with per-turn tokens, and the served model and effort from the gateway | ✓ 7 | ✓ 1 | ● 3 | ● 4 | — |
 | `fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens and its tool names | ✓ 6 | ✓ 1 | ● 3 | ● 4 | — |
 | `cursor()`: Cursor through its TypeScript SDK, one runner per session | ✓ 4 | ✓ 1 | ● 2 | ● 2 | — |
-| `effort` on each harness factory: default id, requested vs served | ✓ 6 | ✓ 1 | ● 1 | ● 1 | — |
+| `effort` on each harness factory: default id, requested vs served | ✓ 7 | ✓ 1 | ● 1 | ● 1 | — |
 | Token usage and the served model, per turn and totalled, from any harness | ✓ 2 | — | — | — | ◐ 3 (2 without a canary) |
 | Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 16 | — | — | — | ◐ 3 (1 without a canary) |
 | `fakeHarness({ script })` and `layout` | ✓ 2 | — | ● 2 | ● 2 | — |
@@ -127,6 +127,7 @@
 | Each agent CLI's native stream: replayed through the adapters, and checked for format drift | ✓ 2 | — | — | — | ◐ 1 (1 without a canary) |
 | The models a harness's API requests named on the wire (`servedModels`) | ✓ 1 | — | — | — | ◐ 1 (1 without a canary) |
 | The model variant a harness resolved (`composer-2.5[fast=true]`), in the stack's `resolvedModels`, `-v`, `summary.md` and the studio | ✓ 1 | — | — | — | ◐ 1 (1 without a canary) |
+| `grokBuild()`: xAI's Grok Build over ACP on a brokered xAI key, its image, rules, skills, MCP servers, tool names and the turn's tokens | ✓ 6 | ✓ 1 | ● 3 | ● 4 | — |
 
 ## Judges and matchers
 

@@ -254,11 +254,11 @@ export const CASES: Record<string, Case[]> = {
     ['data: cursor without a model', harnesses({ kind: 'cursor' })],
     ['data: cursor with a typo', harnesses({ kind: 'cursor', model: 'm', modle: 'x' })],
     [
-      ['data: grok-build with a provider', harnesses({ kind: 'grok-build', model: 'xai/g' })],
       'data: claude-code with a bad effort',
       harnesses({ kind: 'claude-code', model: 'm', effort: 'huge' }),
     ],
     ['data: goose with a provider', harnesses({ kind: 'goose', model: 'google/g' })],
+    ['data: grok-build with a provider', harnesses({ kind: 'grok-build', model: 'xai/g' })],
     ['data: fx without a model', harnesses({ kind: 'fx' })],
     ['data: fake with a bad layout', harnesses({ kind: 'fake', layout: 'vim' })],
     ['data: fake with a bad script', harnesses({ kind: 'fake', script: [{ exec: 'ls' }] })],

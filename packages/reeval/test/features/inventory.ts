@@ -755,6 +755,7 @@ export const inventory: InventoryFeature[] = [
       'harness/pi-dockerfile',
       'harness/codex-dockerfile',
       'harness/fx-dockerfile',
+      'harness/grok-build-dockerfile',
     ],
     plan: ['images/install-from-dockerfile'],
     tests: [
@@ -964,6 +965,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/docker-antigravity.test.ts › Antigravity attempts broker the key on its model endpoint only',
       docker('Goose gets the key on the model list it fetches each turn'),
       docker('Gemini refusing the key fails the turn and names the host variable'),
+      docker('grokBuild: the key is brokered on the xAI API only'),
     ],
   },
   {
@@ -1153,7 +1155,6 @@ export const inventory: InventoryFeature[] = [
       'harness/codex-workspace-skills',
       'harness/codex-home-skills',
       'harness/codex-dockerfile',
-      'harness/grok-build-dockerfile',
     ],
     plan: ['codex/codex'],
     tests: [
@@ -1234,6 +1235,7 @@ export const inventory: InventoryFeature[] = [
       piAdapter('unit', 'effort is --thinking'),
       codexAdapter('unit', 'effort is model_reasoning_effort in the config'),
       gooseAdapter('unit', 'effort is GOOSE_THINKING_EFFORT'),
+      grokAdapter('unit', "effort is the config's default_reasoning_effort"),
       opencodeAdapter('unit', "effort is that provider's thinking option"),
     ],
   },
@@ -1363,7 +1365,6 @@ export const inventory: InventoryFeature[] = [
       'judge/state-transcript',
       'judge/state-turns',
       'judge/state-checks',
-      docker('grokBuild: the key is brokered on the xAI API only'),
       'judge/state-cascade',
     ],
     tests: [
@@ -1647,7 +1648,6 @@ export const inventory: InventoryFeature[] = [
       analysis('effort needs 4 runs a cell to be testable'),
     ],
   },
-  grokAdapter('unit', "effort is the config's default_reasoning_effort"),
   {
     id: 'contrasts',
     area: 'Records and studio',
