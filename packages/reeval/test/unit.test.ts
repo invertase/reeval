@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { fileURLToPath } from 'node:url'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
@@ -75,7 +76,9 @@ import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
+import { fakeSandbox } from '../src/sandbox.ts'
 import { clip } from '../src/text.ts'
+import { project } from './helpers.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
   const brokerLine = (kind: AgentKind, model = 'm') => {
@@ -692,6 +695,82 @@ profiles:
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
+})
+
+test('a relative host path resolves the same in reeval.yaml, TypeScript data and the helpers', async () => {
+  const dockerfile = 'FROM debian:bookworm-slim\n'
+  const p = await project('path-parity', {
+    'yaml/docker/Dockerfile': dockerfile,
+    'data/docker/Dockerfile': dockerfile,
+    'helpers/docker/Dockerfile': dockerfile,
+    'yaml/reeval.yaml': `sandbox: { kind: docker, dockerfile: docker/Dockerfile }
+environment:
+  kind: environment
+  name: base
+  layers:
+    - name: base
+      spec:
+        workspace: { kind: git, repo: ../app, url: ../app }
+        files: { a.md: { kind: file, path: notes/a.md }, b.md: inline }
+        rules: { kind: file, path: ./AGENTS.md }
+        skills:
+          - { kind: skill, source: local, path: ./skills, placement: harness }
+          - { kind: skill, source: npm, spec: file:../pkg.tgz, path: skills, placement: harness }
+profiles:
+  local: { defaults: { sandbox: { kind: fake, dir: ./tmp } } }
+`,
+    'data/reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+export default defineConfig({
+  sandbox: { kind: 'docker', dockerfile: 'docker/Dockerfile' },
+  environment: defineEnvironment('base', {
+    workspace: { kind: 'git', repo: '../app', url: '../app' },
+    files: { 'a.md': { kind: 'file', path: 'notes/a.md' }, 'b.md': 'inline' },
+    rules: { kind: 'file', path: './AGENTS.md' },
+    skills: [
+      { kind: 'skill', source: 'local', path: './skills', placement: 'harness' },
+      { kind: 'skill', source: 'npm', spec: 'file:../pkg.tgz', path: 'skills', placement: 'harness' },
+    ],
+  }),
+  profiles: { local: { defaults: { sandbox: { kind: 'fake', dir: './tmp' } } } },
+})
+`,
+    'helpers/reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { docker, fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  sandbox: docker({ dockerfile: 'docker/Dockerfile' }),
+  environment: defineEnvironment('base', ({ file, git, skill }) => ({
+    workspace: git('../app'),
+    files: { 'a.md': file('notes/a.md'), 'b.md': 'inline' },
+    rules: file('./AGENTS.md'),
+    skills: [skill.local('./skills'), skill.npm('file:../pkg.tgz')],
+  })),
+  profiles: { local: { defaults: { sandbox: fakeSandbox({ dir: './tmp' }) } } },
+})
+`,
+  })
+  const resolved = async (name: string, config: string) => {
+    const dir = join(p.dir, name)
+    const c = await loadConfig(join(dir, config))
+    const paths = {
+      sandbox: c.sandbox,
+      spec: c.environment?.layers[0]?.spec,
+      local: c.profiles.local?.defaults.sandbox,
+    }
+    return JSON.parse(JSON.stringify(paths).replaceAll(JSON.stringify(dir).slice(1, -1), '<dir>'))
+  }
+  const yaml = await resolved('yaml', 'reeval.yaml')
+  assert.deepEqual(yaml.sandbox, { kind: 'docker', dockerfile: join('<dir>', 'docker/Dockerfile') })
+  assert.deepEqual(yaml.local, { kind: 'fake', dir: join('<dir>', 'tmp') })
+  assert.equal(yaml.spec.workspace.url, join(p.dir, 'app'))
+  assert.deepEqual(await resolved('data', 'reeval.config.ts'), yaml, 'TypeScript data')
+  assert.deepEqual(await resolved('helpers', 'reeval.config.ts'), yaml, 'the helpers')
+})
+
+test('fakeSandbox resolves a relative dir against the file that calls it', () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  assert.equal(fakeSandbox({ dir: './sandboxes' }).dir, join(here, 'sandboxes'))
+  assert.equal(fakeSandbox({ dir: '/abs/sandboxes' }).dir, '/abs/sandboxes')
+  assert.equal(fakeSandbox().dir, undefined)
 })
 
 test('requireConfig refuses a missing file with the config names doctor lists and reeval init', () => {

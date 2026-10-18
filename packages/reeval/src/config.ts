@@ -10,10 +10,10 @@ import {
   environmentFrom,
   helpersFor,
   isEnvironment,
-  isLocalPath,
   isSecret,
-  localNpmSpec,
-  toPath,
+  type MissingDockerfile,
+  sandboxPaths,
+  specPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
 import {
@@ -205,70 +205,38 @@ export function parseYamlConfig(text: string, file: string): unknown {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const isPath = (value: unknown): value is string => typeof value === 'string' && value !== ''
+/** A config's Dockerfile that isn't there, named by its field. */
+const missingIn =
+  (file: string): MissingDockerfile =>
+  (field, full) => {
+    throw new UsageError(
+      `${field} in ${file}: ${full} doesn't exist. Paths in ${file} are relative to its directory.`,
+    )
+  }
 
 /**
- * A data config with its host paths made absolute against its directory, as `file()`,
- * `skill.local()`, `skill.npm()`, `git()` and `docker({ dockerfile })` resolve a script config's
- * against its file: host files (`files`, `rules`), local skills and npm specs, a local git
- * workspace, a Dockerfile and a fake sandbox's `dir`. Only a non-empty string changes; any other
- * value is left for the checks to name.
+ * The config with `sandbox` and each profile's `defaults.sandbox`, when written as data, given
+ * absolute host paths against `root`. With `environments`, an environment written as data (a
+ * `reeval.yaml`'s) gets its layers' paths resolved too; a script config's come from
+ * `defineEnvironment`, which resolves them against its own file.
  */
-function withHostPaths(
-  data: Record<string, unknown>,
+function withHostPaths<T extends object>(
+  config: T,
   root: string,
   file: string,
-): Record<string, unknown> {
-  const hostFile = (value: unknown) =>
-    isRecord(value) && value.kind === 'file' && isPath(value.path)
-      ? { ...value, path: toPath(value.path, root) }
-      : value
-  const sandbox = (value: unknown, where: string) => {
-    if (!isRecord(value)) return value
-    if (value.kind === 'docker' && isPath(value.dockerfile)) {
-      const full = toPath(value.dockerfile, root)
-      if (!existsSync(full)) {
-        throw new UsageError(
-          `${where}.dockerfile in ${file}: ${full} doesn't exist. Paths in ${file} are relative to its directory.`,
-        )
-      }
-      return { ...value, dockerfile: full }
-    }
-    return value.kind === 'fake' && isPath(value.dir)
-      ? { ...value, dir: toPath(value.dir, root) }
-      : value
-  }
-  const skill = (value: unknown) => {
-    if (!isRecord(value)) return value
-    if (value.source === 'local' && isPath(value.path)) {
-      return { ...value, path: toPath(value.path, root) }
-    }
-    return value.source === 'npm' && isPath(value.spec)
-      ? { ...value, spec: localNpmSpec(value.spec, root) }
-      : value
-  }
-  const spec = (value: unknown, where: string) => {
-    if (!isRecord(value)) return value
-    const out = { ...value }
-    if ('sandbox' in value) out.sandbox = sandbox(value.sandbox, `${where}.sandbox`)
-    const { workspace, files, rules, skills } = value
-    if (isRecord(workspace) && isPath(workspace.url) && isLocalPath(workspace.url)) {
-      out.workspace = { ...workspace, url: toPath(workspace.url, root) }
-    }
-    if (isRecord(files)) {
-      out.files = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, hostFile(v)]))
-    }
-    if ('rules' in value) out.rules = hostFile(rules)
-    if (Array.isArray(skills)) out.skills = skills.map(skill)
-    return out
-  }
-  const environment = (value: unknown, where: string) =>
+  { environments = false } = {},
+): T {
+  const missing = missingIn(file)
+  const environment = (value: unknown, field: string) =>
     isRecord(value) && Array.isArray(value.layers)
       ? {
           ...value,
           layers: value.layers.map((layer, i) =>
             isRecord(layer)
-              ? { ...layer, spec: spec(layer.spec, `${where}.layers[${i}].spec`) }
+              ? {
+                  ...layer,
+                  spec: specPaths(layer.spec, root, `${field}.layers[${i}].spec`, missing),
+                }
               : layer,
           ),
         }
@@ -276,21 +244,23 @@ function withHostPaths(
   const options = (value: unknown, prefix: string) => {
     if (!isRecord(value)) return value
     const out = { ...value }
-    if ('sandbox' in value) out.sandbox = sandbox(value.sandbox, `${prefix}sandbox`)
-    if ('environment' in value) {
+    if ('sandbox' in value) {
+      out.sandbox = sandboxPaths(value.sandbox, root, `${prefix}sandbox`, missing)
+    }
+    if (environments && 'environment' in value) {
       out.environment = environment(value.environment, `${prefix}environment`)
     }
     return out
   }
-  const config = options(data, '') as Record<string, unknown>
-  const { profiles } = config
-  if (!isRecord(profiles)) return config
+  const out = options(config, '') as Record<string, unknown>
+  const { profiles } = out
+  if (!isRecord(profiles)) return out as T
   const each = Object.entries(profiles).map(([name, profile]) =>
     isRecord(profile) && 'defaults' in profile
       ? [name, { ...profile, defaults: options(profile.defaults, `profiles.${name}.defaults.`) }]
       : [name, profile],
   )
-  return { ...config, profiles: Object.fromEntries(each) }
+  return { ...out, profiles: Object.fromEntries(each) } as T
 }
 
 /** The config from its data form: each environment's data becomes an `Environment` again. */
@@ -328,7 +298,7 @@ export function resolveConfigData(input: unknown, root: string, file: string): R
       `${file} must be a mapping of config keys, like harness: and judge: (got ${JSON.stringify(input)})`,
     )
   }
-  const data = withHostPaths(input, root, file)
+  const data = withHostPaths(input, root, file, { environments: true })
   // `resolveConfig` would ask for `defineEnvironment(…)`, which a data config can't call.
   const { environment, profiles } = data as ReevalConfigData
   const environments = [
@@ -495,11 +465,16 @@ export function selectProfile(
   }
 }
 
+/**
+ * The config with its defaults filled in and checked; `root` is its directory, which relative
+ * host paths written as data resolve against.
+ */
 export function resolveConfig(
-  user: ReevalConfig,
+  input: ReevalConfig,
   root: string,
   file: string = DEFAULT_CONFIG_FILE,
 ): ResolvedConfig {
+  const user = withHostPaths(input, root, file)
   if ('compare' in user) {
     throw new UsageError(
       `compare can't be set in ${file}: it would multiply every eval. Put it on the group or eval that asks the question.`,

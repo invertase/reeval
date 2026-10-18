@@ -39,6 +39,7 @@ const harnesses =
 const config = (c: unknown) => () => resolveConfig(c as never, '/project', 'reeval.config.ts')
 const yaml = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), '/project', 'reeval.yaml')
+const configIn = (c: unknown) => () => resolveConfig(c as never, DIR, 'reeval.config.ts')
 const yamlIn = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), DIR, 'reeval.yaml')
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
@@ -633,6 +634,14 @@ export const CASES: Record<string, Case[]> = {
     ['an unknown field', env({ colour: 'blue' })],
     ['a sandbox that is not one', env({ sandbox: 'docker' })],
     ['a sandbox maxConcurrent 0', env({ sandbox: { kind: 'fake', maxConcurrent: 0 } })],
+    [
+      'a missing dockerfile as data',
+      env({ sandbox: { kind: 'docker', dockerfile: join(DIR, 'nope/Dockerfile') } }),
+    ],
+    [
+      'a dockerfile as data',
+      env({ sandbox: { kind: 'docker', dockerfile: join(DIR, 'Dockerfile') } }),
+    ],
     ['setup not a list', env({ setup: 'npm i' })],
     ['a setup step that is empty', env({ setup: [' '] })],
     ['a setup step with an extra key', env({ setup: [{ run: 'x', env: {} }] })],
@@ -834,6 +843,27 @@ environment:
         'environment:\n  kind: environment\n  name: base\n  layers: [{ name: base, spec: { skills: [{ kind: skill, source: local, path: 3, placement: harness }] } }]\n',
       ),
     ],
+    [
+      'yaml: a dockerfile that is a directory',
+      yamlIn('sandbox: { kind: docker, dockerfile: empty }\n'),
+    ],
+    [
+      'ts: a relative dockerfile as data',
+      configIn({ sandbox: { kind: 'docker', dockerfile: './Dockerfile' } }),
+    ],
+    [
+      'ts: a missing relative dockerfile as data',
+      configIn({ sandbox: { kind: 'docker', dockerfile: 'nope/Dockerfile' } }),
+    ],
+    [
+      'ts: a missing dockerfile as data in a profile',
+      configIn({
+        profiles: {
+          big: { defaults: { sandbox: { kind: 'docker', dockerfile: 'big/Dockerfile' } } },
+        },
+      }),
+    ],
+    ['ts: a relative fake dir as data', configIn({ sandbox: { kind: 'fake', dir: './tmp' } })],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

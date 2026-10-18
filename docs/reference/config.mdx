@@ -42,7 +42,7 @@ Without `--config`, `reeval` looks in the current directory, then in each parent
 
 `--config` always wins, and names like `reeval.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`). `reeval run` and `reeval image build` also fail when no config is found (`No reeval.config.ts … here or above. Run reeval init.`). Other commands then use each key's default in the current directory.
 
-The config's directory is the project root, wherever you run `reeval`. `include` globs, helper paths (`skill.local`, `file`), `.env.local` and `.env`, `.reeval/` (scratch runs, debug data, `history.db`), the history folder and `reeval studio build`'s default `studio-dist/` all resolve against it. So every command behaves the same from a subdirectory as from the root. Env file precedence: the shell, then `.env.local`, then `.env`.
+The config's directory is the project root, wherever you run `reeval`. `include` globs, relative paths in the config (see [Relative paths](#relative-paths)), `.env.local` and `.env`, `.reeval/` (scratch runs, debug data, `history.db`), the history folder and `reeval studio build`'s default `studio-dist/` all resolve against it. So every command behaves the same from a subdirectory as from the root. Env file precedence: the shell, then `.env.local`, then `.env`.
 
 ```text title="reeval run -v, in my-project/src/lib"
 plan  config ../../reeval.config.ts · 1 eval · 1 cell · 1 attempt · ~1s serial
@@ -92,6 +92,30 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 
 `defineConfig` itself does nothing at runtime: it returns what you pass, and exists for types.
 
+## Relative paths
+
+```ts title="reeval.config.ts"
+sandbox: fakeSandbox({ dir: './sandboxes' }), // or { kind: 'fake', dir: './sandboxes' }
+```
+
+```yaml title="reeval.yaml"
+sandbox: { kind: fake, dir: ./sandboxes }
+```
+
+Every host path follows one rule: a relative path resolves against the directory of the file it's written in, wherever you run `reeval` from. Absolute paths stay as written. A helper and its data form resolve alike, so all three lines give `sandboxes/` beside the config.
+
+In a config, that's the config's directory, for `reeval.config.ts` and `reeval.yaml` alike. In an eval file, or a module that calls `defineEnvironment` or a helper, it's that file's.
+
+| Path | Helper | Data form |
+|---|---|---|
+| A host file in `files` or `rules` | `file(path)` | `{ kind: file, path }` |
+| A local skill | `skill.local(path)` | `{ kind: skill, source: local, path, placement }` |
+| A local npm skill (`./`, `../`, absolute or `file:`) | `skill.npm(spec)` | `{ kind: skill, source: npm, spec, path, placement }` |
+| A local git workspace | `git(path)` | `{ kind: git, repo, url }`, with `url` resolved |
+| A Dockerfile, which must be a file | `docker({ dockerfile })` | `{ kind: docker, dockerfile }` |
+| A fake sandbox's parent directory | `fakeSandbox({ dir })` | `{ kind: fake, dir }` |
+| A host directory's files | `directory(path)` | each file as `{ kind: file, path }` |
+
 ## reeval.yaml
 
 ```yaml title="reeval.yaml"
@@ -124,25 +148,7 @@ A project without TypeScript can write its config as YAML. It takes the same key
 
 There is no callback, so `ci`, `hostEnv` and the helpers aren't available, and AI SDK model objects and score functions stay TypeScript only. Its shape is a JSON Schema, `packages/reeval/schema/plan/config.schema.json` in reeval's repository, which a YAML language server can check the file against.
 
-### Paths in reeval.yaml
-
-```yaml title="reeval.yaml"
-sandbox: { kind: docker, dockerfile: docker/Dockerfile }
-environment:
-  kind: environment
-  name: base
-  layers:
-    - name: base
-      spec:
-        files: { NOTES.md: { kind: file, path: ./notes.md } }
-        rules: { kind: file, path: rules.md }
-        skills:
-          - { kind: skill, source: local, path: ./skills, placement: harness }
-```
-
-Relative host paths resolve against the directory `reeval.yaml` is in, wherever you run `reeval` from, as `file()` and `skill.local()` resolve against the file that calls them. That covers a host file in `files` or `rules`, a local skill's `path`, an npm skill's `./`, `../` or `file:` spec, a local git workspace's `url`, a Dockerfile and a fake sandbox's `dir`, at the top level, in `profiles.*.defaults` and in each environment layer. Absolute paths stay as written, and a missing Dockerfile is an error naming its field.
-
-### Mistakes in reeval.yaml
+Relative paths in it follow [the same rule](#relative-paths) as in `reeval.config.ts`.
 
 An empty file is an empty config. A YAML syntax error names the line and column. Every key gets the checks `reeval.config.ts` gets, and the config contract then refuses anything else that isn't its data form, naming the field:
 
@@ -258,7 +264,7 @@ reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 | No `reeval.config.*` here or above | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.` |
 | A `reeval.yaml` beside another config | `reeval.config.ts and reeval.yaml are both in .: reeval reads one config per directory. Keep one, or pass --config.` |
 | A YAML syntax error | `reeval.yaml isn't valid YAML: Map keys must be unique at line 2, column 1: …` |
-| A relative Dockerfile in `reeval.yaml` that isn't there | `sandbox.dockerfile in reeval.yaml: /project/docker/Dockerfile doesn't exist. Paths in reeval.yaml are relative to its directory.` |
+| A Dockerfile written as data that isn't there | `sandbox.dockerfile in reeval.yaml: /project/docker/Dockerfile doesn't exist. Paths in reeval.yaml are relative to its directory.` (or `reeval.config.ts`) |
 | A `null` or a misspelt nested key in `reeval.yaml` | `include in reeval.yaml must be a list (got null)`, `Unknown option "dirr" in history in reeval.yaml. Did you mean "dir"?` |
 
 More messages, with fixes, are on [Errors](/reference/errors).

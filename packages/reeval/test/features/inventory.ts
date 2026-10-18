@@ -245,11 +245,22 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'config.yaml-paths',
+    id: 'config.paths',
     area: 'Config and selection',
-    name: "`reeval.yaml`'s relative host paths (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`) resolve against its directory",
-    plan: ['yaml-paths/from-above', 'yaml-paths/profile-from-above'],
-    tests: [unit("a reeval.yaml's relative host paths resolve against its directory")],
+    name: "One path rule for reeval.yaml and TypeScript: a relative host path (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`), from a helper or its data form, resolves against the directory of the file it's written in",
+    plan: [
+      'yaml-paths/from-above',
+      'yaml-paths/profile-from-above',
+      'ts-paths/from-above',
+      'ts-paths/profile-from-above',
+    ],
+    tests: [
+      unit("a reeval.yaml's relative host paths resolve against its directory"),
+      unit(
+        'a relative host path resolves the same in reeval.yaml, TypeScript data and the helpers',
+      ),
+      unit('fakeSandbox resolves a relative dir against the file that calls it'),
+    ],
   },
   {
     id: 'profiles.max-variants',

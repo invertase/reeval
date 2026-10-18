@@ -44,5 +44,10 @@
   "yaml: a missing dockerfile in an environment layer": "UsageError: environment.layers[0].spec.sandbox.dockerfile in reeval.yaml: <dir>/nope doesn't exist. Paths in reeval.yaml are relative to its directory.",
   "yaml: relative host files, rules, skills and a local repository": null,
   "yaml: a host file with an empty path": "UsageError: files[\"a.txt\"] in layer \"base\" of environment \"base\" in reeval.yaml: file({ path }): Invalid string: must match pattern /\\S/ (got \"\")",
-  "yaml: a local skill path a number": "UsageError: skills[0] in layer \"base\" of environment \"base\" in reeval.yaml: skill.local({ path }) must be a string (got 3)"
+  "yaml: a local skill path a number": "UsageError: skills[0] in layer \"base\" of environment \"base\" in reeval.yaml: skill.local({ path }) must be a string (got 3)",
+  "yaml: a dockerfile that is a directory": "UsageError: sandbox.dockerfile in reeval.yaml: <dir>/empty doesn't exist. Paths in reeval.yaml are relative to its directory.",
+  "ts: a relative dockerfile as data": null,
+  "ts: a missing relative dockerfile as data": "UsageError: sandbox.dockerfile in reeval.config.ts: <dir>/nope/Dockerfile doesn't exist. Paths in reeval.config.ts are relative to its directory.",
+  "ts: a missing dockerfile as data in a profile": "UsageError: profiles.big.defaults.sandbox.dockerfile in reeval.config.ts: <dir>/big/Dockerfile doesn't exist. Paths in reeval.config.ts are relative to its directory.",
+  "ts: a relative fake dir as data": null
 }
