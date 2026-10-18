@@ -55,6 +55,7 @@ Under `'deny-all'` or an allowlist, reeval adds the hosts the attempt can't work
 | `opencode()` | The model's provider's API hosts (`generativelanguage.googleapis.com` for `google/…`, `api.anthropic.com` for `anthropic/…`, [every provider](/reference/harness/opencode#supported-providers)) and `mcp.exa.ai` (its web search) |
 | `goose()`, `pi()` | `generativelanguage.googleapis.com` |
 | `codex()` | `api.openai.com` |
+| `fx()` | `ai-gateway.vercel.sh` for a gateway id, `api.openai.com` for a bare OpenAI id |
 | `fakeHarness({ layout })` | That agent's hosts |
 | A brokered secret | Its `hosts` |
 | An `mcp.http` or `mcp.sse` server | Its host |

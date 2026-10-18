@@ -72,11 +72,11 @@ Each restricted eval lists its policy and the automatic hosts it adds.
 
 | Automatic host | Such as |
 |---|---|
-| The harness's API | `api2.cursor.sh` and `*.cursor.sh` for Cursor, `api.anthropic.com` and `*.anthropic.com` for Claude Code, `generativelanguage.googleapis.com` for Antigravity, Goose and pi, `api.openai.com` for Codex, and the provider's hosts and `mcp.exa.ai` for OpenCode |
+| The harness's API | `api2.cursor.sh` and `*.cursor.sh` for Cursor, `api.anthropic.com` and `*.anthropic.com` for Claude Code, `generativelanguage.googleapis.com` for Antigravity, Goose and pi, `api.openai.com` for Codex, `ai-gateway.vercel.sh` or `api.openai.com` for fx, and the provider's hosts and `mcp.exa.ai` for OpenCode |
 | Every brokered secret's `hosts` | A key the agent is meant to use keeps working |
 | Each MCP `http` or `sse` server's host | The server the environment gives the agent |
 
-The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, and Codex's on OpenAI's side, so an egress policy doesn't stop them and the egress record doesn't see them.
+The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, and Codex's on OpenAI's side, so an egress policy doesn't stop them and the egress record doesn't see them. fx's run in the sandbox but bypass the gateway, so a restricted policy blocks them unrecorded.
 
 reeval still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway. A search the gateway refuses is still a `web-search` (`ok: false`), so the matcher sees it too.
 

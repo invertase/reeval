@@ -1,0 +1,112 @@
+---
+title: fx()
+description: The fx harness, its options and id, its AI Gateway or OpenAI key, the relay that takes it through the egress gateway, and what that relay can't cover.
+---
+
+`fx()` runs Vercel's [fx](https://fx.sh) in the Docker sandbox over its ACP server (`fx acp`), on Vercel AI Gateway or OpenAI's API. `model` is required, and its form picks the provider.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { fx } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: fx({ model: 'anthropic/claude-sonnet-5' }),
+})
+```
+
+## Options
+
+<Property name="model" type="string">
+  A Vercel AI Gateway id with its provider, such as `anthropic/claude-sonnet-5`, which runs on AI Gateway, or a bare OpenAI id, such as `gpt-4.1`, which runs on OpenAI's Chat Completions API. Required.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `fx:<model>`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most fx attempts at once across the run, for example for your key's rate limits.
+</Property>
+
+<Property name="startTimeout" type="Duration" optional>
+  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `fx: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+</Property>
+
+`fx()` has no `effort`: fx offers a reasoning level only on reasoning models, and its OpenAI route can't run those (below).
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `AI_GATEWAY_API_KEY` for a gateway id, `OPENAI_API_KEY` for a bare OpenAI id |
+| Adapter | `@reeval/harness-fx` 0.1.0 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | fx 0.0.14, from its GitHub release, checked against its sha256 |
+| Sandbox | `docker()` only |
+| Image | `reeval-sandbox:fx-0.1.0` |
+| Rules file | `AGENTS.md` |
+| Skills (default placement) | `.fx/skills` in fx's own home (below) |
+| Skills (`placement: 'workspace'`) | `.fx/skills` in the workspace |
+| Egress hosts added | `ai-gateway.vercel.sh` or `api.openai.com`, by the model |
+| Tokens | Reported for each turn |
+| Served model | From each API response, which the gateway reads |
+| MCP | `mcp.stdio`, `mcp.http` and `mcp.sse`, over ACP |
+
+Build its image once with `reeval image build` in a project whose config uses `fx()`. `gpt-4.1` passes the harness contract on OpenAI; pin the model you mean to measure.
+
+## The key and the relay
+
+```text
+fx ──http──▶ relay on 127.0.0.1:47823 ──HTTPS_PROXY──▶ egress gateway ──▶ provider
+   placeholder key                                     real key swapped in
+```
+
+fx's HTTP client ignores `HTTPS_PROXY`, so it can't reach the egress gateway itself. The adapter points fx at a small Node relay inside the sandbox, which forwards each request through the gateway with the sandbox's proxy and CA. fx gets a placeholder; the gateway swaps the real key into the `Authorization` header on these requests only:
+
+| `model` | Host | Endpoint |
+|---|---|---|
+| Gateway id | `ai-gateway.vercel.sh` | `GET /coding-agent/v1/…` (the model list) and `POST /v<n>/ai/language-model` |
+| Bare OpenAI id | `api.openai.com` | `POST /v1/chat/completions` |
+
+The adapter refuses to run in a sandbox that can't broker the key.
+
+<Warning>
+  Only model calls go through the relay. fx's own web search and fetch, and its HTTP and SSE MCP servers, use its HTTP client: a restricted egress policy blocks them, and the record lists none of their requests. Commands the agent runs honour the proxy as usual.
+</Warning>
+
+## Models and tokens
+
+| `model` | Runs on | Served model recorded |
+|---|---|---|
+| `gpt-4.1` | An fx configured provider, `openai`, over the Chat Completions API | `gpt-4.1-2025-04-14` |
+| `anthropic/claude-sonnet-5` | fx's `gateway` provider | The model AI Gateway answers with |
+
+fx sends `max_tokens`, which OpenAI's reasoning models refuse, so a bare id must be a non-reasoning model such as `gpt-4.1`; reasoning models run through AI Gateway. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output. fx doesn't name the served model over ACP, so the gateway reads it from each response.
+
+## Settings
+
+| Setting | Why |
+|---|---|
+| `FX_PROVIDER`, `FX_MODEL` | The provider the model picks, and the model the session starts on. |
+| `FX_AUTO_UPGRADE=0`, `FX_SOUND=0`, `NO_COLOR=1` | No self-upgrade, sounds or colour. |
+| `full-access` session mode | Tool calls run without asking; fx's `auto` mode would send each reviewed action to a reviewer model. |
+
+fx runs with a private home, `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home`, so its settings and home skills live there. The attempt's `context` lists them under that path.
+
+fx names its tool calls, so the transcript reads `bash`, `write`, `edit`, `read`, `glob`, `grep`, `webSearch` and `webFetch`. A command's output is rebuilt from what it streamed, since fx's final update carries a clipped summary. MCP calls are renamed from `mcp_<server>_<tool>` to `mcp__<server>__<tool>`, and a `skill` call names the skill it loaded. fx's `subagent` tool runs a task in a subagent whose own tool calls aren't in fx's stream, so they aren't in the transcript.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No model | `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-4.1' }) (got …)` |
+| No key when the attempt starts | `AI_GATEWAY_API_KEY isn't set, so the fx harness can't authenticate. Set it in the environment or .env.local.` (or `OPENAI_API_KEY`) |
+| The provider refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. …` (or `AI_GATEWAY_API_KEY`) |
+| A non-Docker sandbox | `The fx harness needs the Docker sandbox: set sandbox: docker() …` |
+| fx doesn't start | `fx harness failed to start: …` |
+
+## Related
+
+- [Harnesses](/guide/harnesses)
+- [Secrets and egress](/guide/secrets-and-egress)
+- [Transcripts](/reference/transcript)

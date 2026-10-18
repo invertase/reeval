@@ -18,9 +18,9 @@ TYPESAFE_AI_API_KEY=...
 | `ANTHROPIC_API_KEY` | `claudeCode()`, the same way. Its adapter never reads `AI_GATEWAY_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` or a Claude subscription. |
 | `GEMINI_API_KEY` | `antigravity()`: a Gemini API key, the same way. |
 | `TYPESAFE_AI_API_KEY` | `typesafe-ai/*` judges, such as Jev, directly |
-| `OPENAI_API_KEY` | `codex()`: an OpenAI API key, brokered the same way. |
+| `OPENAI_API_KEY` | `codex()`, and `fx()` on a bare OpenAI id: an OpenAI API key, brokered the same way. |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | `opencode()`, `goose()` and `pi()`: a Gemini API key, brokered the same way. Also `google/*` judges, directly. |
-| `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN` | Any `provider/model` judge whose own key isn't set, through the Vercel AI Gateway |
+| `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN` | Any `provider/model` judge whose own key isn't set, through the Vercel AI Gateway. `AI_GATEWAY_API_KEY` is also `fx()`'s key on a gateway id, brokered the same way. |
 | Any name in `secret.fromEnv('NAME')` | Read on the host and passed into the sandbox (or brokered, or to checks only), redacted everywhere |
 
 A credential with whitespace or a line break in it (a key copied from a wrapped terminal line) stops the run with exit 2, naming the variable and the character.

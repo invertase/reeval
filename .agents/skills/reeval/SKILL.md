@@ -9,8 +9,8 @@ description: >
 
 # reeval
 
-reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or
-Codex) on a task in a fresh Docker sandbox, then checks the result with deterministic assertions
+reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi,
+Codex or fx) on a task in a fresh Docker sandbox, then checks the result with deterministic assertions
 and an LLM judge. You write evals in TypeScript; `reeval run` runs them.
 
 The package and CLI are `reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
@@ -50,7 +50,7 @@ npx reeval run
 1. Install: `npm init -y` if there's no `package.json`, then `npm i -D reeval`
    (or a tarball: `npm i -D /path/to/reeval.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm, pnpm or Yarn.
-2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|none>` (it only
+2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|none>` (it only
    asks in a terminal) writes `reeval.config.ts` (the agent, plus `fake`, `pr` and `nightly`
    profiles), `evals/greet.eval.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval`
    script; `npx reeval run --profile fake` passes with no keys. It never overwrites a file that
@@ -128,12 +128,13 @@ Harnesses (`reeval/harness`), each with a required `model`; a list runs each as 
 | `goose({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id, e.g. `gemini-3.8-flash`; `effort` is `GOOSE_THINKING_EFFORT`. Records no tokens: its ACP usage is the last model call only |
 | `pi({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id; `effort` is `--thinking` |
 | `codex({ model, effort? })` | `OPENAI_API_KEY` | An OpenAI model id, e.g. `gpt-5.6-luna`; `effort` is `model_reasoning_effort` |
+| `fx({ model })` | `AI_GATEWAY_API_KEY`, or `OPENAI_API_KEY` for a bare id | Vercel's fx over ACP: a gateway id (`anthropic/claude-sonnet-5`) runs on AI Gateway, a bare non-reasoning OpenAI id (`gpt-4.1`) on OpenAI. No `effort`. Its own web tools bypass the egress gateway, so `deny-all` blocks them |
 | `fakeHarness(…)` | None | See the fake trio |
 
 OpenCode, Goose, pi and Codex refuse `mcp.sse`. Unset Cursor params take Cursor's default, which
 the record shows (`composer-2.5[fast=true]`), so pin them for reproducible evals.
 
-`effort` is the same field on every factory, with whatever values that CLI takes (no shared
+`effort` is the same field on every factory but `fx()`, with whatever values that CLI takes (no shared
 enum); Fast is not effort. The default harness id includes `[effort=<value>]` when it's set, and
 the record stores the requested effort as `effort` and the served one as `servedEffort`.
 

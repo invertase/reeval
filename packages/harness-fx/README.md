@@ -28,6 +28,10 @@ const agent = new HarnessAgent({
   `AI_GATEWAY_API_KEY`. A bare OpenAI id (`gpt-4.1`) runs on an fx configured provider,
   `openai`, over OpenAI's Chat Completions API with `OPENAI_API_KEY`. fx sends `max_tokens`, which
   OpenAI's reasoning models refuse, so that route takes the non-reasoning ones.
+- **Relay.** fx's HTTP client ignores `HTTPS_PROXY`, so `fx-acp` starts a small Node relay on
+  `127.0.0.1:47823` and points fx at it (`FX_GATEWAY_BASE_URL`, or the configured provider's
+  `base_url`). The relay forwards each request with Node's `fetch`, which honours the sandbox's
+  proxy (`NODE_USE_ENV_PROXY`) and its CA, so model calls still pass the egress gateway.
 - **Quiet.** `FX_QUIET_ENV`: no self-upgrade, no sounds and no colour.
 - **Permissions.** `allow-all` is fx's `full-access` session mode: its `auto` mode would run a
   reviewer model on each action.
@@ -35,5 +39,7 @@ const agent = new HarnessAgent({
   real key replaces it in the `Authorization` header on the provider's host only.
 - **Tools.** fx names its ACP tool calls; `shell`, `write_file`, `edit_file`, `read_file`,
   `glob_files`, `grep_files`, `web_search` and `web_fetch` get the AI SDK's common names, and MCP
-  calls are renamed from `mcp_<server>_<tool>` to `mcp__<server>__<tool>`.
+  calls are renamed from `mcp_<server>_<tool>` to `mcp__<server>__<tool>`. A command's result is
+  rebuilt from its streamed output and exit code (fx's `completed` update carries a clipped JSON
+  summary), and a `skill` call's input gains the skill's `name` from its `location`.
 - **Usage.** fx's ACP `PromptResponse.usage` is the turn's summed input and output tokens.

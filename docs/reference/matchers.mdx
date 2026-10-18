@@ -70,6 +70,7 @@ with these exceptions:
 |---|---|
 | Claude Code | May call `ToolSearch` with `select:mcp__stamp__house_stamp` first, a different tool |
 | OpenCode, Goose | `acp_tool_<id>` if the first ACP update or Goose's `_meta` is missing |
+| fx | May call `mcp_select_tool` with `{ name: 'stamp.house_stamp' }` first, a different tool |
 | pi | `-` in a tool name becomes `_` (write `latest_version`); a hyphenated server is remapped when unambiguous |
 
 Goose, OpenCode, pi and Codex refuse `mcp.sse` at plan time; stdio MCP plans
