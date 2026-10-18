@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { shellQuote } from '@reeval/sandbox-docker/process'
 import { providerModel } from '../analysis/model.ts'
 import {
   allocatePort,
@@ -32,6 +34,7 @@ import { asCheck, sandboxFor } from './checks.ts'
 import type { Attempt } from './state.ts'
 
 const BG_LOG = '/tmp/reeval-bg.log'
+const BG_TAG = 'REEVAL_BACKGROUND'
 
 export type CaptureArtifact = {
   name: string
@@ -75,11 +78,15 @@ export async function startBackground(
   extraEnv: Record<string, string> = {},
 ): Promise<BackgroundHandle> {
   const box = await sandboxFor(a, who)
-  const wrapped = `${command} >${BG_LOG} 2>&1 & echo $!`
+  // A shell of its own keeps a compound command's `&&`, `;` and redirects together, as in the
+  // foreground; reeval's log only takes what the command leaves on stdout and stderr.
+  const shell = a.spec.sandbox.kind === 'docker' ? 'bash' : 'sh'
+  const wrapped = `${shell} -c ${shellQuote(command)} >${BG_LOG} 2>&1 & echo $!`
+  const tag = randomUUID()
   const r = await asCheck(a, () =>
     box.exec(wrapped, {
       signal: a.signal,
-      env: { ...(a.env?.checkVars ?? {}), ...extraEnv },
+      env: { ...(a.env?.checkVars ?? {}), ...extraEnv, [BG_TAG]: tag },
     }),
   )
   const pid = r.stdout.trim().split(/\s+/).at(-1) ?? ''
@@ -99,7 +106,10 @@ export async function startBackground(
         a.spec.sandbox.kind === 'fake' && process.platform === 'win32'
           ? `; wp=$(tr -d '\\r\\n' < /proc/${pid}/winpid 2>/dev/null) && taskkill /F /PID "$wp" >/dev/null 2>&1 || true`
           : ''
-      await box.exec(`kill -9 ${pid} 2>/dev/null || true${win}`).catch(() => {})
+      // The pid is the shell (dash doesn't exec a `-c` command in place), so where there's a
+      // /proc, also kill everything that inherited the tag: the command and all it started.
+      const tree = `for e in /proc/[0-9]*/environ; do grep -qsxzF ${shellQuote(`${BG_TAG}=${tag}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done`
+      await box.exec(`kill -9 ${pid} 2>/dev/null; ${tree}; true${win}`).catch(() => {})
     },
   }
   a.backgrounds.push(handle)

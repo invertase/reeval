@@ -1737,6 +1737,24 @@ export const features: Feature[] = [
     canary: /expected 'nothing listening on port 59999' to be 'port is closed'/,
   },
   {
+    dir: 'ui/background-compound',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /expected 'started' to be 'stopped'/,
+  },
+  {
+    dir: 'ui/serve-redirect',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected 'listening on \d+' to be 'listening on 1'/,
+  },
+  {
+    dir: 'ui/serve-kill',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected 'down' to be 'up'/,
+  },
+  {
     dir: 'ui/capture-browser-false',
     tiers: ['fake', 'docker'],
     env: 'plain',
