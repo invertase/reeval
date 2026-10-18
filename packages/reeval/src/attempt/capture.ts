@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { shellQuote } from '@reeval/sandbox-docker/process'
 import { providerModel } from '../analysis/model.ts'
 import {
   allocatePort,
@@ -32,6 +34,7 @@ import { asCheck, sandboxFor } from './checks.ts'
 import type { Attempt } from './state.ts'
 
 const BG_LOG = '/tmp/reeval-bg.log'
+const BG_TAG = 'REEVAL_BACKGROUND'
 
 export type CaptureArtifact = {
   name: string
@@ -75,31 +78,42 @@ export async function startBackground(
   extraEnv: Record<string, string> = {},
 ): Promise<BackgroundHandle> {
   const box = await sandboxFor(a, who)
-  const wrapped = `${command} >${BG_LOG} 2>&1 & echo $!`
+  // A shell of its own keeps a compound command's `&&`, `;` and redirects together, as in the
+  // foreground; reeval's log only takes what the command leaves on stdout and stderr.
+  const docker = a.spec.sandbox.kind === 'docker'
+  const wrapped = `${docker ? 'bash' : 'sh'} -c ${shellQuote(command)} >${BG_LOG} 2>&1 & echo $$ $!`
+  const tag = randomUUID()
   const r = await asCheck(a, () =>
     box.exec(wrapped, {
       signal: a.signal,
-      env: { ...(a.env?.checkVars ?? {}), ...extraEnv },
+      env: { ...(a.env?.checkVars ?? {}), ...extraEnv, ...(docker ? { [BG_TAG]: tag } : {}) },
     }),
   )
-  const pid = r.stdout.trim().split(/\s+/).at(-1) ?? ''
-  if (!/^\d+$/.test(pid)) {
+  const [group = '', pid = ''] = r.stdout.trim().split(/\s+/).slice(-2)
+  if (!/^\d+$/.test(pid) || !/^\d+$/.test(group)) {
     throw new Error(
       `c.exec({ background: true }) did not start (no pid):\n${(r.stderr || r.stdout).trim()}`,
     )
   }
+  // The pid is the shell around the command (dash and bash run a compound one as its child), so
+  // kill() also stops everything under it.
+  const tree = docker
+    ? // Docker runs the command in a container with a /proc: everything that inherited the tag.
+      `for e in /proc/[0-9]*/environ; do grep -qsxzF ${shellQuote(`${BG_TAG}=${tag}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done`
+    : process.platform === 'win32'
+      ? // SIGTERM does not stop native node.exe started from Git Bash; its Win32 tree, killed, does.
+        `wp=$(tr -d '\\r\\n' < /proc/${pid}/winpid 2>/dev/null) && taskkill /F /T /PID "$wp" >/dev/null 2>&1`
+      : // The fake sandbox spawns each exec detached, so its shell (`$$`) leads a process group
+        // the command and all it started belong to. dash's kill takes no `--`.
+        `kill -9 -${group} 2>/dev/null`
   let killed = false
   const handle: BackgroundHandle = {
     async kill() {
       if (killed) return
       killed = true
       // Do not pass a.signal: after a timeout it is already aborted, and run() would skip the kill.
-      // SIGTERM does not stop native node.exe started from Git Bash; SIGKILL plus the Win32 pid does.
-      const win =
-        a.spec.sandbox.kind === 'fake' && process.platform === 'win32'
-          ? `; wp=$(tr -d '\\r\\n' < /proc/${pid}/winpid 2>/dev/null) && taskkill /F /PID "$wp" >/dev/null 2>&1 || true`
-          : ''
-      await box.exec(`kill -9 ${pid} 2>/dev/null || true${win}`).catch(() => {})
+      // The tree first: Windows reads the Win32 pid from /proc/<pid>, gone once the pid is.
+      await box.exec(`${tree}; kill -9 ${pid} 2>/dev/null; true`).catch(() => {})
     },
   }
   a.backgrounds.push(handle)

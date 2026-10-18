@@ -1690,6 +1690,9 @@ export const inventory: InventoryFeature[] = [
       'ui/capture-no-download',
       'ui/capture-wait-idle',
       'ui/capture-wait-timeout',
+      'ui/background-compound',
+      'ui/serve-redirect',
+      'ui/serve-kill',
     ],
     plan: ['capture/options'],
     tests: [

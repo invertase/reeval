@@ -168,7 +168,7 @@
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
 | `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 9 | — | — | — | ◐ 1 (1 without a canary) |
 | `analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error | ✓ 6 | — | — | — | ◐ 1 (1 without a canary) |
-| `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 6 | ✓ 1 | ● 7 | ● 8 | — |
+| `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 6 | ✓ 1 | ● 10 | ● 11 | — |
 | `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 3 | ✓ 1 | ● 2 | ● 4 | — |
 | `reeval studio` and `reeval studio build` | ✓ 7 | — | — | — | ◐ 1 (1 without a canary) |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 4 | — | — | — | — |
