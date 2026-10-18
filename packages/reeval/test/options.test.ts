@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
+import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
 import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 
@@ -1026,6 +1027,7 @@ export default defineConfig({
       {
         question: 'Which is cleaner?',
         model: 'fake',
+        stateOptions: DEFAULT_QUESTION_STATE,
         votes: [],
         rates: [],
         error: 'the model is over quota',
