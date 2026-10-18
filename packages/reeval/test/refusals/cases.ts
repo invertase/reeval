@@ -352,6 +352,52 @@ export const CASES: Record<string, Case[]> = {
       'a question twice',
       options({ compare: { variants: [e2], questions: ['Q', { question: 'Q' }] } }),
     ],
+    [
+      'a question state with contents',
+      options({
+        compare: { variants: [e2], questions: [{ question: 'Q', state: { contents: ['a'] } }] },
+      }),
+    ],
+    [
+      'a question state with an unknown key',
+      options({
+        compare: { variants: [e2], questions: [{ question: 'Q', state: { dif: true } }] },
+      }),
+    ],
+    [
+      'a question state with a bad turns',
+      options({
+        compare: { variants: [e2], questions: [{ question: 'Q', state: { turns: 'first' } }] },
+      }),
+    ],
+    [
+      'question artifacts an empty list',
+      options({ compare: { variants: [e2], questions: [{ question: 'Q', artifacts: [] }] } }),
+    ],
+    [
+      'question artifacts false',
+      options({ compare: { variants: [e2], questions: [{ question: 'Q', artifacts: false }] } }),
+    ],
+    ['the question option a string', options({ question: 'diff' })],
+    ['the question option with a model', options({ question: { model: 'google/g' } })],
+    ['the question option with an unknown key', options({ question: { stat: {} } })],
+    [
+      'the question option with an unknown state key',
+      options({ question: { state: { transcripts: true } } }),
+    ],
+    [
+      'good: question state and artifacts',
+      options({
+        question: { state: { checks: ['npm test'] } },
+        compare: {
+          variants: [e2],
+          questions: [
+            { question: 'Q', state: { diff: false, output: true }, artifacts: ['home'] },
+            { question: 'R', artifacts: true },
+          ],
+        },
+      }),
+    ],
     ['across unknown', options({ compare: { variants: [e2], across: 'cell' } })],
     ['across an empty list', options({ compare: { variants: [e2], across: [] } })],
     ['across twice', options({ compare: { variants: [e2], across: ['harness', 'harness'] } })],
@@ -750,6 +796,9 @@ export const CASES: Record<string, Case[]> = {
       yaml('capture:\n  viewport: { width: 10.5, height: 10 }\n'),
     ],
     ['yaml: a budget with a typo', yaml('budget: { attempt: 3 }\n')],
+    ['yaml: question with a model', yaml('question: { model: google/g }\n')],
+    ['yaml: question state contents', yaml('question:\n  state: { contents: [a] }\n')],
+    ['yaml: question good', yaml('question:\n  state: { output: true, diff: false }\n')],
     [
       'yaml: good',
       yaml(`include: ['evals/**/*.eval.ts']
@@ -981,6 +1030,14 @@ environment:
     [
       'judge with an empty artifact name',
       request({ op: 'judge', question: 'ok?', options: { artifacts: [''] } }),
+    ],
+    [
+      'judge with artifacts false',
+      request({ op: 'judge', question: 'ok?', options: { artifacts: false } }),
+    ],
+    [
+      'good: judge with every artifact',
+      request({ op: 'judge', question: 'ok?', options: { artifacts: true } }),
     ],
     [
       'judge with a capture missing its file',

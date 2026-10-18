@@ -118,7 +118,7 @@ export const judgeOptionsSchema = z.strictObject({
 
 export const judgeCallSchema = judgeOptionsSchema.extend({
   on: z.custom<Turn | JSONValue>().optional(),
-  artifacts: z.array(z.custom<Capture | string>()).optional(),
+  artifacts: z.union([z.literal(true), z.array(z.custom<Capture | string>())]).optional(),
 })
 
 export type _SameAsSchema = [

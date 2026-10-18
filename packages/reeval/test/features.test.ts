@@ -284,6 +284,19 @@ const judgeInputOf = (run: RunRecord, runDir: string, name = 'lands') => {
   }
 }
 
+/** An eval's one compare answer, with a vote on each order of its one pair. */
+const answerOf = (run: RunRecord, name: string) => {
+  const answer = run.evals.find((e) => e.name === name)?.answers?.[0]
+  assert.ok(answer, `${name} has an answer`)
+  assert.equal(answer.error, undefined, answer.error)
+  assert.equal(answer.votes.length, 2, JSON.stringify(answer.votes))
+  return answer
+}
+
+/** What each vote was shown, as the fixture's fake vote reports it in its reason; equal orders once. */
+const shownOf = (answer: NonNullable<RunRecord['evals'][number]['answers']>[number]) =>
+  [...new Set(answer.votes.map((v) => v.reason ?? ''))].map((r) => JSON.parse(r))
+
 export const features: Feature[] = [
   {
     dir: 'config/found-from-subdirectory',
@@ -1022,6 +1035,83 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'compare/question-default',
+    tiers: ['fake'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    canary: /expected 'hi\\n' to be 'bye\\n'/,
+    record: ({ run }) => {
+      const answer = answerOf(run, 'lands')
+      assert.deepEqual(answer.stateOptions, {
+        task: true,
+        output: false,
+        files: false,
+        diff: true,
+        transcript: false,
+        turns: 'all',
+        checks: false,
+      })
+      assert.equal(answer.artifacts, undefined)
+      assert.deepEqual(shownOf(answer), [{ keys: ['diff'], task: true, reply: false }])
+    },
+  },
+  {
+    dir: 'compare/question-state',
+    tiers: ['fake'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    canary: /expected 'hi\\n' to be 'bye\\n'/,
+    record: ({ run }) => {
+      const answer = answerOf(run, 'lands')
+      assert.equal(answer.stateOptions?.turns, 'last')
+      assert.deepEqual(shownOf(answer), [
+        {
+          keys: ['checks', 'output'],
+          output: 'REPLY-MARK',
+          checks: [{ command: 'cat out.txt', exitCode: 0, stdout: 'hi\n', stderr: '' }],
+          first: false,
+        },
+      ])
+    },
+  },
+  {
+    dir: 'compare/question-cascade',
+    tiers: ['fake'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    canary: /expected 'hi\\n' to be 'bye\\n'/,
+    record: ({ run }) => {
+      const answer = answerOf(run, 'lands')
+      assert.deepEqual(answer.stateOptions, {
+        task: true,
+        output: true,
+        files: true,
+        diff: false,
+        transcript: false,
+        turns: 'all',
+        checks: false,
+      })
+      assert.deepEqual(shownOf(answer), [{ keys: ['files', 'turns'], files: ['added out.txt'] }])
+    },
+  },
+  {
+    dir: 'compare/question-artifacts',
+    tiers: ['fake', 'docker'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    canary: /expected 'artifacts\/landing\.png' to be 'artifacts\/aside\.png'/,
+    record: ({ run }) => {
+      const answer = answerOf(run, 'lands')
+      assert.deepEqual(answer.artifacts, ['landing'])
+      assert.deepEqual(shownOf(answer), [
+        { artifacts: [['Attempt A, screenshot 1 of 1', true]], named: false },
+      ])
+      for (const vote of answer.votes) {
+        assert.deepEqual(vote.artifacts, { a: ['landing'], b: ['landing'] })
+      }
+    },
+  },
+  {
     dir: 'compare/baseline-empty',
     tiers: ['fake', 'docker'],
     env: 'variant',
@@ -1677,6 +1767,22 @@ export const features: Feature[] = [
       assert.doesNotMatch(JSON.stringify(input.state), /"type":"file"/)
       const judged = run.evals.find((e) => e.name === 'lands')?.attempts[0]?.judgements[0]
       assert.equal(judged?.artifacts?.[0]?.name, 'form')
+    },
+  },
+  {
+    dir: 'judge/artifacts-all',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected \[ 'empty', 'filled' \] to deeply equal \[ 'filled', 'empty' \]/,
+    record: ({ run, runDir }) => {
+      const input = judgeInputOf(run, runDir)
+      assert.deepEqual(
+        input.artifacts?.map((a) => [a.name, a.mediaType]),
+        [
+          ['empty', 'image/png'],
+          ['filled', 'image/png'],
+        ],
+      )
     },
   },
   {

@@ -20,7 +20,14 @@ import {
   VOTE_REASON_CAP,
   voteOf,
 } from '../src/compare/pairs.ts'
-import { answerQuestion, blindPair, stagedAttempt } from '../src/compare/questions.ts'
+import {
+  answerQuestion,
+  blindInput,
+  blindPair,
+  questionRequest,
+  stagedAttempt,
+} from '../src/compare/questions.ts'
+import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
 import type { EngineEval } from '../src/engine/node.ts'
 import { TimeoutError } from '../src/errors.ts'
 import { cellOutcome, fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
@@ -370,7 +377,7 @@ describe('compare question pairs', () => {
     run,
     diff: `diff --git a/${harness}-${arm}-${run}.txt b/${harness}-${arm}-${run}.txt\n+${harness}\n`,
     checksPassed,
-    prompts: ['Write the file.'],
+    turns: [{ prompt: 'Write the file.', text: `Done on ${harness}.` }],
   })
   const matrix = (harnesses: string[], arms: string[], runs: number) =>
     harnesses.flatMap((h) =>
@@ -466,9 +473,10 @@ describe('compare question pairs', () => {
         blindPair('Which is cleaner?', pair, false, 20_000),
         blindPair('Which is cleaner?', pair, true, 20_000),
       ]
-      assert.equal(first.a, second.b)
-      assert.equal(first.b, second.a)
-      assert.ok(first.a.includes(`+${pair.a.harness}`), 'a pair is two diffs')
+      assert.deepEqual(first.a, second.b)
+      assert.deepEqual(first.b, second.a)
+      assert.ok(first.a.diff?.includes(`+${pair.a.harness}`), 'a pair is two diffs')
+      assert.deepEqual(Object.keys(first.a), ['diff'], 'by default a side is its diff alone')
     }
   })
 
@@ -484,8 +492,143 @@ describe('compare question pairs', () => {
     for (const name of ['secret-harness', 'arm-x', 'arm-y', 'run 1', 'baseline', 'variant']) {
       assert.ok(!blind.prompt.includes(name), `${name} is not in the prompt`)
     }
-    assert.match(blind.prompt, /<attempt label="A">\n\+one\n\n<\/attempt>/)
+    assert.match(blind.prompt, /<attempt label="A">\n<diff>\n\+one\n\n<\/diff>\n<\/attempt>/)
     assert.match(blind.prompt, /<task>\nWrite the file\.\n<\/task>/)
+  })
+
+  test('state chooses what each side shows; output and files stay out by default', () => {
+    const [pair] = pairsOf([side('h', 'arm-x', 1), side('h', 'arm-y', 1)])
+    assert.ok(pair)
+    const two = {
+      ...pair,
+      a: {
+        ...pair.a,
+        turns: [
+          { prompt: 'Write the file.', text: 'I wrote it, beautifully.' },
+          { prompt: 'Now test it.', text: 'Tests pass.' },
+        ],
+        checks: [{ command: 'npm test', exitCode: 0, stdout: '14 passing\n', stderr: '' }],
+      },
+      b: { ...pair.b, turns: [{ prompt: 'Write the file.', text: 'Done.' }] },
+    }
+    const plain = blindPair('Which?', two, false, 20_000)
+    assert.ok(!plain.prompt.includes('beautifully'), 'no final message by default')
+    assert.ok(!plain.prompt.includes('<files>'), 'no file list by default')
+    assert.match(
+      plain.prompt,
+      /<turn n="1">\n<task>\nWrite the file\./,
+      'prompts differ: each side has its own',
+    )
+    const shown = blindPair('Which?', two, false, 20_000, {
+      state: {
+        ...DEFAULT_QUESTION_STATE,
+        output: true,
+        diff: false,
+        turns: 'last',
+        checks: ['npm test'],
+      },
+    })
+    assert.deepEqual(shown.a, {
+      task: 'Now test it.',
+      output: 'Tests pass.',
+      checks: [{ command: 'npm test', exitCode: 0, stdout: '14 passing\n', stderr: '' }],
+    })
+    assert.deepEqual(shown.b, {
+      task: 'Write the file.',
+      output: 'Done.',
+      checks: [{ command: 'npm test', notRun: true }],
+    })
+    assert.match(shown.prompt, /\$ npm test → not run/)
+    assert.ok(!shown.prompt.includes('<diff>'))
+  })
+
+  test('canary: state off drops a part the default shows', () => {
+    const [pair] = pairsOf([side('h', 'x', 1), side('h', 'y', 1)])
+    assert.ok(pair)
+    const blind = blindPair('Which?', pair, false, 20_000, {
+      state: { ...DEFAULT_QUESTION_STATE, diff: false, output: true },
+    })
+    assert.equal(blind.a.diff, undefined)
+    assert.notEqual(blind.a.diff, blindPair('Which?', pair, false, 20_000).a.diff)
+  })
+
+  test("artifacts send each side's own capture of that name, labelled by position", async () => {
+    const png = (n: number) => new Uint8Array([0x89, 0x50, 0x4e, 0x47, n])
+    const [pair] = pairsOf([
+      {
+        ...side('h', 'arm-x', 1),
+        diff: '+one\n',
+        captures: [{ name: 'home-of-arm-x', data: png(1) }],
+      },
+      {
+        ...side('h', 'arm-y', 1),
+        diff: '+two\n',
+        captures: [{ name: 'home-of-arm-y', data: png(2) }],
+      },
+    ])
+    assert.ok(pair)
+    const both = blindPair('Which?', pair, false, 20_000, {
+      state: DEFAULT_QUESTION_STATE,
+      artifacts: true,
+    })
+    assert.deepEqual(both.a.artifacts, [
+      { label: 'Attempt A, screenshot 1 of 1', mediaType: 'image/png', bytes: 5 },
+    ])
+    for (const name of ['home-of-arm-x', 'home-of-arm-y', 'arm-x', 'arm-y']) {
+      assert.ok(!both.prompt.includes(name), `${name} is not in the prompt`)
+    }
+    const named = blindPair('Which?', pair, true, 20_000, {
+      state: DEFAULT_QUESTION_STATE,
+      artifacts: ['home-of-arm-x'],
+    })
+    assert.deepEqual(named.b.artifacts, [
+      { label: 'Attempt B, screenshot 1 of 1', mediaType: 'image/png', bytes: 5 },
+    ])
+    assert.deepEqual(named.a.artifacts, [{ label: 'Attempt A, screenshot 1 of 1', missing: true }])
+    const request = questionRequest(
+      blindInput('Which?', pair, true, 20_000, { state: DEFAULT_QUESTION_STATE, artifacts: true }),
+    )
+    assert.ok('messages' in request)
+    assert.deepEqual(
+      request.messages[0]?.content.map((part) =>
+        part.type === 'file' ? [...(part.data as Uint8Array)].at(-1) : part.text.split('\n')[0],
+      ),
+      ['Question: Which?', 'Attempt A, screenshot 1 of 1', 2, 'Attempt B, screenshot 1 of 1', 1],
+      "the prompt, then each side's screenshot after its label, in the order shown",
+    )
+    assert.match(request.system, /screenshots of its work/)
+    assert.ok(!('messages' in questionRequest(blindInput('Which?', pair, false, 20_000))))
+    const answer = await answerQuestion({
+      question: 'Which page is clearer?',
+      model: { kind: 'fake-analysis', vote: 'A' },
+      pairs: [pair],
+      maxInputTokens: 20_000,
+      maxOutputTokens: 100,
+      artifacts: ['home-of-arm-x'],
+    })
+    assert.deepEqual(answer.artifacts, ['home-of-arm-x'])
+    assert.deepEqual(
+      answer.votes.map((v) => v.artifacts),
+      [
+        { a: ['home-of-arm-x'], b: [] },
+        { a: ['home-of-arm-x'], b: [] },
+      ],
+      'names per named side, whichever order was shown',
+    )
+    const missing = await answerQuestion({
+      question: 'Which page is clearer?',
+      model: { kind: 'fake-analysis', vote: 'A' },
+      pairs: [pair],
+      maxInputTokens: 20_000,
+      maxOutputTokens: 100,
+      artifacts: ['home'],
+      state: { checks: ['npm tset'] },
+    })
+    assert.equal(
+      missing.error,
+      'question "Which page is clearer?" state.checks names a command no paired attempt ran: "npm tset"',
+    )
+    assert.deepEqual(missing.votes, [])
   })
 
   test('rates count wins over decided votes; ties count for neither side', () => {
@@ -605,6 +748,7 @@ describe('compare question pairs', () => {
     assert.deepEqual(answer, {
       question: 'Which is cleaner?',
       model: 'fake',
+      stateOptions: DEFAULT_QUESTION_STATE,
       votes: [],
       rates: [],
       error: 'quota exceeded',
@@ -619,9 +763,10 @@ describe('compare question pairs', () => {
       }) as unknown as EngineEval
     const record = (kind?: 'judge' | 'assertion') =>
       ({
-        diff: { patch: '+x\n' },
+        diff: { patch: '+x\n', files: [] },
         error: kind ? { kind, message: '' } : null,
         turns: [{ prompt: 'go' }],
+        checks: [],
       }) as unknown as EvalRecord
     assert.equal(stagedAttempt(e('passed'), record())?.checksPassed, true)
     assert.equal(stagedAttempt(e('failed'), record('judge'))?.checksPassed, true)
@@ -632,9 +777,11 @@ describe('compare question pairs', () => {
       arm: 'sdk',
       run: 2,
       diff: '+x\n',
+      files: [],
       checksPassed: true,
       control: false,
-      prompts: ['go'],
+      turns: [{ prompt: 'go', text: undefined, transcript: undefined }],
+      checks: [],
       id: 'h/sdk/fake#2',
     })
   })
@@ -696,8 +843,8 @@ describe('compare questions over real-harness runs (real-e2e-pairs)', () => {
       const [first, second] = [seen[i * 2], seen[i * 2 + 1]] as [BlindPair, BlindPair]
       assert.ok(first.prompt.includes(patchForJudge(pair.a.diff).trimEnd()), 'A is a real diff')
       assert.ok(first.prompt.includes(patchForJudge(pair.b.diff).trimEnd()), 'B is a real diff')
-      assert.equal(first.a, second.b, 'the repeat swaps the order')
-      assert.equal(first.b, second.a)
+      assert.deepEqual(first.a, second.b, 'the repeat swaps the order')
+      assert.deepEqual(first.b, second.a)
       assert.match(first.prompt, /Create a file named hello\.txt/, 'the task both were given')
       for (const name of names) {
         assert.ok(!first.prompt.toLowerCase().includes(name), `${name} is not in the prompt`)

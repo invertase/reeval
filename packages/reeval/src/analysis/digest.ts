@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
 import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
+import { DEFAULT_QUESTION_STATE, questionShows } from '../compare/state.ts'
 import type { HistoryDb } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS, LIFT_MIN_COUNTED } from '../history/facts.ts'
 import { TOOL_CLASSES } from '../history/tool-class.ts'
@@ -116,7 +117,7 @@ export const RULES = [
   "A context-use fact counts each attempt's tool calls by class (context, dependency, web, verify, workspace) and lists which placed files each arm opened: how much an arm leaned on what its environment declared versus digging in installed packages. The classes are a heuristic over tool names and paths; cite them as counts, not as proof of intent.",
   'A contrast fact (kind contrast) is one pair of arms on one harness, a against b, when an eval has two variants or more: pass rate and lift of a over b, the checks that tell them apart (discriminates or mixed; sameOnBoth counts the rest) and effort. It answers how two variants differ from each other, not only from the control; gating stays each variant against its control.',
   'A check (kind checks) whose verdict is both-pass or both-fail passes, or fails, on both the variant and its control: it is no evidence for or against the variant. Only discriminates rows say which requirement separated them.',
-  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates.",
+  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check. Each pair is voted in both orders; splits counts pairs whose two orders picked opposite sides (the position decided, not the work), and rates count such a pair as one win each. With more than two arms, read headToHead (a–b wins per pair, splits apart), not the pooled rates. shows lists what each side was shown: a question that shows output or transcript can favour the better-written account rather than the better work, and one that shows artifacts rests on screenshots.",
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -852,6 +853,7 @@ export async function buildDigestKeepingDropped(
           eval: tagOf(e.key),
           question: clip(a.question, 120),
           model: a.resolvedModel ?? a.model,
+          shows: questionShows(a.stateOptions ?? DEFAULT_QUESTION_STATE, a.artifacts),
           votes: a.votes.length,
           ties,
           ...(a.rates.length

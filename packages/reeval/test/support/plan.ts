@@ -107,7 +107,7 @@ export function renderPlan(plan: PlanDocument): string {
       const across = q.across ? `${q.across} · ` : ''
       rows.push([
         '',
-        `question: ${q.question} · ${across}${pairs} · ${q.model ?? 'no language model'}`,
+        `question: ${q.question} · shows ${q.shows.join(', ')} · ${across}${pairs} · ${q.model ?? 'no language model'}`,
       ])
     }
   }

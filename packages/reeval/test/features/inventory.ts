@@ -203,6 +203,24 @@ export const inventory: InventoryFeature[] = [
     real: ['questions › examples/hello --profile questions'],
   },
   {
+    id: 'compare.questions.state',
+    area: 'Config and selection',
+    name: "Compare questions' `state` and `artifacts`, and the `question` option: what each side shows, cascaded key by key",
+    plan: ['compare/questions-state'],
+    fixtures: [
+      'compare/question-default',
+      'compare/question-state',
+      'compare/question-cascade',
+      'compare/question-artifacts',
+    ],
+    tests: [
+      'reeval/test/results.test.ts › state chooses what each side shows; output and files stay out by default',
+      'reeval/test/results.test.ts › canary: state off drops a part the default shows',
+      "reeval/test/results.test.ts › artifacts send each side's own capture of that name, labelled by position",
+      options('common mistakes'),
+    ],
+  },
+  {
     id: 'gate',
     area: 'Config and selection',
     name: "`gate` (`'all'`, `{ passRate }`) and `compare.gate`",
@@ -1310,8 +1328,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'judge.artifacts',
     area: 'Judges and matchers',
-    name: '`c.judge({ artifacts })` sends captures as AI SDK file parts; JSON-only calls stay an object',
-    fixtures: ['judge/artifacts'],
+    name: '`c.judge({ artifacts })` sends captures as AI SDK file parts (`true` sends every one); JSON-only calls stay an object',
+    fixtures: ['judge/artifacts', 'judge/artifacts-all'],
     tests: [
       unit('decideState keeps JSON-only state an object'),
       unit('TypeSafe decide rejects file parts without HTTP'),

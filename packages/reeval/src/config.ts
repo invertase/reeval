@@ -57,6 +57,7 @@ const CONFIG_KEYS = [
   'egress',
   'judge',
   'capture',
+  'question',
   'timeout',
   'concurrency',
   'record',
@@ -79,6 +80,7 @@ const DEFAULTS_KEYS = [
   'egress',
   'judge',
   'capture',
+  'question',
   'timeout',
 ]
 const LIMIT_KEYS = ['runs', 'compare', 'harness']
@@ -562,6 +564,7 @@ export function resolveConfig(
     defaultProfile,
     judge: resolveJudge(user.judge, file),
     capture: user.capture ?? {},
+    question: user.question ?? {},
     timeoutMs: parseDuration(user.timeout ?? '15m'),
     concurrency:
       user.concurrency === undefined

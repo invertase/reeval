@@ -1,7 +1,12 @@
 // The SDK-facing plain-data contract: the shapes another language's declaration tree carries,
 // each a Zod schema that validates it, describes it and gives its JSON Schema.
 import type { z } from 'zod'
-import { compareQuestionSchema, pairFactorSchema } from './compare.ts'
+import {
+  compareQuestionSchema,
+  pairFactorSchema,
+  questionOptionsSchema,
+  questionStateSchema,
+} from './compare.ts'
 import {
   analysisConfigDataSchema,
   budgetSchema,
@@ -83,6 +88,8 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   CodexHarnessDescriptor: codexHarnessSchema,
   JudgeStateOptions: judgeStateSchema,
   CompareQuestion: compareQuestionSchema,
+  QuestionStateOptions: questionStateSchema,
+  QuestionOptions: questionOptionsSchema,
   PairFactor: pairFactorSchema,
   GatePolicy: gatePolicySchema,
   EgressPolicy: egressPolicySchema,

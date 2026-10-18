@@ -53,7 +53,7 @@ export default defineConfig({
   analysis: {
     ${options.instructions ? `instructions: ${JSON.stringify(options.instructions)},` : ''}
     model: fakeAnalysis({
-      vote: (p) => (p.a.includes('GoogleSignInButton') === p.b.includes('GoogleSignInButton') || p.a.includes('GoogleSignInButton') ? 'A' : 'B'),
+      vote: (p) => (p.a.diff?.includes('GoogleSignInButton') === p.b.diff?.includes('GoogleSignInButton') || p.a.diff?.includes('GoogleSignInButton') ? 'A' : 'B'),
       output: ${options.output ?? "{ tldr: 'fake', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'fake' } }"},
     }),
   },

@@ -759,6 +759,20 @@
       "description": "A compare question's answer: every vote, and each side's wins over decided votes per cut.",
       "type": "object",
       "properties": {
+        "artifacts": {
+          "description": "The captures it sent of each side, as asked: `true` for all, or their names.",
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
         "error": {
           "description": "Why some or all of its votes are missing: the model call failed. Outcomes never change.",
           "type": "string"
@@ -795,6 +809,10 @@
         "resolvedModel": {
           "description": "The model id the provider says served the calls, when it reports one.",
           "type": "string"
+        },
+        "stateOptions": {
+          "description": "What each side showed, every key resolved; unset on answers from before questions took `state`, which showed the defaults.",
+          "$ref": "#/$defs/ResolvedQuestionStateOptions"
         },
         "votes": {
           "type": "array",
@@ -1863,6 +1881,25 @@
           "description": "Set on a cross-harness pair: the arm (environment) both harnesses ran.",
           "type": "string"
         },
+        "artifacts": {
+          "description": "The captures each named side showed, by name; set when the question sends `artifacts`.",
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "b": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["a", "b"]
+        },
         "b": {
           "type": "string"
         },
@@ -2026,6 +2063,61 @@
         }
       },
       "required": ["checks", "contents", "diff", "files", "output", "task", "transcript", "turns"]
+    },
+    "ResolvedQuestionStateOptions": {
+      "description": "`QuestionStateOptions` with every key set: what each side of one question showed.",
+      "type": "object",
+      "properties": {
+        "checks": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "diff": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "files": {
+          "type": "boolean"
+        },
+        "output": {
+          "type": "boolean"
+        },
+        "task": {
+          "type": "boolean"
+        },
+        "transcript": {
+          "anyOf": [
+            {
+              "enum": ["full", "tools"]
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "turns": {
+          "enum": ["all", "last"]
+        }
+      },
+      "required": ["checks", "diff", "files", "output", "task", "transcript", "turns"]
     },
     "ResourceFailureRecord": {
       "description": "The sandbox ran out of a resource during the attempt: `oom` is the kernel killing `kills` processes at its memory limit. The attempt is then an infra error, whatever its checks said.",

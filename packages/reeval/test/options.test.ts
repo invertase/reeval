@@ -606,12 +606,12 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(
       dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · 1 pair · needs a language model: set analysis\.model$/m,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · 1 pair · needs a language model: set analysis\.model$/m,
     )
     const json = await runCli(p.dir, ['run', '--dry-run', '--json'])
     assert.equal(json.code, 0, json.stdout + json.stderr)
     assert.deepEqual(JSON.parse(json.stdout).evals[0].questions, [
-      { question: 'Which is cleaner?', model: null, pairs: 1 },
+      { question: 'Which is cleaner?', model: null, pairs: 1, shows: ['task', 'diff'] },
     ])
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -657,7 +657,12 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.deepEqual(JSON.parse(dry.stdout).evals[0].questions, [
-      { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash', pairs: 1 },
+      {
+        question: 'Which is cleaner?',
+        model: 'google/gemini-3.8-flash',
+        pairs: 1,
+        shows: ['task', 'diff'],
+      },
     ])
     const missing = await runCli(p.dir, ['run'], { env: noKeys })
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
@@ -694,11 +699,11 @@ export default defineConfig({
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(
       dry.stdout,
-      /^ {2}question 1\/2 {2}Which is cleaner\? · after the run · 1 pair · fake$/m,
+      /^ {2}question 1\/2 {2}Which is cleaner\? · after the run · shows task, diff · 1 pair · fake$/m,
     )
     assert.match(
       dry.stdout,
-      /^ {2}question 2\/2 {2}Which is shorter\? · after the run · 1 pair · fake$/m,
+      /^ {2}question 2\/2 {2}Which is shorter\? · after the run · shows task, diff · 1 pair · fake$/m,
     )
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -847,7 +852,7 @@ export default defineConfig({
   ${analysis}
 })
 `
-  const extra = `analysis: { model: fakeAnalysis({ vote: (p) => (p.a.includes('extra.txt') ? 'A' : p.b.includes('extra.txt') ? 'B' : 'tie') }) },`
+  const extra = `analysis: { model: fakeAnalysis({ vote: (p) => (p.a.diff?.includes('extra.txt') ? 'A' : p.b.diff?.includes('extra.txt') ? 'B' : 'tie') }) },`
 
   test('votes are recorded after the attempts, and the outcome and exit code are the checks', async () => {
     const asked = await project('questions-votes', {
@@ -923,7 +928,7 @@ export default defineConfig({
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(
       dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · environment · 6 pairs · fake$/m,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
     )
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -954,7 +959,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], across: 'envi
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(
       dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · environment · 6 pairs · fake$/m,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
     )
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -980,7 +985,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], across: 'harn
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(
       dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · environment · 6 pairs · fake$/m,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · shows task, diff · environment · 6 pairs · fake$/m,
     )
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -1236,6 +1241,11 @@ evaluate('slow', { runs: 4 }, async (c) => { await c.send('x') })
 describe('common mistakes', { concurrency: 4 }, () => {
   const cases: Array<[string, string, RegExp]> = [
     [
+      'a compare question that shows the model nothing',
+      `group('g', { question: { state: { task: false } } }, () => { evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Q', state: { diff: false } }] } }, async () => {}) })`,
+      /compare\.questions "Q" in evaluate\("g › e"\) shows the model nothing: every state key is off and it sends no artifacts\. Turn on a state key, such as state: \{ diff: true \}, or send artifacts\./,
+    ],
+    [
       'a list of environments',
       `group('genkit', { environment: [a, b] }, () => {})`,
       /environment takes one environment, not a list \(group\("genkit"\)\)\. To compare environments, use compare: \{ baseline, variants: \[a, b\] \}\. baseline is the control; variants are not layered on it\./,
@@ -1298,17 +1308,17 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a compare question that is not a string or an entry',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [42] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\?, across\? \} \(got 42\)/,
+      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\?, across\?, state\?, artifacts\? \} \(got 42\)/,
     ],
     [
       'a compare question entry with an unknown key',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', judge: 'x' }] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\? \} \(got "judge"\)\./,
+      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\?, state\?, artifacts\? \} \(got "judge"\)\./,
     ],
     [
       'cut on a compare question entry',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', cut: 'within' }] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\? \} \(got "cut"\)\. Did you mean "across"\?/,
+      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\?, state\?, artifacts\? \} \(got "cut"\)\. Did you mean "across"\?/,
     ],
     [
       'a compare question across that is not a matrix factor',
