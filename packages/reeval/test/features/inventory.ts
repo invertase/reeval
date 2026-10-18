@@ -66,6 +66,7 @@ const opencodeAdapter = (file: string, name: string) =>
 const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}.test.ts › ${name}`
 const piAdapter = (file: string, name: string) => `harness-pi/test/${file}.test.ts › ${name}`
 const codexAdapter = (file: string, name: string) => `harness-codex/test/${file}.test.ts › ${name}`
+const fxAdapter = (file: string, name: string) => `harness-fx/test/${file}.test.ts › ${name}`
 
 export const inventory: InventoryFeature[] = [
   // Config and selection
@@ -386,6 +387,7 @@ export const inventory: InventoryFeature[] = [
       'harness/goose-home-skills',
       'harness/pi-home-skills',
       'harness/codex-home-skills',
+      'harness/fx-home-skills',
     ],
     real: ['contract › skill placed where the agent reads it, and used'],
   },
@@ -403,6 +405,7 @@ export const inventory: InventoryFeature[] = [
       'harness/goose-workspace-skills',
       'harness/pi-workspace-skills',
       'harness/codex-workspace-skills',
+      'harness/fx-workspace-skills',
     ],
   },
   {
@@ -534,7 +537,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi and Codex, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi, Codex and fx, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
@@ -544,6 +547,7 @@ export const inventory: InventoryFeature[] = [
       'harness/goose-rules',
       'harness/pi-rules',
       'harness/codex-rules',
+      'harness/fx-rules',
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
@@ -745,6 +749,7 @@ export const inventory: InventoryFeature[] = [
       'harness/goose-dockerfile',
       'harness/pi-dockerfile',
       'harness/codex-dockerfile',
+      'harness/fx-dockerfile',
     ],
     plan: ['images/install-from-dockerfile'],
     tests: [
@@ -1167,6 +1172,34 @@ export const inventory: InventoryFeature[] = [
       sandboxDocker(
         'proxy',
         'asks for it uncompressed and records the model and effort, the body passed through whole',
+      ),
+    ],
+  },
+  {
+    id: 'harness.fx',
+    area: 'Harnesses',
+    name: '`fx()`: fx over ACP on a brokered AI Gateway or OpenAI key, through a relay to the egress gateway, with per-turn tokens and its tool names',
+    fixtures: [
+      'harness/fx-rules',
+      'harness/fx-workspace-skills',
+      'harness/fx-home-skills',
+      'harness/fx-dockerfile',
+    ],
+    plan: ['fx/fx'],
+    tests: [
+      harness(
+        'reads rules from AGENTS.md, repo skills from .fx/skills, home skills in its own home',
+      ),
+      harness("fx's adapter brokers only its provider's key, as a Bearer token, to that provider"),
+      harness("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup"),
+      fxAdapter('unit', 'a gateway id runs on AI Gateway, a bare id on OpenAI'),
+      fxAdapter(
+        'unit',
+        "MCP calls are renamed from fx's mcp_<server>_<tool>, longest server first",
+      ),
+      fxAdapter(
+        'unit',
+        "a command's result is its streamed output and exit code, not fx's clipped summary",
       ),
     ],
   },

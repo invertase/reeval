@@ -24,6 +24,7 @@ import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
 import { CODEX_CLI_VERSION } from '@reeval/harness-codex'
+import { FX_CLI_VERSION } from '@reeval/harness-fx'
 import { GOOSE_CLI_VERSION } from '@reeval/harness-goose'
 import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
 import { PI_CLI_VERSION } from '@reeval/harness-pi'
@@ -1428,6 +1429,33 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'harness/fx-rules',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/fx-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/fx-home-skills',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
     dir: 'harness/pi-rules',
     tiers: ['fake', 'docker'],
     image: 'pi',
@@ -1537,6 +1565,18 @@ export const features: Feature[] = [
         image?.agentCli ?? '',
         new RegExp(`${GOOSE_CLI_VERSION.replaceAll('.', '\\.')}$`),
       )
+    },
+  },
+  {
+    dir: 'harness/fx-dockerfile',
+    tiers: ['docker'],
+    image: 'fx',
+    env: 'plain',
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.agentCli ?? '', new RegExp(`${FX_CLI_VERSION.replaceAll('.', '\\.')}$`))
     },
   },
   {
