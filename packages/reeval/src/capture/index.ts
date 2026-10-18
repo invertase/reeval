@@ -18,28 +18,19 @@ import type {
 } from '../types.ts'
 import { fakeInstructionSteps, isWaitStep } from './fake-instructions.ts'
 
-export type { ChromeSession, DownloadProgress, DownloadReporter } from './browser.ts'
 export {
-  CHROME_NAME,
-  CHROME_VERSION,
-  captureWaitLabel,
-  captureWaitTimeout,
   chromeBinaryPath,
   dispatchInput,
   ensureChrome,
   listenForCaptureWait,
   mapPagePoint,
-  navigateAndWait,
   pickPageDebuggerUrl,
   removeChromeProfile,
-  screenshotWithChrome,
   trackNetwork,
-  waitForPage,
-  waitTimeout,
   withChrome,
 } from './browser.ts'
 export { pollHttp } from './poll.ts'
-export { pngSize, stubPng } from './stub.ts'
+export { stubPng } from './stub.ts'
 
 /** Default CSS pixels when the call and cascade omit `viewport`. */
 export const DEFAULT_VIEWPORT: CaptureWindow = { width: 1280, height: 720 }
@@ -53,10 +44,6 @@ export const CAPTURE_WAITS = ['load', 'idle'] as const
 
 export function isWaitMs(wait: Wait): wait is { ms: number } {
   return typeof wait === 'object' && wait !== null && 'ms' in wait
-}
-
-export function isCaptureWindow(viewport: Viewport): viewport is CaptureWindow {
-  return viewport !== 'full-page'
 }
 
 /** `'load'` when the call omits `wait`. `'load'`, `'idle'` or `{ ms }`. */
@@ -120,10 +107,6 @@ export function resolveCaptureViewport(viewport: Viewport | undefined): {
     return { viewport: 'full-page', window: DEFAULT_VIEWPORT, fullPage: true }
   }
   return { viewport: asked, window: asked, fullPage: false }
-}
-
-export function viewportKey(viewport: Viewport): string {
-  return viewport === 'full-page' ? 'full-page' : `${viewport.width}x${viewport.height}`
 }
 
 /** `~/.cache/reeval` when that's the resolved dir; otherwise the absolute path. */

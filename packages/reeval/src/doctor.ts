@@ -253,8 +253,6 @@ export async function checkDocker(
   }
 }
 
-export type MissingImage = { ref: string }
-
 /** reeval's sandbox image for each Docker harness in the config: present, missing or left from an older reeval. */
 export async function checkImages(
   config: ResolvedConfig,

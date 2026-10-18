@@ -9,7 +9,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { readdir, readFile, rm, stat } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { UsageError } from './errors.ts'
@@ -371,12 +371,6 @@ export async function loadPrevious(staging: string): Promise<{
   } catch {
     return { record: null, artifacts: existsSync(artifacts) ? artifacts : null }
   }
-}
-
-/** After assemble, the aside copies of an interrupted scratch are gone with staging. */
-export async function removePrevious(staging: string): Promise<void> {
-  await rm(join(staging, 'previous.json'), { force: true })
-  await rm(join(staging, 'previous-artifacts'), { recursive: true, force: true })
 }
 
 export const previousAttempt = (

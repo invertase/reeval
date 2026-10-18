@@ -1,0 +1,60 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "packages/reeval/src/contract/*.ts": ["types"],
+    "packages/studio-web/src/components/ui/*.tsx": ["exports"]
+  },
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.{mjs,ts}"],
+      "ignoreBinaries": ["report"],
+      "ignoreDependencies": ["jiti"]
+    },
+    "packages/reeval": {
+      "entry": [
+        "src/{index,harness,sandbox,judge,testing,bin}.ts",
+        "src/studio/index.ts",
+        "test/**/*.{ts,mjs}",
+        "scripts/**/*.ts"
+      ],
+      "project": ["src/**/*.ts", "test/**/*.{ts,mjs}", "scripts/**/*.ts"],
+      "ignore": ["test/fixtures/records/**"],
+      "ignoreDependencies": [
+        "@ai-sdk/harness-acp",
+        "@ai-sdk/provider",
+        "@ai-sdk/provider-utils",
+        "studio-web"
+      ]
+    },
+    "packages/harness-*": {
+      "entry": ["test/**/*.ts"]
+    },
+    "packages/harness-codex": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
+    "packages/harness-goose": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
+    "packages/harness-pi": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
+    "packages/harness-opencode": {
+      "entry": ["test/**/*.ts", "scripts/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
+    "packages/sandbox-docker": {
+      "entry": ["test/**/*.ts"]
+    },
+    "packages/studio-web": {
+      "entry": ["test/**/*.ts", "scripts/**/*.mjs", "dev-data.ts"]
+    },
+    "examples/hello": {
+      "entry": ["**/*.eval.ts", "reeval*.config.ts", "scan/*.mjs"]
+    }
+  },
+  "ignoreFiles": ["scripts/third-party.d.mts"]
+}

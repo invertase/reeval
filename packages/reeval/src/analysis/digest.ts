@@ -270,10 +270,6 @@ function criteriaOf(e: EvalEntry, tag: (cell: string) => string) {
   return { rows, neverMet, alwaysMet }
 }
 
-export async function buildDigest(input: DigestInput): Promise<Digest> {
-  return (await buildDigestKeepingDropped(input)).digest
-}
-
 /** The digest, and the evidence dropped from it to fit its cap, whole, for tools to read back. */
 export async function buildDigestKeepingDropped(
   input: DigestInput,

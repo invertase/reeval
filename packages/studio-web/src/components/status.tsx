@@ -102,8 +102,6 @@ export function OutcomeBadge({
   )
 }
 
-export const outcomeLabel = (o: Outcome) => outcomeStyle(o).label
-
 /** A compact segmented bar: pass, fail, missed (ungated failures), infra, skipped. */
 export function TallyBar({
   pass,

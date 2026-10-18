@@ -22,8 +22,6 @@ import type {
   GroupOptions,
 } from './types.ts'
 
-export type { EvalOptions, GroupOptions }
-
 type Declaring = { name: string; options: GroupOptions; node: DeclaredGroup }
 
 // The groups enclosing the code being collected. The collector runs a nested group's callback

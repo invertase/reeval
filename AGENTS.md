@@ -102,6 +102,7 @@ pnpm test        # build, then run every package's tests: engine, wrapper, studi
 pnpm coverage    # the same tests with code coverage from every process they start (below)
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
+pnpm knip        # unused files, exports, types and dependencies (knip.json); CI runs it
 pnpm example     # reeval run in examples/hello (pnpm --filter hello-example reeval run)
 node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a standalone reeval
 ```

@@ -7,7 +7,7 @@ import { allowedHosts, createStudioApp, newToken, type StudioEvent } from './ser
 import type { StudioSource } from './source.ts'
 import { watchRuns } from './watch.ts'
 
-export { buildStudio, StudioBuildError } from './build.ts'
+export { buildStudio } from './build.ts'
 
 /** Where the prebuilt web app ships inside the package (copied from packages/studio-web). */
 export const APP_DIR = ownDir('dist/studio-app')

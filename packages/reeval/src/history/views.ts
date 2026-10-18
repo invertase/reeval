@@ -24,7 +24,6 @@ export {
   type CompareRow,
   type CompareStatus,
   compare,
-  type StackChange,
   stackChanges,
 } from '../view/compare.ts'
 

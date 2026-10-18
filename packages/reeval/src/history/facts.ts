@@ -795,13 +795,3 @@ export function deriveFacts(db: DatabaseSync): void {
   flakyRows.sort((a, b) => String(a.first_seen).localeCompare(String(b.first_seen)))
   insertAll(db, 'flaky_m', flakyRows)
 }
-
-/** An effort verdict as a short phrase, for tables and the digest. */
-export const effortPhrase = (verdict: EffortVerdict | null, p: number | null) =>
-  verdict === 'fewer' || verdict === 'more'
-    ? `${verdict} tool calls (p = ${p?.toFixed(3)})`
-    : verdict === 'insufficient'
-      ? 'too few attempts to test'
-      : verdict === 'noise'
-        ? 'within noise'
-        : '–'

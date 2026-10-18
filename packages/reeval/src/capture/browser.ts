@@ -703,18 +703,3 @@ export async function navigateAndWait(
   const nav = await session.navigate(url)
   await page.ready(nav, timeoutMs)
 }
-
-/** Navigate `url` and return a PNG from `Page.captureScreenshot`. */
-export async function screenshotWithChrome(
-  bin: string,
-  url: string,
-  viewport: CaptureWindow,
-  timeoutMs: number,
-  wait: Wait = 'load',
-  fullPage = false,
-): Promise<Buffer> {
-  return withChrome(bin, viewport, timeoutMs, async (session) => {
-    await navigateAndWait(session, url, wait, timeoutMs)
-    return session.screenshot(fullPage)
-  })
-}
