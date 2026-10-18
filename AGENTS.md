@@ -375,7 +375,7 @@ harness, CLI command or flag, exit code, `reeval query` view, record field or en
 updates its page in the docs' Reference tab (`docs/reference/`), and a change to how people use
 reeval also updates the Guide or a Recipe. Then run `pnpm build && pnpm docs:gen` and `pnpm docs:check`
 (below). If the change affects how agents should write evals, update the reeval skill in
-`.agents/skills/reeval/SKILL.md` too.
+`.agents/skills/reeval/SKILL.md` (or the reference under `references/` that covers it) too.
 
 ### Docs
 
