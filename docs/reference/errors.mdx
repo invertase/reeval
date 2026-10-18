@@ -88,6 +88,11 @@ See [reeval doctor](/reference/cli/doctor) for every check.
 | `Unknown compare option "question" in evaluate("e"). Did you mean "questions"? …` | Rename it to `questions` and pass a list: `questions: ['Which is cleaner?']`. |
 | `Unknown compare option "cut" in evaluate("e"). Did you mean "across"? …` | Use `across: 'environment'` or `across: 'harness'` on `compare` or on the question. `cuts` is refused the same way. |
 | `compare.questions "Which?" in evaluate("e"): across is 'environment' …` | Use `'environment'` or `'harness'`, or leave `across` out to vary both. |
+| `compare.questions "Q" state.contents in evals/a.eval.ts › e can't be set: questions are asked after the attempts, when their workspaces are gone. …` | Narrow `state.diff` to the files the question is about. |
+| `compare.questions "Q" in evaluate("g › e") shows the model nothing: every state key is off and it sends no artifacts. …` | Turn a `state` key back on, such as `diff: true`, or send `artifacts`. The cascaded `question` option counts. |
+| `Unknown question option "model" in evals/a.eval.ts › e. model goes on each compare.questions entry: { question, model }.` | `question` takes `state` and `artifacts`; `model` and `across` go on the entry. |
+| `warning: compare question "Q" shows state.transcript, which names each harness's tools, so its harness pairs aren't blind. …` | A warning, not an error. Ask it with `across: 'environment'`, or leave the transcript out. |
+| `question "Q" artifacts names a capture no paired attempt has: "sign-in"` | On the answer's `error` after the run, with no votes. Check the name passed to `c.capture()`. `state.checks` naming a command no paired attempt ran fails the same way. |
 | `compare.across in evaluate("e") is 'environment' …` | Pass `across: 'environment'`, `across: 'harness'`, or a list of those. An empty list and a repeated value are refused too. |
 | `compare.questions "Which?" in evaluate("e") names typesafe-ai/jev-1.13.0, an evaluation model: …` | Give the question a language model, e.g. `'google/gemini-3.8-flash'`. A model without a provider prefix is refused too. |
 | `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. The hint names `from` for a base image string and `install` for a list of steps. |

@@ -187,6 +187,21 @@ const ran = await c.judge('Did the agent run the tests before finishing?', {
 
 A provider error on a judge call says how big the input was and names its biggest files. See [Provider errors](/reference/judges#provider-errors).
 
+## Compare questions see less
+
+| Key | `c.judge` | Compare question, per side |
+|---|---|---|
+| `task` | `true` | `true`, once when both sides share it |
+| `output` | `true` | `false` |
+| `files` | `true` | `false` |
+| `diff` | `true` | `true` |
+| `transcript` | `false` | `false` |
+| `turns` | `'last'` | `'all'` |
+| `checks` | `false` | `false` |
+| `artifacts` | none | none |
+
+A compare question takes the same keys under the [`question`](/reference/options#question) option, with its own defaults. Side by side, the final message is each agent's claim about its work, so the more confident summary would win on wording; the changed files repeat the two diffs. `judge.state` never reaches a question, so a judge default can't change a pair.
+
 ## Write questions the judge can grade
 
 Ask one thing, about what the judge sees, in words that don't assume one solution. The reeval dogfood run found the failure mode: a question that named specific matchers failed a correct scaffold at 0.05, because the agent used `c.readFile` and `toEqual` instead.
