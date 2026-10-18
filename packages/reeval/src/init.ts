@@ -31,6 +31,7 @@ export const INIT_HARNESSES: ReadonlyArray<{
   { kind: 'goose', label: 'Goose', factory: 'goose', model: 'gemini-3.8-flash' },
   { kind: 'pi', label: 'pi', factory: 'pi', model: 'gemini-3.8-flash' },
   { kind: 'codex', label: 'Codex', factory: 'codex', model: 'gpt-5.6-luna' },
+  { kind: 'fx', label: 'fx', factory: 'fx', model: 'anthropic/claude-sonnet-5' },
 ]
 
 export type InitChoice = AgentKind | 'none'

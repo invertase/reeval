@@ -309,6 +309,65 @@ export function piMcpServers(
   )
 }
 
+/** ACP's `McpServer` shape, which fx takes on `session/new`: `env` and `headers` as name-value lists. */
+export function fxMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, Record<string, unknown>> {
+  const pairs = (values: Record<string, string> = {}) =>
+    Object.entries(values).map(([name, value]) => ({ name, value }))
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) =>
+      s.transport === 'stdio'
+        ? // `harness-acp` takes only an absolute command, so a bare one goes through `env`'s PATH lookup.
+          [
+            name,
+            s.command.startsWith('/')
+              ? { command: s.command, args: s.args, env: pairs(s.env) }
+              : { command: '/usr/bin/env', args: [s.command, ...s.args], env: pairs(s.env) },
+          ]
+        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
+    ),
+  )
+}
+
+/**
+ * fx on the model's provider: Vercel AI Gateway for a gateway id, OpenAI's Chat Completions API
+ * for a bare OpenAI id. Each response's first `model` names the model that served it.
+ */
+export function fxForModel(model: string): ModelSpecific {
+  if (!model.includes('/')) {
+    const endpoints = [
+      { host: 'api.openai.com', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
+    ] as const satisfies readonly EndpointMatch[]
+    return {
+      credential: 'OPENAI_API_KEY',
+      endpoints,
+      modelResponses: endpoints,
+      servedModel: ({ host, responseModel }) =>
+        host === 'api.openai.com' ? responseModel : undefined,
+      hosts: ['api.openai.com'],
+    }
+  }
+  // The model list fx fetches before a turn, and its language-model calls.
+  const call = {
+    host: 'ai-gateway.vercel.sh',
+    path: { regex: '^/v\\d+/ai/language-model$' },
+    method: ['POST'],
+  } as const satisfies EndpointMatch
+  const endpoints = [
+    { host: 'ai-gateway.vercel.sh', path: { regex: '^/coding-agent/v1/' }, method: ['GET'] },
+    call,
+  ] as const satisfies readonly EndpointMatch[]
+  return {
+    credential: 'AI_GATEWAY_API_KEY',
+    endpoints,
+    modelResponses: [call],
+    servedModel: ({ host, responseModel }) =>
+      host === 'ai-gateway.vercel.sh' ? responseModel : undefined,
+    hosts: ['ai-gateway.vercel.sh'],
+  }
+}
+
 /** The Cursor SDK's `McpServerConfig` shape. */
 export function cursorMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -370,6 +429,13 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.agents/skills',
+  },
+  // fx reads AGENTS.md and .fx/skills from the workspace, and ~/.fx/skills from the private home
+  // the ACP bootstrap gives it.
+  fx: {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.fx/skills',
+    harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills',
   },
 }
 
@@ -543,6 +609,24 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-codex')).createCodex({
         auth,
         ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
+        ...(mcpServers
+          ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
+          : {}),
+        requireCredentialBrokering: true,
+      }),
+  },
+  fx: {
+    ...LAYOUTS.fx,
+    name: 'fx',
+    factory: 'fx',
+    // AI Gateway's, for what names no model; forModel gives the model's provider's.
+    ...fxForModel('provider/model'),
+    forModel: fxForModel,
+    mcpServers: fxMcpServers,
+    adapter: async ({ auth, mcpServers, descriptor }) =>
+      (await import('@reeval/harness-fx')).createFx({
+        auth,
+        model: descriptor.model,
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),

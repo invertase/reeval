@@ -9,8 +9,8 @@ description: >
 
 # reeval
 
-reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or
-Codex) on a task in a fresh Docker sandbox, then checks the result with deterministic assertions
+reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi,
+Codex or fx) on a task in a fresh Docker sandbox, then checks the result with deterministic assertions
 and an LLM judge. You write evals in TypeScript; `reeval run` runs them.
 
 The package and CLI are `reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
@@ -49,7 +49,7 @@ npx reeval run
 1. Install: `npm init -y` if there's no `package.json`, then `npm i -D reeval`
    (or a tarball: `npm i -D /path/to/reeval.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm, pnpm or Yarn.
-2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|none>` (it only
+2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|none>` (it only
    asks in a terminal) writes `reeval.config.ts` (the agent, plus `fake`, `pr` and `nightly`
    profiles), `evals/greet.eval.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval`
    script; `npx reeval run --profile fake` passes with no keys. It never overwrites a file that
@@ -89,7 +89,8 @@ export default defineConfig({
 - Harnesses (`reeval/harness`), each with a required `model`; a list runs each as its own cell:
   `cursor` (`CURSOR_API_KEY`), `claudeCode` (`ANTHROPIC_API_KEY`), `antigravity`
   (`GEMINI_API_KEY`), `opencode` (the provider's key; model `<provider>/<model>`), `goose` and
-  `pi` (`GOOGLE_GENERATIVE_AI_API_KEY`), `codex` (`OPENAI_API_KEY`), `fakeHarness`. Details
+  `pi` (`GOOGLE_GENERATIVE_AI_API_KEY`), `codex` (`OPENAI_API_KEY`), `fx` (`AI_GATEWAY_API_KEY`, or
+  `OPENAI_API_KEY` for a bare id), `fakeHarness`. Details
   and `effort` in [references/config.md](references/config.md).
 - Judge models: `'typesafe-ai/jev-1.14.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via

@@ -16,7 +16,7 @@ import { docker } from '{{ pkg }}/sandbox'
 | Import | What it exports |
 |---|---|
 | `{{ pkg }}` | `defineConfig`, `defineEnvironment`, `group`, `evaluate`, `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, `HarnessCapabilityError`, and the types |
-| `{{ pkg }}/harness` | `cursor`, `claudeCode`, `antigravity`, `opencode`, `goose`, `pi`, `codex`, `fakeHarness` |
+| `{{ pkg }}/harness` | `cursor`, `claudeCode`, `antigravity`, `opencode`, `goose`, `pi`, `codex`, `fx`, `fakeHarness` |
 | `{{ pkg }}/sandbox` | `docker`, `fakeSandbox` |
 | `{{ pkg }}/judge` | `fakeJudge`, `fakeAnalysis`, `DEFAULT_THRESHOLD`, `RECOMMENDED_JUDGE_MODEL` |
 | `{{ pkg }}/view` | Browser-safe run headers, the studio's file layout and view-models |
@@ -31,7 +31,7 @@ import { docker } from '{{ pkg }}/sandbox'
     `group`, `evaluate`, `defineEnvironment`, the `c` API, matchers and helpers.
   </Card>
   <Card title="Harnesses and sandboxes" icon="layer-group" href="/reference/harness/cursor">
-    `cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `goose()`, `pi()`, `codex()`, `fakeHarness()`, `docker()`, egress.
+    `cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `goose()`, `pi()`, `codex()`, `fx()`, `fakeHarness()`, `docker()`, egress.
   </Card>
   <Card title="CLI" icon="terminal" href="/reference/cli">
     Every command and flag, run references and exit codes.

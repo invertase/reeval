@@ -18,11 +18,18 @@ export type HarnessRow = {
     | 'goose'
     | 'pi'
     | 'codex'
+    | 'fx'
+    | 'fx-gateway'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
-   * providers than Google's.
+   * providers than Google's, and fx's on AI Gateway.
    */
-  harness?: 'opencode'
+  harness?: 'opencode' | 'fx'
+  /**
+   * Why the row is skipped unless `REEVAL_CONTRACT_HARNESSES` names it, such as a key CI doesn't
+   * have yet.
+   */
+  gated?: string
   /** The cheapest model that does the job; null for the fake agent. */
   model: string | null
   /**
@@ -203,6 +210,41 @@ export const harnesses: HarnessRow[] = [
     servedModel: /^gpt-5\.6-luna\[effort=medium\]$/,
     wireModel: /^gpt-5\.6-luna\[effort=medium\]$/,
   },
+  {
+    // fx on OpenAI's Chat Completions API, as an fx configured provider: a Bearer key, through
+    // the relay that takes fx (which ignores HTTPS_PROXY) through the egress gateway. Not a
+    // reasoning model (fx sends them `max_tokens`), and not gpt-4.1-mini, which hands the skill
+    // probe to an fx subagent that often reports it done without writing the proof.
+    id: 'fx',
+    model: 'gpt-4.1',
+    key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.openai.com'],
+    apiHost: 'api.openai.com',
+    tokens: true,
+    // fx names no model over ACP; the gateway reads the dated snapshot the API answers with.
+    servedModel: /^gpt-4\.1-\d{4}-\d{2}-\d{2}$/,
+    wireModel: /^gpt-4\.1-\d{4}-\d{2}-\d{2}$/,
+  },
+  {
+    // And on Vercel AI Gateway, fx's own provider, with a gateway model id.
+    id: 'fx-gateway',
+    harness: 'fx',
+    gated:
+      'no AI_GATEWAY_API_KEY repository secret yet; name fx-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'fx',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+  },
 ]
 
 /** The row's key from the host, or undefined when none of its variables is set. */
@@ -237,6 +279,7 @@ const imageBuilt = (ref: string) => {
 export function skipRow(row: HarnessRow): string | false {
   const only = process.env.REEVAL_CONTRACT_HARNESSES?.split(',')
   if (only && !only.includes(row.id)) return `REEVAL_CONTRACT_HARNESSES=${only.join(',')}`
+  if (row.gated && !only) return row.gated
   if (row.key) {
     if (process.env.REEVAL_TEST_REAL !== '1') return 'set REEVAL_TEST_REAL=1 to run real agents'
     if (!keyOf(row)) return false

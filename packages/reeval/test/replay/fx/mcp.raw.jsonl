@@ -1,0 +1,35 @@
+{"turn":0,"ms":292,"part":{"type":"start"}}
+{"turn":0,"ms":1654,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call","toolCallId":"call_Y9FF27C1HTH9afJzO8AXaSe6","name":"mcp_stamp_house_stamp","title":"house_stamp","kind":"other","status":"pending","rawInput":{},"_meta":{"fx":{"toolCall":{"internal":false,"mcp":{"server":"stamp","tool":"house_stamp"}}}}}}}
+{"turn":0,"ms":1655,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"call_Y9FF27C1HTH9afJzO8AXaSe6","status":"in_progress"}}}
+{"turn":0,"ms":1656,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"call_Y9FF27C1HTH9afJzO8AXaSe6","status":"completed","content":[{"type":"content","content":{"type":"text","text":"{\"server\":\"stamp\",\"tool\":\"mcp_stamp_house_stamp\",\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"STAMP-7Q\"}]}}"}}]}}}
+{"turn":0,"ms":2371,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":"The house"}}}}
+{"turn":0,"ms":2372,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":"_stamp"}}}}
+{"turn":0,"ms":2372,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":" tool"}}}}
+{"turn":0,"ms":2372,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":" returned"}}}}
+{"turn":0,"ms":2393,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":":"}}}}
+{"turn":0,"ms":2393,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":" ST"}}}}
+{"turn":0,"ms":2396,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":"AMP"}}}}
+{"turn":0,"ms":2396,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":"-"}}}}
+{"turn":0,"ms":2401,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":"7"}}}}
+{"turn":0,"ms":2401,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","messageId":"486d60b876a55a21d10bce3562c9527b","content":{"type":"text","text":"Q"}}}}
+{"turn":0,"ms":2444,"part":{"type":"raw","rawValue":{"sessionUpdate":"session_info_update","title":"Call the house_stamp tool of the stamp MCP","updatedAt":"2026-10-18T17:59:14Z"}}}
+{"turn":0,"ms":2449,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":2449,"part":{"type":"tool-call","toolCallId":"call_Y9FF27C1HTH9afJzO8AXaSe6","toolName":"mcp__stamp__house_stamp","input":{},"dynamic":true,"invalid":true,"error":{"name":"AI_NoSuchToolError","toolName":"mcp__stamp__house_stamp","availableTools":["bash","write","edit","delete_file","read","glob","grep","webSearch","webFetch","skill","subagent","mcp_select_tool"]},"providerExecuted":true}}
+{"turn":0,"ms":2493,"part":{"type":"tool-result","toolCallId":"call_Y9FF27C1HTH9afJzO8AXaSe6","toolName":"mcp__stamp__house_stamp","input":{},"output":[{"content":{"text":"{\"server\":\"stamp\",\"tool\":\"mcp_stamp_house_stamp\",\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"STAMP-7Q\"}]}}","type":"text"},"type":"content"}],"providerExecuted":true}}
+{"turn":0,"ms":2494,"part":{"type":"finish-step","finishReason":"tool-calls","rawFinishReason":"tool-calls","usage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"inferredStep":true}},"response":{"id":"hk6yN4cWIZQlnl5q-0","timestamp":"2026-10-18T17:59:14.933Z","modelId":"gpt-4.1","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":2494,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":2495,"part":{"type":"text-start","id":"486d60b876a55a21d10bce3562c9527b"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":"The house"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":"_stamp"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":" tool"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":" returned"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":":"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":" ST"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":"AMP"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":"-"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":"7"}}
+{"turn":0,"ms":2495,"part":{"type":"text-delta","id":"486d60b876a55a21d10bce3562c9527b","text":"Q"}}
+{"turn":0,"ms":2496,"part":{"type":"raw","rawValue":{"stopReason":"end_turn","usage":{"inputTokens":11241,"outputTokens":25}}}}
+{"turn":0,"ms":2496,"part":{"type":"text-end","id":"486d60b876a55a21d10bce3562c9527b"}}
+{"turn":0,"ms":2496,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"end_turn","usage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"inferredStep":true}},"response":{"id":"hk6yN4cWIZQlnl5q-1","timestamp":"2026-10-18T17:59:14.935Z","modelId":"gpt-4.1","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":2497,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"end_turn","totalUsage":{"inputTokens":11241,"inputTokenDetails":{},"outputTokens":25,"outputTokenDetails":{},"totalTokens":11266,"raw":{"inputTokens":11241,"outputTokens":25}},"providerMetadata":{"acp":{"stopReason":"end_turn","usage":{"inputTokens":11241,"outputTokens":25}}}}}

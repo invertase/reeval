@@ -32,6 +32,7 @@ import {
   cursorSdkEndpoints,
   toUsage as cursorUsage,
 } from '@reeval/harness-cursor-sdk'
+import { FX_HOME_SKILLS_DIR, FX_WORKSPACE_SKILLS_DIR } from '@reeval/harness-fx'
 import {
   GOOSE_ENDPOINTS,
   GOOSE_HOME_SKILLS_DIR,
@@ -59,6 +60,7 @@ import {
   brokeringFor,
   claudeMcpServers,
   cursorMcpServers,
+  fxMcpServers,
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
@@ -74,6 +76,7 @@ import {
   codex,
   cursor,
   fakeHarness,
+  fx,
   goose,
   opencode,
   pi,
@@ -172,6 +175,7 @@ describe('the Claude Code harness', () => {
       goose({ model: 'm' }),
       pi({ model: 'm' }),
       codex({ model: 'm' }),
+      fx({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
@@ -179,7 +183,7 @@ describe('the Claude Code harness', () => {
     }
     assert.throws(
       () => fakeHarness({ layout: 'cline' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex' \(got "cline"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx' \(got "cline"\)/,
     )
   })
 
@@ -575,6 +579,65 @@ describe('the Goose harness', () => {
   })
 })
 
+describe('the fx harness', () => {
+  test('is plain data with its own cell id, and needs a model', () => {
+    const h = fx({ model: 'gpt-4.1-mini' })
+    assert.deepEqual(h, { kind: 'fx', model: 'gpt-4.1-mini' })
+    assert.deepEqual(JSON.parse(JSON.stringify(h)), h)
+    assert.equal(harnessId(h), 'fx:gpt-4.1-mini')
+    assert.equal(harnessId(fx({ model: 'anthropic/claude-sonnet-5' })), 'fx:claude-sonnet-5')
+    for (const model of [undefined, '']) {
+      assert.throws(
+        () => fx({ model } as never),
+        /fx\(\) needs a model: a Vercel AI Gateway id, e\.g\. fx\(\{ model: 'anthropic\/claude-sonnet-5' \}\), or a bare OpenAI id/,
+        String(model),
+      )
+    }
+  })
+
+  test('needs AI_GATEWAY_API_KEY for a gateway id, and OPENAI_API_KEY for a bare OpenAI id', () => {
+    const gateway = resolveConfig({ harness: [fx({ model: 'anthropic/claude-sonnet-5' })] }, '/p')
+    assert.deepEqual(missingCredentials(gateway, { OPENAI_API_KEY: 'x' }), ['AI_GATEWAY_API_KEY'])
+    assert.deepEqual(missingCredentials(gateway, { AI_GATEWAY_API_KEY: 'x' }), [])
+    const openai = resolveConfig({ harness: [fx({ model: 'gpt-4.1-mini' })] }, '/p')
+    assert.deepEqual(missingCredentials(openai, { AI_GATEWAY_API_KEY: 'x' }), ['OPENAI_API_KEY'])
+    assert.deepEqual(missingCredentials(openai, { OPENAI_API_KEY: 'x' }), [])
+  })
+
+  test('reads rules from AGENTS.md, repo skills from .fx/skills, home skills in its own home', () => {
+    const h = fx({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: FX_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/${FX_HOME_SKILLS_DIR}`,
+    })
+    assert.equal(imageHarness(h), 'fx')
+  })
+
+  test("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup", () => {
+    assert.deepEqual(
+      fxMcpServers({
+        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/r' } },
+        local: { transport: 'stdio', command: '/usr/bin/node', args: ['s.mjs'], env: {} },
+        docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
+      }),
+      {
+        files: {
+          command: '/usr/bin/env',
+          args: ['npx', 'mcp-files'],
+          env: [{ name: 'ROOT', value: '/r' }],
+        },
+        local: { command: '/usr/bin/node', args: ['s.mjs'], env: [] },
+        docs: {
+          type: 'http',
+          url: 'https://docs.example/mcp',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
+    )
+  })
+})
+
 describe('mcp.sse', () => {
   test('resolves to an SSE server and reaches every harness in its SSE shape, or is refused by name', async () => {
     const env = defineEnvironment('events', ({ mcp }) => ({
@@ -597,6 +660,13 @@ describe('mcp.sse', () => {
       pi: /^InfraError: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       codex:
         /^InfraError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+      fx: {
+        events: {
+          type: 'sse',
+          url: 'http://events.example/sse',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
     }
     for (const [kind, shape] of Object.entries(expected) as [AgentKind, unknown][]) {
       const toHarness = () => AGENTS[kind].mcpServers(mcp as never)
@@ -1323,6 +1393,55 @@ describe('credential brokering per agent', () => {
           },
         }),
         /can't broker GOOGLE_API_KEY/,
+      )
+      assert.equal(ran, false)
+    })
+  })
+
+  test("fx's adapter brokers only its provider's key, as a Bearer token, to that provider", async () => {
+    const openai = await adapterRules(
+      'fx',
+      { ...everything, OPENAI_API_KEY: 'sk-real' },
+      'gpt-4.1-mini',
+    )
+    assert.equal(openai.length, 1)
+    assert.equal(openai[0]?.match.host, 'api.openai.com', 'never the AI Gateway')
+    assert.deepEqual(openai[0]?.transform.headers, { Authorization: 'Bearer sk-real' })
+    assert.equal(brokeringFor(fx({ model: 'gpt-4.1-mini' }))?.credential, 'OPENAI_API_KEY')
+    const gateway = await adapterRules(
+      'fx',
+      { ...everything, OPENAI_API_KEY: 'sk-real', AI_GATEWAY_API_KEY: 'vck-real' },
+      'anthropic/claude-sonnet-5',
+    )
+    assert.equal(gateway.length, 1)
+    assert.equal(gateway[0]?.match.host, 'ai-gateway.vercel.sh')
+    assert.deepEqual(gateway[0]?.transform.headers, { Authorization: 'Bearer vck-real' })
+    assert.equal(
+      brokeringFor(fx({ model: 'anthropic/claude-sonnet-5' }))?.credential,
+      'AI_GATEWAY_API_KEY',
+    )
+  })
+
+  test("fx fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    await withHostEnv({ OPENAI_API_KEY: 'sk-real' }, async () => {
+      const descriptor = fx({ model: 'gpt-4.1-mini' })
+      const agent = agentFor(descriptor)
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let ran = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            run: async () => {
+              ran = true
+              throw new Error('ran')
+            },
+          },
+        }),
+        /can't broker OPENAI_API_KEY/,
       )
       assert.equal(ran, false)
     })

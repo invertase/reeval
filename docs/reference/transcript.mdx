@@ -103,7 +103,7 @@ A real `error` event, from a Claude Code attempt on an account without credit:
 
 ## Tokens and the served model
 
-Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `pi()` and `codex()` do; `goose()` doesn't), each turn in the run record, and each `Turn` from `c.send()`, has `usage` and `model`. These fields are from a real Cursor turn in the record:
+Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `pi()`, `codex()` and `fx()` do; `goose()` doesn't), each turn in the run record, and each `Turn` from `c.send()`, has `usage` and `model`. These fields are from a real Cursor turn in the record:
 
 ```text
 {"status": "completed", "durationMs": 6918, "usage": {"input": 32307, "output": 600, "cacheRead": 31328, "cacheWrite": 0, "reasoning": null}, "model": "composer-2.5[fast=true]"}

@@ -113,6 +113,15 @@ const BOOTSTRAPS: Record<
         auth: { OPENAI_API_KEY: 'unused' },
       }),
   },
+  fx: {
+    name: 'fx',
+    cli: 'fx',
+    adapter: async () =>
+      (await import('@reeval/harness-fx')).createFx({
+        auth: { AI_GATEWAY_API_KEY: 'unused' },
+        model: 'unused/unused',
+      }),
+  },
 }
 
 /** Keeps the image's `PATH` in login shells, which Debian's `/etc/profile` resets. */

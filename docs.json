@@ -183,6 +183,7 @@
         { "title": "goose()", "href": "/reference/harness/goose" },
         { "title": "pi()", "href": "/reference/harness/pi" },
         { "title": "codex()", "href": "/reference/harness/codex" },
+        { "title": "fx()", "href": "/reference/harness/fx" },
         { "title": "fakeHarness()", "href": "/reference/harness/fake" }
       ]
     },

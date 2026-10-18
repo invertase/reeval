@@ -64,8 +64,8 @@ evaluate(
 )
 ```
 
-- **Real agents in sandboxes.** Cursor, Claude Code, Codex, Antigravity, OpenCode, Goose and pi
-  each work in a fresh local Docker container. Their API keys stay on the host: the sandbox gets
+- **Real agents in sandboxes.** Cursor, Claude Code, Codex, Antigravity, OpenCode, Goose, pi and
+  fx each work in a fresh local Docker container. Their API keys stay on the host: the sandbox gets
   a placeholder, and reeval's egress gateway swaps in the key only on requests to that provider.
 - **Any environment.** Start from a git repository at a pinned ref, then add files, setup steps,
   rules, skills, MCP servers and secrets, on reeval's image or your own `from` or Dockerfile.
@@ -140,7 +140,7 @@ import { cursor } from 'reeval/harness'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
-  // or claudeCode, codex, antigravity, opencode, goose, pi, or a list of
+  // or claudeCode, codex, antigravity, opencode, goose, pi, fx, or a list of
   // harnesses: each is its own cell
   harness: cursor({ model: 'composer-2.5' }),
   // optional; pin the version

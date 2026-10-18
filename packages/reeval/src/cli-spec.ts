@@ -111,7 +111,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: `
   reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
                                 eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex or none
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or none
                                 (fake agent only); the config's harness, with a fake profile for no
                                 keys
     -y, --yes                   Don't ask: take the defaults (--harness cursor)

@@ -40,6 +40,10 @@
       "entry": ["test/**/*.ts"],
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
+    "packages/harness-fx": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
     "packages/harness-goose": {
       "entry": ["test/**/*.ts"],
       "ignoreDependencies": ["@ai-sdk/provider"]

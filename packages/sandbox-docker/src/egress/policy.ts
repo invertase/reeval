@@ -36,6 +36,8 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   pi: ['generativelanguage.googleapis.com'],
   // The Responses API only, with analytics and the plugin sync off.
   codex: ['api.openai.com'],
+  // AI Gateway, for a gateway model id; a bare OpenAI id gets OpenAI's API instead.
+  fx: ['ai-gateway.vercel.sh'],
 }
 
 /** The package registries and GitHub, for a restricted policy that still installs. */

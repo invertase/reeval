@@ -788,9 +788,9 @@
           "const": "fake"
         },
         "layout": {
-          "description": "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
+          "description": "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for `fx`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
           "type": "string",
-          "enum": ["cursor", "claude-code", "antigravity", "opencode", "goose", "pi", "codex"]
+          "enum": ["cursor", "claude-code", "antigravity", "opencode", "goose", "pi", "codex", "fx"]
         },
         "maxConcurrent": {
           "description": "The most attempts on this harness kind at once, across the run.",
@@ -1186,6 +1186,36 @@
         }
       ]
     },
+    "FxHarnessDescriptor": {
+      "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, and reports each turn's tokens.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "Cell id; defaults to `fx:<model>`.",
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "type": "string",
+          "const": "fx"
+        },
+        "maxConcurrent": {
+          "description": "The most fx attempts at once, across the run, e.g. for the key's rate limits.",
+          "type": "number"
+        },
+        "model": {
+          "description": "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-4.1`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "startTimeout": {
+          "description": "How long the harness's session may take to become ready (its bootstrap and first session) before the attempt is an infra error, after one retry; default 90s.",
+          "$ref": "#/$defs/Duration"
+        }
+      },
+      "required": ["kind", "model"],
+      "additionalProperties": false
+    },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",
       "type": "object",
@@ -1285,6 +1315,9 @@
         },
         {
           "$ref": "#/$defs/CodexHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/FxHarnessDescriptor"
         }
       ]
     },

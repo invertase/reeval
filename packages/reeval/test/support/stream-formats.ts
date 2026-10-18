@@ -265,6 +265,28 @@ const FORMATS: Record<string, Format> = {
     lists: [],
     defined: ACP_DEFINED,
   },
+  // fx's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response. A shell
+  // call's last update also has `command_result`, fx's own field.
+  fx: {
+    kind: (e) =>
+      typeof e.sessionUpdate === 'string'
+        ? e.sessionUpdate
+        : typeof e.stopReason === 'string'
+          ? 'prompt-response'
+          : undefined,
+    opaque: [
+      'rawInput',
+      'rawOutput',
+      'content',
+      'locations',
+      'availableCommands',
+      'configOptions',
+      '_meta',
+    ],
+    values: ['status', 'kind', 'stopReason'],
+    lists: [],
+    defined: ACP_DEFINED,
+  },
   // pi's `--mode json` events, by `type` (and the assistant event inside `message_update`).
   pi: {
     kind: (e) => {

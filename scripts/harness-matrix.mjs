@@ -108,7 +108,19 @@ const NOTES = [
     h.kind === 'opencode' &&
     `MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its ${code('execute')} tool; the first prompt waits until they've connected.`,
   (h) =>
+    h.agent.forModel &&
+    h.kind === 'fx' &&
+    `Its key is the model's provider's: ${code('AI_GATEWAY_API_KEY')} for a Vercel AI Gateway id (${code('anthropic/claude-sonnet-5')}), ${code('OPENAI_API_KEY')} for a bare OpenAI id (${code('gpt-4.1')}).`,
+  (h) =>
+    h.kind === 'fx' &&
+    `fx ignores ${code('HTTPS_PROXY')}, so its model calls reach the egress gateway through a relay inside the sandbox; its own web search and fetch, HTTP and SSE MCP servers don't use the relay, so a restricted egress policy blocks them and the record lists none of their requests.`,
+  (h) =>
     h.agent.modelResponses &&
+    h.kind === 'fx' &&
+    `Served model from each API response, which the gateway reads: fx doesn't report one over ACP.`,
+  (h) =>
+    h.agent.modelResponses &&
+    h.kind === 'codex' &&
     `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.6-luna[effort=medium]')}): its CLI doesn't report them.`,
   (h) =>
     h.kind === 'codex' &&
