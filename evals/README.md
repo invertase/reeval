@@ -55,3 +55,56 @@ Every attempt installs this checkout's reeval from `evals/skill/vendor/` (`node
 evals/skill/scripts/vendor.mjs` packs it, renders the docs and extracts the pre-split skill).
 `evals/skill/reeval.oracle.config.ts` runs a fake agent that applies a known-good answer to each
 task, so every check must pass there.
+
+## mcp-debugging: does `reeval mcp` help an agent debug a failing run?
+
+Five small reeval projects, each broken in one known way: a check that reads the wrong path, a
+judge threshold above the judge's score, an eval that forgot to attach its skill, a check that
+races a background process, and a setup step naming a missing script. Each one's failing run is
+already in its `.reeval/`. The agent is told the latest run failed, has to fix the project so
+`reeval run` passes, and must name the cause in `answer.json`.
+
+```ts
+// evals/mcp-debugging/environments.ts
+const control = defineEnvironment(fixture, ({ directory }) => ({
+  files: directory(`./fixtures/${fixture}`),
+  setup: [install, seedTheFailingRun],
+}))
+const variant = control.extendEnvironment(`${fixture}-with-mcp`, ({ mcp }) => ({
+  mcp: { reeval: mcp.stdio('sh', ['-c', 'cd /reeval/workspace 2>/dev/null; exec node_modules/.bin/reeval mcp']) },
+}))
+```
+
+Each fixture's eval compares the CLI alone (control) against the same project with `reeval mcp`
+configured (variant). The checks are deterministic: the named cause, `reeval run` exiting 0,
+`reeval.config.ts` untouched, and the eval's checks neither deleted nor skipped.
+
+On Cursor (`composer-2.5`, 2 runs a cell) and Claude Code (`claude-sonnet-5`, 1 run a cell),
+every attempt passed:
+
+```text
+     ✓ flaky-check          4/4 · pass@1 – gated  4 attempts
+         cursor:composer-2.5/flaky-check/docker           control    2/2  pass@1 100%
+         cursor:composer-2.5/flaky-check-with-mcp/docker  variant    2/2  pass@1 100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise
+           effort: tools 18 vs 17 (×1.06), agent 35s vs 33s (×1.07), tokens 406k vs 354k (×1.15): too few attempts to test
+…
+Attempts  20 passed (20 attempts, 5 evals)
+Duration  3m 42s
+```
+
+So the MCP server didn't change the outcome: 15/15 on each side, lift +0 (95% −20…+20). These
+failures are easy to find without it: the agents ran `reeval run` and read `summary.md`. The
+transcripts showed where the server fell short. Cursor's first call was always `history`, which
+lists recorded runs only, so it came back empty for a project with only scratch runs. Claude
+Code never found the tools, which it keeps behind its tool search. The full write-up and the
+improvements to `reeval mcp` it suggests are in the PR that added this folder.
+
+Check the eval itself without keys: an oracle fixes every fixture and must pass, and a canary
+that skips the failing eval must fail.
+
+```bash
+cd evals/mcp-debugging
+pnpm reeval run --config reeval.oracle.config.ts                     # 10 passed
+pnpm reeval run --config reeval.oracle.config.ts --profile canary    # 10 fail "keeps the checks"
+pnpm reeval run --config reeval.oracle.config.ts --profile mcp with-mcp   # calls reeval mcp
+```
