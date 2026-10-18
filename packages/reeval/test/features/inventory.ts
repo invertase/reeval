@@ -1725,6 +1725,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/ui.test.ts › browser-download names the binary, version, size and cache',
       'reeval/test/capture.test.ts › stub PNG bytes are unique for the capture key',
       'reeval/test/capture.test.ts › removeChromeProfile deletes a profile and ignores a busy one',
+      'reeval/test/capture.test.ts › msysTreeKill stops the pid and its descendants by ppid, each Win32 pid first',
       'reeval/test/capture-wait.test.ts › resolveCaptureWait defaults to load and rejects anything else',
       'reeval/test/capture-wait.test.ts › listenForCaptureWait idle waits for networkAlmostIdle on the navigated loader',
       'reeval/test/capture-wait.test.ts › listenForCaptureWait times out naming the wait and does not resolve late',

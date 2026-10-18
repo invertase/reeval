@@ -70,6 +70,31 @@ function resolveUse(resolved: ResolvedCaptureCall, fakeSandbox: boolean): Captur
   )
 }
 
+/**
+ * Stops `pid` and its descendants under Git for Windows' MSYS. Native children (node.exe) are
+ * MSYS processes too, in /proc with their `ppid` and Win32 `winpid`, but their Windows parent is
+ * gone after MSYS's fork and exec, so `taskkill /T` from the shell doesn't reach them, and a signal
+ * alone doesn't stop them. So collect the tree by `ppid` first (a kill reparents), then `taskkill`
+ * each Win32 pid and SIGKILL its MSYS process; the group kill catches anything the walk raced.
+ */
+export function msysTreeKill(pid: string, group: string, proc = '/proc'): string {
+  return `all=${pid}; todo=" ${pid} "
+while [ "$todo" != " " ]; do
+  next=" "
+  for f in ${proc}/[0-9]*/ppid; do
+    { read -r pp < "$f"; } 2>/dev/null || continue
+    p=\${f#${proc}/}; p=\${p%/ppid}
+    case "$todo" in *" $pp "*) case " $all " in *" $p "*) ;; *) all="$all $p"; next="$next$p " ;; esac ;; esac
+  done
+  todo=$next
+done
+for p in $all; do
+  wp=$(tr -d '\\r\\n' < ${proc}/$p/winpid 2>/dev/null) && taskkill /F /PID "$wp" >/dev/null 2>&1
+  kill -9 "$p" 2>/dev/null
+done
+kill -9 -${group} 2>/dev/null`
+}
+
 /** Starts `command` without waiting for exit. Teardown kills it if the eval didn't. */
 export async function startBackground(
   a: Attempt,
@@ -101,8 +126,7 @@ export async function startBackground(
     ? // Docker runs the command in a container with a /proc: everything that inherited the tag.
       `for e in /proc/[0-9]*/environ; do grep -qsxzF ${shellQuote(`${BG_TAG}=${tag}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done`
     : process.platform === 'win32'
-      ? // SIGTERM does not stop native node.exe started from Git Bash; its Win32 tree, killed, does.
-        `wp=$(tr -d '\\r\\n' < /proc/${pid}/winpid 2>/dev/null) && taskkill /F /T /PID "$wp" >/dev/null 2>&1`
+      ? msysTreeKill(pid, group)
       : // The fake sandbox spawns each exec detached, so its shell (`$$`) leads a process group
         // the command and all it started belong to. dash's kill takes no `--`.
         `kill -9 -${group} 2>/dev/null`
