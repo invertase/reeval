@@ -379,7 +379,14 @@ export const CASES: Record<string, Case[]> = {
       options({ compare: { variants: [e2], questions: [{ question: 'Q', artifacts: false }] } }),
     ],
     ['the question option a string', options({ question: 'diff' })],
-    ['the question option with a model', options({ question: { model: 'google/g' } })],
+    ['good: the question option with a model', options({ question: { model: 'google/g' } })],
+    ['the question option with a model without a provider', options({ question: { model: 'g' } })],
+    [
+      'the question option with an evaluation model',
+      options({ question: { model: 'typesafe-ai/jev-1.13.0' } }),
+    ],
+    ['the question option with a model object', options({ question: { model: { kind: 'x' } } })],
+    ['the question option with across', options({ question: { across: 'harness' } })],
     ['the question option with an unknown key', options({ question: { stat: {} } })],
     [
       'the question option with an unknown state key',
@@ -797,6 +804,7 @@ export const CASES: Record<string, Case[]> = {
     ],
     ['yaml: a budget with a typo', yaml('budget: { attempt: 3 }\n')],
     ['yaml: question with a model', yaml('question: { model: google/g }\n')],
+    ['yaml: question with a bare model', yaml('question: { model: gemini }\n')],
     ['yaml: question state contents', yaml('question:\n  state: { contents: [a] }\n')],
     ['yaml: question good', yaml('question:\n  state: { output: true, diff: false }\n')],
     [

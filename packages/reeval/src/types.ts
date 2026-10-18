@@ -1070,7 +1070,8 @@ export type CompareOptions<E = Environment> = {
 
 /**
  * A question for pairwise judgement: its text, or the text and the `'provider/model'` that
- * answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model.
+ * answers it. Without a model, the cascaded `question.model` answers, else `analysis.model`, else the
+ * judge's when it's a language model.
  * `across` is the factor it varies when pairing; without it (and without a one-factor
  * `compare.across`) both pair kinds run. `state` and `artifacts` choose what each side shows.
  */
@@ -1078,7 +1079,7 @@ export type CompareQuestion =
   | string
   | {
       question: string
-      /** `'provider/model'` that answers it. */
+      /** `'provider/model'` that answers it, over the cascaded `question.model`. */
       model?: string
       /** The factor it varies when pairing. */
       across?: PairFactor
@@ -1131,8 +1132,10 @@ export type ResolvedQuestionStateOptions = {
   checks: boolean | string[]
 }
 
-/** Defaults for every compare question: `state` merged key by key, `artifacts` replaced. */
+/** Defaults for every compare question: `model` and `artifacts` replaced, `state` merged key by key. */
 export type QuestionOptions = {
+  /** `'provider/model'` that answers every question below it without its own `model`. */
+  model?: string
   /** What each side shows. */
   state?: QuestionStateOptions
   /** Each side's own captures, by name; `true` sends all of them. Default none. */
@@ -1238,7 +1241,7 @@ type EvalOptionFields = {
   judge?: JudgeOptions
   /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
   capture?: CaptureOptions
-  /** Defaults for every compare question: `state` merged key by key down the cascade. */
+  /** Defaults for every compare question: `model`, and `state` merged key by key, down the cascade. */
   question?: QuestionOptions
   /** Per attempt. */
   timeout?: Duration
@@ -1469,7 +1472,7 @@ export type ReevalConfig = {
    * binary when `c.capture()` runs; it does not change this object.
    */
   capture?: CaptureOptions
-  /** Defaults for every compare question: what each side shows. Merged key by key down the cascade. */
+  /** Defaults for every compare question: the model that answers it and what each side shows. Merged down the cascade. */
   question?: QuestionOptions
   /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number

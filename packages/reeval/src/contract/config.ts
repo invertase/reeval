@@ -276,7 +276,7 @@ export const reevalConfigDataSchema = z
     question: questionOptionsSchema
       .optional()
       .describe(
-        'Defaults for every compare question: what each side shows. Merged key by key down the cascade.',
+        'Defaults for every compare question: the model that answers it and what each side shows. Merged down the cascade.',
       ),
     concurrency: count()
       .optional()

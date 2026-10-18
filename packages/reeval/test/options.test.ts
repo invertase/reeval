@@ -618,7 +618,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(
       r.stderr,
-      /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) needs a language model to answer it\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\), or give the question its own, \{ question: '…', model: 'google\/gemini-3\.8-flash' \}\./,
+      /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) needs a language model to answer it\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\), or give the question its own, \{ question: '…', model: 'google\/gemini-3\.8-flash' \}, or set question: \{ model \} on its group or eval\./,
     )
     assert.doesNotMatch(r.stdout, /✓|✗/, 'no attempt ran')
     assert.equal(existsSync(join(p.dir, '.reeval/runs')), false)
@@ -679,6 +679,30 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
       malformed.stderr,
       /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
     )
+  })
+
+  test("question.model cascades to every question without its own; an entry's model wins", async () => {
+    const p = await project('questions-option-model', {
+      'reeval.config.ts': fakeConfig({
+        harness: `{ files: { 'ok.txt': 'yes' } }`,
+        extra: `question: { model: 'google/gemini-3.8-flash' },
+  analysis: { model: fakeAnalysis({ vote: 'tie' }) },`,
+      }).replace(
+        "import { fakeJudge } from 'reeval/judge'",
+        "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
+      ),
+      ...asks(`['Which is cleaner?', { question: 'Which is shorter?', model: 'openai/gpt-5.5' }]`),
+    })
+    const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.deepEqual(
+      JSON.parse(dry.stdout).evals[0].questions.map((q: { model: string }) => q.model),
+      ['google/gemini-3.8-flash', 'openai/gpt-5.5'],
+      'the config question.model over analysis.model; the entry over both',
+    )
+    const missing = await runCli(p.dir, ['run'], { env: noKeys })
+    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+    assert.match(missing.stderr, /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY/)
   })
 
   test('with a language model the run plans its questions and the outcome is the checks', async () => {

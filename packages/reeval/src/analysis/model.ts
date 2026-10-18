@@ -67,7 +67,7 @@ export function questionModel(
 ): string | FakeAnalysisModel {
   if (question.model !== undefined) return question.model
   const model = defaultModel(config)
-  const fix = `give the question its own, { question: '…', model: 'google/gemini-3.8-flash' }`
+  const fix = `give the question its own, { question: '…', model: 'google/gemini-3.8-flash' }, or set question: { model } on its group or eval`
   if (model === undefined) {
     throw new UsageError(
       `compare.questions "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'pick between two attempts')}, or ${fix}.`,
