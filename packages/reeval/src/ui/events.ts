@@ -1,5 +1,5 @@
-// The terminal output's view of a run. Nothing in ui/ may import Vitest: the engine translates
-// its reporter hooks into these events.
+// The terminal output's view of a run. The engine emits these events; nothing in ui/ imports the
+// engine or `@vitest/*`.
 import type { RunRecord } from '../history/types.ts'
 import type { PrepareEvent } from '../sandbox/preflight.ts'
 import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'

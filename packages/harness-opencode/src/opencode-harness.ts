@@ -52,6 +52,12 @@ export const OPENCODE_DENIED_TOOLS = ['question', 'browser'] as const
  */
 export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as const
 
+/** Provider thinking option: Anthropic's `thinking`, everyone else's `reasoningEffort`. */
+export function openCodeEffortOptions(model: string, effort: string) {
+  const parts = splitModel(model)
+  return parts?.provider === 'anthropic' ? { thinking: effort } : { reasoningEffort: effort }
+}
+
 /**
  * The config OpenCode runs with, as `OPENCODE_CONFIG_CONTENT` (not the
  * `OPENCODE_DISABLE_*` variables): no self-update or share links,
@@ -61,12 +67,6 @@ export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as co
  * `opencode.json(c)`: a key both set is reeval's, objects merge (MCP servers by name), and permission
  * rules append to the eval's.
  */
-/** Provider thinking option: Anthropic's `thinking`, everyone else's `reasoningEffort`. */
-export function openCodeEffortOptions(model: string, effort: string) {
-  const parts = splitModel(model)
-  return parts?.provider === 'anthropic' ? { thinking: effort } : { reasoningEffort: effort }
-}
-
 export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
   const servers = Object.entries(options.mcpServers ?? {})
   const parts = options.model ? splitModel(options.model) : undefined

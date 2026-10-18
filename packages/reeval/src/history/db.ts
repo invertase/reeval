@@ -177,7 +177,7 @@ CREATE INDEX attempts_by_cell ON attempts (run_id, eval_key, cell_key);
 CREATE INDEX env_skills_by_digest ON env_skills (run_id, digest);
 `
 
-/** The canned questions of docs/history-observability-review.md §2, as views to filter. */
+/** Canned questions about the history, as views to filter. */
 const VIEWS = `
 -- Variant against control, per harness, per run.
 CREATE VIEW lift AS
