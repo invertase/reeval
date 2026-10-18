@@ -777,6 +777,10 @@
           "description": "Why some or all of its votes are missing: the model call failed. Outcomes never change.",
           "type": "string"
         },
+        "input": {
+          "description": "`questions/<n>.json` under the eval's directory: what the model was sent, per pair and order.",
+          "$ref": "#/$defs/FileRef"
+        },
         "model": {
           "description": "`'provider/model'`, or `fake` for `fakeAnalysis()`.",
           "type": "string"
@@ -1195,7 +1199,7 @@
       "type": "object",
       "properties": {
         "answers": {
-          "description": "The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons).",
+          "description": "The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets masked and screenshots as refs; unset where the eval's files weren't kept.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/CompareAnswer"

@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { AskedCall, AskedQuestion } from '../compare/questions.ts'
+import { resolveQuestionState } from '../compare/state.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { environmentSandbox, NO_ENVIRONMENT } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
@@ -17,13 +19,15 @@ import { liftInterval, round3 } from '../stats.ts'
 import type {
   Cell,
   CellGate,
-  CompareAnswer,
   EnvironmentRecord,
   EvalRecord,
   FamilyMeta,
   FileChange,
   HarnessDescriptor,
   Outcome,
+  QuestionCall,
+  QuestionInput,
+  QuestionScreenshot,
   ResolvedJudgeStateOptions,
   RunContext,
   TranscriptEvent,
@@ -110,7 +114,7 @@ export type AssembleInput = {
   lockfiles: RunRecord['dependencies']['lockfiles']
   runner: RunnerInfo
   /** Each eval's compare questions, answered after its attempts, by eval id. */
-  answers?: Map<string, CompareAnswer[]>
+  answers?: Map<string, AskedQuestion[]>
 }
 
 export type AssembledRun = {
@@ -199,6 +203,33 @@ class Artifacts {
   json(path: string, value: unknown): FileRef {
     return this.add(path, `${JSON.stringify(value, null, 2)}\n`)
   }
+}
+
+/** The answer, with what its model was sent saved as `questions/<n>.json` beside the eval's attempts. */
+function withInput(e: EvalEntry, { answer, calls }: AskedQuestion, n: number, out: Artifacts) {
+  if (!calls.length) return answer
+  const byId = new Map(e.attempts.map((a) => [a.id, a]))
+  const call = ({ screenshots, ...rest }: AskedCall): QuestionCall => ({
+    ...rest,
+    ...(screenshots
+      ? {
+          screenshots: screenshots.map((s): QuestionScreenshot => {
+            if ('missing' in s) return s
+            const { attempt, ...shot } = s
+            const ref = byId.get(attempt)?.files.artifacts?.find((a) => a.name === s.name)
+            return ref ? { ...shot, path: ref.path } : shot
+          }),
+        }
+      : {}),
+  })
+  const doc: QuestionInput = {
+    question: answer.question,
+    model: answer.model,
+    stateOptions: answer.stateOptions ?? resolveQuestionState(undefined),
+    ...(answer.artifacts !== undefined ? { artifacts: answer.artifacts } : {}),
+    calls: calls.map(call),
+  }
+  return { ...answer, input: out.json(`${e.slug}/questions/${n}.json`, doc) }
 }
 
 const endOf = (startedAt: string, durationMs: number) =>
@@ -966,8 +997,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const families = familiesOf(evals, (cell) => minLifts.get(cell))
   sequence(evals)
   for (const e of evals) {
-    const answers = input.answers?.get(e.id)
-    if (answers?.length) e.answers = answers
+    const asked = input.answers?.get(e.id)
+    if (asked?.length) e.answers = asked.map((q, i) => withInput(e, q, i + 1, out))
   }
 
   const attempts = evals.flatMap((e) => e.attempts)

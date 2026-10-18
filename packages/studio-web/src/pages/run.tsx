@@ -20,6 +20,7 @@ import {
   type AnswerRow,
   activityLabel,
   answerRows,
+  artifactPath,
   type CellRow,
   caseLabel,
   cellRows,
@@ -63,7 +64,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { analysisQuery, headersQuery, recordQuery } from '@/lib/data'
+import { analysisQuery, headersQuery, recordQuery, useStudio } from '@/lib/data'
 import { formatDate, plural, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { RunAnalysis } from '@/pages/run-analysis'
@@ -483,7 +484,9 @@ function RateRows({ label, rates }: { label: string; rates: AnswerRate[] }) {
 }
 
 /** The compare's questions: each side's win rate over decided votes, per cut. They never gate. */
-function Questions({ rows }: { rows: AnswerRow[] }) {
+function Questions({ rows, runId }: { rows: AnswerRow[]; runId: string }) {
+  const { data: studio } = useStudio()
+  const files = studio?.features.artifacts !== false
   return (
     <section className="space-y-2" data-questions>
       <h3 className="text-sm font-medium">Questions</h3>
@@ -512,6 +515,17 @@ function Questions({ rows }: { rows: AnswerRow[] }) {
                   <li key={reason}>{reason}</li>
                 ))}
               </ul>
+            ) : null}
+            {files && q.input !== null ? (
+              <a
+                href={artifactPath(runId, q.input)}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                data-question-input
+              >
+                What the model saw
+              </a>
             ) : null}
           </div>
         ))}
@@ -643,7 +657,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
 
       <ChecksTable entry={entry} />
 
-      {answers.length ? <Questions rows={answers} /> : null}
+      {answers.length ? <Questions rows={answers} runId={record.runId} /> : null}
 
       <section className="space-y-2">
         <h3 className="text-sm font-medium">{plural(entry.attempts.length, 'attempt')}</h3>

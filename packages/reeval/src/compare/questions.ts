@@ -23,6 +23,7 @@ import type {
   FakeVote,
   PairFactor,
   PairVote,
+  QuestionCall,
   QuestionStateOptions,
   ResolvedQuestionStateOptions,
 } from '../types.ts'
@@ -33,6 +34,7 @@ import {
   type PairTurn,
   pairsOf,
   ratesOf,
+  sideName,
   slots,
   voteOf,
   voteReason,
@@ -96,7 +98,7 @@ function sharedTask(first: PairAttempt, second: PairAttempt, state: ResolvedQues
 }
 
 /** A screenshot as the model is shown it: its position on its side, never the capture's name. */
-type ShownImage = { label: string; data: Uint8Array | null }
+type ShownImage = { label: string; data: Uint8Array | null; side: 'A' | 'B'; name: string }
 
 /** One side as the fake and the prompt see it, with its screenshots and the names they came from. */
 type BuiltSide = { side: BlindSide; images: ShownImage[]; sent: string[] }
@@ -144,11 +146,11 @@ function buildSide(
       const at = `Attempt ${label}, screenshot ${i + 1} of ${names.length}`
       const capture = captures.find((c) => c.name === name)
       if (!capture) {
-        images.push({ label: `${at}: not captured`, data: null })
+        images.push({ label: `${at}: not captured`, data: null, side: label, name })
         return { label: at, missing: true as const }
       }
       sent.push(name)
-      images.push({ label: at, data: capture.data })
+      images.push({ label: at, data: capture.data, side: label, name })
       return { label: at, mediaType: 'image/png' as const, bytes: capture.data.byteLength }
     })
   }
@@ -368,6 +370,51 @@ export type AnswerOptions = {
   /** Model calls at once (default 4). */
   concurrency?: number
   signal?: AbortSignal
+  /** Given each call it makes, in pair order, failed ones included. */
+  calls?: AskedCall[]
+}
+
+/** A screenshot as the runner keeps it: by its attempt's id, which the record turns into a path. */
+export type AskedScreenshot =
+  | { label: string; side: string; name: string; attempt: string }
+  | { label: string; missing: true }
+
+/** A call as the runner keeps it, until the record resolves its screenshots' paths. */
+export type AskedCall = Omit<QuestionCall, 'screenshots'> & { screenshots?: AskedScreenshot[] }
+
+/** A question's answer, and every call it made. */
+export type AskedQuestion = { answer: CompareAnswer; calls: AskedCall[] }
+
+function askedCall(pair: Pair, swapped: boolean, input: BlindInput, error?: string): AskedCall {
+  const [first, second] = slots(pair, swapped)
+  const shown = { A: first, B: second }
+  return {
+    cut: pair.cut,
+    ...(pair.cut === 'within' ? { harness: pair.harness } : { arm: pair.arm }),
+    run: pair.run,
+    a: sideName(pair.cut, pair.a),
+    b: sideName(pair.cut, pair.b),
+    swapped,
+    labels: { A: sideName(pair.cut, first), B: sideName(pair.cut, second) },
+    system: input.system,
+    prompt: input.blind.prompt,
+    ...(input.images.length
+      ? {
+          screenshots: input.images.map((image): AskedScreenshot => {
+            const label = image.label.replace(/: not captured$/, '')
+            return image.data
+              ? {
+                  label,
+                  side: sideName(pair.cut, shown[image.side]),
+                  name: image.name,
+                  attempt: shown[image.side].id ?? '',
+                }
+              : { label, missing: true }
+          }),
+        }
+      : {}),
+    ...(error !== undefined ? { error } : {}),
+  }
 }
 
 const errorText = (error: unknown) =>
@@ -417,10 +464,13 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
   }
   const missing = missingEverywhere(question, shows, pairs)
   if (missing) return { ...head, ...asked, votes: [], rates: [], error: missing }
-  const calls = pairs.flatMap((pair) => [false, true].map((swapped) => ({ pair, swapped })))
+  const calls = pairs
+    .flatMap((pair) => [false, true].map((swapped) => ({ pair, swapped })))
+    .map((call, at) => ({ ...call, at }))
   const served = new Set<string>()
   let error: string | undefined
-  const votes = await pooled(calls, options.concurrency ?? 4, async ({ pair, swapped }) => {
+  const made: Array<AskedCall | null> = new Array(calls.length).fill(null)
+  const votes = await pooled(calls, options.concurrency ?? 4, async ({ pair, swapped, at }) => {
     if (error !== undefined) return null
     const input = blindInput(question, pair, swapped, options.maxInputTokens, shows)
     try {
@@ -430,14 +480,18 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
         options.maxOutputTokens,
         options.signal,
       )
+      made[at] = askedCall(pair, swapped, input)
       if (resolvedModel) served.add(resolvedModel)
       const vote = voteOf(question, pair, swapped, pick, reason)
       return shows.artifacts !== undefined ? { ...vote, artifacts: input.sent } : vote
     } catch (e) {
-      error ??= errorText(e)
+      const why = errorText(e)
+      made[at] = askedCall(pair, swapped, input, why)
+      error ??= why
       return null
     }
   })
+  options.calls?.push(...made.filter((c): c is AskedCall => c !== null))
   const kept = votes.filter((v): v is PairVote => v !== null)
   return {
     ...head,
@@ -523,7 +577,7 @@ export type QuestionRunnerOptions = {
 export function questionRunner(options: QuestionRunnerOptions) {
   const byId = new Map(options.evals.map((e) => [e.row.id, e]))
   const ended = new Map<string, EngineEval[]>()
-  const started = new Map<string, Promise<CompareAnswer[]>>()
+  const started = new Map<string, Promise<AskedQuestion[]>>()
   const controller = new AbortController()
 
   const start = (id: string) => {
@@ -545,7 +599,8 @@ export function questionRunner(options: QuestionRunnerOptions) {
         .filter((s): s is PairAttempt => s !== null)
         .sort((x, y) => ((x.id ?? '') < (y.id ?? '') ? -1 : 1))
       return Promise.all(
-        e.questions.map(async (q) => {
+        e.questions.map(async (q): Promise<AskedQuestion> => {
+          const calls: AskedCall[] = []
           const answer = await answerQuestion({
             question: q.question,
             model: q.model,
@@ -555,13 +610,14 @@ export function questionRunner(options: QuestionRunnerOptions) {
             ...(q.state ? { state: q.state } : {}),
             ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
             signal: controller.signal,
+            calls,
           })
           options.onAnswer?.(id, answer)
-          return answer
+          return { answer, calls }
         }),
       )
     })().catch((error: unknown) =>
-      e.questions.map((q) => {
+      e.questions.map((q): AskedQuestion => {
         const answer: CompareAnswer = {
           question: q.question,
           model: isFake(q.model) ? 'fake' : q.model,
@@ -572,7 +628,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
           error: errorText(error),
         }
         options.onAnswer?.(id, answer)
-        return answer
+        return { answer, calls: [] }
       }),
     )
     started.set(id, answers)
@@ -591,9 +647,9 @@ export function questionRunner(options: QuestionRunnerOptions) {
     cancel(): void {
       controller.abort()
     },
-    async settle(): Promise<Map<string, CompareAnswer[]>> {
+    async settle(): Promise<Map<string, AskedQuestion[]>> {
       for (const id of byId.keys()) if (ended.has(id)) start(id)
-      const out = new Map<string, CompareAnswer[]>()
+      const out = new Map<string, AskedQuestion[]>()
       for (const [id, answers] of started) out.set(id, await answers)
       return out
     },

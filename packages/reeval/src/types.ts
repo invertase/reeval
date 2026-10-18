@@ -1,4 +1,4 @@
-import type { ArtifactLevel, JudgeRetry, RecordMode } from './history/types.ts'
+import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -1199,6 +1199,50 @@ export type CompareAnswer = {
   rates: Array<{ cut: CompareCut; name: string; wins: number; n: number }>
   /** Why some or all of its votes are missing: the model call failed. Outcomes never change. */
   error?: string
+  /** `questions/<n>.json` under the eval's directory: what the model was sent, per pair and order. */
+  input?: FileRef
+}
+
+/** A screenshot a question sent: its label, and the capture it was; refs only, never the bytes. */
+export type QuestionScreenshot =
+  | {
+      label: string
+      /** The named side it came from. */
+      side: string
+      name: string
+      /** The capture under the run directory; unset when the run kept no artifacts for it. */
+      path?: string
+    }
+  | { label: string; missing: true }
+
+/** One order of one pair as the model was asked it. */
+export type QuestionCall = {
+  cut: CompareCut
+  harness?: string
+  arm?: string
+  run: number
+  /** The two sides by name, as on the votes. */
+  a: string
+  b: string
+  /** True for the repeat that showed `b` first. */
+  swapped: boolean
+  /** Which named side the model saw as A and as B. */
+  labels: { A: string; B: string }
+  system: string
+  /** The prompt as sent, secrets masked; screenshots follow it as image parts. */
+  prompt: string
+  screenshots?: QuestionScreenshot[]
+  /** Set when this call failed. */
+  error?: string
+}
+
+/** `questions/<n>.json`: every call one compare question made, in pair order. */
+export type QuestionInput = {
+  question: string
+  model: string
+  stateOptions: ResolvedQuestionStateOptions
+  artifacts?: true | string[]
+  calls: QuestionCall[]
 }
 
 /** An option a profile's `limit` can narrow, and `pin` can protect. */

@@ -350,7 +350,8 @@ export function renderSummary(run: RunRecord): string {
     }
     if (e.answers?.length) {
       for (const a of e.answers) {
-        lines.push(`- Question: ${cell(answersLabel(a))}`)
+        const input = a.input ? ` · [what the model saw](${a.input.path})` : ''
+        lines.push(`- Question: ${cell(answersLabel(a))}${input}`)
         for (const line of headToHeadLines(a.votes)) lines.push(`  - ${cell(line)}`)
         for (const reason of sampleReasons(a.votes)) lines.push(`  - ${cell(reason)}`)
       }

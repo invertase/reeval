@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
+import type { QuestionCall } from '../src/types.ts'
 import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 
@@ -934,7 +935,18 @@ export default defineConfig({
     const run = readRun(asked.dir)
     assert.match(
       run.read('summary.md'),
-      /^- Question: "Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
+      /^- Question: "Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake · \[what the model saw\]\(evals-q-eval-ts-asks-[0-9a-f]+\/questions\/1\.json\)$/m,
+    )
+    // One call per vote, in the same order; a vote's A is its a unless it's the swapped repeat.
+    const input = JSON.parse(run.read(answer.input?.path ?? 'missing'))
+    assert.deepEqual(
+      input.calls.map((c: QuestionCall) => [c.cut, c.a, c.b, c.swapped, c.labels.A]),
+      answer.votes.map((v) => [v.cut, v.a, v.b, v.swapped, v.swapped ? v.b : v.a]),
+    )
+    assert.ok(
+      input.calls.every((c: { prompt: string }) =>
+        c.prompt.startsWith('Question: Which is cleaner?'),
+      ),
     )
     const agent = await runCli(asked.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 1, agent.stdout + agent.stderr)
@@ -942,6 +954,17 @@ export default defineConfig({
       agent.stdout,
       /^question evals\/q\.eval\.ts › asks: "Which is cleaner\?" within: .* · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
     )
+    // Recorded, the input goes with the eval's other files, and is unset where those aren't kept.
+    const kept = await runCli(asked.dir, ['record', 'latest', '--artifacts', 'all'])
+    assert.equal(kept.code, 0, kept.stdout + kept.stderr)
+    const all = readRun(asked.dir, { history: 'evals/.history' })
+    const [keptAnswer] = all.evals[0]?.answers ?? []
+    assert.deepEqual(JSON.parse(all.read(keptAnswer?.input?.path ?? 'missing')), input)
+    const bare = await runCli(asked.dir, ['record', run.run.runId, '--artifacts', 'none'])
+    assert.equal(bare.code, 0, bare.stdout + bare.stderr)
+    const none = readRun(asked.dir, { history: 'evals/.history', back: 1 })
+    assert.equal(none.run.runId, run.run.runId)
+    assert.equal(none.evals[0]?.answers?.[0]?.input, undefined)
   })
 
   test('a question with across: environment records only environment pairs', async () => {
