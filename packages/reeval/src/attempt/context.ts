@@ -36,6 +36,8 @@ const HOME_CONTEXT_PATHS = [
   '.fx/skills',
   '.fx/settings.json',
   '.fx/mcp.json',
+  '.grok/skills',
+  '.grok/config.toml',
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
 const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
@@ -68,6 +70,8 @@ const CONTEXT_PATHS = [
   '.pi/settings.json',
   '.codex/config.toml',
   '.fx/skills',
+  '.grok/skills',
+  '.grok/config.toml',
 ]
 
 async function agentContext(box: Sandbox, signal: AbortSignal): Promise<EvalRecord['context']> {

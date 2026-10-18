@@ -10,6 +10,7 @@ import type {
   FakeHarnessDescriptor,
   FxHarnessDescriptor,
   GooseHarnessDescriptor,
+  GrokBuildHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,
@@ -110,6 +111,16 @@ export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarne
 export const fx = (options: Omit<FxHarnessDescriptor, 'kind'>): FxHarnessDescriptor =>
   make('fx', options)
 
+/**
+ * xAI's Grok Build, with an xAI API key: `model` is an xAI model id, e.g. `grok-4.6`, required
+ * since the CLI's default changes under you. `effort` is Grok's `default_reasoning_effort`. `id`
+ * names the cell; it defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]`
+ * when `effort` is set.
+ */
+export const grokBuild = (
+  options: Omit<GrokBuildHarnessDescriptor, 'kind'>,
+): GrokBuildHarnessDescriptor => make('grok-build', options)
+
 /** A fake agent that writes canned files and replies with canned text. For tests and dry runs. */
 export const fakeHarness = (
   options: Omit<FakeHarnessDescriptor, 'kind'> = {},
@@ -125,6 +136,7 @@ export type {
   FakeScriptStep,
   FxHarnessDescriptor,
   GooseHarnessDescriptor,
+  GrokBuildHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,

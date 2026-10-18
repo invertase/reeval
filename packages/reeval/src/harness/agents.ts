@@ -141,6 +141,26 @@ const GOOSE_ENDPOINTS = [
   },
 ] as const satisfies readonly EndpointMatch[]
 
+/**
+ * What Grok Build sends the key on: the model list and the key's status as a session starts, and
+ * its model calls (Chat Completions, and the Responses API for a model or tool that takes it).
+ */
+const XAI_ENDPOINTS = [
+  { host: 'api.x.ai', path: { exact: '/v1/models' }, method: ['GET'] },
+  { host: 'api.x.ai', path: { exact: '/v1/api-key' }, method: ['GET'] },
+  { host: 'api.x.ai', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
+  { host: 'api.x.ai', path: { exact: '/v1/responses' }, method: ['POST'] },
+] as const satisfies readonly EndpointMatch[]
+
+/** xAI's model calls, whose responses name the model that served them. */
+const XAI_MODEL_RESPONSES = XAI_ENDPOINTS.filter(
+  (e) => e.path.exact === '/v1/chat/completions' || e.path.exact === '/v1/responses',
+)
+
+/** The model an xAI response says served it. */
+const xaiServedModel: ServedModel = ({ host, responseModel }) =>
+  host === 'api.x.ai' ? responseModel : undefined
+
 /** The model a Gemini API request names in its URL. */
 const geminiServedModel: ServedModel = ({ host, path }) =>
   host === 'generativelanguage.googleapis.com'
@@ -368,6 +388,9 @@ export function fxForModel(model: string): ModelSpecific {
   }
 }
 
+/** Grok Build takes ACP's `McpServer` shape on `session/new`, as fx does. */
+export const grokBuildMcpServers = fxMcpServers
+
 /** The Cursor SDK's `McpServerConfig` shape. */
 export function cursorMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -436,6 +459,15 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.fx/skills',
     harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills',
+  },
+  // Grok's bootstrap gives it a private home, so its home skills are under that. It reads the
+  // workspace's AGENTS.md and skills only in a trusted folder, which the adapter's
+  // GROK_FOLDER_TRUST=false makes it; it also reads .agents/skills and .claude/skills.
+  'grok-build': {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.grok/skills',
+    harnessSkillDir:
+      '.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills',
   },
 }
 
@@ -627,6 +659,29 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-fx')).createFx({
         auth,
         model: descriptor.model,
+        ...(mcpServers
+          ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
+          : {}),
+        requireCredentialBrokering: true,
+      }),
+  },
+  'grok-build': {
+    ...LAYOUTS['grok-build'],
+    name: 'Grok Build',
+    factory: 'grokBuild',
+    credential: 'XAI_API_KEY',
+    // The requests Grok sends the key on, with its summary, recap and title-refresh calls off.
+    endpoints: XAI_ENDPOINTS,
+    modelResponses: XAI_MODEL_RESPONSES,
+    servedModel: xaiServedModel,
+    mcpServers: grokBuildMcpServers,
+    adapter: async ({ auth, mcpServers, descriptor }) =>
+      (await import('@reeval/harness-grok-build')).createGrokBuild({
+        auth,
+        model: descriptor.model,
+        ...(descriptor.kind === 'grok-build' && descriptor.effort
+          ? { effort: descriptor.effort }
+          : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
