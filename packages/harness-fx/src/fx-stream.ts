@@ -28,6 +28,24 @@ const contentText = (content: unknown) => {
   return texts.length ? texts.join('') : undefined
 }
 
+/** A `skill` call's part with the skill's `name` from its `location`, input kept as it came. */
+const withSkillName = (part: Part): Part => {
+  const raw = part.input
+  let input: unknown = raw
+  if (typeof raw === 'string') {
+    try {
+      input = JSON.parse(raw)
+    } catch {
+      return part
+    }
+  }
+  const location = record(input).location
+  const name = typeof location === 'string' ? /\/([^/]+)$/.exec(location)?.[1] : undefined
+  if (!name || record(input).name !== undefined) return part
+  const named = { ...record(input), name }
+  return { ...part, input: typeof raw === 'string' ? JSON.stringify(named) : named }
+}
+
 /**
  * Fixes up one fx turn's parts from `@ai-sdk/harness-acp`'s bridge:
  *
@@ -37,6 +55,8 @@ const contentText = (content: unknown) => {
  * - MCP calls are renamed from fx's `mcp_<server>_<tool>` to `mcp__<server>__<tool>`, as Claude
  *   Code names them, for the servers the session was given. The longest matching server wins,
  *   since a server's name can itself contain `_`.
+ * - A `skill` call names its skill by `location` (`skill:<source>:<n>/<name>`); its input gains
+ *   that `name`, which is how reeval reads which skill a load tool loaded.
  */
 export class FxStreamTranslator {
   private readonly prefixes: ReadonlyArray<readonly [string, string]>
@@ -61,6 +81,7 @@ export class FxStreamTranslator {
       return part
     }
     const name = part.toolName
+    if (name === 'skill') return withSkillName(part)
     const match = this.prefixes.find(([prefix]) => name.startsWith(prefix))
     const out = match
       ? { ...part, toolName: `mcp__${match[1]}__${name.slice(match[0].length)}` }

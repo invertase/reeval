@@ -116,3 +116,23 @@ test("a command's result is its streamed output and exit code, not fx's clipped 
   const other = { type: 'tool-result', toolCallId: 'c2', toolName: 'bash', result: 'x' }
   assert.deepEqual(t.push(other), other)
 })
+
+test("a skill call's input gains the skill's name from its location", () => {
+  const t = new FxStreamTranslator()
+  const location = 'skill:61ce5ec8bc2106bf:0/contract-probe'
+  assert.deepEqual(t.push({ type: 'tool-call', toolName: 'skill', input: { location } }), {
+    type: 'tool-call',
+    toolName: 'skill',
+    input: { location, name: 'contract-probe' },
+  })
+  assert.deepEqual(
+    t.push({ type: 'tool-call', toolName: 'skill', input: JSON.stringify({ location }) }),
+    {
+      type: 'tool-call',
+      toolName: 'skill',
+      input: JSON.stringify({ location, name: 'contract-probe' }),
+    },
+  )
+  const unnamed = { type: 'tool-call', toolName: 'skill', input: { resource: '' } }
+  assert.deepEqual(t.push(unnamed), unnamed)
+})

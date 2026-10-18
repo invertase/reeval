@@ -9,7 +9,8 @@ type BuiltinTool = HarnessV1BuiltinTool<any, any>
  * fx's own tools, by the `name` its ACP `tool_call` updates carry, which `@ai-sdk/harness-acp`
  * matches before the title. Each is keyed by the name reeval's transcript reads (`bash`, `write`,
  * `edit`, `webFetch`, `webSearch`); fx's file tools take `path`, not the common `file_path`, so
- * only `bash`, `glob`, `grep` and `webSearch` are common tools. The rest keep fx's names.
+ * only `bash`, `glob`, `grep` and `webSearch` are common tools. The rest keep fx's names
+ * (`skill` loads a skill, `subagent` delegates a task, `mcp_select_tool` looks up an MCP tool).
  */
 export const FX_BUILTIN_TOOLS = {
   bash: commonTool('bash', {
@@ -60,6 +61,18 @@ export const FX_BUILTIN_TOOLS = {
   webFetch: {
     ...tool({ inputSchema: z.looseObject({ url: z.string() }) }),
     nativeName: 'web_fetch',
+    toolUseKind: 'readonly',
+  },
+  skill: {
+    ...tool({ inputSchema: z.looseObject({ location: z.string() }) }),
+    toolUseKind: 'readonly',
+  },
+  // Runs a task in a subagent; the subagent's own tool calls aren't in fx's ACP stream.
+  subagent: {
+    ...tool({ inputSchema: z.looseObject({ request: z.looseObject({}) }) }),
+  },
+  mcp_select_tool: {
+    ...tool({ inputSchema: z.looseObject({ name: z.string() }) }),
     toolUseKind: 'readonly',
   },
 } as const satisfies Record<string, BuiltinTool>
