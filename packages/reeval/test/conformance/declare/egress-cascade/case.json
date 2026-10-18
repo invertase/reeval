@@ -1,0 +1,5 @@
+{
+  "eval": "plan/egress/evals/cascade.eval.ts",
+  "plan": "plan/egress/expected/cascade.txt",
+  "args": []
+}

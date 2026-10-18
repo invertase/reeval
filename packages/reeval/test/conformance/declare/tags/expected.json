@@ -1,0 +1,65 @@
+{
+  "children": [
+    {
+      "type": "group",
+      "name": "slow things",
+      "mode": "run",
+      "options": {
+        "tags": ["slow"]
+      },
+      "children": [
+        {
+          "type": "eval",
+          "name": "big",
+          "mode": "run",
+          "options": {},
+          "body": "b4"
+        },
+        {
+          "type": "eval",
+          "name": "bigger",
+          "mode": "run",
+          "options": {
+            "tags": ["flaky"]
+          },
+          "body": "b5"
+        }
+      ]
+    },
+    {
+      "type": "eval",
+      "name": "quick",
+      "mode": "run",
+      "options": {},
+      "body": "b1"
+    },
+    {
+      "type": "eval",
+      "name": "case 1",
+      "mode": "run",
+      "options": {
+        "tags": ["slow"]
+      },
+      "body": "b2",
+      "family": {
+        "name": "case $n",
+        "case": 0,
+        "cases": 2
+      }
+    },
+    {
+      "type": "eval",
+      "name": "case 2",
+      "mode": "run",
+      "options": {
+        "tags": ["slow"]
+      },
+      "body": "b3",
+      "family": {
+        "name": "case $n",
+        "case": 1,
+        "cases": 2
+      }
+    }
+  ]
+}

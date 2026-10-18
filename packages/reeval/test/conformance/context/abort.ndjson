@@ -1,0 +1,7 @@
+{"case":"abort","about":"the eval's timeout runs out during a call: reeval sends abort, the call in flight replies with an error, and the runner sends done","options":{"timeout":"1s"}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/abort.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"exec","command":"sleep 20"}}}
+{"reeval":{"type":"abort","reason":"timeout","message":"Eval timed out after 1s"}}
+{"reeval":{"id":"1","ok":false,"op":"exec","error":{"name":"TimeoutError","message":"Eval timed out after 1s"}}}
+{"runner":{"type":"done","error":{"name":"TimeoutError","message":"Eval timed out after 1s"}}}
+{"record":{"outcome":"fail","error":{"kind":"timeout","message":"The eval timed out"},"assertions":[],"judgements":[],"checks":[]}}

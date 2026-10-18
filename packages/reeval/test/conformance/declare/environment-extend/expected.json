@@ -1,0 +1,90 @@
+{
+  "children": [
+    {
+      "type": "eval",
+      "name": "parent image",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "parent",
+          "layers": [
+            {
+              "name": "parent",
+              "spec": {
+                "sandbox": {
+                  "kind": "docker",
+                  "from": "node:22-bookworm"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "body": "b1"
+    },
+    {
+      "type": "eval",
+      "name": "child replaces sandbox",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "child",
+          "layers": [
+            {
+              "name": "parent",
+              "spec": {
+                "sandbox": {
+                  "kind": "docker",
+                  "from": "node:22-bookworm"
+                }
+              }
+            },
+            {
+              "name": "child",
+              "spec": {
+                "sandbox": {
+                  "kind": "docker",
+                  "from": "node:24-bookworm"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "body": "b2"
+    },
+    {
+      "type": "eval",
+      "name": "child keeps parent sandbox",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "kept",
+          "layers": [
+            {
+              "name": "parent",
+              "spec": {
+                "sandbox": {
+                  "kind": "docker",
+                  "from": "node:22-bookworm"
+                }
+              }
+            },
+            {
+              "name": "kept",
+              "spec": {
+                "env": {
+                  "MODE": "x"
+                }
+              }
+            }
+          ]
+        }
+      },
+      "body": "b3"
+    }
+  ]
+}

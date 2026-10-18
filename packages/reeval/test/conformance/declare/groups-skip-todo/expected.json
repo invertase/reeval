@@ -1,0 +1,38 @@
+{
+  "children": [
+    {
+      "type": "group",
+      "name": "parked",
+      "mode": "skip",
+      "options": {},
+      "children": [
+        {
+          "type": "eval",
+          "name": "inside",
+          "mode": "run",
+          "options": {},
+          "body": "b1"
+        },
+        {
+          "type": "group",
+          "name": "nested",
+          "mode": "run",
+          "options": {},
+          "children": [
+            {
+              "type": "eval",
+              "name": "deeper",
+              "mode": "run",
+              "options": {},
+              "body": "b2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "todo",
+      "name": "someday"
+    }
+  ]
+}
