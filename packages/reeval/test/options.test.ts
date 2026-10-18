@@ -249,7 +249,7 @@ evaluate('judged', async (c) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /c\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.config\.ts/,
+      /c\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.14\.0' \} in reeval\.config\.ts/,
     )
     assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })
@@ -630,14 +630,14 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
       [
         'judge',
         '',
-        `{ model: 'typesafe-ai/jev-1.13.0' }`,
-        /needs a language model to answer it\. .* \(the judge, typesafe-ai\/jev-1\.13\.0, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\)/,
+        `{ model: 'typesafe-ai/jev-1.14.0' }`,
+        /needs a language model to answer it\. .* \(the judge, typesafe-ai\/jev-1\.14\.0, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\)/,
       ],
       [
         'analysis',
-        `analysis: { model: 'typesafe-ai/jev-1.13.0' },`,
+        `analysis: { model: 'typesafe-ai/jev-1.14.0' },`,
         undefined,
-        /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by analysis\.model in reeval\.config\.ts, "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
+        /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by analysis\.model in reeval\.config\.ts, "typesafe-ai\/jev-1\.14\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
       ],
     ] as const) {
       const p = await project(`questions-eval-model-${name}`, {
@@ -1415,8 +1415,8 @@ describe('common mistakes', { concurrency: 4 }, () => {
     ],
     [
       'an evaluation model for a compare question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', model: 'typesafe-ai/jev-1.13.0' }] } }, async () => {})`,
-      /compare\.questions "Which\?" in evaluate\("e"\) names typesafe-ai\/jev-1\.13\.0, an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', model: 'typesafe-ai/jev-1.14.0' }] } }, async () => {})`,
+      /compare\.questions "Which\?" in evaluate\("e"\) names typesafe-ai\/jev-1\.14\.0, an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
     ],
     [
       'the same compare question twice',
@@ -1780,8 +1780,8 @@ describe('common mistakes', { concurrency: 4 }, () => {
     ],
     [
       'an evaluation-model capture.model',
-      `evaluate('e', { capture: { model: 'typesafe-ai/jev-1.13.0' } }, async () => {})`,
-      /capture\.model "typesafe-ai\/jev-1\.13\.0" in evaluate\("e"\) is an evaluation model/,
+      `evaluate('e', { capture: { model: 'typesafe-ai/jev-1.14.0' } }, async () => {})`,
+      /capture\.model "typesafe-ai\/jev-1\.14\.0" in evaluate\("e"\) is an evaluation model/,
     ],
     [
       'leftover capture.use',
@@ -2075,7 +2075,7 @@ evaluate('one', { environment: env }, async () => {})
     assert.equal(judged.code, 1, judged.stdout + judged.stderr)
     assert.match(
       readRun(p.dir).evals[0]?.error?.message ?? '',
-      /Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.judge\.config\.ts,/,
+      /Set judge: \{ model: 'typesafe-ai\/jev-1\.14\.0' \} in reeval\.judge\.config\.ts,/,
     )
   })
 

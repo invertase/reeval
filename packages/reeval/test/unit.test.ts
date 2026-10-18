@@ -69,6 +69,7 @@ import {
   resolveJudgeArtifacts,
 } from '../src/judge/artifacts.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
+import { scoreWithModel } from '../src/judge/model.ts'
 import { changedFilesForJudge, judgeDiff, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isApiError, isTransient } from '../src/judge/retry.ts'
 import { withInputSize } from '../src/judge/size.ts'
@@ -472,7 +473,7 @@ test('judge model strings need a provider, and credentials follow the provider',
     'GOOGLE_GENERATIVE_AI_API_KEY',
     ...gateway,
   ])
-  assert.deepEqual(judgeCredentials('typesafe-ai/jev-1.13.0'), ['TYPESAFE_AI_API_KEY', ...gateway])
+  assert.deepEqual(judgeCredentials('typesafe-ai/jev-1.14.0'), ['TYPESAFE_AI_API_KEY', ...gateway])
   assert.deepEqual(judgeCredentials('openai/gpt-x'), gateway)
   assert.deepEqual(judgeCredentials({ kind: 'fake-judge', score: 1 }), [])
   assert.throws(
@@ -483,7 +484,7 @@ test('judge model strings need a provider, and credentials follow the provider',
 })
 
 test('missingCredentials names the judge key for the configured provider', () => {
-  const config = resolveConfig({ judge: { model: 'typesafe-ai/jev-1.13.0' } }, '/p')
+  const config = resolveConfig({ judge: { model: 'typesafe-ai/jev-1.14.0' } }, '/p')
   assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k' }), [
     'TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN',
   ])
@@ -505,7 +506,7 @@ test("the credential checks ask for the key of the judge the run uses, the profi
       judge: { model: 'google/gemini-2.5-flash' },
       profiles: {
         fake: { judge: { model: fakeJudge() } },
-        jev: { defaults: { judge: { model: 'typesafe-ai/jev-1.13.0' } } },
+        jev: { defaults: { judge: { model: 'typesafe-ai/jev-1.14.0' } } },
         threshold: { judge: { threshold: 0.5 } },
       },
     },
@@ -550,7 +551,7 @@ test("the credential checks ask for the key of the judge the run uses, the profi
 })
 
 test('judge strings use the provider package when its key is set, else the AI Gateway', () => {
-  const jev = 'typesafe-ai/jev-1.13.0'
+  const jev = 'typesafe-ai/jev-1.14.0'
   assert.deepEqual(judgeRoute(jev, { TYPESAFE_AI_API_KEY: 't', AI_GATEWAY_API_KEY: 'g' }), {
     kind: 'direct',
     provider: 'typesafe-ai',
@@ -564,7 +565,7 @@ test('judge strings use the provider package when its key is set, else the AI Ga
   assert.deepEqual(judgeRoute('openai/gpt-x', { VERCEL_OIDC_TOKEN: 'o' }), { kind: 'gateway' })
   assert.throws(
     () => judgeRoute(jev, {}),
-    /No credentials for judge model "typesafe-ai\/jev-1\.13\.0"\. Set TYPESAFE_AI_API_KEY to call @ai-sdk\/typesafe-ai directly, or AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\) to go through the Vercel AI Gateway, in the environment or \.env\.local\./,
+    /No credentials for judge model "typesafe-ai\/jev-1\.14\.0"\. Set TYPESAFE_AI_API_KEY to call @ai-sdk\/typesafe-ai directly, or AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\) to go through the Vercel AI Gateway, in the environment or \.env\.local\./,
   )
   assert.throws(
     () => judgeRoute('openai/gpt-x', {}),
@@ -897,22 +898,49 @@ test("the judge's state.diff patterns filter its diff and files, the last match 
   assert.ok(inFull.files.includes('added src/app.ts'), 'still listed as changed')
 })
 
-test('TypeSafe decide rejects file parts without HTTP', async () => {
-  const { experimental_decide: decide } = await import('ai')
-  const { typeSafeAi } = await import('@ai-sdk/typesafe-ai')
-  const png = new Uint8Array([137, 80, 78, 71])
-  await assert.rejects(
-    () =>
-      decide({
-        model: typeSafeAi.decisionModel('jev-1.13.0'),
-        state: [
-          { type: 'json', value: { task: 't', output: 'o' } },
-          { type: 'file', mediaType: 'image/png', data: png },
-        ],
-        questions: { answer: { type: 'boolean', instructions: 'ok?' } },
-      }),
-    /TypeSafe AI decision file input/,
-  )
+test('TypeSafe Jev takes c.judge artifacts as a multipart image upload', async () => {
+  const png = Buffer.from([137, 80, 78, 71])
+  const resolved = resolveJudgeArtifacts(['form'], new Map([['form', png]]))
+  const state = decideState({ task: 't', output: 'o' }, filePartsOf(resolved))
+  const requests: Request[] = []
+  const realFetch = globalThis.fetch
+  const realKey = process.env.TYPESAFE_AI_API_KEY
+  globalThis.fetch = async (input, init) => {
+    requests.push(new Request(input, init))
+    return Response.json({
+      model: 'jev-1.14.0',
+      answers: { answer: { type: 'noul', noul: 0.9 } },
+    })
+  }
+  process.env.TYPESAFE_AI_API_KEY = 'ts-test'
+  try {
+    const { score, resolvedModel } = await scoreWithModel(
+      'typesafe-ai/jev-1.14.0',
+      'Does the form have a submit button?',
+      state,
+      undefined,
+      new AbortController().signal,
+    )
+    assert.equal(score, 0.9)
+    assert.equal(resolvedModel, 'jev-1.14.0')
+  } finally {
+    globalThis.fetch = realFetch
+    if (realKey === undefined) delete process.env.TYPESAFE_AI_API_KEY
+    else process.env.TYPESAFE_AI_API_KEY = realKey
+  }
+  assert.equal(requests.length, 1)
+  const [request] = requests as [Request]
+  assert.match(request.url, /\/systemone$/)
+  assert.equal(request.headers.get('typesafe-danger-zone-images'), 'true')
+  const form = await request.formData()
+  const body = JSON.parse(await (form.get('request') as Blob).text())
+  assert.equal(body.model, 'jev-1.14.0')
+  const [[reference, asset]] = Object.entries(body.assets) as [[string, { part: string }]]
+  assert.deepEqual(asset, { type: 'image', part: 'image-1' })
+  assert.ok(body.state.includes(reference), 'the image is referenced where the capture sits')
+  const image = form.get('image-1') as Blob
+  assert.equal(image.type, 'image/png')
+  assert.deepEqual(new Uint8Array(await image.arrayBuffer()), new Uint8Array(png))
 })
 
 test('decideState keeps JSON-only state an object', () => {

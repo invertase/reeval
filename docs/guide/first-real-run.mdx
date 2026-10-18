@@ -103,7 +103,7 @@ CURSOR_API_KEY=...
 GOOGLE_GENERATIVE_AI_API_KEY=...
 ```
 
-`reeval run` reads `.env.local` and `.env` from the directory that holds `reeval.config.ts`, wherever you run it from. The judge key depends on the judge model: `google/*` models use `GOOGLE_GENERATIVE_AI_API_KEY`, and `typesafe-ai/jev-1.13.0` uses `TYPESAFE_AI_API_KEY`.
+`reeval run` reads `.env.local` and `.env` from the directory that holds `reeval.config.ts`, wherever you run it from. The judge key depends on the judge model: `google/*` models use `GOOGLE_GENERATIVE_AI_API_KEY`, and `typesafe-ai/jev-1.14.0` uses `TYPESAFE_AI_API_KEY`.
 
 <Warning>
   Put `.env.local` next to `reeval.config.ts`. A key in another directory, the current one included, isn't read.

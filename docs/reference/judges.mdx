@@ -24,7 +24,7 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
 `judge` is accepted in `reeval.config.ts`, profile `judge` and `defaults.judge`, groups, evals, and as the second argument of `c.judge()`. It merges field by field, the most specific level winning: the call, then the eval, then its groups, then the profile, then the config.
 
 <Property name="model" type="string | FakeJudgeModel | DecisionModel" optional>
-  `"provider/model"`, such as `typesafe-ai/jev-1.13.0` (reeval's recommended judge) or `google/gemini-3.8-flash`. `fakeJudge()` for tests. Groups, evals and calls also accept an AI SDK decision model object. There's no default: `c.judge()` without a model fails.
+  `"provider/model"`, such as `typesafe-ai/jev-1.14.0` (reeval's recommended judge) or `google/gemini-3.8-flash`. `fakeJudge()` for tests. Groups, evals and calls also accept an AI SDK decision model object. There's no default: `c.judge()` without a model fails.
 </Property>
 
 <Property name="threshold" type="number" optional>
@@ -45,7 +45,7 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
 
 `c.judge()` also takes `on`: a `Turn` this attempt's `c.send()` returned, to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). Only those `Turn` objects count as turns: a plain object shaped like one is a value, and a copy of a turn (`{ ...turn }`) is refused. `on` with a value and `state: { output: false }` is refused.
 
-`artifacts` is call-only: `true` for every capture so far, or a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
+`artifacts` is call-only: `true` for every capture so far, or a list of `c.capture()` handles or their names. Each capture is sent as a file part. Jev (`typesafe-ai/jev-1.14.0`, with `TYPESAFE_AI_API_KEY`) takes PNG captures; a provider that cannot take files fails the call with its own error.
 
 <Property name="artifacts" type="true | Array<Capture | string>" optional>
   Captures this call sends the judge: `true` for every capture the attempt has taken so far, in the order it took them, or a list of handles from `c.capture()` or capture `name`s. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
@@ -127,7 +127,7 @@ reeval calls a provider's own package when its key is set, and the Vercel AI Gat
 | `google/` | `GOOGLE_GENERATIVE_AI_API_KEY` | `@ai-sdk/google` |
 | Any other | None | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
 
-[reeval analyze](/reference/cli/analyze) routes its `analysis.model` the same way: a direct key when the provider has one, the AI Gateway otherwise. It needs a language model, though, so an evaluation model such as `typesafe-ai/jev-1.13.0` can judge but can't write an analysis.
+[reeval analyze](/reference/cli/analyze) routes its `analysis.model` the same way: a direct key when the provider has one, the AI Gateway otherwise. It needs a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
 
 The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none:
 
@@ -157,7 +157,7 @@ A judge that returns `score` (default `1`) for every question, with no key and n
 
 Per group, eval or call, `score` can be a function of the state the judge would see, to test what reaches it: `fakeJudge({ score: (state) => (String(state.diff).includes('dist/') ? 0 : 1) })`. The config takes a number.
 
-`'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.13.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
+`'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.14.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
 
 ## fakeAnalysis
 
@@ -199,9 +199,9 @@ Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses 
 
 | Mistake | Message |
 |---|---|
-| No model | `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.` |
+| No model | `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.14.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.` |
 | No turn yet | `c.judge() has no turn to grade: call c.send() first` |
-| No provider prefix | `judge.model in reeval.config.ts needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash" (got "gemini-3.8-flash")` |
+| No provider prefix | `judge.model in reeval.config.ts needs a provider prefix, e.g. "typesafe-ai/jev-1.14.0" or "google/gemini-3.8-flash" (got "gemini-3.8-flash")` |
 | A model object in the config | `judge.model in reeval.config.ts must be a "provider/model" string or fakeJudge(). Pass a model object per group, eval or call instead.` |
 | A bad threshold | `judge.threshold in reeval.config.ts must be between 0 and 1 (got 2)`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
 | An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
