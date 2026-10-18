@@ -2006,7 +2006,7 @@ describe('token usage and the served model, from any harness', () => {
   })
 
   test('Claude Code: the API usage its bridge maps, cache creation as cache writes', async () => {
-    // harness-claude-code 1.0.152's bridge (`mapUsage`) on a real Messages API usage block:
+    // harness-claude-code 1.0.158's bridge (`mapUsage`) on a real Messages API usage block:
     // input_tokens 6, cache_creation_input_tokens 4210, cache_read_input_tokens 15022, output 311.
     const claude = {
       inputTokens: { total: 19238, noCache: 6, cacheRead: 15022, cacheWrite: 4210 },

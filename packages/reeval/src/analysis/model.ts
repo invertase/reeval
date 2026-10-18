@@ -27,7 +27,7 @@ function defaultModel(config: ResolvedConfig): string | FakeAnalysisModel | unde
   return undefined
 }
 
-/** ` (the judge, typesafe-ai/jev-1.13.0, is an evaluation model: it scores yes/no questions and can't <task>)`, when it is one. */
+/** ` (the judge, typesafe-ai/jev-1.14.0, is an evaluation model: it scores yes/no questions and can't <task>)`, when it is one. */
 function judgeAside(config: ResolvedConfig, task: string): string {
   const judge = config.judge.model
   if (typeof judge !== 'string' && !isFakeJudge(judge)) return ''

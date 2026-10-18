@@ -1346,7 +1346,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['judge/artifacts', 'judge/artifacts-all'],
     tests: [
       unit('decideState keeps JSON-only state an object'),
-      unit('TypeSafe decide rejects file parts without HTTP'),
+      unit('TypeSafe Jev takes c.judge artifacts as a multipart image upload'),
       engine('c.judge artifacts must be a capture handle or name on this attempt'),
     ],
   },

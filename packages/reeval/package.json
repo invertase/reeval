@@ -76,17 +76,17 @@
     "test:replay": "node --test --experimental-strip-types --no-warnings test/replay.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/google": "4.0.93",
-    "@ai-sdk/harness": "1.0.148",
-    "@ai-sdk/harness-acp": "1.0.87",
-    "@ai-sdk/provider": "4.0.27",
-    "@ai-sdk/provider-utils": "5.0.59",
-    "@ai-sdk/typesafe-ai": "3.0.18",
+    "@ai-sdk/google": "4.0.99",
+    "@ai-sdk/harness": "1.0.154",
+    "@ai-sdk/harness-acp": "1.0.93",
+    "@ai-sdk/provider": "4.0.29",
+    "@ai-sdk/provider-utils": "5.0.62",
+    "@ai-sdk/typesafe-ai": "3.0.21",
     "@hono/node-server": "2.1.5",
     "@modelcontextprotocol/server": "2.3.1",
     "@vitest/expect": "5.0.5",
     "@vitest/utils": "5.0.5",
-    "ai": "7.0.140",
+    "ai": "7.0.143",
     "commander": "15.0.0",
     "get-tsconfig": "4.14.3",
     "hono": "4.13.13",
@@ -99,7 +99,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "@ai-sdk/harness-claude-code": "1.0.152",
+    "@ai-sdk/harness-claude-code": "1.0.158",
     "@modelcontextprotocol/client": "2.3.1",
     "@reeval/harness-antigravity": "workspace:0.1.8",
     "@reeval/harness-codex": "workspace:0.1.7",

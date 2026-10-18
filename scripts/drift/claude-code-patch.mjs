@@ -61,8 +61,9 @@ try {
       `${latest} reports the served model unpatched: upstream fixed it. Drop ${patchFile} and its patchedDependencies entry, and bump from ${pinned}.`,
     )
 
-  const apply = spawnSync('git', ['apply', '-p1', patch], { cwd: pkg, encoding: 'utf8' })
-  if (apply.status !== 0)
+  // pnpm applies a patch only at its exact lines, where git apply would move a hunk.
+  const apply = spawnSync('git', ['apply', '-v', '-p1', patch], { cwd: pkg, encoding: 'utf8' })
+  if (apply.status !== 0 || /\(offset -?\d+ lines?\)/.test(apply.stderr))
     report(
       false,
       `${patchFile} doesn't apply to ${latest}, which still loses the served model: rebase it with pnpm patch.\n${apply.stderr}`,

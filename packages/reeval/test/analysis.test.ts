@@ -1531,8 +1531,8 @@ evaluate('greets', { runs: 1 }, async (c) => {
         /reeval analyze needs a language model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \}.*reeval analyze --context/,
       ],
       [
-        "analysis: { model: 'typesafe-ai/jev-1.13.0' },",
-        /analysis\.model in reeval\.config\.ts is "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions/,
+        "analysis: { model: 'typesafe-ai/jev-1.14.0' },",
+        /analysis\.model in reeval\.config\.ts is "typesafe-ai\/jev-1\.14\.0", an evaluation model: it scores yes\/no questions/,
       ],
       [
         "analysis: { model: 'google/gemini-3.8-flash' },",
@@ -2093,8 +2093,8 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
         /analysis\.agent in reeval\.config\.ts needs a language model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't write an analysis\), or turn agent off\./,
       ],
       [
-        "analysis: { agent: true, model: 'typesafe-ai/jev-1.13.0' },",
-        /analysis\.model in reeval\.config\.ts is "typesafe-ai\/jev-1\.13\.0", an evaluation model/,
+        "analysis: { agent: true, model: 'typesafe-ai/jev-1.14.0' },",
+        /analysis\.model in reeval\.config\.ts is "typesafe-ai\/jev-1\.14\.0", an evaluation model/,
       ],
       [
         "analysis: { agent: true, model: 'google/gemini-3.8-flash' },",

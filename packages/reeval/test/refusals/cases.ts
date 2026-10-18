@@ -340,7 +340,7 @@ export const CASES: Record<string, Case[]> = {
       options({
         compare: {
           variants: [e2],
-          questions: [{ question: 'Q', model: 'typesafe-ai/jev-1.13.0' }],
+          questions: [{ question: 'Q', model: 'typesafe-ai/jev-1.14.0' }],
         },
       }),
     ],
@@ -383,7 +383,7 @@ export const CASES: Record<string, Case[]> = {
     ['the question option with a model without a provider', options({ question: { model: 'g' } })],
     [
       'the question option with an evaluation model',
-      options({ question: { model: 'typesafe-ai/jev-1.13.0' } }),
+      options({ question: { model: 'typesafe-ai/jev-1.14.0' } }),
     ],
     ['the question option with a model object', options({ question: { model: { kind: 'x' } } })],
     ['the question option with across', options({ question: { across: 'harness' } })],

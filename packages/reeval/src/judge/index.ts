@@ -3,7 +3,7 @@ import type { FakeJudgeModel, JudgeModel, JudgeOptions, JudgeState, Verdict } fr
 import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
 
 /** The judge the docs recommend, pinned so a model update never silently moves scores. */
-export const RECOMMENDED_JUDGE_MODEL = 'typesafe-ai/jev-1.13.0'
+export const RECOMMENDED_JUDGE_MODEL = 'typesafe-ai/jev-1.14.0'
 export const DEFAULT_THRESHOLD = 0.8
 
 const GATEWAY_KEYS = ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']

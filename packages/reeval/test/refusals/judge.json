@@ -20,7 +20,7 @@
   "providerOptions with a non-object provider": "UsageError: judge.providerOptions in evals/a.eval.ts › e must map each provider to an object of JSON values, e.g. { google: { thinkingConfig: { thinkingBudget: 0 } } } (got {\"google\":\"fast\"})",
   "providerOptions good": null,
   "good": null,
-  "config: model without a provider": "UsageError: judge.model in reeval.config.ts needs a provider prefix, e.g. \"typesafe-ai/jev-1.13.0\" or \"google/jev\" (got \"jev\")",
+  "config: model without a provider": "UsageError: judge.model in reeval.config.ts needs a provider prefix, e.g. \"typesafe-ai/jev-1.14.0\" or \"google/jev\" (got \"jev\")",
   "config: model an object": "UsageError: judge.model in reeval.config.ts must be a \"provider/model\" string or fakeJudge(). Pass a model object per group, eval or call instead.",
   "config: fake judge score function": "UsageError: judge.model in reeval.config.ts must be fakeJudge({ score }) with a number. Pass a score function per group, eval or call instead.",
   "config: threshold above 1": "UsageError: judge.threshold in reeval.config.ts must be between 0 and 1 (got 1.5)",

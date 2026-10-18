@@ -34,7 +34,7 @@ import { sandboxFor } from './checks.ts'
 import type { Attempt } from './state.ts'
 
 const noJudgeModel = (configFile: string) =>
-  `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in ${configFile}, ` +
+  `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.14.0' } in ${configFile}, ` +
   'on the group or eval, or pass { model } to this call.'
 
 /** A turn this attempt sent becomes its index; any other value is graded as the output. */
