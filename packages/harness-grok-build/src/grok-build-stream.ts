@@ -35,6 +35,40 @@ export function grokTurnUsage(usage: Record<string, unknown>) {
   }
 }
 
+const text = (value: unknown) => (typeof value === 'string' ? value : undefined)
+
+/**
+ * A tool result's text from Grok's `rawOutput`, which is an object per tool: a command's combined
+ * output as bytes, a file read without its line numbers, an edit's or search's own summary, an MCP
+ * tool's one result variant. Any other shape is kept as it is.
+ */
+export function grokToolOutput(output: unknown): unknown {
+  const value = record(output)
+  switch (value.type) {
+    case 'Bash': {
+      const bytes = value.output
+      if (Array.isArray(bytes) && bytes.every((b) => typeof b === 'number')) {
+        return new TextDecoder().decode(Uint8Array.from(bytes))
+      }
+      return text(value.output_for_prompt) ?? output
+    }
+    case 'ReadFile': {
+      const file = record(value.FileContent)
+      return text(file.raw_output) ?? text(file.content) ?? output
+    }
+    case 'SearchReplace':
+      return text(record(value.EditsApplied).tool_output_for_prompt) ?? output
+    case 'SearchTool':
+      return text(value.content) ?? output
+    case 'MCP': {
+      const variants = Object.values(record(value.output))
+      return (variants.length === 1 && text(variants[0])) || output
+    }
+    default:
+      return output
+  }
+}
+
 /**
  * Fixes up one Grok Build turn's parts from `@ai-sdk/harness-acp`:
  *
@@ -42,6 +76,7 @@ export function grokTurnUsage(usage: Record<string, unknown>) {
  *   `tool_call` update, and a `use_tool` call of an MCP server's tool (`tool_name`
  *   `stamp__house_stamp`, server `stamp`) is `mcp__stamp__house_stamp`, with its `tool_input`
  *   as the input.
+ * - A tool result's output is its text (see grokToolOutput).
  * - The `finish` part's usage is the turn's, from the prompt response's `_meta.usage`: Grok sends
  *   no ACP `usage`, so `@ai-sdk/harness-acp` reports none.
  */
@@ -55,6 +90,14 @@ export class GrokBuildStreamTranslator {
   }
 
   push(part: Part): Part {
+    const named = this.name(part)
+    if (named.type !== 'tool-result') return named
+    return 'result' in named
+      ? { ...named, result: grokToolOutput(named.result) }
+      : { ...named, output: grokToolOutput(named.output) }
+  }
+
+  private name(part: Part): Part {
     if (part.type === 'raw') {
       const value = record(part.rawValue)
       if (typeof value.stopReason === 'string' && isObjectLike(record(value._meta).usage)) {

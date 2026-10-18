@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { GrokBuildStreamTranslator, grokTurnUsage } from '../src/grok-build-stream.ts'
+import {
+  GrokBuildStreamTranslator,
+  grokToolOutput,
+  grokTurnUsage,
+} from '../src/grok-build-stream.ts'
 
 type Part = { type: string; [key: string]: unknown }
 
@@ -96,4 +100,59 @@ test('twin: reasoning tokens on top of the output tokens count apart from them',
 
 test('twin: without a prompt response the finish part is left as it is', () => {
   assert.deepEqual(finishUsage(turn([])), { inputTokens: {}, outputTokens: {} })
+})
+
+/** Tool results' `rawOutput` as the Grok Build CLI 1.0.62 sends them over ACP. */
+const BASH = {
+  type: 'Bash',
+  output: [...new TextEncoder().encode('héllo\n')],
+  output_for_prompt: 'exit: 0\nhéllo\n',
+  exit_code: 0,
+}
+
+test("a command's result is its combined output, decoded from Grok's bytes", () => {
+  const out = turn([
+    ...call('b1', 'run_terminal_command').slice(0, 2),
+    { type: 'tool-result', toolCallId: 'b1', toolName: 'acp_tool_b1', result: BASH },
+  ])
+  const result = out.find((p) => p.type === 'tool-result')
+  assert.equal(result?.toolName, 'run_terminal_command')
+  assert.equal(result?.result, 'héllo\n')
+})
+
+test('twin: a result part that carries output rather than result has its output mapped', () => {
+  const t = new GrokBuildStreamTranslator()
+  const part = t.push({ type: 'tool-result', toolCallId: 'b1', toolName: 'bash', output: BASH })
+  assert.deepEqual(part, {
+    type: 'tool-result',
+    toolCallId: 'b1',
+    toolName: 'bash',
+    output: 'héllo\n',
+  })
+})
+
+test("twin: without the bytes, a command's result is the text Grok gave the model", () => {
+  assert.equal(grokToolOutput({ ...BASH, output: undefined }), 'exit: 0\nhéllo\n')
+})
+
+test('a file read, an edit, a tool search and an MCP call give their text', () => {
+  const read = { raw_output: 'Always write tests.', content: '1→Always write tests.' }
+  assert.equal(grokToolOutput({ type: 'ReadFile', FileContent: read }), 'Always write tests.')
+  assert.equal(
+    grokToolOutput({ type: 'SearchReplace', EditsApplied: { tool_output_for_prompt: 'updated' } }),
+    'updated',
+  )
+  assert.equal(grokToolOutput({ type: 'SearchTool', content: '{"results":[]}' }), '{"results":[]}')
+  assert.equal(
+    grokToolOutput({ type: 'MCP', server_name: 's', output: { OkayOutput: 'STAMP-7Q' } }),
+    'STAMP-7Q',
+  )
+})
+
+test('twin: an output of a shape Grok has not been seen to send is kept as it is', () => {
+  const other = { type: 'ListDir', entries: ['a'] }
+  assert.equal(grokToolOutput(other), other)
+  const mcp = { type: 'MCP', output: { OkayOutput: { structured: true } } }
+  assert.equal(grokToolOutput(mcp), mcp)
+  assert.equal(grokToolOutput('plain'), 'plain')
 })
