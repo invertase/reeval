@@ -38,6 +38,8 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   codex: ['api.openai.com'],
   // AI Gateway, for a gateway model id; a bare OpenAI id gets OpenAI's API instead.
   fx: ['ai-gateway.vercel.sh'],
+  // The xAI API only, with telemetry, feedback, remote config and the auto-updater off.
+  'grok-build': ['api.x.ai'],
 }
 
 /** The package registries and GitHub, for a restricted policy that still installs. */
