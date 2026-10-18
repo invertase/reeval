@@ -120,7 +120,8 @@ export default defineConfig({
       vote: (p) => {
         if (p.question.includes('missing name')) throw new Error('${QUESTION_ERROR}')
         const score = (diff) => (diff.includes('Ahoy') ? 2 : 0) + (diff.includes("name = 'world'") ? 1 : 0)
-        return score(p.a) === score(p.b) ? 'tie' : score(p.a) > score(p.b) ? 'A' : 'B'
+        const [a, b] = [score(p.a.diff ?? ''), score(p.b.diff ?? '')]
+        return a === b ? 'tie' : a > b ? 'A' : 'B'
       },${agent}
     }),
   },
