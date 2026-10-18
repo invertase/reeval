@@ -59,15 +59,14 @@ import { observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
+  acpMcpServers,
   agentAuth,
   agentFor,
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
   cursorMcpServers,
-  fxMcpServers,
   gooseMcpServers,
-  grokBuildMcpServers,
   LAYOUTS,
   layoutOf,
   opencodeVars,
@@ -624,7 +623,7 @@ describe('the fx harness', () => {
 
   test("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup", () => {
     assert.deepEqual(
-      fxMcpServers({
+      acpMcpServers({
         files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/r' } },
         local: { transport: 'stdio', command: '/usr/bin/node', args: ['s.mjs'], env: {} },
         docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
@@ -681,27 +680,8 @@ describe('the Grok Build harness', () => {
     assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
   })
 
-  test("gets MCP servers in ACP's McpServer shape, a bare stdio command through env", () => {
-    assert.deepEqual(
-      grokBuildMcpServers({
-        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/r' } },
-        local: { transport: 'stdio', command: '/usr/bin/node', args: ['s.mjs'] },
-        docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
-      }),
-      {
-        files: {
-          command: '/usr/bin/env',
-          args: ['npx', 'mcp-files'],
-          env: [{ name: 'ROOT', value: '/r' }],
-        },
-        local: { command: '/usr/bin/node', args: ['s.mjs'], env: [] },
-        docs: {
-          type: 'http',
-          url: 'https://docs.example/mcp',
-          headers: [{ name: 'A', value: 'b' }],
-        },
-      },
-    )
+  test("gets MCP servers in ACP's McpServer shape, as fx does", () => {
+    assert.equal(AGENTS['grok-build'].mcpServers, acpMcpServers)
   })
 
   test("the served model is what each model call's response names, on api.x.ai only", () => {

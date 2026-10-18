@@ -329,8 +329,11 @@ export function piMcpServers(
   )
 }
 
-/** ACP's `McpServer` shape, which fx takes on `session/new`: `env` and `headers` as name-value lists. */
-export function fxMcpServers(
+/**
+ * ACP's `McpServer` shape, which fx and Grok Build take on `session/new`: `env` and `headers` as
+ * name-value lists.
+ */
+export function acpMcpServers(
   servers: Record<string, ResolvedMcpServer>,
 ): Record<string, Record<string, unknown>> {
   const pairs = (values: Record<string, string> = {}) =>
@@ -387,9 +390,6 @@ export function fxForModel(model: string): ModelSpecific {
     hosts: ['ai-gateway.vercel.sh'],
   }
 }
-
-/** Grok Build takes ACP's `McpServer` shape on `session/new`, as fx does. */
-export const grokBuildMcpServers = fxMcpServers
 
 /** The Cursor SDK's `McpServerConfig` shape. */
 export function cursorMcpServers(
@@ -654,7 +654,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
     ...fxForModel('provider/model'),
     forModel: fxForModel,
-    mcpServers: fxMcpServers,
+    mcpServers: acpMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-fx')).createFx({
         auth,
@@ -674,7 +674,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     endpoints: XAI_ENDPOINTS,
     modelResponses: XAI_MODEL_RESPONSES,
     servedModel: xaiServedModel,
-    mcpServers: grokBuildMcpServers,
+    mcpServers: acpMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-grok-build')).createGrokBuild({
         auth,
