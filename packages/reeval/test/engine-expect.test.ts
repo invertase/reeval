@@ -2,20 +2,23 @@
 // attempt that asserts, with reeval's shims for the runner state @vitest/expect expects.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
+import { assertionRecords, softFailure } from '../src/attempt/assertions.ts'
 import {
-  attemptAssertions,
   attemptExpectError,
   createExpect,
   type ExpectTask,
   expect,
   extendExpect,
   type Pending,
+  rawAssertions,
   SUBJECT,
   unawaitedError,
   withAttemptExpect,
 } from '../src/engine/expect.ts'
 
 const task = (): ExpectTask => ({ type: 'test', name: 't', fullTestName: 'file > t' })
+/** The task's records, as the attempt makes them from the engine's raw entries. */
+const records = (t: ExpectTask) => assertionRecords(rawAssertions(t))
 const fails = (fn: () => unknown, pattern: RegExp) => assert.throws(fn, pattern)
 
 describe('standalone expect', () => {
@@ -55,11 +58,11 @@ describe('standalone expect', () => {
     assert.equal(own.getState().assertionCalls, 1)
     assert.equal(own.getState().currentTestName, 'file > t')
     assert.match(
-      attemptExpectError(own, t)?.message ?? '',
+      attemptExpectError(own)?.message ?? '',
       /expected number of assertions to be 2, but got 1/,
     )
     own(2).toBe(2)
-    assert.equal(attemptExpectError(own, t), undefined)
+    assert.equal(attemptExpectError(own), undefined)
     // Another attempt's expect is untouched.
     assert.equal(createExpect(task()).getState().assertionCalls, 0)
     assert.equal(createExpect().getState().currentTestName, '')
@@ -71,20 +74,18 @@ describe('standalone expect', () => {
     const t = task()
     const own = createExpect(t)
     own.hasAssertions()
-    assert.equal(
-      attemptExpectError(own, t)?.message,
-      'expected any number of assertion, but got none',
-    )
+    assert.equal(attemptExpectError(own)?.message, 'expected any number of assertion, but got none')
     own(true).toBe(true)
-    assert.equal(attemptExpectError(own, t), undefined)
+    assert.equal(attemptExpectError(own), undefined)
   })
 
   test('expect.soft records a failure on the attempt and carries on', () => {
     const t = task()
     const own = createExpect(t)
-    own.soft(1).toBe(2)
+    assert.equal(own.soft(1).toBe(2), undefined)
     own.soft(3).toBe(3)
-    const error = attemptExpectError(own, t)
+    assert.equal(attemptExpectError(own), undefined, 'a soft failure is not a count error')
+    const error = softFailure(rawAssertions(t))
     assert.ok(error instanceof Error)
     assert.equal(error.name, 'AssertionError')
     assert.match(error.message, /expected 1 to be 2/)
@@ -172,7 +173,7 @@ describe('assertions recorded on the attempt', () => {
     assert.equal(typeof own(1)[Symbol.toStringTag as never], 'undefined')
     own.assertions(9)
     assert.deepEqual(
-      attemptAssertions(t).map(({ durationMs, ...x }) => x),
+      records(t).map(({ durationMs, ...x }) => x),
       [
         { label: 'one', labelled: true, matcher: 'toBe', status: 'pass', soft: false },
         { label: 'not.toBe 2', labelled: false, matcher: 'not.toBe', status: 'pass', soft: false },
@@ -205,14 +206,14 @@ describe('assertions recorded on the attempt', () => {
         { label: 'least 2', labelled: false, matcher: 'least', status: 'pass', soft: false },
       ],
     )
-    const timed = attemptAssertions(t).filter((x) => x.durationMs !== undefined)
+    const timed = records(t).filter((x) => x.durationMs !== undefined)
     assert.deepEqual(
       timed.map((x) => x.label),
       ['resolves.toBe 3', 'three'],
       'only async matchers are timed',
     )
     // Canary: a label the eval gave is never replaced by the default.
-    assert.notEqual(attemptAssertions(t)[0]?.label, 'toBe 1')
+    assert.notEqual(records(t)[0]?.label, 'toBe 1')
   })
 
   test('a soft matcher records its own outcome, fails the attempt at the end and carries on', async () => {
@@ -224,7 +225,7 @@ describe('assertions recorded on the attempt', () => {
     await own.soft(Promise.resolve(1)).resolves.toBe(1)
     own.soft(3).toBe(4)
     assert.deepEqual(
-      attemptAssertions(t).map((x) => [x.label, x.status, x.soft]),
+      records(t).map((x) => [x.label, x.status, x.soft]),
       [
         ['first', 'fail', true],
         ['toBe 2', 'pass', true],
@@ -233,8 +234,10 @@ describe('assertions recorded on the attempt', () => {
         ['toBe 4', 'fail', true],
       ],
     )
-    assert.equal(t.result?.errors?.length, 3)
-    assert.match(attemptExpectError(own, t)?.message ?? '', /first: expected 1 to be 2/)
+    const soft = rawAssertions(t).filter((x) => x.status === 'fail')
+    assert.equal(soft.length, 3)
+    assert.ok(soft.every((x) => x.error instanceof Error))
+    assert.match(softFailure(rawAssertions(t))?.message ?? '', /first: expected 1 to be 2/)
   })
 
   test("a matcher that can't answer is an error, not a failure; a thrown non-Error keeps its text", () => {
@@ -263,7 +266,7 @@ describe('assertions recorded on the attempt', () => {
     assert.throws(() => own(1).toThrowNull())
     assert.throws(() => own(1).toThrowText())
     assert.deepEqual(
-      attemptAssertions(t).map((x) => [x.status, x.message]),
+      records(t).map((x) => [x.status, x.message]),
       [
         ['error', 'toBeReported() expects a turn'],
         ['error', "the harness doesn't report it"],
@@ -292,7 +295,7 @@ describe('assertions recorded on the attempt', () => {
     own(null).toBeNull()
     for (const n of [1, 2, 3]) own(n).toBeTypeOf('number')
     assert.deepEqual(
-      attemptAssertions(t).map((x) => x.label),
+      records(t).map((x) => x.label),
       [
         `toBe ${'x'.repeat(55)}…`,
         'toEqual /a/',
@@ -317,16 +320,16 @@ describe('assertions recorded on the attempt', () => {
     const own = createExpect(t)
     let resolve = (_: number) => {}
     const late = own(new Promise<number>((r) => (resolve = r))).resolves.toBe(1)
-    assert.deepEqual(attemptAssertions(t), [])
+    assert.deepEqual(records(t), [])
     resolve(1)
     await late
     assert.deepEqual(
-      attemptAssertions(t).map((x) => x.label),
+      records(t).map((x) => x.label),
       ['resolves.toBe 1'],
     )
     // An expect without an attempt records nothing, and a task it never saw has nothing.
     createExpect()(1).toBe(1)
-    assert.deepEqual(attemptAssertions(task()), [])
+    assert.deepEqual(records(task()), [])
   })
 
   test('expect.poll is one entry with its final outcome, not one per try', async () => {
@@ -339,13 +342,13 @@ describe('assertions recorded on the attempt', () => {
         own.poll(() => 'no', { interval: 5, timeout: 30, message: 'ready' }).toBe('yes') as never,
     )
     assert.deepEqual(
-      attemptAssertions(t).map((x) => [x.label, x.matcher, x.status]),
+      records(t).map((x) => [x.label, x.matcher, x.status]),
       [
         ['poll.toBe 3', 'poll.toBe', 'pass'],
         ['ready', 'poll.toBe', 'fail'],
       ],
     )
-    assert.ok((attemptAssertions(t)[0]?.durationMs ?? -1) >= 0)
+    assert.ok((records(t)[0]?.durationMs ?? -1) >= 0)
   })
 })
 
@@ -373,7 +376,7 @@ describe('expect routed to the attempt', () => {
         ['expect.poll(…).toBe()', false],
       ],
     )
-    assert.match(attemptExpectError(own, t)?.message ?? '', /expected 1 to be 2/)
+    assert.match(softFailure(rawAssertions(t))?.message ?? '', /expected 1 to be 2/)
     // Outside any attempt, nothing is tracked and the worker's expect counts.
     const before = pending.length
     void expect(Promise.resolve(1)).resolves.toBe(1)

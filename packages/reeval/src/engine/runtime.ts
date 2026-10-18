@@ -6,9 +6,9 @@ import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
 import type { DebugLine } from '../view/debug.ts'
 
-import type { AssertionResult } from './expect.ts'
+import type { RawAssertion } from './expect.ts'
 
-export { type AssertionResult, SUBJECT } from './expect.ts'
+export { isUnanswerable, type RawAssertion, SUBJECT } from './expect.ts'
 
 export type TestHandle = {
   file: string
@@ -20,12 +20,13 @@ export type TestHandle = {
   debug(line: DebugLine): void
   /**
    * Waits for the async assertions the eval started but didn't await, and returns the error that
-   * fails the attempt: the first one's failure, that it wasn't awaited, or what `expect.soft`,
-   * `expect.assertions` or `expect.hasAssertions` left.
+   * fails the attempt: the first one's failure, or that it wasn't awaited.
    */
   unawaited(): Promise<Error | undefined>
+  /** What `expect.assertions` or `expect.hasAssertions` left unmet. */
+  expectError(): Error | undefined
   /** The attempt's `expect` and `expect.soft` matcher calls that have settled, in call order. */
-  assertions(): AssertionResult[]
+  assertions(): RawAssertion[]
 }
 
 export type TestMode = 'run' | 'skip' | 'only' | 'todo'

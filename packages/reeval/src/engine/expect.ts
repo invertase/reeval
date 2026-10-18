@@ -19,9 +19,7 @@ import {
   setState,
   type Tester,
 } from '@vitest/expect'
-import { processError } from '@vitest/utils/error'
 import type { MATCHERS, MatcherArgs, MatcherName } from '../matchers.ts'
-import type { AssertionRecord } from '../types.ts'
 
 declare module '@vitest/expect' {
   interface ExpectPollOptions {
@@ -86,7 +84,6 @@ export type ExpectTask = {
   type: 'test'
   name: string
   fullTestName: string
-  result?: { state: string; errors?: unknown[] }
 }
 
 type Extra = {
@@ -96,7 +93,22 @@ type Extra = {
   isExpectingAssertionsError: Error | null
 }
 
-export type AssertionResult = AssertionRecord
+/** One settled `expect` matcher call as the engine saw it; attempt/assertions.ts makes its record. */
+export type RawAssertion = {
+  /** `toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`. */
+  matcher: string
+  args: unknown[]
+  /** What the subject names itself by (its `SUBJECT`), if it does. */
+  subject?: unknown
+  /** `expect`'s second argument, when the eval gave one. */
+  label?: string
+  soft: boolean
+  status: 'pass' | 'fail' | 'error'
+  /** What the matcher threw, unless it passed. */
+  error?: unknown
+  /** Async matchers only. */
+  durationMs?: number
+}
 
 /**
  * A value that names itself in a default label when its matcher takes no argument: `c.exec`'s
@@ -104,12 +116,7 @@ export type AssertionResult = AssertionRecord
  */
 export const SUBJECT = Symbol.for('reeval.subject')
 
-type Recorded = Omit<AssertionResult, 'label' | 'status'> & {
-  label: string | undefined
-  status: AssertionResult['status'] | undefined
-  args: unknown[]
-  subject: unknown
-}
+type Recorded = Omit<RawAssertion, 'status'> & { status?: RawAssertion['status'] }
 
 const recordings = new WeakMap<ExpectTask, Recorded[]>()
 
@@ -126,11 +133,6 @@ const UNRECORDED = new Set([
   'finally',
 ])
 
-const MESSAGE_LIMIT = 1024
-const LABEL_LIMIT = 60
-
-const clipped = (s: string, limit: number) => (s.length > limit ? `${s.slice(0, limit)}…` : s)
-
 const flag = (assertion: object, name: string): unknown => chai.util.flag(assertion, name)
 
 const subjectOf = (value: unknown): unknown =>
@@ -139,16 +141,8 @@ const subjectOf = (value: unknown): unknown =>
     : undefined
 
 /** Can't answer either way: the harness doesn't report it, or the subject isn't one it reads. */
-const isUnanswerable = (error: unknown) =>
+export const isUnanswerable = (error: unknown) =>
   error instanceof TypeError || (error as Error | null)?.name === 'HarnessCapabilityError'
-
-/** Pushes a soft failure onto the task, as `@vitest/expect` does for `expect.soft`. */
-function softFailure(task: ExpectTask, error: unknown) {
-  task.result ??= { state: 'fail' }
-  task.result.state = 'fail'
-  task.result.errors ??= []
-  task.result.errors.push(processError(error))
-}
 
 /** Starts a record of `matcher` called on `assertion`, in call order. */
 function begin(list: Recorded[], assertion: object, name: string, args: unknown[]): Recorded {
@@ -162,13 +156,11 @@ function begin(list: Recorded[], assertion: object, name: string, args: unknown[
     .filter(Boolean)
     .join('.')
   const entry: Recorded = {
-    label: typeof message === 'string' && message ? message : undefined,
-    labelled: typeof message === 'string' && message !== '',
     matcher,
-    status: undefined,
-    soft: !!flag(assertion, 'soft'),
     args,
     subject: subjectOf(flag(assertion, 'object')),
+    ...(typeof message === 'string' && message ? { label: message } : {}),
+    soft: !!flag(assertion, 'soft'),
   }
   list.push(entry)
   return entry
@@ -176,21 +168,17 @@ function begin(list: Recorded[], assertion: object, name: string, args: unknown[
 
 function settle(entry: Recorded, error: unknown, startedAt?: number) {
   entry.status = error === undefined ? 'pass' : isUnanswerable(error) ? 'error' : 'fail'
-  if (error !== undefined) {
-    const message = error instanceof Error ? error.message : String(error)
-    entry.message = clipped(message, MESSAGE_LIMIT)
-  }
+  if (error !== undefined) entry.error = error
   if (startedAt !== undefined) entry.durationMs = Math.round(performance.now() - startedAt)
 }
 
 /**
  * Wraps an assertion so each matcher called on it is recorded on the attempt. A soft matcher's
- * failure is caught here and pushed onto the task as `@vitest/expect` would, so its outcome is
- * known per call.
+ * failure is caught here and kept on its entry, which fails the attempt at its end.
  */
-function recording<T extends object>(target: T, list: Recorded[], task: ExpectTask): T {
+function recording<T extends object>(target: T, list: Recorded[]): T {
   const chained = (value: unknown) =>
-    value instanceof chai.Assertion ? recording(value, list, task) : value
+    value instanceof chai.Assertion ? recording(value, list) : value
   const call = (fn: (...args: unknown[]) => unknown, name: string, args: unknown[]) => {
     // `expect.poll` retries the matcher; it records the final outcome itself.
     if (flag(target, 'poll')) return Reflect.apply(fn, target, args)
@@ -202,7 +190,7 @@ function recording<T extends object>(target: T, list: Recorded[], task: ExpectTa
       result = Reflect.apply(fn, target, args)
     } catch (error) {
       settle(entry, error)
-      if (entry.soft) return softFailure(task, error)
+      if (entry.soft) return
       throw error
     }
     if (!isThenable(result)) {
@@ -216,7 +204,7 @@ function recording<T extends object>(target: T, list: Recorded[], task: ExpectTa
       },
       (error: unknown) => {
         settle(entry, error, startedAt)
-        if (entry.soft) return softFailure(task, error)
+        if (entry.soft) return
         throw error
       },
     )
@@ -235,36 +223,9 @@ function recording<T extends object>(target: T, list: Recorded[], task: ExpectTa
   })
 }
 
-const shown = (value: unknown): string => {
-  if (typeof value === 'string') return value
-  if (value instanceof RegExp) return String(value)
-  try {
-    return JSON.stringify(value) ?? String(value)
-  } catch {
-    return String(value)
-  }
-}
-
-/**
- * The attempt's matcher calls that have settled, in call order. Without a label, one is
- * `<matcher> <first argument>` (or what the subject names); repeats get ` #2`, ` #3`.
- */
-export function attemptAssertions(task: ExpectTask): AssertionResult[] {
-  const seen = new Map<string, number>()
-  return (recordings.get(task) ?? []).flatMap((r) => {
-    if (r.status === undefined) return []
-    const named = r.args.length ? shown(r.args[0]) : shownSubject(r.subject)
-    const base =
-      r.label ?? clipped(named === undefined ? r.matcher : `${r.matcher} ${named}`, LABEL_LIMIT)
-    const n = (seen.get(base) ?? 0) + 1
-    seen.set(base, n)
-    const { args: _args, subject: _subject, ...rest } = r
-    return [{ ...rest, label: n > 1 ? `${base} #${n}` : base, status: r.status }]
-  })
-}
-
-const shownSubject = (subject: unknown) =>
-  typeof subject === 'string' && subject ? subject.replace(/\s+/g, ' ').trim() : undefined
+/** The attempt's matcher calls that have settled, in call order. */
+export const rawAssertions = (task: ExpectTask): RawAssertion[] =>
+  (recordings.get(task) ?? []).filter((r): r is RawAssertion => r.status !== undefined)
 
 /** An `expect` of its own for one attempt (or, without a task, the worker's). */
 export function createExpect(task?: ExpectTask): ExpectStatic {
@@ -274,7 +235,7 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
     const { assertionCalls } = getState(expect)
     setState({ assertionCalls: assertionCalls + 1 }, expect)
     const assertion = chai.expect(value, message) as unknown as { withTest(t: unknown): object }
-    return task ? recording(assertion.withTest(task), list, task) : assertion
+    return task ? recording(assertion.withTest(task), list) : assertion
   }) as ExpectStatic
   Object.assign(expect, chai.expect)
   Object.assign(expect, (globalThis as Record<symbol, object>)[ASYMMETRIC_MATCHERS_OBJECT])
@@ -374,11 +335,8 @@ function createPoll(expect: ExpectStatic, list?: Recorded[]): ExpectStatic['poll
   }
 }
 
-/** The failure `expect.assertions`, `expect.hasAssertions` or `expect.soft` left on an attempt. */
-export function attemptExpectError(expect: ExpectStatic, task: ExpectTask): Error | undefined {
-  const [soft] = task.result?.errors ?? []
-  // Serialized by @vitest/expect; an Error again, so it fails the attempt like any other.
-  if (soft) return Object.assign(new Error(), soft)
+/** The failure `expect.assertions` or `expect.hasAssertions` left on an attempt. */
+export function attemptExpectError(expect: ExpectStatic): Error | undefined {
   const state = expect.getState() as MatcherState & Extra
   if (
     state.expectedAssertionsNumber !== null &&

@@ -1,19 +1,17 @@
 // The attempt protocol's `expect` call for reeval's matchers: resolves the call's subject on the
 // attempt, turns its wire arguments back into the values `expect` takes, and runs the matcher's
-// row in MATCHERS, the code the TypeScript `expect` runs too.
+// row in MATCHERS, the code the TypeScript `expect` runs too. Its record comes from
+// assertions.ts, as the TypeScript `expect`'s do.
 import type { AttemptCall } from '../contract/attempt.ts'
+import { isUnanswerable, type RawAssertion } from '../engine/runtime.ts'
 import { UsageError } from '../errors.ts'
 import { isMatcherName, MATCHERS, type MatcherName, runMatcher } from '../matchers.ts'
 import type { AssertionRecord, AttemptContext } from '../types.ts'
+import { assertionRecords } from './assertions.ts'
 
 export type ExpectCall = Extract<AttemptCall, { op: 'expect' }>
 
-/** A matcher call's outcome: its status, and why when it didn't pass. */
-export type MatchOutcome = Pick<AssertionRecord, 'status' | 'message'>
-
-/** Can't answer either way: the harness doesn't report it, or the subject isn't one it reads. */
-const isUnanswerable = (error: unknown) =>
-  error instanceof TypeError || (error as Error | null)?.name === 'HarnessCapabilityError'
+type Outcome = Pick<RawAssertion, 'status' | 'error'> & { async: boolean }
 
 const isPattern = (value: object): value is { regexp: string; flags?: string } =>
   'regexp' in value &&
@@ -52,37 +50,78 @@ function subjectOf(c: AttemptContext, subject: ExpectCall['subject']): unknown {
   return c.readFile(subject.readFile)
 }
 
-async function once(c: AttemptContext, name: MatcherName, call: ExpectCall): Promise<MatchOutcome> {
+/** What the subject names itself by, as `c.exec`'s and `c.judge`'s results do in TypeScript. */
+function subjectName(subject: ExpectCall['subject']): string | undefined {
+  if ('exec' in subject) return subject.exec
+  if (!('value' in subject)) return undefined
+  const value = subject.value as { verdict?: unknown; question?: unknown } | null
+  return typeof value === 'object' && value !== null && 'verdict' in value
+    ? (value.question as string | undefined)
+    : undefined
+}
+
+async function once(c: AttemptContext, name: MatcherName, call: ExpectCall): Promise<Outcome> {
   const args = call.args.map(fromWire)
+  let async = false
   try {
     const actual = await subjectOf(c, call.subject)
-    const result = await runMatcher(name, actual, args, { not: call.not })
-    return result.pass !== call.not
-      ? { status: 'pass' }
-      : { status: 'fail', message: result.message() }
+    const running = runMatcher(name, actual, args, { not: call.not })
+    async = running instanceof Promise
+    const result = await running
+    if (result.pass !== call.not) return { status: 'pass', async }
+    const message = result.message()
+    const error = new Error(call.label ? `${call.label}: ${message}` : message)
+    error.name = 'AssertionError'
+    return { status: 'fail', error, async }
   } catch (error) {
     if (!isUnanswerable(error)) throw error
-    return { status: 'error', message: (error as Error).message }
+    return { status: 'error', error, async }
   }
 }
 
 /**
- * Runs one `expect` call on the attempt. A polled call re-reads its subject and retries until
- * the matcher passes or its timeout leaves no room for another try, then answers the last try.
+ * Runs one `expect` call on the attempt, as the matcher call it records. A polled call re-reads
+ * its subject and retries until the matcher passes or its timeout leaves no room for another
+ * try, then answers the last try.
  */
-export async function match(c: AttemptContext, call: ExpectCall): Promise<MatchOutcome> {
+export async function match(c: AttemptContext, call: ExpectCall): Promise<RawAssertion> {
   const name = call.matcher
   if (!isMatcherName(name)) {
     throw new UsageError(
       `${name} isn't one of reeval's matchers (${Object.keys(MATCHERS).join(', ')})`,
     )
   }
-  if (!call.poll) return once(c, name, call)
-  const { interval = 50, timeout = 1000 } = call.poll
-  const deadline = Date.now() + timeout
-  for (;;) {
-    const outcome = await once(c, name, call)
-    if (outcome.status === 'pass' || Date.now() + interval >= deadline) return outcome
-    await new Promise((resolve) => setTimeout(resolve, interval))
+  const startedAt = performance.now()
+  let outcome = await once(c, name, call)
+  if (call.poll) {
+    const { interval = 50, timeout = 1000 } = call.poll
+    const deadline = Date.now() + timeout
+    while (outcome.status !== 'pass' && Date.now() + interval < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, interval))
+      outcome = await once(c, name, call)
+    }
   }
+  const subject = subjectName(call.subject)
+  return {
+    matcher: [call.poll && 'poll', call.not && 'not', name].filter(Boolean).join('.'),
+    args: call.args.map(fromWire),
+    ...(subject === undefined ? {} : { subject }),
+    ...(call.label ? { label: call.label } : {}),
+    soft: call.soft,
+    status: outcome.status,
+    ...(outcome.status === 'pass' ? {} : { error: outcome.error }),
+    ...(outcome.async || call.poll
+      ? { durationMs: Math.round(performance.now() - startedAt) }
+      : {}),
+  }
+}
+
+/** Runs the call, adds it to the attempt's matcher calls and replies with its record. */
+export async function expectCall(
+  c: AttemptContext,
+  calls: RawAssertion[],
+  call: ExpectCall,
+): Promise<AssertionRecord> {
+  calls.push(await match(c, call))
+  return assertionRecords(calls).at(-1) as AssertionRecord
 }

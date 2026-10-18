@@ -8,6 +8,7 @@ import { TimeoutError } from '../errors.ts'
 import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
+import { assertionRecords, softFailure } from './assertions.ts'
 import { capturePage, serveCommand } from './capture.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
@@ -41,7 +42,7 @@ export async function runAttempt(spec: AttemptSpec, fn: EvalFn, handle: TestHand
 async function attemptBody(
   spec: AttemptSpec,
   fn: EvalFn,
-  { signal: testSignal, setMeta, progress, unawaited, assertions }: TestHandle,
+  { signal: testSignal, setMeta, progress, unawaited, expectError, assertions }: TestHandle,
   id: string,
   debug: AttemptDebug,
 ): Promise<void> {
@@ -98,7 +99,7 @@ async function attemptBody(
     })
     // A body that ignores the signal can still return normally after a timeout or cancel.
     a.signal.throwIfAborted()
-    const missed = await unawaited()
+    const missed = (await unawaited()) ?? softFailure(assertions()) ?? expectError()
     // A start that failed under a caught call or `expect.soft` still fails the attempt as itself.
     if (a.startFailure) throw a.startFailure.error
     if (missed) throw missed
@@ -139,7 +140,7 @@ async function attemptBody(
       )
     }
     const { record } = a
-    const checked = assertions()
+    const checked = assertionRecords(assertions())
     if (checked.length) record.assertions = checked
     for (const x of checked) {
       const why = x.message ? ` · ${clip(x.message.split('\n')[0] ?? '', 160)}` : ''
