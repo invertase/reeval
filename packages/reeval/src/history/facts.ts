@@ -309,6 +309,14 @@ export function deriveFacts(db: DatabaseSync): void {
       ),
     ).map((r) => `${r.run_id}\0${r.attempt_key}`),
   )
+  const diffs = new Map(
+    // An empty diff leaves the agent's answer as its only work, which this doesn't compare.
+    rowsOf<{ run_id: string; attempt_key: string; sha256: string | null }>(
+      db.prepare(
+        `SELECT run_id, attempt_key, sha256 FROM artifacts WHERE kind = 'diff' AND bytes > 0`,
+      ),
+    ).flatMap((r) => (r.sha256 ? [[`${r.run_id}\0${r.attempt_key}`, r.sha256] as const] : [])),
+  )
   const samples = new Map<string, EffortSample[]>()
   const byCell = new Map<string, Attempt[]>()
   for (const a of attempts) {
@@ -765,12 +773,29 @@ export function deriveFacts(db: DatabaseSync): void {
       (byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []).filter((a) => a.outcome === 'fail'),
     )
     const w = wilson(pass, pass + fail)
+    const passedDiffs = new Set(
+      list.flatMap((c) =>
+        (byCell.get(cellId(c.run_id, c.eval_key, c.key)) ?? []).flatMap((a) => {
+          const sha = a.outcome === 'pass' && diffs.get(`${a.run_id}\0${a.key}`)
+          return sha ? [sha] : []
+        }),
+      ),
+    )
+    // The same change both passed and failed its checks: the checks, not the agent, vary.
+    const sameWork =
+      failing.length > 0 &&
+      failing.every(
+        (a) =>
+          a.error_kind === 'assertion' && passedDiffs.has(diffs.get(`${a.run_id}\0${a.key}`) ?? ''),
+      )
     const cause =
       infra > 0 || failing.some((a) => a.error_kind === 'infra')
         ? 'infra'
         : failing.some((a) => nearThreshold.has(`${a.run_id}\0${a.key}`))
           ? 'judge'
-          : 'agent'
+          : sameWork
+            ? 'check'
+            : 'agent'
     const starts = list.map((c) => c.started_at).sort()
     flakyRows.push({
       eval_key: first.eval_key,

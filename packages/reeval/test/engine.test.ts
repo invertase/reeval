@@ -1555,6 +1555,10 @@ evaluate('repeated', { runs: 4 }, async (c) => {
   await c.send('go')
   expect(c.attempt.n % 4).not.toBe(0)
 })
+evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'none' }, runs: 2 }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('nope.txt')
+})
 `,
     })
     const r = await runCli(p.dir)
@@ -1562,6 +1566,8 @@ evaluate('repeated', { runs: 4 }, async (c) => {
     // The control's two failures count in 2/4, but only the gated variant's 2/2 in the rate.
     assert.match(summary, /✓ compared +2\/4 · pass@1 100% gated {2}4 attempts\n/)
     assert.match(summary, /✗ repeated +3\/4 +pass@1 +75% {2}4 attempts\n/)
+    // Nothing gates a study, so its misses get the miss mark, never ✓ beside 0/4.
+    assert.match(summary, /○ studied +0\/4 · not gated {2}4 attempts\n/)
   })
 
   test("a harness whose session never becomes ready is an infra error, once retried; its sandbox goes, other evals don't wait", async () => {

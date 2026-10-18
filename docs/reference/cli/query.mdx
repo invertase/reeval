@@ -71,7 +71,7 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | `effort` | Cell per run: attempts, median and quartiles of tool calls, agent seconds and tokens; for a variant, its control's medians, the ratios, the exact Mann–Whitney p-values and verdicts. `tokens_verdict` is null when either side has no usage sample |
 | `factor_effects` | One factor's contrast (`environment`, `harness`, `model`) by evidence tier (`controlled`, `pooled`, `observed`, `not_measured`), with pass-rate and effort verdicts |
 | `skill_reads` | Attempt and skill its environment placed: the transcript line of its first read (a path under `skills/<name>/`, or a `skill` / `load_skill` call), and how many |
-| `flaky_cells` | Cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (`flaky` from 6 counted attempts) and a likely cause (`infra`, `judge`, `agent`) |
+| `flaky_cells` | Cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (`flaky` from 6 counted attempts) and a likely cause (`infra`, `judge`, `check` when the same change both passed and failed, else `agent`) |
 | `drift` | Run where a cell's fingerprint changed from its previous run, the parts and context paths that changed, and `noise = 1` when only an agent CLI's own runtime state changed |
 | `failing_attempts` | Failed or infra-error attempt, with the skill of its environment (joined by digest), harness, model, error and `oom_kills` (processes killed at the sandbox's memory limit) |
 | `eval_trend` | Eval per run: outcome, pass rate, branch, PR and fingerprint |

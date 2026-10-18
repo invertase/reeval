@@ -233,8 +233,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 0,
     help: `
   reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
-                                tools for reeval query's views and SQL, history, show, compare,
-                                transcripts and saved analyses, and runs as resources
+                                tools for why a run failed, reeval query's views and SQL,
+                                history, show, compare, transcripts and saved analyses, and runs
+                                as resources
     --http                      Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
                                 --port <n> (default 4986), --host <addr>
     --token <value>             With --http, require it as a bearer token (also REEVAL_MCP_TOKEN)`,

@@ -229,6 +229,15 @@ function toolName(part: StampedPart['part']): string {
   return str(part.toolName)
 }
 
+/** The tool's input: a Cursor MCP call's own `args`, without the wrapper naming its server and tool. */
+function toolInput(part: StampedPart['part']): unknown {
+  const input = record(part.input)
+  if (typeof input.providerIdentifier === 'string' && typeof input.toolName === 'string') {
+    return input.args ?? {}
+  }
+  return part.input
+}
+
 /**
  * Turns an AI SDK harness stream into reeval transcript events: text and reasoning blocks joined,
  * each tool call merged with its result, edits normalised to `file-edit`, web tools given their
@@ -319,7 +328,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
         type: 'tool',
         toolCallId: id,
         tool: name,
-        input: call.part.input,
+        input: toolInput(call.part),
         output,
         ok: !failed,
       },
@@ -426,7 +435,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
         type: 'tool',
         toolCallId: id,
         tool: name,
-        input: call.part.input,
+        input: toolInput(call.part),
         output: null,
         ok: false,
       },
