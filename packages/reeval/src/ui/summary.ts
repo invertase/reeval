@@ -94,6 +94,9 @@ function entryOutcome(e: EvalEntry): Outcome {
   return e.outcome
 }
 
+/** Every cell is `gate: 'none'`: the eval reports its attempts but nothing gates it. */
+const allUngated = (e: EvalEntry) => e.cells.length > 0 && e.cells.every((c) => c.gate === 'none')
+
 const pct = (rate: number | null) =>
   rate === null ? '  – ' : `${Math.round(rate * 100)}%`.padStart(4)
 
@@ -104,9 +107,11 @@ function evalColumns(c: Colors, e: EvalEntry): string {
   if (more.length) {
     const pass = e.attempts.filter((a) => a.outcome === 'pass').length
     const counted = e.attempts.filter((a) => a.outcome === 'pass' || a.outcome === 'fail').length
-    const rate = hasUngatedCells(e.cells)
-      ? ` · pass@1 ${pct(e.passRate).trim()} gated`
-      : `  pass@1 ${pct(e.passRate)}`
+    const rate = allUngated(e)
+      ? ' · not gated'
+      : hasUngatedCells(e.cells)
+        ? ` · pass@1 ${pct(e.passRate).trim()} gated`
+        : `  pass@1 ${pct(e.passRate)}`
     return c.dim(`${`${pass}/${counted}`.padStart(7)}${rate}  ${e.attempts.length} attempts`)
   }
   if (attemptOutcome(attempt) === 'cancelled') return c.yellow('cancelled')
@@ -269,7 +274,11 @@ function tree(c: Colors, evals: EvalEntry[], families: FamilyRecord[] = []): str
       ]
     }
     if (!entry) return [` ${pad}${text}`]
-    const name = `${mark(c, entryOutcome(entry))} ${text}`
+    const missedOnly =
+      entryOutcome(entry) === 'pass' &&
+      allUngated(entry) &&
+      entry.attempts.some((a) => isUngatedMiss(entry, a))
+    const name = `${missedOnly ? MISS_MARK(c) : mark(c, entryOutcome(entry))} ${text}`
     return [
       ` ${pad}${name}${fill}  ${evalColumns(c, entry)}`,
       ...cellRows(c, entry, ` ${pad}    `),
