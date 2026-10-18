@@ -31,7 +31,7 @@ case $part in
     pnpm --filter reeval schema:check
     pnpm exec biome ci .
     (cd packages/reeval && REEVAL_FIXTURE_TIERS=fake node_test test/features.test.ts test/studio.test.ts)
-    for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
+    for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx; do
       pnpm --filter "@reeval/$p" test
     done
     # The browser test skips without Chrome: count that as a failure here.

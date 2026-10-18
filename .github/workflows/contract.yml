@@ -34,11 +34,11 @@ jobs:
       REEVAL_TEST_REAL: '1'
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key fails, naming the variable.
-      REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex
-      # The hard cap for this job: the contract (12 attempts) on all nine rows, the e2e (2) on the
-      # seven harnesses' own rows, and the real-tier fixtures (2 each, 10 of them): 108 + 14 + 20.
+      REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx
+      # The hard cap for this job: the contract (12 attempts) on all ten rows, the e2e (2) on the
+      # eight harnesses' own rows, and the real-tier fixtures (2 each, 10 of them): 120 + 16 + 20.
       # Each reserves its attempts in the ledger first, and fails rather than go over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '142'
+      REEVAL_REAL_ATTEMPT_BUDGET: '156'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}

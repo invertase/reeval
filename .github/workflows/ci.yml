@@ -229,7 +229,7 @@ jobs:
       - name: sandbox-docker (without containers) and the harness packages
         if: matrix.shard == '1/4'
         run: |
-          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
+          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx; do
             echo "::group::@reeval/$p"
             pnpm --filter "@reeval/$p" test
             echo "::endgroup::"
