@@ -1068,18 +1068,22 @@ export default defineConfig({
       r.stdout,
       /question {2}"Which is cleaner\?" 0 votes, 0 ties · fake · failed: the model is over quota$/m,
     )
-    const [e] = readRun(p.dir).evals
+    const run = readRun(p.dir)
+    const [e] = run.evals
     assert.equal(e?.outcome, 'pass')
-    assert.deepEqual(e?.answers, [
-      {
-        question: 'Which is cleaner?',
-        model: 'fake',
-        stateOptions: DEFAULT_QUESTION_STATE,
-        votes: [],
-        rates: [],
-        error: 'the model is over quota',
-      },
-    ])
+    const { input, ...answer } = e?.answers?.[0] ?? {}
+    assert.deepEqual(answer, {
+      question: 'Which is cleaner?',
+      model: 'fake',
+      stateOptions: DEFAULT_QUESTION_STATE,
+      votes: [],
+      rates: [],
+      error: 'the model is over quota',
+    })
+    // The calls in flight when the first failed are saved too, each with its error.
+    const { calls } = JSON.parse(run.read(input?.path ?? 'missing'))
+    assert.ok(calls.length >= 1, JSON.stringify(calls))
+    for (const call of calls) assert.equal(call.error, 'the model is over quota')
   })
 })
 
