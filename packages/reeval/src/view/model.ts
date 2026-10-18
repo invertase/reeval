@@ -439,6 +439,8 @@ export type AnswerRow = {
   noPairs: boolean
   /** Distinct vote reasons, in vote order, at most three. */
   reasons: string[]
+  /** `questions/<n>.json` under the run's directory: what the model was sent; null when not kept. */
+  input: string | null
 }
 
 /** One row per compare question, with each cut's win rates in the record's order. */
@@ -458,6 +460,7 @@ export function answerRows(e: Pick<EvalEntry, 'answers'>): AnswerRow[] {
       error: a.error ?? null,
       noPairs: a.votes.length === 0 && a.error === undefined,
       reasons: sampleReasons(a.votes),
+      input: a.input?.path ?? null,
     }
   })
 }

@@ -223,6 +223,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'compare.questions.input',
+    area: 'Records and studio',
+    name: "`evals[].answers[].input`: what each compare question's model was sent, per pair and order",
+    fixtures: ['compare/question-input'],
+    tests: [studio("compare answers: each question's win rates per cut")],
+  },
+  {
     id: 'gate',
     area: 'Config and selection',
     name: "`gate` (`'all'`, `{ passRate }`) and `compare.gate`",

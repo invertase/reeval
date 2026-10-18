@@ -610,6 +610,7 @@ describe('view-models over a real history', () => {
         error: null,
         noPairs: false,
         reasons: [],
+        input: `${matrix.evals[0]?.slug}/questions/1.json`,
       },
     ])
     for (const h of [headers[0], headers[1], headers[3]]) {
@@ -620,6 +621,9 @@ describe('view-models over a real history', () => {
     const first = withReason.answers?.[0]?.votes[0]
     if (first) first.reason = 'the other arm writes hello.txt'
     assert.deepEqual(answerRows(withReason)[0]?.reasons, ['the other arm writes hello.txt'])
+    const unkept = structuredClone(matrix.evals[0] as RunRecord['evals'][number])
+    for (const a of unkept.answers ?? []) delete a.input
+    assert.equal(answerRows(unkept)[0]?.input, null, 'a record that kept no files links nothing')
   })
 
   test("compare answers over real harnesses' diffs (real-e2e-pairs), a failed one and one with no pairs", async () => {

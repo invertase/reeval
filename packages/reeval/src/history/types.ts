@@ -238,7 +238,9 @@ export type EvalEntry = {
    * The compare's questions, answered after its attempts by pairwise votes, one per question;
    * unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote
    * may include a short `reason` (capped). `reeval analyze` includes each answer in the digest
-   * (rates by cut, votes, ties, a failed call, a sample of reasons).
+   * (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is
+   * `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets
+   * masked and screenshots as refs; unset where the eval's files weren't kept.
    */
   answers?: CompareAnswer[]
   /** Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite. */

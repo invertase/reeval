@@ -260,10 +260,12 @@ const keeps = (e: EvalEntry, level: ArtifactLevel) =>
   level === 'all' || (level === 'failures' && (e.outcome === 'fail' || e.outcome === 'infra_error'))
 
 const refsOf = (e: EvalEntry): FileRef[] =>
-  e.attempts.flatMap((a) => [
-    ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
-    ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
-  ])
+  e.attempts
+    .flatMap((a) => [
+      ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
+      ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
+    ])
+    .concat((e.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])))
 
 export type RecordOptions = {
   root: string
@@ -321,6 +323,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       a.files = {}
       for (const c of a.checks) delete c.log
     }
+    for (const q of e.answers ?? []) delete q.input
   }
   const patch = record.git?.worktreePatch
   let droppedPatch: string[] = []

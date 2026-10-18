@@ -1112,6 +1112,48 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'compare/question-input',
+    tiers: ['fake', 'docker'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'artifacts\/landing\.png' to be 'artifacts\/aside\.png'/,
+    record: ({ run, runDir }) => {
+      const entry = run.evals.find((e) => e.name === 'lands')
+      const answer = answerOf(run, 'lands')
+      assert.equal(answer.input?.path, `${entry?.slug}/questions/1.json`)
+      const input = JSON.parse(readFileSync(join(runDir, answer.input.path), 'utf8'))
+      assert.equal(input.question, 'Which page looks better?')
+      assert.deepEqual(input.artifacts, ['landing'])
+      assert.deepEqual(
+        input.calls.map((c: { swapped: boolean; labels: object }) => [c.swapped, c.labels]),
+        [
+          [false, { A: 'baseline', B: 'variant' }],
+          [true, { A: 'variant', B: 'baseline' }],
+        ],
+      )
+      const landing = (arm: string) =>
+        entry?.attempts
+          .find((a) => a.cell.includes(`/${arm}/`))
+          ?.files.artifacts?.find((a) => a.name === 'landing')?.path
+      for (const call of input.calls) {
+        assert.match(call.prompt, /^Question: Which page looks better\?/)
+        assert.match(call.prompt, /write the page for \[REDACTED\]/)
+        assert.deepEqual(
+          call.screenshots,
+          [call.labels.A, call.labels.B].map((side: string, i: number) => ({
+            label: `Attempt ${'AB'[i]}, screenshot 1 of 1`,
+            side,
+            name: 'landing',
+            path: landing(side),
+          })),
+        )
+        for (const shot of call.screenshots) assert.ok(existsSync(join(runDir, shot.path)))
+      }
+      assert.equal(filesContaining(runDir, TOKEN), '')
+    },
+  },
+  {
     dir: 'compare/baseline-empty',
     tiers: ['fake', 'docker'],
     env: 'variant',
