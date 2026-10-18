@@ -5,10 +5,12 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
+import { queryCommand } from '../src/query.ts'
 import { countSecrets } from '../src/redact.ts'
+import type { ResolvedConfig } from '../src/types.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { runCli } from './helpers.ts'
-import { CORPUS_DIR, corpusEntries } from './support/corpus.ts'
+import { CORPUS_DIR, corpusEntries, HISTORY_DIR } from './support/corpus.ts'
 import { fixture } from './support/fixture.ts'
 import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
 
@@ -64,7 +66,7 @@ function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: bo
   return [...out]
 }
 
-describe('the record corpus', () => {
+describe('the record corpus', { concurrency: 4 }, () => {
   test('holds every kind of run the record can describe', () => {
     const found = new Set(
       entries.flatMap((e) =>
@@ -173,8 +175,10 @@ describe('the record corpus', () => {
         name: string
         type: 'table' | 'view'
       }>
-      for (const s of schema) {
-        const q = s.type === 'view' ? s.name : `select * from ${s.name}`
+      const statement = (s: (typeof schema)[number]) =>
+        s.type === 'view' ? s.name : `select * from ${s.name}`
+      for (const type of ['view', 'table']) {
+        const q = statement(schema.find((s) => s.type === type) as (typeof schema)[number])
         await ok(['query', q])
         await ok(['query', q, '--json'])
       }
@@ -182,6 +186,29 @@ describe('the record corpus', () => {
       const site = join(p.dir, 'site')
       await ok(['studio', 'build', '--out', site])
       for (const id of ids) readFileSync(join(site, 'data/runs', `${id}.json`))
+      // Every view and table in both formats, through the command `reeval query` runs, in this
+      // process: a CLI start per query would be most of the suite's time. Last, since this
+      // process's build id differs from dist's, so its first query rebuilds history.db.
+      const config = { root: p.dir, history: { dir: HISTORY_DIR } } as ResolvedConfig
+      for (const s of schema) {
+        for (const json of [false, true]) {
+          let stdout = ''
+          let stderr = ''
+          const code = await queryCommand(
+            {
+              config,
+              flags: { json },
+              out: (text) => (stdout += `${text}\n`),
+              err: (text) => (stderr += `${text}\n`),
+            },
+            [statement(s)],
+          )
+          const where = `reeval query ${statement(s)}${json ? ' --json' : ''} in ${entry.name}\n${stdout}${stderr}`
+          assert.equal(code, 0, where)
+          assert.doesNotMatch(stderr, /warning: skipped|TypeError|Cannot read prop/, where)
+          assert.doesNotMatch(stdout, /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date/, where)
+        }
+      }
     })
   }
 })

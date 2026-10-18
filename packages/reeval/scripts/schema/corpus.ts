@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 export const CORPUS_DIR = fileURLToPath(new URL('../../test/fixtures/records/', import.meta.url))
 
 const RUN_FILE = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}\.json$/
-const HISTORY = 'evals/.history'
+/** Where each entry's runs are, from its root: the default `history.dir`. */
+export const HISTORY_DIR = 'evals/.history'
 
 export type CorpusRun = {
   runId: string
@@ -22,9 +23,9 @@ export type CorpusEntry = { name: string; dir: string; runs: CorpusRun[] }
 export function corpusEntries(): CorpusEntry[] {
   const root = CORPUS_DIR
   return readdirSync(root, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && existsSync(join(root, e.name, HISTORY)))
+    .filter((e) => e.isDirectory() && existsSync(join(root, e.name, HISTORY_DIR)))
     .map((e) => {
-      const history = join(root, e.name, HISTORY)
+      const history = join(root, e.name, HISTORY_DIR)
       const runs = readdirSync(history)
         .filter((n) => RUN_FILE.test(n))
         .sort()
@@ -65,7 +66,7 @@ export function corpus(): {
   }
   for (const entry of corpusEntries()) {
     for (const run of entry.runs) records.push({ file: run.file, value: run.raw })
-    walk(join(entry.dir, HISTORY))
+    walk(join(entry.dir, HISTORY_DIR))
   }
   return { records, transcripts, analyses }
 }
