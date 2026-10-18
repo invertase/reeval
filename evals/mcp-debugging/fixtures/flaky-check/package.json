@@ -1,0 +1,5 @@
+{
+  "name": "flaky-check",
+  "private": true,
+  "type": "module"
+}
