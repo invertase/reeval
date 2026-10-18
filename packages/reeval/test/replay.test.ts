@@ -14,6 +14,7 @@ import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import { AntigravityStreamTranslator } from '@reeval/harness-antigravity'
 import { CodexStreamTranslator } from '@reeval/harness-codex'
 import { CursorSdkStreamTranslator } from '@reeval/harness-cursor-sdk'
+import { FxStreamTranslator } from '@reeval/harness-fx'
 import { GooseStreamTranslator } from '@reeval/harness-goose'
 import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
 import { PiStreamTranslator } from '@reeval/harness-pi'
@@ -76,8 +77,16 @@ const harnesses = existsSync(root)
       .map((d) => d.name)
   : []
 
-test('there are captures for Cursor, Antigravity, OpenCode, Goose, pi and Codex', () => {
-  assert.deepEqual(harnesses.sort(), ['antigravity', 'codex', 'cursor', 'goose', 'opencode', 'pi'])
+test('there are captures for Cursor, Antigravity, OpenCode, Goose, pi, Codex and fx', () => {
+  assert.deepEqual(harnesses.sort(), [
+    'antigravity',
+    'codex',
+    'cursor',
+    'fx',
+    'goose',
+    'opencode',
+    'pi',
+  ])
 })
 
 for (const harness of harnesses) {
@@ -281,6 +290,60 @@ describe('replay: the Goose adapter, from the captured parts', () => {
   })
 })
 
+// fx's ACP events become parts inside @ai-sdk/harness-acp's bridge too: its adapter rebuilds a
+// command's output from the `in_progress` updates (the `completed` one is a clipped summary) and
+// names MCP calls from fx's `mcp_<server>_<tool>`.
+describe('replay: the fx adapter, from the captured parts', () => {
+  type Part = { type: string; [k: string]: unknown }
+  const record = (v: unknown) =>
+    typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+  const clipped = [{ type: 'content', content: { type: 'text', text: '{"state":"completed"' } }]
+  /** The captured parts as the bridge sends them: fx's own names, and a result's clipped content. */
+  const fromBridge = (lines: Line[]): Part[] =>
+    lines.map((l) => {
+      const part = l.part
+      if (part.type !== 'tool-call' && part.type !== 'tool-result') return part
+      const named =
+        part.toolName === 'mcp__stamp__house_stamp'
+          ? { ...part, toolName: 'mcp_stamp_house_stamp' }
+          : part
+      if (named.type !== 'tool-result') return named
+      const { output: _output, ...rest } = named
+      return { ...rest, result: clipped }
+    })
+  const replay = (lines: Line[], mcpServers: string[] = []) => {
+    const t = new FxStreamTranslator({ mcpServers })
+    return fromBridge(lines).map((p) => t.push(p))
+  }
+  const bashResult = (parts: Part[]) =>
+    record(parts.find((p) => p.type === 'tool-result' && p.toolName === 'bash')?.result)
+  const names = (parts: Part[]) =>
+    parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+  const inProgress = (l: Line) =>
+    l.part.type === 'raw' && record(l.part.rawValue).status === 'in_progress'
+
+  test('edit-and-run.raw.jsonl: the command output is rebuilt from its in_progress updates', () => {
+    const out = bashResult(replay(parse(read('fx', 'edit-and-run.raw.jsonl'))))
+    assert.match(String(out.output), /contract-42/)
+    assert.equal(out.exitCode, 0)
+  })
+
+  test('twin: without its in_progress updates, the output is not rebuilt', () => {
+    const lines = parse(read('fx', 'edit-and-run.raw.jsonl')).filter((l) => !inProgress(l))
+    assert.doesNotMatch(JSON.stringify(bashResult(replay(lines)).output ?? ''), /contract-42/)
+  })
+
+  test("mcp.raw.jsonl: the MCP call is named again from fx's mcp_<server>_<tool>", () => {
+    const lines = parse(read('fx', 'mcp.raw.jsonl'))
+    assert.ok(names(replay(lines, ['stamp'])).includes('mcp__stamp__house_stamp'))
+  })
+
+  test("twin: without the server, the MCP call keeps fx's name", () => {
+    const lines = parse(read('fx', 'mcp.raw.jsonl'))
+    assert.ok(!names(replay(lines)).includes('mcp__stamp__house_stamp'))
+  })
+})
+
 /** Changes to each harness's native stream that must each read as a format change. */
 const formatChanges: Record<string, Array<[string, string]>> = {
   antigravity: [
@@ -312,6 +375,12 @@ const formatChanges: Record<string, Array<[string, string]>> = {
     ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
     ['"stopReason"', '"stop_reason"'],
     ['"status":"completed"', '"status":"done"'],
+  ],
+  fx: [
+    ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
+    ['"stopReason"', '"stop_reason"'],
+    ['"status":"completed"', '"status":"done"'],
+    ['"kind":"execute"', '"kind":"shell"'],
   ],
   opencode: [
     ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
@@ -359,15 +428,16 @@ const acpOutcomes: Array<[RegExp, string]> = [
   [/"stopReason":"end_turn"/g, '"stopReason":"refusal"'],
   [/"stopReason":"end_turn"/g, '"stopReason":"cancelled"'],
 ]
-/** Goose sends no `kind`, so a tool kind is OpenCode's only. */
+/** Goose sends no `kind`; OpenCode and fx do (fx's `command_result` has its own). */
 const acpKinds: Array<[RegExp, string]> = [
-  [/"kind":"[a-z_]+"/g, '"kind":"fetch"'],
-  [/"kind":"[a-z_]+"/g, '"kind":"switch_mode"'],
+  [/"kind":"(read|edit|execute)"/g, '"kind":"fetch"'],
+  [/"kind":"(read|edit|execute)"/g, '"kind":"switch_mode"'],
 ]
 
 for (const [harness, outcomes] of [
   ['opencode', [...acpOutcomes, ...acpKinds]],
   ['goose', acpOutcomes],
+  ['fx', [...acpOutcomes, ...acpKinds]],
 ] as const)
   describe(`replay: ${harness}'s format holds every value ACP defines`, () => {
     const known = new Set(knownSignatures(harness))

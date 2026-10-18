@@ -72,7 +72,7 @@
     "test:features": "node --test --experimental-strip-types --no-warnings test/features.test.ts",
     "test:docker": "REEVAL_FIXTURE_TIERS=docker REEVAL_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts",
     "test:real": "REEVAL_FIXTURE_TIERS=real REEVAL_TEST_REAL=1 node --test --experimental-strip-types --no-warnings test/features.test.ts",
-    "test:contract": "REEVAL_TEST_REAL=1 REEVAL_CONTRACT_HARNESSES=${REEVAL_CONTRACT_HARNESSES:-cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex} node --test --test-concurrency=1 --experimental-strip-types --no-warnings test/contract.test.ts test/e2e-real.test.ts",
+    "test:contract": "REEVAL_TEST_REAL=1 REEVAL_CONTRACT_HARNESSES=${REEVAL_CONTRACT_HARNESSES:-cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx} node --test --test-concurrency=1 --experimental-strip-types --no-warnings test/contract.test.ts test/e2e-real.test.ts",
     "test:replay": "node --test --experimental-strip-types --no-warnings test/replay.test.ts"
   },
   "dependencies": {

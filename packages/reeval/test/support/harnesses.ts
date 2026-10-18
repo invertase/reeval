@@ -212,9 +212,11 @@ export const harnesses: HarnessRow[] = [
   },
   {
     // fx on OpenAI's Chat Completions API, as an fx configured provider: a Bearer key, through
-    // the relay that takes fx (which ignores HTTPS_PROXY) through the egress gateway.
+    // the relay that takes fx (which ignores HTTPS_PROXY) through the egress gateway. Not a
+    // reasoning model (fx sends them `max_tokens`), and not gpt-4.1-mini, which hands the skill
+    // probe to an fx subagent that often reports it done without writing the proof.
     id: 'fx',
-    model: 'gpt-4.1-mini',
+    model: 'gpt-4.1',
     key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
     image: 'fx',
     skillContext:
@@ -223,8 +225,8 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'api.openai.com',
     tokens: true,
     // fx names no model over ACP; the gateway reads the dated snapshot the API answers with.
-    servedModel: /^gpt-4\.1-mini/,
-    wireModel: /^gpt-4\.1-mini/,
+    servedModel: /^gpt-4\.1-\d{4}-\d{2}-\d{2}$/,
+    wireModel: /^gpt-4\.1-\d{4}-\d{2}-\d{2}$/,
   },
   {
     // And on Vercel AI Gateway, fx's own provider, with a gateway model id.
