@@ -1,6 +1,6 @@
 ---
 title: Harnesses
-description: Run evals on Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex or fx, or on several at once as separate cells.
+description: Run evals on Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex, fx or Grok Build, or on several at once as separate cells.
 ---
 
 A harness is the coding agent reeval drives. The same eval runs on any of them, so you can see whether your skill helps one agent and not another.
@@ -13,6 +13,7 @@ import {
   cursor,
   fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from '{{ pkg }}/harness'
@@ -25,6 +26,7 @@ export const gs = goose({ model: 'gemini-3.8-flash' })
 export const pim = pi({ model: 'gemini-3.8-flash' })
 export const cx = codex({ model: 'gpt-5.6-luna' })
 export const fxs = fx({ model: 'anthropic/claude-sonnet-5' })
+export const grok = grokBuild({ model: 'grok-4.6' })
 ```
 
 `examples/hello` defines its harnesses once, so the config, evals and profiles share them.
@@ -41,6 +43,7 @@ export const fxs = fx({ model: 'anthropic/claude-sonnet-5' })
 | `pi()` | `GOOGLE_GENERATIVE_AI_API_KEY`, a Gemini API key | Required: a Gemini model id, such as `gemini-3.8-flash` |
 | `codex()` | `OPENAI_API_KEY`, an OpenAI API key | Required: an OpenAI model id, such as `gpt-5.6-luna` |
 | `fx()` | `AI_GATEWAY_API_KEY` for a gateway id, `OPENAI_API_KEY` for a bare OpenAI id | Required: `anthropic/claude-sonnet-5` (AI Gateway) or `gpt-4.1` (OpenAI) |
+| `grokBuild()` | `XAI_API_KEY`, an xAI API key | Required: an xAI model id, such as `grok-4.6` |
 
 ```bash title=".env.local"
 CURSOR_API_KEY=...
@@ -48,6 +51,7 @@ ANTHROPIC_API_KEY=...
 GEMINI_API_KEY=...
 GOOGLE_GENERATIVE_AI_API_KEY=...
 OPENAI_API_KEY=...
+XAI_API_KEY=...
 AI_GATEWAY_API_KEY=...
 ```
 
@@ -83,7 +87,7 @@ npx reeval image build --config reeval.claude.config.ts
 npx reeval run --config reeval.claude.config.ts
 ```
 
-Each harness has its own sandbox image with its agent baked in, such as `reeval-sandbox:antigravity-0.1.8` or `reeval-sandbox:cursor-0.1.5`. `reeval image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code, Antigravity, pi and Codex run their CLIs, and OpenCode, Goose and fx their ACP servers.
+Each harness has its own sandbox image with its agent baked in, such as `reeval-sandbox:antigravity-0.1.8` or `reeval-sandbox:cursor-0.1.5`. `reeval image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code, Antigravity, pi and Codex run their CLIs, and OpenCode, Goose, fx and Grok Build their ACP servers.
 
 ## Run several harnesses as cells
 

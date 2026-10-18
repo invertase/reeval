@@ -184,6 +184,7 @@
         { "title": "pi()", "href": "/reference/harness/pi" },
         { "title": "codex()", "href": "/reference/harness/codex" },
         { "title": "fx()", "href": "/reference/harness/fx" },
+        { "title": "grokBuild()", "href": "/reference/harness/grok-build" },
         { "title": "fakeHarness()", "href": "/reference/harness/fake" }
       ]
     },
