@@ -4,10 +4,14 @@ description: >
   How to write, run and debug evals with reeval, the eval runner for coding agents (npm package
   reeval; CLI `reeval`, alias `re`). Use whenever a task mentions reeval, reeval.config.ts,
   *.eval.ts files, `reeval run`, evals for a coding agent, comparing skills, MCP servers or
-  docs, or lift.
+  docs, or lift. Not for changing reeval's own source: contributors follow the repository's
+  AGENTS.md.
 ---
 
 # reeval
+
+This skill is for writing evals with reeval, not for changing reeval itself: to contribute to
+the invertase/reeval repository, follow its root `AGENTS.md` instead.
 
 reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi,
 Codex or fx) on a task in a fresh Docker sandbox, then checks the result with deterministic assertions
