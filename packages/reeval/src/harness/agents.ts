@@ -348,13 +348,20 @@ export function fxForModel(model: string): ModelSpecific {
       hosts: ['api.openai.com'],
     }
   }
+  // The model list fx fetches before a turn, and its language-model calls.
+  const call = {
+    host: 'ai-gateway.vercel.sh',
+    path: { regex: '^/v\\d+/ai/language-model$' },
+    method: ['POST'],
+  } as const satisfies EndpointMatch
   const endpoints = [
-    { host: 'ai-gateway.vercel.sh', path: { regex: '^/' }, method: ['GET', 'POST'] },
+    { host: 'ai-gateway.vercel.sh', path: { regex: '^/coding-agent/v1/' }, method: ['GET'] },
+    call,
   ] as const satisfies readonly EndpointMatch[]
   return {
     credential: 'AI_GATEWAY_API_KEY',
     endpoints,
-    modelResponses: endpoints,
+    modelResponses: [call],
     servedModel: ({ host, responseModel }) =>
       host === 'ai-gateway.vercel.sh' ? responseModel : undefined,
     hosts: ['ai-gateway.vercel.sh'],

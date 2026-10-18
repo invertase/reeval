@@ -363,6 +363,17 @@ test('an auth failure names the credential; other errors get no hint', () => {
     ),
     'The API rejected AWS_BEARER_TOKEN_BEDROCK: set a valid key in the environment or .env.local',
   )
+  // fx's words, for a configured provider (OpenAI) and for AI Gateway.
+  for (const [model, message, credential] of [
+    ['gpt-4.1-mini', 'configured provider authentication failed · HTTP 401', 'OPENAI_API_KEY'],
+    ['google/m', 'AI_GATEWAY_API_KEY authentication failed · HTTP 401', 'AI_GATEWAY_API_KEY'],
+  ] as const) {
+    assert.equal(
+      authHint(agentFor({ kind: 'fx', model }), message),
+      `The API rejected ${credential}: set a valid key in the environment or .env.local`,
+      message,
+    )
+  }
   // The twins: a rate limit, a server error, a missing model and a refused host aren't the key.
   for (const message of [
     'HTTP 429: Resource has been exhausted (e.g. check quota).',
