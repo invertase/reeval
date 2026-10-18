@@ -1,4 +1,4 @@
-import { evaluate, expect, group } from 'reeval'
+import { type AttemptContext, evaluate, expect, group } from 'reeval'
 import { brokenProject } from './environments.ts'
 
 const CAUSES = [
@@ -14,7 +14,10 @@ const CAUSES = [
 
 type Cause = (typeof CAUSES)[number]
 
-const task = `This is a reeval project (reeval is an eval runner for coding agents; its CLI is \`reeval\`, already installed, and it runs here without Docker or API keys). Its latest run failed.
+const intro =
+  'This is a reeval project (reeval is an eval runner for coding agents; its CLI is `reeval`, already installed, and it runs here without Docker or API keys).'
+
+const fixTask = `${intro} Its latest run failed.
 
 Find out why, and fix the project so that \`reeval run\` passes. Fix the cause: don't delete or skip checks, and leave reeval.config.ts alone (it is the agent under test and its judge).
 
@@ -54,21 +57,30 @@ const fixtures: Array<{ fixture: string; cause: Cause; file: string; keeps: RegE
   },
 ]
 
-const parseAnswer = (text: string | null): { cause?: unknown } => {
+const parseAnswer = (text: string | null): Record<string, unknown> => {
   try {
-    return JSON.parse(text ?? '') as { cause?: unknown }
+    return JSON.parse(text ?? '') as Record<string, unknown>
   } catch {
     return {}
   }
 }
 
+/** The eval names an answer lists, matched loosely: `evals/pad.eval.ts › pads a string` names `pads a string`. */
+const named = (value: unknown, names: string[]) => {
+  const given = Array.isArray(value) ? value.map(String) : []
+  return names.filter((name) => given.some((g) => g.toLowerCase().includes(name)))
+}
+
+// A study, not a gate: the numbers are each side's pass rate, the lift and the effort.
+const study = (fixture: string, history?: { base: string }) => {
+  const { control, variant } = brokenProject(fixture, history)
+  return { compare: { baseline: control, variants: [variant], gate: 'none' as const } }
+}
+
 group('debugs a run', () => {
   for (const { fixture, cause, file, keeps } of fixtures) {
-    const { control, variant } = brokenProject(fixture)
-    // A study, not a gate: the numbers are each side's pass rate, the lift and the effort.
-    const compare = { baseline: control, variants: [variant], gate: 'none' as const }
-    evaluate(fixture, { compare }, async (c) => {
-      await c.send(task)
+    evaluate(fixture, study(fixture), async (c) => {
+      await c.send(fixTask)
 
       const answer = parseAnswer(await c.readFile('answer.json'))
       expect.soft(answer.cause, 'names the cause').toBe(cause)
@@ -85,4 +97,89 @@ group('debugs a run', () => {
       expect.soft(weakened, 'keeps the checks').toEqual([])
     })
   }
+})
+
+// Projects with a git history and a recorded run per commit: questions the latest run alone can't
+// answer, and one run too big to read whole.
+group('reads the history', () => {
+  const history = `${intro} Every commit's run is recorded in its history, in evals/.history.`
+  const toolkit = { base: 'toolkit' }
+
+  /** Records the agent must leave as they are; new runs it records are fine. */
+  const touchedRecords = async (c: AttemptContext) =>
+    (await c.exec('git status --porcelain -- evals/.history')).stdout
+      .split('\n')
+      .filter((line) => line.trim() && !line.startsWith('??'))
+
+  evaluate('flaky-since', study('flaky-since', toolkit), async (c) => {
+    await c.send(`${history}
+
+One eval has started failing intermittently. Find which eval, the commit that made it flaky, and whether the flakiness is in the eval's check or in the agent's work. Don't change any files.
+
+Write answer.json: {"eval": "<eval name>", "commit": "<its sha>", "cause": "<check or agent>"}.`)
+
+    const answer = parseAnswer(await c.readFile('answer.json'))
+    expect.soft(named([answer.eval], ['builds the report']), 'names the eval').toHaveLength(1)
+    const truth = await c.exec(`git log --format=%H --grep='^update evals (batch 5)$'`)
+    const given = await c.exec(
+      `git rev-parse --verify --quiet '${String(answer.commit ?? '')}^{commit}'`,
+    )
+    expect.soft(given.stdout.trim(), 'names the commit').toBe(truth.stdout.trim())
+    expect.soft(answer.cause, 'names the cause').toBe('check')
+    expect.soft(await touchedRecords(c), 'leaves the history alone').toEqual([])
+  })
+
+  evaluate('regression', study('regression', toolkit), async (c) => {
+    await c.send(`${history}
+
+Compare the run recorded at the tag v1.2 with the latest run. Which evals regressed: passed at v1.2 and fail in the latest run? Don't change any files.
+
+Write answer.json: {"regressed": ["<eval name>", …]}.`)
+
+    const answer = parseAnswer(await c.readFile('answer.json'))
+    const regressed = ['pads a string', 'removes duplicates']
+    expect.soft(named(answer.regressed, regressed), 'finds each regression').toEqual(regressed)
+    expect
+      .soft(
+        named(answer.regressed, ['clamps a number', 'chunks an array', 'sums a list']),
+        'names nothing else',
+      )
+      .toEqual([])
+    expect.soft(await touchedRecords(c), 'leaves the history alone').toEqual([])
+  })
+
+  evaluate('is-new', study('is-new', toolkit), async (c) => {
+    await c.send(`${history}
+
+The latest run failed. Which of its failing evals are failing for the first time in this history, and which failed in earlier runs too? Don't change any files.
+
+Write answer.json: {"new": ["<eval name>", …], "old": ["<eval name>", …]}.`)
+
+    const answer = parseAnswer(await c.readFile('answer.json'))
+    const old = ['clamps a number', 'builds the report']
+    expect
+      .soft(named(answer.new, ['title-cases a phrase', ...old]), 'finds the new failure')
+      .toEqual(['title-cases a phrase'])
+    expect.soft(named(answer.old, old), 'finds the old failures').toEqual(old)
+    expect.soft(await touchedRecords(c), 'leaves the history alone').toEqual([])
+  })
+
+  evaluate('big-record', study('big-record', { base: 'catalog' }), async (c) => {
+    await c.send(`${fixTask}\n\nIts runs are large: 82 attempts each.`)
+
+    const answer = parseAnswer(await c.readFile('answer.json'))
+    expect.soft(answer.cause, 'names the cause').toBe('check-path')
+    await expect
+      .soft(c.exec('node_modules/.bin/reeval run --ui plain'), 'reeval run passes')
+      .toSucceed()
+    expect.soft(c, 'leaves the agent under test alone').not.toHaveChanged(['reeval.config.ts'])
+    const source = (await c.readFile('evals/export.eval.ts')) ?? ''
+    const weakened = [
+      ...[/toHaveFile\(\s*'lib\/export\.js'/, /c\.exec\(joinsRows\)/]
+        .filter((keep) => !keep.test(source))
+        .map(String),
+      ...(source.match(/\.(skip|todo|only)\(|gate:|passRate/g) ?? []),
+    ]
+    expect.soft(weakened, 'keeps the checks').toEqual([])
+  })
 })

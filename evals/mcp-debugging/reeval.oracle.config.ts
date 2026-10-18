@@ -19,7 +19,7 @@ export default defineConfig({
     mcp: {
       defaults: {
         harness: fakeHarness({
-          script: [[{ mcp: 'reeval/query_failing_attempts' }, { exec: oracle }]],
+          script: [[{ mcp: 'reeval/failures' }, { exec: oracle }]],
         }),
       },
     },
