@@ -1,7 +1,7 @@
 // Builds a fixture's history in the sandbox's workspace: a git repository with a commit per change
 // and a recorded reeval run at each, so the agent has a real history to read. It deletes itself
 // first, so the agent never sees how the history was made.
-// `node history.mjs <task>`, from the workspace.
+// `node seed-history.mjs <task>`, from the workspace.
 import { execFileSync } from 'node:child_process'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 

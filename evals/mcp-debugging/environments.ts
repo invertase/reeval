@@ -30,13 +30,13 @@ exit 1`
 /**
  * A broken reeval project and the same project with `reeval mcp` configured as a stdio MCP server
  * named `reeval`. A `history` task starts from `base` and builds a git history with a recorded
- * run per commit (seeds/history.mjs); any other starts from its fixture and its failing run.
+ * run per commit (scripts/seed-history.mjs); any other starts from its fixture and its failing run.
  */
 export function brokenProject(fixture: string, history?: { base: string }) {
   const control = defineEnvironment(fixture, ({ directory, file }) => ({
     files: {
       ...directory(`./fixtures/${history?.base ?? fixture}`),
-      ...(history ? { '~/.dogfood-seed.mjs': file('./seeds/history.mjs') } : {}),
+      ...(history ? { '~/.dogfood-seed.mjs': file('./scripts/seed-history.mjs') } : {}),
       ...(tarball ? { '~/reeval.tgz': file(tarball) } : {}),
     },
     env: { DOGFOOD_TASK: fixture },
