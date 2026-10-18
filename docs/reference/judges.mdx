@@ -43,7 +43,7 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   What the judge is given beside your question: the judge's state, not the workspace's or the attempt's. An object keyed by the state's fields, described in [What the judge is given](#what-the-judge-is-given). It merges key by key, so a call's `state: { transcript: 'tools' }` keeps the config's `diff` patterns. A key's value replaces the outer one whole; lists aren't concatenated.
 </Property>
 
-`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). `on` with a value and `state: { output: false }` is refused. `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
+`c.judge()` also takes `on`: a `Turn` this attempt's `c.send()` returned, to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). Only those `Turn` objects count as turns: a plain object shaped like one is a value, and a copy of a turn (`{ ...turn }`) is refused. `on` with a value and `state: { output: false }` is refused. `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
 
 <Property name="artifacts" type="Array<Capture | string>" optional>
   Captures this call sends the judge. A handle from `c.capture()` or that capture's `name`. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
