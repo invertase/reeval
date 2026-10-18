@@ -1,6 +1,6 @@
 import { defineEnvironment } from 'reeval'
 import { docker } from 'reeval/sandbox'
-import { show } from './repo.ts'
+import { changedOnto, show } from './repo.ts'
 import type { Task } from './tasks.ts'
 
 /** What the arms differ by: the repo's guide for contributors, and the feature contract. */
@@ -30,17 +30,31 @@ const repoAt = (
     setup: [...(more.setup ?? []), install],
   }))
 
+const amend =
+  'git add -A && git -c user.name=reeval -c user.email=reeval@localhost commit -q --amend --no-edit'
+
 /**
- * Both arms of one task. The control has no guides, and its one commit doesn't either, so
+ * A branch of guide changes to try as a third arm, as `REEVAL_CONTRIBUTING_GUIDES=<branch>`: the
+ * branch's diff from HEAD's history, applied to each task's starting commit.
+ */
+const NEW_GUIDES = process.env.REEVAL_CONTRIBUTING_GUIDES
+
+/**
+ * The arms of one task. The control has no guides, and its one commit doesn't either, so
  * `git status` and `git show` don't point at them. The variant places them as files, so
- * `reeval query skill_files` counts the agent's reads of each.
+ * `reeval query skill_files` counts the agent's reads of each. `newGuides`, with
+ * REEVAL_CONTRIBUTING_GUIDES set, has that branch's guides, committed like the control.
  */
 export function arms(task: Task) {
   return {
+    newGuides: NEW_GUIDES
+      ? repoAt(task, `${task.id}-new-guides`, {
+          files: changedOnto(task.pr.parent, NEW_GUIDES),
+          setup: [amend],
+        })
+      : undefined,
     control: repoAt(task, `${task.id}-no-guides`, {
-      setup: [
-        `rm -f ${GUIDES.join(' ')} && git add -A && git -c user.name=reeval -c user.email=reeval@localhost commit -q --amend --no-edit`,
-      ],
+      setup: [`rm -f ${GUIDES.join(' ')} && ${amend}`],
     }),
     variant: repoAt(task, `${task.id}-guides`, {
       files: Object.fromEntries(GUIDES.map((p) => [p, show(task.pr.parent, p)])),
