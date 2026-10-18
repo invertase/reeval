@@ -24,9 +24,13 @@
           "additionalProperties": false
         },
         {
-          "description": "`c.exec(command)`: a command in the sandbox. Replies with its exit code and output.",
+          "description": "`c.exec(command, { background? })`: a command in the sandbox. Replies with its exit code and output, or with a handle when it runs in the background.",
           "type": "object",
           "properties": {
+            "background": {
+              "description": "Leave it running and reply with its handle, not its output.",
+              "type": "boolean"
+            },
             "command": {
               "description": "A shell command, run in the workspace.",
               "type": "string",
@@ -38,6 +42,90 @@
             }
           },
           "required": ["command", "op"],
+          "additionalProperties": false
+        },
+        {
+          "description": "`c.serve(command, port?)`: a background process and its port.",
+          "type": "object",
+          "properties": {
+            "command": {
+              "description": "A shell command; `PORT` is set to the port.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "op": {
+              "type": "string",
+              "const": "serve"
+            },
+            "port": {
+              "description": "The container port. Omit it and reeval allocates one.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            }
+          },
+          "required": ["command", "op"],
+          "additionalProperties": false
+        },
+        {
+          "description": "`handle.kill()`: stops a background process. Killing one that's gone is fine.",
+          "type": "object",
+          "properties": {
+            "handle": {
+              "description": "A background process, as an exec or serve reply named it.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "op": {
+              "type": "string",
+              "const": "kill"
+            }
+          },
+          "required": ["handle", "op"],
+          "additionalProperties": false
+        },
+        {
+          "description": "`c.capture(target, options)`: screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`. Replies with the capture.",
+          "type": "object",
+          "properties": {
+            "op": {
+              "type": "string",
+              "const": "capture"
+            },
+            "options": {
+              "$ref": "#/$defs/CaptureCallData"
+            },
+            "target": {
+              "description": "A container port, or a serve handle by its id.",
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "port": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 65535
+                    }
+                  },
+                  "required": ["port"],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "description": "A background process, as an exec or serve reply named it.",
+                      "type": "string",
+                      "pattern": "\\S"
+                    }
+                  },
+                  "required": ["handle"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "required": ["op", "target"],
           "additionalProperties": false
         },
         {
@@ -110,6 +198,23 @@
             "op": {
               "type": "string",
               "const": "expect"
+            },
+            "poll": {
+              "description": "`expect.poll`: reeval re-reads the subject and retries the matcher until it passes, recording only the final outcome. The subject must be one reeval can re-read: the attempt, a command or a file.",
+              "type": "object",
+              "properties": {
+                "interval": {
+                  "description": "Milliseconds between tries. Default 50.",
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "timeout": {
+                  "description": "Milliseconds before it fails with the last error. Default 1000.",
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              },
+              "additionalProperties": false
             },
             "soft": {
               "description": "Called as `expect.soft`: a failure fails the attempt at its end.",
@@ -208,6 +313,72 @@
       "required": ["file", "name", "path", "port", "viewport"],
       "additionalProperties": false
     },
+    "CaptureCallData": {
+      "description": "`c.capture()`'s camera and path as data. Default `path` is `/`; default `name` is derived from the path. A test's `fakeInstructions` journey is TypeScript-only.",
+      "type": "object",
+      "properties": {
+        "instructions": {
+          "description": "Journey: goal strings and `{ wait }` beats, run by the vision model.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CaptureInstruction"
+          }
+        },
+        "model": {
+          "description": "Overrides cascaded `capture.model` for this call.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "path": {
+          "type": "string"
+        },
+        "timeout": {
+          "$ref": "#/$defs/Duration"
+        },
+        "viewport": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureWindow"
+            },
+            {
+              "type": "string",
+              "const": "full-page"
+            }
+          ]
+        },
+        "wait": {
+          "description": "Look-ready once, before the first model shot or the saved PNG. Default `'load'`.",
+          "$ref": "#/$defs/Wait"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CaptureInstruction": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "wait": {
+              "$ref": "#/$defs/Wait"
+            }
+          },
+          "required": ["wait"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CaptureWait": {
+      "description": "Chromium look-ready events. `'load'` is `window` load (`Page.loadEventFired`). `'idle'` is `Page.lifecycleEvent` `networkAlmostIdle`.",
+      "type": "string",
+      "enum": ["load", "idle"]
+    },
     "CaptureWindow": {
       "description": "Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`.",
       "type": "object",
@@ -227,6 +398,19 @@
       },
       "required": ["height", "width"],
       "additionalProperties": false
+    },
+    "Duration": {
+      "description": "More than zero: `90s`, `15m`, `1h`, or a number of milliseconds.",
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^(?=.*[1-9])\\d+(\\.\\d+)?(ms|s|m|h)$"
+        }
+      ]
     },
     "FakeJudgeData": {
       "description": "`fakeJudge()` as data: the score every call gets.",
@@ -460,7 +644,7 @@
       ]
     },
     "MatcherSubject": {
-      "description": "What `expect` was given: a turn `c.send` returned, the attempt (for its files and latest turn), or a value, such as an `ExecResult`.",
+      "description": "What `expect` was given: a turn `c.send` returned, the attempt (for its files and latest turn), a value, such as an `ExecResult`, or a command or file reeval reads for it.",
       "anyOf": [
         {
           "type": "object",
@@ -497,6 +681,30 @@
           },
           "required": ["value"],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exec": {
+              "description": "A command reeval runs, for its `ExecResult`; again on each try when polled.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["exec"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "readFile": {
+              "description": "A file reeval reads, for its contents (null when there's none).",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["readFile"],
+          "additionalProperties": false
         }
       ]
     },
@@ -516,6 +724,25 @@
       },
       "required": ["regexp"],
       "additionalProperties": false
+    },
+    "Wait": {
+      "description": "Same shape at top-level `wait` and `{ wait }` between instructions.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CaptureWait"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ms": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": ["ms"],
+          "additionalProperties": false
+        }
+      ]
     }
   }
 }

@@ -100,10 +100,99 @@
                   "const": "exec"
                 },
                 "result": {
-                  "$ref": "#/$defs/ExecResult"
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/ExecResult"
+                    },
+                    {
+                      "description": "A background process, still running.",
+                      "type": "object",
+                      "properties": {
+                        "handle": {
+                          "description": "A background process, as an exec or serve reply named it.",
+                          "type": "string",
+                          "pattern": "\\S"
+                        }
+                      },
+                      "required": ["handle"],
+                      "additionalProperties": false
+                    }
+                  ]
                 }
               },
               "required": ["id", "ok", "op", "result"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "handle": {
+                  "description": "A background process, as an exec or serve reply named it.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "serve"
+                },
+                "port": {
+                  "description": "The container port it was given.",
+                  "type": "number"
+                }
+              },
+              "required": ["handle", "id", "ok", "op", "port"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "kill"
+                }
+              },
+              "required": ["id", "ok", "op"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "capture": {
+                  "$ref": "#/$defs/Capture"
+                },
+                "id": {
+                  "description": "Pairs a reply with its request.",
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "op": {
+                  "type": "string",
+                  "const": "capture"
+                }
+              },
+              "required": ["capture", "id", "ok", "op"],
               "additionalProperties": false
             },
             {
@@ -222,13 +311,91 @@
             },
             "op": {
               "type": "string",
-              "enum": ["send", "exec", "readFile", "writeFile", "expect", "judge"]
+              "enum": [
+                "send",
+                "exec",
+                "readFile",
+                "writeFile",
+                "expect",
+                "judge",
+                "serve",
+                "kill",
+                "capture"
+              ]
             }
           },
           "required": ["error", "id", "ok", "op"],
           "additionalProperties": false
         }
       ]
+    },
+    "Capture": {
+      "description": "What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`.",
+      "type": "object",
+      "properties": {
+        "file": {
+          "description": "`artifacts/<name>.png` under the attempt directory.",
+          "type": "object",
+          "properties": {
+            "bytes": {
+              "type": "number"
+            },
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": ["bytes", "path", "sha256"],
+          "additionalProperties": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "description": "Path on the app, as passed in.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Container port that was tunneled.",
+          "type": "number"
+        },
+        "viewport": {
+          "description": "What the author asked, including `'full-page'`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureWindow"
+            },
+            {
+              "type": "string",
+              "const": "full-page"
+            }
+          ]
+        }
+      },
+      "required": ["file", "name", "path", "port", "viewport"],
+      "additionalProperties": false
+    },
+    "CaptureWindow": {
+      "description": "Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`.",
+      "type": "object",
+      "properties": {
+        "height": {
+          "description": "In CSS pixels.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "width": {
+          "description": "In CSS pixels.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["height", "width"],
+      "additionalProperties": false
     },
     "Diff": {
       "type": "object",

@@ -8,6 +8,8 @@ import { z } from 'zod'
 import type {
   AssertionRecord,
   Capture,
+  CaptureInstruction,
+  CaptureWait,
   Cell,
   CellRole,
   Diff,
@@ -20,6 +22,7 @@ import type {
   TurnData,
   TurnStatus,
   Verdict,
+  Wait,
   WebEventType,
 } from '../types.ts'
 import { captureWindowSchema } from './config.ts'
@@ -29,7 +32,7 @@ import {
   judgeModelNameSchema,
   judgeStateSchema,
 } from './judge.ts'
-import { type Assert, dataProblem, jsonValueSchema, type Same } from './shared.ts'
+import { type Assert, dataProblem, durationSchema, jsonValueSchema, type Same } from './shared.ts'
 
 const nullableNumber = z.number().nullable()
 
@@ -240,6 +243,9 @@ export const judgeFailureSchema = z
   )
 
 export type _SameAsSchema = [
+  Assert<Same<z.infer<typeof captureWaitSchema>, CaptureWait>>,
+  Assert<Same<z.infer<typeof waitSchema>, Wait>>,
+  Assert<Same<z.infer<typeof captureInstructionSchema>, CaptureInstruction>>,
   Assert<Same<z.infer<typeof cellSchema>, Cell>>,
   Assert<Same<z.infer<typeof cellRoleSchema>, CellRole>>,
   Assert<Same<z.infer<typeof captureSchema>, Capture>>,
@@ -290,12 +296,64 @@ export const matcherSubjectSchema = z
     z.strictObject({ turn: turnIndex }),
     z.strictObject({ attempt: z.literal(true).describe('The attempt itself, `c`.') }),
     z.strictObject({ value: jsonValueSchema.describe('A value the eval passes as it is.') }),
+    z.strictObject({
+      exec: z
+        .string()
+        .regex(/\S/)
+        .describe('A command reeval runs, for its `ExecResult`; again on each try when polled.'),
+    }),
+    z.strictObject({
+      readFile: z
+        .string()
+        .regex(/\S/)
+        .describe("A file reeval reads, for its contents (null when there's none)."),
+    }),
   ])
   .describe(
-    'What `expect` was given: a turn `c.send` returned, the attempt (for its files and latest turn), or a value, such as an `ExecResult`.',
+    'What `expect` was given: a turn `c.send` returned, the attempt (for its files and latest turn), a value, such as an `ExecResult`, or a command or file reeval reads for it.',
   )
 
 const nonEmpty = z.string().regex(/\S/, 'must not be empty')
+
+const portSchema = z
+  .number()
+  .int()
+  .min(1, 'a port from 1 to 65535')
+  .max(65535, 'a port from 1 to 65535')
+const millisSchema = z.number().positive('more than zero milliseconds')
+
+export const captureWaitSchema = z
+  .enum(['load', 'idle'])
+  .describe(
+    "Chromium look-ready events. `'load'` is `window` load (`Page.loadEventFired`). `'idle'` is `Page.lifecycleEvent` `networkAlmostIdle`.",
+  )
+
+export const waitSchema = z
+  .union([captureWaitSchema, z.strictObject({ ms: millisSchema })])
+  .describe('Same shape at top-level `wait` and `{ wait }` between instructions.')
+
+export const captureInstructionSchema = z.union([nonEmpty, z.strictObject({ wait: waitSchema })])
+
+export const captureCallDataSchema = z
+  .strictObject({
+    name: nonEmpty.optional(),
+    path: z.string().optional(),
+    viewport: z.union([captureWindowSchema, z.literal('full-page')]).optional(),
+    timeout: durationSchema.optional(),
+    wait: waitSchema
+      .optional()
+      .describe("Look-ready once, before the first model shot or the saved PNG. Default `'load'`."),
+    instructions: z
+      .array(captureInstructionSchema)
+      .optional()
+      .describe('Journey: goal strings and `{ wait }` beats, run by the vision model.'),
+    model: z.string().optional().describe('Overrides cascaded `capture.model` for this call.'),
+  })
+  .describe(
+    "`c.capture()`'s camera and path as data. Default `path` is `/`; default `name` is derived from the path. A test's `fakeInstructions` journey is TypeScript-only.",
+  )
+
+const handleId = nonEmpty.describe('A background process, as an exec or serve reply named it.')
 
 export const judgeCallDataSchema = z
   .strictObject({
@@ -331,9 +389,36 @@ export const attemptCallSchema = z
       .strictObject({
         op: z.literal('exec'),
         command: nonEmpty.describe('A shell command, run in the workspace.'),
+        background: z
+          .boolean()
+          .optional()
+          .describe('Leave it running and reply with its handle, not its output.'),
       })
       .describe(
-        '`c.exec(command)`: a command in the sandbox. Replies with its exit code and output.',
+        '`c.exec(command, { background? })`: a command in the sandbox. Replies with its exit code and output, or with a handle when it runs in the background.',
+      ),
+    z
+      .strictObject({
+        op: z.literal('serve'),
+        command: nonEmpty.describe('A shell command; `PORT` is set to the port.'),
+        port: portSchema
+          .optional()
+          .describe('The container port. Omit it and reeval allocates one.'),
+      })
+      .describe('`c.serve(command, port?)`: a background process and its port.'),
+    z
+      .strictObject({ op: z.literal('kill'), handle: handleId })
+      .describe("`handle.kill()`: stops a background process. Killing one that's gone is fine."),
+    z
+      .strictObject({
+        op: z.literal('capture'),
+        target: z
+          .union([z.strictObject({ port: portSchema }), z.strictObject({ handle: handleId })])
+          .describe('A container port, or a serve handle by its id.'),
+        options: captureCallDataSchema.optional(),
+      })
+      .describe(
+        '`c.capture(target, options)`: screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`. Replies with the capture.',
       ),
     z
       .strictObject({
@@ -371,6 +456,27 @@ export const attemptCallSchema = z
           .boolean()
           .describe('Called as `expect.soft`: a failure fails the attempt at its end.'),
         label: z.string().optional().describe("`expect`'s second argument."),
+        poll: z
+          .strictObject({
+            interval: millisSchema.optional().describe('Milliseconds between tries. Default 50.'),
+            timeout: millisSchema
+              .optional()
+              .describe('Milliseconds before it fails with the last error. Default 1000.'),
+          })
+          .optional()
+          .describe(
+            '`expect.poll`: reeval re-reads the subject and retries the matcher until it passes, recording only the final outcome. The subject must be one reeval can re-read: the attempt, a command or a file.',
+          ),
+      })
+      .superRefine((call, ctx) => {
+        if (call.poll && 'value' in call.subject) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['subject'],
+            message:
+              "can't be polled: reeval can't re-read a value. Poll the attempt, an exec or a readFile",
+          })
+        }
       })
       .describe(
         'A matcher call: `expect(subject, label).not?.matcher(...args)`. Replies with its record.',
@@ -406,7 +512,24 @@ export const attemptReplySchema = z
   .union([
     z.discriminatedUnion('op', [
       z.strictObject({ id, ok: z.literal(true), op: z.literal('send'), turn: turnDataSchema }),
-      z.strictObject({ id, ok: z.literal(true), op: z.literal('exec'), result: execResultSchema }),
+      z.strictObject({
+        id,
+        ok: z.literal(true),
+        op: z.literal('exec'),
+        result: z.union([
+          execResultSchema,
+          z.strictObject({ handle: handleId }).describe('A background process, still running.'),
+        ]),
+      }),
+      z.strictObject({
+        id,
+        ok: z.literal(true),
+        op: z.literal('serve'),
+        handle: handleId,
+        port: z.number().describe('The container port it was given.'),
+      }),
+      z.strictObject({ id, ok: z.literal(true), op: z.literal('kill') }),
+      z.strictObject({ id, ok: z.literal(true), op: z.literal('capture'), capture: captureSchema }),
       z.strictObject({
         id,
         ok: z.literal(true),
@@ -430,7 +553,17 @@ export const attemptReplySchema = z
     z.strictObject({
       id,
       ok: z.literal(false),
-      op: z.enum(['send', 'exec', 'readFile', 'writeFile', 'expect', 'judge']),
+      op: z.enum([
+        'send',
+        'exec',
+        'readFile',
+        'writeFile',
+        'expect',
+        'judge',
+        'serve',
+        'kill',
+        'capture',
+      ]),
       error: attemptErrorSchema,
     }),
   ])
@@ -507,6 +640,14 @@ const OTHER_KEYS = [
   ...Object.keys(judgeCallDataSchema.shape),
   ...Object.keys(judgeStateSchema.shape),
   ...Object.keys(captureSchema.shape),
+  ...Object.keys(captureCallDataSchema.shape),
+  'port',
+  'handle',
+  'exec',
+  'readFile',
+  'interval',
+  'timeout',
+  'ms',
 ]
 
 /** What's wrong with an attempt request a runner sent, by the field's path, or undefined. */
@@ -566,6 +707,11 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   AttemptDone: attemptDoneSchema,
   Cell: cellSchema,
   CellRole: cellRoleSchema,
+  CaptureCallData: captureCallDataSchema,
+  CaptureInstruction: captureInstructionSchema,
+  CaptureWait: captureWaitSchema,
+  Wait: waitSchema,
+  Duration: durationSchema,
 }
 
 /** The schemas `ATTEMPT_SCHEMAS` shares with a hand-written type in src/types.ts, by its name. */
@@ -588,4 +734,5 @@ export const ATTEMPT_TYPES = [
   'CaptureWindow',
   'Cell',
   'CellRole',
+  'CaptureWait',
 ] as const
