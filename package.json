@@ -36,6 +36,7 @@
     "@types/node": "22.20.4",
     "c8": "12.0.0",
     "knip": "6.41.0",
+    "reeval": "workspace:*",
     "rollup-plugin-license": "3.7.1",
     "spdx-expression-validate": "2.0.0",
     "spdx-satisfies": "6.0.0",
