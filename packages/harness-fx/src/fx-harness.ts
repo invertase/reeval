@@ -42,7 +42,50 @@ export const FX_QUIET_ENV = {
   NO_COLOR: '1',
 } as const
 
-/** Downloads the pinned release for the sandbox's arch and checks its sha256. */
+/**
+ * fx's HTTP client ignores `HTTPS_PROXY`, so it can't reach the sandbox's egress gateway itself.
+ * It talks plain HTTP to this relay on localhost (fx allows `http://` there), which forwards each
+ * request with Node's `fetch`, which honours the proxy (`NODE_USE_ENV_PROXY`) and the gateway's CA.
+ */
+export const FX_RELAY_PORT = 47823
+const FX_RELAY = `import { createServer } from 'node:http'
+import { Readable } from 'node:stream'
+import { writeFileSync } from 'node:fs'
+const [port, upstream, ready] = process.argv.slice(2)
+const drop = new Set(['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive'])
+const server = createServer(async (req, res) => {
+  try {
+    const headers = Object.entries(req.headers).filter(([k]) => !drop.has(k))
+    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : Readable.toWeb(req)
+    const r = await fetch(upstream + req.url, { method: req.method, headers, body, duplex: 'half' })
+    const out = {}
+    r.headers.forEach((v, k) => { if (k !== 'content-encoding' && k !== 'content-length') out[k] = v })
+    res.writeHead(r.status, out)
+    if (r.body) Readable.fromWeb(r.body).pipe(res)
+    else res.end()
+  } catch (error) {
+    res.writeHead(502, { 'content-type': 'text/plain' })
+    res.end(String(error))
+  }
+})
+server.on('error', (error) => {
+  if (error.code !== 'EADDRINUSE') throw error
+  writeFileSync(ready, '')
+  process.exit(0)
+})
+server.listen(Number(port), '127.0.0.1', () => writeFileSync(ready, ''))
+`
+
+/** `fx-acp`: starts the relay to the model's provider (`FX_RELAY_UPSTREAM`), waits for it, then becomes `fx acp`. */
+const FX_LAUNCH = `#!/bin/bash
+bin="$(dirname "$0")"
+ready="$(mktemp -u)"
+node "$bin/fx-relay.mjs" ${FX_RELAY_PORT} "$FX_RELAY_UPSTREAM" "$ready" >/dev/null 2>&1 &
+for _ in $(seq 100); do [ -e "$ready" ] && break; sleep 0.05; done
+exec "$bin/fx" acp
+`
+
+/** Downloads the pinned release for the sandbox's arch and checks its sha256, and writes the relay. */
 export const FX_INSTALL_COMMAND = `case "$(uname -m)" in
   x86_64|amd64) arch=x86_64 sha=${FX_CLI_SHA256.x86_64} ;;
   aarch64|arm64) arch=aarch64 sha=${FX_CLI_SHA256.aarch64} ;;
@@ -52,7 +95,14 @@ curl -fsSL --retry 3 -o fx.tar.gz "https://github.com/vercel-labs/fx/releases/do
 echo "$sha  fx.tar.gz" | sha256sum -c -
 mkdir -p "$HOME/.local/bin"
 tar -xzf fx.tar.gz -C "$HOME/.local/bin" fx
-rm fx.tar.gz`
+rm fx.tar.gz
+cat > "$HOME/.local/bin/fx-relay.mjs" <<'FX_RELAY'
+${FX_RELAY}FX_RELAY
+cat > "$HOME/.local/bin/fx-acp" <<'FX_LAUNCH'
+${FX_LAUNCH}FX_LAUNCH
+chmod +x "$HOME/.local/bin/fx-acp"`
+
+const relayUrl = `http://127.0.0.1:${FX_RELAY_PORT}`
 
 export type FxHarnessSettings = {
   /** The model's provider's key only (see {@link FX_PROVIDERS}). The host environment is never read. */
@@ -65,9 +115,19 @@ export type FxHarnessSettings = {
   readonly requireCredentialBrokering?: boolean
 }
 
-/** fx's process env: quiet flags, the provider and the model. */
+/**
+ * fx's process env: quiet flags, the provider, the model and the relay. The same keys for every
+ * model, so the bootstrap an image bakes for one provider serves the other.
+ */
 export function fxEnv(model: string) {
-  return { ...FX_QUIET_ENV, FX_PROVIDER: fxProviderOf(model), FX_MODEL: model }
+  const provider = fxProviderOf(model)
+  return {
+    ...FX_QUIET_ENV,
+    FX_PROVIDER: provider,
+    FX_MODEL: model,
+    FX_GATEWAY_BASE_URL: relayUrl,
+    FX_RELAY_UPSTREAM: FX_PROVIDERS[provider].url,
+  }
 }
 
 /**
@@ -80,7 +140,7 @@ export function fxSettings(model: string) {
     providers: {
       openai: {
         protocol: 'openai-chat-completions',
-        base_url: `${FX_PROVIDERS.openai.url}/v1`,
+        base_url: `${relayUrl}/v1`,
         auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
       },
     },
@@ -106,11 +166,11 @@ export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools>
     harnessId: FX_HARNESS_ID,
     builtinTools: FX_BUILTIN_TOOLS,
     source: { type: 'install-command', command: FX_INSTALL_COMMAND },
-    executable: 'fx',
-    args: ['acp'],
+    executable: 'fx-acp',
+    args: [],
     auth: settings.auth,
     env: fxEnv(settings.model),
-    credentialEnv: [provider.credential],
+    credentialEnv: Object.values(FX_PROVIDERS).map((each) => each.credential),
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[provider.credential]
       const placeholder = sandboxEnv?.[provider.credential]
@@ -157,7 +217,6 @@ type Emit = (part: { type: string; [key: string]: unknown }) => void
 
 /** The session, with each turn's parts through a fresh {@link FxStreamTranslator}. */
 function translated(session: Session, mcpServers: readonly string[]): Session {
-  if (!mcpServers.length) return session
   const turn = (run: (options: never) => unknown) => (options: { emit: Emit }) => {
     const translator = new FxStreamTranslator({ mcpServers })
     return run({

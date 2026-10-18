@@ -318,7 +318,13 @@ export function fxMcpServers(
   return Object.fromEntries(
     Object.entries(servers).map(([name, s]) =>
       s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: pairs(s.env) }]
+        ? // `harness-acp` takes only an absolute command, so a bare one goes through `env`'s PATH lookup.
+          [
+            name,
+            s.command.startsWith('/')
+              ? { command: s.command, args: s.args, env: pairs(s.env) }
+              : { command: '/usr/bin/env', args: [s.command, ...s.args], env: pairs(s.env) },
+          ]
         : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
     ),
   )

@@ -36,7 +36,13 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     ...FX_QUIET_ENV,
     FX_PROVIDER: 'openai',
     FX_MODEL: 'gpt-4.1-mini',
+    FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
+    FX_RELAY_UPSTREAM: 'https://api.openai.com',
   })
+  assert.deepEqual(
+    Object.keys(fxEnv('openai/gpt-5.6')).sort(),
+    Object.keys(fxEnv('gpt-4.1')).sort(),
+  )
   assert.deepEqual(fxSettings('openai/gpt-5.6'), [])
   const [file] = fxSettings('gpt-4.1-mini')
   assert.equal(file?.path, '.fx/settings.json')
@@ -44,6 +50,10 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     type: 'bearer',
     env: 'OPENAI_API_KEY',
   })
+  assert.equal(
+    JSON.parse(file?.content ?? '').providers.openai.base_url,
+    'http://127.0.0.1:47823/v1',
+  )
 })
 
 test("auth is an environment with the model's provider's key, or it throws", () => {
@@ -81,4 +91,28 @@ test("MCP calls are renamed from fx's mcp_<server>_<tool>, longest server first"
     type: 'tool-call',
     toolName: 'bash',
   })
+})
+
+test("a command's result is its streamed output and exit code, not fx's clipped summary", () => {
+  const t = new FxStreamTranslator()
+  const update = (status: string, extra: Record<string, unknown>) =>
+    t.push({
+      type: 'raw',
+      rawValue: { sessionUpdate: 'tool_call_update', toolCallId: 'c1', status, ...extra },
+    })
+  const text = (value: string) => [{ type: 'content', content: { type: 'text', text: value } }]
+  update('in_progress', { content: text('contract-') })
+  update('in_progress', { content: text('42\n') })
+  update('completed', { content: text('{"session_id":null,"st'), command_result: { exit_code: 0 } })
+  assert.deepEqual(
+    t.push({ type: 'tool-result', toolCallId: 'c1', toolName: 'bash', result: text('{"s') }),
+    {
+      type: 'tool-result',
+      toolCallId: 'c1',
+      toolName: 'bash',
+      result: { output: 'contract-42\n', exitCode: 0 },
+    },
+  )
+  const other = { type: 'tool-result', toolCallId: 'c2', toolName: 'bash', result: 'x' }
+  assert.deepEqual(t.push(other), other)
 })

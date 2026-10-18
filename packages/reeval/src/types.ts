@@ -451,8 +451,8 @@ export type FakeHarnessDescriptor = {
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
    * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`,
-   * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the
-   * fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
+   * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for
+   * `fx`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
    */
   layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex' | 'fx'
 }
