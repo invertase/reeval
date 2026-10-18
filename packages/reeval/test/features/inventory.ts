@@ -41,6 +41,7 @@ export const AREAS = [
 export type Area = (typeof AREAS)[number]
 
 const unit = (name: string) => `reeval/test/unit.test.ts › ${name}`
+const declaration = (name: string) => `reeval/test/declaration.test.ts › ${name}`
 const options = (name: string) => `reeval/test/options.test.ts › ${name}`
 const engine = (name: string) => `reeval/test/engine.test.ts › ${name}`
 const secrets = (name: string) => `reeval/test/secrets.test.ts › ${name}`
@@ -247,7 +248,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'config.paths',
     area: 'Config and selection',
-    name: "One path rule for reeval.yaml and TypeScript: a relative host path (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`), from a helper or its data form, resolves against the directory of the file it's written in",
+    name: "One path rule for reeval.yaml, TypeScript and declaration trees: a relative host path (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`), from a helper or its data form, resolves against the directory of the file it's written in",
     plan: [
       'yaml-paths/from-above',
       'yaml-paths/profile-from-above',
@@ -260,6 +261,9 @@ export const inventory: InventoryFeature[] = [
         'a relative host path resolves the same in reeval.yaml, TypeScript data and the helpers',
       ),
       unit('fakeSandbox resolves a relative dir against the file that calls it'),
+      declaration("a tree's relative host paths resolve against the declaring file's directory"),
+      declaration('a tree with relative paths plans the same tests as with absolute ones'),
+      declaration("a tree's missing Dockerfile is refused at its absolute path, naming the field"),
     ],
   },
   {

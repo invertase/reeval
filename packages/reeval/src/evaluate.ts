@@ -1,3 +1,4 @@
+import { dirname } from 'node:path'
 import { runAttempt } from './attempt/index.ts'
 import { declarationProblem } from './contract/declaration.ts'
 import type {
@@ -9,7 +10,13 @@ import type {
 } from './declaration.ts'
 import { collectingFile, getRunContext, registerGroup, registerTest } from './engine/runtime.ts'
 import { inCI } from './env.ts'
-import { callerDir, environmentFrom, sandboxPaths } from './environment.ts'
+import {
+  callerDir,
+  environmentFrom,
+  environmentPaths,
+  type MissingDockerfile,
+  sandboxPaths,
+} from './environment.ts'
 import { UsageError } from './errors.ts'
 import { isObjectLike } from './object.ts'
 import { checkOptions, matchesTags, refuseIllegalCompare } from './options.ts'
@@ -53,23 +60,25 @@ function declare(node: DeclaredNode): void {
   tree.children.push(node)
 }
 
+const missingIn =
+  (where: string): MissingDockerfile =>
+  (field, full) => {
+    throw new UsageError(
+      `${field} in ${where}: ${full} doesn't exist. Paths are relative to the file that declares it.`,
+    )
+  }
+
 /**
- * The options with a `sandbox` written as data given absolute host paths against the eval file,
- * as `docker()` and `fakeSandbox()` resolve theirs against the file that calls them.
+ * The options with a `sandbox` written as data given absolute host paths against `base`, the
+ * eval file, as `docker()` and `fakeSandbox()` resolve theirs against the file that calls them.
  */
-function withPaths<T extends GroupOptions>(options: T, where: string): T {
+function withPaths<T extends GroupOptions>(
+  options: T,
+  where: string,
+  base = callerDir() ?? process.cwd(),
+): T {
   if (typeof options !== 'object' || options === null || !('sandbox' in options)) return options
-  const sandbox = sandboxPaths(
-    options.sandbox,
-    callerDir() ?? process.cwd(),
-    'sandbox',
-    (field, full) => {
-      throw new UsageError(
-        `${field} in ${where}: ${full} doesn't exist. Paths are relative to the file that declares it.`,
-      )
-    },
-  )
-  return { ...options, sandbox }
+  return { ...options, sandbox: sandboxPaths(options.sandbox, base, 'sandbox', missingIn(where)) }
 }
 
 /** `(name, fn)`, `(name, options, fn)` as in Vitest, or `(name, fn, options)`. */
@@ -283,59 +292,61 @@ export const evaluate: EvaluateFn & {
 /**
  * Declares a tree's groups and evals as the calls that made it would, in the file being
  * collected; `bodyFor` gives each eval's body by its id. A tree from another language is
- * checked against the contract first.
+ * checked against the contract first. Its relative host paths resolve against the directory of
+ * the file being collected, as a TypeScript eval file's do against its own.
  */
 export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string) => EvalFn): void {
   const problem = declarationProblem(nodes)
   if (problem) throw new UsageError(problem)
-  declareNodes(nodes, bodyFor)
+  const file = collectingFile()
+  declareNodes(nodes, bodyFor, file ? dirname(file) : process.cwd())
 }
 
-function declareNodes(nodes: readonly DeclaredNode[], bodyFor: (id: string) => EvalFn): void {
+function declareNodes(
+  nodes: readonly DeclaredNode[],
+  bodyFor: (id: string) => EvalFn,
+  base: string,
+): void {
   for (const node of nodes) {
     if (node.type === 'todo') registerTodo(node.name)
     else if (node.type === 'group') {
       const children = node.children
-      defineGroup(node.mode)(node.name, optionsFrom(node.options, `group("${node.name}")`), () =>
-        declareNodes(children, bodyFor),
+      const where = `group("${node.name}")`
+      defineGroup(node.mode)(node.name, optionsFrom(node.options, where, base), () =>
+        declareNodes(children, bodyFor, base),
       )
     } else if (node.family) {
-      const options = optionsFrom(node.options, `evaluate("${node.name}")`)
+      const options = optionsFrom(node.options, `evaluate("${node.name}")`, base)
       checkOnly(node.mode, 'evaluate')
       register(node.mode, node.name, options, bodyFor(node.body), '', node.family)
     } else
       defineEval(node.mode)(
         node.name,
-        optionsFrom(node.options, `evaluate("${node.name}")`),
+        optionsFrom(node.options, `evaluate("${node.name}")`, base),
         bodyFor(node.body),
       )
   }
 }
 
-/** Options from their data forms: environments become `Environment`s again. */
-function optionsFrom(data: EvalOptionsData, where: string): EvalOptions {
-  refuseIllegalCompare(data, where)
-  const { environment, compare, ...rest } = data
-  const asEnv = (env: EnvironmentData) => environmentFrom(env)
-  if (compare === undefined) {
-    return {
-      ...rest,
-      ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
-    }
-  }
+/**
+ * Options from their data forms, with host paths absolute against `base`: environments become
+ * `Environment`s again.
+ */
+function optionsFrom(written: EvalOptionsData, where: string, base: string): EvalOptions {
+  refuseIllegalCompare(written, where)
+  const resolved = withPaths(written as GroupOptions, where, base) as EvalOptionsData
+  const { environment, compare, ...rest } = resolved
+  const missing = missingIn(where)
+  const asEnv = (env: EnvironmentData, field: string) =>
+    environmentFrom(environmentPaths(env, base, field, missing) as EnvironmentData)
+  const own = environment !== undefined ? { environment: asEnv(environment, 'environment') } : {}
+  if (compare === undefined) return { ...rest, ...own }
+  const variants = compare.variants.map((v, i) => asEnv(v, `compare.variants[${i}]`))
   if (compare.baseline !== undefined) {
     return {
       ...rest,
-      compare: {
-        ...compare,
-        baseline: asEnv(compare.baseline),
-        variants: compare.variants.map(asEnv),
-      },
+      compare: { ...compare, baseline: asEnv(compare.baseline, 'compare.baseline'), variants },
     }
   }
-  return {
-    ...rest,
-    ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
-    compare: { ...compare, variants: compare.variants.map(asEnv) },
-  }
+  return { ...rest, ...own, compare: { ...compare, variants } }
 }

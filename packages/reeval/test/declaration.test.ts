@@ -1,7 +1,7 @@
 // An eval file's declarations as data (src/declaration.ts): what evaluate and group record, and
 // that the tree, through JSON and declared again, plans the same tests as the calls did.
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { validate } from '../scripts/schema/validate.ts'
@@ -117,6 +117,149 @@ test('a tree through JSON, declared again, plans the same tests as the calls', a
       'run outer › both › c [fake/plain/docker#1]',
     ],
   )
+})
+
+/** A tree as another language writes it: host paths relative to the eval file, evals/x.eval.ts. */
+function relativeTree(): DeclarationTree['children'] {
+  const env = (name: string, spec: object) => ({
+    kind: 'environment',
+    name,
+    layers: [{ name, spec }],
+  })
+  const docker = (dockerfile: string) => ({ kind: 'docker', dockerfile })
+  const context = env('context', {
+    files: { 'a.txt': { kind: 'file', path: './fixtures/a.txt' } },
+    rules: { kind: 'file', path: '../RULES.md' },
+    skills: [
+      { kind: 'skill', source: 'local', path: './skills', placement: 'harness' },
+      { kind: 'skill', source: 'npm', spec: '../pkg.tgz', path: 'skills', placement: 'harness' },
+    ],
+    workspace: { kind: 'git', repo: '../app', url: '../app' },
+  })
+  const eval_ = (name: string, options: object, extra: object = {}) => ({
+    type: 'eval' as const,
+    name,
+    mode: 'run' as const,
+    options,
+    body: 'b1',
+    ...extra,
+  })
+  return [
+    {
+      type: 'group',
+      name: 'fake',
+      mode: 'run',
+      options: { harness: { only: 'fake' }, sandbox: { kind: 'fake', dir: './sandboxes' } },
+      children: [eval_('context', { environment: context })],
+    },
+    eval_('compare', {
+      compare: {
+        baseline: env('plain', { sandbox: docker('./images/Dockerfile') }),
+        variants: [env('built', { sandbox: docker('../docker/Dockerfile') })],
+      },
+    }),
+    ...[0, 1].map((i) =>
+      eval_(
+        `case ${i}`,
+        { sandbox: docker('images/Dockerfile') },
+        {
+          family: { name: 'case %#', case: i, cases: 2 },
+        },
+      ),
+    ),
+  ] as DeclarationTree['children']
+}
+
+/** A project with the Dockerfiles the relative tree names. */
+function pathsProject(name: string): string {
+  const root = tempDir(name)
+  for (const dir of ['evals/images', 'docker']) {
+    mkdirSync(join(root, dir), { recursive: true })
+    writeFileSync(join(root, dir, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
+  }
+  return root
+}
+
+/** Every host path a declared tree's options hold, by where it sits. */
+function hostPaths(nodes: DeclarationTree['children'], into: Record<string, string> = {}) {
+  const at = (value: unknown, path: string) => {
+    if (typeof value !== 'object' || value === null) return
+    const v = value as Record<string, unknown>
+    if (v.kind === 'fake' && typeof v.dir === 'string') into[`${path}.dir`] = v.dir
+    if (v.kind === 'docker' && typeof v.dockerfile === 'string')
+      into[`${path}.dockerfile`] = v.dockerfile
+    if (v.kind === 'file' && typeof v.path === 'string') into[`${path}.path`] = v.path
+    if (v.source === 'local' && typeof v.path === 'string') into[`${path}.path`] = v.path
+    if (v.source === 'npm' && typeof v.spec === 'string') into[`${path}.spec`] = v.spec
+    if (v.kind === 'git' && typeof v.url === 'string') into[`${path}.url`] = v.url
+    for (const [key, child] of Object.entries(v)) at(child, `${path}.${key}`)
+  }
+  for (const node of nodes) {
+    if (node.type === 'todo') continue
+    at(node.options, `${node.name}`)
+    if (node.type === 'group') hostPaths(node.children, into)
+  }
+  return into
+}
+
+test("a tree's relative host paths resolve against the declaring file's directory", async () => {
+  const root = pathsProject('tree-paths')
+  const evals = join(root, 'evals')
+  const { file } = await collected(root, () => declareTree(relativeTree(), () => async () => {}))
+  const tree = JSON.parse(JSON.stringify(declaredTree(file))) as DeclarationTree
+  assert.deepEqual(hostPaths(tree.children), {
+    'fake.sandbox.dir': join(evals, 'sandboxes'),
+    'context.environment.layers.0.spec.files.a.txt.path': join(evals, 'fixtures/a.txt'),
+    'context.environment.layers.0.spec.rules.path': join(root, 'RULES.md'),
+    'context.environment.layers.0.spec.skills.0.path': join(evals, 'skills'),
+    'context.environment.layers.0.spec.skills.1.spec': join(root, 'pkg.tgz'),
+    'context.environment.layers.0.spec.workspace.url': join(root, 'app'),
+    'compare.compare.baseline.layers.0.spec.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
+    'compare.compare.variants.0.layers.0.spec.sandbox.dockerfile': join(root, 'docker/Dockerfile'),
+    'case 0.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
+    'case 1.sandbox.dockerfile': join(evals, 'images/Dockerfile'),
+  })
+})
+
+test('a tree with relative paths plans the same tests as with absolute ones', async () => {
+  const root = pathsProject('tree-relative')
+  const relative = await collected(root, () => declareTree(relativeTree(), () => async () => {}))
+  const absolute = JSON.parse(JSON.stringify(declaredTree(relative.file))) as DeclarationTree
+  const elsewhere = await collected(tempDir('tree-absolute'), () =>
+    declareTree(absolute.children, () => async () => {}),
+  )
+  const order = (tests: typeof relative.tests) =>
+    JSON.parse(
+      JSON.stringify(tests, (key, value) =>
+        key === 'order' && typeof value === 'number' ? 0 : value,
+      ),
+    )
+  assert.equal(relative.tests.length, 9)
+  assert.deepEqual(order(elsewhere.tests), order(relative.tests))
+  const replayed = JSON.parse(JSON.stringify(declaredTree(elsewhere.file))) as DeclarationTree
+  assert.deepEqual(hostPaths(replayed.children), hostPaths(absolute.children))
+})
+
+test("a tree's missing Dockerfile is refused at its absolute path, naming the field", async () => {
+  const root = tempDir('tree-missing')
+  const sandbox = { kind: 'docker', dockerfile: './Dockerfile' }
+  const env = { kind: 'environment', name: 'e', layers: [{ name: 'e', spec: { sandbox } }] }
+  const node = (options: object) =>
+    [{ type: 'eval', name: 'e', mode: 'run', options, body: 'b1' }] as DeclarationTree['children']
+  const full = join(root, 'evals', 'Dockerfile')
+  for (const [options, field] of [
+    [{ sandbox }, 'sandbox.dockerfile'],
+    [{ environment: env }, 'environment.layers[0].spec.sandbox.dockerfile'],
+    [{ compare: { variants: [env] } }, 'compare.variants[0].layers[0].spec.sandbox.dockerfile'],
+  ] as const) {
+    await assert.rejects(
+      () => collected(root, () => declareTree(node(options), () => async () => {})),
+      {
+        name: 'UsageError',
+        message: `${field} in evaluate("e"): ${full} doesn't exist. Paths are relative to the file that declares it.`,
+      },
+    )
+  }
 })
 
 test('replaying a tree with compare: false is refused like evaluate', async () => {

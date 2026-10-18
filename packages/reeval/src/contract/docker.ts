@@ -110,7 +110,7 @@ export const dockerSandboxSchema = z
     dockerfile: nonEmpty()
       .optional()
       .describe(
-        "An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
+        "A Dockerfile, absolute or relative to the directory of the file it's written in, built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
       ),
   })
   .superRefine(oneRecipe)

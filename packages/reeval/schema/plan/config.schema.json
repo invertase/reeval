@@ -330,7 +330,7 @@
           "exclusiveMinimum": 0
         },
         "dockerfile": {
-          "description": "An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
+          "description": "A Dockerfile, absolute or relative to the directory of the file it's written in, built from its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.",
           "type": "string",
           "pattern": "\\S"
         },
@@ -1041,7 +1041,7 @@
           "const": "file"
         },
         "path": {
-          "description": "Its absolute path on the host.",
+          "description": "Its path on the host, absolute or relative to the directory of the file it's written in.",
           "type": "string",
           "pattern": "\\S"
         }
