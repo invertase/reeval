@@ -1,0 +1,3 @@
+ARG REEVAL_BASE
+FROM ${REEVAL_BASE}
+RUN echo own > /opt/own

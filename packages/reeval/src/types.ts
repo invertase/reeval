@@ -667,8 +667,8 @@ export type DockerSandboxDescriptor = {
   /** A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached. */
   from?: string
   /**
-   * An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from
-   * its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.
+   * A Dockerfile, absolute or relative to the directory of the file it's written in, built from its
+   * directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.
    */
   dockerfile?: string
   /** Baked onto the sandbox image in one build container: in order, no secrets, no workspace. */
@@ -738,7 +738,7 @@ export type EnvVars = Record<string, EnvValue>
 /** A file on the host, read when an attempt starts. Made by the `file` helper. */
 export type HostFile = {
   kind: 'file'
-  /** Its absolute path on the host. */
+  /** Its path on the host, absolute or relative to the directory of the file it's written in. */
   path: string
 }
 

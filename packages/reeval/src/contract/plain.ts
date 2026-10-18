@@ -156,7 +156,9 @@ export const envVarsSchema = z
 export const hostFileSchema = z
   .strictObject({
     kind: z.literal('file'),
-    path: nonEmpty().describe('Its absolute path on the host.'),
+    path: nonEmpty().describe(
+      "Its path on the host, absolute or relative to the directory of the file it's written in.",
+    ),
   })
   .describe('A file on the host, read when an attempt starts. Made by the `file` helper.')
 

@@ -110,7 +110,7 @@ sandbox: { kind: fake, dir: ./sandboxes }
 
 Every host path follows one rule: a relative path resolves against the directory of the file it's written in, wherever you run `reeval` from. Absolute paths stay as written. A helper and its data form resolve alike, so all three lines give `sandboxes/` beside the config.
 
-In a config, that's the config's directory, for `reeval.config.ts` and `reeval.yaml` alike. In an eval file, or a module that calls `defineEnvironment` or a helper, it's that file's.
+In a config, that's the config's directory, for `reeval.config.ts` and `reeval.yaml` alike. In an eval file, or a module that calls `defineEnvironment` or a helper, it's that file's. An eval file's declarations sent as data, by an SDK in another language, resolve against that eval file's directory too.
 
 | Path | Helper | Data form |
 |---|---|---|

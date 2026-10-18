@@ -75,6 +75,23 @@ evals; `unhandled` fails the run; a failed attempt is a `result` with `state: "f
 
 `declaration` in `schema/plan/` takes its node shapes from the Zod schemas in
 `src/contract/declaration.ts`, and `declareTree` checks a tree against them before declaring it.
+
+A tree's relative host paths resolve against the directory of the eval file being collected, the
+rule TypeScript and `reeval.yaml` follow: a fake sandbox's `dir`, a `dockerfile` (which must be a
+file), and, in each environment layer's spec, host files in `files` and `rules`, a local skill's
+`path`, a local npm skill's `spec` and a local git workspace's `url`. That covers an eval's or
+group's `sandbox`, `environment`, `compare.baseline` and `compare.variants`. Absolute paths stay
+as written, so a tree a TypeScript file declared, whose helpers already resolved its paths,
+declares the same again.
+
+```jsonc
+// declared in /project/evals/greet.eval.py
+{"type":"eval","name":"greets","mode":"run","body":"b1","options":{
+  "sandbox":{"kind":"docker","dockerfile":"./images/Dockerfile"}}}
+// plans with "dockerfile":"/project/evals/images/Dockerfile"; a missing one is refused:
+// sandbox.dockerfile in evaluate("greets"): /project/evals/images/Dockerfile doesn't exist. …
+```
+
 The calls an eval's body makes on its attempt (`c.send`, `c.exec`, `c.serve`, `kill`,
 `c.capture`, `c.readFile`, `c.writeFile`, `c.judge` and each matcher, `expect.poll` included)
 have their own schemas in `src/contract/attempt.ts`, with JSON Schemas in

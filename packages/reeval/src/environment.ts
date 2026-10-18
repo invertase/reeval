@@ -965,6 +965,27 @@ export function specPaths(
   return out
 }
 
+/**
+ * An environment written as data with each layer's spec given absolute host paths against `base`,
+ * as `specPaths` gives one spec. Anything that isn't environment data is left for the checks.
+ */
+export function environmentPaths(
+  value: unknown,
+  base: string,
+  field: string,
+  missing: MissingDockerfile,
+): unknown {
+  if (!isRecord(value) || !Array.isArray(value.layers)) return value
+  return {
+    ...value,
+    layers: value.layers.map((layer, i) =>
+      isRecord(layer)
+        ? { ...layer, spec: specPaths(layer.spec, base, `${field}.layers[${i}].spec`, missing) }
+        : layer,
+    ),
+  }
+}
+
 function buildSpec(input: EnvironmentInput, where: string, base: string): EnvironmentSpec {
   const spec = typeof input === 'function' ? input(helpersFor(base)) : input
   if (spec instanceof Promise || typeof (spec as { then?: unknown })?.then === 'function') {

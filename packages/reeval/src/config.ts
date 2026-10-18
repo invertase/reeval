@@ -9,12 +9,12 @@ import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import {
   environmentFrom,
+  environmentPaths,
   helpersFor,
   isEnvironment,
   isSecret,
   type MissingDockerfile,
   sandboxPaths,
-  specPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
 import {
@@ -231,20 +231,6 @@ function withHostPaths<T extends object>(
   { environments = false } = {},
 ): T {
   const missing = missingIn(file)
-  const environment = (value: unknown, field: string) =>
-    isRecord(value) && Array.isArray(value.layers)
-      ? {
-          ...value,
-          layers: value.layers.map((layer, i) =>
-            isRecord(layer)
-              ? {
-                  ...layer,
-                  spec: specPaths(layer.spec, root, `${field}.layers[${i}].spec`, missing),
-                }
-              : layer,
-          ),
-        }
-      : value
   const options = (value: unknown, prefix: string) => {
     if (!isRecord(value)) return value
     const out = { ...value }
@@ -252,7 +238,7 @@ function withHostPaths<T extends object>(
       out.sandbox = sandboxPaths(value.sandbox, root, `${prefix}sandbox`, missing)
     }
     if (environments && 'environment' in value) {
-      out.environment = environment(value.environment, `${prefix}environment`)
+      out.environment = environmentPaths(value.environment, root, `${prefix}environment`, missing)
     }
     return out
   }
