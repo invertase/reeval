@@ -30,6 +30,9 @@ importers:
       knip:
         specifier: 6.41.0
         version: 6.41.0
+      reeval:
+        specifier: workspace:*
+        version: link:packages/reeval
       rollup-plugin-license:
         specifier: 3.7.1
         version: 3.7.1(picomatch@4.0.7)(rollup@4.63.5)

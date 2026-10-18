@@ -7,7 +7,7 @@
   },
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.{mjs,ts}"],
+      "entry": ["scripts/**/*.{mjs,ts}", "evals/**/*.{eval.ts,mjs}", "reeval*.config.ts"],
       "ignoreBinaries": ["report"],
       "ignoreDependencies": ["jiti"]
     },
