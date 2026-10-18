@@ -60,7 +60,10 @@ const signals: Record<string, (events: TranscriptEvent[]) => void> = {
     assert.ok(edits(events).some((e) => e.path === 'skill-proof.txt'))
   },
   mcp(events) {
-    assert.ok(tools(events).some((t) => t.tool === 'mcp__stamp__house_stamp'))
+    const calls = tools(events).filter((t) => t.tool === 'mcp__stamp__house_stamp')
+    assert.ok(calls.length)
+    // The input is the MCP tool's own arguments, not Cursor's wrapper naming the server.
+    for (const call of calls) assert.ok(!text(call.input).includes('providerIdentifier'))
   },
   'edit-and-run'(events) {
     assert.ok(edits(events).some((e) => e.path === 'notes.txt' && e.kind === 'modify'))
