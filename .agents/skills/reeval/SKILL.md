@@ -478,7 +478,8 @@ group(
   current-skill (1 split)`) or `reeval query question_pairs`, not the pooled
   rates, which count a split as a win for each side.
   A vote may carry a short `reason` (capped); do not gate on its wording. Their
-  model is the entry's `model`, else `analysis.model`, else the judge's when
+  model is the entry's `model`, else the cascaded `question.model`, else
+  `analysis.model`, else the judge's when
   it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2
   at plan time while `--dry-run` still lists them. A profile that leaves only
   the baseline drops them (`questions off (profile …)`). Keep deterministic
@@ -488,8 +489,8 @@ group(
   `{ transcript: 'tools', checks: ['npm test'] }`); keep `output` off for pairwise
   questions, since the more confident summary wins on wording. For UI evals,
   `artifacts: ['sign-in']` (or `true`) sends each side's own capture of that name
-  as an image. The `question` option (`{ state?, artifacts? }`, config → profile
-  → group → eval → entry, key by key) sets defaults; `judge.state` never reaches
+  as an image. The `question` option (`{ model?, state?, artifacts? }`, config →
+  profile → group → eval → entry, `state` key by key) sets defaults; `judge.state` never reaches
   questions. A question showing `transcript` across harnesses warns (tool names
   unblind them): ask it with `across: 'environment'`.
 - Questions are answered on the host once all of an eval's attempts end, from
@@ -617,7 +618,7 @@ files; `reeval record` warns if git still ignores a file it wrote.
 | `environment` and `compare: { baseline, … }` together | `environment and compare.baseline can't both be set` | Drop `environment`, or drop `baseline` to make it the control |
 | `compare: false` on an eval or group | `compare: false can't be set` | Use a profile's `limit.compare: false` |
 | `compare: { question: '…' }` | `Unknown compare option "question" … Did you mean "questions"?` | `questions: ['…']`, always a list |
-| A compare question and no language model | `compare.questions "…" (…) needs a language model` (exit 2) | Set `analysis.model`, or give the question its own `model` |
+| A compare question and no language model | `compare.questions "…" (…) needs a language model` (exit 2) | Set `analysis.model`, give the question its own `model`, or set `question: { model }` |
 | `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |

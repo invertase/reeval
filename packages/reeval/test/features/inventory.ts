@@ -206,8 +206,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.questions.state',
     area: 'Config and selection',
-    name: "Compare questions' `state` and `artifacts`, and the `question` option: what each side shows, cascaded key by key",
-    plan: ['compare/questions-state'],
+    name: "Compare questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded",
+    plan: ['compare/questions-state', 'compare/questions-model'],
     fixtures: [
       'compare/question-default',
       'compare/question-state',
@@ -218,6 +218,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/results.test.ts › state chooses what each side shows; output and files stay out by default',
       'reeval/test/results.test.ts › canary: state off drops a part the default shows',
       "reeval/test/results.test.ts › artifacts send each side's own capture of that name, labelled by position",
+      options("question.model cascades to every question without its own; an entry's model wins"),
       options('common mistakes'),
     ],
   },

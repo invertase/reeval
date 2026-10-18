@@ -26,7 +26,7 @@
 | `compare.harness` | ✓ 1 | ✓ 1 | — | — | — |
 | `compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control | ✓ 1 | ✓ 3 | ● 2 | ● 2 | — |
 | `compare.questions`: questions in the plan, answered after the run with pairwise win rates | ✓ 16 | ✓ 4 | — | — | ◐ 1 (1 without a canary) |
-| Compare questions' `state` and `artifacts`, and the `question` option: what each side shows, cascaded key by key | ✓ 4 | ✓ 1 | ● 4 | ● 1 | — |
+| Compare questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded | ✓ 5 | ✓ 2 | ● 4 | ● 1 | — |
 | `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 3 | — | — | — | — |
 | The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'` | ✓ 1 | ✓ 2 | — | — | — |
 | Profiles: `defaults`, `limit`, `pin`, selection and typos | ✓ 3 | ✓ 3 | — | — | — |

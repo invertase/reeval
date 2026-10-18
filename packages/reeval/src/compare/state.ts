@@ -31,7 +31,7 @@ export function resolveQuestionState(
   return out as ResolvedQuestionStateOptions
 }
 
-/** `inner` over `outer`: `state` key by key, `artifacts` replaced. */
+/** `inner` over `outer`: `state` key by key, `model` and `artifacts` replaced. */
 export function mergeQuestion(
   outer: QuestionOptions,
   inner: QuestionOptions | undefined,
@@ -42,7 +42,7 @@ export function mergeQuestion(
   return out
 }
 
-/** A planned question with the cascaded `question` defaults under its own `state` and `artifacts`. */
+/** A planned question with the cascaded `question` defaults under its own `model`, `state` and `artifacts`. */
 export function withQuestionDefaults(
   q: PlannedQuestion,
   defaults: QuestionOptions,
@@ -52,8 +52,10 @@ export function withQuestionDefaults(
     ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
   })
   const { state: _state, artifacts: _artifacts, ...rest } = q
+  const model = q.model ?? defaults.model
   return {
     ...rest,
+    ...(model !== undefined ? { model } : {}),
     ...(state && Object.keys(state).length ? { state } : {}),
     ...(artifacts !== undefined ? { artifacts } : {}),
   }

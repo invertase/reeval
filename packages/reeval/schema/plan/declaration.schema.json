@@ -163,7 +163,7 @@
       "additionalProperties": false
     },
     "CompareQuestion": {
-      "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run. `state` and `artifacts` choose what each side shows.",
+      "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, the cascaded `question.model` answers, else `analysis.model`, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run. `state` and `artifacts` choose what each side shows.",
       "anyOf": [
         {
           "type": "string",
@@ -194,7 +194,7 @@
               ]
             },
             "model": {
-              "description": "`'provider/model'` that answers it.",
+              "description": "`'provider/model'` that answers it, over the cascaded `question.model`.",
               "type": "string"
             },
             "question": {
@@ -945,7 +945,7 @@
               }
             },
             "question": {
-              "description": "Defaults for every compare question: `state` merged key by key down the cascade.",
+              "description": "Defaults for every compare question: `model`, and `state` merged key by key, down the cascade.",
               "$ref": "#/$defs/QuestionOptions"
             },
             "runs": {
@@ -1229,7 +1229,7 @@
               }
             },
             "question": {
-              "description": "Defaults for every compare question: `state` merged key by key down the cascade.",
+              "description": "Defaults for every compare question: `model`, and `state` merged key by key, down the cascade.",
               "$ref": "#/$defs/QuestionOptions"
             },
             "runs": {
@@ -1435,7 +1435,7 @@
               }
             },
             "question": {
-              "description": "Defaults for every compare question: `state` merged key by key down the cascade.",
+              "description": "Defaults for every compare question: `model`, and `state` merged key by key, down the cascade.",
               "$ref": "#/$defs/QuestionOptions"
             },
             "runs": {
@@ -2133,7 +2133,7 @@
       "enum": ["compare", "harness", "runs"]
     },
     "QuestionOptions": {
-      "description": "Defaults for every compare question: `state` merged key by key, `artifacts` replaced.",
+      "description": "Defaults for every compare question: `model` and `artifacts` replaced, `state` merged key by key.",
       "type": "object",
       "properties": {
         "artifacts": {
@@ -2152,6 +2152,10 @@
               }
             }
           ]
+        },
+        "model": {
+          "description": "`'provider/model'` that answers every question below it without its own `model`.",
+          "type": "string"
         },
         "state": {
           "description": "What each side shows.",

@@ -1473,7 +1473,7 @@
       "additionalProperties": false
     },
     "QuestionOptions": {
-      "description": "Defaults for every compare question: `state` merged key by key, `artifacts` replaced.",
+      "description": "Defaults for every compare question: `model` and `artifacts` replaced, `state` merged key by key.",
       "type": "object",
       "properties": {
         "artifacts": {
@@ -1492,6 +1492,10 @@
               }
             }
           ]
+        },
+        "model": {
+          "description": "`'provider/model'` that answers every question below it without its own `model`.",
+          "type": "string"
         },
         "state": {
           "description": "What each side shows.",
