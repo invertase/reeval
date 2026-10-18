@@ -1,3 +1,6 @@
+// reeval's matchers, once: the Chai adapter `expect` extends with and the attempt protocol's
+// `expect` call (attempt/match.ts) both run these, so a matcher's outcome and message are the same
+// however it was called. engine/expect.ts's `Matchers` interface is held to this table.
 import {
   calledMcp,
   calledSkill,
@@ -6,6 +9,7 @@ import {
   edited,
   fetched,
   type PathMatch,
+  type Result,
   ran,
   searched,
   type ToolInputMatch,
@@ -13,7 +17,17 @@ import {
 import { isObjectLike } from './object.ts'
 import type { ExecResult, JudgeFailure, Verdict } from './types.ts'
 
-type Result = { pass: boolean; message: () => string }
+/** How the matcher was called: `not` is `expect(…).not`, which a matcher may answer itself. */
+export type MatcherFlags = { not: boolean }
+
+/** A matcher's body: the subject `expect` was given, then the matcher's own arguments. */
+type Run<A extends unknown[], R extends Result | Promise<Result>> = (
+  actual: unknown,
+  args: A,
+  flags: MatcherFlags,
+) => R
+
+const matcher = <A extends unknown[], R extends Result | Promise<Result>>(run: Run<A, R>) => run
 
 /** The last `lines` lines, and at most `chars` characters of them: one line can be megabytes. */
 const tail = (s: string, lines = 20, chars = 2000) => {
@@ -28,21 +42,23 @@ type HasFiles = { readFile(path: string): Promise<string | null> }
 const hasFiles = (value: unknown): value is HasFiles =>
   isObjectLike(value) && typeof value.readFile === 'function'
 
-export const matchers = {
-  async toHaveFile(actual: unknown, path: string, pattern?: RegExp | string): Promise<Result> {
-    if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from c.send(), or c')
-    const content = await actual.readFile(path)
-    if (content === null) return { pass: false, message: () => `expected file ${path} to exist` }
-    if (pattern === undefined) return { pass: true, message: () => `expected no file at ${path}` }
-    const pass = typeof pattern === 'string' ? content.includes(pattern) : pattern.test(content)
-    return {
-      pass,
-      message: () =>
-        `expected ${path} ${pass ? 'not ' : ''}to match ${pattern}\n--- ${path} ---\n${tail(content)}`,
-    }
-  },
+export const MATCHERS = {
+  toHaveFile: matcher(
+    async (actual, [path, pattern]: [path: string, pattern?: RegExp | string]) => {
+      if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from c.send(), or c')
+      const content = await actual.readFile(path)
+      if (content === null) return { pass: false, message: () => `expected file ${path} to exist` }
+      if (pattern === undefined) return { pass: true, message: () => `expected no file at ${path}` }
+      const pass = typeof pattern === 'string' ? content.includes(pattern) : pattern.test(content)
+      return {
+        pass,
+        message: () =>
+          `expected ${path} ${pass ? 'not ' : ''}to match ${pattern}\n--- ${path} ---\n${tail(content)}`,
+      }
+    },
+  ),
 
-  async toSucceed(actual: unknown): Promise<Result> {
+  toSucceed: matcher(async (actual, _: []) => {
     const r = (await actual) as ExecResult
     if (typeof r?.exitCode !== 'number') throw new TypeError('toSucceed() expects run.exec(...)')
     return {
@@ -53,46 +69,36 @@ export const matchers = {
           : `expected command to succeed, exit code ${r.exitCode}\n` +
             `--- stderr ---\n${tail(r.stderr)}\n--- stdout ---\n${tail(r.stdout)}`,
     }
-  },
+  }),
 
-  toHaveSearched(actual: unknown, query?: RegExp | string): Result {
-    return searched(actual, query)
-  },
+  toHaveSearched: matcher((actual, [query]: [query?: RegExp | string]) => searched(actual, query)),
 
-  toHaveFetched(actual: unknown, url?: RegExp | string): Result {
-    return fetched(actual, url)
-  },
+  toHaveFetched: matcher((actual, [url]: [url?: RegExp | string]) => fetched(actual, url)),
 
-  toHaveCalledSkill(actual: unknown, name: string): Result {
-    return calledSkill(actual, name)
-  },
+  toHaveCalledSkill: matcher((actual, [name]: [name: string]) => calledSkill(actual, name)),
 
-  toHaveCalledMcp(actual: unknown, server: string, tool: string, input?: ToolInputMatch): Result {
-    return calledMcp(actual, server, tool, input)
-  },
+  toHaveCalledMcp: matcher(
+    (actual, [server, tool, input]: [server: string, tool: string, input?: ToolInputMatch]) =>
+      calledMcp(actual, server, tool, input),
+  ),
 
-  toHaveCalledTool(actual: unknown, name: string | RegExp, input?: ToolInputMatch): Result {
-    return calledTool(actual, name, input)
-  },
+  toHaveCalledTool: matcher(
+    (actual, [name, input]: [name: string | RegExp, input?: ToolInputMatch]) =>
+      calledTool(actual, name, input),
+  ),
 
-  toHaveRun(actual: unknown, command?: RegExp | string): Result {
-    return ran(actual, command)
-  },
+  toHaveRun: matcher((actual, [command]: [command?: RegExp | string]) => ran(actual, command)),
 
-  toHaveEdited(actual: unknown, path?: RegExp | string): Result {
-    return edited(actual, path)
-  },
+  toHaveEdited: matcher((actual, [path]: [path?: RegExp | string]) => edited(actual, path)),
 
-  toHaveChanged(actual: unknown, paths?: PathMatch): Result {
-    return changed(actual, paths)
-  },
+  toHaveChanged: matcher((actual, [paths]: [paths?: PathMatch]) => changed(actual, paths)),
 
-  toPass(this: { isNot?: boolean } | undefined, actual: unknown): Result {
+  toPass: matcher((actual, _: [], { not }): Result => {
     const failure = actual as JudgeFailure
     if (failure?.verdict === 'error' && typeof failure.error === 'string') {
       // A failed call answered nothing, so `.not.toPass()` fails on it too.
       return {
-        pass: !!this?.isNot,
+        pass: not,
         message: () =>
           `judge failed for "${failure.question}" (${failure.model}): ${failure.error}`,
       }
@@ -107,5 +113,37 @@ export const matchers = {
           ? `expected judge to fail: score ${score} ≥ ${v.threshold} for "${v.question}"`
           : `judge score ${score} is below ${v.threshold} for "${v.question}" (${v.model})`,
     }
-  },
+  }),
 }
+
+export type MatcherName = keyof typeof MATCHERS
+
+/** A matcher's arguments after the subject, as `expect(…).<name>(...args)` takes them. */
+export type MatcherArgs<K extends MatcherName> = Parameters<(typeof MATCHERS)[K]>[1]
+
+export const isMatcherName = (name: string): name is MatcherName => Object.hasOwn(MATCHERS, name)
+
+/** Runs `name`'s row on arguments its signature hasn't checked, as Chai and the protocol pass them. */
+export const runMatcher = (
+  name: MatcherName,
+  actual: unknown,
+  args: unknown[],
+  flags: MatcherFlags,
+): Result | Promise<Result> =>
+  (MATCHERS[name] as Run<unknown[], Result | Promise<Result>>)(actual, args, flags)
+
+type ChaiMatcher<K extends MatcherName> = (
+  this: { isNot?: boolean } | undefined,
+  actual: unknown,
+  ...args: MatcherArgs<K>
+) => ReturnType<(typeof MATCHERS)[K]>
+
+/** The table as `expect.extend` takes it: Chai passes `.not` as `this.isNot`. */
+export const matchers = Object.fromEntries(
+  (Object.keys(MATCHERS) as MatcherName[]).map((name) => [
+    name,
+    function (this: { isNot?: boolean } | undefined, actual: unknown, ...args: unknown[]) {
+      return runMatcher(name, actual, args, { not: !!this?.isNot })
+    },
+  ]),
+) as { [K in MatcherName]: ChaiMatcher<K> }
