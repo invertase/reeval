@@ -124,7 +124,7 @@ summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
 
 ## The summary
 
-Plain output ends with a summary: a file › group tree with each eval's outcome, duration, lowest judge score and turns. Evals with several attempts get their pass count, their pass@1 (labelled `gated` when some cells, such as controls, aren't gated: see [the eval line](/reference/cli/run#the-summarys-eval-line)) and a row per cell, with its role and lift, and each variant an `effort:` line (see [effort](/concepts/lift#effort-next-to-lift)). From a real run of Cursor and Antigravity at `--runs 2`:
+Plain output ends with a summary: a file › group tree with each eval's outcome, duration, lowest judge score and turns. An eval with several attempts gets its pass count, its pass@1 ([`gated`](/reference/cli/run#the-summarys-eval-line) when some cells aren't), a row per cell with its role and lift, and an [`effort:`](/concepts/lift#effort-next-to-lift) line under each variant. From a real run of Cursor and Antigravity at `--runs 2`:
 
 ```text
 Summary
@@ -153,7 +153,9 @@ Duration  2m 39s
 
 An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity, OpenCode, pi and Codex do): input includes cached reads, and there's no cost line because reeval prices no models.
 
-Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its artifact directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure. Misses in ungated cells (a compare's controls, by default) get their own neutral `Expected misses, not gated` section instead, one line of why each, and `summary.md` folds their detail into `<details>`.
+Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its attempt's directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure.
+
+Misses in ungated cells (a compare's controls, by default) get their own neutral `Expected misses, not gated` section instead, one line of why each, and `summary.md` folds their detail into `<details>`.
 
 | Variable | Same as |
 |---|---|

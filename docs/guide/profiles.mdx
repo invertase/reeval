@@ -47,14 +47,19 @@ npx reeval image build --profile nightly   # the images nightly's plan needs
 | `limit.compare` | Over every eval | `false` runs the control only; `{ maxVariants: n }` keeps the first n |
 | `limit.harness` | Over every eval | Keeps only these harness ids; an eval left with none is skipped |
 
-An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it. `--runs` on the command line beats both. A profile can also set a default `judge`, when to `record`, and `tags` filters like `--tag`.
+An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it, and `--runs` on the command line beats both.
+
+A profile can also set a default `judge`, when to `record`, and `tags` filters like `--tag`.
 
 ## Pin what a profile can't change
 
 ```ts title="evals/skill.eval.ts"
 group(
   'house greeting',
-  { compare: { baseline: plain, variants: [withHouseGreeting] }, pin: ['compare'] },
+  {
+    compare: { baseline: plain, variants: [withHouseGreeting] },
+    pin: ['compare'],
+  },
   () => { /* … */ },
 )
 ```
@@ -107,7 +112,9 @@ plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · ~13s 
 reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
 ```
 
-`budget.attempts` is checked against the plan before anything starts. Over it, `reeval run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run ends with status `budget` (exit 1). When the run records (`--record`, `record: 'always'`, or in CI), it's recorded with that status, and `reeval compare` never takes it as a base.
+reeval checks `budget.attempts` against the plan before anything starts; over it, `reeval run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run ends with status `budget` (exit 1).
+
+When the run records (`--record`, `record: 'always'`, or in CI), it's recorded with that status, and `reeval compare` never takes it as a base.
 
 There's no cost or token budget. `budget: { usd: 5 }` stops the run before it starts:
 

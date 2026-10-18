@@ -83,9 +83,8 @@ evaluate.each(names)(
   async (c, name) => {
     await c.send('Create greet.js exporting greet(name) in our house style.')
     const check = `m.greet('${name}') === 'Ahoy, ${name}!' ? 0 : 1`
-    await expect(
-      c.exec(`node -e "import('./greet.js').then((m) => process.exit(${check}))"`),
-    ).toSucceed()
+    const run = `import('./greet.js').then((m) => process.exit(${check}))`
+    await expect(c.exec(`node -e "${run}"`)).toSucceed()
   },
 )
 ```
@@ -212,10 +211,12 @@ evals/percase.eval.ts › adds lodash with pnpm  1          —         1     1
 
 ## Variations
 
-- **Cases in their own module:** `import { cases } from './cases.ts'`. reeval records every local file an eval imports among its sources, so an edit to the list shows up when you [compare runs](/guide/history).
-- **Inside a group:** `evaluate.each` works in `group(…)`, and the group's options (`compare`, `runs`, `environment`) apply to every case. Each `evaluate.each` is its own family.
-- **Querying families:** `reeval query family_lift` has one row per family, variant and run. See [query](/reference/cli/query).
-- **Competitors:** see [Check a recommendation](/recipes/recommendation) for one judge-only eval per competitor.
+| Variation | How |
+|---|---|
+| Cases in their own module | `import { cases } from './cases.ts'`. reeval records every local file an eval imports among its sources, so an edit to the list shows up when you [compare runs](/guide/history) |
+| Inside a group | `evaluate.each` works in `group(…)`, and the group's options (`compare`, `runs`, `environment`) apply to every case. Each `evaluate.each` is its own family |
+| Querying families | `reeval query family_lift` has one row per family, variant and run. See [query](/reference/cli/query) |
+| Competitors | See [Check a recommendation](/recipes/recommendation) for one judge-only eval per competitor |
 
 ## Next
 

@@ -43,7 +43,9 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   What the judge is given beside your question: the judge's state, not the workspace's or the attempt's. An object keyed by the state's fields, described in [What the judge is given](#what-the-judge-is-given). It merges key by key, so a call's `state: { transcript: 'tools' }` keeps the config's `diff` patterns. A key's value replaces the outer one whole; lists aren't concatenated.
 </Property>
 
-`c.judge()` also takes `on`: a `Turn` this attempt's `c.send()` returned, to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). Only those `Turn` objects count as turns: a plain object shaped like one is a value, and a copy of a turn (`{ ...turn }`) is refused. `on` with a value and `state: { output: false }` is refused. `artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
+`c.judge()` also takes `on`: a `Turn` this attempt's `c.send()` returned, to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff). Only those `Turn` objects count as turns: a plain object shaped like one is a value, and a copy of a turn (`{ ...turn }`) is refused. `on` with a value and `state: { output: false }` is refused.
+
+`artifacts` is call-only: a list of `c.capture()` handles or their names. Each capture is sent as a file part. A provider that cannot take files fails the call with its own error.
 
 <Property name="artifacts" type="Array<Capture | string>" optional>
   Captures this call sends the judge. A handle from `c.capture()` or that capture's `name`. The PNG is a file part (`{ type: 'file', mediaType: 'image/png', data }`). Ask about facts in the picture, not whether it "looks great". JSON-only calls (no `artifacts`) stay a JSON object.
@@ -57,7 +59,9 @@ const verdict = await c.judge('Does sign-in handle a wrong password?', {
 })
 ```
 
-The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`; the resolved option is beside it as `stateOptions`. With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
+The judge gets your question and a JSON state, which `state` chooses. It's in `judge-input.json` as each call's `state`; the resolved option is beside it as `stateOptions`.
+
+With `artifacts`, the state is an ordered list: one JSON part, then each capture as a file part. The score is the model's probability that the answer is yes.
 
 | `state` key | Type | Default | What the state holds |
 |---|---|---|---|
@@ -94,12 +98,14 @@ What was left out, and why, is the judge input's `dropped` in `judge-input.json`
 
 ## Provider errors
 
-reeval sends the judge everything `state` selects, uncut. When the provider refuses it, or a judge call fails with any other error from the provider's API, the message keeps the provider's wording and adds one line: the input's estimated size, at four characters a token, its biggest parts and files, and the `state` keys that were on, largest first. reeval knows no model's limit and doesn't read the provider's message, so the line comes with every provider error.
-
 ```text
 judge failed for "Is it done?" (typesafe.evaluation/jev-under-test): {"error_type":"max_tokens_exceeded"}
 The judge's input was ~22k tokens (estimated): diff 19k, of which src/pages/SignIn.tsx is 17k, src/firebase.ts is 2k; transcript 3k. Narrow state.diff, state.transcript, state.files, state.task or state.output.
 ```
+
+reeval sends the judge everything `state` selects, uncut. When the provider refuses it, or a judge call fails with any other error from the provider's API, the message keeps the provider's wording and adds one line.
+
+That line has the input's estimated size, at four characters a token, its biggest parts and files, and the `state` keys that were on, largest first. reeval knows no model's limit and doesn't read the provider's message, so the line comes with every provider error.
 
 ## Failed calls
 
@@ -131,7 +137,11 @@ reeval: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_A
 
 ## Retries
 
-A transient provider error (408, 409, 425, 429, a 5xx, or a message about high demand, overload, rate limits or a reset connection) is retried up to six tries in all, with exponential backoff from 2 seconds, capped at 30 seconds, and at least any `retry-after`.
+| Retried | How |
+|---|---|
+| 408, 409, 425, 429 and any 5xx | Up to six tries in all |
+| A message about high demand, overload, rate limits or a reset connection | The same |
+| The wait between tries | Exponential from 2 seconds, capped at 30, and at least any `retry-after` |
 
 Each retry is recorded on the verdict as `{ error, delayMs }`. A judge that still fails is a [failed call](#failed-calls): a judge error for the attempt, not a failed check.
 
@@ -143,7 +153,11 @@ import { fakeJudge } from '{{ pkg }}/judge'
 judge: { model: fakeJudge({ score: 0.95 }) }
 ```
 
-A judge that returns `score` (default `1`) for every question, with no key and no call. Its model name is `fake`. Per group, eval or call, `score` can be a function of the state the judge would see, to test what reaches it: `fakeJudge({ score: (state) => (String(state.diff).includes('dist/') ? 0 : 1) })`. The config takes a number. `'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.13.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
+A judge that returns `score` (default `1`) for every question, with no key and no call. Its model name is `fake`.
+
+Per group, eval or call, `score` can be a function of the state the judge would see, to test what reaches it: `fakeJudge({ score: (state) => (String(state.diff).includes('dist/') ? 0 : 1) })`. The config takes a number.
+
+`'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.13.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
 
 ## fakeAnalysis
 
@@ -165,7 +179,9 @@ analysis: {
 }
 ```
 
-With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note. Its summary of the run reads up to three dropped evidence items and three failing attempts with the tools, then answers with `output`; an `output` function gets the digest with the evidence it read, and one that throws tests a failed summary.
+With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note.
+
+Its summary of the run reads up to three dropped evidence items and three failing attempts with the tools, then answers with `output`; an `output` function gets the digest with the evidence it read, and one that throws tests a failed summary.
 
 ```ts
 analysis: {
@@ -175,7 +191,9 @@ analysis: {
 }
 ```
 
-`vote` answers [compare questions](/guide/compare#ask-questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, `{ winner, reason? }` to record a reason, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
+`vote` answers [compare questions](/guide/questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, `{ winner, reason? }` to record a reason, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`.
+
+Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
 
 ## Errors
 

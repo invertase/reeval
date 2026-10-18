@@ -49,11 +49,11 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
 ## Filters
 
 ```bash
-npx reeval run evals/hello.eval.ts            # a file
-npx reeval run "greet module"               # evals by group or name
-npx reeval run "greet module › creates"     # an eval in a group, as its id reads
-npx reeval run with-house-greeting          # cells by key
-npx reeval run skill antigravity            # the Antigravity cells of skill.eval.ts
+npx reeval run evals/hello.eval.ts      # a file
+npx reeval run "greet module"           # evals by group or name
+npx reeval run "greet module › creates" # an eval in a group, by its id
+npx reeval run with-house-greeting      # cells by key
+npx reeval run skill antigravity        # skill.eval.ts's Antigravity cells
 ```
 
 - A filter part that names an eval file picks files. Every other part picks evals by name or cell key, as a case-sensitive substring of the eval id or the cell key (`cursor:composer-2.5/with-house-greeting/docker`).
@@ -75,7 +75,9 @@ The estimate is the median of each eval's recent attempts on that harness (the l
 plan  run 20260926T174055Z_b010670_ci_vdfy · profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
 ```
 
-`--dry-run` adds a row per eval, then, when Docker is running, a line per sandbox image saying whether it's ready, to build, stale or missing (a `from` tag is looked up in its registry, never pulled), and stops with exit 0. `--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document, with each image step's `status` and `detail`. Neither needs credentials, and Docker is optional.
+`--dry-run` adds a row per eval, then, when Docker is running, a line per sandbox image saying whether it's ready, to build, stale or missing (a `from` tag is looked up in its registry, never pulled), and stops with exit 0. Neither needs credentials, and Docker is optional.
+
+`--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document, with each image step's `status` and `detail`.
 
 ```text
 images  4 sandbox images: 1 ready, 3 to build
@@ -98,39 +100,34 @@ npx reeval run --resume 20260101T000000Z_nogit_ada-lovelace_k3f9
 npx reeval run --resume 20260101T0000
 ```
 
-Without a ref, reeval picks the newest **resumable** thing: a Stopped staging
-directory, or an `interrupted` / `budget` scratch record. That is not `reeval
-show latest`. After a crash, `latest` is often the previous assembled run,
-which may be complete.
+| Ref | Picks |
+|---|---|
+| None, or `latest` | The newest resumable run: a Stopped staging directory, or an `interrupted` or `budget` scratch record. Not `reeval show latest`, which after a crash is often the previous assembled run |
+| A run id or unique prefix | That run. Git SHA prefixes aren't used: they'd pick the newest run at that commit, which is often complete |
 
-`--resume <ref>` is a run id or unique prefix. Git SHA prefixes are not used:
-they would pick the newest run at that commit, which is often complete.
+A run is resumable when it isn't `complete` and no process for that id is still alive on this machine. The pid is what counts: a quiet heartbeat (a sleeping laptop) is still running, and resume won't destroy its containers. A second `--resume` of the same id is refused while the first CLI still holds it.
 
-A run is resumable when no process for that id is still alive on this machine
-and it is not `complete`. The pid is what counts: a quiet heartbeat (a sleeping
-laptop) is still running, and resume will not destroy its containers. A second
-`--resume` of the same id is refused while the first CLI still holds it. With
-no ref, a live leftover is named (`still running`) rather than reported as
-missing. `.reeval/current` points at the id when the run starts, after the
-plan, so `--resume` with no ref can find a crash that never assembled. A usage
-error at plan time writes nothing.
+With no ref, a live leftover is named (`still running`) rather than reported as missing. `.reeval/current` points at the id from the moment the run starts, after the plan, so `--resume` can find a crash that never assembled. A usage error at plan time writes nothing.
 
-In-flight attempts start again from the beginning of the attempt. Completed
-ones keep their outcome, including a pass. The assembled record replaces the
-interrupted or budget scratch under the same id.
+In-flight attempts start again from the beginning, and completed ones keep their outcome, including a pass. The assembled record replaces the interrupted or budget scratch under the same id.
 
-On GitHub Actions, the id is written to `GITHUB_OUTPUT` as `run-id` and to the
-step summary when the run starts, so the job log has it even if SIGKILL skips
-assemble. Re-run still needs the leftover staging (or interrupted scratch)
-restored onto the new VM.
+On GitHub Actions, the id goes to `GITHUB_OUTPUT` as `run-id` and to the step summary when the run starts, so the job log has it even if SIGKILL skips assembly. A re-run still needs the leftover staging (or interrupted scratch) restored onto the new VM.
 
 ## Before any attempt starts
 
-`reeval run` checks, in order: a `reeval.config.*` is found (or `--config` names one); the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running. Each failure exits 2 without writing a run. With no config it says `No reeval.config.ts … here or above. Run reeval init.`; a present config whose `include` matches nothing says `No eval files in … match include: …`.
+| Check, in order | On failure, exit 2 without writing a run |
+|---|---|
+| A config is found, or `--config` names one | `No reeval.config.ts … here or above. Run reeval init.` |
+| The config and every eval file load | The load error |
+| `include` matches files, and filters and tags match evals | `No eval files in … match include: …` |
+| `.only` isn't used in CI | |
+| The plan fits `budget.attempts` | |
+| The credentials of the harnesses and judge the plan uses are set, with no stray whitespace | The missing or malformed variables |
+| Docker is running | |
 
 Then it prepares every sandbox image the plan needs, three at a time, once each: see [Sandbox providers](/reference/sandbox/providers). One the config sets that can't be prepared stops the run there, exit 3 (2 for a missing `docker({ image })`); one a group or eval sets fails only the attempts that need it.
 
-`reeval run` loads `.env.local`, then `.env`, from the config's directory, not the current one: variables already set in your shell win, then `.env.local`, then `.env`. The config and the evals both see them.
+`reeval run` loads `.env.local`, then `.env`, from the config's directory, not the current one. Variables already set in your shell win, then `.env.local`, then `.env`, and the config and the evals both see them.
 
 ## Output flags
 
@@ -155,23 +152,20 @@ An eval with several attempts shows its passes over every counted attempt, then 
 
 The `gated` label says the rate leaves out the ungated cells, whose failures don't fail the eval. The studio's eval history labels the rate the same way.
 
-A single-attempt eval's line shows each judge as `pass 0.92/0.80` or
-`fail 0.78/0.80`. Three or more judges collapse to the lowest score plus a
-count (`fail 0.33/0.80 · 3 judges`). Token usage, when the harness reported it,
-follows the turns.
+A single-attempt eval's line shows each judge as `pass 0.92/0.80` or `fail 0.78/0.80`. Three or more judges collapse to the lowest score plus a count (`fail 0.33/0.80 · 3 judges`). Token usage, when the harness reported it, follows the turns.
 
-An eval with several attempts also prints each judge key's passes over counted
-attempts on the cell row (`login 4/5 · checkout 0/5`). Questions that share a
-prefix show the distinctive tail (`…email sign-in 4/5 · …social sign-in 0/5`)
-so the rates stay matchable.
+An eval with several attempts also prints each judge key's passes over counted attempts on the cell row (`login 4/5 · checkout 0/5`). Questions that share a prefix show the distinctive tail (`…email sign-in 4/5 · …social sign-in 0/5`), so the rates stay matchable.
 
-A variant key shows lift only when both sides have at least two counted
-attempts. The cell's tokens are the sum of those counted attempts; a harness
-that reports none leaves the field blank, never `0`.
+A judge key shows lift on a variant only when both sides have at least two counted attempts. The cell's tokens are the sum of its counted attempts; a harness that reports none leaves the field blank, never `0`.
 
 ## What it writes
 
-Every run, including one where nothing passed, writes a scratch run to `.reeval/runs/<runId>.json` and its artifacts to `.reeval/runs/<runId>/`. `--record`, or `record: 'ci'` with `CI` set, or `record: 'always'`, also copies it into the history folder. Each attempt's local debug data goes to `.reeval/debug/`.
+| Path | What | When |
+|---|---|---|
+| `.reeval/runs/<runId>.json` | The scratch run's record | Every run, including one where nothing passed |
+| `.reeval/runs/<runId>/` | Its artifacts | Every run |
+| The history folder | A copy of both | `--record`, `record: 'ci'` with `CI` set, or `record: 'always'` |
+| `.reeval/debug/` | Each attempt's local debug data | Every run |
 
 ## Related
 

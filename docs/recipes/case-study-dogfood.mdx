@@ -48,7 +48,7 @@ export const brokenProject = defineEnvironment(
   }),
 )
 
-/** A hastily written skill on that project: shallow, vague and partly out of date. */
+/** A hasty skill on that project: shallow, vague and partly out of date. */
 export const reevalWeak = brokenProject.extendEnvironment(
   'reeval-weak',
   ({ skill }) => ({
@@ -168,16 +168,22 @@ Overall, `reeval-good` needed 4× fewer tool calls (median 10 against 40) and ab
 
 ## What the judge caught
 
-35 of 36 verdicts were 0.98 or higher. The one failure, 0.10, was the control on `fix-config`. It fixed the config, but its explanation said `baseline` "added nothing" and `repeat` "is only an alias". Neither is true: `baseline` doesn't exist and `repeat` isn't an alias. The judge was right, and that was the one quality difference the run found.
+| Run | Score | What happened |
+|---|---|---|
+| The full run | 35 of 36 at 0.98 or higher | The judge passed the work |
+| The full run, control on `fix-config` | 0.10 | It fixed the config, but its explanation said `baseline` "added nothing" and `repeat` "is only an alias". Neither is true: `baseline` doesn't exist and `repeat` isn't an alias |
+| The smoke run, a correct scaffold | 0.05 | The question named specific matchers and the agent used others: a bug in the question |
 
-The verdict carried no reason, so finding the false claims meant reading the final message. In the smoke run the judge also failed a correct scaffold at 0.05, because the question named specific matchers and the agent used others. That was a bug in the question.
+The judge was right about `fix-config`, and that was the one quality difference the run found. The verdict carried no reason, so finding the false claims meant reading the final message.
 
 ## Lessons
 
-- **Tasks the agent already solves saturate.** composer-2.5 solved all three tasks from the type definitions and reeval's error messages. To separate variants, make the task harder or measure effort.
-- **Lift measures pass rate only.** The skill's 4× effect appeared nowhere in `lift`. reeval now prints an `effort:` line under each variant (median tool calls and agent time against the control's, with a rank test), and `reeval query effort` and [`reeval analyze`](/reference/cli/analyze) report it across runs.
-- **Name outcomes, not methods, in judge questions.** "Checks hello.txt with a deterministic assertion" survives; "uses `toHaveFile`" fails correct work.
-- **Two runs a cell is a smoke test.** Every interval here is more than 100 points wide.
+| Lesson | Why |
+|---|---|
+| Tasks the agent already solves saturate | composer-2.5 solved all three tasks from the type definitions and reeval's error messages. To separate variants, make the task harder or measure effort |
+| Lift measures pass rate only | The skill's 4× effect appeared nowhere in `lift`. The `effort:` line under each variant, `reeval query effort` and [`reeval analyze`](/guide/analyze) report it |
+| Name outcomes, not methods, in judge questions | "Checks hello.txt with a deterministic assertion" survives; "uses `toHaveFile`" fails correct work |
+| Two runs a cell is a smoke test | Every interval here is more than 100 points wide |
 
 The same suite later ran on Cursor and Antigravity side by side; see [Compare agents](/recipes/compare-agents).
 

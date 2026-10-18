@@ -89,11 +89,18 @@ The commit comes before `files` and `setup`, so what they add is uncommitted, an
 ## What the record keeps
 
 ```bash
-npx reeval show latest --json | jq -c '.environments[].workspace'
+npx reeval show latest --json | jq '.environments[].workspace'
 ```
 
 ```json
-{"source":"https://github.com/vitejs/vite","ref":"v6.0.0","path":"packages/create-vite/template-react-ts","commit":"814120f2ad387ca3d1e16c7dd403b04ca4b97f75","tree":"1006cbf3da5c05d570e320b94b2e958e375f8021","init":true}
+{
+  "source": "https://github.com/vitejs/vite",
+  "ref": "v6.0.0",
+  "path": "packages/create-vite/template-react-ts",
+  "commit": "814120f2ad387ca3d1e16c7dd403b04ca4b97f75",
+  "tree": "1006cbf3da5c05d570e320b94b2e958e375f8021",
+  "init": true
+}
 ```
 
 The tree hash is in the environment's digest, so the fingerprint changes when the code does, and not when an unrelated commit moves the ref.
@@ -109,7 +116,9 @@ export const app = defineEnvironment('app', ({ git }) => ({
 }))
 ```
 
-`token` names a host variable, as `secret.fromEnv` does. reeval reads it on the host and sends it, as a header in `git`'s environment, only to the repository's own origin; it never reaches the sandbox, the record or `.reeval`, and it's masked in errors. Without `token`, reeval uses your own git credentials: a credential helper, `gh auth setup-git` or an SSH key. It never prompts.
+`token` names a host variable, as `secret.fromEnv` does. reeval reads it on the host and sends it, as a header in `git`'s environment, only to the repository's own origin; it never reaches the sandbox, the record or `.reeval`, and it's masked in errors.
+
+Without `token`, reeval uses your own git credentials (a credential helper, `gh auth setup-git` or an SSH key), and never prompts.
 
 Only the tree reaches the sandbox, so a `deny-all` eval can start from a private repository. In GitHub Actions, the workflow's own `GITHUB_TOKEN` reads only its own repository; for another private one, store a read-only fine-grained token as a secret and set it in the step's `env`:
 
@@ -139,10 +148,12 @@ Those attempts are infra errors, so the run exits 3. [Errors](/reference/errors#
 
 ## Variations
 
-- **Patch the starting code:** `files` are written over the repository, so `files: { 'src/config.ts': … }` swaps one file.
-- **Compare two versions:** `const v5 = reactTs.extendEnvironment('v5', ({ git }) => ({ workspace: git(…, { ref: 'v5.4.0', path: … }) }))`, then `compare: { baseline: reactTs, variants: [v5] }`. The child's `workspace` replaces its parent's. `compare` runs the two apart.
-- **A repository next to your evals:** `git('../fixtures/app', { ref: 'v1' })` resolves against the calling file, as `file()` does.
-- **A fixture directory that isn't a repository:** `files: directory('../fixtures/app')` copies its files, without `node_modules/`, `dist/` and the other [default ignores](/reference/helpers#directory). Unlike `workspace`, it isn't pinned to a commit: the files' contents are in the environment's digest instead.
+| Variation | How |
+|---|---|
+| Patch the starting code | `files` are written over the repository, so `files: { 'src/config.ts': … }` swaps one file |
+| Compare two versions | `const v5 = reactTs.extendEnvironment('v5', ({ git }) => ({ workspace: git(…, { ref: 'v5.4.0', path: … }) }))`, then `compare: { baseline: reactTs, variants: [v5] }`. The child's `workspace` replaces its parent's. `compare` runs the two apart |
+| A repository next to your evals | `git('../fixtures/app', { ref: 'v1' })` resolves against the calling file, as `file()` does |
+| A fixture directory that isn't a repository | `files: directory('../fixtures/app')` copies its files, without `node_modules/`, `dist/` and the other [default ignores](/reference/helpers#directory). Unlike `workspace`, it isn't pinned to a commit: the files' contents are in the environment's digest instead |
 
 ## Next
 

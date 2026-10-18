@@ -31,7 +31,9 @@ my-project/
     src/lib/
 ```
 
-Without `--config`, `reeval` looks in the current directory, then in each parent up to the filesystem root, and uses the first config it finds, as Vitest and ESLint do. In each directory it tries `reeval.config.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs`, in that order, and then [`reeval.yaml`](#reevalyaml) or `reeval.yml`. A directory with a YAML config and another config is an error. A git or workspace root doesn't stop the search, so a nested project with its own config uses it, and a project without one uses its parent's.
+Without `--config`, `reeval` looks in the current directory, then in each parent up to the filesystem root, and uses the first config it finds, as Vitest and ESLint do. In each directory it tries `reeval.config.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs`, in that order, and then [`reeval.yaml`](#reevalyaml) or `reeval.yml`. A directory with a YAML config and another config is an error.
+
+A git or workspace root doesn't stop the search, so a nested project with its own config uses it, and a project without one uses its parent's.
 
 | You run | reeval reads |
 |---|---|
@@ -40,9 +42,13 @@ Without `--config`, `reeval` looks in the current directory, then in each parent
 | `reeval run --config ../reeval.claude.config.ts` | that file, relative to the current directory |
 | `reeval run --config reeval.staging.yml` | that YAML config |
 
-`--config` always wins, and names like `reeval.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`). `reeval run` and `reeval image build` also fail when no config is found (`No reeval.config.ts … here or above. Run reeval init.`). Other commands then use each key's default in the current directory.
+`--config` always wins, and names like `reeval.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`).
 
-The config's directory is the project root, wherever you run `reeval`. `include` globs, relative paths in the config (see [Relative paths](#relative-paths)), `.env.local` and `.env`, `.reeval/` (scratch runs, debug data, `history.db`), the history folder and `reeval studio build`'s default `studio-dist/` all resolve against it. So every command behaves the same from a subdirectory as from the root. Env file precedence: the shell, then `.env.local`, then `.env`.
+`reeval run` and `reeval image build` also fail when no config is found (`No reeval.config.ts … here or above. Run reeval init.`). Other commands then use each key's default in the current directory.
+
+The config's directory is the project root, wherever you run `reeval`. `include` globs, relative paths in the config (see [Relative paths](#relative-paths)), `.env.local` and `.env`, `.reeval/` (scratch runs, debug data, `history.db`), the history folder and `reeval studio build`'s default `studio-dist/` all resolve against it. So every command behaves the same from a subdirectory as from the root.
+
+Env file precedence: the shell, then `.env.local`, then `.env`.
 
 ```text title="reeval run -v, in my-project/src/lib"
 plan  config ../../reeval.config.ts · 1 eval · 1 cell · 1 attempt · ~1s serial
@@ -150,6 +156,8 @@ There is no callback, so `ci`, `hostEnv` and the helpers aren't available, and A
 
 Relative paths in it follow [the same rule](#relative-paths) as in `reeval.config.ts`.
 
+### Mistakes in reeval.yaml
+
 An empty file is an empty config. A YAML syntax error names the line and column. Every key gets the checks `reeval.config.ts` gets, and the config contract then refuses anything else that isn't its data form, naming the field:
 
 ```text
@@ -234,7 +242,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 <Property name="analysis" type="{ model?, agent?, instructions?, maxInputTokens?, maxOutputTokens? }">
   Settings for `reeval analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance, placed first in the prompt as the question the analysis answers; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). `model` also answers a [compare `question`](/reference/options#compare) that names no model of its own. See [reeval analyze](/reference/cli/analyze).
 
-  `agent: true` (default `false`) makes `reeval run` write a note on each eval and harness once its attempts finish, into `.reeval/analysis/<runId>/notes/`, and then a summary of the run into the `reeval analyze` cache, with the same model and caps: one call per eval and harness, and one summary, every run. With no language model it exits 2 before anything runs. See [Notes during a run](/guide/analysis#notes-during-a-run).
+  `agent: true` (default `false`) makes `reeval run` write a note on each eval and harness once its attempts finish, into `.reeval/analysis/<runId>/notes/`, and then a summary of the run into the `reeval analyze` cache, with the same model and caps: one call per eval and harness, and one summary, every run. With no language model it exits 2 before anything runs. See [Notes during a run](/guide/analyze#notes-during-a-run).
 </Property>
 
 `compare`, `tags` and `pin` belong on groups and evals, not in the config.

@@ -57,7 +57,12 @@ Build its image once with `reeval image build` in a project whose config uses `p
 
 ## Why not `@ai-sdk/harness-pi`
 
-That adapter runs pi's agent loop in reeval's own process on the host: its model calls leave from the host with the real key, its MCP servers start on the host, and it patches Node's global `fs` to reach the sandbox's files, which isn't safe with attempts running side by side. reeval's adapter runs the pi CLI inside the sandbox instead, so its model calls go through the gateway like every other harness's.
+| | `@ai-sdk/harness-pi` | `@reeval/harness-pi` |
+|---|---|---|
+| pi's agent loop | In reeval's own process, on the host | The pi CLI, in the sandbox |
+| Model calls | Leave from the host with the real key | Go through the gateway like every other harness's |
+| MCP servers | Start on the host | Start in the sandbox |
+| The sandbox's files | Reached by patching Node's global `fs`, which isn't safe with attempts running side by side | The CLI's own |
 
 ## The key
 
@@ -71,16 +76,30 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 ## Tokens
 
-Each model call pi makes is one step, with the tokens pi reports for it (uncached input, cache reads and writes, output and reasoning); each turn has their sum. pi also computes a USD cost from its own price table, which reeval ignores: it prices no models.
+| pi reports, per model call | The turn records |
+|---|---|
+| Uncached input | `input` |
+| Cache reads and writes | `cacheRead`, `cacheWrite` |
+| Output and reasoning | `output`, `reasoning` |
+| A USD cost from its own price table | Nothing: reeval prices no models |
+
+Each model call pi makes is one step, and each turn has their sum.
 
 ## Turns and settings
 
-Each turn runs `pi --mode json -p --offline --approve --no-extensions --provider google --model <model> --session-id <id>`, with the same session id every turn, so later turns continue the conversation.
+```bash
+pi --mode json -p --offline --approve --no-extensions \
+  --provider google --model <model> --session-id <id>
+```
 
-- `--offline` stops pi's startup network operations, so a turn contacts only the Gemini API.
-- `--approve` trusts the workspace, which pi needs to read `.pi/skills` there.
-- `--no-extensions` stops pi loading extensions from the workspace or home, and its built-in ones, so what the agent can do is what the eval set up.
-- `-e builtin:mcp`, only when the eval gives it MCP servers, loads pi's built-in MCP extension back.
+Each turn runs that, with the same session id every turn, so later turns continue the conversation.
+
+| Flag | Why |
+|---|---|
+| `--offline` | Stops pi's startup network operations, so a turn contacts only the Gemini API |
+| `--approve` | Trusts the workspace, which pi needs to read `.pi/skills` there |
+| `--no-extensions` | Stops pi loading extensions from the workspace or home, and its built-in ones, so what the agent can do is what the eval set up |
+| `-e builtin:mcp` | Only when the eval gives it MCP servers: loads pi's built-in MCP extension back |
 
 The prompt is a command-line argument, so it must stay under 128 KiB. Instructions go to `~/.pi/agent/AGENTS.md`, which pi reads before the workspace's.
 

@@ -51,14 +51,15 @@ It collects the evals with `--config`, `--profile` or `REEVAL_PROFILE`, and filt
 A real `--dry-run` in `examples/hello`, where `✓` is ready, `+` to build, `~` stale and `✗` missing:
 
 ```text
-images  4 sandbox images (nothing built: --dry-run)
-docker · 15 evals
-  ✓ base  reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+images  7 sandbox images (nothing built: --dry-run)
+docker · 23 evals
+  + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+…
 docker+0ab0e263 + install · 1 eval
-  ✓ base               reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
 …
 ```
 

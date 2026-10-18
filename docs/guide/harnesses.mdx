@@ -6,7 +6,15 @@ description: Run evals on Cursor, Claude Code, Antigravity, OpenCode, Goose, pi 
 A harness is the coding agent reeval drives. The same eval runs on any of them, so you can see whether your skill helps one agent and not another.
 
 ```ts title="evals/harnesses.ts"
-import { antigravity, claudeCode, codex, cursor, goose, opencode, pi } from '{{ pkg }}/harness'
+import {
+  antigravity,
+  claudeCode,
+  codex,
+  cursor,
+  goose,
+  opencode,
+  pi,
+} from '{{ pkg }}/harness'
 
 export const composer = cursor({ model: 'composer-2.5' })
 export const claude = claudeCode({ model: 'claude-sonnet-5' })
@@ -48,7 +56,9 @@ export const ocClaude = opencode({ model: 'anthropic/claude-haiku-4-5' })
 export const ocRouter = opencode({ model: 'openrouter/openai/gpt-5.4-mini' })
 ```
 
-OpenCode's model id names its provider, and the provider picks the key: `anthropic/…` needs `ANTHROPIC_API_KEY`, and only that key is brokered. reeval runs it on any of the providers whose key OpenCode sends in a header, and refuses the rest (Vertex, Azure, subscriptions, local servers) at plan time. Bedrock runs on a Bedrock API key (`AWS_BEARER_TOKEN_BEDROCK`) in its `AWS_REGION`. The [OpenCode reference](/reference/harness/opencode#supported-providers) lists both.
+OpenCode's model id names its provider, and the provider picks the key: `anthropic/…` needs `ANTHROPIC_API_KEY`, and only that key is brokered. reeval runs it on any provider whose key OpenCode sends in a header, and refuses the rest (Vertex, Azure, subscriptions, local servers) at plan time.
+
+Bedrock runs on a Bedrock API key (`AWS_BEARER_TOKEN_BEDROCK`) in its `AWS_REGION`. The [OpenCode reference](/reference/harness/opencode#supported-providers) lists the providers it runs and refuses.
 
 ## Run under another harness
 
@@ -121,7 +131,9 @@ Duration  2m 39s
 …
 ```
 
-Lift and effort are always against the control on the same harness. Without the skill, Cursor wrote `Welcome home, Ada!` and Antigravity `Hello, Ada!`. With it, both wrote the house greeting, and both did far less work: Antigravity's median fell from 24.5 tool calls to 3.5. Line prefixes name the harness when there are several, as in `[greets#1 antigravity:gemini-3.8-flash-medium · control]`.
+Lift and effort are always against the control on the same harness. Without the skill, Cursor wrote `Welcome home, Ada!` and Antigravity `Hello, Ada!`. With it, both wrote the house greeting with far less work: Antigravity's median fell from 24.5 tool calls to 3.5.
+
+Line prefixes name the harness when there are several, as in `[greets#1 antigravity:gemini-3.8-flash-medium · control]`.
 
 ## Name cells with ids
 
@@ -138,9 +150,11 @@ A harness's id defaults to `<kind>:<model>`. Set `effort` and it becomes `<kind>
 reeval: evals/guide-matrix.eval.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
 ```
 
-`params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalog lists (`fast=true` for `composer-2.5`), and reeval records and shows the variant that ran. The default can change, so pin every parameter, such as `params: { fast: 'false' }`, for reproducible evals.
+`params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalogue lists (`fast=true` for `composer-2.5`), and reeval records and shows the variant that ran. The default can change, so pin every parameter, such as `params: { fast: 'false' }`, for reproducible evals.
 
-`effort` is reasoning effort on every shipped factory: the value that CLI takes (`high`, `xhigh`, `max`, `off`, …). There is no shared enum. On Cursor it maps onto the catalog param `Cursor.models.list()` names for that model, not `params.fast`. The record stores the requested value on the cell and the served suffix (`gpt-5.6-luna[effort=medium]`) on the attempt; `reeval query` has them as `reasoning_effort` and `served_reasoning_effort` on `cells` and `attempts`. `reeval query effort` is the measured [effort](/concepts/lift#effort-next-to-lift): tool calls, time and tokens.
+`effort` is reasoning effort on every shipped factory, as the value that agent's CLI takes (`high`, `xhigh`, `max`, `off`, …), with no shared enum. On Cursor it maps onto the model parameter `Cursor.models.list()` names for that model, not `params.fast`.
+
+The record stores the requested value on the cell and the served suffix (`gpt-5.6-luna[effort=medium]`) on the attempt. `reeval query` has them as `reasoning_effort` and `served_reasoning_effort` on `cells` and `attempts`; its `effort` view is something else, the measured [effort](/concepts/lift#effort-next-to-lift).
 
 Filter a run by id, as in `npx reeval run skill antigravity`, and a profile's `limit.harness` lists ids too.
 
@@ -198,7 +212,7 @@ A list replaces the inherited harnesses. `add` appends one or a list to them, an
 
 [//]: # (/generated:harness-matrix)
 
-Partial means reeval records the served model from the gateway's requests only. Each harness's page has the details.
+`partial` in the served-model column means reeval records the served model from the gateway's requests only. Each harness's page has the details.
 
 ## Where each agent reads context
 

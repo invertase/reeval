@@ -40,7 +40,7 @@ Every harness needs a `model`. `params` sets Cursor's model parameters; `fast: '
 
 | Harness | Id (in cell keys and filters) | Key in `.env.local` | Sandbox image |
 |---|---|---|---|
-| `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `reeval-sandbox:cursor-0.1.0` |
+| `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `reeval-sandbox:cursor-0.1.5` |
 | `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `reeval-sandbox:claude-code-1.0.152-patch.8edc594f` |
 | `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `reeval-sandbox:antigravity-0.1.8` |
 
@@ -156,12 +156,14 @@ There's no Claude Code run on this page: the Anthropic account behind these capt
 
 ## Variations
 
-- **Two settings of one model:** `cursor({ model: 'composer-2.5', params: { fast: 'false' }, id: 'cursor:composer-2.5-slow' })` next to the fast one. Give same-kind harnesses distinct ids.
-- **Add an agent to one group:** `{ harness: (inherited) => [...inherited, claude] }` extends the list instead of replacing it.
-- **Keep PRs cheap:** a `pr` profile with `limit: { harness: ['cursor:composer-2.5'] }` runs one agent on PRs and all of them nightly (see [Nightly matrix and Pages](/recipes/nightly-pages)).
-- **Ask which agent did better:** a `question` on the compare judges the agents' diffs against each other after the run, per arm and run, as `examples/hello`'s `questions.eval.ts` does on Cursor and pi (`--profile questions`). Its win rates annotate; see [Ask questions](/guide/compare#ask-questions).
-- **Rate limits:** `antigravity({ model, maxConcurrent: 2 })` caps that agent's attempts at once.
-- **A bigger suite:** the [dogfood case study](/recipes/case-study-dogfood) ran two skills on three harder evals.
+| Variation | How |
+|---|---|
+| Two settings of one model | `cursor({ model: 'composer-2.5', params: { fast: 'false' }, id: 'cursor:composer-2.5-slow' })` next to the fast one. Give same-kind harnesses distinct ids |
+| Add an agent to one group | `{ harness: (inherited) => [...inherited, claude] }` extends the list instead of replacing it |
+| Keep PRs cheap | A `pr` profile with `limit: { harness: ['cursor:composer-2.5'] }` runs one agent on PRs and all of them nightly (see [Nightly matrix and Pages](/recipes/nightly-pages)) |
+| Ask which agent did better | A `question` on the compare judges the agents' diffs against each other after the run, per arm and run, as `examples/hello`'s `questions.eval.ts` does on Cursor and pi (`--profile questions`). Its win rates annotate; see [Compare questions](/guide/questions) |
+| Rate limits | `antigravity({ model, maxConcurrent: 2 })` caps that agent's attempts at once |
+| A bigger suite | The [dogfood case study](/recipes/case-study-dogfood) ran two skills on three harder evals |
 
 ## Next
 

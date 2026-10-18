@@ -59,8 +59,6 @@ Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interru
 
 ## Run references
 
-Commands that take a `[run]` accept any of these. They search recorded runs and unrecorded scratch runs. `reeval run --resume` is different: omitted and `latest` mean the newest **resumable** run (Stopped staging, or an `interrupted` / `budget` scratch), not assembled `latest`. See [Resume a stopped run](/reference/cli/run#resume-a-stopped-run).
-
 | Reference | Means |
 |---|---|
 | `latest` | The newest run (the default) |
@@ -68,6 +66,10 @@ Commands that take a `[run]` accept any of these. They search recorded runs and 
 | `20260926T170558Z_bd6205e_ada-lovelace_sycz` | A full run id |
 | `20260926T1705` | A unique prefix of a run id |
 | `bd6205e` | A git SHA prefix of 4+ characters: the newest run at that commit |
+
+Commands that take a `[run]` accept any of these, and search recorded runs and unrecorded scratch runs.
+
+`reeval run --resume` is different: omitted and `latest` mean the newest **resumable** run (Stopped staging, or an `interrupted` or `budget` scratch), not assembled `latest`. See [Resume a stopped run](/reference/cli/run#resume-a-stopped-run).
 
 A run id is `<UTC start>_<short sha>_<author>_<random>`. The author is `git config user.name` as a slug, or `ci` in CI.
 

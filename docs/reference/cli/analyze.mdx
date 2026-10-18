@@ -6,10 +6,13 @@ description: Explain a run in plain words with one checked LLM call over a diges
 `reeval analyze` explains a run: what happened, what the numbers mean, why, and what to change. reeval computes the facts; one structured LLM call explains and ranks them, and reeval checks the answer before showing it.
 
 ```bash
-npx reeval analyze                                  # latest vs its nearest recorded ancestor
+# latest vs its nearest recorded ancestor
+npx reeval analyze
 npx reeval analyze latest --vs latest~2 --eval skill
-npx reeval analyze --vs none                        # this run only: no ancestor
-npx reeval analyze --context                        # the digest for your own agent: no key, no call
+# this run only: no ancestor
+npx reeval analyze --vs none
+# the digest for your own agent: no key, no call
+npx reeval analyze --context
 ```
 
 ## Help
@@ -83,10 +86,11 @@ flowchart LR
 export default defineConfig({
   judge: { model: 'typesafe-ai/jev-1.13.0' },
   analysis: {
-    model: 'google/gemini-3.8-flash', // default: the judge's, when it's a language model
+    // default: the judge's, when it's a language model
+    model: 'google/gemini-3.8-flash',
     instructions: 'Fewer tool calls count as a win.',
-    maxInputTokens: 20_000,           // the digest's cap (characters ÷ 4)
-    maxOutputTokens: 8_000,           // the answer's cap
+    maxInputTokens: 20_000, // the digest's cap (characters ÷ 4)
+    maxOutputTokens: 8_000, // the answer's cap
   },
 })
 ```
@@ -96,7 +100,7 @@ export default defineConfig({
 </Property>
 
 <Property name="analysis.agent" type="boolean" optional>
-  Also write a note on each eval and harness during `reeval run`, and a summary of the run once it's written, with this model and these caps. Default false. See [Notes during a run](/guide/analysis#notes-during-a-run).
+  Also write a note on each eval and harness during `reeval run`, and a summary of the run once it's written, with this model and these caps. Default false. See [Notes during a run](/guide/analyze#notes-during-a-run).
 </Property>
 
 <Property name="analysis.instructions" type="string" optional>
@@ -111,7 +115,9 @@ export default defineConfig({
   The answer's cap, at least 500. Default 8000.
 </Property>
 
-For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. In `analysis.agent`'s summary, the fake first reads up to three dropped evidence items and three failing attempts with the tools, and the function gets the digest with the evidence it read; a function that throws is a failed call. reeval has no prices, so the footer shows tokens used and no cost.
+For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. A function that throws is a failed call.
+
+In `analysis.agent`'s summary, the fake first reads up to three dropped evidence items and three failing attempts with the tools, and the function gets the digest with the evidence it read. reeval has no prices, so the footer shows tokens used and no cost.
 
 ## Errors
 

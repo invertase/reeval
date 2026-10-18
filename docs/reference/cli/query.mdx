@@ -7,7 +7,8 @@ description: Read-only SQL over every recorded and scratch run, with every view 
 
 ```bash
 npx reeval query lift
-npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_noise = 0"
+npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift
+  WHERE within_noise = 0"
 ```
 
 ## Help

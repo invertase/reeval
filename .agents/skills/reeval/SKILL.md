@@ -9,10 +9,11 @@ description: >
 
 # reeval
 
-reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex) on a task
-in a fresh Docker sandbox, then checks the result with deterministic assertions and an LLM judge.
-You write evals in TypeScript; `reeval run` runs them. The package and CLI are
-`reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
+reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or
+Codex) on a task in a fresh Docker sandbox, then checks the result with deterministic assertions
+and an LLM judge. You write evals in TypeScript; `reeval run` runs them.
+
+The package and CLI are `reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
 site; its Reference tab has every option, flag and error).
 
 ## Vocabulary
@@ -37,10 +38,19 @@ reeval's word in code and messages.
 
 ## Workflow
 
+```bash
+npm i -D reeval
+npx reeval init --harness cursor   # then: npx reeval run --profile fake
+npx reeval run --dry-run           # the plan, no keys or Docker
+npx reeval image build             # once, for real agents
+npx reeval doctor                  # Docker, keys and images, with fixes
+npx reeval run
+```
+
 1. Install: `npm init -y` if there's no `package.json`, then `npm i -D reeval`
    (or a tarball: `npm i -D /path/to/reeval.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm, pnpm or Yarn.
-2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|none>` (it only
+2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|none>` (it only
    asks in a terminal) writes `reeval.config.ts` (the agent, plus `fake`, `pr` and `nightly`
    profiles), `evals/greet.eval.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval`
    script; `npx reeval run --profile fake` passes with no keys. It never overwrites a file that
@@ -48,9 +58,10 @@ reeval's word in code and messages.
    `include`) yourself.
 3. `npx reeval run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
-4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in `.env.local` next
-   to `reeval.config.ts` (not the directory you run from), `npx reeval doctor` (exit 1 names each
-   problem and its fix; `--json`, `--online` tries the keys), then `npx reeval run`. Exit 0 means every gated cell passed.
+4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in
+   `.env.local` next to `reeval.config.ts` (not the directory you run from), `npx reeval doctor`
+   (exit 1 names each problem and its fix; `--json`, `--online` tries the keys), then
+   `npx reeval run`. Exit 0 means every gated cell passed.
 5. Read failures in the summary, then `.reeval/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
    `npx reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
@@ -65,18 +76,29 @@ import { defineConfig } from 'reeval'
 import { cursor } from 'reeval/harness'
 
 export default defineConfig({
-  include: ['evals/**/*.eval.ts'],              // default
+  include: ['evals/**/*.eval.ts'],            // default
   harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
-  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // no default model; pin versions
+  // no default judge model; pin versions
+  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 },
   runs: 1,                                    // attempts per cell
   timeout: '15m',                             // per attempt
 })
 ```
 
-A project without TypeScript can write `reeval.yaml` (or `.yml`) instead: the same keys in their
-data forms (`harness: { kind: cursor, model: composer-2.5 }`, `{ kind: secret, hosts: [...] }`,
-`{ kind: fake-judge, score: 0.9 }`, environments as `{ kind: environment, name, layers: [{ name, spec }] }`),
-no callback. A `reeval.yaml` beside a `reeval.config.*` is an error.
+A project without TypeScript can write `reeval.yaml` (or `.yml`) instead, with no callbacks:
+
+```yaml
+harness: { kind: cursor, model: composer-2.5 }
+judge: { model: typesafe-ai/jev-1.13.0 }   # or { kind: fake-judge, score: 0.9 }
+env:
+  NPM_TOKEN: { kind: secret, hosts: [registry.npmjs.org] }
+environment:
+  kind: environment
+  name: base
+  layers: [{ name: base, spec: { setup: [npm ci] } }]
+```
+
+A `reeval.yaml` beside a `reeval.config.*` is an error.
 
 One path rule for both: a relative host path resolves against the directory of the file it's
 written in (the config's, an eval file's, or the module calling `defineEnvironment` or a helper),
@@ -84,27 +106,45 @@ whether it comes from a helper (`file()`, `skill.local()`, `skill.npm()`, `git()
 `docker({ dockerfile })`, `fakeSandbox({ dir })`) or its data form (`{ kind: file, path }`,
 `{ kind: fake, dir }`, …). Absolute paths stay as written.
 
-Without an `environment`, the attempt uses the cascaded `sandbox` option, else implicit Docker (reeval's image: Node 22, git, pnpm, the agent CLI). `defineConfig({ sandbox })` is the default machine when the resolved env omits `sandbox`; it is not an environment. A named env is a total override: no skills, files or sandbox inherit from the config environment. `.extend()` keeps the parent env's sandbox when the child omits it. A fake config puts `sandbox: fakeSandbox()` on `defineConfig` so `plain` / skill variants run without Docker. Do not put `fakeSandbox()` on `plain` itself: real Cursor runs need Docker.
+| Where the sandbox comes from | When |
+|---|---|
+| The environment's `sandbox` | It sets one; `extendEnvironment` keeps the parent's when the child omits it |
+| The cascaded `sandbox` option (`defineConfig({ sandbox })`) | The resolved environment omits it; it's the default machine, not an environment |
+| Implicit Docker (reeval's image: Node 22, git, pnpm, the agent CLI) | Neither is set |
 
-- Harnesses (`reeval/harness`): `cursor({ model, params?, effort? })` (`CURSOR_API_KEY`;
-  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant, including Fast;
-  `effort` maps onto the catalog param `Cursor.models.list()` names for that model, not Fast; unset params take Cursor's default, which
-  the record shows as `composer-2.5[fast=true]`, so pin them for reproducible evals),
-  `claudeCode({ model, effort? })` (`ANTHROPIC_API_KEY`, model required; `effort` is the Agent SDK `/effort` control),
-  `antigravity({ model, effort? })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
-  `gemini-3.8-flash-medium`; `effort` is `agy --effort`), `opencode({ model, effort? })` (OpenCode 2 on any brokerable provider: the model is
-  `<provider>/<model>`, e.g. `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5`,
-  `openrouter/…`, and needs only that provider's key, e.g. `ANTHROPIC_API_KEY`; `amazon-bedrock/…`
-  takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local
-  providers are refused at plan time; no `mcp.sse`; web search via Exa,
-  whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
-  and `pi({ model, effort? })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
-  `gemini-3.8-flash`; neither takes `mcp.sse`; Goose `effort` is `GOOSE_THINKING_EFFORT`, pi's is `--thinking`),
-  `codex({ model, effort? })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.6-luna`; no `mcp.sse`; `effort` is `model_reasoning_effort`) and
-  `fakeHarness(…)`. A list runs each harness as its own cell. `effort` is the same field name on every factory; values are whatever that CLI takes (no shared enum). The default harness id includes `[effort=<value>]` when it is set. The record stores the requested reasoning effort as `effort` and the served one as `servedEffort`. Fast is not effort. In `reeval query` they are `reasoning_effort` (`cells`, `attempts`) and `served_reasoning_effort` (`attempts`); **effort** on its own (`reeval query effort`, the summary's `effort:` line) is always the measured tool-call, time and token metric.
-  Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
-  harness's own endpoints. Cursor, Claude Code, Antigravity, OpenCode, pi and Codex report tokens, which reeval records
-  per turn, attempt and run (no prices); Goose's ACP usage is only the last model call, so it records none for Goose.
+A named env is a total override: no skills, files or sandbox inherit from the config
+environment. A fake config puts `sandbox: fakeSandbox()` on `defineConfig` so `plain` and skill
+variants run without Docker. Don't put `fakeSandbox()` on `plain` itself: real Cursor runs need
+Docker.
+
+Harnesses (`reeval/harness`), each with a required `model`; a list runs each as its own cell:
+
+| Factory | Key | Notes |
+|---|---|---|
+| `cursor({ model, params?, effort? })` | `CURSOR_API_KEY` | Cursor's agent through the Cursor SDK. `params` such as `{ fast: 'true' }` pick the variant; `effort` maps onto the parameter `Cursor.models.list()` names for that model |
+| `claudeCode({ model, effort? })` | `ANTHROPIC_API_KEY` | `effort` is the Agent SDK's `/effort` |
+| `antigravity({ model, effort? })` | `GEMINI_API_KEY` (a Gemini API key) | e.g. `gemini-3.8-flash-medium`; `effort` is `agy --effort` |
+| `opencode({ model, effort? })` | That provider's key, e.g. `ANTHROPIC_API_KEY` | OpenCode 2; the model is `<provider>/<model>`, e.g. `google/gemini-3.8-flash`. `amazon-bedrock/…` takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local providers are refused at plan time. Web search via Exa, whose host it allows; it also reads `.claude/skills` and `.agents/skills` |
+| `goose({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id, e.g. `gemini-3.8-flash`; `effort` is `GOOSE_THINKING_EFFORT`. Records no tokens: its ACP usage is the last model call only |
+| `pi({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id; `effort` is `--thinking` |
+| `codex({ model, effort? })` | `OPENAI_API_KEY` | An OpenAI model id, e.g. `gpt-5.6-luna`; `effort` is `model_reasoning_effort` |
+| `fakeHarness(…)` | None | See the fake trio |
+
+OpenCode, Goose, pi and Codex refuse `mcp.sse`. Unset Cursor params take Cursor's default, which
+the record shows (`composer-2.5[fast=true]`), so pin them for reproducible evals.
+
+`effort` is the same field on every factory, with whatever values that CLI takes (no shared
+enum); Fast is not effort. The default harness id includes `[effort=<value>]` when it's set, and
+the record stores the requested effort as `effort` and the served one as `servedEffort`.
+
+In `reeval query` those are `reasoning_effort` (`cells`, `attempts`) and
+`served_reasoning_effort` (`attempts`). **effort** on its own (`reeval query effort`, the
+summary's `effort:` line) is always the measured tool-call, time and token metric.
+
+Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
+harness's own endpoints. Every harness but Goose reports tokens, which reeval records per turn,
+attempt and run (no prices).
+
 - Judge models: `'typesafe-ai/jev-1.13.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
   the Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Always a provider prefix.
@@ -122,17 +162,22 @@ import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
-  // A scripted "agent": writes these files on every turn and replies with text.
-  harness: fakeHarness({ files: { 'hello.txt': 'hello\n' }, text: 'Created hello.txt.' }),
-  sandbox: fakeSandbox(),                      // default machine; not an environment
+  // A scripted "agent": writes these files every turn and replies with text.
+  harness: fakeHarness({
+    files: { 'hello.txt': 'hello\n' },
+    text: 'Created hello.txt.',
+  }),
+  sandbox: fakeSandbox(), // default machine; not an environment
   judge: { model: fakeJudge({ score: 0.9 }) }, // fixed score, no model call
 })
 ```
 
 `fakeHarness` also takes `withSkill: { files, text }` (used when the environment gives the agent
 a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 'server/tool' }`
-steps per turn), `layout: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex'`, `failWith`, `delayMs`,
-`flakeRate`, `reasoning`, `tools` and `id`. Keep a fake config next to the real one and run it
+steps per turn), `layout` (an agent's id, such as `'claude-code'`), `failWith`, `delayMs`,
+`flakeRate`, `reasoning`, `tools` and `id`.
+
+Keep a fake config next to the real one and run it
 with `--config reeval.fake.config.ts`.
 
 ## Evals
@@ -144,9 +189,10 @@ import { evaluate, expect, group } from 'reeval'
 group('hello', () => {
   evaluate('creates hello.txt', async (c) => {
     const turn = await c.send('Create hello.txt containing "hello".')
-    await expect(turn).toHaveFile('hello.txt', /hello/)   // await it: it's async
+    await expect(turn).toHaveFile('hello.txt', /hello/) // async: await it
     await expect(c.exec('grep -q hello hello.txt')).toSucceed()
-    expect(await c.judge('Did the agent create hello.txt with the right content?')).toPass()
+    const q = 'Did the agent create hello.txt with the right content?'
+    expect(await c.judge(q)).toPass()
   })
 })
 ```
@@ -243,46 +289,63 @@ group('hello', () => {
 
 ## Options and the cascade
 
-`defineConfig`, `group` and `evaluate` take the same options; inner levels win: `harness` (one
-or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or
-a function), `sandbox` (the default machine when the resolved env omits one), `environment` (one),
-`runs`, `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `capture`
-(shallow-merged camera defaults: viewport, timeout, browser, model; viewport replaces the
-value; `'full-page'` is legal; `model` is the vision model, cascading like `question`;
-port is not an option), `timeout`, `tags`,
-`pin`. `compare` goes only on groups and evals. A named env is a total override of the config
-environment. Options are plain objects, never functions. Unknown keys are errors with a hint
-(`repeat` → "Did you mean runs?").
+`defineConfig`, `group` and `evaluate` take the same options, and inner levels win:
+
+| Option | Cascades as |
+|---|---|
+| `harness` | One or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or a function |
+| `sandbox` | The default machine when the resolved env omits one |
+| `environment` | One; a named env is a total override of the config environment |
+| `env` | Merged by name |
+| `judge` | Merged by field |
+| `capture` | Shallow-merged camera defaults (`viewport`, `timeout`, `browser`, `model`, the vision model); `viewport` replaces the value, and the port is not an option |
+| `runs`, `gate`, `egress`, `timeout` | Replaced |
+| `tags`, `pin` | Unioned |
+| `compare` | Groups and evals only |
+
+Options are plain objects, never functions. Unknown keys are errors with a hint (`repeat` → "Did
+you mean runs?").
 
 ## Environments
 
 What the agent runs *in*, per attempt: the code the workspace starts as, skills, MCP servers,
-files, rules, env vars, secrets and setup steps. Pass a spec, or a synchronous callback that destructures the helpers it needs:
+files, rules, env vars, secrets and setup steps. Pass a spec, or a synchronous callback that
+destructures the helpers it needs:
 
 ```ts
 // evals/envs.ts
 import { defineEnvironment } from 'reeval'
 
 export const houseStyle = defineEnvironment('house-style', ({ skill }) => ({
-  skills: [skill.local('../skills/house-style')],   // a dir with SKILL.md, relative to this file
+  // a dir with SKILL.md, relative to this file
+  skills: [skill.local('../skills/house-style')],
 }))
 
 export const withDocs = houseStyle.extendEnvironment(
   'with-docs',
   ({ file, mcp }) => ({
-  files: { 'docs/api.md': file('../docs/api.md') },  // written into the workspace
-  rules: file('../rules/house.md'),                  // AGENTS.md (CLAUDE.md for Claude Code)
-  mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url) (not on Goose, pi or Codex)
-  setup: [{ run: 'npm ci', timeout: '5m' }],         // every attempt, before the agent
-}))
+    // written into the workspace
+    files: { 'docs/api.md': file('../docs/api.md') },
+    // AGENTS.md (CLAUDE.md for Claude Code)
+    rules: file('../rules/house.md'),
+    // or mcp.http(url) / mcp.sse(url) (not on OpenCode, Goose, pi or Codex)
+    mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) },
+    // every attempt, before the agent
+    setup: [{ run: 'npm ci', timeout: '5m' }],
+  }),
+)
 
 // Start from existing code: a repo, or one directory of it, at a pinned ref
 export const app = defineEnvironment('acme-app', ({ git }) => ({
-  workspace: git('https://github.com/acme/app', { ref: 'v2.3.0', path: 'examples/basic' }),
+  workspace: git('https://github.com/acme/app', {
+    ref: 'v2.3.0',
+    path: 'examples/basic',
+  }),
   setup: ['npm ci'],
 }))
 
-// Or seed a whole fixture directory: a plain object of file() entries, so spread and override it
+// Or seed a fixture directory: a plain object of file() entries, so spread
+// and override it
 export const notes = defineEnvironment('acme-notes', ({ directory }) => ({
   files: { ...directory('../fixture'), 'README.md': 'something' },
   setup: [{ run: 'npm ci --no-audit --no-fund', timeout: '5m' }],
@@ -293,22 +356,29 @@ Use `directory(path, { into?, glob?, defaultIgnores? })` for a fixture directory
 mapping a file list through `file()`. It skips `.git`, `node_modules/`, `dist/`, top-level
 `build/`, caches and editor folders (`DEFAULT_DIRECTORY_IGNORES`; `defaultIgnores: false` keeps
 them, except `.git`). `glob` is ordered gitignore-style patterns where the last match wins and
-`!` excludes: `glob: ['src/**', 'package.json', '!**/*.test.ts']`. Executable files stay
-executable; empty directories aren't seeded.
+`!` excludes: `glob: ['src/**', 'package.json', '!**/*.test.ts']`.
+
+Executable files stay executable; empty directories aren't seeded.
 
 `workspace: git(repo, { ref, path })` takes a URL, `github:owner/repo`, a GitHub `/tree/` URL or
 a local path (relative to the file). reeval fetches it on the host before any attempt, with the
 host's git credentials or `token: 'GITHUB_TOKEN'` (a host variable's name; never a token in the
-URL or the eval), copies the tree in before `files` (which win) and `setup`, and records the
-commit and tree hash. `init: true` adds a `.git` with one commit of the tree (no remote), for
-agents that expect a repo. Pin `ref` to a tag or full SHA; a branch warns. The agent's diff starts
-after setup, so the repo never counts as its change. A bad ref, path, URL or token fails only
-the attempts that use it (infra error, exit 3). Submodules and LFS files aren't fetched.
+URL or the eval). It copies the tree in before `files` (which win) and `setup`, and records the
+commit and tree hash.
+
+`init: true` adds a `.git` with one commit of the tree (no remote), for agents that expect a
+repo. Pin `ref` to a tag or full SHA; a branch warns. The agent's diff starts after setup, so the
+repo never counts as its change.
+
+A bad ref, path, URL or token fails only the attempts that use it (infra error, exit 3).
+Submodules and LFS files aren't fetched.
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
 writes them into the repo's skill directory). `extendEnvironment` is the only composition; the
 child wins on shared keys and **replaces** `sandbox` entirely when it sets one (install is not
-merged onto the parent image). A skill is a directory whose `SKILL.md` has YAML frontmatter
+merged onto the parent image).
+
+A skill is a directory whose `SKILL.md` has YAML frontmatter
 (`name`, `description`; quote values containing `: `). Baking (`from`, `install`, `dockerfile`)
 is `sandbox: docker({ … })` on the environment.
 
@@ -316,8 +386,10 @@ is `sandbox: docker({ … })` on the environment.
 
 `compare` answers "does this environment help?". The control is `baseline`, or, when it's
 left out, the environment the eval would run in anyway (its own or an inherited `environment`,
-else an empty one named `baseline`). Each variant runs as that environment on its own, with the
-same prompt and checks. `compare` does not layer, inherit or extend. Share setup first:
+else an empty one named `baseline`).
+
+Each variant runs as that environment on its own, with the same prompt and checks. `compare`
+does not layer, inherit or extend. Share setup first:
 
 ```ts
 const greetsAda = `node -e "import('./greet.js').then((m) =>
@@ -332,7 +404,7 @@ group(
   { compare: { baseline: plain, variants: [houseStyle] }, runs: 2 },
   () => {
     evaluate('greets in the house style', async (c) => {
-      await c.send('Create greet.js exporting greet(name) in our house greeting style.')
+      await c.send('Create greet.js exporting greet(name) in our house style.')
       await expect(c.exec(greetsAda)).toSucceed()
     })
   },
@@ -424,21 +496,33 @@ group(
 ## Sandboxes
 
 ```ts
-docker()                                             // reeval's Node image with the agent CLI
-docker({ install: ['npm i -g firebase-tools@14'] })  // baked once as a cached layer; no secrets
-docker({ from: 'python:3.12-slim' })                 // Debian/Ubuntu base; reeval adds Node + agent
-docker({ dockerfile: './sandbox/Dockerfile' })       // ARG REEVAL_BASE / FROM ${REEVAL_BASE} to layer on reeval's
-docker({ memory: '8g', cpus: 4, pids: 4096 })        // limits; defaults 4g, 2, 1024
-docker({ memory: '4g', swap: 0 })                    // swap on top; default = memory, 0 = none
-docker({ root: true })                               // opt in: apt-get at run time (default: user reeval)
+// reeval's Node image with the agent CLI
+docker()
+// baked once as a cached layer; no secrets
+docker({ install: ['npm i -g firebase-tools@14'] })
+// a Debian or Ubuntu base; reeval adds Node and the agent
+docker({ from: 'python:3.12-slim' })
+// ARG REEVAL_BASE and FROM ${REEVAL_BASE} to layer on reeval's image
+docker({ dockerfile: './sandbox/Dockerfile' })
+// limits; defaults 4g, 2 and 1024
+docker({ memory: '8g', cpus: 4, pids: 4096 })
+// swap on top; default the same as memory, 0 for none
+docker({ memory: '4g', swap: 0 })
+// opt in to apt-get at run time (default: user reeval)
+docker({ root: true })
 ```
 
-The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.
-`root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
-A process killed at the memory limit makes the attempt an infra error (`error.resource.cause: 'oom'`), not a
-failed check: raise `memory` for a heavy build rather than loosening the check.
+The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds
+run as root. `root: true` or `capabilities` print a warning at the start of every run, so prefer
+`install`. A process killed at the memory limit makes the attempt an infra error
+(`error.resource.cause: 'oom'`), not a failed check: raise `memory` rather than loosening it.
 
-Put a specific machine on `defineEnvironment`, or `sandbox` on `defineConfig` / profile / group / eval as the default when the resolved env omits one. A list is an error. `npx reeval image build` builds every image the plan needs. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and 24 cannot share a cell. Environments that share an image still share one preflight build.
+Put a specific machine on `defineEnvironment`, or `sandbox` on `defineConfig`, a profile, group
+or eval as the default when the resolved env omits one. A list is an error. `npx reeval image
+build` builds every image the plan needs.
+
+The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and 24 can't share
+a cell. Environments that share an image still share one preflight build.
 
 ## Secrets and egress
 
@@ -446,49 +530,71 @@ Secrets come from a `defineConfig` or `defineEnvironment` callback, never litera
 
 ```ts
 defineEnvironment('gemini', ({ secret }) => ({
-  env: { GEMINI_API_KEY: secret.fromEnv('GEMINI_API_KEY', { hosts: secret.hosts.gemini }) },
+  env: {
+    GEMINI_API_KEY: secret.fromEnv('GEMINI_API_KEY', {
+      hosts: secret.hosts.gemini,
+    }),
+  },
 }))
 ```
 
 With `hosts`, the sandbox only sees a placeholder and reeval's gateway swaps in the real value on
-HTTPS requests to those hosts. `{ to: 'checks' }` keeps it from the agent. `egress: 'allow-all' |
-'deny-all' | { allow: [hosts] }` limits where the sandbox may connect (the harness's API, brokered
-hosts and MCP hosts are always allowed; `DEFAULT_EGRESS_ALLOW` is npm, Yarn, PyPI and GitHub). A
-blocked request doesn't fail the attempt; it's recorded, and your checks decide.
+HTTPS requests to those hosts. `{ to: 'checks' }` keeps it from the agent.
+
+`egress: 'allow-all' | 'deny-all' | { allow: [hosts] }` limits where the sandbox may connect (the
+harness's API, brokered hosts and MCP hosts are always allowed; `DEFAULT_EGRESS_ALLOW` is npm,
+Yarn, PyPI and GitHub). A blocked request doesn't fail the attempt; it's recorded, and your checks decide.
 
 ## CLI
 
 ```text
-reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p> --record --ui plain -v
-reeval record            reeval history      reeval show [run]      reeval compare [base] [head] [--md]
-reeval query lift        reeval query effort      reeval query "SELECT … FROM failing_attempts"
-reeval analyze           (one checked LLM reading of a run; --vs none for this run only;
-                         --context for your own agent)
-                         TL;DR is one sentence; confidence is capped after citation/command checks
-                         (not high if any check failed; low if a claim dropped or a command rejected)
-                         anomalies are number-checked; a cited judge score that disagrees is dropped
-                         every cell gate: 'none' reads as a study: how the arms differ, check by check
-                         (label your expects); analysis.instructions is the question it answers
-                         analysis: { agent: true } also notes each eval × harness during reeval run
-                         (.reeval/analysis/<run>/notes/) and caches the run's summary for reeval analyze
-                         (a model call each, off by default; never gates)
-reeval studio            reeval studio build --out site      reeval image build [--dry-run] [--profile <p>]      reeval clean
-reeval mcp               (the history as read-only MCP tools: history, show, compare, query_*, transcript)
+reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p>
+                         --record --ui plain -v
+reeval record            reeval history         reeval show [run]
+reeval compare [base] [head] [--md]
+reeval query lift        reeval query effort
+reeval query "SELECT … FROM failing_attempts"
+reeval analyze           one checked LLM reading of a run; --vs none for this
+                         run only; --context for your own agent
+reeval studio            reeval studio build --out site
+reeval image build [--dry-run] [--profile <p>]     reeval clean
+reeval mcp               the history as read-only MCP tools
 ```
 
-If your client has an `reeval` MCP server (`reeval mcp`), prefer its tools for reading results: they
+`reeval analyze` gives a one-sentence TL;DR. Its confidence is capped after the citation and
+command checks: not high if any check failed, low if a claim was dropped or a command rejected.
+Anomalies are number-checked, and a cited judge score that disagrees is dropped.
+
+When every cell is `gate: 'none'`, it reads the run as a study: how the arms differ, check by
+check, so label your expects. `analysis.instructions` is the question it answers.
+
+`analysis: { agent: true }` also notes each eval × harness during `reeval run`
+(`.reeval/analysis/<run>/notes/`) and caches the run's summary for `reeval analyze`: a model call
+each, off by default, and it never gates.
+
+If your client has a `reeval` MCP server (`reeval mcp`), prefer its tools for reading results: they
 return the same JSON as `--json`, and `query_failing_attempts` or `compare` then `transcript` is
 the quickest way from "it failed" to what the agent did.
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
-(`reeval run skill antigravity`). Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
-above (paths resolve from its directory), or `--config <path>`. `reeval run` and `reeval image build`
-fail with no config (`No reeval.config.ts … here or above. Run reeval init.`); there is no hidden
-default harness or include. Exit codes: 0 pass (and
-`--dry-run`), 1 a gated failure, 2 usage/config error (including a filter that matches nothing),
-3 infra error, 130 Ctrl-C, 143 SIGTERM. Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies
-them to `evals/.history/` to commit. That folder gets a `.gitignore` that un-ignores
-recorded `*.log` files; `reeval record` warns if git still ignores a file it wrote.
+(`reeval run skill antigravity`).
+
+Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
+above (paths resolve from its directory), or `--config <path>`. `reeval run` and `reeval image
+build` fail with no config (`No reeval.config.ts … here or above. Run reeval init.`); there is
+no hidden default harness or include.
+
+| Exit code | Means |
+|---|---|
+| 0 | Pass, and `--dry-run` |
+| 1 | A gated failure |
+| 2 | A usage or config error, including a filter that matches nothing |
+| 3 | An infra error |
+| 130, 143 | Ctrl-C, SIGTERM |
+
+Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies them to
+`evals/.history/` to commit. That folder gets a `.gitignore` that un-ignores recorded `*.log`
+files; `reeval record` warns if git still ignores a file it wrote.
 
 ## Common mistakes (and the fix)
 

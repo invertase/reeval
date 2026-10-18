@@ -8,10 +8,14 @@ A sandbox provider is what makes and starts a sandbox: Docker today, with the fa
 ```ts
 interface SandboxProvider {
   kind: string
-  check(): Promise<void>                       // credentials, connectivity
-  key(sandbox, harness): string                // attempts with one key share one sandbox
-  prepare(sandbox, harness, ctx): Promise<Handle> // build, pull or provision
-  classify(error): PrepareFailure              // config, transient or resource
+  // credentials, connectivity
+  check(): Promise<void>
+  // attempts with one key share one sandbox
+  key(sandbox, harness): string
+  // build, pull or provision
+  prepare(sandbox, harness, ctx): Promise<Handle>
+  // config, transient or resource
+  classify(error): PrepareFailure
 }
 ```
 

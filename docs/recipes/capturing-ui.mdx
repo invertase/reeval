@@ -1,19 +1,15 @@
 ---
 title: Capturing UI
-description: Take a PNG of a port the agent left running, keep it as an artifact, and show it in Studio.
+description: Take a PNG of a port the agent left running, keep it with the attempt, and show it in the studio.
 ---
 
-**Goal:** screenshot whatever the agent left running on a port, store it under `artifacts/`, and
-see it on the attempt in Studio.
+**Goal:** screenshot whatever the agent left running on a port, store it under `artifacts/`, and see it on the attempt in the studio.
 
-`c.capture()` is the PNG helper. reeval takes the shot on the host through the existing port
-tunnel. The sandbox image does not grow a browser. `capture.browser: false` or
-`REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
+`c.capture()` takes the shot on the host, in a headless Chrome, through the sandbox's port tunnel, so the sandbox image needs no browser. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
 
 ## Seeded app
 
-`setup` backgrounds the server on a declared port. The agent edits it. `c.capture` polls, then
-screenshots.
+A `setup` step starts the server in the background on a known port, and the agent edits the app. `c.capture` polls the port until it answers, then takes the shot.
 
 ```ts title="evals/login.eval.ts"
 import { defineEnvironment, evaluate } from '{{ pkg }}'
@@ -32,7 +28,7 @@ evaluate('login screen', { environment: firebaseWeb }, async (c) => {
 
 ## Author starts the server
 
-After the turn, start the server with `c.exec({ background: true })` or `c.serve`, then capture.
+After the turn, start the server yourself with `c.serve` (or `c.exec(command, { background: true })`), then capture.
 
 ```ts title="evals/landing.eval.ts"
 import { evaluate } from '{{ pkg }}'
@@ -46,12 +42,11 @@ evaluate('landing page', async (c) => {
 })
 ```
 
-`$PORT` expands on a bash string. `{port}` is not expanded unless the command is argv.
-`c.serve` is not an environment or eval option.
+`c.serve` allocates a port when you don't pass one and sets `PORT`, so the command can use `$PORT`.
 
 ## Agent starts the server
 
-The prompt names the port. `c.capture` polls; nothing listening fails the attempt.
+The prompt names the port. `c.capture` polls it, and nothing listening by the timeout fails the attempt.
 
 ```ts title="evals/agent-serve.eval.ts"
 import { evaluate } from '{{ pkg }}'
@@ -64,10 +59,7 @@ evaluate('landing page', async (c) => {
 
 ## After a journey
 
-`instructions` is a list of goals and waits. Each string is a vision loop on
-the same host Chrome tab: the model sees an ephemeral full-page shot and
-returns click / type / key / scroll / drag / hover. Handlers send Chrome
-`Input` events. There are no selectors.
+`instructions` is a list of goals and waits. Each string is a vision loop on the same Chrome tab: the model sees a full-page shot and answers with a click, typing, a key, a scroll, a drag or a hover, which reeval sends as Chrome `Input` events. There are no selectors.
 
 ```ts
 const server = await c.serve(
@@ -85,35 +77,30 @@ await c.capture(server, {
 })
 ```
 
-Top-level `wait` runs once, before the first model shot. `{ wait }` between
-strings is the authored beat. A `{ wait: 'idle' }` beat waits from that moment
-until at most two requests have been in flight for 500ms, so it also covers a
-click that only fetches. `viewport: 'full-page'` keeps the default
-window and saves a tall PNG. Typed secrets are plain text: they can appear
-in the PNG and in debug.
+The top-level `wait` runs once, before the first model shot, and a `{ wait }` between strings pauses the journey there. A `{ wait: 'idle' }` waits until at most two requests have been in flight for 500ms, so it also covers a click that only fetches.
 
-Set `capture.model` (cascades like `question`) or rely on the analysis
-model when it accepts images.
+`viewport: 'full-page'` keeps the default window and saves a tall PNG. Anything the model types is plain text, so a typed secret can appear in the PNG and the debug data.
+
+`capture.model` picks the vision model, and cascades like `question`. Without it, reeval uses the analysis model when that model accepts images.
 
 ## After load
 
-Client-rendered pages often fetch after `window` `load`. `wait: 'idle'` holds
-the shot until Chromium reports `networkAlmostIdle`.
+Client-rendered pages often fetch after the `window` `load` event. `wait: 'idle'` holds the shot until Chromium reports `networkAlmostIdle`.
 
 ```ts
 await c.capture(server, { name: 'home', wait: 'idle' })
 ```
 
-`'load'` (the default) is `Page.loadEventFired`. `'idle'` is Chromium's
-`Page.lifecycleEvent` `networkAlmostIdle` (at most two HTTP requests for about
-500ms). The same `timeout` is the budget: if the event never arrives, the
-capture fails and there is no PNG. Pages that never go quiet (Vite HMR, SSE,
-long-poll) keep `wait: 'load'` or raise `timeout`.
+| `wait` | Waits for |
+|---|---|
+| `'load'` (default) | `Page.loadEventFired` |
+| `'idle'` | Chromium's `networkAlmostIdle` lifecycle event: at most two HTTP requests for about 500ms |
+
+The capture's `timeout` covers the wait: if the event never arrives, the capture fails and there's no PNG. For a page that never goes quiet (Vite HMR, SSE, long polling), keep `wait: 'load'` or raise `timeout`.
 
 ## Judge the screenshot
 
-Pass the handle (or its `name`) to `c.judge`. The judge sees the PNG as a file
-part. Ask about facts in the picture, not whether it "looks great".
+Pass the capture (or its `name`) to `c.judge`, which sends the PNG to the judge as a file. Ask about facts in the picture, not whether it "looks great".
 
 ```ts
 const image = await c.capture(server, { name: 'form' })
@@ -122,20 +109,18 @@ await c.judge('it has visual feedback for a failed form', {
 })
 ```
 
-A provider that cannot take files fails that call with its own error. JSON-only
-judge calls (no `artifacts`) are unchanged.
+A provider that can't take files fails that call with its own error. A judge call without `artifacts` sends no image.
 
 ## What you get
 
-The PNG lands at `artifacts/<name>.png` on the attempt. Studio shows it under Artefacts as
-`image/png`. Retention is `history.artifacts` (`all`, `failures`, `none`). A
-judge call that sent the capture records the same ref on the verdict.
+| Where | What |
+|---|---|
+| The attempt's directory | `artifacts/<name>.png` |
+| The studio | The PNG under the attempt's Artefacts, as `image/png` |
+| The verdict | The same reference, on a judge call that sent the capture |
+| `history.artifacts` | Which attempts keep it: `all`, `failures` or `none` |
 
-Several attempts can capture at once. Cleaning up Chrome's profile after the
-shot never fails the attempt or drops the PNG.
-
-The first `chrome-headless-shell` download is visible in `reeval run` (name, pinned version,
-size, progress, cache path). A cache hit is quiet. Fake-tier stubs never download.
+Several attempts can capture at once. The first `chrome-headless-shell` download shows in `reeval run` with its pinned version, size, progress and cache path; a cache hit is quiet.
 
 ## Next
 

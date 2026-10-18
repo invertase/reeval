@@ -1,9 +1,9 @@
 ---
 title: Analysis
-description: Ask your eval history questions in SQL with reeval query, and get a checked, plain-words reading of a run with reeval analyze.
+description: Ask your eval history questions in SQL with reeval query.
 ---
 
-reeval gives you two ways to dig into results. `reeval query` runs read-only SQL over every recorded and scratch run, and its answers are computed by fixed rules. `reeval analyze` makes one LLM call over those same facts and explains the run in plain words, with every claim checked.
+`reeval query` runs read-only SQL over every recorded and scratch run, and computes its answers by fixed rules. [`reeval analyze`](/guide/analyze) explains a run in plain words from the same facts.
 
 ```bash
 npx reeval query
@@ -24,7 +24,7 @@ Views (the common questions; filter them with SQL):
 …
 ```
 
-With no argument, `reeval query` lists the views, the tables and a few examples. A view is a common question with the joins done for you. Filter it with SQL like any table. The history here is the runs from the earlier pages, including the two house-greeting compares.
+With no argument, `reeval query` lists the views, the tables and a few examples. A view is a common question with the joins done for you, which you filter with SQL like any table. The history here is the runs from the earlier pages, including the two house-greeting compares.
 
 ## Track lift over time
 
@@ -62,7 +62,9 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 evals/skill.eval.ts › house greeting › greets in the house…  antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  2  3.5           24.5                  0.1429       0.3333   insufficient
 ```
 
-`effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap. `tokens_verdict` is null when either side has no usage sample: omitted, not insufficient. A Goose cell does not blank `tokens_verdict` on Cursor cells in the same study.
+`effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap.
+
+`tokens_verdict` is null when either side has no usage sample: omitted, not insufficient. It's per cell, so a Goose cell, which reports no tokens, doesn't blank it on Cursor cells in the same study.
 
 `separated`, `time_separated` and `tokens_separated` are 1 when the variant's and control's ranges don't overlap on tool calls, agent time or tokens. At three attempts a side or more, that's a direction the summary prints as `no overlap`, though the test is still `insufficient`.
 
@@ -83,7 +85,7 @@ environment  with-house-greeting  controlled  1     1       0.07   effect       
 environment  with-house-greeting  pooled      2     1       0.307  effect        0.0286   fewer
 ```
 
-`factor_effects` asks what one factor (the environment, the harness or the model) changes, and says how good the evidence is. `controlled` compares two cells in one run. `pooled` combines the same comparison over comparable runs. Pooling Cursor's two compares gives four attempts a side, enough to call the skill's saving `fewer` tool calls.
+`factor_effects` asks what one factor (the environment, the harness or the model) changes, and says how good the evidence is. `controlled` compares two cells in one run, and `pooled` combines the same comparison over comparable runs. Pooling Cursor's two compares gives four attempts a side, enough to call the skill's saving `fewer` tool calls.
 
 ## Check that the agent read the skill
 
@@ -99,12 +101,9 @@ cursor:composer-2.5/with-house-greeting/docker                house-greeting  4 
 antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  house-greeting  2          1
 ```
 
-`skill_reads` has one row per attempt and skill its environment placed.
-`read_line` is the line in `transcript.jsonl` of the first tool that opened it:
-a path under `skills/<name>/`, or a dedicated `skill` / `load_skill` call. It's
-null, with `reads` at 0, when the agent never opened it. A variant that passes
-without reading its skill didn't pass because of it. The same signals are
-`expect(turn).toHaveCalledSkill(name)` during the eval.
+`skill_reads` has one row per attempt and skill its environment placed. `read_line` is the line in `transcript.jsonl` of the first tool that opened it: a path under `skills/<name>/`, or a dedicated `skill` or `load_skill` call. It's null, with `reads` at 0, when the agent never opened it.
+
+A variant that passes without reading its skill didn't pass because of it. `expect(turn).toHaveCalledSkill(name)` checks the same signals during the eval.
 
 ## See what each arm leaned on
 
@@ -120,17 +119,19 @@ claude-code:claude-haiku-4-5/skilled/docker  ~/.claude/skills/contract-probe/SKI
 codex:gpt-5.4-mini/skilled/docker            ~/.agents/skills/contract-probe/SKILL.md  2      3
 ```
 
-`skill_files` lists every file an attempt's environment declared (each skill's
-`SKILL.md` and references, rules files) and how many tool calls opened it,
-directly, through a glob or a shell command. A `NULL` `first_line` means the
-agent never opened it.
+`skill_files` lists every file an attempt's environment declared (each skill's `SKILL.md` and references, rules files) and how many tool calls opened it, directly, through a glob or a shell command. A `NULL` `first_line` means the agent never opened it.
 
-`context_use` sorts each attempt's tool calls into `context` (a placed skill,
-rules file or MCP tool), `dependency` (`node_modules`, `site-packages`,
-`--help`), `web`, `verify` (a check's command, tests, builds) and `workspace`.
-An arm that spends its calls in `dependency` while another stays in `context`
-is digging for what the other was told. The classes are a heuristic over tool
-names and paths, and `reeval analyze` cites them as counts.
+`context_use` sorts each attempt's tool calls into classes, a heuristic over tool names and paths that `reeval analyze` cites as counts:
+
+| Class | Tool calls on |
+|---|---|
+| `context` | A placed skill, rules file or MCP tool |
+| `dependency` | `node_modules`, `site-packages`, `--help` |
+| `web` | A web search or fetch tool, or `curl` or `wget` of a URL |
+| `verify` | A check's command, tests, builds |
+| `workspace` | Everything else in the workspace |
+
+An arm that spends its calls in `dependency` while another stays in `context` is digging for what the other was told.
 
 ## Count tokens
 
@@ -151,7 +152,9 @@ control  composer-2.5[fast=true]  4  92569  1458
 variant  composer-2.5[fast=true]  4  33045  494
 ```
 
-The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: with no `params` set, `composer-2.5` ran as `fast=true`. A cell's key repeats across evals in a run, so join `cells` on `eval_key` as well. `reeval query effort` also ranks those totals when both sides of a compare reported usage (`tokens_median`, `tokens_p`, `tokens_verdict`).
+The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: with no `params` set, `composer-2.5` ran as `fast=true`.
+
+A cell's key repeats across evals in a run, so join `cells` on `eval_key` as well. `reeval query effort` also ranks those totals when both sides of a compare reported usage.
 
 ## Script it and rebuild it
 
@@ -181,131 +184,13 @@ reeval: reeval query is read-only: .reeval/history.db is a projection of the run
 
 `--rebuild` throws it away and reads every record again.
 
-## Explain a run with reeval analyze
-
-```bash
-npx reeval analyze --config reeval.agents.config.ts --save
-```
-
-```text
-analysing 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg with google/gemini-3.8-flash…
-…
-Results
-  - For eval 'skill', the house-greeting skill produced a controlled pass-rate lift of +100 pts (95% CI +7…+100, verdict: effect) in both cursor:with-house-greeting and antigravity:with-house-greeting relative to their respective control cells. [F5…
-…
-  - Within run r2 alone, effort reductions on eval 'skill' (cursor: 3 vs 11.5 tool calls; antigravity: 3.5 vs 24.5 tool calls; p = 0.3333 for both) had a verdict of insufficient because 2 vs 2 attempts cannot reach statistical significance. [F10]
-…
-Suggested actions
-  1. Increase attempt count on skill eval to reach statistical power for effort (eval · impact medium · effort low) [F10] [F11]
-     target: evals/skill.eval.ts. Run more attempts per cell (at least 6 per cell) so exact Mann-Whitney effort tests can achieve p < 0.05 significance rather than returning insufficient.
-     expect: Effort differences (fewer tool calls and agent seconds) reach statistical significance instead of insufficient.
-     verify: reeval run --runs 6 --tag skill
-…
-gemini-3.8-flash · analysis-v2 · digest v1 · 10381 in / 3196 out tokens · 13s · 29 citations checked, 0 invalid, 0 dropped · 1 commands checked, 0 rejected
-```
-
-`reeval analyze` explains the latest run against its nearest recorded ancestor, here the cross-agent run from [Harnesses](/guide/harnesses): what happened, the results, why, anomalies, and at most five actions. `--vs none` skips that ancestor and writes up this run alone: no drift, eval-changed or cross-run factor rows.
-
-reeval computes the facts, the model only explains them, and every claim must cite a fact (`F…`) or evidence (`E…`) from the digest. reeval drops claims that don't, flags numbers no cited fact holds (anomalies included), drops a line that quotes a judge score which is not the cited attempt's recorded score, and checks each verify command against its CLI. The digest lists each eval's tags: a `--tag` must appear there, or the command should be `reeval run <id>`.
-
-After those checks it caps confidence: not `high` when any citation or command failed, and `low` when a claim was dropped or a command was rejected. The TL;DR is one sentence (what happened, how sure, why, next) and shows that capped value; the footer still counts the checks. An `insufficient` lift or effort verdict is not measured, so it is not a results line. When the eval's sources changed, the digest says `not comparable` and drops the mixed pass-rate: `6/10 vs 8/9` is not a results line. A `compare.questions` answer is in the digest (rates by cut, votes, ties, a failed call, a sample of reasons): it annotates, and never gates pass, fail or the exit code. A vote's reason is the model's wording, not a check.
-
-The studio run page leads with a deterministic pass/fail/infra sentence, and pins the TL;DR under the header when an analysis exists.
-
-<Warning>
-  A `--tag` that no eval has, or any other rejected verify, drops the action.
-  It is not printed with `verify: none`.
-</Warning>
-
-The studio shows saved analyses on the run's Analysis tab, with citations that link to attempts:
-
-<Image src="/assets/studio/run-analysis.png" alt="reeval studio Analysis tab with the TL;DR, what happened and results, each claim followed by its citations" width={800} />
-
-## Check it, cache it, save it
-
-```bash
-npx reeval analyze --config reeval.agents.config.ts --dry-run
-```
-
-```text
-digest 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg: 24 facts, 5 evidence items, 18 attempts
-size 26510 characters ≈ 6628 tokens (cap 20000 in, 8000 out)
-model google/gemini-3.8-flash · analysis-v2 · cache miss (.reeval/analysis/cb4f1ade460a94fdd4e5a9ddef213bd995e81adbbf4f83d0c4a7fa93e0a69398.json)
-```
-
-`--dry-run` shows the digest's size and the cache key without a call. The same inputs never call the model twice: `.reeval/analysis` caches each answer, and `--no-cache` asks again. `--save`, as above, also writes it into the run's history folder as JSON and Markdown, to commit. `--md` and `--json` print it for a PR comment or a script.
-
-`--context` needs no key and makes no call. It prints the digest and reeval's rules as Markdown, for your own coding agent to read. To choose the model or steer it, set `analysis` in the config:
-
-```ts title="reeval.config.ts"
-export default defineConfig({
-  analysis: {
-    model: 'google/gemini-3.8-flash', // default: the judge's, if it can
-    instructions: 'Fewer tool calls count as a win.',
-  },
-  // …
-})
-```
-
-`instructions` opens the prompt, before the digest, as the question the analysis answers. A run where every cell has `gate: 'none'` is read as a study: the TL;DR says how the arms differ, check by check, rather than that attempts failed.
-
-## Notes during a run
-
-```ts title="reeval.config.ts"
-export default defineConfig({
-  analysis: { agent: true, model: 'google/gemini-3.8-flash' },
-  // …
-})
-```
-
-```text
-analysis: 1 note in .reeval/analysis/20260929T201657Z_33d6cda_cursor-agent_dr8k/notes
-```
-
-With `agent: true`, `reeval run` writes a note on each eval and harness as soon as that harness's attempts of the eval have all finished. The model doesn't read whole transcripts. It gets tools: list the attempts, open one, and compare a failed attempt with a passing one to see where their steps diverged.
-
-```json title=".reeval/analysis/<runId>/notes/<eval>__<harness>.json"
-{
-  "kind": "reeval-analysis-note",
-  "evalId": "evals/skill.eval.ts › house greeting › greets in the house style",
-  "harness": "fake",
-  "model": "google/gemini-3.8-flash",
-  "attempts": ["fake/plain/fake#1", "fake/with-house-greeting/fake#1"],
-  "text": "In fake/plain/fake#1, the agent failed the assertion check because `greet('Ada')` returned \"Hello, Ada!\" rather than the expected \"Ahoy, Ada!\". In contrast, fake/with-house-greeting/fake#1 passed with the expected greeting. …",
-  "usage": { "inputTokens": 5768, "outputTokens": 549 },
-  …
-}
-```
-
-A note never changes an outcome or the exit code. If the call fails, the note keeps its `error` and the run prints a warning. `agent` is off by default because it's one more model call per eval and harness on every run; `maxInputTokens` and `maxOutputTokens` cap each one.
-
-## A summary after the run
-
-```text
-analysis: 2 notes in .reeval/analysis/20260929T224823Z_3e6c17d_cursor-agent_6jp9/notes
-analysis: summary in .reeval/analysis/2d23006542befac87f359270f49b8cc539a4fd24ef4070e6d342a50a75ba804b.json (reeval analyze shows it)
-…
-$ npx reeval analyze
-cached analysis from 2026-09-29T22:51:58.212Z (.reeval/analysis/2d23006542befac87f359270f49b8cc539a4fd24ef4070e6d342a50a75ba804b.json); --no-cache calls the model again
-…
-  - pi:control#1 failed because instead of creating greet.js, it exited asking for clarification on the greeting style. [E1:L63] [F8] [r1/questions/pi:control#1]
-…
-gemini-3.8-flash · analysis-v2 · digest v1 · 15493 in / 4862 out tokens · 18s · 33 citations checked, 0 invalid, 0 dropped · 2 commands checked, 0 rejected
-```
-
-Once the run is written, `agent: true` also summarises it: the document `reeval analyze` writes, against the same base and under the same cache key. So `reeval analyze` prints it with no call, and `--save` keeps it in the history folder. Before its answer, the model can read what the digest left out with tools: evidence dropped to fit `maxInputTokens`, and any attempt's steps, checks and diff.
-
-If the summary's call fails, the cache keeps it with its `error` and the run prints a warning; the exit code stands. `reeval analyze` counts a failed summary as a miss and asks again. The studio's Analysis tab shows the summary, each harness's notes, and a failed call's error:
-
-<Image src="/assets/studio/run-analysis-notes.png" alt="The Analysis tab's notes by harness: one note each for cursor:composer-2.5 and pi:gemini-3.8-flash on the questions eval" width={800} />
-
 ## Next
 
 <CardGroup cols={2}>
-  <Card title="Debugging" icon="bug" href="/guide/debugging">
-    Find out why an attempt failed.
+  <Card title="Explaining a run" icon="message" href="/guide/analyze">
+    A checked, plain-words reading of a run.
   </Card>
-  <Card title="reeval analyze" icon="terminal" href="/reference/cli/analyze">
-    Every flag, the digest and the checks.
+  <Card title="reeval query" icon="terminal" href="/reference/cli/query">
+    Every view, table and flag.
   </Card>
 </CardGroup>

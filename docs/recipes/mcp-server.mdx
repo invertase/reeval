@@ -5,10 +5,7 @@ description: Give the agent your MCP server, check that it calls the server's to
 
 **Goal:** find out whether agents call your MCP server, and whether they answer better with it than without.
 
-The server goes in an [environment](/guide/environments). A `compare` runs the
-eval with and without it. Check the call with
-`toHaveCalledMcp(server, tool)`. The transcript still names it
-`mcp__<server>__<tool>`.
+The server goes in an [environment](/guide/environments), and a `compare` runs the eval with and without it. `toHaveCalledMcp(server, tool)` checks the call, which the transcript names `mcp__<server>__<tool>`.
 
 ## The files
 
@@ -187,13 +184,12 @@ Summary
 
 ## Variations
 
-- **A published stdio server:** `mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0'])`. Pin the version, and give its env secrets `hosts` to broker them: `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })`.
-- **Check the answer, not the call:** drop the tool check and add `c.judge('Does the reply name 4.2.0 as the latest version?')`.
-- **Server plus docs skill:** `compare: { baseline: plain, variants: [withDocsMcp, withDocsSkill] }` compares both against the same control, and `withDocsMcp.extendEnvironment('mcp-and-skill', …)` adds a cell with both.
-- **Every harness:** set `harness: [cursor(…), claudeCode(…)]`.
-  `toHaveCalledMcp` and the `mcp__<server>__<tool>` transcript name are the
-  same on each (see [Compare agents](/recipes/compare-agents)), except that
-  pi writes a `-` in a tool's name as `_` ([pi](/reference/harness/pi)).
+| Variation | How |
+|---|---|
+| A published stdio server | `mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0'])`. Pin the version, and give its env secrets `hosts` to broker them: `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })` |
+| Check the answer, not the call | Drop the tool check and add `c.judge('Does the reply name 4.2.0 as the latest version?')` |
+| Server plus docs skill | `compare: { baseline: plain, variants: [withDocsMcp, withDocsSkill] }` compares both against the same control, and `withDocsMcp.extendEnvironment('mcp-and-skill', …)` adds a cell with both |
+| Every harness | Set `harness: [cursor(…), claudeCode(…)]`. `toHaveCalledMcp` and the `mcp__<server>__<tool>` transcript name are the same on each (see [Compare agents](/recipes/compare-agents)), except that pi writes a `-` in a tool's name as `_` ([pi](/reference/harness/pi)) |
 
 ## Next
 

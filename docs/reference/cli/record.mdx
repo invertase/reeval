@@ -59,7 +59,9 @@ warning: left worktree.patch out of 20260930T165638Z_161d9a9_ada-lovelace_vkcv: 
 recorded evals/.history/20260930T165638Z_161d9a9_ada-lovelace_vkcv.json + 3 artifact files in … (9.2 KB). Commit it with git.
 ```
 
-The record keeps `diffHash` and sets `worktreePatch` to `null`, with a `worktreePatchNote` naming the file, the line and the rule. Nothing was committed: take the key out of the file, or add the file to `.gitignore`, so a later commit doesn't carry it. Rotate the key only if it's already been committed or pushed. `--skip-secret-scan` keeps the patch once you've checked it by hand, on a run that isn't recorded yet.
+The record keeps `diffHash` and sets `worktreePatch` to `null`, with a `worktreePatchNote` naming the file, the line and the rule. Nothing was committed: take the key out of the file, or add the file to `.gitignore`, so a later commit doesn't carry it.
+
+Rotate the key only if it's already been committed or pushed. `--skip-secret-scan` keeps the patch once you've checked it by hand, on a run that isn't recorded yet.
 
 ## Recording automatically
 
