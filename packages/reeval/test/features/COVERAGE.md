@@ -30,7 +30,7 @@
 | The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'` | ✓ 1 | ✓ 2 | — | — | — |
 | Profiles: `defaults`, `limit`, `pin`, selection and typos | ✓ 3 | ✓ 3 | — | — | — |
 | `reeval.yaml`: the config as data, with profiles, `--config` and one config per directory | ✓ 2 | ✓ 4 | — | — | — |
-| One path rule for reeval.yaml, TypeScript and declaration trees: a relative host path (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`), from a helper or its data form, resolves against the directory of the file it's written in | ✓ 6 | ✓ 4 | — | — | — |
+| One path rule for reeval.yaml, TypeScript and declaration trees: a relative host path (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`), from a helper or its data form, resolves against the directory of the file it's written in | ✓ 6 | ✓ 6 | — | — | — |
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — |
 | `reeval run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 2 | ✓ 1 | — | — | — |

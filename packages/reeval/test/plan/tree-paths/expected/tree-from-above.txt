@@ -1,0 +1,12 @@
+no profile · 3 evals · 4 cells · 4 attempts
+evals/tree.eval.ts › images › from the group  fake/-/docker:images      control      gated    ×1
+evals/tree.eval.ts › an environment           fake/built/docker:docker  control      gated    ×1
+evals/tree.eval.ts › a compare                fake/built/docker:docker  control      ungated  ×1
+                                              fake/own/docker:images    variant own  gated    ×1
+excluded: —
+image docker:images · 2 evals
+  dockerfile evals/images/Dockerfile  reeval-dockerfile:images-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
+  harness                             reeval-dockerfile:images-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)
+image docker:docker · 2 evals
+  dockerfile docker/Dockerfile  reeval-dockerfile:docker-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
+  harness                       reeval-dockerfile:docker-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)

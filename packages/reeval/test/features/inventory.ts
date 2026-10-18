@@ -254,6 +254,8 @@ export const inventory: InventoryFeature[] = [
       'yaml-paths/profile-from-above',
       'ts-paths/from-above',
       'ts-paths/profile-from-above',
+      'tree-paths/tree-from-above',
+      'tree-paths/helpers-from-above',
     ],
     tests: [
       unit("a reeval.yaml's relative host paths resolve against its directory"),
