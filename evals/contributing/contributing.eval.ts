@@ -11,10 +11,6 @@ import { TASKS } from './tasks.ts'
 const FOOTER =
   "\n\nThe repository is checked out with its dependencies installed. Make the change as you would for a pull request to this repository. You don't need to commit."
 
-// REEVAL_CONTRIBUTING_ORACLE=1 with the fake config applies the merged change instead of an agent:
-// every check must pass on it, and fail on the fake agent's empty change.
-const ORACLE = process.env.REEVAL_CONTRIBUTING_ORACLE === '1'
-
 group('contributing to reeval', { timeout: '45m' }, () => {
   for (const task of TASKS) {
     const { control, variant } = arms(task)
@@ -22,9 +18,10 @@ group('contributing to reeval', { timeout: '45m' }, () => {
       `${task.title} (#${task.pr.number})`,
       { compare: { baseline: control, variants: [variant], gate: 'none' } },
       async (c) => {
-        if (ORACLE && c.attempt.cell.harness.startsWith('fake')) {
+        // The merged change, for reeval.oracle.config.ts's fake agent to apply. A real agent never
+        // gets it.
+        if (c.attempt.cell.harness.startsWith('fake')) {
           await c.writeFile('~/oracle.patch', patchOf(task.pr.parent, task.pr.sha, GUIDES))
-          await expect(c.exec('git apply ~/oracle.patch')).toSucceed()
         }
         await c.send(task.prompt + FOOTER)
 

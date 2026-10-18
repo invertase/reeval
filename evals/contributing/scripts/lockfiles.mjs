@@ -5,9 +5,9 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 const here = (path) => fileURLToPath(new URL(path, import.meta.url))
-const tasks = readFileSync(here('./tasks.ts'), 'utf8')
+const tasks = readFileSync(here('../tasks.ts'), 'utf8')
 const parents = [...tasks.matchAll(/parent: '([0-9a-f]{40})'/g)].map((m) => m[1])
-const out = here('./sandbox/lockfiles/')
+const out = here('../sandbox/lockfiles/')
 
 rmSync(out, { recursive: true, force: true })
 for (const sha of parents) {
@@ -15,7 +15,7 @@ for (const sha of parents) {
   mkdirSync(dir, { recursive: true })
   const tar = execFileSync(
     'git',
-    ['-C', here('../..'), 'archive', sha, 'pnpm-lock.yaml', 'patches'],
+    ['-C', here('../../..'), 'archive', sha, 'pnpm-lock.yaml', 'patches'],
     {
       maxBuffer: 64 * 1024 * 1024,
     },
