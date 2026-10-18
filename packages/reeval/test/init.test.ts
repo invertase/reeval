@@ -192,9 +192,10 @@ describe('reeval init', () => {
     assert.equal((await ask('\n')).choice, 'cursor')
     assert.equal((await ask('2\n')).choice, 'claude-code')
     assert.equal((await ask(`${INIT_HARNESSES.length + 1}\n`)).choice, 'none')
-    const again = await ask(`${INIT_HARNESSES.length + 2}\nClaude Code\n`)
+    const choices = INIT_HARNESSES.length + 1
+    const again = await ask(`${choices + 1}\nClaude Code\n`)
     assert.equal(again.choice, 'claude-code')
-    assert.match(again.out, /Answer 1 to 9, or one of cursor, claude-code/)
+    assert.match(again.out, new RegExp(`Answer 1 to ${choices}, or one of cursor, claude-code`))
     assert.match(again.out, /1\) Cursor +cursor:composer-2\.5, CURSOR_API_KEY/)
     await assert.rejects(ask(''), (e) => e instanceof UsageError && /no answer/.test(e.message))
   })
