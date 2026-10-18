@@ -635,7 +635,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
         'analysis',
         `analysis: { model: 'typesafe-ai/jev-1.13.0' },`,
         undefined,
-        /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by config\.analysis\.model "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
+        /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by analysis\.model in reeval\.config\.ts, "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
       ],
     ] as const) {
       const p = await project(`questions-eval-model-${name}`, {
@@ -1243,7 +1243,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a variant with its own checks',
       `evaluate('e', { compare: { baseline: a, variants: [{ environment: a, check: () => {} }] } }, async () => {})`,
-      /compare takes environments \(got an object with "environment", "check"\) in evaluate\("e"\)\. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval\./,
+      /compare\.variants in evaluate\("e"\) must be environments from defineEnvironment \(got an object with "environment", "check"\)\. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval\./,
     ],
     [
       'compare scoped to a harness the eval does not run',
@@ -1268,7 +1268,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'compare as an array',
       `evaluate('e', { compare: [a] }, async () => {})`,
-      /compare must be an object in evaluate\("e"\)\. Use compare: \{ baseline, variants: \[\.\.\.\] \}\./,
+      /compare in evaluate\("e"\) must be an object, not a list\. Use compare: \{ baseline, variants: \[\.\.\.\] \}\./,
     ],
     [
       'a compare strategy',
@@ -1343,7 +1343,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a compare question entry without its question',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ model: 'google/gemini-3.8-flash' } as never] } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) has an entry without its question \(got undefined\)/,
+      /compare\.questions in evaluate\("e"\) has an entry without its question, e\.g\./,
     ],
     [
       'a compare question model without a provider',
@@ -1373,7 +1373,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'pinning something that cannot be pinned',
       `evaluate('e', { pin: ['timeout'] }, async () => {})`,
-      /pin accepts harness, runs and compare \(got timeout\)/,
+      /pin in evaluate\("e"\) lists harness, runs and\/or compare \(got "timeout"\)/,
     ],
     [
       'a callback as group options',
@@ -1403,7 +1403,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a harness edit that adds and keeps at once',
       `evaluate('e', { harness: { add: [], only: 'fake' } as never }, async () => {})`,
-      /harness takes \{ add \} or \{ only \}, not both, in evaluate\("e"\)/,
+      /harness in evaluate\("e"\) takes \{ add \} or \{ only \}, not both\. Use add/,
     ],
     [
       'a sandbox that is not docker() or fakeSandbox() on evaluate',
@@ -1438,7 +1438,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a setup step with an unknown key',
       `defineEnvironment('e', { setup: [{ run: 'ls', dir: 'x' } as never] })`,
-      /Steps in defineEnvironment\("e"\) are strings or \{ run, timeout\?, cwd\? \} objects \(got "dir"\)/,
+      /setup step "ls" in defineEnvironment\("e"\) has an unknown key "dir"; a step is a string or \{ run, timeout\?, cwd\? \}\./,
     ],
     [
       'two evals with the same name',
@@ -1473,12 +1473,12 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a judge threshold over 1 on a group',
       `group('g', { judge: { threshold: 2 } }, () => { evaluate('e', async () => {}) })`,
-      /judge\.threshold must be between 0 and 1 \(got 2\) in group\("g"\)/,
+      /judge\.threshold in group\("g"\) must be between 0 and 1 \(got 2\)/,
     ],
     [
       'a judge.state.diff pattern as one string on a group',
       `group('g', { judge: { state: { diff: 'src/' as never } } }, () => { evaluate('e', async () => {}) })`,
-      /judge\.state\.diff must be true, false or a non-empty list of patterns \(got "src\/"\) in group\("g"\)/,
+      /judge\.state\.diff in group\("g"\) must be true, false or a non-empty list of patterns \(got "src\/"\)/,
     ],
     [
       'a file path that climbs out of the workspace',
@@ -1528,12 +1528,12 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
-      /runs must be a whole number of at least 1 \(got 0\)/,
+      /runs in evaluate\("e"\) must be a whole number of at least 1 \(got 0\)/,
     ],
     [
       'a gate as a percentage',
       `evaluate('e', { gate: { passRate: 80 } }, async () => {})`,
-      /gate is 'all' \(every attempt passes\) or \{ passRate \} with a share above 0 and at most 1, e\.g\. gate: \{ passRate: 0\.8 \} \(got \{"passRate":80\}\) in evaluate\("e"\)/,
+      /gate in evaluate\("e"\) is 'all' \(every attempt passes\) or \{ passRate \} with a share above 0 and at most 1, e\.g\. gate: \{ passRate: 0\.8 \} \(got \{"passRate":80\}\)/,
     ],
     [
       'passRate instead of gate',
@@ -1613,7 +1613,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'egress as a list of hosts',
       `evaluate('e', { egress: ['api.example.com'] as never }, async () => {})`,
-      /egress is 'allow-all' \(the default\), 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\) in evaluate\("e"\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
+      /egress in evaluate\("e"\) is 'allow-all' \(the default\), 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
     ],
     [
       'an egress deny list',
@@ -1683,7 +1683,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'capture as a string',
       `evaluate('e', { capture: 5173 as never }, async () => {})`,
-      /capture is \{ viewport\?, timeout\?, browser\?, model\? \} \(got 5173\) in evaluate\("e"\)/,
+      /capture in evaluate\("e"\) is \{ viewport\?, timeout\?, browser\?, model\? \} \(got 5173\)/,
     ],
     [
       'an unknown capture key',
@@ -1698,22 +1698,22 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a capture viewport without height',
       `evaluate('e', { capture: { viewport: { width: 1280 } as never } }, async () => {})`,
-      /capture\.viewport is \{ width, height \} or 'full-page'/,
+      /capture\.viewport in evaluate\("e"\) is \{ width, height \} or 'full-page'/,
     ],
     [
       'capture.browser as a string',
       `evaluate('e', { capture: { browser: 'off' as never } }, async () => {})`,
-      /capture\.browser is true or false \(got "off"\) in evaluate\("e"\)/,
+      /capture\.browser in evaluate\("e"\) is true or false \(got "off"\)/,
     ],
     [
       'a capture viewport with height and fullPage',
       `evaluate('e', { capture: { viewport: { height: 720, fullPage: true } as never } }, async () => {})`,
-      /capture\.viewport is \{ width, height \} or 'full-page' in evaluate\("e"\), not \{ height, fullPage \}/,
+      /capture\.viewport in evaluate\("e"\) is \{ width, height \} or 'full-page', not \{ height, fullPage \}/,
     ],
     [
       'instructions without a vision model',
       `evaluate('e', { capture: { instructions: ['Fill the form'] } as never }, async () => {})`,
-      /c\.capture\(\) instructions need a vision model in evaluate\("e"\)/,
+      /capture\.instructions in evaluate\("e"\) can't be set: instructions go on the call/,
     ],
     [
       'an evaluation-model capture.model',
@@ -1774,27 +1774,27 @@ ${body}
     [
       'widening in a profile limit',
       `profiles: { pr: { limit: { harness: [fakeHarness({ id: 'a' })] } } },`,
-      /profiles\.pr\.limit\.harness can only list harness ids to allow \(got fakeHarness\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
+      /profiles\.pr\.limit\.harness in reeval\.config\.ts can only list harness ids to allow \(got fakeHarness\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
     ],
     [
       'a usd budget',
       `budget: { usd: 20 },`,
-      /budget\.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
+      /budget\.usd in reeval\.config\.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
     ],
     [
       'an unbrokered policy reeval does not know',
       `secrets: { unbrokered: 'deny' as never },`,
-      /config\.secrets\.unbrokered is 'warn' or 'error' \(got "deny"\)/,
+      /secrets\.unbrokered in reeval\.config\.ts is 'warn' or 'error' \(got "deny"\)/,
     ],
     [
       'maxConcurrent 0 on a config harness',
       `harness: fakeHarness({ maxConcurrent: 0 }),`,
-      /maxConcurrent must be a whole number of at least 1 \(got 0\) for harness in reeval\.config\.ts/,
+      /harness\.maxConcurrent in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
     ],
     [
       'a judge threshold as text in the config',
       `judge: { model: fakeJudge({ score: 0.9 }), threshold: '0.8' as never },`,
-      /judge\.threshold must be between 0 and 1 \(got 0\.8\) in reeval\.config\.ts/,
+      /judge\.threshold in reeval\.config\.ts must be between 0 and 1 \(got "0\.8"\)/,
     ],
     [
       'a judge diff option outside state',
@@ -1814,47 +1814,47 @@ ${body}
     [
       'a judge.state.transcript that is not a mode',
       `judge: { model: fakeJudge({ score: 0.9 }), state: { transcript: 'all' as never } },`,
-      /judge\.state\.transcript must be true, false, 'tools' or 'full' \(got "all"\) in reeval\.config\.ts/,
+      /judge\.state\.transcript in reeval\.config\.ts must be true, false, 'tools' or 'full' \(got "all"\)/,
     ],
     [
       'an empty path in judge.state.contents',
       `judge: { model: fakeJudge({ score: 0.9 }), state: { contents: ['README.md', ''] } },`,
-      /judge\.state\.contents must be a list of paths or patterns \(got \["README\.md",""\]\) in reeval\.config\.ts/,
+      /judge\.state\.contents in reeval\.config\.ts must be a list of paths or patterns \(got \["README\.md",""\]\)/,
     ],
     [
       'judge.state as a list',
       `judge: { model: fakeJudge({ score: 0.9 }), state: ['transcript'] as never },`,
-      /judge\.state must be an object such as \{ transcript: 'tools' \} \(got \["transcript"\]\) in reeval\.config\.ts/,
+      /judge\.state in reeval\.config\.ts must be an object such as \{ transcript: 'tools' \} \(got \["transcript"\]\)/,
     ],
     [
       'a fake judge scoring with a function in the config',
       `judge: { model: fakeJudge({ score: () => 1 }) },`,
-      /fakeJudge\(\{ score \}\) in the config takes a number\. Pass a score function per group, eval or call instead\./,
+      /judge\.model in reeval\.config\.ts must be fakeJudge\(\{ score \}\) with a number\. Pass a score function per group, eval or call instead\./,
     ],
     [
       'keeping no debug runs',
       `debug: { keep: 0 },`,
-      /config\.debug\.keep must be a whole number of at least 1 \(got 0\)/,
+      /debug\.keep in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
     ],
     [
       'a trace buffer size as text',
       `debug: { traceBufferMb: '8MB' as never },`,
-      /config\.debug\.traceBufferMb must be a number of megabytes above 0 \(got 8MB\)/,
+      /debug\.traceBufferMb in reeval\.config\.ts must be a number of megabytes above 0 \(got "8MB"\)/,
     ],
     [
       'analysis.agent as text',
       `analysis: { agent: 'yes' as never },`,
-      /config\.analysis\.agent must be a boolean/,
+      /analysis\.agent in reeval\.config\.ts must be true or false \(got "yes"\)/,
     ],
     [
       'a debug folder option',
       `debug: { dir: '/tmp/debug' } as never,`,
-      /Unknown option "dir" in config\.debug\. Use keep, traceBufferMb\./,
+      /Unknown option "dir" in debug in reeval\.config\.ts\. Use keep, traceBufferMb\./,
     ],
     [
       'control reuse',
       `profiles: { pr: { reuse: 'control' } },`,
-      /Unknown option "reuse" in profiles\.pr\. Reusing control results from \.history isn’t built yet/,
+      /Unknown option "reuse" in profiles\.pr in reeval\.config\.ts\. Reusing control results from \.history isn’t built yet/,
     ],
     [
       'a sandbox that is not docker() or fakeSandbox() on defineConfig',
@@ -1864,7 +1864,7 @@ ${body}
     [
       'a sandbox that is not docker() or fakeSandbox() on profile defaults',
       `profiles: { pr: { defaults: { sandbox: { kind: 'vm' } as never } } },`,
-      /sandbox in profiles\.pr\.defaults must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
     ],
   ]
   for (const [what, extra, message] of configCases) {

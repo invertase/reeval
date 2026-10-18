@@ -6,7 +6,7 @@ import { parseDuration } from '../duration.ts'
 import type { Duration, JSONValue } from '../types.ts'
 
 /** A string with something other than whitespace in it. */
-export const nonEmpty = () => z.string().regex(/\S/)
+export const nonEmpty = () => z.string().regex(/\S/, 'must not be empty')
 
 // Described through the registry, not `.describe()`: a described copy would leave the recursion
 // pointing at an unnamed schema in the JSON Schema.
@@ -113,14 +113,34 @@ export function oneOf(values: readonly unknown[]): string {
  * an unknown key, a value of the wrong type, or Zod's own words for anything else.
  */
 export function genericProblem(call: string, issue: Issue, value: unknown): string {
+  issue = closestBranch(issue)
   const path = fieldPath(issue.path)
   const at = call ? `${call}({ ${path} })` : path
   if (issue.code === 'unrecognized_keys') return `${at} has an unknown key "${issue.keys[0]}"`
   const v = valueAt(value, issue.path)
   if (issue.code === 'invalid_value') return `${at} is ${oneOf(issue.values)} (got ${got(v)})`
   const expected = issue.code === 'invalid_type' ? EXPECTED[issue.expected] : undefined
+  if (expected && v === undefined) return `${at} is missing: it must be ${expected}`
   if (expected) return `${at} must be ${expected} (got ${got(v)})`
-  return `${at}: ${issue.message} (got ${got(v)})`
+  const sentence = /^(must|needs) /.test(issue.message) ? ` ${issue.message}` : `: ${issue.message}`
+  return `${at}${sentence} (got ${got(v)})`
+}
+
+/**
+ * For a union that matched no form, the issue in the form that got furthest (its issue sits
+ * deepest, then fewest issues), with the union's path in front: a capture missing its `file`
+ * names `file`, not the whole union, and an unknown key in that form comes first. The union's own
+ * issue when every form failed at its root.
+ */
+export function closestBranch(issue: Issue): Issue {
+  if (issue.code !== 'invalid_union' || !('errors' in issue) || !issue.errors.length) return issue
+  const depth = (branch: readonly Issue[]) => Math.max(...branch.map((i) => i.path.length))
+  const [best] = [...issue.errors]
+    .filter((branch) => branch.length > 0)
+    .sort((a, b) => depth(b) - depth(a) || a.length - b.length)
+  if (!best || depth(best) === 0) return issue
+  const inner = best.find((i) => i.code === 'unrecognized_keys') ?? (best[0] as Issue)
+  return closestBranch({ ...inner, path: [...issue.path, ...inner.path] } as Issue)
 }
 
 /**
@@ -138,7 +158,9 @@ export function dataProblem(
   const result = schema.safeParse(value)
   if (result.success) return undefined
   const { issues } = result.error
-  const issue = issues.find((i) => i.code === 'unrecognized_keys') ?? (issues[0] as Issue)
+  const issue = closestBranch(
+    issues.find((i) => i.code === 'unrecognized_keys') ?? (issues[0] as Issue),
+  )
   const field = fieldPath(issue.path)
   const v = valueAt(value, issue.path)
   if (issue.code === 'invalid_union' && 'options' in issue) {

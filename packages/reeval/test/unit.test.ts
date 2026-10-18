@@ -418,7 +418,10 @@ test('concurrency: flag, then REEVAL_CONCURRENCY, then config, then a default si
   )
   assert.equal(await resolveConcurrency(withConfig, '7', capacity, { REEVAL_CONCURRENCY: '6' }), 7)
   await assert.rejects(resolveConcurrency(config, 'lots', capacity, {}), /--concurrency must be/)
-  assert.throws(() => resolveConfig({ concurrency: 0 }, '/p'), /config\.concurrency must be/)
+  assert.throws(
+    () => resolveConfig({ concurrency: 0 }, '/p'),
+    /concurrency in reeval\.config\.ts must be a whole number of at least 1 \(got 0\)/,
+  )
 })
 
 test('redactSecrets masks secret-looking env values', () => {
@@ -561,7 +564,7 @@ test('judge strings use the provider package when its key is set, else the AI Ga
   assert.deepEqual(judgeRoute('openai/gpt-x', { VERCEL_OIDC_TOKEN: 'o' }), { kind: 'gateway' })
   assert.throws(
     () => judgeRoute(jev, {}),
-    /No credentials for judge model "typesafe-ai\/jev-1\.13\.0"\. Set TYPESAFE_AI_API_KEY to call @ai-sdk\/typesafe-ai directly, or AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\) to go through the Vercel AI Gateway\./,
+    /No credentials for judge model "typesafe-ai\/jev-1\.13\.0"\. Set TYPESAFE_AI_API_KEY to call @ai-sdk\/typesafe-ai directly, or AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\) to go through the Vercel AI Gateway, in the environment or \.env\.local\./,
   )
   assert.throws(
     () => judgeRoute('openai/gpt-x', {}),
@@ -1634,7 +1637,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
   assert.throws(
     () =>
       defineEnvironment('bad', ({ skill }) => ({ skills: [skill.local('.', { exclude: ['/'] })] })),
-    /skill exclude must be an array of paths or globs/,
+    /skill\(\{ exclude \}\) must be a list of paths or globs/,
   )
 })
 

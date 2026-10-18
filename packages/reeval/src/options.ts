@@ -7,6 +7,7 @@ import { sandboxProblem } from './contract/docker.ts'
 import { harnessProblem } from './contract/harness.ts'
 import { judgeProblem } from './contract/judge.ts'
 import { gateProblem } from './contract/plain.ts'
+import { closest } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
@@ -148,7 +149,7 @@ function checkMaxConcurrent(value: unknown, where: string): void {
     return
   }
   throw new UsageError(
-    `maxConcurrent must be a whole number of at least 1 (got ${String(value)}) for ${where}`,
+    `${where} must be a whole number of at least 1 (got ${JSON.stringify(value)})`,
   )
 }
 
@@ -186,24 +187,29 @@ export function refuseIllegalCompare(
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
   for (const key of Object.keys(options)) {
     if (allowed.includes(key)) continue
+    const near = SUGGEST[key] ?? closest(key, allowed)
     const hint =
       key === 'pool'
         ? ' pool is an option of evaluate.each, beside the cases: evaluate.each(cases, { pool: false }).'
-        : SUGGEST[key]
-          ? ` Did you mean "${SUGGEST[key]}"?`
+        : near
+          ? ` Did you mean "${near}"?`
           : ''
     throw new UsageError(`Unknown option "${key}" in ${where}.${hint}`)
   }
   const o = options as EvalOptions
   if (o.runs !== undefined && !(Number.isInteger(o.runs) && o.runs >= 1)) {
-    throw new UsageError(`runs must be a whole number of at least 1 (got ${o.runs}) in ${where}`)
+    throw new UsageError(
+      `runs in ${where} must be a whole number of at least 1 (got ${JSON.stringify(o.runs)})`,
+    )
   }
   if (o.gate !== undefined) checkGate(o.gate, where)
   if (
     o.tags !== undefined &&
     (!Array.isArray(o.tags) || o.tags.some((t) => typeof t !== 'string'))
   ) {
-    throw new UsageError(`tags must be a list of strings in ${where}`)
+    throw new UsageError(
+      `tags in ${where} must be a list of strings, e.g. tags: ['smoke'] (got ${JSON.stringify(o.tags)})`,
+    )
   }
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
   if (o.egress !== undefined) checkEgress(o.egress, where, UsageError)
@@ -257,7 +263,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const bad = Array.isArray(o.pin) ? o.pin.filter((k) => !PINNABLE.includes(k)) : [o.pin]
     if (bad.length) {
       throw new UsageError(
-        `pin accepts harness, runs and compare (got ${bad.map(String).join(', ')}) in ${where}`,
+        `pin in ${where} lists harness, runs and/or compare (got ${bad.map((k) => JSON.stringify(k)).join(', ')})`,
       )
     }
   }
@@ -271,12 +277,12 @@ const CAPTURE_CALL_ONLY = new Set(['instructions', 'wait', 'name', 'path'])
 /** Throws unless `capture` is a shallow-merge object with a viewport, timeout, browser and/or model. */
 export function checkCapture(value: unknown, where: string): void {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new UsageError(`capture is ${CAPTURE_SHAPE} (got ${JSON.stringify(value)}) in ${where}`)
+    throw new UsageError(`capture in ${where} is ${CAPTURE_SHAPE} (got ${JSON.stringify(value)})`)
   }
   const o = value as CaptureOptions & Record<string, unknown>
   if (o.instructions !== undefined) {
     throw new UsageError(
-      `c.capture() instructions need a vision model in ${where}. instructions is call-only on the call.`,
+      `capture.instructions in ${where} can't be set: instructions go on the call, c.capture(port, { instructions }).`,
     )
   }
   const unknown = Object.keys(o).filter((k) => !CAPTURE_KEYS.includes(k))
@@ -284,12 +290,12 @@ export function checkCapture(value: unknown, where: string): void {
     const key = unknown[0] ?? ''
     if (key === 'use' || key === 'fake') {
       throw new UsageError(
-        `Unknown capture key "${key}" in ${where}. Set capture.model. Tests pass fakeInstructions from reeval/testing as instructions.`,
+        `Unknown capture key "${key}" in ${where}. Set capture.model; tests pass fakeInstructions from reeval/testing as instructions.`,
       )
     }
     if (CAPTURE_CALL_ONLY.has(key)) {
       throw new UsageError(
-        `c.capture() ${key} is call-only on the call in ${where}. Use viewport, timeout, browser, model.`,
+        `capture.${key} in ${where} can't be set: ${key} goes on the call, c.capture(port, { ${key} }). Use viewport, timeout, browser, model.`,
       )
     }
     throw new UsageError(
@@ -300,7 +306,7 @@ export function checkCapture(value: unknown, where: string): void {
   if (o.timeout !== undefined) parseDuration(o.timeout)
   if (o.browser !== undefined && typeof o.browser !== 'boolean') {
     throw new UsageError(
-      `capture.browser is true or false (got ${JSON.stringify(o.browser)}) in ${where}`,
+      `capture.browser in ${where} is true or false (got ${JSON.stringify(o.browser)})`,
     )
   }
   if (o.model !== undefined) checkCaptureModel(o.model, where)
@@ -310,13 +316,13 @@ function checkViewport(value: unknown, where: string): void {
   if (value === 'full-page') return
   if (!isObjectLike(value) || Array.isArray(value)) {
     throw new UsageError(
-      `capture.viewport is { width, height } or 'full-page' (got ${JSON.stringify(value)}) in ${where}`,
+      `capture.viewport in ${where} is { width, height } or 'full-page' (got ${JSON.stringify(value)})`,
     )
   }
   const keys = Object.keys(value)
   if (keys.includes('fullPage')) {
     throw new UsageError(
-      `capture.viewport is { width, height } or 'full-page' in ${where}, not { height, fullPage }. Use viewport: 'full-page' for a tall shot.`,
+      `capture.viewport in ${where} is { width, height } or 'full-page', not { height, fullPage }. Use viewport: 'full-page' for a tall shot.`,
     )
   }
   const isSize = (n: unknown) => typeof n === 'number' && Number.isInteger(n) && n > 0
@@ -326,7 +332,7 @@ function checkViewport(value: unknown, where: string): void {
     !isSize(value.height)
   ) {
     throw new UsageError(
-      `capture.viewport is { width, height } or 'full-page' (got ${JSON.stringify(value)}) in ${where}`,
+      `capture.viewport in ${where} is { width, height } or 'full-page' (got ${JSON.stringify(value)})`,
     )
   }
 }
@@ -334,7 +340,7 @@ function checkViewport(value: unknown, where: string): void {
 function checkCaptureModel(value: unknown, where: string): void {
   if (typeof value !== 'string' || !value.includes('/')) {
     throw new UsageError(
-      `capture.model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(value)}) in ${where}`,
+      `capture.model in ${where} is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(value)})`,
     )
   }
   if (isEvaluationModel(value)) {
@@ -380,7 +386,9 @@ function editHarness(
   where: string,
 ): HarnessDescriptor[] {
   if ('add' in edit && 'only' in edit) {
-    throw new UsageError(`harness takes { add } or { only }, not both, in ${where}`)
+    throw new UsageError(
+      `harness in ${where} takes { add } or { only }, not both. Use add to append to the inherited harnesses, only to keep some of them.`,
+    )
   }
   if ('add' in edit) return [...inherited, ...(Array.isArray(edit.add) ? edit.add : [edit.add])]
   const ids = Array.isArray(edit.only) ? edit.only : [edit.only]
@@ -406,13 +414,13 @@ export function checkHarnesses(list: unknown[], where: string): void {
       const why = opencodeModelError(item.model)
       if (why) throw new UsageError(`opencode() in ${where}: ${why}`)
     }
-    checkMaxConcurrent(item.maxConcurrent, `harness in ${where}`)
+    checkMaxConcurrent(item.maxConcurrent, `harness.maxConcurrent in ${where}`)
     const { startTimeout } = item
     if (startTimeout !== undefined) {
       try {
         parseDuration(startTimeout)
       } catch (error) {
-        throw new UsageError(`startTimeout of harness in ${where}: ${(error as Error).message}`)
+        throw new UsageError(`harness.startTimeout in ${where}: ${(error as Error).message}`)
       }
     }
     const problem = harnessProblem(item)
@@ -619,7 +627,10 @@ export function cascade(
   }
   const names = out.compare?.variants.map((v) => v.name) ?? []
   const dupe = names.find((n, i) => names.indexOf(n) !== i)
-  if (dupe) throw new UsageError(`compare in ${where} lists two variants named ${dupe}`)
+  if (dupe)
+    throw new UsageError(
+      `compare in ${where} lists two variants named ${dupe}. Give each variant its own name.`,
+    )
 
   let skip: string | undefined
   const limit = profile?.limit

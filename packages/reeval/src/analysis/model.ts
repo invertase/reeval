@@ -45,7 +45,7 @@ export function analysisModelName(
   const model = defaultModel(config)
   if (model !== undefined) return model
   throw new UsageError(
-    `${use === 'agent' ? 'config.analysis.agent' : 'reeval analyze'} needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}${use === 'agent' ? ', or turn agent off' : ', or run reeval analyze --context to hand the digest to your own coding agent'}.`,
+    `${use === 'agent' ? `analysis.agent in ${config.file}` : 'reeval analyze'} needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}${use === 'agent' ? ', or turn agent off' : ', or run reeval analyze --context to hand the digest to your own coding agent'}.`,
   )
 }
 
@@ -75,7 +75,7 @@ export function questionModel(
   }
   if (typeof model === 'string' && isEvaluationModel(model)) {
     throw new UsageError(
-      `compare.questions "${question.question}" (${where}) would be answered by config.analysis.model "${model}", an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash', or ${fix}.`,
+      `compare.questions "${question.question}" (${where}) would be answered by analysis.model in ${config.file}, "${model}", an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash', or ${fix}.`,
     )
   }
   return model
@@ -90,7 +90,7 @@ export function resolveAnalysisModel(
   if (isFake(model)) return { name: 'fake', route: 'fake', fake: model }
   if (isEvaluationModel(model)) {
     throw new UsageError(
-      `config.analysis.model "${model}" is an evaluation model: it scores yes/no questions and can't write an analysis. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
+      `analysis.model in ${config.file} is "${model}", an evaluation model: it scores yes/no questions and can't write an analysis. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
     )
   }
   try {

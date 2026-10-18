@@ -131,11 +131,11 @@ test('judge options name an unknown key, a misspelt state key and a bad value', 
   )
   assert.equal(
     judgeProblem({ state: { turns: 'first' } }, loc),
-    `judge.state.turns must be 'last' or 'all' (got "first") in evals/a.eval.ts › lands`,
+    `judge.state.turns in evals/a.eval.ts › lands must be 'last' or 'all' (got "first")`,
   )
   assert.equal(
     judgeProblem({ state: { diff: [] } }, loc),
-    'judge.state.diff must be true, false or a non-empty list of patterns (got []) in evals/a.eval.ts › lands',
+    'judge.state.diff in evals/a.eval.ts › lands must be true, false or a non-empty list of patterns (got [])',
   )
   assert.equal(
     judgeProblem({ state: { contents: ['**', '!dist/'], checks: true } }, loc),

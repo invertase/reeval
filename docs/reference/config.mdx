@@ -52,7 +52,7 @@ plan  config ../../reeval.config.ts · 1 eval · 1 cell · 1 attempt · ~1s seri
 
 The plan line names the config when it isn't in the current directory, and `-v` names it on each attempt's first `plan` line.
 
-The config is TypeScript loaded as is, with no build step. It must default-export an object or a callback that returns one: anything else is `reeval.config.ts must default-export defineConfig({...})`.
+The config is TypeScript loaded as is, with no build step. It must default-export an object or a callback that returns one: anything else is `reeval.config.ts's default export must be defineConfig({…}) (got …)`.
 
 ## The callback
 
@@ -251,15 +251,15 @@ reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 |---|---|
 | `compare` in the config | `compare can't be set in reeval.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.` |
 | A literal secret | `env.API_KEY in reeval.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` |
-| A judge model object | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` |
-| A model without a provider | `config.judge: Judge model "gemini-3.8-flash" needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash"` |
+| A judge model object | `judge.model in reeval.config.ts must be a "provider/model" string or fakeJudge(). Pass a model object per group, eval or call instead.` |
+| A model without a provider | `judge.model in reeval.config.ts needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash" (got "gemini-3.8-flash")` |
 | A bad duration | `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` |
 | A zero or negative duration | `Invalid duration 0. A duration is more than zero: use e.g. "90s" or "15m".` |
-| A bad concurrency | `config.concurrency must be a whole number of at least 1 (got 0)` |
-| An unknown `debug` key | `Unknown option "keepRuns" in config.debug. Use keep, traceBufferMb.` |
-| `analysis.agent` that isn't `true` or `false` | `config.analysis.agent must be a boolean` |
-| `analysis.agent` with no language model | `config.analysis.agent needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in reeval.config.ts …, or turn agent off.` |
-| A missing default profile | `defaultProfile names "pr", which isn't in profiles (none)` |
+| A bad concurrency | `concurrency in reeval.config.ts must be a whole number of at least 1 (got 0)` |
+| An unknown `debug` key | `Unknown option "keepRuns" in debug in reeval.config.ts. Use keep, traceBufferMb.` |
+| `analysis.agent` that isn't `true` or `false` | `analysis.agent in reeval.config.ts must be true or false (got "yes")` |
+| `analysis.agent` with no language model | `analysis.agent in reeval.config.ts needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in reeval.config.ts …, or turn agent off.` |
+| A missing default profile | `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (it defines none). Add it under profiles, or name one that's there.` |
 | A `Promise` from the callback | `The defineConfig callback in reeval.config.ts returned a Promise. …` |
 | No `reeval.config.*` here or above | `No reeval.config.ts (or reeval.config.mts, reeval.config.cts, reeval.config.js, reeval.config.mjs, reeval.config.cjs, reeval.yaml, reeval.yml) here or above. Run reeval init.` |
 | A `reeval.yaml` beside another config | `reeval.config.ts and reeval.yaml are both in .: reeval reads one config per directory. Keep one, or pass --config.` |

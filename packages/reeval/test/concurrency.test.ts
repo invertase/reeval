@@ -307,7 +307,7 @@ evaluate('a', { runs: 5 }, async (c) => {
     })
     const b = await runCli(bad.dir)
     assert.equal(b.code, 2)
-    assert.match(b.stderr, /config\.concurrency must be a whole number/)
+    assert.match(b.stderr, /concurrency in reeval\.config\.ts must be a whole number/)
   })
 
   test('at concurrency 1, runs go round-robin across evals with their cells together', async () => {

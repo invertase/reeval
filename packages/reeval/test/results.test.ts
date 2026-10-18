@@ -276,7 +276,7 @@ describe('gate policies', () => {
     checkGate('all', 'e')
     checkGate({ passRate: 1 }, 'e')
     for (const bad of ['any', { passRate: 0 }, { passRate: 1.2 }, { rate: 0.8 }, {}, 0.8]) {
-      assert.throws(() => checkGate(bad, 'e'), /gate is 'all' .* or \{ passRate \}/)
+      assert.throws(() => checkGate(bad, 'e'), /gate in e is 'all' .* or \{ passRate \}/)
     }
   })
 })

@@ -40,7 +40,11 @@ export function resolveRun(entries: HistoryEntry[], ref = 'latest'): HistoryEntr
   const back = /^latest(?:~(\d+))?$/.exec(ref)
   if (back) {
     const entry = entries[entries.length - 1 - Number(back[1] ?? 0)]
-    if (!entry) throw new RefError(`There are only ${entries.length} runs`)
+    if (!entry) {
+      throw new RefError(
+        `There ${entries.length === 1 ? 'is only 1 run' : `are only ${entries.length} runs`}, so ${ref} names none. reeval history lists them.`,
+      )
+    }
     return entry
   }
   const exact = entries.find((e) => e.runId === ref)
@@ -48,13 +52,15 @@ export function resolveRun(entries: HistoryEntry[], ref = 'latest'): HistoryEntr
   const byId = entries.filter((e) => e.runId.startsWith(ref))
   if (byId.length === 1 && byId[0]) return byId[0]
   if (byId.length > 1)
-    throw new RefError(`"${ref}" matches ${byId.length} runs; use more of the id`)
+    throw new RefError(`"${ref}" matches ${byId.length} runs: use more of the id`)
   if (/^[0-9a-f]{4,40}$/i.test(ref)) {
     const atSha = entries.filter((e) => e.git?.sha.startsWith(ref.toLowerCase()))
     const newest = atSha[atSha.length - 1]
     if (newest) return newest
   }
-  throw new RefError(`No run matches "${ref}"`)
+  throw new RefError(
+    `No run matches "${ref}". Pass latest, latest~N, a run id or a git SHA; reeval history lists them.`,
+  )
 }
 
 /**

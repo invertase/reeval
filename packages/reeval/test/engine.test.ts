@@ -387,7 +387,7 @@ evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'
     assert.equal(none.code, 2)
     assert.match(
       none.stderr,
-      /No eval files match evals\/\*\*\/\*\.eval\.ts \(config\.include\) in \S*empty\S*\. Name eval files to match it, or set include in reeval\.config\.ts\./,
+      /No eval files in \S*empty\S* match include: evals\/\*\*\/\*\.eval\.ts\. Name eval files to match it, or set include in reeval\.config\.ts\./,
     )
 
     const missing = await runCli(empty.dir, ['run', '--config', 'missing.ts'])
@@ -894,7 +894,7 @@ evaluate('fails', async (c) => {
     assert.match(byEnv.stdout, / · grouped logs$/m, 'REEVAL_LOG_ORDER stands in for the flag')
     const bad = await run('--log-order', 'sideways')
     assert.equal(bad.code, 2)
-    assert.match(bad.stderr, /--log-order must be one of stream, grouped, auto/)
+    assert.match(bad.stderr, /--log-order is one of stream, grouped, auto \(got sideways\)/)
   })
 
   test('agent mode prints failures only, with record and summary paths, and no colour', async () => {
@@ -1047,7 +1047,7 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     assert.equal(e?.error?.kind, 'judge')
     assert.match(
       e?.error?.message ?? '',
-      /judge failed for "first\?" \(no-provider\): Judge model "no-provider" needs a provider prefix/,
+      /judge failed for "first\?" \(no-provider\): The judge model needs a provider prefix, .*\(got "no-provider"\)/,
     )
     assert.deepEqual(
       e?.trial.judgements.map((j) => [j.question, j.verdict]),
@@ -1584,7 +1584,7 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /startTimeout of harness in reeval\.config\.ts: Invalid duration "soon"/)
+    assert.match(r.stderr, /harness\.startTimeout in reeval\.config\.ts: Invalid duration "soon"/)
 
     // An operational limit, like maxConcurrent: results with and without it stay comparable.
     const fingerprint = async (harness: string) => {

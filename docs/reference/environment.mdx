@@ -165,12 +165,12 @@ These stop the run with exit 2, prefixed by the eval file.
 | An unknown field | `Unknown field "steps" in defineEnvironment("e"). Did you mean "setup"?` |
 | A `Promise` | `defineEnvironment("e") returned a Promise. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead.` |
 | A literal secret | `env.GITHUB_TOKEN in defineEnvironment("e") is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` |
-| `setup` not a list | `setup in defineEnvironment("e") must be a list` |
-| A bad step | `Steps in defineEnvironment("e") are strings or { run, timeout? } objects` |
+| `setup` not a list | `setup in defineEnvironment("e") must be a list (got "npm ci")` |
+| A bad step | `setup[0] in defineEnvironment("e") must be a command string or { run, timeout?, cwd? } (got 3)`; an unknown key gets `setup step "npm ci" in defineEnvironment("e") has an unknown key "env"; a step is a string or { run, timeout?, cwd? }.` |
 | A skill path string | `skills in defineEnvironment("e") must come from the skill helper, e.g. skills: [skill.local('./skills')] (got "./skills")` |
-| An MCP object | `mcp.docs in defineEnvironment("e") must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server'])` |
-| A bad file value | `files["a.txt"] in defineEnvironment("e") must be a string or file(path)` |
-| Bad rules | `rules in defineEnvironment("e") must be markdown or file(path)` |
+| An MCP object | `mcp.docs in defineEnvironment("e") must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server']) (got {"command":"npx"})` |
+| A bad file value | `files["a.txt"] in defineEnvironment("e") must be a string or file(path) (got 1)` |
+| Bad rules | `rules in defineEnvironment("e") must be markdown or file(path) (got 3)` |
 | A `workspace` that isn't from `git()` | `workspace in defineEnvironment("e") must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got "https://github.com/acme/app")` |
 | A list as `environment` | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.` |
 

@@ -619,7 +619,7 @@ export async function doctor(
         id: 'config',
         status: 'fail',
         summary: redactSecrets((error as Error).message),
-        fix: `fix ${configLabel(configPath)}, then reeval run --dry-run`,
+        fix: `edit ${configLabel(configPath)}, then reeval run --dry-run`,
       })
     }
   }
@@ -676,7 +676,7 @@ export function renderReport(report: DoctorReport, color: boolean): string[] {
     '',
     report.problems
       ? red(
-          `${count(report.problems, 'problem')}, ${count(report.warnings, 'warning')}. Fix them and run reeval doctor again.`,
+          `${count(report.problems, 'problem')}, ${count(report.warnings, 'warning')}. Fix ${report.problems === 1 ? 'it' : 'them'} and run reeval doctor again.`,
         )
       : report.warnings
         ? yellow(`No problems, ${count(report.warnings, 'warning')}.`)

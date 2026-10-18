@@ -116,7 +116,7 @@ Rules go to `AGENTS.md` in the workspace. Skills with the default placement go t
 | Catalog has no effort param | `Cursor's model catalog has no effort parameter for <model>. Fast is params.fast, not effort.` |
 | No key, before the run | `Missing credentials: CURSOR_API_KEY, … Set them in the environment or .env.local.` |
 | A key with a line break | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). …` |
-| A non-Docker sandbox | `The Cursor harness needs the Docker sandbox` |
+| A non-Docker sandbox | `The Cursor harness needs the Docker sandbox: set sandbox: docker() …` |
 | The agent doesn't start | `Cursor harness failed to start: …` |
 | Its image can't be built | `Baking the Cursor CLI onto reeval-sandbox-base:latest failed: …` (`reeval run` builds a missing image before the run) |
 

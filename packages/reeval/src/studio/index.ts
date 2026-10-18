@@ -81,7 +81,9 @@ export async function startStudio(options: StartOptions) {
     }
   }
   stopWatching()
-  throw new Error(`Ports ${options.port}–${options.port + 19} are all in use; pass --port`)
+  throw new Error(
+    `Ports ${options.port}–${options.port + 19} are all in use: pass another with --port`,
+  )
 }
 
 export function openBrowser(url: string) {

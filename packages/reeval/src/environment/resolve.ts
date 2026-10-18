@@ -142,7 +142,10 @@ function template(
   const placeholders = new Map<string, string>()
   return value.template.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
     const v = process.env[name]
-    if (!v) throw new InfraError(`secret.template needs ${name} for ${where}, and it isn't set`)
+    if (!v)
+      throw new InfraError(
+        `secret.template for ${where} needs ${name}, which isn't set. Set it in the environment or .env.local.`,
+      )
     registerSecret(v)
     if (!hosts) return v
     const p = placeholders.get(name) ?? broker(secrets, name, v, hosts)
@@ -168,7 +171,9 @@ export function parseSkillMd(
     )
   }
   if (front != null && (typeof front !== 'object' || Array.isArray(front))) {
-    throw new InfraError(`${where}: the SKILL.md frontmatter must be a YAML mapping`)
+    throw new InfraError(
+      `${where}: the SKILL.md frontmatter must be a YAML mapping, e.g. name: my-skill and description: … on their own lines`,
+    )
   }
   const field = (key: 'name' | 'description') => {
     const value = (front as Record<string, unknown> | null)?.[key]
@@ -230,11 +235,13 @@ function parseSkill(dir: string, source: string, exclude: readonly string[]): Lo
 
 function checkSkill(name: string, description: string | undefined, source: string) {
   if (!SKILL_NAME.test(name)) {
-    throw new InfraError(`Skill "${name}" in ${source}: the name must be kebab-case`)
+    throw new InfraError(
+      `Skill "${name}" in ${source}: the name must be kebab-case, e.g. my-skill (lower-case letters, digits and -)`,
+    )
   }
   if (!description) {
     throw new InfraError(
-      `Skill "${name}" in ${source} has no description in its SKILL.md frontmatter`,
+      `Skill "${name}" in ${source} has no description in its SKILL.md frontmatter. Add a description: line saying when to use it.`,
     )
   }
 }
@@ -246,7 +253,9 @@ function loadSkills(
   exclude: readonly string[] = DEFAULT_SKILL_EXCLUDE,
 ): LoadedSkill[] {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
-    throw new InfraError(`Skill source ${source} isn't a directory`)
+    throw new InfraError(
+      `Skill source ${source} isn't a directory. Point it at a skill's directory, or at a directory of skills.`,
+    )
   }
   const dirs = existsSync(join(dir, 'SKILL.md'))
     ? [dir]
@@ -390,7 +399,10 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
 const skillHash = (s: HarnessSkill) => sha256(JSON.stringify(s))
 
 const readHostFile = (f: HostFile, where: string): Uint8Array => {
-  if (!existsSync(f.path)) throw new InfraError(`${f.path} for ${where} doesn't exist`)
+  if (!existsSync(f.path))
+    throw new InfraError(
+      `${f.path} for ${where} doesn't exist. file() paths resolve against the file that calls it, or reeval.yaml's directory.`,
+    )
   return readFileSync(f.path)
 }
 

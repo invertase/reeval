@@ -183,21 +183,21 @@ analysis: {
 |---|---|
 | No model | `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.` |
 | No turn yet | `c.judge() has no turn to grade: call c.send() first` |
-| No provider prefix | `config.judge: Judge model "gemini-3.8-flash" needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash"` |
-| A model object in the config | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` |
-| A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in reeval.config.ts`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
+| No provider prefix | `judge.model in reeval.config.ts needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash" (got "gemini-3.8-flash")` |
+| A model object in the config | `judge.model in reeval.config.ts must be a "provider/model" string or fakeJudge(). Pass a model object per group, eval or call instead.` |
+| A bad threshold | `judge.threshold in reeval.config.ts must be between 0 and 1 (got 2)`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
 | An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
-| A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
+| A bad `maxConcurrent` | `judge.maxConcurrent in evaluate("x") must be a whole number of at least 1 (got 0)` |
 | An unknown option | `Unknown judge option "diff" in reeval.config.ts. Did you mean "state.diff"?`; on a call, `… in c.judge(). …`. `on` outside a call: `on is per call: c.judge(question, { on }).` |
 | An unknown `state` key | `Unknown judge.state key "transcipt" in reeval.config.ts. Did you mean "transcript"?` |
-| A bad `state` value | `judge.state.turns must be 'last' or 'all' (got "first") in evals/a.eval.ts › lands`; `state` itself must be an object such as `{ transcript: 'tools' }` |
+| A bad `state` value | `judge.state.turns in evals/a.eval.ts › lands must be 'last' or 'all' (got "first")`; `state` itself must be an object such as `{ transcript: 'tools' }` |
 | A check it hasn't run | `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` |
 | `on` with no output | `c.judge() on gives the output, but state.output is false` |
 | A bad `artifacts` | `c.judge() artifacts must be a list of capture handles or names (got "form")` |
 | An unknown capture name | `c.judge() artifacts names a capture this attempt doesn't have: "form"` |
-| A score function in the config | `config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.` |
+| A score function in the config | `judge.model in reeval.config.ts must be fakeJudge({ score }) with a number. Pass a score function per group, eval or call instead.` |
 | The provider refuses the input | The provider's message, then `The judge's input was ~29k tokens (estimated): diff 28k, of which …`, as a failed call |
-| No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.` |
+| No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway, in the environment or .env.local.` |
 
 ## Related
 

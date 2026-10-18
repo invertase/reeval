@@ -128,7 +128,7 @@ pi has no SSE transport, and skips a server whose name isn't letters, digits, `_
 | No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the pi harness can't authenticate. Set it in the environment or .env.local.` |
 | `mcp.sse` (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
 | An MCP server name pi skips (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the <name> server: rename it` |
-| A non-Docker sandbox | `The pi harness needs the Docker sandbox` |
+| A non-Docker sandbox | `The pi harness needs the Docker sandbox: set sandbox: docker() …` |
 | pi dies mid-turn | `pi exited with code <n> before ending the turn: …` |
 
 ## Related

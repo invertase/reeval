@@ -130,8 +130,8 @@ describe('cli', () => {
     usage(['--bogus'], /^Unknown option '--bogus'\. Run reeval --help\.$/)
     usage(['run', '--dry-runn'], /^Unknown option '--dry-runn'\. Did you mean --dry-run\?/)
     usage(['run', '-x'], /^Unknown option '-x'/)
-    usage(['run', '--runs'], /^Option '--runs <value>' argument missing$/)
-    usage(['run', '--json=1'], /^Option '--json' does not take an argument$/)
+    usage(['run', '--runs'], /^--runs needs a value, e\.g\. --runs <value>\. Run reeval --help\.$/)
+    usage(['run', '--json=1'], /^--json doesn't take a value: pass --json on its own\.$/)
     usage(['run', '--port', '3'], /^--port isn't an option of reeval run\. Run reeval --help\.$/)
     usage(['show', '-v'], /^--verbose isn't an option of reeval show/)
     usage(['--dry-run', 'run'], /^--dry-run isn't an option of reeval\b/)
@@ -154,10 +154,10 @@ describe('cli', () => {
       for (const flag of spec.flags.filter(
         (f) => FLAGS[f].type === 'string' && !('optional' in FLAGS[f] && FLAGS[f].optional),
       )) {
-        usage([...path, `--${flag}`], /argument missing/)
+        usage([...path, `--${flag}`], /needs a value/)
       }
       for (const flag of spec.flags.filter((f) => FLAGS[f].type === 'boolean')) {
-        usage([...path, `--${flag}=yes`], /does not take an argument/)
+        usage([...path, `--${flag}=yes`], /doesn't take a value/)
       }
     }
   })
@@ -173,7 +173,10 @@ describe('cli', () => {
         /^reeval: Unknown command "image foo"\. Did you mean reeval image build\?\n$/,
       ],
       [['--bogus'], /^reeval: Unknown option '--bogus'\. Run reeval --help\.\n$/],
-      [['run', '--runs'], /^reeval: Option '--runs <value>' argument missing\n$/],
+      [
+        ['run', '--runs'],
+        /^reeval: --runs needs a value, e\.g\. --runs <value>\. Run reeval --help\.\n$/,
+      ],
       [['run', '--runs', '0'], /^reeval: --runs must be a whole number of at least 1 \(got 0\)\n$/],
       [['run', '--json'], /^reeval: reeval run --json only prints the plan: add --dry-run\./],
       [['clean', '--keep', 'x'], /^reeval: --keep must be a whole number \(got x\)\n$/],

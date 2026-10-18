@@ -134,7 +134,7 @@ A restricted policy is part of the environment's fingerprint, so runs under diff
 
 | Mistake | Message |
 |---|---|
-| A bare list | `egress is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got ["api.example.com"]) in reeval.config.ts. For a list of hosts, use { allow: ["api.example.com"] }.` |
+| A bare list | `egress in reeval.config.ts is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got ["api.example.com"]). For a list of hosts, use { allow: ["api.example.com"] }.` |
 | A deny list | `Unknown egress key "deny" in reeval.config.ts. A policy lists what's allowed; everything else is refused.` |
 | A URL | `egress.allow in reeval.config.ts: hosts are host names, not URLs: use 'api.example.com' (got 'https://api.example.com/v1')` |
 | A port | `egress.allow in reeval.config.ts: hosts are host names without a port: use 'api.example.com' (got 'api.example.com:443')` |

@@ -3,15 +3,15 @@
   "a node that is not one": "UsageError: The declaration tree's children[0] must be an object (got \"e\")",
   "an unknown node type": "UsageError: The declaration tree's children[0].type is one of 'eval', 'group' or 'todo' (got \"test\")",
   "a node without a type": "UsageError: The declaration tree's children[0].type is one of 'eval', 'group' or 'todo' (got undefined)",
-  "an eval without a body": "UsageError: The declaration tree's children[0].body must be a string (got undefined)",
+  "an eval without a body": "UsageError: The declaration tree's children[0].body is missing: it must be a string",
   "an eval with a bad mode": "UsageError: The declaration tree's children[0].mode is one of 'run', 'skip' or 'only' (got \"focus\")",
   "an eval with an unknown key": "UsageError: The declaration tree's children[0] has an unknown key \"timeout\"",
   "an eval whose options are a list": "UsageError: The declaration tree's children[0].options must be an object (got [])",
   "an eval whose name is a number": "UsageError: The declaration tree's children[0].name must be a string (got 3)",
-  "a family without its cases": "UsageError: The declaration tree's children[0].family.cases must be a number (got undefined)",
+  "a family without its cases": "UsageError: The declaration tree's children[0].family.cases is missing: it must be a number",
   "a family with a fractional case": "UsageError: The declaration tree's children[0].family.case must be a whole number (got 0.5)",
   "a nested eval with a typo": "UsageError: The declaration tree's children[0].children[1] has an unknown key \"bdy\". Did you mean \"body\"?",
-  "a group without children": "UsageError: The declaration tree's children[0].children must be a list (got undefined)",
+  "a group without children": "UsageError: The declaration tree's children[0].children is missing: it must be a list",
   "a todo with options": "UsageError: The declaration tree's children[0] has an unknown key \"options\"",
   "good": null
 }

@@ -103,7 +103,7 @@ MCP servers go in `config.toml` under `mcp_servers`: `mcp.stdio` as `command`, `
 | No key when the attempt starts | `OPENAI_API_KEY isn't set, so the Codex harness can't authenticate. Set it in the environment or .env.local.` |
 | OpenAI refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. unexpected status 401 Unauthorized: …` |
 | `mcp.sse` (at plan time, exit 2) | `evaluate("<eval>") on codex:<model>: Codex has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
-| A non-Docker sandbox | `The Codex harness needs the Docker sandbox` |
+| A non-Docker sandbox | `The Codex harness needs the Docker sandbox: set sandbox: docker() …` |
 | Codex dies mid-turn | `codex exited with code <n> before ending the turn: …` |
 
 A refused key is retried five times by Codex before the turn fails; each retry is a `retry` event in the transcript.

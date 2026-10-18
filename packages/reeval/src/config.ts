@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { configDataProblem } from './contract/config.ts'
 import { judgeProblem } from './contract/judge.ts'
+import { closest, oneOf } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import {
@@ -190,7 +191,9 @@ export async function loadConfig(
     }
   }
   if (!exported || typeof exported !== 'object' || exported instanceof Promise) {
-    throw new UsageError(`${configPath} must default-export defineConfig({...})`)
+    throw new UsageError(
+      `${configPath}'s default export must be defineConfig({…}) (got ${exported instanceof Promise ? 'a Promise' : JSON.stringify(exported)}). Write export default defineConfig({…}).`,
+    )
   }
   return resolveConfig(exported, root, configPath)
 }
@@ -345,32 +348,36 @@ export function evalRoot(include: string[]): string {
 const ARTIFACTS = ['all', 'failures', 'none'] as const
 const RECORD = ['manual', 'ci', 'always'] as const
 
-const unknownKey = (value: object, allowed: string[], where: string) => {
+const unknownKey = (value: object, allowed: string[], where: string, file: string) => {
   const key = Object.keys(value).find((k) => !allowed.includes(k))
   if (key === undefined) return
   const hints: Record<string, string> = {
     reuse: 'Reusing control results from .history isn’t built yet; every run runs its controls.',
     compare: 'compare only goes on a group or eval; a profile can narrow it with limit.compare.',
   }
-  throw new UsageError(
-    `Unknown option "${key}" in ${where}.${hints[key] ? ` ${hints[key]}` : ` Use ${allowed.join(', ')}.`}`,
-  )
+  const near = closest(key, allowed)
+  const hint = hints[key] ?? (near ? `Did you mean "${near}"?` : `Use ${allowed.join(', ')}.`)
+  throw new UsageError(`Unknown option "${key}" in ${where} in ${file}. ${hint}`)
 }
 
-export function checkBudget(budget: unknown, where: string): Budget {
+export function checkBudget(budget: unknown, where: string, file: string): Budget {
   if (budget === undefined) return {}
   if (typeof budget !== 'object' || budget === null) {
-    throw new UsageError(`${where} must be an object like { attempts: 20, duration: '1h' }`)
+    throw new UsageError(
+      `${where} in ${file} must be an object like { attempts: 20, duration: '1h' } (got ${JSON.stringify(budget)})`,
+    )
   }
   if ('usd' in budget || 'tokens' in budget) {
     throw new UsageError(
-      `${where}.${'usd' in budget ? 'usd' : 'tokens'} isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.`,
+      `${where}.${'usd' in budget ? 'usd' : 'tokens'} in ${file} isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.`,
     )
   }
-  unknownKey(budget, ['attempts', 'duration'], where)
+  unknownKey(budget, ['attempts', 'duration'], where, file)
   const { attempts, duration } = budget as Budget
   if (attempts !== undefined && !(Number.isInteger(attempts) && attempts >= 1)) {
-    throw new UsageError(`${where}.attempts must be a whole number of at least 1 (got ${attempts})`)
+    throw new UsageError(
+      `${where}.attempts in ${file} must be a whole number of at least 1 (got ${JSON.stringify(attempts)})`,
+    )
   }
   if (duration !== undefined) parseDuration(duration)
   return { ...(attempts ? { attempts } : {}), ...(duration ? { duration } : {}) }
@@ -383,35 +390,41 @@ const describeValue = (v: unknown) => {
   return isAgentKind(kind) ? `${AGENTS[kind].factory}({ … })` : 'an object'
 }
 
-function checkProfile(name: string, profile: unknown): Profile {
+function checkProfile(name: string, profile: unknown, file: string): Profile {
   const where = `profiles.${name}`
   if (typeof profile !== 'object' || profile === null) {
-    throw new UsageError(`${where} must be an object with defaults, limit, budget, …`)
+    throw new UsageError(
+      `${where} in ${file} must be an object of profile settings, e.g. { limit: { runs: 1 } } (got ${JSON.stringify(profile)})`,
+    )
   }
-  unknownKey(profile, PROFILE_KEYS, where)
+  unknownKey(profile, PROFILE_KEYS, where, file)
   const p = profile as Profile
   if (p.defaults !== undefined) {
-    unknownKey(p.defaults, DEFAULTS_KEYS, `${where}.defaults`)
-    checkOptions(p.defaults, `${where}.defaults`)
+    unknownKey(p.defaults, DEFAULTS_KEYS, `${where}.defaults`, file)
+    checkOptions(p.defaults, `${where}.defaults in ${file}`)
   }
   if (p.limit !== undefined) {
-    unknownKey(p.limit, LIMIT_KEYS, `${where}.limit`)
+    unknownKey(p.limit, LIMIT_KEYS, `${where}.limit`, file)
     const { runs, compare, harness } = p.limit
     if (runs !== undefined && !(Number.isInteger(runs) && runs >= 1)) {
-      throw new UsageError(`${where}.limit.runs must be a whole number of at least 1`)
+      throw new UsageError(
+        `${where}.limit.runs in ${file} must be a whole number of at least 1 (got ${JSON.stringify(runs)})`,
+      )
     }
     if (
       compare !== undefined &&
       compare !== false &&
       !(Number.isInteger(compare?.maxVariants) && compare.maxVariants >= 0)
     ) {
-      throw new UsageError(`${where}.limit.compare must be false or { maxVariants: n }`)
+      throw new UsageError(
+        `${where}.limit.compare in ${file} must be false or { maxVariants: n }, e.g. { maxVariants: 1 } (got ${JSON.stringify(compare)})`,
+      )
     }
     if (harness !== undefined) {
       const bad = Array.isArray(harness) ? harness.find((h) => typeof h !== 'string') : harness
       if (bad !== undefined) {
         throw new UsageError(
-          `${where}.limit.harness can only list harness ids to allow (got ${describeValue(bad)}). To add harnesses, use ${where}.defaults.harness.`,
+          `${where}.limit.harness in ${file} can only list harness ids to allow (got ${describeValue(bad)}). To add harnesses, use ${where}.defaults.harness.`,
         )
       }
     }
@@ -420,13 +433,17 @@ function checkProfile(name: string, profile: unknown): Profile {
     p.tags !== undefined &&
     (!Array.isArray(p.tags) || p.tags.some((t) => typeof t !== 'string'))
   ) {
-    throw new UsageError(`${where}.tags must be a list of tag filters`)
+    throw new UsageError(
+      `${where}.tags in ${file} must be a list of tag filters, e.g. tags: ['smoke'] (got ${JSON.stringify(p.tags)})`,
+    )
   }
   if (p.record !== undefined && !RECORD.includes(p.record)) {
-    throw new UsageError(`${where}.record must be one of ${RECORD.join(', ')}`)
+    throw new UsageError(
+      `${where}.record in ${file} is ${oneOf(RECORD)} (got ${JSON.stringify(p.record)})`,
+    )
   }
-  if (p.judge !== undefined) resolveJudge(p.judge, `${where}.judge`)
-  checkBudget(p.budget, `${where}.budget`)
+  if (p.judge !== undefined) resolveJudge(p.judge, file, `${where}.judge`)
+  checkBudget(p.budget, `${where}.budget`, file)
   return p
 }
 
@@ -484,15 +501,19 @@ export function resolveConfig(
   checkOptions(user, file, CONFIG_KEYS)
   const include = user.include ?? ['evals/**/*.eval.ts']
   if (!Array.isArray(include) || include.some((p) => typeof p !== 'string')) {
-    throw new UsageError('config.include must be an array of glob strings')
+    throw new UsageError(
+      `include in ${file} must be a list of glob patterns, e.g. include: ['evals/**/*.eval.ts'] (got ${JSON.stringify(include)})`,
+    )
   }
   const record = user.record ?? 'ci'
   if (!RECORD.includes(record)) {
-    throw new UsageError(`config.record must be one of ${RECORD.join(', ')}`)
+    throw new UsageError(`record in ${file} is ${oneOf(RECORD)} (got ${JSON.stringify(record)})`)
   }
   const artifacts = user.history?.artifacts ?? 'all'
   if (!ARTIFACTS.includes(artifacts)) {
-    throw new UsageError(`config.history.artifacts must be one of ${ARTIFACTS.join(', ')}`)
+    throw new UsageError(
+      `history.artifacts in ${file} is ${oneOf(ARTIFACTS)} (got ${JSON.stringify(artifacts)})`,
+    )
   }
   const historyDir = resolve(root, user.history?.dir ?? join(evalRoot(include), '.history'))
   const harness = user.harness === undefined ? [DEFAULT_HARNESS] : [user.harness].flat()
@@ -505,18 +526,22 @@ export function resolveConfig(
   const profiles: Record<string, Profile> = {}
   if (user.profiles !== undefined) {
     if (typeof user.profiles !== 'object' || user.profiles === null) {
-      throw new UsageError(`profiles in ${file} must be an object of named profiles`)
+      throw new UsageError(
+        `profiles in ${file} must be an object of named profiles, e.g. profiles: { pr: { limit: { runs: 1 } } } (got ${JSON.stringify(user.profiles)})`,
+      )
     }
     for (const [name, profile] of Object.entries(user.profiles)) {
-      profiles[name] = checkProfile(name, profile)
+      profiles[name] = checkProfile(name, profile, file)
     }
   }
   const defaultProfile = user.defaultProfile ?? {}
-  unknownKey(defaultProfile, ['ci', 'local'], 'defaultProfile')
-  for (const name of [defaultProfile.ci, defaultProfile.local]) {
+  unknownKey(defaultProfile, ['ci', 'local'], 'defaultProfile', file)
+  for (const key of ['ci', 'local'] as const) {
+    const name = defaultProfile[key]
     if (name !== undefined && !profiles[name]) {
+      const names = Object.keys(profiles)
       throw new UsageError(
-        `defaultProfile names "${name}", which isn't in profiles (${Object.keys(profiles).join(', ') || 'none'})`,
+        `defaultProfile.${key} in ${file} names "${name}", which isn't a profile (${names.length ? `profiles: ${names.join(', ')}` : 'it defines none'}). Add it under profiles, or name one that's there.`,
       )
     }
   }
@@ -532,37 +557,41 @@ export function resolveConfig(
     gate: user.gate,
     env: user.env ?? {},
     ...(user.egress !== undefined ? { egress: user.egress } : {}),
-    budget: checkBudget(user.budget, 'budget'),
+    budget: checkBudget(user.budget, 'budget', file),
     profiles,
     defaultProfile,
-    judge: resolveJudge(user.judge),
+    judge: resolveJudge(user.judge, file),
     capture: user.capture ?? {},
     timeoutMs: parseDuration(user.timeout ?? '15m'),
     concurrency:
       user.concurrency === undefined
         ? undefined
-        : checkConcurrency(user.concurrency, 'config.concurrency'),
+        : checkConcurrency(user.concurrency, `concurrency in ${file}`),
     record,
     history: { dir: historyDir, artifacts },
-    secrets: checkSecrets(user.secrets),
-    debug: checkDebug(user.debug),
-    analysis: checkAnalysis(user.analysis),
+    secrets: checkSecrets(user.secrets, file),
+    debug: checkDebug(user.debug, file),
+    analysis: checkAnalysis(user.analysis, file),
   }
 }
 
 export const ANALYSIS_DEFAULTS = { maxInputTokens: 20_000, maxOutputTokens: 8_000 } as const
 
-function checkAnalysis(analysis: ReevalConfig['analysis']): ResolvedConfig['analysis'] {
+function checkAnalysis(
+  analysis: ReevalConfig['analysis'],
+  file: string,
+): ResolvedConfig['analysis'] {
   if (analysis === undefined) return { ...ANALYSIS_DEFAULTS }
   if (typeof analysis !== 'object' || analysis === null) {
     throw new UsageError(
-      "config.analysis must be an object like { model: 'google/gemini-3.8-flash' }",
+      `analysis in ${file} must be an object like { model: 'google/gemini-3.8-flash' } (got ${JSON.stringify(analysis)})`,
     )
   }
   unknownKey(
     analysis,
     ['model', 'agent', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
-    'config.analysis',
+    'analysis',
+    file,
   )
   const {
     model,
@@ -572,27 +601,31 @@ function checkAnalysis(analysis: ReevalConfig['analysis']): ResolvedConfig['anal
     maxOutputTokens = ANALYSIS_DEFAULTS.maxOutputTokens,
   } = analysis
   if (typeof model === 'string') {
-    const problem = checkModelString(model)
-    if (problem) throw new UsageError(problem.replace('Judge model', 'config.analysis.model'))
+    const problem = checkModelString(model, `analysis.model in ${file}`, [`google/${model}`])
+    if (problem) throw new UsageError(problem)
   } else if (model !== undefined && !(isObjectLike(model) && model.kind === 'fake-analysis')) {
     throw new UsageError(
-      "config.analysis.model must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash'",
+      `analysis.model in ${file} must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(model)})`,
     )
   }
   if (agent !== undefined && typeof agent !== 'boolean') {
-    throw new UsageError('config.analysis.agent must be a boolean')
+    throw new UsageError(
+      `analysis.agent in ${file} must be true or false (got ${JSON.stringify(agent)})`,
+    )
   }
   if (instructions !== undefined && typeof instructions !== 'string') {
-    throw new UsageError('config.analysis.instructions must be a string')
+    throw new UsageError(
+      `analysis.instructions in ${file} must be a string (got ${JSON.stringify(instructions)})`,
+    )
   }
   if (!(Number.isInteger(maxInputTokens) && maxInputTokens >= 1000)) {
     throw new UsageError(
-      `config.analysis.maxInputTokens must be a whole number of at least 1000 (got ${maxInputTokens})`,
+      `analysis.maxInputTokens in ${file} must be a whole number of at least 1000 (got ${maxInputTokens})`,
     )
   }
   if (!(Number.isInteger(maxOutputTokens) && maxOutputTokens >= 500)) {
     throw new UsageError(
-      `config.analysis.maxOutputTokens must be a whole number of at least 500 (got ${maxOutputTokens})`,
+      `analysis.maxOutputTokens in ${file} must be a whole number of at least 500 (got ${maxOutputTokens})`,
     )
   }
   return { ...analysis, maxInputTokens, maxOutputTokens }
@@ -601,36 +634,42 @@ function checkAnalysis(analysis: ReevalConfig['analysis']): ResolvedConfig['anal
 /** Runs whose local debug data `.reeval/debug` keeps, and the trace buffer per attempt. */
 export const DEBUG_DEFAULTS = { keep: 20, traceBufferMb: 8 } as const
 
-function checkDebug(debug: ReevalConfig['debug']): ResolvedConfig['debug'] {
+function checkDebug(debug: ReevalConfig['debug'], file: string): ResolvedConfig['debug'] {
   if (debug === undefined) {
     return { keep: DEBUG_DEFAULTS.keep, traceBufferBytes: DEBUG_DEFAULTS.traceBufferMb * 2 ** 20 }
   }
   if (typeof debug !== 'object' || debug === null) {
-    throw new UsageError('config.debug must be an object like { keep: 20, traceBufferMb: 8 }')
+    throw new UsageError(
+      `debug in ${file} must be an object like { keep: 20, traceBufferMb: 8 } (got ${JSON.stringify(debug)})`,
+    )
   }
-  unknownKey(debug, ['keep', 'traceBufferMb'], 'config.debug')
+  unknownKey(debug, ['keep', 'traceBufferMb'], 'debug', file)
   const { keep = DEBUG_DEFAULTS.keep, traceBufferMb = DEBUG_DEFAULTS.traceBufferMb } = debug
   if (!(Number.isInteger(keep) && keep >= 1)) {
-    throw new UsageError(`config.debug.keep must be a whole number of at least 1 (got ${keep})`)
+    throw new UsageError(
+      `debug.keep in ${file} must be a whole number of at least 1 (got ${JSON.stringify(keep)})`,
+    )
   }
   if (!(typeof traceBufferMb === 'number' && traceBufferMb > 0)) {
     throw new UsageError(
-      `config.debug.traceBufferMb must be a number of megabytes above 0 (got ${traceBufferMb})`,
+      `debug.traceBufferMb in ${file} must be a number of megabytes above 0 (got ${JSON.stringify(traceBufferMb)})`,
     )
   }
   return { keep, traceBufferBytes: Math.round(traceBufferMb * 2 ** 20) }
 }
 
-function checkSecrets(secrets: ReevalConfig['secrets']): ResolvedConfig['secrets'] {
+function checkSecrets(secrets: ReevalConfig['secrets'], file: string): ResolvedConfig['secrets'] {
   if (secrets === undefined) return { unbrokered: 'warn' }
   if (typeof secrets !== 'object' || secrets === null) {
-    throw new UsageError("config.secrets must be an object like { unbrokered: 'error' }")
+    throw new UsageError(
+      `secrets in ${file} must be an object like { unbrokered: 'error' } (got ${JSON.stringify(secrets)})`,
+    )
   }
-  unknownKey(secrets, ['unbrokered'], 'config.secrets')
+  unknownKey(secrets, ['unbrokered'], 'secrets', file)
   const unbrokered = secrets.unbrokered ?? 'warn'
   if (unbrokered !== 'warn' && unbrokered !== 'error') {
     throw new UsageError(
-      `config.secrets.unbrokered is 'warn' or 'error' (got ${JSON.stringify(unbrokered)})`,
+      `secrets.unbrokered in ${file} is 'warn' or 'error' (got ${JSON.stringify(unbrokered)})`,
     )
   }
   return { unbrokered }
@@ -673,10 +712,12 @@ export async function resolveConcurrency(
 }
 
 function resolveJudge(
-  judge: ReevalConfig['judge'] = {},
-  where = 'config.judge',
+  judge: ReevalConfig['judge'] | undefined,
+  file: string,
+  path = 'judge',
 ): ResolvedConfig['judge'] {
-  const problem = judgeProblem(judge, { at: 'config', where })
+  judge ??= {}
+  const problem = judgeProblem(judge, { at: 'config', path, file })
   if (problem) throw new UsageError(problem)
   const threshold = judge.threshold ?? DEFAULT_THRESHOLD
   return { ...judge, threshold }

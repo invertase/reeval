@@ -126,7 +126,7 @@ restored onto the new VM.
 
 ## Before any attempt starts
 
-`reeval run` checks, in order: a `reeval.config.*` is found (or `--config` names one); the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running. Each failure exits 2 without writing a run. With no config it says `No reeval.config.ts … here or above. Run reeval init.`; a present config whose `include` matches nothing says `No eval files match … set include`.
+`reeval run` checks, in order: a `reeval.config.*` is found (or `--config` names one); the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running. Each failure exits 2 without writing a run. With no config it says `No reeval.config.ts … here or above. Run reeval init.`; a present config whose `include` matches nothing says `No eval files in … match include: …`.
 
 Then it prepares every sandbox image the plan needs, three at a time, once each: see [Sandbox providers](/reference/sandbox/providers). One the config sets that can't be prepared stops the run there, exit 3 (2 for a missing `docker({ image })`); one a group or eval sets fails only the attempts that need it.
 

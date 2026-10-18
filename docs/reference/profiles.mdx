@@ -142,16 +142,16 @@ reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Na
 
 | Mistake | Message |
 |---|---|
-| An unknown profile key | `Unknown option "x" in profiles.pr. Use defaults, limit, judge, budget, record, tags.` |
+| An unknown profile key | `Unknown option "x" in profiles.pr in reeval.config.ts. Use defaults, limit, judge, budget, record, tags.` (a near miss gets `Did you mean "limit"?`) |
 | `compare` in a profile | `… compare only goes on a group or eval; a profile can narrow it with limit.compare.` |
-| An unknown `defaultProfile` key | `Unknown option "remote" in defaultProfile. Use ci, local.` |
-| A default that isn't a profile | `defaultProfile names "pr", which isn't in profiles (none)` |
-| A harness object in `limit.harness` | `profiles.pr.limit.harness can only list harness ids to allow (got cursor({ … })). To add harnesses, use profiles.pr.defaults.harness.` |
-| A bad `limit.compare` | `profiles.pr.limit.compare must be false or { maxVariants: n }` |
-| A bad `limit.runs` | `profiles.pr.limit.runs must be a whole number of at least 1` |
-| Tags that aren't strings | `profiles.pr.tags must be a list of tag filters` |
-| `budget.usd` | `profiles.pr.budget.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` |
-| A bad `budget.attempts` | `profiles.pr.budget.attempts must be a whole number of at least 1 (got 0)` |
+| An unknown `defaultProfile` key | `Unknown option "remote" in defaultProfile in reeval.config.ts. Use ci, local.` |
+| A default that isn't a profile | `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (it defines none). Add it under profiles, or name one that's there.` |
+| A harness object in `limit.harness` | `profiles.pr.limit.harness in reeval.config.ts can only list harness ids to allow (got cursor({ … })). To add harnesses, use profiles.pr.defaults.harness.` |
+| A bad `limit.compare` | `profiles.pr.limit.compare in reeval.config.ts must be false or { maxVariants: n }, e.g. { maxVariants: 1 } (got true)` |
+| A bad `limit.runs` | `profiles.pr.limit.runs in reeval.config.ts must be a whole number of at least 1 (got 0)` |
+| Tags that aren't strings | `profiles.pr.tags in reeval.config.ts must be a list of tag filters, e.g. tags: ['smoke'] (got "smoke")` |
+| `budget.usd` | `profiles.pr.budget.usd in reeval.config.ts isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` |
+| A bad `budget.attempts` | `profiles.pr.budget.attempts in reeval.config.ts must be a whole number of at least 1 (got 0)` |
 
 ## Related
 
