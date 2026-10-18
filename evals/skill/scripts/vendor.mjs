@@ -7,7 +7,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } f
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const CURRENT_SKILL_REF = 'd296c3333240dbe272456df8c23bad6cfe975a06'
+const CURRENT_SKILL_REF = 'f89798f5c1ebd96f65405087bb4630fb95fd5379'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const suite = join(here, '..')

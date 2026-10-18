@@ -19,7 +19,7 @@ channel to learn it from and four authoring tasks, and compares the channels:
 
 | Arm | What the agent gets |
 |---|---|
-| `skill-current` (control) | The reeval skill as one 637-line `SKILL.md`, before the split |
+| `skill-current` (control) | The reeval skill as one 638-line `SKILL.md`, before the split |
 | `skill-split` | [`.agents/skills/reeval/`](../.agents/skills/reeval): a short `SKILL.md` and references it opens on demand |
 | `docs` | The docs site's pages in `reeval-docs/`, no skill |
 | `mcp` | `reeval mcp` (the run history as MCP tools), no skill or docs |
