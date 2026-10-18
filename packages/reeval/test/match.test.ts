@@ -1,16 +1,19 @@
 // One matcher table (src/matchers.ts) for both ways a matcher is called: the published `Matchers`
 // interface names exactly its rows, and the attempt protocol's `expect` call (src/attempt/match.ts)
-// answers every matcher as the TypeScript `expect` records it.
+// records every matcher, label and ` #n` included, as the TypeScript `expect` does.
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { type ExpectCall, fromWire, match } from '../src/attempt/match.ts'
+import { assertionRecords } from '../src/attempt/assertions.ts'
+import { type ExpectCall, expectCall, fromWire, match } from '../src/attempt/match.ts'
 import {
-  attemptAssertions,
   createExpect,
   type ExpectTask,
   extendExpect,
+  type RawAssertion,
+  rawAssertions,
+  SUBJECT,
 } from '../src/engine/expect.ts'
 import { MATCHERS, matchers } from '../src/matchers.ts'
 import type { AttemptContext, TranscriptEvent, Verdict } from '../src/types.ts'
@@ -57,10 +60,17 @@ const turn = {
 
 const c = {
   turns: [turn],
-  exec: async (command: string) =>
-    command === 'true'
-      ? { exitCode: 0, stdout: 'ok\n', stderr: '' }
-      : { exitCode: 1, stdout: '', stderr: 'boom\n' },
+  // Names its command, as c.exec's promise does.
+  exec: (command: string) =>
+    Object.defineProperty(
+      Promise.resolve(
+        command === 'true'
+          ? { exitCode: 0, stdout: 'ok\n', stderr: '' }
+          : { exitCode: 1, stdout: '', stderr: 'boom\n' },
+      ),
+      SUBJECT,
+      { value: command },
+    ),
   readFile: async (path: string) => files[path] ?? null,
 } as unknown as AttemptContext
 
@@ -72,10 +82,17 @@ const verdict: Verdict = {
   model: 'fake/judge',
 }
 
+/** A verdict as `c.judge` returns it, naming its question. */
+const named = (v: object) =>
+  Object.defineProperty({ ...v }, SUBJECT, { value: (v as Verdict).question })
+
 const re = (regexp: string, flags?: string) => ({ regexp, ...(flags ? { flags } : {}) })
 
-/** Each row: the protocol call's subject and wire arguments; every row runs with and without `.not`. */
-const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[]]> = [
+/**
+ * Each row: the protocol call's subject and wire arguments, and its label; every row runs with
+ * and without `.not`, so repeated labels are numbered.
+ */
+const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[], string?]> = [
   ['toHaveFile', { attempt: true }, ['greet.js', re('greet')]],
   ['toHaveFile', { turn: 0 }, ['greet.js', 'nope']],
   ['toHaveFile', { attempt: true }, ['missing.js']],
@@ -88,9 +105,12 @@ const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[]]> = 
   ['toHaveCalledTool', { turn: 0 }, [re('^sh'), 'npm']],
   ['toHaveRun', { turn: 0 }, [re('npm (run )?test', 'i')]],
   ['toHaveRun', { attempt: true }, ['pnpm']],
+  ['toHaveRun', { turn: 0 }, ['npm'], 'runs the tests'],
+  ['toHaveFetched', { turn: 0 }, [], 'fetched something'],
   ['toHaveEdited', { turn: 0 }, ['greet.js']],
   ['toHaveChanged', { attempt: true }, [['src', re('\\.md$')]]],
   ['toHaveChanged', { turn: 0 }, ['docs']],
+  ['toHaveChanged', { turn: 0 }, [`docs/${'x'.repeat(80)}`]],
   ['toPass', { value: verdict as never }, []],
   ['toPass', { value: { ...verdict, verdict: 'pass', score: 0.9 } as never }, []],
   ['toPass', { value: { nope: true } }, []],
@@ -103,7 +123,7 @@ const tsSubject = (subject: ExpectCall['subject']): unknown =>
     : 'attempt' in subject
       ? c
       : 'value' in subject
-        ? subject.value
+        ? named(subject.value as object)
         : 'exec' in subject
           ? c.exec(subject.exec)
           : c.readFile(subject.readFile)
@@ -123,38 +143,54 @@ describe('one matcher table', () => {
     assert.deepEqual(names, Object.keys(MATCHERS))
   })
 
-  test('every matcher answers a protocol call as the TypeScript expect records it', async () => {
+  test('every matcher records the same from a protocol call as from the TypeScript expect', async () => {
     assert.deepEqual(
       [...new Set(CASES.map(([name]) => name))].sort(),
       Object.keys(MATCHERS).sort(),
       'a case for every matcher',
     )
-    const statuses = new Set<string>()
-    for (const [matcher, subject, args] of CASES) {
+    const t = task()
+    const own = createExpect(t)
+    const calls: RawAssertion[] = []
+    const replies = []
+    for (const [matcher, subject, args, label] of CASES) {
       for (const not of [false, true]) {
-        const t = task()
-        const own = createExpect(t)
-        const chain = own(tsSubject(subject)) as unknown as Record<string, unknown>
+        const chain = own(tsSubject(subject), label) as unknown as Record<string, unknown>
         const assertion = (not ? chain.not : chain) as Record<string, (...a: unknown[]) => unknown>
         await Promise.resolve()
           .then(() => assertion[matcher]?.(...args.map(fromWire)))
           .catch(() => {})
-        const [recorded] = attemptAssertions(t)
-        const call = { op: 'expect', subject, matcher, args, not, soft: false } as ExpectCall
-        const outcome = await match(c, call)
-        const where = `${not ? 'not.' : ''}${matcher}(${JSON.stringify(args)})`
-        assert.deepEqual(
-          outcome,
-          {
-            status: recorded?.status,
-            ...(recorded?.message === undefined ? {} : { message: recorded.message }),
-          },
-          where,
-        )
-        statuses.add(outcome.status)
+        const call = {
+          op: 'expect',
+          subject,
+          matcher,
+          args,
+          not,
+          soft: false,
+          ...(label ? { label } : {}),
+        } as ExpectCall
+        replies.push(await expectCall(c, calls, call))
       }
     }
-    assert.deepEqual([...statuses].sort(), ['error', 'fail', 'pass'])
+    const timing = ({ durationMs, ...x }: { durationMs?: number }) => ({
+      ...x,
+      timed: durationMs !== undefined,
+    })
+    const ts = assertionRecords(rawAssertions(t)).map(timing)
+    assert.equal(ts.length, CASES.length * 2)
+    assert.deepEqual(replies.map(timing), ts)
+    assert.deepEqual(assertionRecords(calls).map(timing), ts, 'each reply is its final record')
+    assert.deepEqual([...new Set(ts.map((x) => x.status))].sort(), ['error', 'fail', 'pass'])
+    const labels = ts.map((x) => x.label)
+    for (const label of [
+      'toHaveFile greet.js #2',
+      'runs the tests #2',
+      'toSucceed true',
+      'toPass Is it polite?',
+      `toHaveChanged docs/${'x'.repeat(41)}…`,
+    ]) {
+      assert.ok(labels.includes(label), `${label} in ${JSON.stringify(labels)}`)
+    }
   })
 
   test('a polled call re-reads its subject until the matcher passes, or answers its last try', async () => {
@@ -169,18 +205,32 @@ describe('one matcher table', () => {
       matcher: 'toHaveFile',
       args: ['greet.js'],
       not: false,
-      soft: false,
+      soft: true,
       poll: { interval: 5, timeout: 1000 },
     }
-    assert.deepEqual(await match(later, call), { status: 'pass' })
+    const passed = await match(later, call)
     assert.equal(reads, 3)
+    assert.deepEqual(
+      { ...passed, durationMs: typeof passed.durationMs },
+      {
+        matcher: 'poll.toHaveFile',
+        args: ['greet.js'],
+        soft: true,
+        status: 'pass',
+        durationMs: 'number',
+      },
+    )
     const never = await match(c, {
       ...call,
       args: ['missing.js'],
+      not: false,
       poll: { interval: 5, timeout: 30 },
     })
-    assert.deepEqual(never, { status: 'fail', message: 'expected file missing.js to exist' })
-    assert.deepEqual(await match(c, { ...call, poll: {} }), { status: 'pass' })
+    assert.equal(never.status, 'fail')
+    assert.equal((never.error as Error).message, 'expected file missing.js to exist')
+    assert.equal((await match(c, { ...call, poll: {} })).status, 'pass')
+    const sync = await match(c, { ...call, matcher: 'toHaveRun', args: [], poll: undefined })
+    assert.equal(sync.durationMs, undefined, 'only async or polled calls are timed')
   })
 
   test("a call reeval can't evaluate is a usage error naming what's wrong", async () => {

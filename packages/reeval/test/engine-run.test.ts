@@ -217,9 +217,10 @@ describe('runTests', () => {
     }
   })
 
-  test("unawaited assertions and expect.soft fail through the handle's check", async () => {
+  test('unawaited assertions, expect.soft and expect.assertions reach the handle', async () => {
     let missed: Error | undefined
-    let soft: Error | undefined
+    let soft: unknown
+    let counted: Error | undefined
     const collected = await tests(
       [
         'unawaited',
@@ -234,12 +235,22 @@ describe('runTests', () => {
         {},
         async (h) => {
           expect.soft(1).toBe(2)
-          soft = await h.unawaited()
+          assert.equal(await h.unawaited(), undefined)
+          soft = h.assertions()[0]?.error
+        },
+      ],
+      [
+        'counted',
+        {},
+        async (h) => {
+          expect.assertions(2)
+          expect(1).toBe(1)
+          counted = h.expectError()
         },
       ],
     )
     const { reporter } = recorder()
-    await runTests(collected, new Set([0, 1]), {
+    await runTests(collected, new Set([0, 1, 2]), {
       file: '/f',
       stagingDir: stagingDir(),
       signal: new AbortController().signal,
@@ -247,14 +258,15 @@ describe('runTests', () => {
       onReady: () => {},
     })
     assert.match(missed?.message ?? '', /wasn't awaited/)
-    assert.match(soft?.message ?? '', /expected 1 to be 2/)
+    assert.match((soft as Error | undefined)?.message ?? '', /expected 1 to be 2/)
+    assert.match(counted?.message ?? '', /expected number of assertions to be 2, but got 1/)
   })
 
   test("each attempt's handle lists its own assertions", async () => {
     const seen: string[][] = []
     const body = (n: number) => async (h: TestHandle) => {
       expect(n, `checks ${n}`).toBe(n)
-      seen[n] = h.assertions().map((x) => x.label)
+      seen[n] = h.assertions().map((x) => x.label ?? '')
     }
     const collected = await tests(['one', {}, body(0)], ['two', {}, body(1)])
     const { reporter } = recorder()
