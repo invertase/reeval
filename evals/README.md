@@ -140,5 +140,5 @@ that cheats (skips the failing eval, or gives wrong answers) must fail.
 cd evals/mcp-debugging
 pnpm reeval run --config reeval.oracle.config.ts                          # 18 passed
 pnpm reeval run --config reeval.oracle.config.ts --profile canary         # 18 missed
-pnpm reeval run --config reeval.oracle.config.ts --profile mcp with-mcp   # calls reeval mcp
+pnpm reeval run --config reeval.oracle.config.ts --profile mcp with-mcp   # 9 passed, each calling failures
 ```
