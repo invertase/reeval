@@ -42,6 +42,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_RAW_TRANSCRIPT` | | `1` also writes the harness's unnormalised stream to `transcript.raw.jsonl` |
 | `REEVAL_CAPTURE_BROWSER` | | `0` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. Same as `capture: { browser: false }` |
 | `REEVAL_FAKE_EXEC` | | Not read from your shell: on Windows, a random id reeval sets in each fake-sandbox command's environment, so that stopping the command also stops every MSYS process it started |
+| `REEVAL_BACKGROUND` | | Not read from your shell: a random id reeval sets in a `c.exec(cmd, { background: true })` or `c.serve` command's environment, so that `kill()` also stops every process it started (where the sandbox has a `/proc`) |
 | `REEVAL_BASE` | | Not read from your shell: the build argument reeval passes to a `docker({ dockerfile })` build, naming reeval's image for the cell's harness. Start a Dockerfile `ARG REEVAL_BASE` / `FROM ${REEVAL_BASE}` |
 
 ## CI and agent detection
