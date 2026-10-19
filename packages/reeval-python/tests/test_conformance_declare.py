@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from reeval_py.declare import collect_module_tree_sync
+from reeval_python.declare import collect_module_tree_sync
 from tests.evals.tags_mirror import declare_tags
 
 PKG_ROOT = Path(__file__).resolve().parents[1]

@@ -20,6 +20,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { dirname, join } from 'node:path'
+import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
@@ -2155,6 +2156,7 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker', 'real'],
     env: '-',
     canary: /expected.*to succeed/i,
+    prepare: (dir) => syncPythonFixtureProject(dir),
   },
   {
     dir: 'run/resume',

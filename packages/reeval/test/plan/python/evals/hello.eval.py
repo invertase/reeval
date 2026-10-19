@@ -1,4 +1,4 @@
-from reeval_py.declare import evaluate
+from reeval_python.declare import evaluate
 
 
 @evaluate("hello")

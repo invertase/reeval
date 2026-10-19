@@ -1,4 +1,8 @@
-from reeval_py.declare import evaluate
+import tomli
+
+from reeval_python.declare import evaluate
+
+assert tomli.__version__
 
 
 @evaluate("lands")

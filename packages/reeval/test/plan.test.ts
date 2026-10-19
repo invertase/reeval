@@ -8,6 +8,7 @@ import { describe, test } from 'node:test'
 import { project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
+import { syncPythonFixtureProject } from './support/python-fixture.ts'
 
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
@@ -65,7 +66,12 @@ export const cases: PlanCase[] = [
     name: 'helpers-from-above',
     args: ['--config', 'project/reeval.config.ts', 'helpers.eval'],
   },
-  { dir: 'python', name: 'hello', args: [] },
+  {
+    dir: 'python',
+    name: 'hello',
+    args: [],
+    prepare: (dir) => syncPythonFixtureProject(dir),
+  },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },

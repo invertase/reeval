@@ -112,6 +112,14 @@ jobs:
                   engine=true ;;
               esac
               case $f in
+                packages/reeval-python/* | \
+                packages/reeval/src/language-runner/* | \
+                packages/reeval/test/python-sdk.test.ts | \
+                packages/reeval/test/language-runner.test.ts)
+                  unit=true
+                  features=true ;;
+              esac
+              case $f in
                 packages/reeval/src/engine/* | \
                 packages/reeval/src/attempt/* | \
                 packages/reeval/src/capture/* | \
@@ -197,6 +205,16 @@ jobs:
       # docs.page's own check: internal links, assets and frontmatter targets.
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
+      - uses: astral-sh/setup-uv@77caa2f40b1fd32aef1283f5ecca827f3c8c3b67 # v5.4.1
+      - name: reeval-python (uv sync, ruff, pyright, pytest)
+        if: ${{ !cancelled() }}
+        working-directory: packages/reeval-python
+        run: |
+          uv sync --dev
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+          uv run pytest
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
   # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.

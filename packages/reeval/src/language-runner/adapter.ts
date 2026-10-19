@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { loadEvalFile } from '../engine/loader.ts'
 import { ownFile } from '../root.ts'
+import { resolvePythonRunnerCommand } from './python-runner.ts'
 import type { RunnerCommand } from './transport.ts'
 
 /** How reeval loads an eval file while `collect()` is active in the worker. */
@@ -36,7 +37,7 @@ const PYTHON_ADAPTER: LanguageAdapter = {
   includeGlobs: ['evals/**/*.eval.py'],
   remote: true,
   load: (file, root) => import('./remote.ts').then((m) => m.collectLanguageFile(file, root)),
-  runnerCommand: () => [process.env.REEVAL_PYTHON ?? 'python3', '-m', 'reeval_py.runner'],
+  runnerCommand: (root) => resolvePythonRunnerCommand(root),
 }
 
 /** Every adapter; TypeScript is first and the in-process default. */
@@ -54,9 +55,10 @@ export function defaultIncludeGlobs(): string[] {
 export function runnerEnv(root: string, adapter: LanguageAdapter): NodeJS.ProcessEnv {
   const sdk = process.env.REEVAL_PYTHON_SDK ?? repoPythonSdk()
   if (adapter.id !== 'python' || !sdk) return process.env
+  const src = join(sdk, 'src')
   return {
     ...process.env,
-    PYTHONPATH: [sdk, process.env.PYTHONPATH].filter(Boolean).join(':'),
+    PYTHONPATH: [src, sdk, process.env.PYTHONPATH].filter(Boolean).join(':'),
     REEVAL_PROJECT_ROOT: resolve(root),
   }
 }

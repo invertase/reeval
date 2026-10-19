@@ -9,7 +9,12 @@
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "extra-files": [
-        { "type": "json", "path": "packages/reeval/package.json", "jsonpath": "$.version" }
+        { "type": "json", "path": "packages/reeval/package.json", "jsonpath": "$.version" },
+        {
+          "type": "toml",
+          "path": "packages/reeval-python/pyproject.toml",
+          "jsonpath": "$.project.version"
+        }
       ]
     }
   }

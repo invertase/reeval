@@ -2,5 +2,5 @@
   "name": "reeval-python",
   "private": true,
   "version": "0.0.0",
-  "description": "Python authoring SDK for reeval (*.eval.py); PyPI package, pytest in this directory"
+  "description": "Python authoring SDK for reeval (*.eval.py); npm private workspace helper only"
 }

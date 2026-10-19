@@ -1,6 +1,6 @@
 """Python eval authoring API for reeval (*.eval.py)."""
 
-from reeval_py.declare import (
+from reeval_python.declare import (
     collect_module_tree,
     evaluate,
     group,

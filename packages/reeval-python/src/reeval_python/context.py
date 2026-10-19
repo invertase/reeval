@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
 SendFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
@@ -63,9 +62,12 @@ class AttemptContext:
         if not reply.get("ok", False):
             err = reply.get("error") or {"name": "Error", "message": "call failed"}
             raise RuntimeError(f"{err.get('name')}: {err.get('message')}")
-        assertion = reply.get("assertion") or {}
+        assertion_raw = reply.get("assertion")
+        assertion = (
+            cast(dict[str, Any], assertion_raw) if isinstance(assertion_raw, dict) else {}
+        )
         if assertion.get("status") == "fail":
-            msg = assertion.get("message") or "expect failed"
+            msg = str(assertion.get("message") or "expect failed")
             raise AssertionError(msg)
 
     async def judge(self, question: str, **options: Any) -> dict[str, Any]:

@@ -37,7 +37,7 @@ flowchart TD
   Pick -.->|".eval.dart (next)"| Dart["Dart adapter<br/>remote: true"]
   Py --> Remote["remote.ts<br/>spawn runnerCommand()"]
   Dart -.-> Remote
-  Remote <-->|"loopback TCP + token<br/>protocol v2 NDJSON"| SDK["Language SDK runner<br/>reeval_py / sdks/dart"]
+  Remote <-->|"loopback TCP + token<br/>protocol v2 NDJSON"| SDK["Language SDK runner<br/>reeval_python / sdks/dart"]
   SDK -->|"collect → declared tree"| Declare["declareTree()"]
   SDK <-->|"start · {id, call, attempt} · replies · done"| Host["attempt-host.ts"]
 
@@ -61,7 +61,7 @@ Defined in `packages/reeval/src/language-runner/adapter.ts`:
 | `includeGlobs` | Default discovery patterns merged into config `include` |
 | `remote` | `false`: body runs in the worker with jiti; `true`: out-of-process runner |
 | `load(file, root)` | Worker **collect**: register evals via `evaluate` / `group` (TS) or remote `declareTree` |
-| `runnerCommand(root)?` | When `remote`, spawn the SDK (e.g. `python3 -m reeval_py.runner`) |
+| `runnerCommand(root)?` | When `remote`, spawn the SDK (`resolvePythonRunnerCommand` in `python-runner.ts`: `uv run … python -m reeval_python`, `.venv/bin/python`, or `python3`) |
 
 Entry point: `loadEvalModule()` in `language-runner/load.ts` →
 `adapterForFile(file).load(...)`.
@@ -103,8 +103,8 @@ own test runner.
    (Python: `packages/reeval-python/tests/test_conformance_declare.py`).
 2. **`test/conformance/context/<case>.ndjson`** — port of `conformance/runner.ts`: replay each
    `reeval` line, run a tiny eval body that emits the golden `runner` lines, match the `record` line.
-3. **Repo gate** — `packages/reeval/test/python-sdk.test.ts` runs Python declare conformance when
-   `python3` is present; add a sibling gate per language.
+3. **Repo gate** — `packages/reeval/test/python-sdk.test.ts` runs `uv sync` + `uv run pytest` when
+   `uv` is present; add a sibling gate per language.
 
 When TypeScript changes declaration or protocol behaviour, run
 `REEVAL_UPDATE_SNAPSHOTS=1` on `conformance.test.ts`, review the diff, and update every SDK mirror
@@ -122,7 +122,7 @@ Use **Python** as the worked reference (`packages/reeval-python/`, feature fixtu
 | 2 | Register adapter in `language-runner/adapter.ts` (`extensions`, `includeGlobs`, `remote: true`, `runnerCommand`) |
 | 3 | Declare conformance: mirror each `test/conformance/declare/<case>/` |
 | 4 | Context conformance: NDJSON scripts through the SDK runner |
-| 5 | One feature fixture (`<lang>-sdk/hello`: `lands` + `canary`) on **fake**; add **docker** / **real** when sandbox or Cursor checks apply ([feature contract](../../packages/reeval/test/features/README.md)) |
+| 5 | One feature fixture (`<lang>-sdk/hello`: `lands` + `canary`) on **fake**; add **docker** / **real** when sandbox or Cursor checks apply ([feature contract](../../../packages/reeval/test/features/README.md)) |
 | 6 | Plan case under `test/plan/<lang>/` + snapshot |
 | 7 | Row in `test/features/inventory.ts`, row in `features.test.ts`, then `pnpm features:matrix --write` |
 | 8 | CI: install the SDK toolchain; run conformance (and a gate test like `python-sdk.test.ts`) |
@@ -132,9 +132,10 @@ Use **Python** as the worked reference (`packages/reeval-python/`, feature fixtu
 
 | Piece | Location |
 |---|---|
-| Declare API | `packages/reeval-python/reeval_py/declare.py` |
-| Runner + collect | `packages/reeval-python/reeval_py/runner.py` |
-| Attempt `c.*` over the socket | `packages/reeval-python/reeval_py/context.py` |
+| Declare API | `packages/reeval-python/src/reeval_python/declare.py` |
+| Runner + collect | `packages/reeval-python/src/reeval_python/runner.py` |
+| Attempt `c.*` over the socket | `packages/reeval-python/src/reeval_python/context.py` |
+| uv project + project dep | `packages/reeval/test/features/python-sdk/hello/pyproject.toml` (`tomli` import in `lands.eval.py`) |
 | Declare goldens | `packages/reeval-python/tests/test_conformance_declare.py` |
 | Smoke fixture | `packages/reeval/test/features/python-sdk/hello/` (`lands.eval.py`, `canary.eval.py`) |
 | Plan snapshot | `packages/reeval/test/plan/python/hello/` |
@@ -152,7 +153,7 @@ pnpm test:features    # fake sandbox; Docker legs run when Docker is available
 pnpm test:docker      # Docker only; fails if Docker is missing (REEVAL_TEST_REQUIRE_DOCKER=1 in CI)
 pnpm test:real        # real Cursor fixtures; needs REEVAL_TEST_REAL=1 and CURSOR_API_KEY
 pnpm test:plan        # plan snapshots for new include globs / eval files
-node --test test/python-sdk.test.ts   # Python declare conformance (python3 required)
+node --test test/python-sdk.test.ts   # Python declare conformance (uv required)
 ```
 
 Debug one fixture by hand: `REEVAL_TEST_KEEP=1` on the feature test, then in the temp project

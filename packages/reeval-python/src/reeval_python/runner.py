@@ -3,43 +3,25 @@
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import json
 import os
 import sys
 import traceback
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from reeval_py.context import AttemptContext
-import reeval_py.declare as decl
-from reeval_py.declare import get_body
+from reeval_python.context import AttemptContext
+from reeval_python.declare import collect_eval_file, get_body
 
 RUNNER_PROTOCOL = 2
-SDK_VERSION = "0.0.0"
 
 
-def _load_eval_file(path: Path) -> None:
-    decl.reset_collector()
-    spec = importlib.util.spec_from_file_location("reeval_eval", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"can't load {path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-
-def _collect_suite_sync(suite) -> None:
-    if suite.factory is not None:
-        suite.factory()
-    for nested in suite.suites:
-        _collect_suite_sync(nested)
-
-
-def _tree_for_file(root: Path, rel: str) -> dict[str, Any]:
-    _load_eval_file(root / rel)
-    _collect_suite_sync(decl._suites[0])
-    assert decl._tree_children is not None
-    return {"children": [c.as_json() for c in decl._tree_children]}
+def sdk_version() -> str:
+    try:
+        return version("reeval-python")
+    except PackageNotFoundError:
+        return "0.0.0"
 
 
 class _Connection:
@@ -111,7 +93,7 @@ async def serve() -> None:
         "protocol": RUNNER_PROTOCOL,
         "token": token,
         "sdk": "python",
-        "version": SDK_VERSION,
+        "version": sdk_version(),
         "runtime": sys.version.split()[0],
     }
     writer.write((json.dumps(hello) + "\n").encode())
@@ -121,18 +103,22 @@ async def serve() -> None:
     buf = b""
     while True:
         chunk = await reader.read(65536)
-        if not chunk:
+        if chunk == b"":
             break
         buf += chunk
-        while b"\n" in buf:
-            line, buf = buf.split(b"\n", 1)
+        while True:
+            newline = buf.find(b"\n")
+            if newline < 0:
+                break
+            line = buf[:newline]
+            buf = buf[newline + 1 :]
             if not line.strip():
                 continue
-            msg = json.loads(line.decode())
+            msg = cast(dict[str, Any], json.loads(line.decode()))
             if msg.get("t") == "collect":
-                rel = msg["file"]
+                rel = str(msg["file"])
                 try:
-                    tree = _tree_for_file(root, rel)
+                    tree = collect_eval_file(root / rel)
                     conn.write({"t": "declared", "file": rel, "tree": tree})
                 except Exception as exc:  # noqa: BLE001
                     conn.write(
@@ -147,8 +133,8 @@ async def serve() -> None:
                     )
                 await conn.drain()
             elif msg.get("type") == "start":
-                attempt_id = msg["attempt"]["id"]
-                body_id = msg["body"]
+                attempt_id = str(msg["attempt"]["id"])
+                body_id = str(msg["body"])
                 task = asyncio.create_task(_run_body(conn, attempt_id, body_id))
                 tasks.add(task)
                 task.add_done_callback(tasks.discard)

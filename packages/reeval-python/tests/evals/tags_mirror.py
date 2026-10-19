@@ -1,6 +1,6 @@
 """Mirror of packages/reeval/test/plan/selection/evals/tags.eval.ts for declare conformance."""
 
-from reeval_py.declare import evaluate, evaluate_each, group
+from reeval_python.declare import evaluate, evaluate_each, group
 
 
 def declare_tags() -> None:

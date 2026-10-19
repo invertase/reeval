@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from pathlib import Path
+from typing import Any, Literal, cast
 
 Mode = Literal["run", "skip", "only", "todo"]
 
@@ -45,7 +47,7 @@ class DeclaredGroup:
     name: str
     mode: Mode
     options: dict[str, Any]
-    children: list[DeclaredEval | DeclaredGroup | DeclaredTodo] = field(default_factory=list)
+    children: list["DeclNode"] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -75,10 +77,14 @@ class _GroupFrame:
     node: DeclaredGroup
 
 
+def _empty_suites() -> list[_Suite]:
+    return []
+
+
 @dataclass
 class _Suite:
     factory: Callable[[], None] | None = None
-    suites: list[_Suite] = field(default_factory=list)
+    suites: list[_Suite] = field(default_factory=_empty_suites)
 
 
 _tree_children: list[DeclNode] | None = None
@@ -110,7 +116,9 @@ def _declare(node: DeclNode) -> None:
         _tree_children.append(node)
 
 
-def _register_group(name: str, mode: Mode, options: dict[str, Any], factory: Callable[[], None]) -> None:
+def _register_group(
+    name: str, mode: Mode, options: dict[str, Any], factory: Callable[[], None]
+) -> None:
     suite = _Suite(factory=factory)
     _suites[-1].suites.append(suite)
 
@@ -126,7 +134,7 @@ def group(
     if callable(arg) and arg2 is None:
         fn, opts = arg, {}
     elif isinstance(arg, dict) and callable(arg2):
-        opts, fn = dict(arg), arg2
+        opts, fn = dict[str, Any](cast(dict[str, Any], arg)), arg2
     else:
         raise TypeError("group(name, options, fn) or group(name, fn)")
 
@@ -159,10 +167,10 @@ def evaluate(
         _register_eval(name, mode, {}, arg, None)
         return arg
     if isinstance(arg, dict) and callable(arg2):
-        _register_eval(name, mode, dict(arg), arg2, None)
+        _register_eval(name, mode, dict[str, Any](cast(dict[str, Any], arg)), arg2, None)
         return arg2
 
-    opts = dict(arg if isinstance(arg, dict) else {})
+    opts = dict[str, Any](cast(dict[str, Any], arg)) if isinstance(arg, dict) else {}
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         _register_eval(name, mode, opts, fn, None)
@@ -171,14 +179,17 @@ def evaluate(
     return decorator
 
 
-def evaluate_each(cases: Sequence[Any], name_template: str, options: dict[str, Any] | None = None):
-    opts = dict(options or {})
+def evaluate_each(
+    cases: Sequence[Any], name_template: str, options: dict[str, Any] | None = None
+):
+    opts = dict[str, Any](options or {})
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         for index, case in enumerate(cases):
             family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
-            if isinstance(case, dict) and "n" in case:
-                display = name_template.replace("$n", str(case["n"]))
+            case_value: Any = case
+            if isinstance(case_value, dict) and "n" in case_value:
+                display = name_template.replace("$n", str(cast(Any, case_value["n"])))
             else:
                 display = name_template.replace("$n", str(index + 1)).replace("%#", str(index))
             _register_eval(display, "run", opts, fn, family)
@@ -198,28 +209,43 @@ def _register_eval(
     _declare(DeclaredEval(name=name, mode=mode, options=options, body=body, family=family))
 
 
-async def _collect_suite(suite: _Suite) -> None:
+def _collect_suite_sync(suite: _Suite) -> None:
     if suite.factory is not None:
         suite.factory()
     for nested in suite.suites:
-        await _collect_suite(nested)
+        _collect_suite_sync(nested)
 
 
-async def collect_module_tree(loader: Callable[[], None]) -> dict[str, Any]:
+def _tree_after_loader(loader: Callable[[], None]) -> dict[str, Any]:
     reset_collector()
     loader()
-    await _collect_suite(_suites[0])
+    _collect_suite_sync(_suites[0])
     assert _tree_children is not None
     return {"children": [c.as_json() for c in _tree_children]}
 
 
-def collect_module_tree_sync(loader: Callable[[], None]) -> dict[str, Any]:
-    import asyncio
+async def collect_module_tree(loader: Callable[[], None]) -> dict[str, Any]:
+    return _tree_after_loader(loader)
 
-    return asyncio.run(collect_module_tree(loader))
+
+def collect_module_tree_sync(loader: Callable[[], None]) -> dict[str, Any]:
+    return _tree_after_loader(loader)
 
 
 def get_body(body_id: str) -> Callable[..., Any]:
     if body_id not in _bodies:
         raise KeyError(f"unknown eval body {body_id}")
     return _bodies[body_id]
+
+
+def collect_eval_file(path: Path) -> dict[str, Any]:
+    """Import one *.eval.py file and return its declaration tree JSON."""
+
+    def loader() -> None:
+        spec = importlib.util.spec_from_file_location("reeval_eval", path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"can't load {path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+    return collect_module_tree_sync(loader)
