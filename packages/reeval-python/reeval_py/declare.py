@@ -217,3 +217,9 @@ def collect_module_tree_sync(loader: Callable[[], None]) -> dict[str, Any]:
     import asyncio
 
     return asyncio.run(collect_module_tree(loader))
+
+
+def get_body(body_id: str) -> Callable[..., Any]:
+    if body_id not in _bodies:
+        raise KeyError(f"unknown eval body {body_id}")
+    return _bodies[body_id]

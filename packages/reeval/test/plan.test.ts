@@ -65,6 +65,7 @@ export const cases: PlanCase[] = [
     name: 'helpers-from-above',
     args: ['--config', 'project/reeval.config.ts', 'helpers.eval'],
   },
+  { dir: 'python', name: 'hello', args: [] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },

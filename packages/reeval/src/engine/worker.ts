@@ -6,7 +6,7 @@ import { useSchedulerChannel } from '../scheduler/client.ts'
 import type { RunContext } from '../types.ts'
 import { collect, collectingFile, registerGroup, registerTest } from './collector.ts'
 import { extendExpect } from './expect.ts'
-import { loadEvalFile } from './loader.ts'
+import { loadEvalModule } from '../language-runner/load.ts'
 import { type FromWorker, PROTOCOL, type ToWorker } from './protocol.ts'
 import { type Reporter, routeConsole, runTests, serializeError } from './run.ts'
 import { useEngine } from './runtime.ts'
@@ -57,7 +57,7 @@ export function startWorker(channel: Channel): Worker {
     extendExpect(matchers)
     routeConsole(reporter)
     try {
-      const tests = await collect(file, () => loadEvalFile(file, run.config.root))
+      const tests = await collect(file, () => loadEvalModule(file, run.config.root))
       channel.send({
         t: 'collected',
         tests: tests.map(({ index, name, groups, mode, options }) => ({

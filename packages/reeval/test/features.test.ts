@@ -2151,6 +2151,12 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'python-sdk/hello',
+    tiers: ['fake'],
+    env: '-',
+    canary: /expected.*to succeed/i,
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',
@@ -2314,8 +2320,9 @@ test('every feature fixture is in the table, with one check and a canary', () =>
     .sort()
   assert.deepEqual(dirs, features.map((f) => f.dir).sort())
   for (const dir of dirs) {
-    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => f.endsWith('.eval.ts'))
-    assert.deepEqual(evals.sort(), ['canary.eval.ts', 'lands.eval.ts'], dir)
+    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))
+    const ext = evals.some((f) => f.endsWith('.eval.py')) ? '.eval.py' : '.eval.ts'
+    assert.deepEqual(evals.sort(), [`canary${ext}`, `lands${ext}`].sort(), dir)
     assert.ok(existsSync(join(root, dir, 'reeval.config.ts')), dir)
   }
 })
