@@ -1,12 +1,13 @@
 // One eval file's worker: loads the file, reports what it declares, and with a selection, runs
 // those attempts and exits. The main process starts a fresh one per file (./pool.ts), from the
 // copy of reeval the project itself resolves, so the file registers with the reeval it imports.
+
+import { loadEvalModule } from '../language-runner/load.ts'
 import { matchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
 import type { RunContext } from '../types.ts'
 import { collect, collectingFile, registerGroup, registerTest } from './collector.ts'
 import { extendExpect } from './expect.ts'
-import { loadEvalModule } from '../language-runner/load.ts'
 import { type FromWorker, PROTOCOL, type ToWorker } from './protocol.ts'
 import { type Reporter, routeConsole, runTests, serializeError } from './run.ts'
 import { useEngine } from './runtime.ts'

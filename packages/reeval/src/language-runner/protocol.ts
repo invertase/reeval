@@ -1,6 +1,6 @@
 // Loopback NDJSON between reeval and a language SDK runner. Session messages use `t`; attempt
 // traffic uses the attempt protocol shapes from src/contract/attempt.ts (no `t`).
-import type { DeclarationTree } from '../declaration.ts'
+
 import type {
   AttemptAbort,
   AttemptDone,
@@ -8,6 +8,7 @@ import type {
   AttemptRequest,
   AttemptStart,
 } from '../contract/attempt.ts'
+import type { DeclarationTree } from '../declaration.ts'
 
 export const RUNNER_PROTOCOL = 2
 
@@ -43,10 +44,7 @@ export type RunnerAttemptRequest = AttemptRequest & { attempt: string }
 
 export type RunnerAttemptDone = AttemptDone & { attempt: string }
 
-export type FromRunner =
-  | SessionFromRunner
-  | RunnerAttemptRequest
-  | RunnerAttemptDone
+export type FromRunner = SessionFromRunner | RunnerAttemptRequest | RunnerAttemptDone
 
 export const isSessionFrom = (message: FromRunner): message is SessionFromRunner => 't' in message
 

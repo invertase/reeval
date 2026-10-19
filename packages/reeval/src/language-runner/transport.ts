@@ -6,7 +6,6 @@ import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
 import {
   type FromRunner,
-  isRunnerAttemptDone,
   isSessionFrom,
   RUNNER_PROTOCOL,
   type SessionFromRunner,
@@ -18,9 +17,7 @@ export type RunnerCommand = readonly [command: string, ...args: string[]]
 export type LanguageRunner = {
   send(message: ToRunner): void
   onMessage(listener: (message: FromRunner) => void): void
-  nextSession<T extends SessionFromRunner['t']>(
-    t: T,
-  ): Promise<Extract<SessionFromRunner, { t: T }>>
+  nextSession<T extends SessionFromRunner['t']>(t: T): Promise<Extract<SessionFromRunner, { t: T }>>
   onGone(listener: (reason: string) => void): void
   hello: Extract<SessionFromRunner, { t: 'hello' }>
   close(): void

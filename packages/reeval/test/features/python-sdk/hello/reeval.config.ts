@@ -18,12 +18,7 @@ export default defineConfig({
           params: { fast: 'false' },
         })
       : fakeHarness({
-          script: [
-            [
-              { write: { 'greet.py': 'print("hi")\n' } },
-              { reply: 'Created greet.py.' },
-            ],
-          ],
+          script: [[{ write: { 'greet.py': 'print("hi")\n' } }, { reply: 'Created greet.py.' }]],
         }),
   sandbox,
   judge: { model: fakeJudge({ score: 1 }) },

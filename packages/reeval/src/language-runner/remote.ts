@@ -2,21 +2,20 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { relative } from 'node:path'
 import type { AttemptDone, AttemptStart } from '../contract/attempt.ts'
-import { declareTree } from '../evaluate.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
+import { declareTree } from '../evaluate.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AttemptContext, BackgroundHandle, EvalFn } from '../types.ts'
-import { adapterForFile } from './adapter.ts'
-import { runnerEnv } from './adapter.ts'
+import { adapterForFile, runnerEnv } from './adapter.ts'
 import { replyToAttempt } from './attempt-host.ts'
 import type { RunnerAttemptDone, RunnerAttemptRequest } from './protocol.ts'
 import {
   errorFrom,
   isRunnerAttemptDone,
-  isSessionFrom,
   isRunnerAttemptRequest,
-  startLanguageRunner,
+  isSessionFrom,
   type LanguageRunner,
+  startLanguageRunner,
 } from './transport.ts'
 
 type Live = {
@@ -88,7 +87,8 @@ function remoteBody(
           reason instanceof Error ? reason.message : String(reason ?? 'The run was cancelled')
         runner.send({
           type: 'abort',
-          reason: reason instanceof Error && reason.name === 'TimeoutError' ? 'timeout' : 'cancelled',
+          reason:
+            reason instanceof Error && reason.name === 'TimeoutError' ? 'timeout' : 'cancelled',
           message,
         })
         finish(() => reject(reason))
@@ -108,7 +108,9 @@ function remoteBody(
             reject(errorFrom(error))
           }),
         gone: (reason) =>
-          finish(() => reject(new InfraError(`The language runner stopped mid-attempt: ${reason}`))),
+          finish(() =>
+            reject(new InfraError(`The language runner stopped mid-attempt: ${reason}`)),
+          ),
       })
 
       if (t.signal.aborted) return onAbort()

@@ -1,7 +1,8 @@
 // Answers attempt-protocol calls from a language runner on the real AttemptContext.
+
+import { type ExpectCall, expectCall } from '../attempt/match.ts'
 import type { AttemptCall, AttemptReply, AttemptRequest } from '../contract/attempt.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
-import { expectCall, type ExpectCall } from '../attempt/match.ts'
 import type { AttemptContext, BackgroundHandle, JudgeCallOptions, Turn } from '../types.ts'
 
 const isTurnRef = (value: unknown): value is { turn: number } =>

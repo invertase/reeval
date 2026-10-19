@@ -27,9 +27,9 @@ import {
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
+import { defaultIncludeGlobs } from './language-runner/adapter.ts'
 import { isObjectLike } from './object.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
-import { defaultIncludeGlobs } from './language-runner/adapter.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {

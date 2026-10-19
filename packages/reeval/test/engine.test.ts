@@ -7,6 +7,7 @@ import type { AddressInfo } from 'node:net'
 import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
+import { defaultIncludeGlobs } from '../src/language-runner/adapter.ts'
 import {
   fakeConfig,
   liveSandboxes,
@@ -16,7 +17,6 @@ import {
   readRun,
   runCli,
 } from './helpers.ts'
-import { defaultIncludeGlobs } from '../src/language-runner/adapter.ts'
 
 const defaultIncludePattern = () =>
   defaultIncludeGlobs()
