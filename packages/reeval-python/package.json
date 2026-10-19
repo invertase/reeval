@@ -1,6 +1,5 @@
 {
   "name": "reeval-python",
-  "private": true,
   "version": "0.0.0",
-  "description": "Python authoring SDK for reeval (spike; pytest in packages/reeval-python)"
+  "description": "Python authoring SDK for reeval (*.eval.py); PyPI package, pytest in this directory"
 }

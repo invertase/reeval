@@ -1,4 +1,4 @@
-"""Declaration-time API for reeval eval files (spike)."""
+"""Python eval authoring API for reeval (*.eval.py)."""
 
 from reeval_py.declare import (
     collect_module_tree,
