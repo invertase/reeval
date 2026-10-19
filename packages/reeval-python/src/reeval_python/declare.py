@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from reeval_python.wire import options_to_wire
+
 Mode = Literal["run", "skip", "only", "todo"]
 
 
@@ -123,6 +125,10 @@ def _register_group(
     _suites[-1].suites.append(suite)
 
 
+def _wire_options(options: dict[str, Any]) -> dict[str, Any]:
+    return options_to_wire(options) or {}
+
+
 def group(
     name: str,
     arg: Callable[[], None] | dict[str, Any] | None = None,
@@ -138,7 +144,7 @@ def group(
     else:
         raise TypeError("group(name, options, fn) or group(name, fn)")
 
-    node = DeclaredGroup(name=name, mode=mode, options=opts, children=[])
+    node = DeclaredGroup(name=name, mode=mode, options=_wire_options(opts), children=[])
     _declare(node)
     frame = _GroupFrame(name=name, options=opts, node=node)
 
@@ -204,7 +210,15 @@ def _register_eval(
     family: DeclaredFamily | None,
 ) -> None:
     body = _next_body(fn)
-    _declare(DeclaredEval(name=name, mode=mode, options=options, body=body, family=family))
+    _declare(
+        DeclaredEval(
+            name=name,
+            mode=mode,
+            options=_wire_options(options),
+            body=body,
+            family=family,
+        )
+    )
 
 
 def _collect_suite_sync(suite: _Suite) -> None:

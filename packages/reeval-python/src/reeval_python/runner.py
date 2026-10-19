@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import sys
@@ -11,7 +12,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, cast
 
-from reeval_python.context import AttemptContext
+from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
 
 RUNNER_PROTOCOL = 2
@@ -64,12 +65,21 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         req_id = str(seq)
         return await conn.request(attempt_id, req_id, message["call"])
 
-    ctx = AttemptContext(attempt_id, send_request)
+    loop = asyncio.get_running_loop()
+    async_ctx = AttemptContext(attempt_id, send_request)
     error: dict[str, Any] | None = None
     try:
-        result = fn(ctx)
-        if asyncio.iscoroutine(result):
-            await result
+        if inspect.iscoroutinefunction(fn):
+            async_ctx.bind_expect()
+            await fn(async_ctx)
+        else:
+            sync_ctx = SyncAttemptContext(async_ctx, loop)
+            sync_ctx.bind_expect()
+
+            def run_sync() -> None:
+                fn(sync_ctx)
+
+            await asyncio.to_thread(run_sync)
     except Exception as exc:  # noqa: BLE001
         error = {"name": type(exc).__name__, "message": str(exc), "stack": traceback.format_exc()}
     conn.write({"type": "done", "attempt": attempt_id, **({"error": error} if error else {})})

@@ -15,6 +15,10 @@ lifecycle stay shared.
 
 **Rules (non-negotiable):**
 
+- **SDKs are language-native; the wire format is never the public API.** Python evals import
+  `evaluate` and `expect` from `reeval_python`, use snake_case (`c.read_file`, `expect(…).to_succeed()`),
+  typed results and snake_case options mapped to camelCase on the wire internally. Plain `def` bodies run
+  on a worker thread with a sync context; `async def` uses the same asyncio implementation.
 - **TypeScript stays in-process.** Never send `.eval.ts` through the runner transport; records,
   stacks and matcher behaviour must stay unchanged.
 - **No per-language branches in the engine.** The worker calls `loadEvalModule()` only; do not
