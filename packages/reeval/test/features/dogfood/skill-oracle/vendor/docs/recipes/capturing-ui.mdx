@@ -1,0 +1,149 @@
+---
+title: Capturing UI
+description: Take a PNG of a port the agent left running, keep it with the attempt, and show it in the studio.
+---
+
+**Goal:** screenshot whatever the agent left running on a port, store it under `artifacts/`, and see it on the attempt in the studio.
+
+`c.capture()` takes the shot on the host, in a headless Chrome, through the sandbox's port tunnel, so the sandbox image needs no browser. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
+
+## Seeded app
+
+A `setup` step starts the server in the background on a known port, and the agent edits the app. `c.capture` polls the port until it answers, then takes the shot.
+
+```ts title="evals/login.eval.ts"
+import { defineEnvironment, evaluate } from 'reeval'
+
+const firebaseWeb = defineEnvironment('firebase-web', {
+  setup: [
+    'npm run dev -- --port 5173 --host 127.0.0.1 >/tmp/dev.log 2>&1 &',
+  ],
+})
+
+evaluate('login screen', { environment: firebaseWeb }, async (c) => {
+  await c.send('Add a labelled email field to the login form.')
+  await c.capture(5173, { name: 'login', path: '/login' })
+})
+```
+
+## Author starts the server
+
+After the turn, start the server yourself with `c.serve` (or `c.exec(command, { background: true })`), then capture.
+
+```ts title="evals/landing.eval.ts"
+import { evaluate } from 'reeval'
+
+evaluate('landing page', async (c) => {
+  await c.send('Build a Vite app. I will start the server.')
+  const server = await c.serve(
+    'npm run dev -- --port $PORT --host 127.0.0.1',
+  )
+  await c.capture(server, { name: 'home' })
+})
+```
+
+`c.serve` allocates a port when you don't pass one and sets `PORT`, so the command can use `$PORT`.
+
+## Agent starts the server
+
+The prompt names the port. `c.capture` polls it, and nothing listening by the timeout fails the attempt.
+
+```ts title="evals/agent-serve.eval.ts"
+import { evaluate } from 'reeval'
+
+evaluate('landing page', async (c) => {
+  await c.send('Build a Vite app. Serve it on 127.0.0.1:5173.')
+  await c.capture(5173, { name: 'home' })
+})
+```
+
+## After a journey
+
+`instructions` is a list of goals and waits. Each string is a vision loop on the same Chrome tab: the model sees a full-page shot and answers with a click, typing, a key, a scroll, a drag or a hover, which reeval sends as Chrome `Input` events. There are no selectors.
+
+```ts
+const server = await c.serve(
+  'npm run dev -- --port $PORT --host 127.0.0.1',
+)
+await c.capture(server, {
+  name: 'after-submit',
+  wait: 'idle',
+  instructions: [
+    'Fill in the sign-in form and submit',
+    { wait: 'idle' },
+    'Click forgot password',
+  ],
+  viewport: 'full-page',
+})
+```
+
+The top-level `wait` runs once, before the first model shot, and a `{ wait }` between strings pauses the journey there. A `{ wait: 'idle' }` waits until at most two requests have been in flight for 500ms, so it also covers a click that only fetches.
+
+`viewport: 'full-page'` keeps the default window and saves a tall PNG. Anything the model types is plain text, so a typed secret can appear in the PNG and the debug data.
+
+`capture.model` picks the vision model, and cascades like `question`. Without it, reeval uses the analysis model when that model accepts images.
+
+## After load
+
+Client-rendered pages often fetch after the `window` `load` event. `wait: 'idle'` holds the shot until Chromium reports `networkAlmostIdle`.
+
+```ts
+await c.capture(server, { name: 'home', wait: 'idle' })
+```
+
+| `wait` | Waits for |
+|---|---|
+| `'load'` (default) | `Page.loadEventFired` |
+| `'idle'` | Chromium's `networkAlmostIdle` lifecycle event: at most two HTTP requests for about 500ms |
+
+The capture's `timeout` covers the wait: if the event never arrives, the capture fails and there's no PNG. For a page that never goes quiet (Vite HMR, SSE, long polling), keep `wait: 'load'` or raise `timeout`.
+
+## Judge the screenshot
+
+Pass the capture (or its `name`) to `c.judge`, which sends the PNG to the judge as a file. Ask about facts in the picture, not whether it "looks great".
+
+```ts
+const image = await c.capture(server, { name: 'form' })
+await c.judge('it has visual feedback for a failed form', {
+  artifacts: [image],
+})
+```
+
+Jev (`typesafe-ai/jev-1.14.0`, with `TYPESAFE_AI_API_KEY`) takes PNG captures. A provider that can't take files fails that call with its own error. A judge call without `artifacts` sends no image, and `artifacts: true` sends every capture the attempt has taken so far.
+
+## Compare two arms' screenshots
+
+```ts
+compare: {
+  baseline: plain,
+  variants: [withDesignSystem],
+  questions: [{
+    question: 'Which sign-in page follows the design system more closely?',
+    artifacts: ['sign-in'],
+  }],
+}
+```
+
+Each attempt calls `c.capture(server, { name: 'sign-in' })`. After the run, the question sends each side's own `sign-in` capture beside its task and diff, labelled only by position (`Attempt A, screenshot 1 of 1`). See [Choose what each side shows](/guide/questions#choose-what-each-side-shows).
+
+## What you get
+
+| Where | What |
+|---|---|
+| The attempt's directory | `artifacts/<name>.png` |
+| The studio | The PNG under the attempt's Artefacts, as `image/png` |
+| The verdict | The same reference, on a judge call that sent the capture |
+| `history.artifacts` | Which attempts keep it: `all`, `failures` or `none` |
+
+Several attempts can capture at once. The first `chrome-headless-shell` download shows in `reeval run` with its pinned version, size, progress and cache path; a cache hit is quiet.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="The attempt context" icon="terminal" href="/reference/attempt-context">
+    `c.capture`, `c.serve` and `c.exec({ background })`.
+  </Card>
+  <Card title="Options" icon="sliders" href="/reference/options">
+    The `capture` cascade: viewport, timeout, browser, model.
+  </Card>
+</CardGroup>

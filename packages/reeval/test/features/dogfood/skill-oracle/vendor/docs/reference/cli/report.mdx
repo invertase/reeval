@@ -1,0 +1,117 @@
+---
+title: reeval report
+description: Collect a redacted bug report about reeval, review it locally, then file it as a GitHub issue.
+---
+
+`reeval report` collects what a maintainer needs to debug reeval: versions, `reeval doctor`, your config's shape, the last command's error and stack, and the run's failures with their debug logs. Everything is redacted. It prints a summary and writes the report on your machine; nothing is uploaded until you file it.
+
+```bash
+npx reeval report               # the report in .reeval/reports/<time>/
+npx reeval report --out bug.md  # bug.md, bug.json and bug-logs.tar.gz
+npx reeval report --issue       # then a pre-filled GitHub issue
+```
+
+## Flags
+
+[//]: # (generated:cli-help:report)
+
+```text
+reeval report [run]           Collect a bug report: versions, reeval doctor, the config's shape, the
+                              last reeval command's error and stack, the run's failures and their
+                              .reeval/debug logs, redacted. Prints a summary, writes it to .reeval/reports
+                              and uploads nothing
+  --out <dir|file>            Write report.md, report.json and report-logs.tar.gz there instead
+                              (a .md or .json file writes the others beside it)
+  --json                      The bundle as JSON on stdout
+  --last                      Report the last reeval command that failed, and its run
+  --issue                     Open a pre-filled GitHub issue for reeval in the browser, or with gh
+                              installed, file it with gh issue create once you confirm
+  -y, --yes                   With --issue, file it with gh without asking
+```
+
+[//]: # (/generated:cli-help:report)
+
+The run is `latest` unless you name one (see [run references](/reference/cli#run-references)). With `--last`, it's the run of the last `reeval` command that failed, when that was `reeval run`.
+
+## Output
+
+A real report after a run whose agent failed to start:
+
+```text
+reeval report
+versions  reeval 0.0.1 · Node 22.14.0 · npm 10.9.7 · linux 6.12.94+ x64 · agent cursor
+command   reeval run --profile <value> <arg> → exit 3 (run 20260927T163409Z_nogit_cursor-agent_wtce), 2026-09-27T16:34:08.902Z
+error     infra: agent failed: key [REDACTED] in <project>
+run       20260927T163409Z_nogit_cursor-agent_wtce: infra_error, 1 attempt, 0 pass, 1 infra error
+failing   evals/boom.eval.ts › boom # fake/-/fake#1 (infra)
+doctor    1 problem (gitignore), 1 warning
+config    reeval.config.ts: keys harness, profiles, sandbox; harness fake; sandbox fake; profiles pr
+logs      2 debug files attached
+redacted  7 secret values masked, all already by reeval's records and logs; home → ~, project → <project>
+
+Wrote .reeval/reports/20260927T163440Z/report.md, .reeval/reports/20260927T163440Z/report.json, .reeval/reports/20260927T163440Z/report-logs.tar.gz
+Nothing was uploaded. Review the files, then file it with reeval report --issue.
+```
+
+| File | Holds |
+|---|---|
+| `report.md` | Everything below, to read and attach to the issue |
+| `report.json` | The same as one JSON document (`kind: "reeval-report"`); `--json` prints it |
+| `report-logs.tar.gz` | Each failing attempt's `.reeval/debug` files, redacted; only when there are some |
+
+## What it collects
+
+| Part | What | What it leaves out |
+|---|---|---|
+| Versions | reeval, Node, npm, the package manager (from `npm_config_user_agent` or the lockfile), OS and architecture, CI and coding agent | |
+| Variables | Names of the `REEVAL_*` and secret-looking variables that are set | Every value |
+| Last command | Its arguments, exit code, duration, run and, when it failed, its error and stack | Flag values and arguments, shown as `<value>` and `<arg>` |
+| `reeval doctor` | Every check, as `reeval doctor --json` without `--online` | |
+| Config | The option keys it sets, its harness and sandbox kinds, and each profile's name and keys | Every value, model and path |
+| Run | Its outcome and counts, `stack` from the record (reeval, packages, images, harnesses, judge), and up to 5 failing attempts: the error, turn errors, the last lines of `debug.log` and `trace.ndjson`, and refused or failed gateway requests | The trace's `config` entries, which hold the config's values |
+
+reeval logs the last 20 `reeval` commands in `.reeval/cli.jsonl`, redacted, in a project that has an `.reeval/` folder. That's where the last command comes from.
+
+## Redaction
+
+```text
+Outcome infra_error.
+infra: agent failed: key [REDACTED] in <project>
+```
+
+| Masked | As |
+|---|---|
+| Secret-looking variables' and `secret()` values, raw or JSON-, URL- or base64-encoded, and any stretch of 8 or more of their characters | `[REDACTED]`, as in a run record |
+| Well-known token shapes | `[REDACTED]` |
+| Every value of 8 or more characters in `.env.local` and `.env`, whatever its name | `[REDACTED]` |
+| Your project folder, then your home folder | `<project>`, `~` |
+
+The `redacted` line counts every `[REDACTED]` in the report and its attached logs, one per place a value was masked, and says how many reeval had masked already in the records and logs it read.
+
+<Warning>
+  Read `report.md` before you share it. The failure messages and logs are your agent's and your evals' own output, and redaction only catches what looks like a secret.
+</Warning>
+
+## --issue
+
+```text
+Open this to file the issue (pre-filled; nothing is sent until you submit it):
+https://github.com/invertase/reeval/issues/new?template=bug_report.yml&title=reeval%20run%3A%20infra%3A%20agent%20failed…
+```
+
+`--issue` writes the report as above, then opens reeval's bug-report form in your browser with the title and the summary filled in. The URL stays under 8,000 characters: a long summary is cut at a line and says to attach `report.md`. Drag `report.md` and `report-logs.tar.gz` into the issue.
+
+With [`gh`](https://cli.github.com) installed, it asks first, then files the issue with `gh issue create` (the body is `issue.md` in the report's folder), and `-y` answers yes. Without a terminal to ask in and without `-y`, it prints the URL. The repository comes from `bugs` in reeval's `package.json`.
+
+## The hint
+
+```text
+hint: if this looks like a bug in reeval, reeval report collects a redacted report to file (REEVAL_NO_REPORT_HINT=1 hides this)
+```
+
+After an infra error (exit 3), a crash, an error reeval didn't expect, or an error a run reports that no eval owned, `reeval` prints this line on stderr. It doesn't in agent output, with `--json`, or with `REEVAL_NO_REPORT_HINT=1`.
+
+## Related
+
+- [reeval doctor](/reference/cli/doctor): the checks the report includes
+- [Debug data](/reference/debug-data): the `.reeval/debug` files it attaches

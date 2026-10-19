@@ -1,0 +1,167 @@
+---
+title: Start from an existing codebase
+description: Run evals on pre-existing code, such as a template, an example app, a real repository or one directory of a monorepo, pinned to a commit.
+---
+
+**Goal:** have the agent change code that already exists, such as a starter template, your own app or one package of a monorepo, instead of an empty workspace.
+
+An environment's `workspace` names a git repository, or one directory of it. Every attempt's workspace starts as that tree, at the same commit.
+
+## The files
+
+```ts title="evals/env.ts"
+import { defineEnvironment } from 'reeval'
+
+export const reactTs = defineEnvironment('react-ts', ({ git }) => ({
+  workspace: git('https://github.com/vitejs/vite', {
+    ref: 'v6.0.0',
+    path: 'packages/create-vite/template-react-ts',
+    init: true,
+  }),
+  setup: [{ run: 'npm install --no-audit --no-fund', timeout: '5m' }],
+}))
+```
+
+```ts title="evals/template.eval.ts"
+import { evaluate, expect } from 'reeval'
+import { reactTs } from './env.ts'
+
+evaluate('adds a reset button', { environment: reactTs }, async (c) => {
+  const turn = await c.send(
+    'Add a Reset button to src/App.tsx that sets the count back to 0.',
+  )
+  expect(turn.diff.files).toEqual([
+    { path: 'src/App.tsx', status: 'modified' },
+  ])
+  await expect(c.exec('npm run build')).toSucceed()
+})
+```
+
+`path` makes that directory's contents the workspace root, so `package.json` is at the top. `init: true` makes the workspace a git repository, as a real checkout would be. The diff starts after `setup`, so neither the template nor what `npm install` added shows as the agent's change.
+
+## Check the plan
+
+```bash
+npx reeval run --dry-run
+```
+
+```text
+plan  1 eval · 1 cell · 1 attempt · ~1s serial
+eval                                        harnesses  variants  runs  attempts  notes
+evals/template.eval.ts › adds a reset button  1          —         1     1         workspace: https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts
+```
+
+A dry run never fetches. With `--json`, each of the eval's cells has a `workspace` with its `repo`, `ref` and `path`. A branch, or no `ref`, adds a warning: results on a moving branch aren't comparable over time.
+
+## Run it
+
+```text
+plan  1 eval · 1 cell · 1 attempt · ~1s serial
+workspace https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts at 814120f2ad38
+…
+[adds#1 fake]  +0:21 $ npm run build  exit 0 2s
+[adds#1 fake] ✓ evals/template.eval.ts › adds a reset button  22s
+```
+
+Before any attempt, reeval fetches the repository on the host and resolves the ref once. With a `path`, it fetches only that directory's files: the vite monorepo's template takes about a second.
+
+| Step | Where |
+|---|---|
+| Fetch the ref (shallow; partial with a `path`) | The host, into `.reeval/cache/git/repos/` |
+| Export the tree as a tarball, by tree hash | `.reeval/cache/git/trees/` |
+| Unpack it into the workspace, before `files` and `setup` | Each attempt's sandbox |
+
+A pinned full commit SHA that's already in the cache reruns offline. Submodules and Git LFS files aren't fetched: a submodule arrives as an empty directory, an LFS file as its pointer.
+
+## A repository for the agent
+
+Without `init`, the workspace has no `.git`, and some agents behave differently outside a repository. With it, the agent sees one commit of the fetched tree and no remote. This is the agent's `git status --short && git log --oneline` in the run above:
+
+```text
+ M src/App.tsx
+?? node_modules/
+?? package-lock.json
+6169c1a https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts at 814120f2ad387ca3d1e16c7dd403b04ca4b97f75
+```
+
+The commit comes before `files` and `setup`, so what they add is uncommitted, and it's by `reeval` at a fixed date, so every attempt starts at the same `HEAD`. The template's history isn't there, and neither is its remote.
+
+## What the record keeps
+
+```bash
+npx reeval show latest --json | jq '.environments[].workspace'
+```
+
+```json
+{
+  "source": "https://github.com/vitejs/vite",
+  "ref": "v6.0.0",
+  "path": "packages/create-vite/template-react-ts",
+  "commit": "814120f2ad387ca3d1e16c7dd403b04ca4b97f75",
+  "tree": "1006cbf3da5c05d570e320b94b2e958e375f8021",
+  "init": true
+}
+```
+
+The tree hash is in the environment's digest, so the fingerprint changes when the code does, and not when an unrelated commit moves the ref.
+
+## Private repositories
+
+```ts title="evals/env.ts"
+export const app = defineEnvironment('app', ({ git }) => ({
+  workspace: git('https://github.com/acme/app', {
+    ref: 'v2.3.0',
+    token: 'GITHUB_TOKEN',
+  }),
+}))
+```
+
+`token` names a host variable, as `secret.fromEnv` does. reeval reads it on the host and sends it, as a header in `git`'s environment, only to the repository's own origin; it never reaches the sandbox, the record or `.reeval`, and it's masked in errors.
+
+Without `token`, reeval uses your own git credentials (a credential helper, `gh auth setup-git` or an SSH key), and never prompts.
+
+Only the tree reaches the sandbox, so a `deny-all` eval can start from a private repository. In GitHub Actions, the workflow's own `GITHUB_TOKEN` reads only its own repository; for another private one, store a read-only fine-grained token as a secret and set it in the step's `env`:
+
+```yaml title=".github/workflows/evals.yml"
+      - run: npx reeval run
+        env:
+          GITHUB_TOKEN: ${{ secrets.APP_READ_TOKEN }}
+```
+
+<Warning>
+  Don't put a token in the URL or in `token`. reeval refuses `https://user:token@…` and a `token` that looks like a token rather than a variable name, without echoing it.
+</Warning>
+
+## When it can't be fetched
+
+A missing ref, directory or repository, or a token that's unset or refused, fails only the attempts that use that workspace, as a sandbox image that failed to prepare does. It's reported once, before the run, and the other evals run:
+
+```text
+✗ workspace https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts failed to prepare (set by environment react-ts; only its attempts fail)
+  Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).
+…
+   ! adds a reset button     17ms  0 turns
+   ✓ writes a README          5ms  0 turns
+```
+
+Those attempts are infra errors, so the run exits 3. [Errors](/reference/errors#git-workspaces) lists each message.
+
+## Variations
+
+| Variation | How |
+|---|---|
+| Patch the starting code | `files` are written over the repository, so `files: { 'src/config.ts': … }` swaps one file |
+| Compare two versions | `const v5 = reactTs.extendEnvironment('v5', ({ git }) => ({ workspace: git(…, { ref: 'v5.4.0', path: … }) }))`, then `compare: { baseline: reactTs, variants: [v5] }`. The child's `workspace` replaces its parent's. `compare` runs the two apart |
+| A repository next to your evals | `git('../fixtures/app', { ref: 'v1' })` resolves against the calling file, as `file()` does |
+| A fixture directory that isn't a repository | `files: directory('../fixtures/app')` copies its files, without `node_modules/`, `dist/` and the other [default ignores](/reference/helpers#directory). Unlike `workspace`, it isn't pinned to a commit: the files' contents are in the environment's digest instead |
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="defineEnvironment" icon="book" href="/reference/environment">
+    `workspace` and the order an attempt applies each field in.
+  </Card>
+  <Card title="Errors" icon="triangle-exclamation" href="/reference/errors#git-workspaces">
+    A missing ref, directory or repository, and what to do.
+  </Card>
+</CardGroup>

@@ -1,0 +1,178 @@
+---
+title: Debugging
+description: Find out why an attempt failed, from the summary block to the full phase trace in .reeval/debug.
+---
+
+When an eval fails, the reason is usually in the summary. When it isn't, reeval has kept a trace of every phase of the attempt on your machine. This page goes from the first to the second.
+
+## Read the failure block
+
+```text
+ ✗ evals/skill.eval.ts › house greeting › greets in the house style  cursor:composer-2.5/plain/docker#2
+   Error: expected command to succeed, exit code 1
+   --- stderr ---
+   (node:1390) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+   (Use `node --trace-warnings ...` to show where the warning was created)
+   --- stdout ---
+   Welcome to the house, Ada!
+    ❯ evals/skill.eval.ts:24:7
+        22|           'Add a package.json with "type": "module". No dependencies.',
+        23|       )
+        24|       await expect(c.exec(greetAda)).toSucceed()
+          |       ^
+        25|     })
+        26|   },
+   record  .reeval/runs/20260926T174022Z_b010670_ada-lovelace_pmvn/evals-skill-eval-ts-house-greeting-greets-in-the-house-style-55be48/cursor-composer-2-5-docker-76739b/2
+```
+
+The first line names the eval, the cell and the attempt number. Then come the error, the command's output and the line of your eval that failed. A control that isn't gated prints only the error's first line and its `record`, under `Expected misses, not gated`, since its miss doesn't fail the run.
+
+The `record` line is the attempt's folder. It holds what the agent did:
+
+```text
+.reeval/runs/<run>/<eval>/<cell>/2/
+  checks/1.log        a c.exec: command, exit code, stdout, stderr
+  diff.patch          what the agent changed in the workspace
+  transcript.jsonl    every message, tool call and file edit
+```
+
+## Use agent mode under a coding agent
+
+```bash
+REEVAL_UI=agent npx reeval run preferences
+```
+
+```text
+plan  run 20260926T174122Z_b010670_ada-lovelace_f2sr · 7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
+reeval run: 20260926T174122Z_b010670_ada-lovelace_f2sr · 1 eval file
+FAIL evals/preferences.eval.ts › recommends Genkit over LangChain for production apps (21s, judge)
+  judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
+  record: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-eval-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
+…
+7 failed
+summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
+```
+
+Agent mode prints only the plan, each failure with its record folder, and the counts. reeval picks it on its own when a coding agent runs it, so an agent fixing your evals reads a few lines, not the whole log. `--ui agent` or `REEVAL_UI=agent` turns it on by hand.
+
+## Trace each phase with -v
+
+```bash
+npx reeval run brokering -v --ui plain --log-order grouped
+```
+
+```text
+…
+[agent#1 cursor]  17:40:47 plan      harness cursor:composer-2.5 (reeval.config.ts or its default)
+[agent#1 cursor]  17:40:47 plan      sandbox docker (reeval.config.ts or its default)
+[agent#1 cursor]  17:40:47 plan      environment - (none set)
+[agent#1 cursor]  17:40:47 plan      egress allow-all (reeval.config.ts or its default)
+…
+[agent#1 cursor]  17:40:47 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
+[agent#1 cursor]  17:40:47 image     cache hit reeval-sandbox:cursor-0.1.0 (reeval's image for cursor; reeval image build rebuilds it)
+…
+[agent#1 cursor]  17:40:49 harness   turn 1 started: "Run `env | sort > env.txt` and reply with how many lines env.txt has."
+…
+[agent#1 cursor]  17:40:49 gateway   POST https://api2.cursor.sh/auth/exchange_user_api_key → 200 · allowed · ↑2 B ↓956 B · 76ms · substituted CURSOR_API_KEY (authorization)
+…
+[agent#1 cursor]  17:40:52 harness   tool bash called (tool_7f8359d2-9ba7-4108-85f9-2deffec470e)
+…
+[agent#1 cursor]  17:40:53 harness   tool bash returned in 1027ms (tool_7f8359d2-9ba7-4108-85f9-2deffec470e)
+…
+[agent#1 cursor]  17:40:53 check     $ env; cat /proc/[0-9]*/environ | tr "\0" "\n" → exit 0 · 43ms
+…
+[agent#1 cursor]  17:40:55 teardown  outcome pass
+…
+```
+
+`-v` prints one line per event, tagged with its phase. The `plan` lines say where each setting came from, which answers most "why did it use that?" questions. `gateway` lines show every request the sandbox made and whether a key was swapped in.
+
+## See raw payloads with -vv
+
+```bash
+npx reeval run "passes its own tests" -vv
+```
+
+```text
+…
+[passes#1 fake] 17:54:54.930 harness   turn 1 started: "Create greet.js and greet.test.js. No dependencies."
+[passes#1 fake] 17:54:54.930 harness   turn 1 prompt
+[passes#1 fake]     {"turn":1,"prompt":"Create greet.js and greet.test.js. No dependencies."}
+…
+[passes#1 fake] 17:54:55.026 check     $ node --test → exit 0 · 75ms
+[passes#1 fake] 17:54:55.027 check     check output: node --test
+[passes#1 fake]     {"command":"node --test","exitCode":0,"stdout":"TAP version 13\n# Subtest: greets by name\nok 1 - greets by name\n  ---\n  duration_ms: 0.4…
+```
+
+`-vv`, or `--trace`, adds the payload under each line. That includes the resolved config, each transcript event, check output, docker commands, headers and DNS decisions. The terminal shows the first 2,000 characters of each payload.
+
+## Open the debug folder
+
+```text
+.reeval/debug/<run>/<eval>/<cell>/<n>/
+  debug.log         the -v trace, always written
+  requests.ndjson   one line per egress gateway request (Docker only)
+  trace.ndjson      raw payloads, for failing attempts or with -vv
+```
+
+| File | Written | Holds |
+| --- | --- | --- |
+| `debug.log` | Every attempt | The `-v` lines, with or without `-v` |
+| `requests.ndjson` | Every attempt that makes a request | Method, URL, status, bytes, key swaps |
+| `trace.ndjson` | Failing attempts, or every attempt with `-vv` | The `-vv` payloads |
+
+So you don't need to rerun with `-v` after a failure: the trace is already there. Everything is redacted before it's written. The trace buffer is capped at 8 MB per attempt, and the oldest entries go first.
+
+<Warning>
+  `.reeval/debug` stays on your machine. `reeval record` never copies it into the history folder, and `reeval studio build` never includes it.
+</Warning>
+
+## Use the studio's Debug tab
+
+```bash
+npx reeval studio
+```
+
+<Image src="/assets/studio/debug-tab.png" alt="The studio's Debug tab for one attempt, showing the phase trace and gateway requests" width={800} />
+
+`reeval studio` adds a Debug tab to each attempt that has local debug data. It shows a timeline of the phases, the network requests and the raw trace, next to the transcript and diff.
+
+## Debug reeval itself
+
+```bash
+REEVAL_DEBUG=1 npx reeval run hello
+```
+
+`REEVAL_DEBUG=1` is for when reeval misbehaves rather than the agent. It streams the output of the test engine reeval runs your evals in, plus the Docker sandbox and image build logs, to stderr. It also prints the stack for unexpected errors.
+
+If reeval itself is at fault, `npx reeval report --issue` collects a redacted report (versions, `reeval doctor`, the last error and the run's debug logs), writes it locally for you to review, and opens a pre-filled issue: see [reeval report](/reference/cli/report).
+
+## Clean up
+
+```bash
+npx reeval clean --keep 1
+```
+
+```text
+Removed debug data for 4 runs (106.9 KB) from .reeval/debug
+```
+
+reeval keeps debug data for the newest 20 runs and removes older ones as it goes. `reeval clean` removes it all now, or all but the newest `--keep` runs. Change the defaults in the config:
+
+```ts title="reeval.config.ts"
+export default defineConfig({
+  debug: { keep: 50, traceBufferMb: 16 },
+  // …
+})
+```
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Debug data" icon="folder-open" href="/reference/debug-data">
+    Every file and field in `.reeval/debug`.
+  </Card>
+  <Card title="Errors" icon="triangle-exclamation" href="/reference/errors">
+    What each error means and how to fix it.
+  </Card>
+</CardGroup>

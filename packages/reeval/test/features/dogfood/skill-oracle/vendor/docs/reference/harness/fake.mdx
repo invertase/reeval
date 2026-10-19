@@ -1,0 +1,153 @@
+---
+title: fakeHarness()
+description: A scripted stand-in for a coding agent, for testing evals, configs and pipelines without a key or a model.
+---
+
+`fakeHarness()` is an agent that writes canned files and replies with canned text. It needs no key, costs nothing and finishes in milliseconds.
+
+```ts title="reeval.fake.config.ts"
+import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+
+export default defineConfig({
+  harness: fakeHarness({
+    script: [
+      [
+        { exec: 'ls' },
+        { write: { 'greet.js': 'export const greet = () => "hello"\n' } },
+        { reply: 'Wrote greet.js.' },
+      ],
+    ],
+  }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+})
+```
+
+```bash
+npx reeval run --config reeval.fake.config.ts
+```
+
+## Options
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys. Default `fake`. Give two fakes different ids to run both.
+</Property>
+
+<Property name="files" type="Record<string, string>" optional>
+  Files the agent writes on every turn, keyed by workspace path, after its `script`. Each shows as a `file-edit` event.
+</Property>
+
+<Property name="text" type="string" optional>
+  The agent's final message on every turn. Default `Done.`.
+</Property>
+
+<Property name="script" type="FakeScriptStep[][]" optional>
+  Real sandbox actions, one list per `c.send()`; the last list repeats for later turns. Steps run in order, before `files`. See [Script steps](#script-steps).
+</Property>
+
+<Property name="withSkill" type="{ files?, text? }" optional>
+  Used instead of `files` and `text` when the environment gives the agent any skill, so a `compare` with a skill variant shows lift.
+</Property>
+
+<Property name="flakeRate" type="number" optional>
+  The chance, from 0 to 1, that an attempt writes no files and replies `I ran out of ideas and left the workspace unchanged.`. Decided once per attempt, for realistic pass rates.
+</Property>
+
+<Property name="reasoning" type="string" optional>
+  A `reasoning` event at the start of every turn.
+</Property>
+
+<Property name="servedModel" type="string" optional>
+  The model the agent reports serving each turn, as a real harness reports its resolved variant (`composer-2.5[fast=true]`). It lands in each turn's `model` and the stack's `resolvedModels`. Unset, the agent reports none. A suffix such as `[effort=medium]` is the served reasoning effort.
+</Property>
+
+<Property name="effort" type="string" optional>
+  Reasoning effort to request, recorded on the cell as `effort`. Use `servedModel` for what the turn reports. Fast is not this. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+</Property>
+
+<Property name="tools" type="Array<{ tool, input, output, ok? }>" optional>
+  `tool` events the agent reports on every turn, before writing files. `ok` defaults to `true`.
+</Property>
+
+<Property name="delayMs" type="number" optional>
+  How long each turn takes. It honours the abort signal, so it's useful for testing timeouts; an aborted turn ends with status `aborted`.
+</Property>
+
+<Property name="ignoreAbort" type="boolean" optional>
+  Sits out `delayMs` even after a timeout or Ctrl-C, like an agent that doesn't stop when it's told to. For testing how your run behaves then: reeval waits 3 seconds, then records the turn as `aborted` and moves on.
+</Property>
+
+<Property name="failWith" type="string" optional>
+  Throws an infra error with this message before the first turn, to simulate a harness that doesn't start.
+</Property>
+
+<Property name="layout" type="'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex' | 'fx'" optional>
+  Behave like that agent without its key: its Docker image, rules file, skill directories and egress hosts. Without it, the fake reads `AGENTS.md` and `~/.agents/skills` and uses Cursor's image.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most fake attempts at once across the run.
+</Property>
+
+<Property name="startTimeout" type="Duration" optional>
+  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `fake: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+</Property>
+
+<Property name="startHangs" type="number | true" optional>
+  The first this many session starts of each attempt never become ready, even when aborted (`true`: every one), to test `startTimeout`.
+</Property>
+
+## Script steps
+
+Each step is an object with exactly one key:
+
+| Step | What it does | Reported as |
+|---|---|---|
+| `{ exec: 'npm test' }` | Runs the command in the sandbox, with the sandbox's variables (not the checks' secrets) | A `tool` event named `shell`, with stdout as its output |
+| `{ write: { 'a.js': '…' } }` | Writes the files | `file-edit` events |
+| `{ reply: 'Done.' }` | Sets the turn's final message, instead of `text` | The final `text` event |
+| `{ mcp: 'docs/search' }` | Starts the environment's stdio MCP server `docs` in the sandbox and calls its `search` tool with no arguments | A `tool` event named `mcp__docs__search` |
+| `{ error: 'Credit balance is too low' }` | Ends the turn there with `status: 'error'`, as a provider error would; later steps and `files` are skipped | An `error` event |
+
+An `mcp` step needs a stdio server of that name in the environment; anything else is an infra error for the attempt.
+
+## What a turn looks like
+
+Every turn starts with a `text` event `Working on: <prompt>`, then (when the environment gives any) `Loaded skills: …; mcp: …`, then the reasoning, tools, script and files. The config above produces this `transcript.jsonl`:
+
+```text
+{"ts":"2026-09-26T17:28:31.687Z","atMs":0,"turn":0,"type":"prompt","text":"Create greet.js."}
+{"turn":0,"ts":"2026-09-26T17:28:31.687Z","atMs":0,"type":"text","text":"Working on: Create greet.js.","durationMs":0}
+{"turn":0,"ts":"2026-09-26T17:28:31.687Z","atMs":0,"type":"tool","toolCallId":"call_1","tool":"shell","input":{"command":"ls"},"output":"","ok":true,"durationMs":4}
+{"turn":0,"ts":"2026-09-26T17:28:31.691Z","atMs":4,"type":"file-edit","toolCallId":"call_2","path":"greet.js","kind":"create","added":1,"removed":0,"durationMs":1}
+{"turn":0,"ts":"2026-09-26T17:28:31.692Z","atMs":5,"type":"text","text":"Wrote greet.js.","durationMs":0}
+{"ts":"2026-09-26T17:28:31.692Z","atMs":5,"turn":0,"type":"turn-end","status":"completed","durationMs":5}
+```
+
+## Skills
+
+| `placement` | Where the skill goes |
+|---|---|
+| `'harness'` (default) | Under `~/`, where the layout's adapter would put it (`~/.agents/skills` by default) |
+| `'workspace'` | The layout's workspace skill directory |
+
+Either way, the agent reports the skills in its `Loaded skills` line and switches to `withSkill`.
+
+## Errors
+
+| Mistake | Message |
+|---|---|
+| `script` not a list of lists | `fakeHarness({ script }) takes one list of steps per turn, e.g. script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]] (got …)` |
+| A bad step | `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string }, { mcp: '<server>/<tool>' } or { error: string } (got …)` |
+| A bad layout | `fakeHarness({ layout }) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx' (got …)` |
+| An unknown MCP server | `The fake agent's script calls MCP server "docs", which the environment doesn't have (it has none)` |
+| A remote MCP server | `The fake agent calls stdio MCP servers only; "docs" is http` |
+
+## Related
+
+- [fakeSandbox()](/reference/sandbox/fake)
+- [Judges](/reference/judges): `fakeJudge()`
+- [Writing evals](/guide/writing-evals)

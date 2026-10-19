@@ -1,0 +1,335 @@
+---
+title: Matchers
+description: The matchers reeval adds to expect, including transcript checks.
+---
+
+Import `expect` from `'reeval'`. Transcript checks read the in-memory
+events (no `await`). File, exec and judge checks stay on `expect` too.
+
+```ts title="evals/greet.eval.ts"
+import { evaluate, expect } from 'reeval'
+
+evaluate('creates a tested greet module', async (c) => {
+  const turn = await c.send('Create greet.js exporting greet(name).')
+  expect(turn).toHaveEdited('greet.js')
+  await expect(turn).toHaveFile('greet.js', /export/)
+  await expect(c.exec('node --check greet.js')).toSucceed()
+  expect(await c.judge('Is greet.js small and readable?')).toPass()
+})
+```
+
+`expect` has Vitest's matchers (from `@vitest/expect`), so `toBe`, `toContain`, `toMatch`, `toHaveLength`, `.not`, asymmetric matchers such as `expect.any(…)`, `expect.soft`, `expect.poll` and `expect.assertions(n)` work too. A failed matcher fails the attempt; a failed `expect.soft` fails it when the eval ends.
+
+`toHaveFile`, `toSucceed` and `.resolves`/`.rejects` are async. One you don't `await` still runs before the sandbox is torn down, but it fails the attempt, with its own failure or with `expect(…).toSucceed() wasn't awaited`.
+
+## Transcript matchers
+
+```ts
+expect(turnOrC).toHaveCalledSkill(name)
+expect(turnOrC).toHaveCalledMcp(server, tool, input?)
+expect(turnOrC).toHaveCalledTool(name, input?)
+expect(turnOrC).toHaveRun(command?)
+expect(turnOrC).toHaveEdited(path?)
+expect(turnOrC).toHaveSearched(query?)
+expect(turnOrC).toHaveFetched(url?)
+```
+
+<Property name="actual" type="Turn | AttemptContext">
+  A turn from `c.send()`, or `c` (every turn so far). Anything else throws
+  `toHaveCalledSkill() expects a turn from c.send(), or c`.
+</Property>
+
+Each matcher is synchronous. `.not` and `expect.soft` are Vitest's. File,
+exec and judge checks stay on `expect` as `toHaveFile`, `toSucceed` and
+`toPass`.
+
+`toHaveCalledSkill(name)` passes when a tool loaded that skill: `skill`,
+`Skill` or `load_skill` with `input.id` or `input.name` equal to `name`, or
+any tool whose target contains `skills/<name>/` (a Read or a `sed` of
+`SKILL.md`). That is "opened or loaded", not "followed".
+
+Keep a file or
+`c.exec` check for the outcome. A silent inject (skill text in the system
+prompt, no tool) cannot be asserted.
+
+`toHaveCalledMcp(server, tool, input?)` is the author path for MCP: a
+`type: 'tool'` event named `mcp__<server>__<tool>` after adapters and the
+normaliser. `server` and `tool` are the names you already own (`mcp.stamp`
+and `house_stamp`). Optional `input` is the same match as
+`toHaveCalledTool`. Copy-paste from a transcript still works:
+
+```ts
+expect(turn).toHaveCalledTool('mcp__stamp__house_stamp')
+expect(turn).toHaveCalledTool(/^mcp__stamp__/)
+```
+
+After adapters and the normaliser, that string is the same on every harness,
+with these exceptions:
+
+| Harness | Tool name |
+|---|---|
+| Claude Code | May call `ToolSearch` with `select:mcp__stamp__house_stamp` first, a different tool |
+| OpenCode, Goose | `acp_tool_<id>` if the first ACP update or Goose's `_meta` is missing |
+| fx | May call `mcp_select_tool` with `{ name: 'stamp.house_stamp' }` first, a different tool |
+| pi | `-` in a tool name becomes `_` (write `latest_version`); a hyphenated server is remapped when unambiguous |
+
+Goose, OpenCode, pi and Codex refuse `mcp.sse` at plan time; stdio MCP plans
+on all of them.
+
+`toHaveCalledTool(name, input?)` looks at `type: 'tool'` events only. `name`
+is an exact string or a RegExp. `input` is an optional substring, RegExp, or
+object matched against the recorded input.
+
+Successful `edit` / `write` /
+`delete` are `file-edit` events: use `toHaveEdited`, not
+`toHaveCalledTool('edit')`. Web tools are `web-search` / `web-fetch`: use
+`toHaveSearched` / `toHaveFetched`.
+
+`toHaveRun(command?)` matches `bash` or `shell` (the fake agent). Optional
+`command` is a substring or RegExp on `input.command`. This is the agent's
+command, not `c.exec`.
+
+`toHaveEdited(path?)` matches a `file-edit` whose path matches, or a tool
+whose target or output mentions the path (a shell edit). No argument: any
+`file-edit`.
+It reads the transcript, so `cat test/x` counts and a write from a
+subprocess doesn't: for anti-tamper, use [`toHaveChanged`](#tohavechanged).
+
+```ts title="evals/activation.eval.ts"
+import { evaluate, expect } from 'reeval'
+
+evaluate('uses the house skill and stamps', async (c) => {
+  const turn = await c.send(
+    'Use the house-greeting skill, then call house_stamp.',
+  )
+
+  expect(turn).toHaveCalledSkill('house-greeting')
+  expect(turn).toHaveCalledMcp('stamp', 'house_stamp')
+  expect(c).toHaveRun(/echo contract/)
+  expect(turn).toHaveEdited('greet.js')
+
+  await expect(c).toHaveFile('greet.js', /Ahoy/)
+  await expect(c.exec('node --test')).toSucceed()
+})
+```
+
+```text
+expected skill-like calls matching house-greeting, got ["skill:other"]
+```
+
+```text
+expected MCP calls matching stamp/other, got ["stamp/house_stamp"]
+```
+
+```text
+expected tool calls matching mcp__stamp__other, got ["mcp__stamp__house_stamp"]
+```
+
+<Warning>
+  `toHaveCalledTool('edit')` and `toHaveCalledTool('webSearch')` miss real
+  edits and web calls. The normaliser rewrites those to `file-edit` and
+  `web-*`.
+</Warning>
+
+## toHaveChanged
+
+```ts
+expect(turnOrC).toHaveChanged(paths?)
+```
+
+<Property name="actual" type="Turn | AttemptContext">
+  A turn from `c.send()` (the workspace up to that turn), or `c` (up to its
+  latest turn; before any turn, nothing has changed). Anything else throws
+  `toHaveChanged() expects a turn from c.send(), or c`.
+</Property>
+
+<Property name="paths" type="string | RegExp | Array<string | RegExp>" optional>
+  Workspace-relative globs (`*`, `**`, `{a,b}`, dotfiles included) or
+  RegExps, matched against each changed file's path. A glob also matches
+  every file under the directory it names, so `test` is `test/**`. Without
+  it, any change passes.
+</Property>
+
+It reads `turn.diff.files`: the workspace against the snapshot taken after
+setup. That covers every write, whether a tool, a shell command or a
+subprocess made it, so it's the guard for files the agent must leave alone.
+Files the environment's `.gitignore` ignores aren't in the diff.
+
+```ts title="evals/fix-test.eval.ts"
+import { evaluate, expect } from 'reeval'
+
+evaluate('fixes greet without touching its test', async (c) => {
+  const turn = await c.send('Make the failing greet test pass.')
+  expect(c).not.toHaveChanged(['tsconfig.json', 'biome.json', 'test/**'])
+  expect(turn).toHaveChanged('src/greet.ts')
+  await expect(c.exec('npm test')).toSucceed()
+})
+```
+
+It's synchronous: no `await`. Failure messages list the files it saw, with
+their status (`added`, `modified` or `deleted`):
+
+```text
+expected no changes to test/**, got ["test/greet.test.js" (modified)]
+```
+
+```text
+expected changes to src/greet.ts, got none
+```
+
+## toHaveFile
+
+```ts
+await expect(turnOrT).toHaveFile(path, pattern?)
+```
+
+<Property name="actual" type="Turn | AttemptContext">
+  A turn from `c.send()`, or `c` itself. Both read the sandbox as it is now.
+</Property>
+
+<Property name="path" type="string">
+  Workspace-relative, or `~/` for the home directory.
+</Property>
+
+<Property name="pattern" type="RegExp | string" optional>
+  What the file must contain. A string matches when the file includes it; a `RegExp` when it matches. Without it, the file only has to exist.
+</Property>
+
+It's async, so `await` it. Failure messages:
+
+```text
+expected file greet.js to exist
+```
+
+```text
+expected greet.js to match /welcome/
+--- greet.js ---
+<the file's last 20 lines>
+```
+
+Anything else as `actual` throws `toHaveFile() expects a turn from c.send(), or c`.
+
+## toSucceed
+
+```ts
+await expect(c.exec(command)).toSucceed()
+```
+
+<Property name="actual" type="Promise<ExecResult> | ExecResult">
+  What `c.exec()` or `turn.exec()` returns, awaited or not. It passes when `exitCode` is 0.
+</Property>
+
+It's async, so `await` it. On failure it shows the tail (last 20 lines, at most 2,000 characters) of both streams; the whole output is in the attempt's check log. Any failure's text is capped at 16 KB on screen and in the record, keeping its start and its end:
+
+```text
+expected command to succeed, exit code 1
+--- stderr ---
+…
+--- stdout ---
+…
+```
+
+Anything else throws `toSucceed() expects run.exec(...)`.
+
+## toPass
+
+```ts
+expect(await c.judge(question)).toPass()
+```
+
+<Property name="actual" type="Verdict">
+  A verdict from `c.judge()`. It passes when the verdict is `pass`: the score is at least the threshold.
+</Property>
+
+It's synchronous: await the judge, not the matcher. Failure messages:
+
+```text
+judge score 0.95 is below 0.99 for "Is greet.js small and readable?" (fake)
+```
+
+With `.not`, a passing verdict fails with `expected judge to fail: score … ≥ …`. A [failed call](/reference/judges#failed-calls) fails both ways, with `judge failed for "…" (model): <error>`. Anything but a verdict throws `toPass() expects a c.judge() verdict`.
+
+## toHaveSearched and toHaveFetched
+
+```ts
+expect(turn).toHaveSearched(query?)
+expect(turn).toHaveFetched(url?)
+```
+
+<Property name="actual" type="Turn | AttemptContext">
+  A turn from `c.send()`, or `c`. Anything else throws
+  `toHaveSearched() expects a turn from c.send(), or c`.
+</Property>
+
+<Property name="query / url" type="string | RegExp" optional>
+  A substring or a RegExp matched against each `web-search` event's `query`, or each `web-fetch` event's `url`, in the turn's transcript. Without it, any search or fetch passes. A refused search (`ok: false`) still matches: the agent tried.
+</Property>
+
+A real Cursor run:
+
+```ts title="evals/web.eval.ts"
+import { evaluate, expect } from 'reeval'
+
+evaluate('looks up the latest Node.js LTS', async (c) => {
+  const turn = await c.send(
+    'Search the web for the current Node.js LTS line and tell me its name.',
+  )
+
+  expect(turn).toHaveSearched(/node/i)
+  expect(turn).not.toHaveFetched('example.com')
+})
+```
+
+```text
+[looks#1 cursor] ✓ evals/web.eval.ts › looks up the latest Node.js LTS  16s
+[looks#1 cursor]  +0:00 sandbox ready 1s
+[looks#1 cursor]  +0:01 turn 1 done 14s · 1 tool call, 0 file edits
+```
+
+The search it matched, from the attempt's `transcript.jsonl`:
+
+```text
+{"turn":0,"ts":"2026-09-26T18:01:03.610Z","atMs":4494,"durationMs":7096,"type":"web-search","toolCallId":"tool_25149535-3dd1-49a6-8027-0d896edbed2","query":"Node.js LTS release line 2025 2026 current","references":2}
+```
+
+Both are synchronous: no `await`. They fail with the events they saw (`expected web searches matching /node/i, got none`), and with `.not`, `expected no web fetches matching example.com, got ["https://example.com/"]`.
+
+A harness may not be able to report web events for a turn: then the turn lists them in `turn.unreported`, and both matchers throw `HarnessCapabilityError` (exported from `'reeval'`), negated or not, instead of passing or failing on nothing:
+
+```text
+toHaveFetched() can't check this turn: its harness doesn't report web fetches ('web-fetch' is in turn.unreported), so the agent may have made them with no event. Check the reply or files instead, or use a harness that reports them.
+```
+
+Cursor's SDK leaves web calls out of its stream; reeval's adapter recovers them after each turn from the agent's stored conversation, so a Cursor turn is `unreported` only when that recovery failed.
+
+## Labels
+
+```ts
+await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)
+await expect(c.exec(greetAda), 'house greeting').toSucceed()
+```
+
+`expect`'s second argument labels the check, as in Vitest: a failure reads `house greeting: expected command to succeed, exit code 1`. Every matcher call an attempt makes is recorded under `evals[].attempts[].assertions`, with its label, matcher, status (`pass`, `fail` or `error`), whether it was soft, and its message when it didn't pass.
+
+| Call | Recorded label |
+|---|---|
+| `expect(c, 'exports greet').toHaveFile(…)` | `exports greet` |
+| `expect(c).toHaveFile('greet.js')` | `toHaveFile greet.js` |
+| `expect(x).not.toBe(3)` | `not.toBe 3` |
+| `expect(c.exec(cmd)).toSucceed()` | `toSucceed <the command>` |
+| `expect(await c.judge(q)).toPass()` | `toPass <the question>` |
+| The same label twice in one attempt | `toHaveFile greet.js #2` |
+
+A label without one is the matcher and its first argument (or what it checks), cut at 60 characters. A matcher that can't answer (`HarnessCapabilityError`, or a wrong kind of `actual`) is `error`, not `fail`. A hard failure ends the attempt, so the checks after it aren't recorded on it; in a compare they count as not run.
+
+`expect.poll(…)` records one entry with its final outcome. `expect.assertions(n)`, `expect.hasAssertions()`, `expect.assert` and Chai property chains such as `.to.be.true` aren't recorded. A compare tallies each label per side: see [which checks made the difference](/guide/compare#which-checks-made-the-difference).
+
+<Info>
+  The label is part of the eval's source, so adding or changing one changes the eval's fingerprint and starts its history afresh.
+</Info>
+
+## Related
+
+- [The attempt context](/reference/attempt-context)
+- [Judges](/reference/judges)
+- [Writing evals](/guide/writing-evals)

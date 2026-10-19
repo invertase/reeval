@@ -2119,6 +2119,26 @@ export const features: Feature[] = [
       assert.equal(readFileSync(join(project, '.reeval/current'), 'utf8').trim(), SEEDED_RUN_ID)
     },
   },
+  {
+    dir: 'dogfood/mcp-debugging-oracle',
+    tiers: ['fake'],
+    env: 'check-path',
+    canary: /names the cause/,
+  },
+  {
+    dir: 'dogfood/skill-oracle',
+    tiers: ['fake'],
+    env: 'cli',
+    canary: /never asks the judge/,
+    prepare: (dir) => {
+      const repo = join(testDir, '..', '..', '..')
+      execFileSync('node', [join(repo, 'evals/_support/skill/scripts/vendor.mjs')], {
+        cwd: repo,
+        stdio: 'inherit',
+      })
+      cpSync(join(repo, 'evals/_support/skill/vendor'), join(dir, 'vendor'), { recursive: true })
+    },
+  },
 ]
 
 /** Paths under `dir` whose content includes `needle`, one per line; '' when none do. */

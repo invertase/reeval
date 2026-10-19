@@ -2045,4 +2045,16 @@ export const inventory: InventoryFeature[] = [
     name: 'The packed package installs into a clean project and runs',
     tests: ['reeval/test/pack.test.ts › the packed package installs into a clean project'],
   },
+  {
+    id: 'dogfood.mcp-oracle',
+    area: 'CLI and runner',
+    name: 'Dogfood mcp-debugging eval checks (oracle gate)',
+    fixtures: ['dogfood/mcp-debugging-oracle'],
+  },
+  {
+    id: 'dogfood.skill-oracle',
+    area: 'CLI and runner',
+    name: 'Dogfood skill authoring eval checks (oracle gate)',
+    fixtures: ['dogfood/skill-oracle'],
+  },
 ]

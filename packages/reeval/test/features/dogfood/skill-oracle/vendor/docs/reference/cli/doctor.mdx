@@ -1,0 +1,111 @@
+---
+title: reeval doctor
+description: Check that a project is ready to run, with a fix for every problem.
+---
+
+`reeval doctor` checks what `reeval run` needs, without running anything, and prints the fix for each problem. It exits 0 when nothing failed and 1 when something did.
+
+```bash
+npx reeval doctor
+npx reeval doctor --online --json
+```
+
+## Flags
+
+[//]: # (generated:cli-help:doctor)
+
+```text
+reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
+                              images, each harness's and the judge's key, egress, .gitignore and
+                              keys in .env files git sees; exit 1 on a problem, each with its
+                              fix. Never prints a key
+  --online                    Also try each key with one tiny authenticated request
+  --json                      The checks as JSON
+```
+
+[//]: # (/generated:cli-help:doctor)
+
+## Output
+
+A real run in a project from `reeval init --yes`, before Docker was started or a key was set:
+
+```text
+reeval doctor · reeval.config.ts
+✓ runtime    node 22.14.0 (reeval needs Node >=22.13)
+✓ config     reeval.config.ts: harness cursor:composer-2.5, sandbox docker, profiles fake, pr, nightly
+✗ docker     isn't running, and the config's sandboxes need it
+             fix: start Docker Desktop, or the Docker service (sudo systemctl start docker)
+- image      Docker isn't running
+✗ key        CURSOR_API_KEY for cursor:composer-2.5: not set
+             fix: add CURSOR_API_KEY=... to .env.local
+- judge      no judge model (c.judge needs one)
+✓ egress     allow-all: the agents reach any host (the default); evals and environments may set their own
+✓ gitignore  .env* and .reeval/ are ignored
+
+2 problems, 0 warnings. Fix them and run reeval doctor again.
+```
+
+`✓` passed, `!` is a warning (exit 0), `✗` is a problem (exit 1), and `-` was skipped.
+
+## Checks
+
+| Check | Problem (`✗`) | Warning (`!`) |
+|---|---|---|
+| `runtime` | Node, or the Node version Bun or Deno provides, is older than the package's `engines` | |
+| `config` | No `reeval.config.*` here or above, or it doesn't load | |
+| `docker` | Not running, or running Windows containers, when a sandbox in the config or a profile is `docker()` | Under 4 GB of memory, one attempt's default limit |
+| `image` | reeval's sandbox image for a configured harness isn't built, or a `docker({ image })` isn't in Docker | Images for this harness from another reeval version |
+| `key` | A config harness's key isn't set, has whitespace in it, or (`--online`) its API rejects it | A key only a profile's harness needs isn't set; `--online` couldn't reach the API |
+| `judge` | The judge model's key isn't set | The same, for a profile's judge |
+| `egress` | A sandbox can't enforce its policy, such as a restricted policy on `fakeSandbox()` | |
+| `gitignore` | `.env*` isn't ignored | `.reeval/` isn't ignored |
+| `env-files` | | A `.env` or `.env.*` file git doesn't ignore, such as `.env.example`, sets a `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*CREDENTIAL*` variable to a value that isn't empty or a placeholder (`<key>`, `your-key-here`, `${KEY}`, `xxx`). Shown only when git sees such a file |
+
+## Docker on each platform
+
+reeval's sandboxes are Linux containers. The `docker` check's fix names what your platform needs:
+
+| Platform | Docker isn't running | Docker runs Windows containers |
+|---|---|---|
+| Linux | `start Docker Desktop, or the Docker service (sudo systemctl start docker)` | |
+| macOS | `start Docker Desktop (or another Docker engine, such as OrbStack or Colima)` | |
+| Windows | `install or start Docker Desktop with the WSL 2 backend and Linux containers (…)` | `switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers), on the WSL 2 backend` |
+
+Keys come from the environment and the `.env.local` and `.env` beside the config, as `reeval run` reads them. `reeval doctor` names each key but never prints its value, in text or JSON.
+
+When images are missing and `reeval doctor` runs in a terminal, it offers to build them with `reeval image build`.
+
+## --online
+
+```text
+✗ key        CURSOR_API_KEY for cursor:composer-2.5: set, but api.cursor.com rejects it (HTTP 401)
+             fix: set a valid CURSOR_API_KEY in .env.local
+```
+
+With `--online`, each key goes in one request to its API, only in a header: `GET /v0/me` on `api.cursor.com`, `GET /v1/models` on `api.anthropic.com`, `GET /v1beta/models` on `generativelanguage.googleapis.com` and `GET /v1/models` on `api.openai.com`. HTTP 401 or 403 is a problem. Other keys, such as `TYPESAFE_AI_API_KEY`, are only checked for being set.
+
+## --json
+
+```json
+{
+  "healthy": false,
+  "problems": 2,
+  "warnings": 1,
+  "config": "reeval.config.ts",
+  "checks": [
+    {
+      "id": "runtime",
+      "status": "ok",
+      "summary": "node 22.14.0 (reeval needs Node >=22.13)"
+    },
+    …
+  ]
+}
+```
+
+`status` is `ok`, `warn`, `fail` or `skip`; a check with a fix has `fix`.
+
+## Related
+
+- [reeval init](/reference/cli/init): scaffolds a project that passes these checks, once Docker runs and the key is set
+- [Your first real run](/guide/first-real-run): Docker, the image and keys

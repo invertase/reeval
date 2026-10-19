@@ -1,0 +1,152 @@
+---
+title: Sizing runs
+description: Size runs with pr and nightly profiles, check the plan with --dry-run, and cap runs with budgets.
+---
+
+A PR run should be quick and cheap, and a nightly run thorough. Profiles size a run without touching the eval files:
+
+```ts title="reeval.config.ts"
+export default defineConfig({
+  // …
+  defaultProfile: { ci: 'pr' },
+  profiles: {
+    pr: {
+      limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] },
+      budget: { attempts: 20 },
+    },
+    nightly: {
+      defaults: { runs: 3 },
+      record: 'always',
+      budget: { attempts: 80, duration: '2h' },
+    },
+  },
+})
+```
+
+This is `examples/hello`'s config. `pr` runs every cell once, drops compare variants and keeps only Cursor. `nightly` runs each eval three times, unless the eval says otherwise.
+
+## Choose a profile
+
+```bash
+npx reeval run --profile nightly
+REEVAL_PROFILE=nightly npx reeval run
+CI=1 npx reeval run               # defaultProfile.ci: pr
+npx reeval image build --profile nightly   # the images nightly's plan needs
+```
+
+`--profile` wins, then `REEVAL_PROFILE`, then `defaultProfile.ci` when `CI` is set (or `defaultProfile.local` when it isn't). With none of those, no profile applies. The plan line says which profile ran and why, and the record keeps it.
+
+`reeval image build --profile nightly` picks the profile the same way, so a profile whose `defaults` change the harness or sandbox gets its images built before the run.
+
+## Defaults fill in, limits narrow
+
+| Key | Sits | Does |
+|---|---|---|
+| `defaults` | Under groups and evals | Fills in what an eval doesn't set: `runs`, `harness`, `judge`, `egress`, … |
+| `limit.runs` | Over every eval | Caps runs per cell |
+| `limit.compare` | Over every eval | `false` runs the control only; `{ maxVariants: n }` keeps the first n |
+| `limit.harness` | Over every eval | Keeps only these harness ids; an eval left with none is skipped |
+
+An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it, and `--runs` on the command line beats both.
+
+A profile can also set a default `judge`, when to `record`, and `tags` filters like `--tag`.
+
+## Pin what a profile can't change
+
+```ts title="evals/skill.eval.ts"
+group(
+  'house greeting',
+  {
+    compare: { baseline: plain, variants: [withHouseGreeting] },
+    pin: ['compare'],
+  },
+  () => { /* … */ },
+)
+```
+
+Without its variant, the house-greeting eval means nothing, so it pins `compare`. `pin` takes `harness`, `runs` and `compare`, the keys a `limit` narrows.
+
+## Check the plan first
+
+```bash
+CI=1 npx reeval run --dry-run
+```
+
+```text
+plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
+eval                                                              harnesses  variants  runs  attempts  notes
+evals/brokering.eval.ts › the agent authenticates without seeing…   1          —         1     1
+…
+evals/hello.eval.ts › greet module › creates a tested greet module  1          —         1     1
+evals/hello.eval.ts › greet module › adds a default name in a…      1          —         1     1
+…
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         1     2         pinned: compare
+evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
+```
+
+`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed. The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history.
+
+```bash
+npx reeval run --dry-run --profile nightly
+```
+
+```text
+plan  profile nightly (--profile) · 18 evals · 19 cells · 57 attempts · ~171m 00s serial (~42m 45s at concurrency 4) · budget 80 attempts ✓, 2h
+…
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         3     6
+evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         3     3
+hint: 18 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+```
+
+`--dry-run --json` prints the same plan as one JSON document, with every cell.
+
+## Cap a run with a budget
+
+```bash
+npx reeval run --config reeval.fake.config.ts --profile smoke --runs 20
+```
+
+```text
+plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · ~13s serial (~3s at concurrency 4) · budget 12 attempts ✗
+…
+reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
+```
+
+reeval checks `budget.attempts` against the plan before anything starts; over it, `reeval run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run ends with status `budget` (exit 1).
+
+When the run records (`--record`, `record: 'always'`, or in CI), it's recorded with that status, and `reeval compare` never takes it as a base.
+
+There's no cost or token budget. `budget: { usd: 5 }` stops the run before it starts:
+
+```text
+reeval: budget.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.
+```
+
+`cursor()`, `claudeCode()`, `antigravity()`, `pi()`, `codex()` and `fx()` report tokens (`opencode()` and `goose()` can't), and the summary prints the total, but reeval has no model prices to turn them into a cost.
+
+## Write the config as YAML
+
+```yaml title="reeval.yaml"
+defaultProfile: { ci: pr }
+profiles:
+  pr:
+    limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] }
+    budget: { attempts: 20 }
+  nightly:
+    defaults: { runs: 3 }
+    record: always
+    budget: { attempts: 80, duration: 2h }
+```
+
+A project without TypeScript can put the same config in `reeval.yaml`, with profiles and `--profile` working the same way. Harnesses, secrets and environments are written as data; see [reeval.yaml](/reference/config#reevalyaml).
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="History" icon="database" href="/guide/history">
+    Record runs in git, then compare them.
+  </Card>
+  <Card title="Options and inheritance" icon="layer-group" href="/concepts/options">
+    How config, profiles, groups and evals combine.
+  </Card>
+</CardGroup>

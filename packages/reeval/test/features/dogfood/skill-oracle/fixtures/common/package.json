@@ -1,0 +1,9 @@
+{
+  "name": "agent-evals",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "reeval": "file:vendor/reeval.tgz",
+    "typescript": "7.0.2"
+  }
+}

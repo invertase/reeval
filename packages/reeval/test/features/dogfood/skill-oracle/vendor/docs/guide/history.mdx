@@ -1,0 +1,161 @@
+---
+title: History
+description: Record runs into git, then track evals over time with reeval history, reeval compare and reeval show.
+---
+
+A scratch run in `.reeval/runs/` is gone when you clean up. Recording it copies it into the history folder, as files you commit like any other change.
+
+```bash
+npx reeval run hello --record
+```
+
+```text
+…
+ Results  .reeval/runs/20260926T174005Z_b010670_ada-lovelace_xdb9/summary.md
+recorded evals/.history/20260926T174005Z_b010670_ada-lovelace_xdb9.json + 9 artifact files in evals/.history/20260926T174005Z_b010670_ada-lovelace_xdb9/ (32.7 KB). Commit it with git.
+```
+
+`reeval record` does the same after the fact, for the latest run or the runs you name. reeval never commits or pushes; you do.
+
+## Commit the history folder
+
+```bash
+git add evals/.history
+git commit -m "Record eval run"
+```
+
+```text
+evals/.history/
+  .gitignore                                        un-ignores recorded files
+  20260926T174005Z_b010670_ada-lovelace_xdb9.json    the record
+  20260926T174005Z_b010670_ada-lovelace_xdb9/        its artifacts
+    summary.md
+    <eval>/<cell>/<n>/                              transcript, diff, checks, judge input
+```
+
+A project `*.log` would drop `setup.log` and `checks/<n>.log`. `reeval record` writes
+`.gitignore` in the history folder to keep them. If git still ignores a file it wrote, it
+warns and names the rule.
+
+The history folder is `.history/` next to your evals. File names start with the UTC start time, so the listing is the history, and two branches that record runs merge without conflicts. A record is never edited once written.
+
+<Warning>
+  `reeval record` refuses any file that still looks like a secret after redaction, naming the file, the line and the rule. A patch of your uncommitted changes that looks like it holds one is left out of the record instead. Fix the leak rather than skipping the scan.
+</Warning>
+
+## Record automatically
+
+```ts title="reeval.config.ts"
+export default defineConfig({
+  record: 'ci',                         // the default
+  history: { artifacts: 'failures' },   // 'all' by default
+  // …
+})
+```
+
+`record: 'ci'` records every run when `CI` is set, `'always'` records every run, and `'manual'` only with `reeval record` or `--record`. A profile can set its own, as `nightly` does in `examples/hello`. `history.artifacts` keeps every attempt's artifacts, only failing ones', or none.
+
+## See each eval over time
+
+```bash
+npx reeval history
+```
+
+```text
+7 runs, oldest → newest: 20260926T174005Z_b010670_ada-lovelace_xdb9 (b010670) … 20260926T174444Z_b010670_ada-lovelace_7gmj (b010670)
+
+  ✓·✓✓·✓✓    5/5  evals/hello.eval.ts › greet module › creates a tested greet module
+  ✓·✓✓·✓✓    5/5  evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
+  ·✓····✓    2/2  evals/skill.eval.ts › house greeting › greets in the house style
+  ··✓·✓··    2/2  evals/jq.eval.ts › summarises a JSON file with jq
+…
+
+✓ pass  ✗ fail  ! infra error  ↓ skipped  · not run  ¦ eval or stack changed
+```
+
+One column per recorded run, oldest first. A `¦` marks where an eval's code or stack changed, so a new failure after it may not be a regression. `--all` adds unrecorded scratch runs, and `--json` prints the data.
+
+The studio's eval page shows the same history, with each attempt one click away:
+
+<Image src="/assets/studio/eval-history.png" alt="The studio's eval history page, one row per run with pass rates and fingerprint change marks" width={800} />
+
+## Compare two runs
+
+```bash
+npx reeval compare
+```
+
+```text
+base 20260926T174239Z_b010670_ada-lovelace_yzmg (b010670) → head 20260926T174444Z_b010670_ada-lovelace_7gmj (b010670)
+0 regressed · 0 fixed · 0 not comparable · 2 same
+
+  · → ✓  new                       evals/skill.eval.ts › house greeting › greets in the house style
+  ✓ → ✓  same                      evals/hello.eval.ts › greet module › creates a tested greet module · cells added: cursor:composer-2.5/-/docker
+      antigravity:gemini-3.8-flash-medium/-/docker  tools 15 → 12.5 (×0.83) · agent 36s → 40s (×1.11)
+  ✓ → ✓  same                      evals/hello.eval.ts › greet module › adds a default name in a follow-up turn · cells added: cursor:composer-2.5/-/docker
+      antigravity:gemini-3.8-flash-medium/-/docker  tools 49 → 25 (×0.51) · agent 2m 00s → 1m 05s (×0.54)
+```
+
+`reeval compare` takes a base and a head run. With none, it diffs the latest run against its nearest recorded ancestor in git. Each eval is `regressed`, `fixed`, `same`, `new`, `removed` or `not comparable`.
+
+Not comparable means something the eval depends on changed, such as its file, a helper it imports, the image or the judge, and the line says which. Under a cell in both runs, a line shows how its effort changed: here Antigravity needed half the tool calls in the second run.
+
+<Image src="/assets/studio/compare.png" alt="The studio's compare page, listing evals as regressed, fixed or not comparable between two runs" width={800} />
+
+```bash
+npx reeval compare --md                   # a Markdown table for a PR comment
+npx reeval compare --fail-on-regression   # exit 1 if anything regressed
+```
+
+`reeval analyze` reads the same pair of runs and explains the difference in plain words. [Analysis](/guide/analysis) covers it.
+
+## Show one run
+
+```bash
+npx reeval show
+```
+
+```text
+run 20260926T174444Z_b010670_ada-lovelace_7gmj  12 passed · 4 missed, not gated (16 attempts, 3 evals)
+  started 2026-09-26T17:44:44.497Z  (2m 39s) · artifacts all
+
+  Executed at   b01067008011 on master, clean (the commit that adds this record is later)
+  Lockfiles     pnpm-lock.yaml 44e42fe13bac
+  Images        reeval-sandbox:antigravity-0.1.0 · id e0aaebf3ef65 · no registry digest (built locally) · CLI 1.2.11; reeval-sandbox:cursor-0.1.0 · id a987bc712d5b · no registry digest (built locally) · CLI @cursor/sdk 1.0.32
+  Harnesses     antigravity:gemini-3.8-flash-medium (model gemini-3.8-flash-medium), cursor:composer-2.5 (model composer-2.5)
+  Environments  with-house-greeting 92311eb08048 · skills house-greeting
+  Judge         google/gemini-3.8-flash (served gemini-3.8-flash) · threshold 0.8 · version e0f032315413
+…
+```
+
+`reeval show` prints the state a run ran in, the latest by default: the commit, lockfiles, images, harnesses, environments and judge. Here that's the cross-agent run from [Harnesses](/guide/harnesses).
+
+`--md` prints its `summary.md`, and `--json` the record. A run is `latest`, `latest~N`, a run id or a unique prefix, or a git SHA prefix.
+
+## Reproduce a run
+
+```bash
+npx reeval checkout latest
+```
+
+```text
+checked out b3ccaa3613e1 into .reeval/checkouts/20260926T171355Z_b3ccaa3_cursor-agent_dw8v and applied worktree.patch.
+Remove it with: git worktree remove .reeval/checkouts/20260926T171355Z_b3ccaa3_cursor-agent_dw8v
+```
+
+`reeval checkout` makes a git worktree at the commit the run executed at. If the run had uncommitted changes, the record saved them as `worktree.patch`, and checkout applies it. A run recorded without its patch (too large, `--artifacts none`, or it looked like it held a secret) checks out as the commit alone, and says so:
+
+```text
+checked out 161d9a9f93d7 into .reeval/checkouts/20260930T165638Z_161d9a9_ada-lovelace_vkcv, without the run's uncommitted changes: they weren't saved (not kept: it looked like it held a secret (.env.example line 3: Google API key)).
+```
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="The studio" icon="chart-line" href="/guide/studio">
+    Browse runs, cells, transcripts and diffs.
+  </Card>
+  <Card title="Fingerprints and drift" icon="code-compare" href="/concepts/fingerprints">
+    What makes two runs comparable.
+  </Card>
+</CardGroup>

@@ -1,0 +1,230 @@
+---
+title: Suites of cases
+description: Run one eval body over a list of cases with evaluate.each, and read one pooled result for the whole suite.
+---
+
+**Goal:** check the same kind of task over many inputs, and get one answer for the suite rather than one per input.
+
+`evaluate.each(cases)` registers one eval per case. Each gets its own name, id, cells and history, and the body receives the case as its second argument. With two or more cases, reeval pools them into a family: one pass rate over the cases and, with `compare`, one paired lift.
+
+## The file
+
+```ts title="evals/strings.eval.ts"
+import { evaluate, expect } from 'reeval'
+
+const cases = [
+  { fn: 'slugify', input: 'Hello World', want: 'hello-world' },
+  { fn: 'camelCase', input: 'hello big world', want: 'helloBigWorld' },
+  { fn: 'titleCase', input: 'hello world', want: 'Hello World' },
+]
+
+evaluate.each(cases)('writes $fn', async (c, item) => {
+  await c.send(
+    `Create ${item.fn}.js exporting ${item.fn}(text) as an ES module. ` +
+      'Add a package.json with "type": "module". No dependencies.',
+  )
+  const run = await c.exec(
+    `node -e "import('./${item.fn}.js')` +
+      `.then((m) => console.log(m.${item.fn}('${item.input}')))"`,
+  )
+  await expect(run).toSucceed()
+  expect(run.stdout.trim()).toBe(item.want)
+})
+```
+
+`$fn` in the name becomes each case's `fn`, so the three evals are `writes slugify`, `writes camelCase` and `writes titleCase`. The family is named by the template, `writes $fn`.
+
+## Run it
+
+```bash
+npx reeval run strings --dry-run
+```
+
+```text
+plan  3 evals · 3 cells · 3 attempts · ~3s serial (~1s at concurrency 4)
+eval                                harnesses  variants  runs  attempts  notes
+evals/strings.eval.ts › writes $fn  1          —         1     3         3 cases · pooled pass rate
+```
+
+The plan shows the family as one row. Under the [fake harness](/recipes/fake-harness), with a config whose `titleCase.js` joins words with `_`:
+
+```text
+Summary
+ evals/strings.eval.ts
+   ✗ writes $fn  3 cases
+       ✓ slugify  ✓ camelCase  ✗ titleCase
+       pass@1 2/3 · 67% (95% 21…94)
+…
+Families  1 passed (1)
+   Evals  2 passed · 1 failed (3)
+```
+
+Each case still passes or fails on its own, and a failed case fails the run as before. The family's row adds the pooled pass rate with its 95% interval, so you read the suite once. A filter matches the generated names: `reeval run camelCase` runs one case, and the plan says `1 of 3 cases`.
+
+## Compare across the cases
+
+A compare on an `evaluate.each` measures one lift over every case, paired by case. Each case runs the control and the variant, so a case where both pass (or both fail) cancels out, and the cases where they disagree decide.
+
+```ts title="evals/greetings.eval.ts"
+import { evaluate, expect } from 'reeval'
+import { plain, withHouseGreeting } from './environments.ts'
+
+const names = ['Ada', 'Grace', 'Linus', 'Margaret', 'Dennis', 'Barbara']
+
+evaluate.each(names)(
+  'greets %s in the house style',
+  {
+    compare: {
+      baseline: plain,
+      variants: [withHouseGreeting],
+      minLift: 0.2,
+    },
+  },
+  async (c, name) => {
+    await c.send('Create greet.js exporting greet(name) in our house style.')
+    const check = `m.greet('${name}') === 'Ahoy, ${name}!' ? 0 : 1`
+    const run = `import('./greet.js').then((m) => process.exit(${check}))`
+    await expect(c.exec(`node -e "${run}"`)).toSucceed()
+  },
+)
+```
+
+```text
+Summary
+ evals/greetings.eval.ts
+   ✓ greets %s in the house style  6 cases · paired
+       ✓ Ada  ✓ Grace  ✓ Linus  ✓ Margaret  ✓ Dennis  ✓ Barbara
+       fake/with-house-greeting/fake  pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031) (minLift 20)
+         effort: agent time ×0.60 per case (noise, signed-rank p 0.094)
+
+Expected misses, not gated (6)
+ ○ evals/greetings.eval.ts › greets %s in the house style  6 attempts on fake/plain/fake
+
+Families  1 passed (1)
+```
+
+Six cases at `runs: 1` give a verdict that six separate evals can't: one attempt a side is always within noise. `minLift` gates the pooled lift's lower bound, not each case's. Below it (here with `minLift: 0.6`), the family fails the run with exit 1:
+
+```text
+   ✗ greets %s in the house style  6 cases · paired
+       ✓ Ada  ✓ Grace  ✓ Linus  ✓ Margaret  ✓ Dennis  ✓ Barbara
+       fake/with-house-greeting/fake  pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031) (minLift 60 ✗)
+…
+Lift below minLift (1)
+ ✗ evals/greetings.eval.ts › greets %s in the house style  fake/with-house-greeting/fake pooled pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031): its lower bound is below minLift 60
+
+Families  1 failed (1)
+```
+
+<Info>
+  At `runs: 1` the lift uses Newcombe's paired interval and McNemar's exact test; with more runs it's a t interval over each case's pass-rate difference. Fewer than six discordant cases (or six cases, with runs) reads `insufficient`. [Lift](/concepts/lift) has the details.
+</Info>
+
+## Name placeholders
+
+| Placeholder | Becomes | Example name |
+|---|---|---|
+| `$key` | That property of an object case; left as is when the case has no such key | `'writes $fn'` → `writes slugify` |
+| `%s` | A string case as is; any other case as JSON | `'documents install with %s'` → `documents install with pnpm` |
+| `%#` | The case's index, from 0 | `'case %#'` → `case 0` |
+
+```ts title="evals/managers.eval.ts"
+import { evaluate, expect } from 'reeval'
+
+evaluate.each(['npm', 'pnpm', 'yarn'])(
+  'documents install with %s',
+  { tags: ['docs'] },
+  async (c, pm) => {
+    const turn = await c.send(
+      `Write INSTALL.md explaining how to install lodash with ${pm}.`,
+    )
+    await expect(turn).toHaveFile('INSTALL.md', new RegExp(`${pm} (add|i)`))
+  },
+)
+```
+
+Options go between the name and the body, as with `evaluate`, and apply to every case.
+
+<Warning>
+  Give every case a distinct name; a repeated name is a usage error. Avoid `%#` as the only difference too: reordering the list renames the evals and starts their history again. Renaming the template starts the family's history again.
+</Warning>
+
+## Independent cases
+
+```ts title="evals/managers.eval.ts"
+evaluate.each(['npm', 'pnpm'], { pool: false })(
+  'adds lodash with %s',
+  async (c, pm) => {
+    await c.send(`Add lodash to this project with ${pm}.`)
+  },
+)
+```
+
+`{ pool: false }`, beside the cases, keeps them separate evals: no family row, no pooled rate, and each case's `minLift` gates its own lift. Use it when the cases aren't one population, such as tasks of different kinds that happen to share a body.
+
+## Checks per case
+
+A case is any value, so it can carry its own checks. Optional fields add a check only where you need it:
+
+```ts title="evals/percase.eval.ts"
+import { evaluate, expect } from 'reeval'
+
+type Case = { fn: string; check: string; question?: string }
+
+const cases: Case[] = [
+  { fn: 'slugify', check: 'node -e "import(\'./slugify.js\')"' },
+  {
+    fn: 'camelCase',
+    check: 'node -e "import(\'./camelCase.js\')"',
+    question: 'Does the reply explain how camelCase treats extra spaces?',
+  },
+]
+
+evaluate.each(cases)('exports $fn', async (c, item) => {
+  await c.send(`Create ${item.fn}.js exporting ${item.fn}(text).`)
+  await expect(c.exec(item.check)).toSucceed()
+  if (item.question) expect(await c.judge(item.question)).toPass()
+})
+```
+
+## Options per case
+
+`evaluate.each` shares one set of options. When cases need different options (tags, a sandbox, a timeout), a plain loop works, since `evaluate` is an ordinary function:
+
+```ts title="evals/percase.eval.ts"
+for (const pm of ['npm', 'pnpm']) {
+  evaluate(`adds lodash with ${pm}`, { tags: [pm] }, async (c) => {
+    await c.send(`Add lodash to this project with ${pm}.`)
+  })
+}
+```
+
+```bash
+npx reeval run --tag pnpm --dry-run
+```
+
+```text
+plan  1 eval · 1 cell · 1 attempt · ~3m 00s serial
+eval                                         harnesses  variants  runs  attempts  notes
+evals/percase.eval.ts › adds lodash with pnpm  1          —         1     1
+```
+
+## Variations
+
+| Variation | How |
+|---|---|
+| Cases in their own module | `import { cases } from './cases.ts'`. reeval records every local file an eval imports among its sources, so an edit to the list shows up when you [compare runs](/guide/history) |
+| Inside a group | `evaluate.each` works in `group(…)`, and the group's options (`compare`, `runs`, `environment`) apply to every case. Each `evaluate.each` is its own family |
+| Querying families | `reeval query family_lift` has one row per family, variant and run. See [query](/reference/cli/query) |
+| Competitors | See [Check a recommendation](/recipes/recommendation) for one judge-only eval per competitor |
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="group and evaluate" icon="book" href="/reference/group-evaluate">
+    Signatures, `.skip`, `.only`, `.todo` and `.each`.
+  </Card>
+  <Card title="Lift" icon="chart-line" href="/concepts/lift">
+    How a paired lift over cases is measured.
+  </Card>
+</CardGroup>

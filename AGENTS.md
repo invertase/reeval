@@ -421,15 +421,20 @@ Images live in `docs/assets/` (at most 1600 px wide).
 
 After `pnpm install` and `pnpm build`:
 
-### Without credentials or Docker
+### Dogfood (monorepo root)
 
-`reeval.fake.config.ts` swaps in a fake agent that writes canned files into a temp directory, and a
-fake judge with a fixed score:
+The repository is a real reeval project: `reeval.config.ts` at the root, evals in `evals/`, real
+agents only. See [`evals/README.md`](./evals/README.md). Oracle gates for the eval definitions live
+in `packages/reeval/test/features/dogfood/`, not under `evals/`.
+
+### Without credentials or Docker (`examples/hello`)
+
+`examples/hello/reeval.fake.config.ts` is the tutorial fake harness (also used by the pack test):
 
 ```bash
 cd examples/hello
-pnpm reeval run --config reeval.fake.config.ts                       # includes the skill compare and its lift
-pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # the plan, without running
+pnpm reeval run --config reeval.fake.config.ts
+pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly
 ```
 
 ### With a real agent

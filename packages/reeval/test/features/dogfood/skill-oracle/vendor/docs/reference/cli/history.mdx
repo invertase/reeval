@@ -1,0 +1,99 @@
+---
+title: reeval history, show, compare, checkout
+description: Read recorded runs, diff two of them and reproduce one.
+---
+
+Four commands read the history: recorded runs, plus unrecorded scratch runs where noted.
+
+```bash
+npx reeval history             # pass/fail per eval across runs
+npx reeval show latest --md    # one run as Markdown
+npx reeval compare             # latest vs its nearest recorded ancestor
+npx reeval checkout latest     # a worktree at that run's commit
+```
+
+## reeval history
+
+[//]: # (generated:cli-help:history)
+
+```text
+reeval history [filter]       Pass/fail per recorded eval over recent runs
+                              --limit <n> --all (include unrecorded runs) --json
+```
+
+[//]: # (/generated:cli-help:history)
+
+The filter is a case-insensitive substring of the eval id. Runs go oldest to newest, left to right.
+
+```text
+2 runs, oldest → newest: 20260926T173922Z_7e5376d_ada-lovelace_31fh (7e5376d) … 20260926T173923Z_7e5376d_ada-lovelace_t2ea (7e5376d)
+
+  ✓✓    2/2  evals/hello.eval.ts › greet module › creates a tested greet module
+  ✓✓    2/2  evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
+…
+✓ pass  ✗ fail  ! infra error  ↓ skipped  · not run  ¦ eval or stack changed
+```
+
+`¦` marks a run where the eval's fingerprint changed from the last run that had the same cell, so a filtered run and the full run after it don't count as a change.
+
+## reeval show
+
+[//]: # (generated:cli-help:show)
+
+```text
+reeval show [run]             One run: table, --md (summary.md) or --json (the record)
+```
+
+[//]: # (/generated:cli-help:show)
+
+The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then a line per eval. `--md` prints the run's `summary.md`; `--json` prints the record.
+
+## reeval compare
+
+[//]: # (generated:cli-help:compare)
+
+```text
+reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
+                              --md --json --fail-on-regression
+```
+
+[//]: # (/generated:cli-help:compare)
+
+- **Defaults:** head is `latest`. Base is the nearest recorded, complete run on head's git ancestry, falling back to the previous run by time.
+- **Statuses:** `regressed`, `fixed`, `changed (not comparable)`, `infra error`, `new`, `removed` and `same`.
+- **Not comparable** means a fingerprint part or the grader changed, and reeval says which: `not comparable: evals/helpers.ts changed`.
+- **Filtered runs:** when base and head ran different cells of an eval, the eval is classified on the cells both ran, and the rest are listed (`same · cells removed: …`). With no cell in common, it's not comparable.
+- `--md` prints a `### reeval: head vs base` heading and a table for a PR comment. `--json` returns `{ base, head, changes, rows }`.
+- **No earlier recorded run:** every eval is `new`, with `No earlier recorded run to compare <run> with: every eval is new.`, and `--json` has `base: null`. That's not an error.
+- `--fail-on-regression` exits 1 when any eval regressed, or when a `new` or `changed (not comparable)` eval fails, since no comparable earlier run vouches for it. A changed eval that passes doesn't count. Without the flag, `reeval compare` exits 0.
+
+```text
+base 20260926T173923Z_7e5376d_ada-lovelace_t2ea (7e5376d) → head 20260926T173927Z_7e5376d_ada-lovelace_j03w (7e5376d, not recorded)
+0 regressed · 0 fixed · 0 not comparable · 10 same
+
+  ✓ → ✓  same                      evals/hello.eval.ts › greet module › creates a tested greet module
+…
+```
+
+## reeval checkout
+
+[//]: # (generated:cli-help:checkout)
+
+```text
+reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
+                              (default dir: .reeval/checkouts/<run>)
+```
+
+[//]: # (/generated:cli-help:checkout)
+
+It runs `git worktree add --detach` at the run's commit, then applies the run's `worktree.patch` if it was dirty. Remove the worktree with `git worktree remove <dir>`.
+
+<Warning>
+  The default directory is inside `.reeval/`. Deleting `.reeval/` leaves a stale worktree entry until you run `git worktree prune`.
+</Warning>
+
+## Related
+
+- [History](/guide/history)
+- [Fingerprints and drift](/concepts/fingerprints)
+- [The run record](/reference/record)
