@@ -8,7 +8,12 @@ import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import type { InventoryFeature } from './features/inventory.ts'
 import { pkgRoot } from './helpers.ts'
-import { buildMatrix, renderMarkdown, type Sources } from './support/matrix.ts'
+import {
+  buildMatrix,
+  checkEvalOptionCoverage,
+  renderMarkdown,
+  type Sources,
+} from './support/matrix.ts'
 
 type Report = { problems: string[]; markdown: string; current: boolean }
 
@@ -52,6 +57,9 @@ describe('the matrix check (twins: it can fail)', () => {
       path === 'reeval/test/unit.test.ts'
         ? "// covers a comment\nconst label = 'a helper string'\ntest('parses a thing', () => {})"
         : null,
+    evalOptionKeys: ['harness'],
+    evalOptionSpecs: [{ key: 'harness', featureId: 'x', plan: true }],
+    refusalText: 'harness in evals/a.eval.ts',
   }
   const feature = (f: Partial<InventoryFeature>): InventoryFeature => ({
     id: 'x',
@@ -155,6 +163,35 @@ describe('the matrix check (twins: it can fail)', () => {
       'inventory y: "rules read" isn\'t "contract › <behaviour>", "e2e › <title>" or "questions › <title>"',
       'contract behaviour "clean teardown" covers no feature: add it to an entry in inventory.ts',
     ])
+  })
+
+  test('eval option coverage fails when a key, plan case or refusal row is missing', () => {
+    assert.deepEqual(
+      checkEvalOptionCoverage([], {
+        evalOptionKeys: ['harness', 'runs'],
+        evalOptionSpecs: [{ key: 'harness', featureId: 'matrix.harness-runs', plan: true }],
+        refusalText: '',
+      }),
+      [
+        'eval option "runs" has no entry in test/features/eval-options.ts: add one naming its inventory feature; when reeval run --dry-run output changes, set plan: true and add a case under test/plan/',
+        'eval option "harness": inventory feature matrix.harness-runs doesn\'t exist',
+      ],
+    )
+    assert.deepEqual(
+      checkEvalOptionCoverage([feature({ id: 'x' })], {
+        evalOptionKeys: ['harness'],
+        evalOptionSpecs: [
+          { key: 'harness', featureId: 'x', plan: true, refusals: true },
+          { key: 'harness', featureId: 'x' },
+        ],
+        refusalText: '',
+      }),
+      [
+        'eval option "harness" is listed twice in eval-options.ts',
+        'eval option "harness": changes reeval run --dry-run output, so inventory x needs a plan case under test/plan/, not a feature fixture (see test/features/README.md#which-tier)',
+        'eval option "harness": add refusal rows in test/refusals/ for inventory x (REEVAL_UPDATE_SNAPSHOTS=1 pnpm --filter reeval test test/refusals.test.ts)',
+      ],
+    )
   })
 
   test('names that do not exist fail', () => {
