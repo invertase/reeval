@@ -1,0 +1,6 @@
+# Un-ignore recorded files. A parent *.log drops setup.log and checks/*.log.
+!*.json
+!*.jsonl
+!*.md
+!*.patch
+!*.log

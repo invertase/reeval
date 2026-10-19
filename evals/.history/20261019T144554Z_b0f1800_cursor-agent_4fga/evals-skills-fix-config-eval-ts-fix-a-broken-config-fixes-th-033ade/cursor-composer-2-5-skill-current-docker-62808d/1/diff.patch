@@ -1,0 +1,40 @@
+diff --git a/evals/docs.eval.ts b/evals/docs.eval.ts
+index 4aebce3..f6cf9fc 100644
+--- a/evals/docs.eval.ts
++++ b/evals/docs.eval.ts
+@@ -1,8 +1,12 @@
+ import { evaluate, expect } from 'reeval'
+ import { plain, withDocs } from './environments.ts'
+ 
+-evaluate('answers from the docs', { environment: [plain, withDocs], repeat: 3 }, async (c) => {
+-  await c.send('How do I page through GET /notes? Write the answer to answer.md.')
+-  expect(c, 'names the parameter').toHaveFile('answer.md', /limit/)
+-  expect(await c.judge('Does answer.md say how to page through /notes?')).toPass()
+-})
++evaluate(
++  'answers from the docs',
++  { compare: { baseline: plain, variants: [withDocs] }, runs: 3 },
++  async (c) => {
++    await c.send('How do I page through GET /notes? Write the answer to answer.md.')
++    await expect(c, 'names the parameter').toHaveFile('answer.md', /limit/)
++    expect(await c.judge('Does answer.md say how to page through /notes?')).toPass()
++  },
++)
+diff --git a/reeval.config.ts b/reeval.config.ts
+index 0043f84..5f975d7 100644
+--- a/reeval.config.ts
++++ b/reeval.config.ts
+@@ -2,7 +2,6 @@ import { defineConfig } from 'reeval'
+ import { fakeHarness } from 'reeval/harness'
+ import { fakeJudge } from 'reeval/judge'
+ import { fakeSandbox } from 'reeval/sandbox'
+-import { withDocs } from './evals/environments.ts'
+ 
+ export default defineConfig({
+   harness: fakeHarness({
+@@ -11,5 +10,4 @@ export default defineConfig({
+   }),
+   sandbox: fakeSandbox(),
+   judge: { model: fakeJudge({ score: 0.9 }) },
+-  compare: { variants: [withDocs] },
+ })

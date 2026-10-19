@@ -1,0 +1,82 @@
+$ ./node_modules/.bin/reeval run --ui plain
+exit 0
+--- stdout
+plan  run 20261019T144624Z_nogit_reeval_kxxb · 1 eval · 2 cells · 6 attempts · ~192ms serial (~96ms at concurrency 2)
+hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
+hint: 1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
+reeval 0.9.0 · run 20261019T144624Z_nogit_reeval_kxxb · 1 eval file · harness fake · sandbox fake · concurrency 2 · stream logs
+[answers#1 control] ▶ evals/docs.eval.ts › answers from the docs
+[answers#1 control]  +0:00 sandbox starting
+[answers#2 control] ▶ evals/docs.eval.ts › answers from the docs
+[answers#2 control]  +0:00 sandbox starting
+[answers#1 control]  +0:00 sandbox ready 15ms
+[answers#1 control]  +0:00 turn 1 started
+[answers#2 control]  +0:00 sandbox ready 14ms
+[answers#2 control]  +0:00 turn 1 started
+[answers#1 control]  +0:00 turn 1 done 1ms · 0 tool calls, 1 file edit
+[answers#2 control]  +0:00 turn 1 done 2ms · 0 tool calls, 1 file edit
+[answers#1 control]  +0:00 judging: Does answer.md say how to page through /notes?
+[answers#1 control]  +0:00 judge  pass 0.90 (≥ 0.8)  Does answer.md say how to page through /notes?
+[answers#1 control]  +0:00 cleaning up
+[answers#2 control]  +0:00 judging: Does answer.md say how to page through /notes?
+[answers#2 control]  +0:00 judge  pass 0.90 (≥ 0.8)  Does answer.md say how to page through /notes?
+[answers#2 control]  +0:00 cleaning up
+[answers#1 control] ✓ evals/docs.eval.ts › answers from the docs  41ms
+[answers#1 with-docs] ▶ evals/docs.eval.ts › answers from the docs
+[answers#1 with-docs]  +0:00 sandbox starting
+[answers#2 control] ✓ evals/docs.eval.ts › answers from the docs  39ms
+[answers#2 with-docs] ▶ evals/docs.eval.ts › answers from the docs
+[answers#2 with-docs]  +0:00 sandbox starting
+[answers#1 with-docs]  +0:00 sandbox ready 9ms
+[answers#1 with-docs]  +0:00 turn 1 started
+[answers#1 with-docs]  +0:00 turn 1 done 1ms · 0 tool calls, 1 file edit
+[answers#2 with-docs]  +0:00 sandbox ready 11ms
+[answers#2 with-docs]  +0:00 turn 1 started
+[answers#2 with-docs]  +0:00 turn 1 done 2ms · 0 tool calls, 1 file edit
+[answers#1 with-docs]  +0:00 judging: Does answer.md say how to page through /notes?
+[answers#1 with-docs]  +0:00 judge  pass 0.90 (≥ 0.8)  Does answer.md say how to page through /notes?
+[answers#1 with-docs]  +0:00 cleaning up
+[answers#2 with-docs]  +0:00 judging: Does answer.md say how to page through /notes?
+[answers#2 with-docs]  +0:00 judge  pass 0.90 (≥ 0.8)  Does answer.md say how to page through /notes?
+[answers#2 with-docs]  +0:00 cleaning up
+[answers#1 with-docs] ✓ evals/docs.eval.ts › answers from the docs  29ms
+[answers#3 control] ▶ evals/docs.eval.ts › answers from the docs
+[answers#3 control]  +0:00 sandbox starting
+[answers#2 with-docs] ✓ evals/docs.eval.ts › answers from the docs  31ms
+[answers#3 with-docs] ▶ evals/docs.eval.ts › answers from the docs
+[answers#3 with-docs]  +0:00 sandbox starting
+[answers#3 control]  +0:00 sandbox ready 7ms
+[answers#3 control]  +0:00 turn 1 started
+[answers#3 control]  +0:00 turn 1 done 0ms · 0 tool calls, 1 file edit
+[answers#3 with-docs]  +0:00 sandbox ready 8ms
+[answers#3 with-docs]  +0:00 turn 1 started
+[answers#3 with-docs]  +0:00 turn 1 done 2ms · 0 tool calls, 1 file edit
+[answers#3 control]  +0:00 judging: Does answer.md say how to page through /notes?
+[answers#3 control]  +0:00 judge  pass 0.90 (≥ 0.8)  Does answer.md say how to page through /notes?
+[answers#3 control]  +0:00 cleaning up
+[answers#3 with-docs]  +0:00 judging: Does answer.md say how to page through /notes?
+[answers#3 control] ✓ evals/docs.eval.ts › answers from the docs  25ms
+[answers#3 with-docs]  +0:00 judge  pass 0.90 (≥ 0.8)  Does answer.md say how to page through /notes?
+[answers#3 with-docs]  +0:00 cleaning up
+[answers#3 with-docs] ✓ evals/docs.eval.ts › answers from the docs  23ms
+
+Summary
+ evals/docs.eval.ts
+   ✓ answers from the docs      6/6 · pass@1 100% gated  6 attempts
+       fake/plain/fake      control    3/3  pass@1 100%
+         Does answer.md say… 3/3
+       fake/with-docs/fake  variant    3/3  pass@1 100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise
+         Does answer.md say… 3/3 (+0 pts)
+         effort: tools 0 vs 0 (×–), agent 0s vs 0s (×1.00): too few attempts to test
+         checks: names the parameter 3/3 vs 3/3 (doesn't discriminate) · toPass Does answer.md say how to page through /notes? 3/3 vs 3/3 (doesn't discriminate)
+
+Checks that don't discriminate (2)
+ · evals/docs.eval.ts › answers from the docs  fake/with-docs/fake  names the parameter: passes on both
+ · evals/docs.eval.ts › answers from the docs  fake/with-docs/fake  toPass Does answer.md say how to page through /notes?: passes on both
+
+Attempts  6 passed (6 attempts, 1 evals)
+Duration  830ms
+ Results  .reeval/runs/20261019T144624Z_nogit_reeval_kxxb/summary.md
+--- stderr
+(node:1654) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)

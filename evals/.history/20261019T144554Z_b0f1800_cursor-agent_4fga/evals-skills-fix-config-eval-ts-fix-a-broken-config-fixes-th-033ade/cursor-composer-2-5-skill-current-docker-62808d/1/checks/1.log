@@ -1,0 +1,76 @@
+$ ./node_modules/.bin/reeval run --dry-run --json
+exit 0
+--- stdout
+{
+  "runId": "20261019T144623Z_nogit_reeval_p15v",
+  "profile": null,
+  "totals": {
+    "evals": 1,
+    "skipped": 0,
+    "cells": 2,
+    "attempts": 6
+  },
+  "budget": {
+    "attempts": null,
+    "duration": null,
+    "fits": true
+  },
+  "concurrency": 2,
+  "estimateMs": 192,
+  "warnings": [],
+  "sandboxWarnings": [],
+  "hints": [
+    "1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead",
+    "1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)"
+  ],
+  "evals": [
+    {
+      "id": "evals/docs.eval.ts › answers from the docs",
+      "file": "evals/docs.eval.ts",
+      "groups": [],
+      "name": "answers from the docs",
+      "tags": [],
+      "skip": null,
+      "notes": [],
+      "cells": [
+        {
+          "key": "fake/plain/fake",
+          "harness": "fake",
+          "environment": "plain",
+          "sandbox": "fake",
+          "role": "control",
+          "gate": "none",
+          "runs": 3,
+          "brokered": [],
+          "egress": {
+            "policy": "allow-all",
+            "auto": []
+          }
+        },
+        {
+          "key": "fake/with-docs/fake",
+          "harness": "fake",
+          "environment": "with-docs",
+          "sandbox": "fake",
+          "role": "variant",
+          "variant": "with-docs",
+          "gate": "all",
+          "runs": 3,
+          "brokered": [],
+          "egress": {
+            "policy": "allow-all",
+            "auto": []
+          },
+          "files": [
+            "docs/api.md"
+          ]
+        }
+      ]
+    }
+  ],
+  "excluded": [],
+  "images": []
+}
+--- stderr
+(node:1626) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)

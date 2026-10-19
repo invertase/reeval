@@ -1,0 +1,526 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261019T144554Z_b0f1800_cursor-agent_4fga",
+  "status": "complete",
+  "startedAt": "2026-10-19T14:45:54.576Z",
+  "endedAt": "2026-10-19T14:46:25.675Z",
+  "durationMs": 31099,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "b0f1800e7736ca1bf83460d8f9103806846a23dc",
+    "branch": "ehesp/dogfood-dx-refactor-c568",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-10-19T11:55:39+00:00",
+    "shallow": false,
+    "remote": "https://github.com/invertase/reeval"
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": [
+      {
+        "path": "pnpm-lock.yaml",
+        "sha256": "c749ec6c3bae4d86a6f2dd985f6e032e1e3498ce571199e6b5c36f4bf2b75361"
+      }
+    ]
+  },
+  "stack": {
+    "reeval": "0.9.0",
+    "node": "22.14.0",
+    "runtime": {
+      "name": "node",
+      "version": "22.14.0"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.5",
+        "id": "sha256:6fd4e477139de245ff9ad1590e1f2d37783ebb754e88403bc6ae1ab9173cad6d",
+        "agentCli": "@cursor/sdk 1.0.38",
+        "base": "reeval-sandbox:cursor-0.1.5",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.8",
+      "@reeval/harness-opencode": "0.2.8",
+      "@reeval/harness-goose": "0.1.3",
+      "@reeval/harness-pi": "0.2.7",
+      "@reeval/harness-cursor-sdk": "0.1.5",
+      "@ai-sdk/harness-claude-code": "1.0.158-patch.6c1cff12",
+      "@reeval/harness-codex": "0.1.7",
+      "@reeval/harness-fx": "0.1.0",
+      "ai": "7.0.143",
+      "@ai-sdk/harness": "1.0.154",
+      "@ai-sdk/google": "4.0.99",
+      "@ai-sdk/typesafe-ai": "3.0.21"
+    },
+    "harnesses": [
+      {
+        "id": "cursor:composer-2.5",
+        "kind": "cursor",
+        "model": "composer-2.5",
+        "effort": null,
+        "resolvedModels": [
+          "composer-2.5[fast=true]"
+        ],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": "google/gemini-3.8-flash",
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "f77dfe956cea"
+    },
+    "context": [
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "500992f5c7c9e95673557fd84f48a09af795721c7959993e789335d4ee4b75f3"
+      },
+      {
+        "path": "~/.agents/skills/reeval/SKILL.md",
+        "sha256": "0417bc2f31a06c152c57ffa452dfa9617f14742ce9f019aafb2fd0612032a7d1"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "skill-current",
+      "parent": "notes",
+      "overrides": [],
+      "digest": "sha256:5d98d84332d933de16d7b725a61ab0c137480e31b969aea05b8e1ea21d1cb054",
+      "setup": [
+        "npm install --no-audit --no-fund"
+      ],
+      "skills": [
+        {
+          "name": "reeval",
+          "source": "local:evals/skills/utils/vendor/skill-current/reeval",
+          "commit": null,
+          "sha256": "234b5a936c01a486fd200df306b4e6e7ea9d8096822734315a881f5ca09c5789",
+          "placement": "harness",
+          "excluded": []
+        }
+      ],
+      "mcp": [],
+      "files": [
+        {
+          "path": ".gitignore",
+          "sha256": "523818f0d85f60a956d4bb93ec39d6556e573e9575863d939edc6beafd57b229"
+        },
+        {
+          "path": "package.json",
+          "sha256": "ef2c5de18b581d293ab44d8ca53477852b93c49fbbff3f32c2c1081f9b100477"
+        },
+        {
+          "path": "tsconfig.json",
+          "sha256": "15bd1872e3a93b33f1a520d9f1a6ba2ce4abcfb344172b289569f020483111da"
+        },
+        {
+          "path": "docs/api.md",
+          "sha256": "ea09e82e52b457a5abb17e5370c464f17e963e657ede642c129e34578ab04a42"
+        },
+        {
+          "path": "evals/docs.eval.ts",
+          "sha256": "0795b1f942e283c344aae49d23ac0a0e628108a7a43a8ea41182e6473b2a7368"
+        },
+        {
+          "path": "evals/environments.ts",
+          "sha256": "03eeef30bbcdc1771264568af7e459a55eeb69e42979a77aacb82208da91b057"
+        },
+        {
+          "path": "reeval.config.ts",
+          "sha256": "d98e54f3278d2234398990100e5e1b6a98c2ff5b8ab02026bab6086acce992b7"
+        },
+        {
+          "path": "vendor/reeval.tgz",
+          "sha256": "f4c962778777192d978039a6e29d04632f6a791a7d9b5c970b558c2139173e06"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": {
+    "name": "pr",
+    "reason": "--profile",
+    "defaults": {},
+    "limit": {
+      "runs": 1,
+      "compare": false
+    }
+  },
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 180000,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "attempts": 12,
+    "duration": "45m"
+  },
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": "google/gemini-3.8-flash",
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "1c470f08b3be5ec2431f533145b16068790d38eb19cdbb54ad6f18c7055c81d1"
+  },
+  "cost": {
+    "inputTokens": 214947,
+    "outputTokens": 1693,
+    "usage": {
+      "input": 116867,
+      "output": 1693,
+      "cacheRead": 98080,
+      "cacheWrite": 0,
+      "reasoning": null
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/skills/fix-config.eval.ts › fix a broken config › fixes the config and the eval",
+      "key": "evals/skills/fix-config.eval.ts › fix a broken config › fixes the config and the eval",
+      "slug": "evals-skills-fix-config-eval-ts-fix-a-broken-config-fixes-th-033ade",
+      "file": "evals/skills/fix-config.eval.ts",
+      "group": [
+        "fix a broken config"
+      ],
+      "name": "fixes the config and the eval",
+      "tags": [],
+      "compare": {
+        "baseline": "skill-current"
+      },
+      "fingerprint": "80e57f61031157c1679e38ea90fcafa19ae3b3e8b362162cf8242400dc8e46dd",
+      "sources": [
+        {
+          "path": "evals/skills/fix-config.eval.ts",
+          "sha256": "744f92ce878e1db8f8bbbd1727becc7ce25ff0ff1b065d906677c17eb947c427"
+        },
+        {
+          "path": "evals/skills/utils/channels.ts",
+          "sha256": "ee927675bed83efb1dfd045e6a93f82853d0f4038e485186a7117512f56c2763"
+        },
+        {
+          "path": "evals/skills/utils/checks.ts",
+          "sha256": "a88f924746dc6ba45e3d1e8fe6a638da76888af05443e6490ce96cbfcc4d573c"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": null,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/skill-current/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "skill-current",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "d22f973e16e6df6014b917070561598f020aa0435b1d7e1e427a1547f3807938",
+          "fingerprintParts": {
+            "sources": "4924ad4878d0db200780ef3b5ce400abdf0d7bac6c56221ad996290d938bb643",
+            "harness": "84f8a02aabf8cc5f94e282a5b85d7148d3089b2f44fd550dcea1d89cbe80870b",
+            "environment": "sha256:5d98d84332d933de16d7b725a61ab0c137480e31b969aea05b8e1ea21d1cb054",
+            "image": "sha256:6fd4e477139de245ff9ad1590e1f2d37783ebb754e88403bc6ae1ab9173cad6d",
+            "agentCli": "@cursor/sdk 1.0.38",
+            "judge": "578f56a58d45220fdaee8e1f82a7e8e9da0a55efd635e1b31c34b6e2b3383bbf",
+            "context": "bd2ec8dd2c344c514bb0acf4e8cd4e33e68bc9ad6686379132ccabc501dc53cc"
+          },
+          "environmentDigest": "sha256:5d98d84332d933de16d7b725a61ab0c137480e31b969aea05b8e1ea21d1cb054",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "effort": null,
+          "gate": "none",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "reeval run --dry-run exits 0",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "plans 2 cells and 6 attempts",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "with-docs is the variant",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "passes on the fake config",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "leaves docs/ alone",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "names the missing await",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skills/fix-config.eval.ts › fix a broken config › fixes the config and the eval # cursor:composer-2.5/skill-current/docker#1",
+          "id": "cursor:composer-2.5/skill-current/docker#1",
+          "cell": "cursor:composer-2.5/skill-current/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-19T14:45:55.439Z",
+          "imageId": "sha256:6fd4e477139de245ff9ad1590e1f2d37783ebb754e88403bc6ae1ab9173cad6d",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "500992f5c7c9e95673557fd84f48a09af795721c7959993e789335d4ee4b75f3"
+            },
+            {
+              "path": "~/.agents/skills/reeval/SKILL.md",
+              "sha256": "0417bc2f31a06c152c57ffa452dfa9617f14742ce9f019aafb2fd0612032a7d1"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 17,
+                "sent": 651803,
+                "received": 417859
+              },
+              {
+                "host": "registry.npmjs.org",
+                "port": 443,
+                "connections": 15,
+                "sent": 71343,
+                "received": 22264131
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 30228,
+          "turns": [
+            {
+              "prompt": "This workspace is a small reeval project (npm package `reeval` is installed; use `npx reeval`). Its `reeval.config.ts` uses reeval’s fake harness so `npx reeval run` and `--dry-run` work inside the project without API keys. `npx reeval run --dry-run` fails. Fix reeval.config.ts and the evals so the plan is what the author meant: the docs eval compares no docs (the control) against the with-docs environment, 3 runs per cell, and `npx reeval run` passes. Leave docs/ alone. Then list each mistake you fixed, one line each.",
+              "status": "completed",
+              "startedAt": "2026-10-19T14:46:04.122Z",
+              "durationMs": 18898,
+              "usage": {
+                "input": 116867,
+                "output": 1693,
+                "cacheRead": 98080,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "Reading the reeval skill and inspecting the project configuration.\n\n\nFixing config and eval files: moving `compare` off the config and correcting eval options.\n\n\nFixed `reeval.config.ts` and `evals/docs.eval.ts`. `npx reeval run --dry-run` and `npx reeval run` both exit 0 (plan: 1 eval, 2 cells — plain control vs with-docs variant — 6 attempts at 3 runs per cell).\n\n**Mistakes fixed (one line each):**\n\n1. **`compare` in `reeval.config.ts`** — reeval forbids global compare; it would apply to every eval.\n2. **Unused `withDocs` import in config** — compare belongs on the eval, not the config.\n3. **`environment: [plain, withDocs]`** — environment must be a single env; A/B belongs in `compare`.\n4. **`repeat: 3`** — the option is `runs`, not `repeat`.\n5. **Missing `compare.baseline: plain`** — control is no-docs (`plain`), not an implicit empty baseline while treating both envs as a list.\n6. **Missing `await` on `toHaveFile`** — file checks are async and must be awaited."
+            }
+          ],
+          "usage": {
+            "input": 116867,
+            "output": 1693,
+            "cacheRead": 98080,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 8681,
+            "agentMs": 18900,
+            "diffMs": 128,
+            "checksMs": 1867,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 8,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 5975
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "reeval run --dry-run exits 0",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true
+            },
+            {
+              "label": "plans 2 cells and 6 attempts",
+              "labelled": true,
+              "matcher": "toMatchObject",
+              "status": "pass",
+              "soft": true
+            },
+            {
+              "label": "with-docs is the variant",
+              "labelled": true,
+              "matcher": "toBe",
+              "status": "pass",
+              "soft": true
+            },
+            {
+              "label": "passes on the fake config",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": true,
+              "durationMs": 1176
+            },
+            {
+              "label": "leaves docs/ alone",
+              "labelled": true,
+              "matcher": "not.toHaveChanged",
+              "status": "pass",
+              "soft": true
+            },
+            {
+              "label": "names the missing await",
+              "labelled": true,
+              "matcher": "toMatch",
+              "status": "pass",
+              "soft": true
+            }
+          ],
+          "checks": [
+            {
+              "command": "./node_modules/.bin/reeval run --dry-run --json",
+              "exitCode": 0,
+              "durationMs": 692,
+              "log": {
+                "path": "evals-skills-fix-config-eval-ts-fix-a-broken-config-fixes-th-033ade/cursor-composer-2-5-skill-current-docker-62808d/1/checks/1.log",
+                "sha256": "2e46c72768aa3474032a442d7ed56c1d86853b01c1cc8a253ae350a15199be41",
+                "bytes": 1921
+              }
+            },
+            {
+              "command": "./node_modules/.bin/reeval run --ui plain",
+              "exitCode": 0,
+              "durationMs": 1175,
+              "log": {
+                "path": "evals-skills-fix-config-eval-ts-fix-a-broken-config-fixes-th-033ade/cursor-composer-2-5-skill-current-docker-62808d/1/checks/2.log",
+                "sha256": "1cbf61e61964b8d1eaabbae8b4279f34eb773a374a7e2753efb6ec1943bdf64e",
+                "bytes": 5237
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "evals/docs.eval.ts",
+              "status": "modified"
+            },
+            {
+              "path": "reeval.config.ts",
+              "status": "modified"
+            }
+          ],
+          "files": {
+            "setupLog": {
+              "path": "evals-skills-fix-config-eval-ts-fix-a-broken-config-fixes-th-033ade/cursor-composer-2-5-skill-current-docker-62808d/1/setup.log",
+              "sha256": "340da8d84d32cb71e6fa66143df5e66742ce0a9aa982849d00020c77927d850b",
+              "bytes": 258
+            },
+            "transcript": {
+              "path": "evals-skills-fix-config-eval-ts-fix-a-broken-config-fixes-th-033ade/cursor-composer-2-5-skill-current-docker-62808d/1/transcript.jsonl",
+              "sha256": "4b50bb5b3e683fe75996b6276082316ade5ea348f0a52c47e8a899653605952f",
+              "bytes": 121366
+            },
+            "diff": {
+              "path": "evals-skills-fix-config-eval-ts-fix-a-broken-config-fixes-th-033ade/cursor-composer-2-5-skill-current-docker-62808d/1/diff.patch",
+              "sha256": "760f79ece391347a36ae15d69ca6b677c346d9f3b7bcc7be67531e5b138437f6",
+              "bytes": 1565
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
