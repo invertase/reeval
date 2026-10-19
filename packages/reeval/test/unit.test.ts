@@ -345,6 +345,10 @@ test('an auth failure names the credential; other errors get no hint', () => {
       'codex',
       'unexpected status 401 Unauthorized: Incorrect API key provided: sk-not-a*****-key. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, auth error: 401, auth error code: invalid_api_key',
     ],
+    [
+      'grok-build',
+      'ACP session initialization failed: ACP authentication method "xai.api_key" is not advertised by the agent. Advertised methods: grok.com.',
+    ],
   ]
   for (const [kind, message] of refused) {
     const { credential } = AGENTS[kind]
@@ -381,6 +385,7 @@ test('an auth failure names the credential; other errors get no hint', () => {
     'models/gemini-9 is not found for API version v1beta (404)',
     'CONNECT blocked.example.net:443 → 403 · blocked',
     'The Antigravity CLI exited with code 1 before reporting a result',
+    'ACP authentication method "grok.com" is not advertised by the agent',
   ]) {
     assert.equal(authHint(AGENTS.antigravity, message), undefined, message)
   }

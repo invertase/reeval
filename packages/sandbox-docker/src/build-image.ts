@@ -122,6 +122,15 @@ const BOOTSTRAPS: Record<
         model: 'unused/unused',
       }),
   },
+  'grok-build': {
+    name: 'Grok Build',
+    cli: 'grok',
+    adapter: async () =>
+      (await import('@reeval/harness-grok-build')).createGrokBuild({
+        auth: { XAI_API_KEY: 'unused' },
+        model: 'unused',
+      }),
+  },
 }
 
 /** Keeps the image's `PATH` in login shells, which Debian's `/etc/profile` resets. */

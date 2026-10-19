@@ -32,6 +32,7 @@ export const INIT_HARNESSES: ReadonlyArray<{
   { kind: 'pi', label: 'pi', factory: 'pi', model: 'gemini-3.8-flash' },
   { kind: 'codex', label: 'Codex', factory: 'codex', model: 'gpt-5.6-luna' },
   { kind: 'fx', label: 'fx', factory: 'fx', model: 'anthropic/claude-sonnet-5' },
+  { kind: 'grok-build', label: 'Grok Build', factory: 'grokBuild', model: 'grok-4.6' },
 ]
 
 export type InitChoice = AgentKind | 'none'

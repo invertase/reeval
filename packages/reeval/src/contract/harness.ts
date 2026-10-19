@@ -12,6 +12,7 @@ import type {
   FakeScriptStep,
   FxHarnessDescriptor,
   GooseHarnessDescriptor,
+  GrokBuildHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,
@@ -217,6 +218,26 @@ export const codexHarnessSchema = z
     "OpenAI's Codex CLI through `@reeval/harness-codex` (`codex exec --json`), made by `codex()`. It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.",
   )
 
+export const grokBuildHarnessSchema = z
+  .strictObject({
+    kind: z.literal('grok-build'),
+    model: z
+      .string()
+      .regex(BARE_MODEL)
+      .describe('An xAI model id Grok Build runs on the xAI API, e.g. `grok-4.6`.'),
+    effort: effort(
+      "Reasoning effort as Grok's `default_reasoning_effort`, e.g. `low`, `medium` or `high`, for a model that takes one.",
+    ),
+    id: id('grok-build'),
+    maxConcurrent: maxConcurrent(
+      "The most Grok Build attempts at once, across the run, e.g. for the key's rate limits.",
+    ),
+    startTimeout: startTimeout(),
+  })
+  .describe(
+    "xAI's Grok Build through `@reeval/harness-grok-build` (`grok agent stdio`), made by `grokBuild()`. It runs xAI models on an xAI API key and reports each turn's tokens.",
+  )
+
 export const fakeScriptStepSchema = z
   .union([
     z.strictObject({ exec: z.string() }),
@@ -238,6 +259,7 @@ export const FAKE_LAYOUTS = [
   'pi',
   'codex',
   'fx',
+  'grok-build',
 ] as const
 
 export const fakeHarnessSchema = z
@@ -313,7 +335,7 @@ export const fakeHarnessSchema = z
       .enum(FAKE_LAYOUTS)
       .optional()
       .describe(
-        "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for `fx`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
+        "Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`, `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`, `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for `fx`, Grok's private home for `grok-build`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.",
       ),
   })
   .describe('A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`.')
@@ -328,6 +350,7 @@ const SCHEMAS = {
   pi: piHarnessSchema,
   codex: codexHarnessSchema,
   fx: fxHarnessSchema,
+  'grok-build': grokBuildHarnessSchema,
 } as const
 
 export const harnessDescriptorSchema = z
@@ -341,6 +364,7 @@ export const harnessDescriptorSchema = z
     piHarnessSchema,
     codexHarnessSchema,
     fxHarnessSchema,
+    grokBuildHarnessSchema,
   ])
   .describe('The agent an attempt runs: a real harness, or the fake one.')
 
@@ -361,6 +385,8 @@ export type _SameAsSchema = [
   Assert<Same<keyof z.infer<typeof codexHarnessSchema>, keyof CodexHarnessDescriptor>>,
   Assert<Same<z.infer<typeof fxHarnessSchema>, FxHarnessDescriptor>>,
   Assert<Same<keyof z.infer<typeof fxHarnessSchema>, keyof FxHarnessDescriptor>>,
+  Assert<Same<z.infer<typeof grokBuildHarnessSchema>, GrokBuildHarnessDescriptor>>,
+  Assert<Same<keyof z.infer<typeof grokBuildHarnessSchema>, keyof GrokBuildHarnessDescriptor>>,
   Assert<Same<z.infer<typeof fakeHarnessSchema>, FakeHarnessDescriptor>>,
   Assert<Same<keyof z.infer<typeof fakeHarnessSchema>, keyof FakeHarnessDescriptor>>,
   Assert<Same<z.infer<typeof fakeScriptStepSchema>, FakeScriptStep>>,
@@ -378,6 +404,7 @@ export const FACTORY: Record<HarnessDescriptor['kind'], string> = {
   pi: 'pi',
   codex: 'codex',
   fx: 'fx',
+  'grok-build': 'grokBuild',
 }
 
 const MODEL: Partial<Record<HarnessDescriptor['kind'], (v: unknown) => string>> = {
@@ -395,6 +422,8 @@ const MODEL: Partial<Record<HarnessDescriptor['kind'], (v: unknown) => string>> 
     `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got ${got(v)})`,
   fx: (v) =>
     `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-4.1' }) (got ${got(v)})`,
+  'grok-build': (v) =>
+    `grokBuild() needs an xAI model id, without a provider, since it runs on an xAI API key, e.g. grokBuild({ model: 'grok-4.6' }) (got ${got(v)})`,
 }
 
 const SCRIPT_EXAMPLE = "script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]]"

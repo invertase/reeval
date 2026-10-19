@@ -48,6 +48,10 @@
       "entry": ["test/**/*.ts"],
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
+    "packages/harness-grok-build": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
     "packages/harness-pi": {
       "entry": ["test/**/*.ts"],
       "ignoreDependencies": ["@ai-sdk/provider"]

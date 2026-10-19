@@ -287,6 +287,27 @@ const FORMATS: Record<string, Format> = {
     lists: [],
     defined: ACP_DEFINED,
   },
+  // Grok Build's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
+  'grok-build': {
+    kind: (e) =>
+      typeof e.sessionUpdate === 'string'
+        ? e.sessionUpdate
+        : typeof e.stopReason === 'string'
+          ? 'prompt-response'
+          : undefined,
+    opaque: [
+      'rawInput',
+      'rawOutput',
+      'content',
+      'locations',
+      'availableCommands',
+      'configOptions',
+      '_meta',
+    ],
+    values: ['status', 'kind', 'stopReason'],
+    lists: [],
+    defined: ACP_DEFINED,
+  },
   // pi's `--mode json` events, by `type` (and the assistant event inside `message_update`).
   pi: {
     kind: (e) => {

@@ -1,6 +1,6 @@
 ---
 title: Harnesses
-description: Run evals on Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex or fx, or on several at once as separate cells.
+description: Run evals on Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex, fx or Grok Build, or on several at once as separate cells.
 ---
 
 A harness is the coding agent reeval drives. The same eval runs on any of them, so you can see whether your skill helps one agent and not another.
@@ -13,6 +13,7 @@ import {
   cursor,
   fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from '{{ pkg }}/harness'
@@ -25,6 +26,7 @@ export const gs = goose({ model: 'gemini-3.8-flash' })
 export const pim = pi({ model: 'gemini-3.8-flash' })
 export const cx = codex({ model: 'gpt-5.6-luna' })
 export const fxs = fx({ model: 'anthropic/claude-sonnet-5' })
+export const grok = grokBuild({ model: 'grok-4.6' })
 ```
 
 `examples/hello` defines its harnesses once, so the config, evals and profiles share them.
@@ -41,6 +43,7 @@ export const fxs = fx({ model: 'anthropic/claude-sonnet-5' })
 | `pi()` | `GOOGLE_GENERATIVE_AI_API_KEY`, a Gemini API key | Required: a Gemini model id, such as `gemini-3.8-flash` |
 | `codex()` | `OPENAI_API_KEY`, an OpenAI API key | Required: an OpenAI model id, such as `gpt-5.6-luna` |
 | `fx()` | `AI_GATEWAY_API_KEY` for a gateway id, `OPENAI_API_KEY` for a bare OpenAI id | Required: `anthropic/claude-sonnet-5` (AI Gateway) or `gpt-4.1` (OpenAI) |
+| `grokBuild()` | `XAI_API_KEY`, an xAI API key | Required: an xAI model id, such as `grok-4.6` |
 
 ```bash title=".env.local"
 CURSOR_API_KEY=...
@@ -48,6 +51,7 @@ ANTHROPIC_API_KEY=...
 GEMINI_API_KEY=...
 GOOGLE_GENERATIVE_AI_API_KEY=...
 OPENAI_API_KEY=...
+XAI_API_KEY=...
 AI_GATEWAY_API_KEY=...
 ```
 
@@ -83,7 +87,7 @@ npx reeval image build --config reeval.claude.config.ts
 npx reeval run --config reeval.claude.config.ts
 ```
 
-Each harness has its own sandbox image with its agent baked in, such as `reeval-sandbox:antigravity-0.1.8` or `reeval-sandbox:cursor-0.1.5`. `reeval image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code, Antigravity, pi and Codex run their CLIs, and OpenCode, Goose and fx their ACP servers.
+Each harness has its own sandbox image with its agent baked in, such as `reeval-sandbox:antigravity-0.1.8` or `reeval-sandbox:cursor-0.1.5`. `reeval image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code, Antigravity, pi and Codex run their CLIs, and OpenCode, Goose, fx and Grok Build their ACP servers.
 
 ## Run several harnesses as cells
 
@@ -206,6 +210,7 @@ A list replaces the inherited harnesses. `add` appends one or a list to them, an
 | [pi](/reference/harness/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
 | [Codex](/reference/harness/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 | [fx](/reference/harness/fx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Grok Build](/reference/harness/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
 
 - **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
 - **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.
@@ -215,6 +220,7 @@ A list replaces the inherited harnesses. `add` appends one or a list to them, an
 - **pi**: No `mcp.sse` transport: those servers are refused at plan time (exit 2).
 - **Codex**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). Served model and reasoning effort from each API response, which the gateway reads (e.g. `gpt-5.6-luna[effort=medium]`): its CLI doesn't report them. Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.
 - **fx**: Its key is the model's provider's: `AI_GATEWAY_API_KEY` for a Vercel AI Gateway id (`anthropic/claude-sonnet-5`), `OPENAI_API_KEY` for a bare OpenAI id (`gpt-4.1`). fx ignores `HTTPS_PROXY`, so its model calls reach the egress gateway through a relay inside the sandbox; its own web search and fetch, HTTP and SSE MCP servers don't use the relay, so a restricted egress policy blocks them and the record lists none of their requests. Served model from each API response, which the gateway reads: fx doesn't report one over ACP.
+- **Grok Build**: Served model from each API response, which the gateway reads: its CLI doesn't report it.
 
 [//]: # (/generated:harness-matrix)
 
@@ -234,6 +240,7 @@ A list replaces the inherited harnesses. `add` appends one or a list to them, an
 | pi | `AGENTS.md` | `.pi/skills` | `~/.pi/agent/skills` |
 | Codex | `AGENTS.md` | `.agents/skills` | `~/.agents/skills` |
 | fx | `AGENTS.md` | `.fx/skills` | `~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills` |
+| Grok Build | `AGENTS.md` | `.grok/skills` | `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills` |
 
 [//]: # (/generated:harness-layout)
 

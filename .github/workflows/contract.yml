@@ -34,16 +34,17 @@ jobs:
       REEVAL_TEST_REAL: '1'
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key fails, naming the variable.
-      REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx
-      # The hard cap for this job: the contract (12 attempts) on all ten rows, the e2e (2) on the
-      # eight harnesses' own rows, and the real-tier fixtures (2 each, 10 of them): 120 + 16 + 20.
+      REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build
+      # The hard cap for this job: the contract (12 attempts) on all eleven rows, the e2e (2) on
+      # the nine harnesses' own rows, and the real-tier fixtures (2 each, 10 of them): 132 + 18 + 20.
       # Each reserves its attempts in the ledger first, and fails rather than go over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '156'
+      REEVAL_REAL_ATTEMPT_BUDGET: '170'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

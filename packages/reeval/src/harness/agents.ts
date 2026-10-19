@@ -141,6 +141,26 @@ const GOOSE_ENDPOINTS = [
   },
 ] as const satisfies readonly EndpointMatch[]
 
+/**
+ * What Grok Build sends the key on: the model list and the key's status as a session starts, and
+ * its model calls (Chat Completions, and the Responses API for a model or tool that takes it).
+ */
+const XAI_ENDPOINTS = [
+  { host: 'api.x.ai', path: { exact: '/v1/models' }, method: ['GET'] },
+  { host: 'api.x.ai', path: { exact: '/v1/api-key' }, method: ['GET'] },
+  { host: 'api.x.ai', path: { exact: '/v1/chat/completions' }, method: ['POST'] },
+  { host: 'api.x.ai', path: { exact: '/v1/responses' }, method: ['POST'] },
+] as const satisfies readonly EndpointMatch[]
+
+/** xAI's model calls, whose responses name the model that served them. */
+const XAI_MODEL_RESPONSES = XAI_ENDPOINTS.filter(
+  (e) => e.path.exact === '/v1/chat/completions' || e.path.exact === '/v1/responses',
+)
+
+/** The model an xAI response says served it. */
+const xaiServedModel: ServedModel = ({ host, responseModel }) =>
+  host === 'api.x.ai' ? responseModel : undefined
+
 /** The model a Gemini API request names in its URL. */
 const geminiServedModel: ServedModel = ({ host, path }) =>
   host === 'generativelanguage.googleapis.com'
@@ -309,8 +329,11 @@ export function piMcpServers(
   )
 }
 
-/** ACP's `McpServer` shape, which fx takes on `session/new`: `env` and `headers` as name-value lists. */
-export function fxMcpServers(
+/**
+ * ACP's `McpServer` shape, which fx and Grok Build take on `session/new`: `env` and `headers` as
+ * name-value lists.
+ */
+export function acpMcpServers(
   servers: Record<string, ResolvedMcpServer>,
 ): Record<string, Record<string, unknown>> {
   const pairs = (values: Record<string, string> = {}) =>
@@ -436,6 +459,15 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.fx/skills',
     harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills',
+  },
+  // Grok's bootstrap gives it a private home, so its home skills are under that. It reads the
+  // workspace's AGENTS.md and skills only in a trusted folder, which the adapter's
+  // GROK_FOLDER_TRUST=false makes it; it also reads .agents/skills and .claude/skills.
+  'grok-build': {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.grok/skills',
+    harnessSkillDir:
+      '.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills',
   },
 }
 
@@ -622,11 +654,34 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
     ...fxForModel('provider/model'),
     forModel: fxForModel,
-    mcpServers: fxMcpServers,
+    mcpServers: acpMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-fx')).createFx({
         auth,
         model: descriptor.model,
+        ...(mcpServers
+          ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
+          : {}),
+        requireCredentialBrokering: true,
+      }),
+  },
+  'grok-build': {
+    ...LAYOUTS['grok-build'],
+    name: 'Grok Build',
+    factory: 'grokBuild',
+    credential: 'XAI_API_KEY',
+    // The requests Grok sends the key on, with its summary, recap and title-refresh calls off.
+    endpoints: XAI_ENDPOINTS,
+    modelResponses: XAI_MODEL_RESPONSES,
+    servedModel: xaiServedModel,
+    mcpServers: acpMcpServers,
+    adapter: async ({ auth, mcpServers, descriptor }) =>
+      (await import('@reeval/harness-grok-build')).createGrokBuild({
+        auth,
+        model: descriptor.model,
+        ...(descriptor.kind === 'grok-build' && descriptor.effort
+          ? { effort: descriptor.effort }
+          : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
@@ -707,10 +762,12 @@ export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlock
 /**
  * How the APIs behind the harnesses say they refused a key: an HTTP 401, Anthropic's and OpenAI's
  * wording, Google's (which answers 400), and OpenCode's for any provider's 401 or 403. A bare 403 isn't here: the gateway and MCP servers send
- * those for reasons that have nothing to do with the harness's key.
+ * those for reasons that have nothing to do with the harness's key. Grok Build checks its key as
+ * it starts and, when xAI refuses it (a 400 or 401, not an outage), offers no `xai.api_key`
+ * sign-in, which is all `@ai-sdk/harness-acp` reports.
  */
 const REFUSED_KEY =
-  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b/i
+  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b|\bauthentication method "xai\.api_key" is not advertised\b/i
 
 /** What to do when a harness error says its API refused the key, naming the variable; else undefined. */
 export function authHint(agent: Agent, message: string): string | undefined {

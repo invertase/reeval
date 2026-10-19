@@ -20,6 +20,7 @@ TYPESAFE_AI_API_KEY=...
 | `TYPESAFE_AI_API_KEY` | `typesafe-ai/*` judges, such as Jev, directly |
 | `OPENAI_API_KEY` | `codex()`, and `fx()` on a bare OpenAI id: an OpenAI API key, brokered the same way. |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | `opencode()`, `goose()` and `pi()`: a Gemini API key, brokered the same way. Also `google/*` judges, directly. |
+| `XAI_API_KEY` | `grokBuild()`: an xAI API key, brokered the same way. |
 | `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN` | Any `provider/model` judge whose own key isn't set, through the Vercel AI Gateway. `AI_GATEWAY_API_KEY` is also `fx()`'s key on a gateway id, brokered the same way. |
 | Any name in `secret.fromEnv('NAME')` | Read on the host and passed into the sandbox (or brokered, or to checks only), redacted everywhere |
 

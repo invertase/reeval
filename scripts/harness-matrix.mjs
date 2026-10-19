@@ -123,6 +123,10 @@ const NOTES = [
     h.kind === 'codex' &&
     `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.6-luna[effort=medium]')}): its CLI doesn't report them.`,
   (h) =>
+    h.agent.modelResponses &&
+    h.kind === 'grok-build' &&
+    `Served model from each API response, which the gateway reads: its CLI doesn't report it.`,
+  (h) =>
     h.kind === 'codex' &&
     h.web.search &&
     `Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.`,

@@ -58,6 +58,7 @@ Harnesses (`reeval/harness`), each with a required `model`; a list runs each as 
 | `pi({ model, effort? })` | `GOOGLE_GENERATIVE_AI_API_KEY` | A Gemini model id; `effort` is `--thinking` |
 | `codex({ model, effort? })` | `OPENAI_API_KEY` | An OpenAI model id, e.g. `gpt-5.6-luna`; `effort` is `model_reasoning_effort` |
 | `fx({ model })` | `AI_GATEWAY_API_KEY`, or `OPENAI_API_KEY` for a bare id | Vercel's fx over ACP: a gateway id (`anthropic/claude-sonnet-5`) runs on AI Gateway, a bare non-reasoning OpenAI id (`gpt-4.1`) on OpenAI. No `effort`. Its own web tools bypass the egress gateway, so `deny-all` blocks them |
+| `grokBuild({ model, effort? })` | `XAI_API_KEY` | xAI's Grok Build CLI; an xAI model id, e.g. `grok-4.6`; `effort` is `default_reasoning_effort`. It finds MCP tools with its `search_tool` before calling them |
 | `fakeHarness(…)` | None | See the fake trio in SKILL.md |
 
 OpenCode, Goose, pi and Codex refuse `mcp.sse`. Unset Cursor params take Cursor's default, which

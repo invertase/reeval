@@ -452,9 +452,19 @@ export type FakeHarnessDescriptor = {
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
    * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`,
    * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for
-   * `fx`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
+   * `fx`, Grok's private home for `grok-build`). Defaults to the fake's own (`AGENTS.md`,
+   * `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex' | 'fx'
+  layout?:
+    | 'cursor'
+    | 'claude-code'
+    | 'antigravity'
+    | 'opencode'
+    | 'goose'
+    | 'pi'
+    | 'codex'
+    | 'fx'
+    | 'grok-build'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -658,6 +668,29 @@ export type FxHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
+/**
+ * xAI's Grok Build through `@reeval/harness-grok-build` (`grok agent stdio`), made by
+ * `grokBuild()`. It runs xAI models on an xAI API key and reports each turn's tokens.
+ */
+export type GrokBuildHarnessDescriptor = {
+  kind: 'grok-build'
+  /** An xAI model id Grok Build runs on the xAI API, e.g. `grok-4.6`. */
+  model: string
+  /**
+   * Reasoning effort as Grok's `default_reasoning_effort`, e.g. `low`, `medium` or `high`, for a
+   * model that takes one.
+   */
+  effort?: string
+  /** Cell id; defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set. */
+  id?: string
+  /** The most Grok Build attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
@@ -668,6 +701,7 @@ export type AgentHarnessDescriptor =
   | PiHarnessDescriptor
   | CodexHarnessDescriptor
   | FxHarnessDescriptor
+  | GrokBuildHarnessDescriptor
 /** The agent an attempt runs: a real harness, or the fake one. */
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 

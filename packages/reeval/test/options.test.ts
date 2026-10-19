@@ -1631,7 +1631,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a fake agent layout reeval does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'cline' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx' \(got "cline"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx', 'grok-build' \(got "cline"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',
