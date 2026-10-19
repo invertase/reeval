@@ -171,7 +171,22 @@
             "fileEdits": {
               "type": "number"
             },
+            "maxToolMs": {
+              "description": "Longest tool `durationMs` in the transcript; null when none reported a duration.",
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
             "reasoningMs": {
+              "type": "number"
+            },
+            "stalledTools": {
+              "description": "Transcript tool events with `stalled: true` (long shell or edit).",
               "type": "number"
             },
             "tools": {
@@ -199,7 +214,15 @@
               ]
             }
           },
-          "required": ["fileEdits", "reasoningMs", "tools", "webFetches", "webSearches"]
+          "required": [
+            "fileEdits",
+            "maxToolMs",
+            "reasoningMs",
+            "stalledTools",
+            "tools",
+            "webFetches",
+            "webSearches"
+          ]
         },
         "assertions": {
           "description": "Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.",

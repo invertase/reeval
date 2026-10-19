@@ -37,6 +37,8 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
     { path: 'evals[].cells[].effort', empty: () => null },
     { path: 'evals[].attempts[].effort', empty: () => null },
     { path: 'evals[].attempts[].servedEffort', empty: () => null },
+    { path: 'evals[].attempts[].activity.stalledTools', empty: () => 0 },
+    { path: 'evals[].attempts[].activity.maxToolMs', empty: () => null },
   ],
   'transcript-line': [],
   analysis: [],

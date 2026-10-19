@@ -1863,6 +1863,42 @@ describe('Antigravity transcripts', () => {
   })
 })
 
+describe('Cursor tool wall time when completed_at_ms is early', () => {
+  test('durationMs follows the stream until the tool result, and marks long shells stalled', () => {
+    const startedAt = Date.parse('2026-10-18T12:00:00.000Z')
+    const events = normaliseStream(
+      [
+        { ms: 100, part: { type: 'tool-call', toolCallId: 'b', toolName: 'bash', input: {} } },
+        {
+          ms: 2_810_000,
+          part: { type: 'tool-result', toolCallId: 'b', output: 'ok' },
+        },
+        {
+          ms: 150,
+          part: {
+            type: 'raw',
+            rawValue: {
+              type: 'event',
+              event: {
+                type: 'tool_call',
+                call_id: 'b',
+                status: 'completed',
+                started_at_ms: startedAt + 100,
+                completed_at_ms: startedAt + 200,
+              },
+            },
+          },
+        },
+      ],
+      startedAt,
+    )
+    const bash = events.find((e) => e.type === 'tool' && e.tool === 'bash')
+    assert.ok(bash && bash.type === 'tool')
+    assert.equal(bash.durationMs, 2_809_900)
+    assert.equal(bash.stalled, true)
+  })
+})
+
 describe('a failed tool call keeps its error', () => {
   const failed = (error: unknown) =>
     normaliseStream(

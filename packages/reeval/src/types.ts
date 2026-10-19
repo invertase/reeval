@@ -17,12 +17,17 @@ export type FileEditEvent = {
 
 /**
  * Normalised agent events. Each tool call is one event, merged with its result; `durationMs`
- * is null when the harness never reported the end.
+ * is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null
+ * when the harness never reported the end. Long shell or edit calls set `stalled: true`.
  */
 export type TranscriptEvent = EventTime &
   (
     | { type: 'text' | 'reasoning'; text: string; durationMs: number | null }
-    | (FileEditEvent & { durationMs: number | null })
+    | (FileEditEvent & {
+        durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
+      })
     | {
         type: 'web-search'
         toolCallId: string
@@ -32,8 +37,18 @@ export type TranscriptEvent = EventTime &
         /** Whether the search succeeded. Absent means it did. */
         ok?: boolean
         durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
       }
-    | { type: 'web-fetch'; toolCallId: string; url: string; ok: boolean; durationMs: number | null }
+    | {
+        type: 'web-fetch'
+        toolCallId: string
+        url: string
+        ok: boolean
+        durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
+      }
     | {
         type: 'tool'
         toolCallId: string
@@ -42,6 +57,8 @@ export type TranscriptEvent = EventTime &
         output: unknown
         ok: boolean
         durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
       }
     | { type: 'error'; message: string }
     /** A step that failed while the turn went on: a model call the harness retried. */
