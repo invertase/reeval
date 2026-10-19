@@ -106,3 +106,8 @@ Each attempt starts from the task's parent commit (`git('../..', { ref })`) in a
 pnpm store already holds every task's dependencies, so `pnpm install` takes about 3 seconds
 offline. `reeval.oracle.config.ts` runs a fake agent that applies the merged pull request, so
 every check must pass there.
+
+`REEVAL_CONTRIBUTING_GUIDES=<branch>` adds a third arm: that branch's changes to the guides,
+applied to each task's starting commit. With #374's "Before you finish" checklist, every check
+passed in 6 of 8 attempts, against 1 of 8 with the guides it replaced. Every one of those
+attempts ran `pnpm format`.
