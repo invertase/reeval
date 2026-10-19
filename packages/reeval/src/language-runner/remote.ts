@@ -12,7 +12,7 @@ import { replyToAttempt } from './attempt-host.ts'
 import type { RunnerAttemptDone, RunnerAttemptRequest } from './protocol.ts'
 import {
   errorFrom,
-  isAttemptDone,
+  isRunnerAttemptDone,
   isSessionFrom,
   isRunnerAttemptRequest,
   startLanguageRunner,
@@ -52,7 +52,7 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
     if (isRunnerAttemptRequest(message)) {
       const slot = live.get(message.attempt)
       slot?.onRequest(message)
-    } else if (isAttemptDone(message)) {
+    } else if (isRunnerAttemptDone(message)) {
       const key = (message as RunnerAttemptDone).attempt
       if (key) live.get(key)?.onDone(message)
       else if (live.size === 1) live.values().next().value?.onDone(message)

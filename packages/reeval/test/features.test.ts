@@ -2152,7 +2152,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'python-sdk/hello',
-    tiers: ['fake'],
+    tiers: ['fake', 'docker', 'real'],
     env: '-',
     canary: /expected.*to succeed/i,
   },

@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
 import {
   type FromRunner,
-  isAttemptDone,
+  isRunnerAttemptDone,
   isSessionFrom,
   RUNNER_PROTOCOL,
   type SessionFromRunner,
@@ -156,4 +156,4 @@ export function errorFrom(wire: WireError): Error {
 
 type WireError = import('./protocol.ts').WireError
 
-export { isAttemptDone, isRunnerAttemptRequest, isSessionFrom } from './protocol.ts'
+export { isRunnerAttemptDone, isRunnerAttemptRequest, isSessionFrom } from './protocol.ts'

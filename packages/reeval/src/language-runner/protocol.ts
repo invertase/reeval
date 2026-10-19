@@ -53,5 +53,5 @@ export const isSessionFrom = (message: FromRunner): message is SessionFromRunner
 export const isRunnerAttemptRequest = (message: FromRunner): message is RunnerAttemptRequest =>
   'id' in message && 'call' in message && 'attempt' in message && !('ok' in message)
 
-export const isAttemptDone = (message: FromRunner): message is AttemptDone =>
-  'type' in message && message.type === 'done'
+export const isRunnerAttemptDone = (message: FromRunner): message is RunnerAttemptDone =>
+  'type' in message && message.type === 'done' && 'attempt' in message
