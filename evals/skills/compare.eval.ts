@@ -4,12 +4,12 @@ import { dryRun, typechecks } from './utils/checks.ts'
 
 const task =
   PREAMBLE +
-  'evals/landing.eval.ts builds a landing page and screenshots it as `home`. Turn it into a ' +
-  'skill comparison: the control has no skill, the variant gets the design skill in ' +
-  'skills/design, 2 runs per cell. Add a compare question asking which landing page follows ' +
-  "the design guidelines more closely, and let the question see each side's `home` " +
-  'screenshot. Keep the existing checks. `npx reeval run --dry-run` must plan it and it must ' +
-  "typecheck with `npx tsc -p .`; you don't need to run it."
+  'evals/landing.eval.ts builds a landing page and screenshots it as `home`. A design skill lives in ' +
+  'skills/design. Set up the project so reeval can measure whether that skill improves landing pages: ' +
+  'use reeval compare with two runs per side, keep the existing checks, and add a compare question ' +
+  '(screenshots visible to the judge) about which run follows the design guidelines more closely. ' +
+  '`npx reeval run --dry-run` must plan the comparison and `npx tsc -p .` must pass; you do not need ' +
+  'to run the full eval.'
 
 group(
   'add a compare with a question',

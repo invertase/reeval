@@ -47,8 +47,8 @@ export function channels(base: Environment) {
   return { baseline: skillCurrent, variants: [skillSplit, docs, mcp] }
 }
 
-/** Shared by every task: a reeval project the agent has never seen, and how to run it. */
+/** Shared by every task: the starter workspace the agent edits (its own fake-harness config). */
 export const PREAMBLE =
-  'This project tests a coding agent with reeval (an eval runner for coding agents; npm ' +
-  'package `reeval`, already installed; run it with `npx reeval`). The config runs a fake ' +
-  'agent, so no API key or Docker is needed. '
+  'This workspace is a small reeval project (npm package `reeval` is installed; use `npx reeval`). ' +
+  'Its `reeval.config.ts` uses reeval’s fake harness so `npx reeval run` and `--dry-run` work inside ' +
+  'the project without API keys. '
