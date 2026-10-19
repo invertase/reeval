@@ -179,6 +179,15 @@ export const MATCHERS = {
 
 export type MatcherName = keyof typeof MATCHERS
 
+/** Vitest/Jest already ship these; the protocol table still runs them for Python and other SDKs. */
+const GENERIC_MATCHERS = new Set<MatcherName>([
+  'toBe',
+  'toEqual',
+  'toBeNull',
+  'toBeTruthy',
+  'toContain',
+])
+
 /** A matcher's arguments after the subject, as `expect(…).<name>(...args)` takes them. */
 export type MatcherArgs<K extends MatcherName> = Parameters<(typeof MATCHERS)[K]>[1]
 
@@ -208,3 +217,10 @@ export const matchers = Object.fromEntries(
     },
   ]),
 ) as { [K in MatcherName]: ChaiMatcher<K> }
+
+/** Chai `expect.extend` in eval workers: reeval-specific matchers only (not Jest's toEqual, …). */
+export const evalMatchers = Object.fromEntries(
+  (Object.keys(matchers) as MatcherName[])
+    .filter((name) => !GENERIC_MATCHERS.has(name))
+    .map((name) => [name, matchers[name]]),
+) as typeof matchers

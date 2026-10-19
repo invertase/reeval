@@ -187,15 +187,15 @@ describe('toHaveFetched and toHaveSearched', () => {
 
 describe('toBe and toEqual', () => {
   test('toBe uses Object.is', () => {
-    assert.equal(matchers.toBe(1, [1]).pass, true)
-    const r = matchers.toBe(1, [2])
+    assert.equal(matchers.toBe(1, 1).pass, true)
+    const r = matchers.toBe(1, 2)
     assert.equal(r.pass, false)
     assert.match(r.message(), /Object\.is equality/)
   })
 
   test('toEqual uses deep strict equality', () => {
-    assert.equal(matchers.toEqual({ a: 1 }, [{ a: 1 }]).pass, true)
-    const r = matchers.toEqual(1, [2])
+    assert.equal(matchers.toEqual({ a: 1 }, { a: 1 }).pass, true)
+    const r = matchers.toEqual(1, 2)
     assert.equal(r.pass, false)
     assert.match(r.message(), /deeply equal/)
   })

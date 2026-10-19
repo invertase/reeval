@@ -3,7 +3,7 @@
 // copy of reeval the project itself resolves, so the file registers with the reeval it imports.
 
 import { loadEvalModule } from '../language-runner/load.ts'
-import { matchers } from '../matchers.ts'
+import { evalMatchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
 import type { RunContext } from '../types.ts'
 import { collect, collectingFile, registerGroup, registerTest } from './collector.ts'
@@ -55,7 +55,7 @@ export function startWorker(channel: Channel): Worker {
 
   async function init(run: RunContext, file: string, select: number[] | null): Promise<void> {
     useEngine({ registerTest, registerGroup, getRunContext: () => run, collectingFile })
-    extendExpect(matchers)
+    extendExpect(evalMatchers)
     routeConsole(reporter)
     try {
       const tests = await collect(file, () => loadEvalModule(file, run.config.root))

@@ -114,6 +114,16 @@ const CASES: Array<[keyof typeof MATCHERS, ExpectCall['subject'], unknown[], str
   ['toPass', { value: verdict as never }, []],
   ['toPass', { value: { ...verdict, verdict: 'pass', score: 0.9 } as never }, []],
   ['toPass', { value: { nope: true } }, []],
+  ['toBe', { value: 1 }, [1]],
+  ['toBe', { value: 1 }, [2]],
+  ['toEqual', { value: { a: 1 } }, [{ a: 1 }]],
+  ['toEqual', { value: 1 }, [2]],
+  ['toBeNull', { value: null }, []],
+  ['toBeNull', { value: 0 }, []],
+  ['toBeTruthy', { value: true }, []],
+  ['toBeTruthy', { value: false }, []],
+  ['toContain', { value: 'hello' }, ['ell']],
+  ['toContain', { value: 'hello' }, ['nope']],
 ]
 
 /** The subject as an eval's body hands it to `expect`. */
@@ -123,7 +133,9 @@ const tsSubject = (subject: ExpectCall['subject']): unknown =>
     : 'attempt' in subject
       ? c
       : 'value' in subject
-        ? named(subject.value as object)
+        ? subject.value !== null && typeof subject.value === 'object'
+          ? named(subject.value as object)
+          : subject.value
         : 'exec' in subject
           ? c.exec(subject.exec)
           : c.readFile(subject.readFile)
@@ -242,9 +254,9 @@ describe('one matcher table', () => {
       not: false,
       soft: false,
     }
-    await assert.rejects(match(c, { ...call, matcher: 'toBe' }), {
+    await assert.rejects(match(c, { ...call, matcher: 'toBeTruthyEnough' }), {
       name: 'UsageError',
-      message: /^toBe isn't one of reeval's matchers \(toHaveFile, toSucceed, /,
+      message: /^toBeTruthyEnough isn't one of reeval's matchers \(toBe, toEqual, /,
     })
     await assert.rejects(match(c, { ...call, args: [re('(')] }), {
       name: 'UsageError',
