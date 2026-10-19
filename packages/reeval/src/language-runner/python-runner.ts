@@ -12,7 +12,11 @@ let uvOnPath: boolean | undefined
 
 export function uvAvailable(): boolean {
   if (uvOnPath !== undefined) return uvOnPath
-  const result = spawnSync('uv', ['--version'], { encoding: 'utf8', stdio: 'pipe', windowsHide: true })
+  const result = spawnSync('uv', ['--version'], {
+    encoding: 'utf8',
+    stdio: 'pipe',
+    windowsHide: true,
+  })
   uvOnPath = result.status === 0
   return uvOnPath
 }

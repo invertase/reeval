@@ -1,19 +1,23 @@
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   projectUsesUv,
-  resolvePythonRunnerCommand,
   REEVAL_PYTHON_MODULE,
+  resolvePythonRunnerCommand,
 } from '../src/language-runner/python-runner.ts'
 
 test('resolvePythonRunnerCommand prefers REEVAL_PYTHON', () => {
   const prev = process.env.REEVAL_PYTHON
   process.env.REEVAL_PYTHON = '/custom/python'
   try {
-    assert.deepEqual(resolvePythonRunnerCommand('/any'), ['/custom/python', '-m', REEVAL_PYTHON_MODULE])
+    assert.deepEqual(resolvePythonRunnerCommand('/any'), [
+      '/custom/python',
+      '-m',
+      REEVAL_PYTHON_MODULE,
+    ])
   } finally {
     if (prev === undefined) delete process.env.REEVAL_PYTHON
     else process.env.REEVAL_PYTHON = prev

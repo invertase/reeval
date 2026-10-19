@@ -20,7 +20,6 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { dirname, join } from 'node:path'
-import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
@@ -44,6 +43,7 @@ import {
   reserveAttempts,
 } from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
+import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
 /** `real` is Docker with real Cursor (REEVAL_FIXTURE_HARNESS=cursor), one fixture at a time. */

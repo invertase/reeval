@@ -111,6 +111,7 @@ function reevalVariables() {
   }
   walk(src)
   found.delete('REEVAL_BASE_ARG') // the constant that holds the name REEVAL_BASE
+  found.delete('REEVAL_PYTHON_MODULE') // python -m target, not an env var
   return [...found].sort()
 }
 
