@@ -63,9 +63,7 @@ class AttemptContext:
             err = reply.get("error") or {"name": "Error", "message": "call failed"}
             raise RuntimeError(f"{err.get('name')}: {err.get('message')}")
         assertion_raw = reply.get("assertion")
-        assertion = (
-            cast(dict[str, Any], assertion_raw) if isinstance(assertion_raw, dict) else {}
-        )
+        assertion = cast(dict[str, Any], assertion_raw) if isinstance(assertion_raw, dict) else {}
         if assertion.get("status") == "fail":
             msg = str(assertion.get("message") or "expect failed")
             raise AssertionError(msg)

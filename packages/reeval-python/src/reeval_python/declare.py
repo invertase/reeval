@@ -47,7 +47,7 @@ class DeclaredGroup:
     name: str
     mode: Mode
     options: dict[str, Any]
-    children: list["DeclNode"] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
+    children: list[DeclNode] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -179,9 +179,7 @@ def evaluate(
     return decorator
 
 
-def evaluate_each(
-    cases: Sequence[Any], name_template: str, options: dict[str, Any] | None = None
-):
+def evaluate_each(cases: Sequence[Any], name_template: str, options: dict[str, Any] | None = None):
     opts = dict[str, Any](options or {})
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
