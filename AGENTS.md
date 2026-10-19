@@ -22,13 +22,21 @@ pnpm docs:gen && pnpm docs:check     # after any user-visible change
 
 - **The tests** are the files for what you changed. A plan change runs `pnpm test:plan`, a fixture
  `pnpm test:features` and a new refusal `test/refusals.test.ts` (in `packages/reeval`); `pnpm test`
- runs them all.
+ runs them all — but only in this block, not while you are still editing (see below).
 - **A new feature or option** takes the tier the [feature contract](./packages/reeval/test/features/README.md#which-tier)'s
  table gives it (a plan case or a fixture), an `inventory.ts` entry and `pnpm features:matrix --write`.
 - **A user-visible change** updates its page in `docs/reference/` (see [Docs](#docs)).
 - **After touching `src/contract/`** run `pnpm --filter reeval typecheck` and
  `pnpm --filter reeval schema:check`: each module's `_SameAsSchema` holds its hand-written type to
  the Zod schema, and only the compiler sees it.
+
+## While you work
+
+Do **not** run broad `node --test test/features.test.ts`, `pnpm test:features` or full `pnpm test`
+during an agent turn. On Cursor, the shell tool can ignore the timeout the agent asks for; one hung
+test run has stalled dogfood attempts for 25–47 minutes. Use targeted
+`node --test test/<file>.test.ts` (or `pnpm test:plan` on one case) to check your change, and leave
+the full suite to the [Before you finish](#before-you-finish) block or CI.
 
 reeval is an open-source eval runner for coding agents. You write an eval, then a real agent does
 the task in a local Docker container. reeval checks the result with deterministic assertions and an
