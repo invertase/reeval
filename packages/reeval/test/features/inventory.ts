@@ -2083,4 +2083,10 @@ export const inventory: InventoryFeature[] = [
     name: 'The packed package installs into a clean project and runs',
     tests: ['reeval/test/pack.test.ts › the packed package installs into a clean project'],
   },
+  {
+    id: 'sdk.python',
+    area: 'CLI and runner',
+    name: 'Python eval authoring SDK (declare conformance)',
+    tests: ['reeval/test/python-sdk.test.ts › Python SDK declare conformance'],
+  },
 ]
