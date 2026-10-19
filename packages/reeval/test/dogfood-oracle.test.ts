@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import { pkgRoot, runCli, tempDir } from './helpers.ts'
 
 const repoRoot = join(pkgRoot, '../..')
-const oracleScript = join(repoRoot, 'evals/_support/mcp-debugging/scripts/oracle.mjs')
+const oracleScript = join(repoRoot, 'evals/mcp-debugging/utils/scripts/oracle.mjs')
 
 const oracleExec = `node ${JSON.stringify(oracleScript)}`
 const oracleConfig = `import { defineConfig } from 'reeval'
@@ -18,7 +18,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 const oracle = ${JSON.stringify(oracleExec)}
 
 export default defineConfig({
-  include: ['evals/mcp-debugging.eval.ts'],
+  include: ['evals/mcp-debugging/debugging.eval.ts'],
   harness: fakeHarness({ script: [[{ exec: oracle }]], text: 'Fixed it.' }),
   sandbox: fakeSandbox(),
   profiles: {
@@ -30,22 +30,10 @@ export default defineConfig({
 `
 
 function syncDogfoodMcp(dir: string) {
-  mkdirSync(join(dir, 'evals'), { recursive: true })
-  cpSync(join(repoRoot, 'evals/mcp-debugging.eval.ts'), join(dir, 'evals/mcp-debugging.eval.ts'))
-  cpSync(
-    join(repoRoot, 'evals/_support/mcp-debugging'),
-    join(dir, 'evals/_support/mcp-debugging'),
-    {
-      recursive: true,
-    },
-  )
-  cpSync(
-    join(repoRoot, 'evals/_fixtures/mcp-debugging'),
-    join(dir, 'evals/_fixtures/mcp-debugging'),
-    {
-      recursive: true,
-    },
-  )
+  cpSync(join(repoRoot, 'fixtures'), join(dir, 'fixtures'), { recursive: true })
+  cpSync(join(repoRoot, 'evals/mcp-debugging'), join(dir, 'evals/mcp-debugging'), {
+    recursive: true,
+  })
   writeFileSync(join(dir, 'reeval.config.ts'), oracleConfig)
   mkdirSync(join(dir, 'node_modules'), { recursive: true })
   execFileSync('ln', ['-sf', pkgRoot, join(dir, 'node_modules/reeval')], { stdio: 'ignore' })

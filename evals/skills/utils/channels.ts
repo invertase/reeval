@@ -8,8 +8,8 @@ import { defineEnvironment, type Environment } from 'reeval'
 export function project(name: string, fixture: string, after: string[] = []): Environment {
   return defineEnvironment(name, ({ directory, file }) => ({
     files: {
-      ...directory('../../_fixtures/skill/common'),
-      ...directory(`../../_fixtures/skill/${fixture}`),
+      ...directory('../../../fixtures/skill-common'),
+      ...directory(`../../../fixtures/skill-${fixture}`),
       'vendor/reeval.tgz': file('./vendor/reeval.tgz'),
     },
     setup: [{ run: 'npm install --no-audit --no-fund', timeout: '5m' }, ...after],

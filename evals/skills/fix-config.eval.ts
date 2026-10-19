@@ -1,6 +1,6 @@
 import { evaluate, expect, group } from 'reeval'
-import { channels, PREAMBLE, project } from './_support/skill/channels.ts'
-import { dryRun, runsOnFake } from './_support/skill/checks.ts'
+import { channels, PREAMBLE, project } from './utils/channels.ts'
+import { dryRun, runsOnFake } from './utils/checks.ts'
 
 const task =
   PREAMBLE +

@@ -4,7 +4,7 @@ import { defineConfig } from 'reeval'
 import { cursor } from 'reeval/harness'
 
 export default defineConfig({
-  include: ['evals/*.eval.ts'],
+  include: ['evals/**/*.eval.ts'],
   harness: cursor({ model: 'composer-2.5' }),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   timeout: '15m',

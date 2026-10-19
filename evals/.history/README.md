@@ -6,7 +6,7 @@ Commit run records here from **real** harness profiles (`pr`, `nightly`, …), n
 # From repo root, with CURSOR_API_KEY and judge keys in .env.local:
 pnpm build
 pnpm exec reeval image build
-pnpm exec reeval run skill-fix-config --profile pr --record
+pnpm exec reeval run skills/fix-config --profile pr --record
 git add evals/.history
 ```
 

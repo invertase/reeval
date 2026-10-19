@@ -11,7 +11,7 @@ const CURRENT_SKILL_REF = 'f89798f5c1ebd96f65405087bb4630fb95fd5379'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const suite = join(here, '..')
-const repo = join(suite, '..', '..', '..')
+const repo = join(here, '..', '..', '..', '..')
 const vendor = join(suite, 'vendor')
 rmSync(vendor, { recursive: true, force: true })
 mkdirSync(vendor, { recursive: true })

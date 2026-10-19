@@ -2132,11 +2132,11 @@ export const features: Feature[] = [
     canary: /never asks the judge/,
     prepare: (dir) => {
       const repo = join(testDir, '..', '..', '..')
-      execFileSync('node', [join(repo, 'evals/_support/skill/scripts/vendor.mjs')], {
+      execFileSync('node', [join(repo, 'evals/skills/utils/scripts/vendor.mjs')], {
         cwd: repo,
         stdio: 'inherit',
       })
-      cpSync(join(repo, 'evals/_support/skill/vendor'), join(dir, 'vendor'), { recursive: true })
+      cpSync(join(repo, 'evals/skills/utils/vendor'), join(dir, 'vendor'), { recursive: true })
     },
   },
 ]

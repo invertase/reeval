@@ -1,5 +1,5 @@
 import { type AttemptContext, evaluate, expect, group } from 'reeval'
-import { brokenProject } from './_support/mcp-debugging/environments.ts'
+import { brokenProject } from './utils/environments.ts'
 
 const CAUSES = [
   'agent-error',

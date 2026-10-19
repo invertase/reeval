@@ -35,7 +35,7 @@ exit 1`
 export function brokenProject(fixture: string, history?: { base: string }) {
   const control = defineEnvironment(fixture, ({ directory, file }) => ({
     files: {
-      ...directory(`../../_fixtures/mcp-debugging/${history?.base ?? fixture}`),
+      ...directory(`../../../fixtures/mcp-${history?.base ?? fixture}`),
       ...(history ? { '~/.dogfood-seed.mjs': file('./scripts/seed-history.mjs') } : {}),
       ...(tarball ? { '~/reeval.tgz': file(tarball) } : {}),
     },
