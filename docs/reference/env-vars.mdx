@@ -45,6 +45,11 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_FAKE_EXEC` | | Not read from your shell: on Windows, a random id reeval sets in each fake-sandbox command's environment, so that stopping the command also stops every MSYS process it started |
 | `REEVAL_BACKGROUND` | | Not read from your shell: in `docker()`, a random id reeval sets in a `c.exec(cmd, { background: true })` or `c.serve` command's environment, so that `kill()` also stops every process it started |
 | `REEVAL_BASE` | | Not read from your shell: the build argument reeval passes to a `docker({ dockerfile })` build, naming reeval's image for the cell's harness. Start a Dockerfile `ARG REEVAL_BASE` / `FROM ${REEVAL_BASE}` |
+| `REEVAL_PYTHON` | | Python binary for the out-of-process runner (`python3` by default) |
+| `REEVAL_PYTHON_SDK` | | Path to the `reeval-python` package on the host; prepended to `PYTHONPATH` for the runner |
+| `REEVAL_PROJECT_ROOT` | | Not read from your shell: project root the worker passes to a remote language runner |
+| `REEVAL_RUNNER` | | Not read from your shell: loopback address of the language-runner socket |
+| `REEVAL_RUNNER_TOKEN` | | Not read from your shell: one-time token the runner must send on `hello` |
 
 ## CI and agent detection
 
