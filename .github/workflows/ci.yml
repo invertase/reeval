@@ -205,7 +205,7 @@ jobs:
       # docs.page's own check: internal links, assets and frontmatter targets.
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
-      - uses: astral-sh/setup-uv@77caa2f40b1fd32aef1283f5ecca827f3c8c3b67 # v5.4.1
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
       - name: reeval-python (uv sync, ruff, pyright, pytest)
         if: ${{ !cancelled() }}
         working-directory: packages/reeval-python
