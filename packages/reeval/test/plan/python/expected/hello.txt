@@ -1,5 +1,3 @@
 no profile · 1 evals · 1 cells · 1 attempts
-evals/hello.eval.py › hello  fake/-/docker  control  gated  ×1
+evals/hello.eval.py › hello  fake/-/fake  control  gated  ×1
 excluded: —
-image docker · 1 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

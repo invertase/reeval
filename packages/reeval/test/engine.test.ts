@@ -16,6 +16,12 @@ import {
   readRun,
   runCli,
 } from './helpers.ts'
+import { defaultIncludeGlobs } from '../src/language-runner/adapter.ts'
+
+const defaultIncludePattern = () =>
+  defaultIncludeGlobs()
+    .map((g) => g.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join(', ')
 
 const math = (value: number) => `
 import { evaluate, expect } from 'reeval'
@@ -90,7 +96,10 @@ describe('engine', () => {
     const { runId } = readRun(p.dir).run
     const none = await runCli(p.dir, ['run', 'nope'])
     assert.equal(none.code, 2, none.stdout + none.stderr)
-    assert.match(none.stderr, /No evals matched evals\/\*\*\/\*\.eval\.ts with filter "nope"/)
+    assert.match(
+      none.stderr,
+      new RegExp(`No evals matched ${defaultIncludePattern()} with filter "nope"`),
+    )
     assert.equal(readRun(p.dir).run.runId, runId, 'no empty run written')
     assert.deepEqual(readdirSync(join(p.dir, '.reeval/staging')), [], 'no staging left behind')
   })
@@ -125,7 +134,7 @@ export default defineConfig({
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /No evals matched evals\/\*\*\/\*\.eval\.ts/)
+    assert.match(r.stderr, new RegExp(`No evals matched ${defaultIncludePattern()}`))
     assert.ok(!existsSync(join(p.dir, '.reeval/runs')), 'no run written')
   })
 
@@ -211,7 +220,7 @@ evaluate('top level', async () => {})
     assert.equal(spaced.code, 2, spaced.stdout + spaced.stderr)
     assert.match(
       spaced.stderr,
-      /No evals matched evals\/\*\*\/\*\.eval\.ts with filter "outer fast"/,
+      new RegExp(`No evals matched ${defaultIncludePattern()} with filter "outer fast"`),
     )
     assert.equal(readRun(p.dir).run.runId, runId, 'no run written')
   })
@@ -387,7 +396,9 @@ evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'
     assert.equal(none.code, 2)
     assert.match(
       none.stderr,
-      /No eval files in \S*empty\S* match include: evals\/\*\*\/\*\.eval\.ts\. Name eval files to match it, or set include in reeval\.config\.ts\./,
+      new RegExp(
+        `No eval files in \\S*empty\\S* match include: ${defaultIncludePattern()}\\. Name eval files to match it, or set include in reeval\\.config\\.ts\\.`,
+      ),
     )
 
     const missing = await runCli(empty.dir, ['run', '--config', 'missing.ts'])
