@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,6 +12,10 @@ class ExecResult:
     exit_code: int
     stdout: str
     stderr: str
+
+    @property
+    def ok(self) -> bool:
+        return self.exit_code == 0
 
     @classmethod
     def from_wire(cls, command: str, data: dict[str, Any]) -> ExecResult:
@@ -45,6 +49,17 @@ class Turn:
     def text(self) -> str:
         return str(self.raw.get("text") or "")
 
+    @property
+    def status(self) -> str:
+        return str(self.raw.get("status") or "")
+
+    @property
+    def diff(self) -> dict[str, Any] | None:
+        diff = self.raw.get("diff")
+        if isinstance(diff, dict):
+            return cast(dict[str, Any], diff)
+        return None
+
 
 VerdictKind = Literal["pass", "fail", "error"]
 
@@ -57,6 +72,18 @@ class Verdict:
     question: str
     model: str
     raw: dict[str, Any]
+
+    @property
+    def passed(self) -> bool:
+        return self.verdict == "pass"
+
+    @property
+    def reason(self) -> str | None:
+        for key in ("reason", "explanation", "rationale"):
+            value = self.raw.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return None
 
     @classmethod
     def from_wire(cls, data: dict[str, Any]) -> Verdict:

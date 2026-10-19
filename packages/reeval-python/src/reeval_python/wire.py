@@ -13,6 +13,7 @@ MATCHER_TO_WIRE: dict[str, str] = {
     "to_pass": "toPass",
     "to_equal": "toEqual",
     "to_contain": "toContain",
+    "to_be_truthy": "toBeTruthy",
     "to_be": "toBe",
     "to_be_null": "toBeNull",
     "to_have_file": "toHaveFile",

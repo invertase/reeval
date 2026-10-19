@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
+from reeval_python.errors import ReevalAssertionError
 
 RUNNER_PROTOCOL = 2
 
@@ -68,18 +69,42 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
     loop = asyncio.get_running_loop()
     async_ctx = AttemptContext(attempt_id, send_request)
     error: dict[str, Any] | None = None
+
+    async def run_async_body() -> None:
+        async_ctx.bind_expect()
+        await fn(async_ctx)
+
+    async def run_sync_body() -> None:
+        sync_ctx = SyncAttemptContext(async_ctx, loop)
+        sync_ctx.bind_expect()
+        await asyncio.to_thread(fn, sync_ctx)
+
     try:
         if inspect.iscoroutinefunction(fn):
-            async_ctx.bind_expect()
-            await fn(async_ctx)
+            await run_async_body()
         else:
-            sync_ctx = SyncAttemptContext(async_ctx, loop)
-            sync_ctx.bind_expect()
-
-            def run_sync() -> None:
-                fn(sync_ctx)
-
-            await asyncio.to_thread(run_sync)
+            await run_sync_body()
+    except ReevalAssertionError as exc:
+        error = {
+            "name": "AssertionError",
+            "message": str(exc),
+            "stack": traceback.format_exc(),
+        }
+    except AssertionError as exc:
+        try:
+            await async_ctx.record_plain_assert(exc)
+        except ReevalAssertionError as recorded:
+            error = {
+                "name": "AssertionError",
+                "message": str(recorded),
+                "stack": traceback.format_exc(),
+            }
+        except AssertionError as nested:
+            error = {
+                "name": "AssertionError",
+                "message": str(nested),
+                "stack": traceback.format_exc(),
+            }
     except Exception as exc:  # noqa: BLE001
         error = {"name": type(exc).__name__, "message": str(exc), "stack": traceback.format_exc()}
     conn.write({"type": "done", "attempt": attempt_id, **({"error": error} if error else {})})

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, cast
 
+from reeval_python.assertion import assert_to_expect
 from reeval_python.errors import ReevalAssertionError
 from reeval_python.expect import bind_expect
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
@@ -55,6 +56,9 @@ class AttemptContext:
         contents = reply.get("contents")
         return None if contents is None else str(contents)
 
+    async def file(self, path: str) -> str | None:
+        return await self.read_file(path)
+
     async def write_file(self, path: str, content: str) -> None:
         await self._call("writeFile", path=path, content=content)
 
@@ -95,6 +99,17 @@ class AttemptContext:
         if assertion.get("status") == "fail":
             raise ReevalAssertionError(str(assertion.get("message") or "expect failed"))
 
+    async def record_plain_assert(self, exc: AssertionError) -> None:
+        wire = assert_to_expect(exc)
+        await self.run_expect(
+            subject=wire.subject,
+            matcher=wire.matcher,
+            args=wire.args,
+            label=wire.label,
+            not_=wire.not_,
+            soft=False,
+        )
+
     def bind_expect(self) -> None:
         async def submit(**kwargs: Any) -> None:
             await self.run_expect(**kwargs)
@@ -127,6 +142,9 @@ class SyncAttemptContext:
 
     def read_file(self, path: str) -> str | None:
         return self._run(self._ctx.read_file(path))
+
+    def file(self, path: str) -> str | None:
+        return self._run(self._ctx.file(path))
 
     def write_file(self, path: str, content: str) -> None:
         self._run(self._ctx.write_file(path, content))

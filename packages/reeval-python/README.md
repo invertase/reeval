@@ -41,12 +41,17 @@ from reeval_python import evaluate, expect
 @evaluate("lands")
 def lands(c):
     c.send("Create greet.py that prints hi")
-    expect(c.exec("test -f greet.py")).to_succeed()
+    assert c.exec("test -f greet.py").ok
     expect(c.judge("Does greet.py print hi?")).to_pass()
 ```
 
-Use snake_case on the context (`read_file`, `write_file`) and on matchers (`to_succeed`, `to_pass`,
-`to_equal`, `to_contain`, …). Matchers raise `ReevalAssertionError` on failure. Async bodies use
+Plain `assert` is first-class: failures become hard checks in the run record (same shape as
+TypeScript). Use typed results (`ExecResult.ok`, `Verdict.passed`, `Turn.text`, …) and `c.file(path)`
+for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, soft checks,
+labels) — Playwright-style.
+
+Use snake_case on the context (`read_file`, `write_file`, `file`) and on matchers (`to_succeed`,
+`to_pass`, `to_equal`, `to_contain`, …). Matcher failures raise `ReevalAssertionError`. Async bodies use
 `async def`, `await c.send(...)`, and `await expect(await c.exec(...)).to_succeed()`; sync bodies
 use plain `def` and block on the runner loop.
 
