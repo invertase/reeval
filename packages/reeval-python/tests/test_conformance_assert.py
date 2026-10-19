@@ -16,12 +16,7 @@ from reeval_python.expect import expect
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = (
-    PKG_ROOT.parent
-    / "reeval"
-    / "test"
-    / "conformance"
-    / "context"
-    / "assert-equivalent.ndjson"
+    PKG_ROOT.parent / "reeval" / "test" / "conformance" / "context" / "assert-equivalent.ndjson"
 )
 
 
