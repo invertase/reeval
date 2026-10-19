@@ -407,7 +407,7 @@ test('parseDuration', () => {
 
 test('resolveConfig defaults', () => {
   const c = resolveConfig({}, '/p')
-  assert.deepEqual(c.include, ['evals/**/*.eval.ts'])
+  assert.deepEqual(c.include, ['evals/**/*.eval.ts', 'evals/**/*.eval.py'])
   assert.deepEqual(c.harness, [{ kind: 'cursor', model: 'composer-2.5' }])
   assert.deepEqual(c.sandbox, { kind: 'docker' })
   assert.equal(c.environment, undefined, 'no environment by default')
