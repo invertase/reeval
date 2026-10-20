@@ -11,11 +11,10 @@ import type { NetworkPolicy } from '../src/egress/policy.ts'
 import type { Substitution } from '../src/egress/substitution.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import type { DockerSession, EgressOptions, SessionOptions } from '../src/session.ts'
-import { CLI, createSession, DEFAULT_NETWORK, ENGINE } from './engine.ts'
+import { CLI, createSession, DEFAULT_NETWORK, ENGINE, REQUIRE_ENGINE } from './engine.ts'
 
-// REEVAL_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
 const dockerReady =
-  process.env.REEVAL_TEST_REQUIRE_DOCKER === '1' ||
+  REQUIRE_ENGINE ||
   (() => {
     try {
       execFileSync(CLI, ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })

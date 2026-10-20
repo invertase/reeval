@@ -11,10 +11,10 @@ import { dockerCapacity, imageInfo } from '../src/docker-cli.ts'
 import { CA_BUNDLE, CA_PATH, PROXY_PORT } from '../src/egress/gateway.ts'
 import { DEFAULT_IMAGE, SANDBOX_HOME, SANDBOX_USER } from '../src/image.ts'
 import { DEFAULT_LIMITS, type DockerSession, type SessionOptions } from '../src/session.ts'
-import { CLI, createSession, ENGINE } from './engine.ts'
+import { CLI, createSession, ENGINE, REQUIRE_ENGINE } from './engine.ts'
 
 const dockerReady =
-  process.env.REEVAL_TEST_REQUIRE_DOCKER === '1' ||
+  REQUIRE_ENGINE ||
   (() => {
     try {
       execFileSync(CLI, ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })

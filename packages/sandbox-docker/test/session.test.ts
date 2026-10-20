@@ -7,7 +7,7 @@ import { after, describe, test } from 'node:test'
 import { PROXY_PORT } from '../src/egress/gateway.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import type { DockerSession } from '../src/session.ts'
-import { CLI, createSession } from './engine.ts'
+import { CLI, createSession, REQUIRE_ENGINE } from './engine.ts'
 
 const dockerReady = (() => {
   try {
@@ -17,7 +17,7 @@ const dockerReady = (() => {
     return false
   }
 })()
-const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
+const requireDocker = REQUIRE_ENGINE
 const skip = !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`
 
 /** Polls until `check` returns true, failing with `what` after the deadline. */
