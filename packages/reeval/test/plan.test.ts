@@ -370,11 +370,13 @@ evaluate('uses tools', { environment: tools }, async () => {})
     }
   })
 
-  test('--json without --dry-run exits 2 with the fix', async () => {
+  test('--json without --dry-run runs, and prints the suite result instead of the plan', async () => {
     const p = await fixture('plan/matrix')
     const r = await runCli(p.dir, ['run', '--json'])
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /reeval run --json only prints the plan: add --dry-run/)
+    const doc = JSON.parse(r.stdout)
+    assert.equal(typeof doc.runId, 'string', r.stderr)
+    assert.ok(Array.isArray(doc.files) && Array.isArray(doc.paths), 'a SuiteResult')
+    assert.equal(doc.totals, undefined, 'not the plan document')
   })
 })
 
