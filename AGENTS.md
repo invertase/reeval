@@ -193,7 +193,7 @@ from its repository under `scripts/third-party-licenses/`. A file copied from sh
 with a `Modified from shadcn/ui` line, which is how the notices find it
 (`studio-web/src/components/ui/LICENSE` has shadcn/ui's licence).
 
-**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.158 carries a pnpm patch
+**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.160 carries a pnpm patch
 (`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`): its bridge loses the served model.
 A patch reaches only this workspace, so `reeval` lists the adapter in `devDependencies`
 and tsdown inlines it with its bridge files (`dist/bridge/`), which its bootstrap writes into the
@@ -475,7 +475,7 @@ pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # t
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
-   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.5`, `claude-code-1.0.158-patch.6c1cff12`,
+   `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.5`, `claude-code-1.0.160-patch.907f9184`,
    `antigravity-0.1.8`, `opencode-0.2.8`, `goose-0.1.3`, `pi-0.2.7`, `codex-0.1.7`, `fx-0.1.0`, `grok-build-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
