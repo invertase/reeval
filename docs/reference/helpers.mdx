@@ -120,7 +120,7 @@ Every skill source takes `placement`: `'harness'` (default) lets the harness ada
 </Property>
 
 <Property name="skill.git(repo, options?)" type="SkillSource">
-  A git repository: `https://…`, `git@…`, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. `ref` is a branch, tag or SHA; `path` is the directory inside the repository.
+  A git repository: `https://…`, `git@…`, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. `ref` is a branch, tag or SHA; `path` is the directory inside the repository. Without `path`, reeval reads the root when it has a `SKILL.md`, else the repository's `skills/` directory when it has one, as `skill.registry` does, else the root's subdirectories. From there it looks one level down only: each skill is a directory with its own `SKILL.md`.
 </Property>
 
 <Property name="skill.npm(spec, options?)" type="SkillSource">

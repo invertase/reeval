@@ -46,7 +46,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | `skill.local`, placed by the harness | — | — | ● 9 | ● 9 | — | ● 2 |
 | `skill.local` with `placement: 'workspace'` | — | — | ● 11 | ● 11 | — | — |
-| `skill.git`: ref, `path`, `only` and the recorded commit | ✓ 2 | — | ● 1 | ● 1 | — | — |
+| `skill.git`: ref, `path` (else `skills/` when the root has no SKILL.md), `only` and the recorded commit | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | `workspace: git(…)`: a repository or directory at a ref, fetched on the host, with its commit and tree recorded | ✓ 5 | ✓ 1 | ● 4 | ● 4 | — | — |
 | `git(…, { init: true })`: a `.git` with one commit of the fetched tree | ✓ 1 | — | ● 1 | ● 1 | — | — |
 | `git(…, { token })`: a token from a host variable for the fetch, never in the sandbox or the record | ✓ 2 | — | ● 1 | ● 2 | — | — |

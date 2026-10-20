@@ -489,6 +489,24 @@ export const features: Feature[] = [
       assert.equal(workspaceOf(run)?.commit, git(join(project, 'repo'), 'rev-parse', 'v1')),
   },
   {
+    dir: 'skills/git-skills-dir',
+    tiers: ['fake', 'docker'],
+    env: 'skills-dir',
+    canary: /to contain 'Hello there, <name>\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'skill-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'skills')
+    },
+    record: ({ run }) => {
+      const [skill] = skills(run)
+      assert.equal(skill?.name, 'house-greeting')
+      assert.match(skill?.source ?? '', /\/repo:skills$/, 'the source names the skills/ it used')
+    },
+  },
+  {
     dir: 'skills/registry-version',
     tiers: ['fake', 'docker'],
     env: 'registry-v1',

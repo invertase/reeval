@@ -357,9 +357,13 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
     case 'git': {
       const { url } = parseGitRepo(s.repo)
       const { dir, commit } = await cloneSkills(root, url, s.ref)
-      const label = `${s.repo}${s.ref ? `#${s.ref}` : ''}${s.path ? `:${s.path}` : ''}`
+      // Without a path, a repository of skills under skills/ works as it does for skill.registry.
+      const path =
+        s.path ??
+        (!existsSync(join(dir, 'SKILL.md')) && existsSync(join(dir, 'skills')) ? 'skills' : '')
+      const label = `${s.repo}${s.ref ? `#${s.ref}` : ''}${path ? `:${path}` : ''}`
       return {
-        skills: loadSkills(s.path ? join(dir, s.path) : dir, label, s.only, s.exclude),
+        skills: loadSkills(join(dir, path), label, s.only, s.exclude),
         source: label,
         commit,
       }
