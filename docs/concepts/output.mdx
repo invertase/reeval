@@ -70,7 +70,7 @@ todo             greets in Klingon
 Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
-The tally counts each eval (and each case of a family) once, fails first, and leaves zeros out. An infra error isn't a fail, and the [exit code](/reference/exit-codes) says which happened. `not gated` marks an eval whose cells are all ungated, a study, so it never reads `pass` beside `0 of 2`.
+The tally counts each eval (and each case of a family) once, fails first, and leaves zeros out. An infra error isn't a fail, and the [exit code](/reference/cli#exit-codes) says which happened. `not gated` marks an eval whose cells are all ungated, a study, so it never reads `pass` beside `0 of 2`.
 
 The last line, `Set analysis.model…`, prints only when no analysis model resolves: `analysis.model` is unset and the judge isn't a language model. With one, the tally ends the run.
 
