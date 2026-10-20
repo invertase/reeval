@@ -469,9 +469,7 @@ evaluate('ok', async (c) => {
       }
       const lines = r.stdout.split('\n')
       const failedAt = lines.findIndex((l) =>
-        /✗ docker\+[0-9a-f]+ · \S+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(
-          l,
-        ),
+        /✗ docker\+[0-9a-f]+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(l),
       )
       assert.ok(failedAt >= 0, r.stdout)
       assert.ok(
