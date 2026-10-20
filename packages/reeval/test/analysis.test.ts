@@ -562,7 +562,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     assert.equal(first.code, 0, first.stdout)
     assert.match(
       first.stdout,
-      /skilled.*lift \+100 pts[^\n]*\n\s+effort: tools \d+ vs \d+ \(×[\d.–]+\), agent [\d.]+s vs [\d.]+s \(×[\d.–]+\): too few attempts to test/,
+      /skilled.*lift \+100 pts[^\n]*\n\s+effort: tools \d+ vs \d+ \(×[\d.–]+\), agent (?:<0\.1s vs <0\.1s|<?[\d.]+s vs <?[\d.]+s \(×[\d.–]+\)): too few attempts to test/,
     )
     const { read } = readRun(p.dir)
     assert.match(read('summary.md'), /effort tools \d+ vs \d+/)

@@ -81,7 +81,10 @@ evaluate('hi', async (c) => {
         'evals/d.eval.ts': eval_,
       })
       const started = Date.now()
-      const a = await runCli(brokered.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+      const a = await runCli(brokered.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 240_000,
+      })
       const out = a.stdout + a.stderr
       assert.equal(a.code, 0, out)
       assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')
@@ -168,7 +171,7 @@ evaluate('real', { environment: house }, async (c) => {
 })
 `,
       })
-      const r = await runCli(p.dir, ['run', '--ui', 'plain'], {
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
         env: { GEMINI_API_KEY: key },
         timeoutMs: 540_000,
       })

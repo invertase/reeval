@@ -1389,7 +1389,10 @@ evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
         GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaSy-not_a_real_key_0000000000000000',
         REEVAL_DEBUG: '1',
       }
-      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 240_000,
+      })
       const out = r.stdout + r.stderr
       assert.match(
         out,
@@ -1431,7 +1434,10 @@ evaluate('hi', async (c) => { await c.send('Reply with the word hi.') })
 `,
         })
         const env = { GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaSy-not_a_real_key_0000000000000000' }
-        const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+        const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+          env,
+          timeoutMs: 240_000,
+        })
         const out = r.stdout + r.stderr
         assert.match(
           out,
@@ -1465,7 +1471,10 @@ evaluate('hi', async (c) => {
 `,
       })
       const env = { OPENAI_API_KEY: 'sk-not_a_real_key_0000000000000000', REEVAL_DEBUG: '1' }
-      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 300_000 })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 300_000,
+      })
       const out = r.stdout + r.stderr
       assert.match(
         out,
@@ -1509,7 +1518,10 @@ evaluate('hi', async (c) => {
       })
       // A made-up key: Grok lists the models and checks the key as it starts, and xAI refuses it.
       const env = { XAI_API_KEY: 'xai-not_a_real_key_0000000000000000', REEVAL_DEBUG: '1' }
-      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 300_000 })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 300_000,
+      })
       const out = r.stdout + r.stderr
       for (const path of ['/v1/models', '/v1/api-key']) {
         assert.match(
@@ -1583,7 +1595,10 @@ evaluate('hi', async (c) => {
         'evals/d.eval.ts': eval_,
       })
       const started = Date.now()
-      const a = await runCli(brokered.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+      const a = await runCli(brokered.dir, ['run', '--ui', 'plain', '--output-logs', 'full'], {
+        env,
+        timeoutMs: 240_000,
+      })
       const out = a.stdout + a.stderr
       assert.equal(a.code, 0, out)
       assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')
