@@ -56,7 +56,7 @@ Usage:
                                 --limit <n> --all (include unrecorded runs) --json
   reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
-                                --md --json --fail-on-regression
+                                --md --json --fail-on-regression; -v adds each cell's lift and effort
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                                 (default dir: .reeval/checkouts/<run>)
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,

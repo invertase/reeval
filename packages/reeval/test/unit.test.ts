@@ -60,7 +60,7 @@ import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
-import { compare, formatCompare, stackChanges } from '../src/history/views.ts'
+import { compare, stackChanges } from '../src/history/views.ts'
 import { newRunId, RUN_ID } from '../src/ids.ts'
 import {
   badJudgeArtifacts,
@@ -1077,10 +1077,6 @@ test('compare classifies an eval on the cells both runs have, and lists the rest
   assert.deepEqual(compare(base, head), [
     { id: 'e', status: 'same', base: 'pass', head: 'pass', cells: { added: [], removed } },
   ])
-  assert.match(
-    formatCompare(base, head, compare(base, head), false),
-    /✓ → ✓ {2}same {22}e · cells removed: cursor\/-, cursor\/reeval-good, agy\/-, agy\/reeval-weak$/m,
-  )
   // The shared cell still decides: a flip in it is a regression, and a change in it is drift.
   const failed = run('fail', [cell('agy/reeval-good', 'fail')])
   assert.deepEqual(

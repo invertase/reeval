@@ -10,18 +10,19 @@ import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
   type CompareRow,
   compare,
-  formatCompare,
   formatHistory,
-  formatNoBaseline,
   formatShow,
   history,
   pickBaseline,
   type Reachability,
   resolveRun,
   stackChanges,
+  unreachable,
 } from './history/views.ts'
 import { fromCwd, sha256 } from './ids.ts'
 import type { ResolvedConfig } from './types.ts'
+import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
+import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
   json?: boolean
@@ -32,6 +33,7 @@ export type HistoryFlags = {
   'skip-secret-scan'?: boolean
   limit?: string
   'fail-on-regression'?: boolean
+  verbose?: boolean[]
 }
 
 export class CommandError extends Error {
@@ -148,11 +150,15 @@ export async function historyCommand(ctx: Ctx, filter: string[]): Promise<number
   return 0
 }
 
+/** A listed run's record, from the history folder or the scratch runs. */
+const recordOf = (config: ResolvedConfig, entry: HistoryEntry) =>
+  readRecord(
+    join(entry.recorded ? config.history.dir : scratchDir(config.root), `${entry.runId}.json`),
+  )
+
 /** The record of the run `ref` names (default latest), recorded or scratch. */
 export async function showRecord(config: ResolvedConfig, ref?: string) {
-  const entry = resolveRun(await allRuns(config), ref)
-  const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
-  return readRecord(join(dir, `${entry.runId}.json`))
+  return recordOf(config, resolveRun(await allRuns(config), ref))
 }
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
@@ -205,8 +211,25 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
   const { base, head, rows, reach, json } = await compareView(ctx.config, refs)
   const failing = regressions(rows)
   if (ctx.flags.json) ctx.out(JSON.stringify(json, null, 2))
-  else if (!base) ctx.out(formatNoBaseline(head, rows, !!ctx.flags.md))
-  else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md, reach))
+  else {
+    const side = async (e: HistoryEntry) => ({
+      runId: e.runId,
+      suite: suiteResult(await recordOf(ctx.config, e)),
+      unreachable: unreachable(e, reach),
+    })
+    const input = {
+      base: base ? await side(base) : null,
+      head: await side(head),
+      rows,
+      changes: base ? stackChanges(base, head) : [],
+    }
+    const opts = { color: false, verbose: !!ctx.flags.verbose?.length }
+    ctx.out(
+      ctx.flags.md
+        ? renderCompareMarkdown(input, opts).trimEnd()
+        : renderCompare(input, opts).join('\n'),
+    )
+  }
   return ctx.flags['fail-on-regression'] && failing.length ? 1 : 0
 }
 

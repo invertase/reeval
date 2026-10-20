@@ -1,16 +1,30 @@
-// The result layouts `reeval run`, summary.md and `reeval show` print: each layout rendered from a
-// corpus run and held to its golden, test/fixtures/output/<name>.txt (REEVAL_UPDATE_SNAPSHOTS=1
-// rewrites them; review the diff), and the rules every layout keeps.
+// The result layouts `reeval run`, summary.md and `reeval show` print, and `reeval compare`'s: each
+// layout rendered from corpus runs and held to its golden, test/fixtures/output/<name>.txt
+// (REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff), and the rules every layout keeps.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { GOLDENS, goldenSuite, OUTPUT_DIR } from '../scripts/output/goldens.ts'
+import {
+  COMPARE_GOLDENS,
+  type CompareGolden,
+  GOLDENS,
+  goldenCompare,
+  goldenSuite,
+  OUTPUT_DIR,
+} from '../scripts/output/goldens.ts'
+import { corpusEntries } from '../scripts/schema/corpus.ts'
 import { hasAnalysisModel } from '../src/config.ts'
 import type { ResolvedConfig } from '../src/types.ts'
 import { colors, stripAnsi } from '../src/ui/colors.ts'
+import {
+  type CompareInput,
+  compareTally,
+  renderCompare,
+  renderCompareMarkdown,
+} from '../src/ui/compare-layout.ts'
 import { layout, NO_MODEL_HINT, render, tallyLine } from '../src/ui/layout.ts'
 
 const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
@@ -22,10 +36,22 @@ const rendered = (name: string) => {
   return render(goldenSuite(g), null, { color: false, verbose: !!g.verbose, hint: true })
 }
 
+const comparedText = (g: CompareGolden, input = goldenCompare(g)) =>
+  renderCompare(input, { color: false, verbose: !!g.verbose })
+
+const compareGolden = (name: string) => {
+  const g = COMPARE_GOLDENS.find((x) => x.name === name)
+  assert.ok(g, name)
+  return g
+}
+
 describe('output goldens', () => {
-  for (const g of GOLDENS) {
+  for (const g of [...GOLDENS, ...COMPARE_GOLDENS]) {
     test(g.name, () => {
-      const text = `${rendered(g.name).join('\n')}\n`
+      const lines = COMPARE_GOLDENS.includes(g as CompareGolden)
+        ? comparedText(g as CompareGolden)
+        : rendered(g.name)
+      const text = `${lines.join('\n')}\n`
       const file = join(OUTPUT_DIR, `${g.name}.txt`)
       if (UPDATE) {
         mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -176,6 +202,108 @@ describe('every layout', () => {
   })
 })
 
+describe('catch regressions (reeval compare)', () => {
+  test('ends with the tally: regressed first, zeros left out, no statistics without -v', () => {
+    const full = comparedText(compareGolden('compare'))
+    assert.equal(
+      full.at(-1),
+      "1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same",
+    )
+    for (const g of COMPARE_GOLDENS.filter((x) => !x.verbose)) {
+      assert.doesNotMatch(comparedText(g).join('\n'), /\d%|lift|interval|noise|×/, g.name)
+    }
+    assert.match(comparedText(compareGolden('compare-verbose')).join('\n'), /agent 0s → 0s \(×/)
+    const c = colors(false)
+    const row = (status: CompareInput['rows'][number]['status']) => ({
+      id: status,
+      status,
+      base: null,
+      head: null,
+    })
+    assert.equal(compareTally(c, [row('same'), row('fixed'), row('same')]), '1 fixed · 2 same')
+    assert.equal(compareTally(c, [row('infra')]), '1 infra error')
+    assert.equal(compareTally(c, []), 'no evals to compare')
+  })
+
+  test('a check not run on one side is not run, never a failure; a flip shows both sides', () => {
+    const regressed = comparedText(compareGolden('compare-regressed')).join('\n')
+    assert.match(regressed, /^ {2}house greeting {3}pass → fail\n {4}expected command to succeed/m)
+    assert.match(regressed, /^ {2}sign-off {9}not run$/m)
+    assert.doesNotMatch(regressed, /sign-off +(pass → )?fail/, 'canary: not printed as fail')
+    const fixed = comparedText(compareGolden('compare-fixed')).join('\n')
+    assert.match(fixed, /^ {2}build {12}fail → pass$/m)
+    assert.match(fixed, /^ {2}types {12}not run → pass$/m)
+    assert.doesNotMatch(fixed, /types +fail → pass/, 'canary: not run is not fail')
+  })
+
+  test('a check not run on both sides is no change: never a flip', () => {
+    const g = compareGolden('compare-regressed')
+    const input = goldenCompare(g)
+    for (const side of [input.base, input.head]) {
+      for (const e of side?.suite.files.flatMap((f) => f.evals) ?? []) {
+        for (const cell of e.cells ?? []) {
+          cell.checks.push({
+            ...(cell.checks[0] as (typeof cell.checks)[number]),
+            label: 'never reached',
+            outcome: { status: 'not run' },
+          })
+        }
+      }
+    }
+    const text = comparedText(g, input).join('\n')
+    assert.match(text, /^ {2}never reached {4}not run$/m)
+    assert.doesNotMatch(text, /never reached +\S+ → /, 'canary: not a flip')
+    const fixed = compareGolden('compare-fixed')
+    const fixedInput = goldenCompare(fixed)
+    for (const side of [fixedInput.base, fixedInput.head]) {
+      for (const k of side?.suite.files.flatMap((f) => f.evals).flatMap((e) => e.cases ?? []) ??
+        []) {
+        for (const cell of k.cells) {
+          cell.checks.push({
+            ...(cell.checks[0] as (typeof cell.checks)[number]),
+            label: 'never reached',
+            outcome: { status: 'not run' },
+          })
+        }
+      }
+    }
+    assert.doesNotMatch(comparedText(fixed, fixedInput).join('\n'), /never reached/)
+  })
+
+  test('unchanged evals collapse to +N same in place, and the runs print once when no block names them', () => {
+    const text = comparedText(compareGolden('compare-same-collapsed'))
+    assert.deepEqual(text.slice(2), ['', '+4 same', '', '4 same'])
+    assert.match(text[0] ?? '', /^base {13}\S+$/)
+    const full = comparedText(compareGolden('compare')).join('\n')
+    assert.doesNotMatch(full, /^base /m, 'a regressed block names them')
+  })
+
+  test('--md is the same layout in a text block under a heading naming both runs', () => {
+    const g = compareGolden('compare')
+    const input = goldenCompare(g)
+    const md = renderCompareMarkdown(input, { color: true, verbose: false })
+    assert.equal(
+      md,
+      [
+        `### reeval compare: ${input.head.runId} vs ${input.base?.runId}`,
+        '',
+        '```text',
+        ...comparedText(g),
+        '```',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  test('colour is the only difference colour makes', () => {
+    const input = goldenCompare(compareGolden('compare'))
+    const plain = renderCompare(input, { color: false, verbose: false })
+    const painted = renderCompare(input, { color: true, verbose: false })
+    assert.ok(painted.some((l) => l.includes('\x1b[')))
+    assert.deepEqual(painted.map(stripAnsi), plain)
+  })
+})
+
 test('output:preview renders every corpus run and golden from src/', () => {
   const r = spawnSync(
     process.execPath,
@@ -184,7 +312,25 @@ test('output:preview renders every corpus run and golden from src/', () => {
   )
   assert.equal(r.status, 0, r.stderr)
   assert.doesNotMatch(r.stdout, /\bundefined\b|\bNaN\b|\[object Object\]/)
-  for (const g of GOLDENS) assert.match(r.stdout, new RegExp(`^── golden ${g.name}$`, 'm'))
+  for (const g of [...GOLDENS, ...COMPARE_GOLDENS]) {
+    assert.match(r.stdout, new RegExp(`^── golden ${g.name}$`, 'm'))
+  }
+  const [base, head] = (corpusEntries().find((e) => e.name === 'with-compare')?.runs ?? []).map(
+    (run) => run.file,
+  )
+  const two = spawnSync(
+    process.execPath,
+    [
+      '--experimental-strip-types',
+      '--no-warnings',
+      'scripts/output/preview.ts',
+      `${base}`,
+      `${head}`,
+    ],
+    { cwd: PACKAGE_DIR, encoding: 'utf8' },
+  )
+  assert.equal(two.status, 0, two.stderr)
+  assert.match(two.stdout, /^── compare .*\n\ncan't compare {4}bills in minor units/m)
   const bad = spawnSync(
     process.execPath,
     ['--experimental-strip-types', '--no-warnings', 'scripts/output/preview.ts', 'no-such-entry'],

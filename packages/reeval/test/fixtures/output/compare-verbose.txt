@@ -1,0 +1,44 @@
+can't compare    bills in minor units with the billing doc
+  changed          environment
+  base             20261020T230147Z_958e309_cursor-agent_aamj  pass
+  head             20261020T230148Z_958e309_cursor-agent_qghb  fail
+  fake/with-doc/fake  tools 0 → 0 (×–) · agent 0s → 0s (×0.50)
+  amount in minor units  failed
+    expected command to succeed, exit code 1
+
+same             adds a reset button that builds
+  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×3.00)
+
+fixed            adds a double button that builds
+  build            fail → pass
+  types            not run → pass
+  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×2.50)
+
+same             adds a clear button that builds
+  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×1.20)
+
+regressed        greets in the house style
+  base             20261020T230147Z_958e309_cursor-agent_aamj
+  head             20261020T230148Z_958e309_cursor-agent_qghb
+  house greeting   pass → fail
+    expected command to succeed, exit code 1
+  sign-off         not run
+  +1 more passed
+  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×2.00)
+
+same             writes greet.js
+  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×0.83)
+
+same             greets in French
+  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×1.20)
+
+new              greets in Spanish
+  head             20261020T230148Z_958e309_cursor-agent_qghb  fail
+  spanish greeting  failed
+    expected command to succeed, exit code 1
+
+removed          greets in German
+  base             20261020T230147Z_958e309_cursor-agent_aamj  fail
+
+stack changed: environments with-doc@007345e67fac → with-doc@26d7ac38e3f5
+1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same
