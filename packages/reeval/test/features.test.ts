@@ -33,6 +33,7 @@ import { PI_CLI_VERSION } from '@reeval/harness-pi'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandbox-docker'
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
@@ -43,7 +44,7 @@ import {
   keyOf,
   reserveAttempts,
 } from './support/harnesses.ts'
-import { type EvalExpectation, expectRun } from './support/oracle.ts'
+import { type EvalExpectation, expectRun, type RunExpectation } from './support/oracle.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
@@ -89,12 +90,19 @@ type Feature = {
   prepare?: (dir: string) => void
   /** Needs POSIX file modes on the host, so the fake tier skips on Windows. */
   posixModes?: true
+  /**
+   * Every eval and attempt, when the defaults can't name them: several harnesses or a family's
+   * cases. Fake tier only, where the ids are fixed.
+   */
+  evals?: RunExpectation['evals']
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
   record?: (view: {
     run: RunRecord
     project: string
     runDir: string
     tier: Tier
+    /** What `reeval run` printed. */
+    stdout: string
   }) => void | Promise<void>
   /** reeval's image the Docker and Podman tiers need, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
@@ -110,6 +118,15 @@ type Feature = {
   timeoutMs?: Partial<Record<Tier, number>>
   /** Extra `reeval run` arguments, e.g. `--resume`. */
   args?: string[]
+}
+
+/** The result block `reeval run` printed for one eval, from its verdict line to the blank line. */
+function blockOf(stdout: string, name: string): string {
+  const lines = stdout.split('\n')
+  const start = lines.findIndex((l) => new RegExp(`^\\S.* {2,}${name}$`).test(l))
+  assert.ok(start >= 0, `no block for ${name}\n${stdout}`)
+  const end = lines.indexOf('', start)
+  return lines.slice(start, end < 0 ? undefined : end).join('\n')
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
@@ -2185,6 +2202,161 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'output/none',
+    tiers: ['fake'],
+    env: '-',
+    canary: /second try: expected 1 to be 2/,
+    record: ({ stdout }) => {
+      assert.equal(blockOf(stdout, 'lands'), 'pass             lands')
+      assert.equal(
+        blockOf(stdout, 'canary'),
+        'fail             canary\n  second try       failed\n    expected 1 to be 2 // Object.is equality',
+      )
+      assert.match(stdout, /\n1 fail · 1 pass\n/)
+      assert.ok(stdout.endsWith(`\n${NO_MODEL_HINT}\n`), stdout)
+    },
+  },
+  {
+    dir: 'output/change',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: { outcome: 'pass', error: { kind: 'assertion', message: /has the marker/ } },
+    landsPass: ['marked'],
+    canary: /has the marker: expected (file )?marker\.txt/,
+    record: ({ stdout }) => {
+      assert.match(
+        blockOf(stdout, 'lands'),
+        /^pass {13}lands\n {2}arm {14}pass\n {2}plain {12}0 of 1\n {2}marked {11}1 of 1 {2}can't tell yet\n {2}check {12}plain {3}marked\n {2}has the marker {3}0 of 1 {2}1 of 1\n/,
+      )
+      assert.match(blockOf(stdout, 'canary'), /^ {2}marked {11}0 of 1 {2}can't tell yet$/m)
+      assert.doesNotMatch(stdout, /%|pass@1/)
+    },
+  },
+  {
+    dir: 'output/harness',
+    tiers: ['fake'],
+    env: '-',
+    canary: /writes out\.txt: expected file out\.txt to exist/,
+    evals: {
+      lands: { outcome: 'pass', attempts: ['writer/-/fake#1', 'copier/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['writer/-/fake#1', 'idler/-/fake#1'],
+        error: { kind: 'assertion', message: /writes out\.txt: expected file out\.txt to exist/ },
+        clean: ['writer/-/fake#1'],
+      },
+    },
+    record: ({ stdout }) => {
+      assert.equal(
+        blockOf(stdout, 'lands'),
+        'pass             lands\n  harness          pass\n  writer           1 of 1\n  copier           1 of 1',
+      )
+      assert.match(
+        blockOf(stdout, 'canary'),
+        /\n {2}writer {12}1 of 1\n {2}idler {13}0 of 1\n {4}writes out\.txt {2}failed\n {6}expected file out\.txt to exist$/,
+      )
+    },
+  },
+  {
+    dir: 'output/both',
+    tiers: ['fake'],
+    env: 'marked',
+    canary: /has the marker: expected (file )?marker\.txt/,
+    evals: {
+      lands: {
+        outcome: 'pass',
+        attempts: [
+          'writer/plain/fake#1',
+          'writer/marked/fake#1',
+          'copier/plain/fake#1',
+          'copier/marked/fake#1',
+        ],
+        error: { kind: 'assertion', message: /has the marker: expected file marker\.txt to exist/ },
+        clean: ['writer/marked/fake#1', 'copier/marked/fake#1'],
+      },
+      canary: {
+        outcome: 'fail',
+        attempts: [
+          'writer/plain/fake#1',
+          'writer/marked/fake#1',
+          'copier/plain/fake#1',
+          'copier/marked/fake#1',
+        ],
+        error: { kind: 'assertion', message: /has the marker: expected (file )?marker\.txt/ },
+      },
+    },
+    record: ({ stdout }) => {
+      const arms = (harness: string) =>
+        `  ${harness}\n    arm             pass\n    plain           0 of 1\n    marked          1 of 1  can't tell yet\n`
+      const lands = blockOf(stdout, 'lands')
+      assert.ok(lands.startsWith(`pass             lands\n${arms('writer')}`), lands)
+      assert.ok(lands.includes(`\n${arms('copier')}`), lands)
+      assert.equal(lands.match(/^ {4}check {11}plain {3}marked$/gm)?.length, 2, lands)
+    },
+  },
+  {
+    dir: 'output/family',
+    tiers: ['fake'],
+    env: '-',
+    canary: /is red: expected 'green' to be 'red'/,
+    evals: {
+      'lands red': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'lands blue': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'canary red': { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      'canary green': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /is red: expected 'green' to be 'red'/ },
+      },
+    },
+    record: ({ stdout }) => {
+      assert.match(
+        stdout,
+        /\n {17}lands %s\n {2}pass {2}red {8}1 of 1\n {2}pass {2}blue {7}1 of 1\n\n/,
+      )
+      assert.match(
+        stdout,
+        /\n {17}canary %s\n {2}pass {2}red {8}1 of 1\n {2}fail {2}green {6}0 of 1\n {4}is red {9}failed\n {6}expected 'green' to be 'red'/,
+      )
+      assert.match(stdout, /\n1 fail · 3 pass\n/)
+    },
+  },
+  {
+    dir: 'output/not-run',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: { outcome: 'pass', error: { kind: 'assertion', message: /has the marker/ } },
+    landsPass: ['marked'],
+    canary: /reached: expected 'control' to be 'variant'/,
+    canaryPass: ['marked'],
+    record: ({ stdout }) => {
+      const lands = blockOf(stdout, 'lands')
+      assert.match(lands, /^ {2}reached {10}not run {2}1 of 1$/m)
+      assert.doesNotMatch(lands, /reached +0 of/)
+      assert.match(blockOf(stdout, 'canary'), /^ {2}reached {10}0 of 1 {2}1 of 1$/m)
+    },
+  },
+  {
+    dir: 'output/infra-error',
+    tiers: ['fake'],
+    env: 'missing',
+    canaryEnv: '-',
+    lands: {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: /^setup step 1\/1 "touch ran" in environment missing/ },
+    },
+    canary: /second try: expected 1 to be 2/,
+    record: ({ stdout }) => {
+      assert.match(
+        blockOf(stdout, 'lands'),
+        /^infra error {6}lands\n {2}infra error {6}setup step 1\/1 "touch ran"/,
+      )
+      assert.match(stdout, /\n1 fail · 1 infra error\n/)
+    },
+  },
+  {
     dir: 'python-sdk/hello',
     tiers: ['fake', 'docker', 'real'],
     env: '-',
@@ -2325,7 +2497,7 @@ function fixtureTests(tiers: Tier[]) {
         const { run, dir: runDir } = readRun(p.dir)
         expectRun(r, run, {
           code: 1,
-          evals: {
+          evals: f.evals ?? {
             lands: {
               outcome: 'pass',
               ...f.lands,
@@ -2340,7 +2512,7 @@ function fixtureTests(tiers: Tier[]) {
             },
           },
         })
-        await f.record?.({ run, project: p.dir, runDir, tier })
+        await f.record?.({ run, project: p.dir, runDir, tier, stdout: r.stdout })
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
         if (tier !== 'fake') await containersGone(run.runId, cliOf(tier))
       })

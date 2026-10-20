@@ -201,7 +201,6 @@ export const inventory: InventoryFeature[] = [
       options('common mistakes'),
       'reeval/test/results.test.ts › compare question pairs',
       'reeval/test/results.test.ts › compare questions over real-harness runs (real-e2e-pairs)',
-      'reeval/test/ui.test.ts › compare answers in the summary',
       studio("compare answers: each question's win rates per cut"),
     ],
     real: ['questions › examples/hello --profile questions'],
@@ -1650,14 +1649,16 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'effort',
     area: 'Records and studio',
-    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio',
+    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare` and the studio',
     tests: [
       analysis('the rank test is exact'),
       analysis('tokens join the rank test when both sides reported usage'),
       analysis('a side with no usage omits the token metric, not insufficient'),
       analysis('tokens still verdict among cells that reported usage when another cell did not'),
       analysis('attempts without usage drop out of the token sample only'),
-      analysis('reeval run, summary.md and reeval compare show each variant cell'),
+      analysis(
+        'reeval run and summary.md print the arms without an effort table below four tries a side',
+      ),
       analysis('reeval query effort verdicts tokens when usage is present'),
       analysis('the prompt and rules say missing usage omits tokens'),
       unit('effort under 10s reads in tenths, so a ratio matches its times'),
@@ -1678,10 +1679,10 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'contrasts',
     area: 'Records and studio',
-    name: 'Contrasts: each pair of arms on one harness (lift, checks, effort) in the run summary, `reeval show`, `summary.md`, `reeval query contrasts` and the digest',
+    name: 'Contrasts: every arm side by side (checks, effort) in the run output, `reeval show` and `summary.md`; each pair of arms on one harness in `reeval query contrasts` and the digest',
     tests: [
       analysis(
-        'show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side',
+        'show, summary.md and the run set every arm side by side, and reeval query contrasts and the digest every pair',
       ),
       analysis('canary: with one variant there is no variant-against-variant row'),
     ],
@@ -1734,10 +1735,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'summary.judge-keys',
     area: 'Records and studio',
-    name: 'Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts',
+    name: 'Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts',
     tests: [
-      'reeval/test/ui.test.ts › cell rows show per-key rates',
-      'reeval/test/ui.test.ts › cell rows distinguish judges that share a clipped prefix',
       studio('per-key judge rates, collapsed scores and cell usage'),
       studio('colliding judge prefixes take the distinctive tail'),
     ],
@@ -1745,21 +1744,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'summary.judge-score',
     area: 'Records and studio',
-    name: 'Collapsed attempt lines show each judge as fail 0.78/0.80 (or the minimum plus a count)',
-    tests: [
-      'reeval/test/ui.test.ts › two judges print as fail',
-      studio('per-key judge rates, collapsed scores and cell usage'),
-    ],
+    name: 'Studio attempt rows show each judge as fail 0.78/0.80 (or the minimum plus a count)',
+    tests: [studio('per-key judge rates, collapsed scores and cell usage')],
   },
   {
     id: 'summary.usage',
     area: 'Records and studio',
-    name: 'Token usage on each attempt line and a per-cell sum of counted attempts, in the summary and studio',
-    tests: [
-      'reeval/test/ui.test.ts › a collapsed attempt line shows verdict',
-      'reeval/test/ui.test.ts › null usage is omitted',
-      studio('per-key judge rates, collapsed scores and cell usage'),
-    ],
+    name: 'Token usage on each attempt and a per-cell sum of counted attempts, in the studio',
+    tests: [studio('per-key judge rates, collapsed scores and cell usage')],
   },
   {
     id: 'analyze',
@@ -2001,7 +1993,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'reeval/test/ui.test.ts › grouped: start lines stream',
       'reeval/test/ui.test.ts › GitHub Actions: passing attempts collapse into groups',
-      engine('agent mode prints failures only'),
+      engine('agent mode prints the plan and the result blocks only'),
       engine("a turn's error message shows in the summary, agent output and summary.md without -v"),
     ],
   },
@@ -2010,6 +2002,30 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: '`--log-order`, `--log-prefix` and `--output-logs` through `reeval run`',
     tests: [engine('--log-order, --log-prefix and --output-logs shape what reeval run prints')],
+  },
+  {
+    id: 'output.layouts',
+    area: 'CLI and runner',
+    name: 'Result layouts by what an eval varies: results, measure a change, compare harnesses, both, and a family',
+    fixtures: ['output/none', 'output/change', 'output/harness', 'output/both', 'output/family'],
+    tests: [
+      'reeval/test/output.test.ts › layout() picks the shape from what the eval varies',
+      'reeval/test/output.test.ts › statistics only with -v',
+    ],
+  },
+  {
+    id: 'output.not-run',
+    area: 'CLI and runner',
+    name: 'A check that never ran reads `not run`, never `0 of N`',
+    fixtures: ['output/not-run'],
+    tests: ["reeval/test/output.test.ts › a check that didn't run reads not run, never 0 of N"],
+  },
+  {
+    id: 'output.tally',
+    area: 'CLI and runner',
+    name: 'The tally (`5 fail · 2 pass`, infra errors and skips apart) and the no-model hint',
+    fixtures: ['output/infra-error'],
+    tests: ['reeval/test/output.test.ts › the tally puts fail first'],
   },
   {
     id: 'verbose',
