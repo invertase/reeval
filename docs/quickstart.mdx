@@ -19,7 +19,7 @@ description: Write and run your first eval in two minutes, with no API keys or D
     reeval init · .
       create    reeval.config.ts       harness cursor:composer-2.5; profiles fake, pr, nightly
       create    evals/greet.eval.ts  one eval, passes on the fake agent
-      create    .gitignore         .reeval/, .env*
+      create    .gitignore         node_modules/, .reeval/, .env*
       create    package.json       script eval, devDependency {{ pkg }}
     ```
 
@@ -31,6 +31,12 @@ description: Write and run your first eval in two minutes, with no API keys or D
     ```
 
     npm, pnpm and Yarn (Plug'n'Play too) all work.
+
+    pnpm's `minimumReleaseAge` refuses a release younger than the policy, with `The latest release of {{ pkg }} is … Published at …`. List {{ pkg }} in `minimumReleaseAgeExclude`, or install it once with `--config.minimum-release-age=0`:
+
+    ```bash
+    pnpm add -D {{ pkg }} --config.minimum-release-age=0
+    ```
   </Step>
   <Step title="Read the eval">
     reeval finds `evals/**/*.eval.ts` by default.
