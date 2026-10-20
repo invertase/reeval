@@ -9,8 +9,6 @@ name: release
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-    branches: [main]
 
 permissions: {}
 
@@ -93,7 +91,7 @@ jobs:
   publish-pypi:
     name: publish to PyPI
     needs: [release-please, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.pypi_created == 'true'
+    if: github.repository == 'invertase/reeval' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.pypi_created == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: pypi
@@ -111,27 +109,4 @@ jobs:
         run: uv build
       - uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26 # v1.14.2
         with:
-          packages-dir: packages/reeval-python/dist
-
-  publish-testpypi:
-    name: publish to TestPyPI (manual)
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    environment: testpypi
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: main
-      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
-      - name: Build sdist and wheel
-        working-directory: packages/reeval-python
-        run: uv build
-      - uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26 # v1.14.2
-        with:
-          repository-url: https://test.pypi.org/legacy/
           packages-dir: packages/reeval-python/dist
