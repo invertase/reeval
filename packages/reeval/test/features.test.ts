@@ -504,7 +504,11 @@ export const features: Feature[] = [
     record: ({ run }) => {
       const [skill] = skills(run)
       assert.equal(skill?.name, 'house-greeting')
-      assert.match(skill?.source ?? '', /\/repo:skills$/, 'the source names the skills/ it used')
+      assert.match(
+        skill?.source ?? '',
+        /repo:skills$/,
+        'the source names the skills/ it used',
+      )
     },
   },
   {
