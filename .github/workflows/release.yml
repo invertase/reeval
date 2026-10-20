@@ -9,6 +9,12 @@ name: release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      republish:
+        description: Run full CI on main and publish npm/PyPI from the manifest (tags must already exist)
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -57,18 +63,54 @@ jobs:
             exit 1
           fi
 
+  republish-gate:
+    name: republish gate
+    if: github.repository == 'invertase/reeval' && github.event_name == 'workflow_dispatch' && inputs.republish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      any_created: ${{ steps.check.outputs.any_created }}
+      npm_created: ${{ steps.check.outputs.npm_created }}
+      pypi_created: ${{ steps.check.outputs.pypi_created }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+          fetch-depth: 0
+      - id: check
+        run: |
+          set -euo pipefail
+          npm_v=$(jq -r '."."' .release-please-manifest.json)
+          py_v=$(jq -r '."packages/reeval-python"' .release-please-manifest.json)
+          git rev-parse "refs/tags/v${npm_v}^{commit}" >/dev/null
+          git rev-parse "refs/tags/reeval-python-v${py_v}^{commit}" >/dev/null
+          echo "any_created=true" >> "$GITHUB_OUTPUT"
+          echo "npm_created=true" >> "$GITHUB_OUTPUT"
+          echo "pypi_created=true" >> "$GITHUB_OUTPUT"
+
   test:
     name: test
-    needs: release-please
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.any_created == 'true'
+    needs: [release-please, republish-gate]
+    if: |
+      always() && !cancelled() && !failure() &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.any_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.result == 'success')
+      )
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: publish to npm
-    needs: [release-please, test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.npm_created == 'true'
+    needs: [release-please, republish-gate, test]
+    if: |
+      always() && needs.test.result == 'success' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.npm_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.npm_created == 'true')
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: npm
@@ -90,8 +132,13 @@ jobs:
 
   publish-pypi:
     name: publish to PyPI
-    needs: [release-please, test]
-    if: github.repository == 'invertase/reeval' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.pypi_created == 'true'
+    needs: [release-please, republish-gate, test]
+    if: |
+      always() && needs.test.result == 'success' && github.repository == 'invertase/reeval' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.pypi_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.pypi_created == 'true')
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: pypi
