@@ -1,0 +1,4 @@
+$ test clear != double
+exit 0
+--- stdout
+--- stderr
