@@ -68,6 +68,8 @@ jobs:
     if: github.repository == 'invertase/reeval' && github.event_name == 'workflow_dispatch' && inputs.republish
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
       any_created: ${{ steps.check.outputs.any_created }}
       npm_created: ${{ steps.check.outputs.npm_created }}
@@ -100,6 +102,7 @@ jobs:
       )
     permissions:
       contents: read
+      actions: read
     uses: ./.github/workflows/ci.yml
 
   publish:
