@@ -31,7 +31,7 @@ import {
   judgeRatesLabel,
   summaryJudgeRates,
 } from '../view/judgements.ts'
-import { formatUsage, hasUngatedCells, isUngatedMiss } from '../view/model.ts'
+import { evalMarkOutcome, formatUsage, hasUngatedCells, isUngatedMiss } from '../view/model.ts'
 import { type Colors, colors } from './colors.ts'
 import type { EvalResult, ReevalEvent } from './events.ts'
 import {
@@ -91,7 +91,7 @@ export function resultFor(entry: EvalEntry, attempt: AttemptRecord, results: Eva
 function entryOutcome(e: EvalEntry): Outcome {
   const outcomes = e.attempts.map(attemptOutcome)
   if (outcomes.length && outcomes.every((o) => o === 'cancelled')) return 'cancelled'
-  return e.outcome
+  return evalMarkOutcome(e)
 }
 
 /** Every cell is `gate: 'none'`: the eval reports its attempts but nothing gates it. */

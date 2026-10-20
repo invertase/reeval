@@ -555,6 +555,19 @@ export const isUngatedMiss = (
   a.error?.kind !== 'aborted' &&
   e.cells.find((c) => c.key === a.cell)?.gate === 'none'
 
+/**
+ * The outcome an eval's mark shows. A pass needs a counted (passed or failed) attempt and no infra
+ * error: a gate that lets those through, such as `gate: 'none'`, still shows `!`, not `✓`.
+ */
+export function evalMarkOutcome(e: Pick<EvalEntry, 'outcome' | 'attempts'>): Outcome {
+  if (e.outcome !== 'pass') return e.outcome
+  const ran = e.attempts.filter((a) => a.outcome !== 'skipped')
+  const infra = ran.some((a) => a.outcome === 'infra_error')
+  return infra || (ran.length > 0 && !ran.some((a) => a.outcome === 'pass' || a.outcome === 'fail'))
+    ? 'infra_error'
+    : 'pass'
+}
+
 /** pass@1 in the gated cells, as an eval's `passRate` counts it. */
 function gatedPassAt1(cells: HistoryCell[]): number | null {
   const gated = cells.filter((c) => c.gate !== 'none')

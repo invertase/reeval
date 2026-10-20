@@ -18,6 +18,7 @@ import {
   summaryJudgeRates,
 } from '../view/judgements.ts'
 import {
+  evalMarkOutcome,
   formatUsage,
   harnessLabel,
   isUngatedMiss,
@@ -332,14 +333,16 @@ export function renderSummary(run: RunRecord): string {
         : a
           ? formatDuration(a.durationMs)
           : ''
-    lines.push(`| ${OUTCOME_MARK[e.outcome]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`)
+    lines.push(
+      `| ${OUTCOME_MARK[evalMarkOutcome(e)]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`,
+    )
   }
   // Failures first, but passes get the same detail: why something passed matters too. Expected
   // misses (ungated cells) come after the passes, collapsed: they fail neither the eval nor the run.
   const rank = (o: Outcome) => (o === 'fail' || o === 'infra_error' ? 0 : o === 'pass' ? 1 : 2)
   for (const e of [...run.evals].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
     if (e.outcome === 'skipped') continue
-    lines.push('', `### ${OUTCOME_MARK[e.outcome]} ${e.id}`, '')
+    lines.push('', `### ${OUTCOME_MARK[evalMarkOutcome(e)]} ${e.id}`, '')
     const multi = e.attempts.length > 1
     if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
     const contrasts = contrastLines(e)
