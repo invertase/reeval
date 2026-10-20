@@ -12,6 +12,7 @@ import {
   type CompareGolden,
   GOLDENS,
   goldenCompare,
+  goldenRender,
   goldenSuite,
   OUTPUT_DIR,
 } from '../scripts/output/goldens.ts'
@@ -38,7 +39,7 @@ const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
 const rendered = (name: string) => {
   const g = GOLDENS.find((x) => x.name === name)
   assert.ok(g, name)
-  return render(goldenSuite(g), null, { color: false, verbose: !!g.verbose, hint: true })
+  return goldenRender(g)
 }
 
 const comparedText = (g: CompareGolden, input = goldenCompare(g)) =>
@@ -84,9 +85,9 @@ describe('every layout', () => {
   test('ends with the tally and the hint, and counts read N of M, never a percentage', () => {
     for (const g of GOLDENS) {
       const lines = rendered(g.name)
-      assert.equal(lines.at(-1), NO_MODEL_HINT, g.name)
+      if (!g.insights) assert.equal(lines.pop(), NO_MODEL_HINT, g.name)
       assert.match(
-        lines.at(-2) ?? '',
+        lines.at(-1) ?? '',
         /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
         g.name,
       )

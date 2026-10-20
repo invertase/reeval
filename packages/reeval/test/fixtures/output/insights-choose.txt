@@ -1,0 +1,16 @@
+                 recommends Genkit for $task
+  Not for a Python agent: 0 of 2 tries passed.
+  pass  a chat app            Genkit 2 of 2
+  pass  a RAG pipeline        Genkit 2 of 2
+  fail  a Python agent        Genkit 2 of 2
+    It also names LangChain, so "names no other framework" fails.
+    names no other framework  0 of 2
+      expected 'I would build this with Genkit. If yo…' not to contain 'LangChain'
+    named
+      Genkit                  2 of 2
+      LangChain               2 of 2
+    searches                  0
+    fetches                   0
+    +1 more passed
+
+1 fail · 2 pass

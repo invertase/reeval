@@ -820,8 +820,8 @@ function insightNotes(
 
 /**
  * A run's result: its errors outside any eval, its blocks with their insights, the headline,
- * then the tally and, with no
- * analysis model, the hint. Insights written for other facts are left out with a note.
+ * then the tally and, with no analysis model, the hint. Insights written for other facts are
+ * left out with a note.
  */
 export function render(
   suite: SuiteResult,

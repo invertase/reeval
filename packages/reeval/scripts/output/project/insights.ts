@@ -14,7 +14,9 @@ const str = (x: unknown) => (typeof x === 'string' ? x : '')
 const countOf = (f: Fact) => str(f.result).replace(/ passed$/, '')
 
 const failing = (f: Fact) =>
-  f.kind === 'check' && /^\d+ of \d+ passed$/.test(str(f.result)) && !/^(\d+) of \1 /.test(str(f.result))
+  f.kind === 'check' &&
+  /^\d+ of \d+ passed$/.test(str(f.result)) &&
+  !/^(\d+) of \1 /.test(str(f.result))
 
 /** The facts under one case or cell: those after it, up to the next of its kind. */
 function under(facts: Fact[], path: string): Fact[] {
@@ -64,10 +66,15 @@ function rowSentence(input: EvalCall, path: string): { text: string; cites: stri
   if (check) {
     const others = input.attempts
       .filter((a) => a.cell.startsWith(path) || check.path.startsWith(a.cell))
-      .flatMap((a) => TOOLS.filter((t) => t !== input.intent?.subject.tool && a.lastText.includes(t)))
+      .flatMap((a) =>
+        TOOLS.filter((t) => t !== input.intent?.subject.tool && a.lastText.includes(t)),
+      )
     const [other] = new Set(others)
     return other
-      ? { text: `It also names ${other}, so "${str(check.label)}" fails.`, cites: [path, check.path] }
+      ? {
+          text: `It also names ${other}, so "${str(check.label)}" fails.`,
+          cites: [path, check.path],
+        }
       : { text: `Only ${countOf(check)} passed "${str(check.label)}".`, cites: [check.path] }
   }
   if (Array.isArray(fact.errors) && fact.errors.length) {

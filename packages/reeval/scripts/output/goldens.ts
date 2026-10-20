@@ -2,13 +2,16 @@
 // names in a corpus run, and each `reeval compare` block, from two corpus runs.
 // test/output.test.ts holds the files to these, and `output:preview all` prints them.
 
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { RunRecord } from '../../src/history/types.ts'
+import { factsHash } from '../../src/insights/hash.ts'
 import type { CompareInput } from '../../src/ui/compare-layout.ts'
+import { render } from '../../src/ui/layout.ts'
 import { type CompareRow, compare, stackChanges } from '../../src/view/compare.ts'
 import { runHeader } from '../../src/view/header.ts'
-import { readableRecord } from '../../src/view/record.ts'
+import type { RunInsights } from '../../src/view/insights.ts'
+import { readableInsights, readableRecord } from '../../src/view/record.ts'
 import { type EvalResult, type SuiteResult, suiteResult } from '../../src/view/suite.ts'
 import { CORPUS_DIR, corpusEntries } from '../schema/corpus.ts'
 
@@ -21,6 +24,8 @@ export type Golden = {
   evals?: string[]
   /** Rendered as `-v` prints it. */
   verbose?: boolean
+  /** Rendered with the run's insights.json, as `reeval show` prints it once insights are written. */
+  insights?: boolean
 }
 
 const layouts = (...ids: string[]) => ids.map((id) => `evals/${id}`)
@@ -64,6 +69,23 @@ export const GOLDENS: Golden[] = [
     verbose: true,
   },
   { name: 'suite', entry: 'with-layouts' },
+  ...(
+    [
+      ['choose', 'choose.eval.ts'],
+      ['finish', 'results.eval.ts › greets in French'],
+      ['measure-a-change', 'measure.eval.ts'],
+      ['harness', 'harnesses.eval.ts › greets in the house style on each agent'],
+      ['both', 'harnesses.eval.ts › learns the house style from the skill'],
+      ['family', 'family.eval.ts'],
+      ['other', 'results.eval.ts › explains why greet.js fails'],
+    ] as const
+  ).map(([name, id]) => ({
+    name: `insights-${name}`,
+    entry: 'with-insights',
+    evals: layouts(id),
+    insights: true,
+  })),
+  { name: 'insights-suite', entry: 'with-insights', insights: true },
 ]
 
 export const OUTPUT_DIR = join(CORPUS_DIR, '..', 'output')
@@ -78,12 +100,40 @@ function tallyOf(evals: EvalResult[], errors: number): SuiteResult['tally'] {
   return tally
 }
 
-/** The golden's run as a SuiteResult, cut down to its evals, the tally counting only those. */
-export function goldenSuite(g: Golden): SuiteResult {
+function goldenRun(g: Golden) {
   const entry = corpusEntries().find((e) => e.name === g.entry)
   if (!entry) throw new Error(`No corpus entry ${g.entry}`)
   const run = g.run ? entry.runs.find((r) => r.runId === g.run) : entry.runs.at(-1)
   if (!run) throw new Error(`No run ${g.run ?? '(newest)'} in corpus entry ${g.entry}`)
+  return run
+}
+
+/**
+ * The golden's insights: its run's insights.json, or null. A golden cut to some evals is a view of
+ * the run's facts, so its insights are held to the cut suite's hash, and the headline, which
+ * speaks for the whole run, is left out.
+ */
+export function goldenInsights(g: Golden, suite: SuiteResult): RunInsights | null {
+  if (!g.insights) return null
+  const file = join(dirname(goldenRun(g).file), suite.runId, 'insights.json')
+  if (!existsSync(file)) throw new Error(`Golden ${g.name}: no ${file}`)
+  const insights = readableInsights(JSON.parse(readFileSync(file, 'utf8')), file)
+  return g.evals ? { ...insights, factsHash: factsHash(suite), headline: null } : insights
+}
+
+/** The golden's lines: with insights there's an analysis model, so no hint. */
+export function goldenRender(g: Golden, o: { color?: boolean; verbose?: boolean } = {}): string[] {
+  const suite = goldenSuite(g)
+  return render(suite, goldenInsights(g, suite), {
+    color: !!o.color,
+    verbose: !!o.verbose || !!g.verbose,
+    hint: !g.insights,
+  })
+}
+
+/** The golden's run as a SuiteResult, cut down to its evals, the tally counting only those. */
+export function goldenSuite(g: Golden): SuiteResult {
+  const run = goldenRun(g)
   const suite = suiteResult(
     readableRecord(JSON.parse(readFileSync(run.file, 'utf8')) as RunRecord, run.file),
   )
