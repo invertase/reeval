@@ -37,8 +37,11 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   dockerState: async () => 'running',
   dockerCapacity: async () => ({ cpus: 8, memoryBytes: 16 * 1024 ** 3 }),
   imageExists: async () => true,
-  imageUses: async (config) =>
-    configuredUses(config).map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
+  // What planning finds when no eval picks a harness: the config's own, on its sandbox.
+  plannedUses: async (config) =>
+    configuredUses(config)
+      .filter((u) => !u.profile)
+      .map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
   imageTags: async () => [],
   podmanConfinement: async () => null,
   gitIgnored: async (_, paths) => paths.map(() => true),
@@ -308,7 +311,7 @@ evaluate('a', async () => {})
 `,
     })
     const config = await loadConfig(join(p.dir, 'reeval.config.ts'))
-    const planned = await checkImages(config, deps({ imageUses: defaultDeps().imageUses }))
+    const planned = await checkImages(config, deps({ plannedUses: defaultDeps().plannedUses }))
     const refs = planned.checks.map((c) => c.summary.split(' ')[0])
     assert.equal(refs.length, 1, JSON.stringify(planned.checks))
     assert.match(refs[0] ?? '', /^reeval-sandbox:claude-code-/)
@@ -320,6 +323,62 @@ evaluate('a', async () => {})
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(dry.stdout, /^images {2}1 sandbox image /m)
     assert.ok(dry.stdout.includes(refs[0] as string), dry.stdout)
+  })
+
+  test('keys: the harnesses the evals plan, so a profile-only harness asks for no CURSOR_API_KEY', async () => {
+    const config = `import { defineConfig } from 'reeval'
+import { claudeCode, codex } from 'reeval/harness'
+export default defineConfig({
+  profiles: {
+    dev: { defaults: { harness: claudeCode({ model: 'claude-sonnet-5' }) } },
+    openai: { defaults: { harness: codex({ model: 'gpt-5.4-mini' }) } },
+  },
+  defaultProfile: { local: 'dev', ci: 'dev' },
+})
+`
+    const p = await project('doctor-planned-keys', {
+      'reeval.config.ts': config,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+evaluate('a', async () => {})
+`,
+    })
+    const loaded = await loadConfig(join(p.dir, 'reeval.config.ts'))
+    const keys = await checkKeys(
+      loaded,
+      deps({ plannedUses: defaultDeps().plannedUses }),
+      false,
+      '.env.local',
+    )
+    assert.deepEqual(
+      keys.map((c) => `${c.status} ${c.summary}`),
+      [
+        'fail ANTHROPIC_API_KEY for claude-code:claude-sonnet-5: not set',
+        'warn OPENAI_API_KEY for codex:gpt-5.4-mini in profile openai: not set',
+      ],
+    )
+
+    // Evals that don't load leave the config's harnesses, reeval's default included, and say so.
+    const broken = await project('doctor-planned-keys-broken', {
+      'reeval.config.ts': config,
+      '.gitignore': '.reeval/\n.env*\n',
+      'evals/a.eval.ts': `throw new Error('broken eval file')\n`,
+    })
+    const r = await runCli(broken.dir, ['doctor', '--json'], {
+      env: { ANTHROPIC_API_KEY: '', CURSOR_API_KEY: '', OPENAI_API_KEY: '' },
+    })
+    const report = JSON.parse(r.stdout)
+    const evals = report.checks.find((c: Check) => c.id === 'evals')
+    assert.equal(evals?.status, 'warn', r.stdout)
+    assert.match(
+      evals?.summary ?? '',
+      /^didn't load, so the images and keys checked are the config's: /,
+    )
+    assert.ok(
+      report.checks.some(
+        (c: Check) => c.id === 'key' && c.summary.startsWith('CURSOR_API_KEY for cursor:'),
+      ),
+      r.stdout,
+    )
   })
 
   test("keys: each harness's, required unless only a profile uses it, never printed", async () => {

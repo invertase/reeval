@@ -57,7 +57,7 @@ export type DoctorDeps = {
   /** Whether the image is in the local Docker (or Podman); throws when the engine can't say. */
   imageExists: (ref: string, engine?: Engine) => Promise<boolean>
   /** The harnesses and sandboxes the evals plan, as `reeval image build` resolves them. */
-  imageUses: (config: ResolvedConfig) => Promise<ImageUse[]>
+  plannedUses: (config: ResolvedConfig) => Promise<ImageUse[]>
   /** `repository:tag` of every local image in a repository. */
   imageTags: (repository: string, engine?: Engine) => Promise<string[]>
   /** Which of `paths` git ignores in `root`, or null outside a git repository. */
@@ -89,7 +89,7 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     podmanConfinement: async () =>
       (await import('./sandbox/providers.ts')).podmanConfinementProblem(),
     imageExists: async (ref, engine) => !!(await (await sandbox()).imageInfo(ref, engine)),
-    imageUses: async (config) => {
+    plannedUses: async (config) => {
       const { plannedImageUses } = await import('./sandbox/images.ts')
       const { stagingDir } = await import('./results.ts')
       const profile = selectProfile(config, undefined, env)
@@ -187,6 +187,23 @@ export function configuredUses(config: ResolvedConfig) {
   }
   return uses
 }
+
+/** What a run would use: the evals' planned attempts, or why they didn't load. */
+type Planned = { uses: ImageUse[] } | { error: string }
+
+const planUses = (config: ResolvedConfig, deps: DoctorDeps): Promise<Planned> =>
+  deps.plannedUses(config).then(
+    (uses) => ({ uses }),
+    (error: Error) => ({ error: redactSecrets(error.message.split('\n')[0] ?? '') }),
+  )
+
+/** The planned uses, or the config's own harnesses on its sandbox when the evals didn't load. */
+const usesOf = (config: ResolvedConfig, planned: Planned): ImageUse[] =>
+  'uses' in planned
+    ? planned.uses
+    : configuredUses(config)
+        .filter((u) => !u.profile)
+        .map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox }))
 
 export function describeConfig(config: ResolvedConfig): string {
   const profiles = Object.keys(config.profiles)
@@ -346,23 +363,12 @@ async function checkDockerEngine(
 export async function checkImages(
   config: ResolvedConfig,
   deps: DoctorDeps,
+  planned?: Planned,
 ): Promise<{ checks: Check[]; missing: string[]; targets: ImageTarget[] }> {
   const { imageFor } = await import('@reeval/sandbox-docker')
   const { imageTargets, reevalImages } = await import('./sandbox/images.ts')
   const checks: Check[] = []
-  let uses: ImageUse[]
-  try {
-    uses = await deps.imageUses(config)
-  } catch (error) {
-    uses = configuredUses(config).map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox }))
-    checks.push({
-      id: 'image',
-      status: 'warn',
-      summary: `the evals didn't load, so these images are the config's: ${redactSecrets((error as Error).message.split('\n')[0] ?? '')}`,
-      fix: 'reeval run --dry-run shows why',
-    })
-  }
-  const targets = imageTargets(uses)
+  const targets = imageTargets(usesOf(config, planned ?? (await planUses(config, deps))))
   const missing: string[] = []
   const exists = async (ref: string, engine: Engine, what: string) => {
     try {
@@ -523,17 +529,29 @@ async function keyCheck(
   }
 }
 
-/** Each agent harness's key, from the environment and `.env.local` / `.env`. */
+/**
+ * Each agent harness's key, from the environment and `.env.local` / `.env`: required for the
+ * harnesses the evals plan, a warning for a key only another profile's harness needs.
+ */
 export async function checkKeys(
   config: ResolvedConfig,
   deps: DoctorDeps,
   online: boolean,
   envFile: string,
+  planned?: Planned,
 ): Promise<Check[]> {
   const byKey = new Map<string, { who: string[]; required: boolean }>()
-  for (const use of configuredUses(config)) {
+  const uses = [
+    ...usesOf(config, planned ?? (await planUses(config, deps))).map((u) => ({
+      harness: u.harness,
+      profile: undefined,
+    })),
+    ...configuredUses(config).filter((u) => u.profile),
+  ]
+  const needed = new Set(uses.flatMap((u) => (u.profile ? [] : [credentialOf(u.harness)])))
+  for (const use of uses) {
     const key = credentialOf(use.harness)
-    if (!key) continue
+    if (!key || (use.profile && needed.has(key))) continue
     const entry = byKey.get(key) ?? { who: [], required: false }
     const who = use.profile
       ? `${harnessId(use.harness)} in profile ${use.profile}`
@@ -751,10 +769,19 @@ export async function doctor(
   if (config) {
     loadEnvFiles(configPath)
     const envFile = fromCwd(join(config.root, '.env.local')) || '.env.local'
+    const planned = await planUses(config, deps)
+    if ('error' in planned) {
+      checks.push({
+        id: 'evals',
+        status: 'warn',
+        summary: `didn't load, so the images and keys checked are the config's: ${planned.error}`,
+        fix: 'reeval run --dry-run shows why',
+      })
+    }
     const docker = await checkDocker(config, deps)
     checks.push(...docker.checks)
     if (docker.running) {
-      const images = await checkImages(config, deps)
+      const images = await checkImages(config, deps, planned)
       checks.push(...images.checks)
       missingImages = images.missing
       imageTargets = images.targets
@@ -765,7 +792,7 @@ export async function doctor(
       checks.push({ id: 'image', status: 'skip', summary: why })
     }
     const online = !!flags.online
-    checks.push(...(await checkKeys(config, deps, online, envFile)))
+    checks.push(...(await checkKeys(config, deps, online, envFile, planned)))
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...checkEgress(config))
     checks.push(await checkGitignore(config.root, deps))
