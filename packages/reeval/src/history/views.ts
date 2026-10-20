@@ -275,7 +275,7 @@ const effortChange = (c: CompareCell) =>
   c.base.effort && c.head.effort ? effortChangeLabel(c.base.effort, c.head.effort) : 'effort –'
 
 /** `reeval show`: the run's header and state, then the result blocks `reeval run` ended with. */
-export function formatShow(run: RunRecord): string {
+export function formatShow(run: RunRecord, opts: { hint: boolean }): string {
   const rows = stateRows(run)
   const width = Math.max(...rows.map(([k]) => k.length))
   return [
@@ -285,6 +285,6 @@ export function formatShow(run: RunRecord): string {
     ...rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`),
     ...warnings(run).map((w) => `  ! ${w}`),
     '',
-    ...render(suiteResult(run), null, { color: false, verbose: false }),
+    ...render(suiteResult(run), null, { color: false, verbose: false, hint: opts.hint }),
   ].join('\n')
 }

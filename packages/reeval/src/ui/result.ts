@@ -27,6 +27,6 @@ export function resultLines(c: Colors, e: RunEnd, verbose: boolean): string[] {
   ]
   return [
     ...e.unhandledErrors.flatMap((error) => [c.red(`error: ${error}`), '']),
-    ...render(suiteResult(record), null, { color: c.enabled, verbose, notes }),
+    ...render(suiteResult(record), null, { color: c.enabled, verbose, notes, hint: e.hint }),
   ]
 }

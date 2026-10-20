@@ -13,7 +13,7 @@ const args = process.argv.slice(2)
 const verbose = args.includes('-v') || args.includes('--verbose')
 const color = args.includes('--color')
 const target = args.find((a) => !a.startsWith('-')) ?? 'all'
-const opts = { color, verbose }
+const opts = { color, verbose, hint: true }
 
 const print = (title: string, lines: string[]) => {
   process.stdout.write(`── ${title}\n\n${lines.join('\n')}\n\n`)
@@ -39,7 +39,11 @@ if (target.endsWith('.json')) {
     }
   }
   for (const g of goldens) {
-    const lines = render(goldenSuite(g), null, { color, verbose: verbose || !!g.verbose })
+    const lines = render(goldenSuite(g), null, {
+      color,
+      verbose: verbose || !!g.verbose,
+      hint: true,
+    })
     print(`golden ${g.name}`, lines)
   }
 }

@@ -959,6 +959,26 @@ evaluate('fails', async (c) => {
     assert.match(bad.stderr, /--log-order is one of stream, grouped, auto \(got sideways\)/)
   })
 
+  test('with an analysis model the run, summary.md and reeval show end at the tally, no hint', async () => {
+    const p = await project('analysis-model-no-hint', {
+      'reeval.config.ts': fakeConfig({ extra: 'analysis: { model: fakeAnalysis({}) },' }).replace(
+        'import { fakeJudge }',
+        'import { fakeAnalysis, fakeJudge }',
+      ),
+      'evals/agent.eval.ts': `${agentEval('')}`,
+    })
+    const r = await runCli(p.dir, ['run'], {
+      env: { REEVAL_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(r.stdout.trimEnd().split('\n').at(-1), '1 pass')
+    assert.ok(!r.stdout.includes(NO_MODEL_HINT), 'canary: the hint is gone when a model resolves')
+    const summary = (r.stdout.match(/results (\S+summary\.md)/) ?? [])[1] ?? ''
+    assert.ok(!readFileSync(join(p.dir, summary), 'utf8').includes(NO_MODEL_HINT))
+    const show = await runCli(p.dir, ['show'])
+    assert.equal(show.stdout.trimEnd().split('\n').at(-1), '1 pass')
+  })
+
   test('agent mode prints the plan and the result blocks only, with no colour', async () => {
     const p = await project('agent-mode', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),

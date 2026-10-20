@@ -50,6 +50,8 @@ export type RenderOptions = {
   verbose: boolean
   /** Lines between the blocks and the tally, as they are: the run's time and where its results are. */
   notes?: string[]
+  /** Ends with `NO_MODEL_HINT`: no analysis model resolves (see `hasAnalysisModel`). */
+  hint: boolean
 }
 
 /** The last line of a run's output while no analysis model writes its answers. */
@@ -567,7 +569,7 @@ export function renderBlocks(suite: SuiteResult, opts: RenderOptions): string[] 
   return out
 }
 
-/** A run's result: its blocks, then the tally and the hint. `insights` arrives with a model. */
+/** A run's result: its blocks, then the tally and, with no analysis model, the hint. `insights` arrives with a model. */
 export function render(suite: SuiteResult, _insights: null, opts: RenderOptions): string[] {
   const blocks = renderBlocks(suite, opts)
   return [
@@ -575,6 +577,6 @@ export function render(suite: SuiteResult, _insights: null, opts: RenderOptions)
     ...(blocks.length ? [''] : []),
     ...(opts.notes ?? []),
     tallyLine(colors(opts.color), suite.tally),
-    NO_MODEL_HINT,
+    ...(opts.hint ? [NO_MODEL_HINT] : []),
   ]
 }

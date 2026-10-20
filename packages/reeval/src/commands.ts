@@ -2,6 +2,7 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
+import { hasAnalysisModel } from './config.ts'
 import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
@@ -85,6 +86,7 @@ export async function record(
     artifacts: parseLevel(flags.artifacts, config.history.artifacts),
     allowIncomplete: flags['allow-incomplete'],
     skipSecretScan: flags['skip-secret-scan'],
+    hint: !hasAnalysisModel(config),
   })
   const where = rel(result.recordPath)
   if (!result.created) return `${where} is already recorded`
@@ -155,9 +157,10 @@ export async function showRecord(config: ResolvedConfig, ref?: string) {
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
   const run = await showRecord(ctx.config, refs[0])
+  const hint = !hasAnalysisModel(ctx.config)
   if (ctx.flags.json) ctx.out(JSON.stringify(run, null, 2))
-  else if (ctx.flags.md) ctx.out(renderSummary(run).trimEnd())
-  else ctx.out(formatShow(run))
+  else if (ctx.flags.md) ctx.out(renderSummary(run, { hint }).trimEnd())
+  else ctx.out(formatShow(run, { hint }))
   return 0
 }
 

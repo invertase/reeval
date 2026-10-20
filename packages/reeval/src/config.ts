@@ -36,6 +36,7 @@ import type {
   Budget,
   ConfigHelpers,
   EnvVars,
+  FakeAnalysisModel,
   HarnessDescriptor,
   Profile,
   ProfileData,
@@ -720,6 +721,17 @@ export function secretSources(env: EnvVars): Array<[string, string]> {
       isSecret(value) && !value.optional ? [[name, value.from ?? name]] : [],
   )
 }
+
+/** `analysis.model`, else the judge's when it's a language model; undefined when neither is. */
+export function analysisModelOf(config: ResolvedConfig): string | FakeAnalysisModel | undefined {
+  const model = config.analysis.model
+  if (model !== undefined) return model
+  const judge = config.judge.model
+  return typeof judge === 'string' && !judge.startsWith('typesafe-ai/') ? judge : undefined
+}
+
+/** Whether a model can answer what each eval asks: `analysis.model`, or a language-model judge. */
+export const hasAnalysisModel = (config: ResolvedConfig) => analysisModelOf(config) !== undefined
 
 /** The provider model `analysis.agent` calls during a run, if it's on: `analysis.model`, else the judge's. */
 function agentModel(config: ResolvedConfig): string | null {

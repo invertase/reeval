@@ -204,6 +204,7 @@ const interleaved: ReevalEvent[] = [
     summaryPath: '.reeval/runs/run-1/summary.md',
     results: [greetResult, defaultResult],
     unhandledErrors: [],
+    hint: true,
   },
 ]
 

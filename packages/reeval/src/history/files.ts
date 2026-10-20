@@ -275,6 +275,8 @@ export type RecordOptions = {
   allowIncomplete?: boolean
   /** Skip the last-chance secret scan, for false positives checked by hand. */
   skipSecretScan?: boolean
+  /** summary.md ends with the hint to set an analysis model: none resolves. */
+  hint: boolean
 }
 
 export type RecordResult = WrittenRun & {
@@ -345,7 +347,8 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatch = null
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
-  if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record)))
+  if (level !== 'none')
+    files.set('summary.md', Buffer.from(renderSummary(record, { hint: options.hint })))
 
   if (!options.skipSecretScan) {
     const scanned: Array<[string, Finding[]]> = [

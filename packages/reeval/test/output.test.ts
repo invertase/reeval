@@ -8,6 +8,8 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { GOLDENS, goldenSuite, OUTPUT_DIR } from '../scripts/output/goldens.ts'
+import { hasAnalysisModel } from '../src/config.ts'
+import type { ResolvedConfig } from '../src/types.ts'
 import { colors, stripAnsi } from '../src/ui/colors.ts'
 import { layout, NO_MODEL_HINT, render, tallyLine } from '../src/ui/layout.ts'
 
@@ -17,7 +19,7 @@ const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
 const rendered = (name: string) => {
   const g = GOLDENS.find((x) => x.name === name)
   assert.ok(g, name)
-  return render(goldenSuite(g), null, { color: false, verbose: !!g.verbose })
+  return render(goldenSuite(g), null, { color: false, verbose: !!g.verbose, hint: true })
 }
 
 describe('output goldens', () => {
@@ -57,6 +59,31 @@ describe('every layout', () => {
     }
   })
 
+  test('the hint prints only when no analysis model resolves; with one, the tally ends the run', () => {
+    const g = GOLDENS.find((x) => x.name === 'suite')
+    assert.ok(g)
+    const without = render(goldenSuite(g), null, { color: false, verbose: false, hint: true })
+    const withModel = render(goldenSuite(g), null, { color: false, verbose: false, hint: false })
+    assert.equal(without.at(-1), NO_MODEL_HINT)
+    assert.ok(!withModel.includes(NO_MODEL_HINT))
+    assert.match(withModel.at(-1) ?? '', /^(\d+ (fail|pass|infra errors?|skipped)( · )?)+$/)
+    assert.deepEqual(withModel, without.slice(0, -1))
+  })
+
+  test('an analysis model resolves from analysis.model, else a language-model judge', () => {
+    const config = (analysis: unknown, judge: unknown) =>
+      ({ analysis: { model: analysis }, judge: { model: judge } }) as unknown as ResolvedConfig
+    assert.equal(hasAnalysisModel(config(undefined, undefined)), false)
+    assert.equal(hasAnalysisModel(config(undefined, 'typesafe-ai/jev-1.14.0')), false)
+    assert.equal(hasAnalysisModel(config(undefined, { kind: 'fake' })), false)
+    assert.equal(hasAnalysisModel(config(undefined, 'google/gemini-3.8-flash')), true)
+    assert.equal(
+      hasAnalysisModel(config('google/gemini-3.8-flash', 'typesafe-ai/jev-1.14.0')),
+      true,
+    )
+    assert.equal(hasAnalysisModel(config({ kind: 'fake-analysis' }, undefined)), true)
+  })
+
   test('statistics only with -v', () => {
     for (const name of ['measure-a-change', 'family-with-change']) {
       assert.doesNotMatch(rendered(name).join('\n'), /interval|difference/, name)
@@ -84,7 +111,7 @@ describe('every layout', () => {
     const e = suite.files[0]?.evals[0]
     assert.ok(e)
     e.questions = [{ question: 'Which reads better?', votes: 4, rates: [], error: null }]
-    const text = render(suite, null, { color: false, verbose: false }).join('\n')
+    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
     assert.match(text, /^ {2}question {2}Which reads better\?\n {4}4 votes, every one a tie$/m)
   })
 
@@ -102,7 +129,7 @@ describe('every layout', () => {
         cell.failed = 1
       }
     }
-    const text = render(suite, null, { color: false, verbose: false }).join('\n')
+    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
     assert.match(text, /^ {2}not gated {2}\S.* +0 of 1$/m)
     assert.doesNotMatch(text, /^ {2}pass {2}\S.* +0 of 1$/m)
   })
@@ -120,9 +147,12 @@ describe('every layout', () => {
   test('render is pure, and colour is the only difference colour makes', () => {
     const g = GOLDENS.find((x) => x.name === 'suite')
     assert.ok(g)
-    const plain = render(goldenSuite(g), null, { color: false, verbose: false })
-    assert.deepEqual(render(goldenSuite(g), null, { color: false, verbose: false }), plain)
-    const painted = render(goldenSuite(g), null, { color: true, verbose: false })
+    const plain = render(goldenSuite(g), null, { color: false, verbose: false, hint: true })
+    assert.deepEqual(
+      render(goldenSuite(g), null, { color: false, verbose: false, hint: true }),
+      plain,
+    )
+    const painted = render(goldenSuite(g), null, { color: true, verbose: false, hint: true })
     assert.ok(painted.some((l) => l.includes('\x1b[')))
     assert.deepEqual(painted.map(stripAnsi), plain)
   })

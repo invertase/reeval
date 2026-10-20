@@ -11,6 +11,7 @@ import {
   configLabel,
   configPathFor,
   findConfig,
+  hasAnalysisModel,
   hostCapacity,
   loadConfig,
   malformedCredentials,
@@ -406,6 +407,7 @@ async function runCommand(
     summaryPath: fromCwd(summary),
     results: engineRun.evals,
     unhandledErrors: engineRun.unhandledErrors,
+    hint: !hasAnalysisModel(ctx.config),
   })
   renderer.close()
   const stepSummary = process.env.GITHUB_STEP_SUMMARY
