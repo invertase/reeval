@@ -1,4 +1,5 @@
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
+import type { HeadlineInput, InsightInput } from './insights/input.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -1588,6 +1589,36 @@ export type FakeAnalysisModel = {
    * `{ error }` to fail every call. A pick may be `{ winner, reason? }`. Default `'tie'`.
    */
   vote?: FakePick | ((pair: BlindPair) => FakePick) | { error: string }
+  /**
+   * What `reeval analyze --insights` gets back: fixed insights, a function of each call's input
+   * (`input.call` is `classify` or `insights`, once each per eval, or `headline` once), or
+   * `{ error }` to fail every call.
+   */
+  insights?: FakeInsights | ((input: FakeInsightsInput) => FakeInsights) | { error: string }
+}
+
+/** What a fake insights function is given: one eval's scoped facts, or the run's evals for the headline. */
+export type FakeInsightsInput = InsightInput | HeadlineInput
+
+/**
+ * A fake insight answer. Each call takes its part: `intent` the classification, `answer`,
+ * `findings`, `rows` and `namedTools` the eval's sentences, `headline` the run's. Whatever's
+ * left out is empty, and the intent defaults to `job: 'other'`.
+ */
+export type FakeInsights = {
+  intent?: {
+    job: 'choose' | 'finish' | 'other'
+    question?: string
+    subject?: { tool?: string; change?: string }
+    name?: 'states-intent' | 'no-intent' | 'contradicts'
+    /** `low` falls back to `job: 'other'`, as a real classification does. */
+    confidence?: 'high' | 'medium' | 'low'
+  }
+  answer?: { text: string; cites: string[] } | null
+  findings?: Array<{ text: string; cites: string[] }>
+  rows?: Array<{ row: string; text: string; cites: string[] }>
+  namedTools?: Array<{ attempt: string; tools: string[] }>
+  headline?: { text: string; cites: string[] } | null
 }
 
 /** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */

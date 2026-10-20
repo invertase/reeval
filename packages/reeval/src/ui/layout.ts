@@ -1,10 +1,15 @@
 // The result blocks every surface prints (the terminal, summary.md, `reeval show`): one block per
 // eval, a pooled family being one, laid out by what the eval's cells compare, then the tally.
-// Pure and deterministic: the same SuiteResult always prints the same lines. Counts read
-// `N of M` and effects are words; statistics print only with `verbose`.
+// Pure and deterministic: the same SuiteResult and insights always print the same lines. Counts
+// read `N of M` and effects are words; statistics print only with `verbose`. Insights fill the
+// slots a layout opens (an answer, a sentence on a row, findings, the headline) and never add or
+// remove a fact row; written for other facts, they're left out with a note.
+import { factsHash } from '../insights/hash.ts'
+import type { InsightSlots } from '../insights/input.ts'
 import { clip } from '../text.ts'
 import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
+import type { EvalInsight, Job, RunInsights } from '../view/insights.ts'
 import type {
   Across,
   CaseResult,
@@ -21,27 +26,56 @@ import type {
 } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
 
-/** What one attempt tests. Only an analysis model can tell, so without one every eval is `other`. */
-export type Job = 'choose' | 'finish' | 'other'
+export type { Job }
 
 export type Layout = {
-  kind: 'results' | 'measure' | 'harnesses' | 'both' | 'regressions'
+  kind: 'results' | 'choose' | 'measure' | 'harnesses' | 'both' | 'regressions'
   /** A pooled `evaluate.each`: the kind's rows, one per case, inside one block. */
   family: boolean
 }
 
 /** The block for an eval: a pure function of its job and its shape. */
-export function layout(_job: Job, across: Across, isFamily: boolean, isCompare: boolean): Layout {
+export function layout(job: Job, across: Across, isFamily: boolean, isCompare: boolean): Layout {
   if (isCompare) return { kind: 'regressions', family: false }
   const kind =
-    across === 'change'
-      ? 'measure'
-      : across === 'harness'
-        ? 'harnesses'
-        : across === 'both'
-          ? 'both'
-          : 'results'
+    job === 'choose' && across === 'none'
+      ? 'choose'
+      : across === 'change'
+        ? 'measure'
+        : across === 'harness'
+          ? 'harnesses'
+          : across === 'both'
+            ? 'both'
+            : 'results'
   return { kind, family: isFamily }
+}
+
+const moved = (c: CellResult) => c.effect === 'better' || c.effect === 'worse'
+const failedCell = (c: CellResult) => c.outcome === 'fail' || c.outcome === 'infra_error'
+
+/**
+ * The insight slots an eval's layout opens: which rows take a sentence (a failing case; an arm
+ * that failed or moved; a failing harness), whether it has findings (a choose or finish eval that
+ * measures a change), and whether it has named tools (a choose eval). An `other` eval takes only
+ * its answer, unless it compares harnesses, which takes a sentence on any job.
+ */
+export function slotsOf(job: Job, e: EvalResult): InsightSlots {
+  const known = job !== 'other'
+  const harnesses = e.across === 'harness' || e.across === 'both'
+  const rows: string[] = []
+  if (known || harnesses) {
+    if (e.cases) {
+      for (const k of e.cases) if (k.outcome !== 'pass') rows.push(k.path)
+      for (const p of e.pooled ?? []) {
+        if (p.outcome === 'fail' || p.effect === 'better' || p.effect === 'worse') rows.push(p.path)
+      }
+    } else if (e.across === 'harness') {
+      for (const c of e.cells ?? []) if (failedCell(c)) rows.push(c.path)
+    } else if (e.across === 'change' || e.across === 'both') {
+      for (const c of e.cells ?? []) if (failedCell(c) || moved(c)) rows.push(c.path)
+    }
+  }
+  return { rows, findings: known && e.across === 'change', namedTools: job === 'choose' }
 }
 
 export type RenderOptions = {
@@ -222,7 +256,7 @@ export const errorText = (err: CellError) =>
   `${clip(err.message, ASSERTION_MAX)}${err.attempts > 1 ? ` (${plural(err.attempts, 'try', 'tries')})` : ''}`
 
 /** The evidence under a failing cell: its failed and not-run checks, its errors, `+N more passed`. */
-function evidence(c: Colors, cell: CellResult, indent: number): Item[] {
+function evidence(c: Colors, cell: CellResult, indent: number, more = true): Item[] {
   const single = cell.passed + cell.failed + cell.infraError <= 1
   const items: Item[] = []
   for (const k of cell.checks.filter(failing)) {
@@ -238,7 +272,9 @@ function evidence(c: Colors, cell: CellResult, indent: number): Item[] {
     items.push({ indent, cells: [errorKind(err), t(errorText(err), c.dim)] })
   }
   const passed = cell.checks.filter((k) => !failing(k)).length
-  if (passed && items.length) items.push({ indent, free: t(`+${passed} more passed`, c.dim) })
+  if (more && passed && items.length) {
+    items.push({ indent, free: t(`+${passed} more passed`, c.dim) })
+  }
   return items
 }
 
@@ -351,7 +387,88 @@ function effortTable(
  * `effects`: the arms carry effect words and the check matrix, which a family's cases leave to
  * its pooled row unless they failed.
  */
-type BodyOptions = { failed: boolean; verbose: boolean; effects: boolean }
+type BodyOptions = { failed: boolean; verbose: boolean; effects: boolean; slots: Slots }
+
+/** What an eval's insight puts under its rows: a row's sentence, and a choose eval's named tools. */
+type Slots = {
+  row: (path: string) => string | null
+  /** The tools named over the cells' tries, most first; empty unless the eval is choose. */
+  named: (cells: CellResult[]) => Array<{ tool: string; tries: number }>
+  /** The tool a choose eval asks about. */
+  subject: string | null
+}
+
+const NO_SLOTS: Slots = { row: () => null, named: () => [], subject: null }
+
+const countedOf = (cells: CellResult[]) => cells.reduce((n, x) => n + x.passed + x.failed, 0)
+
+/** `named`, then a row per tool with the tries that named it. */
+function namedItems(c: Colors, slots: Slots, cells: CellResult[], indent: number): Item[] {
+  const named = slots.named(cells)
+  if (!named.length) return []
+  const of = countedOf(cells)
+  return [
+    { indent, free: t('named', c.dim) },
+    ...named.map((n) => ({ indent: indent + 2, cells: [n.tool, `${n.tries} of ${of}`] })),
+  ]
+}
+
+/** The tries that named the subject, over the cells' tries: `0 of 4`; empty with no subject. */
+function subjectTries(slots: Slots, cells: CellResult[]): string {
+  if (!slots.subject) return ''
+  const subject = slots.subject.toLowerCase()
+  const n = slots.named(cells).find((x) => x.tool.toLowerCase() === subject)?.tries ?? 0
+  return `${n} of ${countedOf(cells)}`
+}
+
+/** `Genkit 0 of 4`, a choose case's count. */
+const subjectCount = (slots: Slots, cells: CellResult[]) =>
+  slots.subject ? `${slots.subject} ${subjectTries(slots, cells)}` : ''
+
+/** Web searches or fetches over the tries, when every try reported a number. */
+function webItems(cells: CellResult[], indent: number): Item[] {
+  const row = (name: string, counts: Array<number | null>): Item[] =>
+    counts.length && counts.every((x) => x !== null)
+      ? [{ indent, cells: [name, String(counts.reduce((a, b) => (a ?? 0) + (b ?? 0), 0))] }]
+      : []
+  return [
+    ...row(
+      'searches',
+      cells.flatMap((x) => x.searches),
+    ),
+    ...row(
+      'fetches',
+      cells.flatMap((x) => x.fetches),
+    ),
+  ]
+}
+
+/** A choose case that missed: its failed checks, the tools named, its searches, then `+N more passed`. */
+function chooseDetail(c: Colors, cells: CellResult[], indent: number, slots: Slots): Item[] {
+  const checks = cells.flatMap((cell) => evidence(c, cell, indent, false))
+  const passed = cells.flatMap((x) => x.checks.filter((k) => !failing(k))).length
+  return [
+    ...checks,
+    ...namedItems(c, slots, cells, indent),
+    ...webItems(cells, indent),
+    ...(passed ? [{ indent, free: t(`+${passed} more passed`, c.dim) }] : []),
+  ]
+}
+
+/** Choose a tool, on a single eval: the subject's count, and on a miss the detail. */
+function chooseBody(c: Colors, cells: CellResult[], indent: number, slots: Slots): string[] {
+  const items: Item[] = slots.subject
+    ? [{ indent, cells: [slots.subject, subjectTries(slots, cells)] }]
+    : []
+  if (!cells.every(clean)) items.push(...chooseDetail(c, cells, indent, slots))
+  return table(items)
+}
+
+/** A row's sentence, as a line under it. */
+const rowLine = (slots: Slots, path: string, indent: number): Item[] => {
+  const text = slots.row(path)
+  return text ? [{ indent, free: text }] : []
+}
 
 /** Measure a change: a row per arm with its effect, the check matrix and the effort table. */
 function measureBody(c: Colors, cells: CellResult[], indent: number, o: BodyOptions): string[] {
@@ -360,6 +477,10 @@ function measureBody(c: Colors, cells: CellResult[], indent: number, o: BodyOpti
   for (const cell of cells) {
     const effect = o.effects ? gatedEffect(c, cell) : t('')
     arms.push({ indent, cells: [label(cell), cellCount(cell), ...(effect.text ? [effect] : [])] })
+    arms.push(
+      ...rowLine(o.slots, cell.path, indent + 2),
+      ...namedItems(c, o.slots, [cell], indent + 2),
+    )
     const stats = o.verbose && o.effects ? statsLine(cell, cells) : null
     if (stats) arms.push({ indent: indent + 2, free: t(stats, c.dim) })
     for (const err of cell.errors) {
@@ -382,12 +503,21 @@ function measureBody(c: Colors, cells: CellResult[], indent: number, o: BodyOpti
 }
 
 /** A row per cell (harness, or sandbox), the ones that didn't pass outright with their evidence. */
-function cellRows(c: Colors, cells: CellResult[], heading: string, indent: number): string[] {
+function cellRows(
+  c: Colors,
+  cells: CellResult[],
+  heading: string,
+  indent: number,
+  slots: Slots,
+): string[] {
   const label = labeller(cells, heading === 'harness' ? ['harness', 'sandbox'] : ['sandbox'])
   const items: Item[] = [{ indent, cells: [heading, t('pass', c.dim)] }]
   for (const cell of cells) {
     items.push({ indent, cells: [label(cell), cellCount(cell)] })
-    if (!clean(cell)) items.push(...evidence(c, cell, indent + 2))
+    items.push(...rowLine(slots, cell.path, indent + 2))
+    if (!clean(cell)) {
+      items.push(...namedItems(c, slots, [cell], indent + 2), ...evidence(c, cell, indent + 2))
+    }
   }
   return table(items)
 }
@@ -413,9 +543,10 @@ function cellsBody(
   o: BodyOptions,
 ): string[] {
   if (kind === 'measure') return measureBody(c, cells, indent, o)
-  if (kind === 'harnesses') return cellRows(c, cells, 'harness', indent)
+  if (kind === 'harnesses') return cellRows(c, cells, 'harness', indent, o.slots)
   if (kind === 'both') return bothBody(c, cells, indent, o)
-  if (cells.length > 1) return cellRows(c, cells, 'sandbox', indent)
+  if (kind === 'choose') return chooseBody(c, cells, indent, o.slots)
+  if (cells.length > 1) return cellRows(c, cells, 'sandbox', indent, o.slots)
   return resultsBody(c, cells[0] as CellResult, indent)
 }
 
@@ -491,9 +622,16 @@ function pooledStats(p: PooledArm, label: string) {
 /**
  * A family: its template, then a row per case. With one cell a case is a row with its count;
  * with more, the case is outer and its cells inner, laid out as a single eval's are, and a
- * pooled `all cases` row sums each cell's counts with its variant's pooled effect.
+ * pooled `all cases` row sums each cell's counts with its variant's pooled effect. A choose
+ * family's case row carries the subject's count instead, and a missed case the tools named.
  */
-function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: boolean): string[] {
+function familyBlock(
+  c: Colors,
+  e: EvalResult,
+  kind: Layout['kind'],
+  verbose: boolean,
+  slots: Slots,
+): string[] {
   const cases = e.cases ?? []
   const columns = [
     ...new Map(cases.flatMap((k) => k.cells).map((cell) => [cell.key, cell])).values(),
@@ -511,11 +649,21 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
   })
   const head = `${' '.repeat(HEAD)}${e.template ?? e.name}`
   const questions = questionLines(c, e.questions, 2)
+  if (kind === 'choose') {
+    const items: Item[] = []
+    for (const k of cases) {
+      items.push({ indent: 2, cells: [lead(caseWord(k), k.label), subjectCount(slots, k.cells)] })
+      items.push(...rowLine(slots, k.path, 4))
+      if (!k.cells.every(clean)) items.push(...chooseDetail(c, k.cells, 4, slots))
+    }
+    return [head, ...table(items), ...questions]
+  }
   if (columns.length <= 1) {
     const items: Item[] = []
     for (const k of cases) {
       const cell = k.cells[0]
       items.push({ indent: 2, cells: [lead(caseWord(k), k.label), cell ? cellCount(cell) : ''] })
+      items.push(...rowLine(slots, k.path, 4))
       if (cell && !clean(cell)) items.push(...evidence(c, cell, 4))
     }
     return [head, ...table(items), ...questions]
@@ -523,8 +671,10 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
   const out = [head]
   for (const k of cases) {
     out.push(`  ${show(lead(caseWord(k), k.label))}`)
+    const sentence = slots.row(k.path)
+    if (sentence) out.push(`    ${sentence}`)
     const failed = k.outcome !== 'pass'
-    out.push(...cellsBody(c, kind, k.cells, 4, { failed, verbose, effects: false }))
+    out.push(...cellsBody(c, kind, k.cells, 4, { failed, verbose, effects: false, slots }))
   }
   if (pooled.length) {
     const label = labeller(columns, ['harness', 'arm', 'sandbox'])
@@ -539,6 +689,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
         indent: 4,
         cells: [label(col), pooledCount(cases, col.key), ...(effect.text ? [effect] : [])],
       })
+      if (p) items.push(...rowLine(slots, p.path, 6))
       if (p && verbose) items.push({ indent: 6, free: t(pooledStats(p, label(col)), c.dim) })
     }
     out.push(`  ${show(lead(pooledWord, 'all cases'))}`, ...table(items))
@@ -546,18 +697,52 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
   return [...out, ...questions]
 }
 
-/** One eval's block, laid out as `layout()` says. */
-export function evalBlock(c: Colors, e: EvalResult, verbose = false): string[] {
-  const shape = layout('other', e.across, e.family, false)
-  if (shape.family) return familyBlock(c, e, shape.kind, verbose)
+/** The slots an eval's insight fills, or none without one. */
+function slotsFor(insight: EvalInsight | null): Slots {
+  if (!insight) return NO_SLOTS
+  const rows = new Map((insight.rows ?? []).map((r) => [r.row, r.text]))
+  const choose = insight.intent.job === 'choose'
+  const named = (cells: CellResult[]) => {
+    if (!choose) return []
+    const counts = new Map<string, number>()
+    for (const n of insight.namedTools ?? []) {
+      if (!cells.some((cell) => n.attempt.startsWith(`${cell.path}#`))) continue
+      for (const tool of new Set(n.tools)) counts.set(tool, (counts.get(tool) ?? 0) + 1)
+    }
+    return [...counts]
+      .map(([tool, tries]) => ({ tool, tries }))
+      .sort((a, b) => b.tries - a.tries || (a.tool < b.tool ? -1 : 1))
+  }
+  return {
+    row: (path) => rows.get(path) ?? null,
+    named,
+    subject: choose ? (insight.intent.subject.tool ?? null) : null,
+  }
+}
+
+/** One eval's block, laid out as `layout()` says for its job, with its insight's sentences. */
+export function evalBlock(
+  c: Colors,
+  e: EvalResult,
+  verbose = false,
+  insight: EvalInsight | null = null,
+): string[] {
+  const shape = layout(insight?.intent.job ?? 'other', e.across, e.family, false)
+  const slots = slotsFor(insight)
+  const answer = insight?.answer ? [`  ${insight.answer.text}`] : []
+  const findings = (insight?.findings ?? []).map((f) => `  ${f.text}`)
+  if (shape.family) {
+    const [head = '', ...rest] = familyBlock(c, e, shape.kind, verbose, slots)
+    return [head, ...answer, ...rest, ...findings]
+  }
   const v = verdict(c, e)
   const name = `${e.group.length ? `${e.group.join(' › ')} › ` : ''}${e.name}`
   const head = `${show(v)}${' '.repeat(Math.max(2, HEAD - v.text.length))}${name}`
   const cells = e.cells ?? []
   if (e.todo || e.outcome === 'skipped' || !cells.length) return [head]
   const failed = e.outcome !== 'pass'
-  const body = cellsBody(c, shape.kind, cells, 2, { failed, verbose, effects: true })
-  return [head, ...body, ...questionLines(c, e.questions, 2)]
+  const body = cellsBody(c, shape.kind, cells, 2, { failed, verbose, effects: true, slots })
+  return [head, ...answer, ...body, ...findings, ...questionLines(c, e.questions, 2)]
 }
 
 /**
@@ -577,10 +762,17 @@ export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
 }
 
 /** Every eval's block in file-path order, then source order; a blank line around each longer one. */
-export function renderBlocks(suite: SuiteResult, opts: RenderOptions): string[] {
+export function renderBlocks(
+  suite: SuiteResult,
+  opts: RenderOptions,
+  insights: RunInsights | null = null,
+): string[] {
   const c = colors(opts.color)
+  const byEval = new Map((insights?.evals ?? []).map((x) => [x.evalId, x]))
   const blocks = suite.files.flatMap((f) =>
-    [...f.evals].sort((a, b) => a.order - b.order).map((e) => evalBlock(c, e, opts.verbose)),
+    [...f.evals]
+      .sort((a, b) => a.order - b.order)
+      .map((e) => evalBlock(c, e, opts.verbose, byEval.get(e.path) ?? null)),
   )
   const out: string[] = []
   blocks.forEach((block, i) => {
@@ -591,17 +783,60 @@ export function renderBlocks(suite: SuiteResult, opts: RenderOptions): string[] 
   return out
 }
 
+/** Insights for these facts: null when there are none, they failed, or they were written for other facts. */
+export const freshInsights = (suite: SuiteResult, insights: RunInsights | null) =>
+  insights && !insights.error && insights.factsHash === factsHash(suite) ? insights : null
+
+/** Why a run's insights didn't print, or with `-v` what wrote them. */
+function insightNotes(
+  c: Colors,
+  suite: SuiteResult,
+  insights: RunInsights | null,
+  fresh: RunInsights | null,
+  verbose: boolean,
+): string[] {
+  if (!insights) return []
+  if (insights.error) return [c.yellow(`insights failed (${clip(insights.error, 200)})`)]
+  if (!fresh) {
+    return [
+      c.dim(
+        `insights left out: insights.json was written for other facts than this run's; delete it and run reeval analyze ${suite.runId} --insights`,
+      ),
+    ]
+  }
+  if (!verbose) return []
+  const { dropped, regenerated } = insights.validation
+  return [
+    c.dim(
+      [
+        `insights by ${insights.model} (${insights.promptVersion})`,
+        `${plural(dropped, 'sentence')} removed`,
+        ...(regenerated ? [`${regenerated} asked again`] : []),
+        `${formatTokens(insights.usage.inputTokens)} in, ${formatTokens(insights.usage.outputTokens)} out`,
+      ].join(' · '),
+    ),
+  ]
+}
+
 /**
- * A run's result: its errors outside any eval, its blocks, then the tally and, with no analysis
- * model, the hint. `insights` arrives with a model.
+ * A run's result: its errors outside any eval, its blocks with their insights, the headline,
+ * then the tally and, with no
+ * analysis model, the hint. Insights written for other facts are left out with a note.
  */
-export function render(suite: SuiteResult, _insights: null, opts: RenderOptions): string[] {
+export function render(
+  suite: SuiteResult,
+  insights: RunInsights | null,
+  opts: RenderOptions,
+): string[] {
   const c = colors(opts.color)
-  const blocks = renderBlocks(suite, opts)
+  const fresh = freshInsights(suite, insights)
+  const blocks = renderBlocks(suite, opts, fresh)
   return [
     ...suite.errors.flatMap((error) => [c.red(`error: ${error}`), '']),
     ...blocks,
     ...(blocks.length ? [''] : []),
+    ...(fresh?.headline ? [fresh.headline.text] : []),
+    ...insightNotes(c, suite, insights, fresh, opts.verbose),
     ...(opts.notes ?? []),
     tallyLine(c, suite.tally),
     ...(opts.hint ? [NO_MODEL_HINT] : []),

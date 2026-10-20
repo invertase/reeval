@@ -43,6 +43,7 @@ export type AnalyzeFlags = {
   context?: boolean
   'dry-run'?: boolean
   'no-cache'?: boolean
+  insights?: boolean
 }
 
 type Ctx = {
@@ -320,6 +321,11 @@ export async function failedAnalysis(
 
 export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { config, flags } = ctx
+  if (flags.insights) {
+    const { checkInsightsFlags, insightsCommand } = await import('../insights/command.ts')
+    checkInsightsFlags(flags)
+    return insightsCommand(ctx, args[0])
+  }
   if (flags.json && flags.md) throw new UsageError('reeval analyze takes --json or --md, not both')
   if (flags.context && flags.save) {
     throw new UsageError('reeval analyze --context makes no analysis to save; drop --save')

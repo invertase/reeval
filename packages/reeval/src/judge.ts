@@ -20,18 +20,22 @@ export const fakeJudge = ({
  * model's structured answer, and each compare question's pair gets `vote` (a fixed `'A'`, `'B'` or
  * `'tie'`, `{ winner, reason? }`, a function of the blinded pair, or `{ error }`), through the same
  * parsing and validation as a real one. With `analysis.agent`, each note calls the same tools a real
- * model
- * would, then answers with `note` (or `note(input)`), or throws `note.error`.
+ * model would, then answers with `note` (or `note(input)`), or throws `note.error`.
+ * `reeval analyze --insights` gets `insights` (or `insights(input)`, called per eval for its
+ * classification and its sentences, then once for the headline), through the same validator: an
+ * uncited sentence is dropped, and one with a banned word is asked for again, then dropped.
  */
 export const fakeAnalysis = ({
   output,
   note,
   vote,
-}: Pick<FakeAnalysisModel, 'output' | 'note' | 'vote'>): FakeAnalysisModel => ({
+  insights,
+}: Pick<FakeAnalysisModel, 'output' | 'note' | 'vote' | 'insights'>): FakeAnalysisModel => ({
   kind: 'fake-analysis',
   ...(output !== undefined ? { output } : {}),
   ...(note !== undefined ? { note } : {}),
   ...(vote !== undefined ? { vote } : {}),
+  ...(insights !== undefined ? { insights } : {}),
 })
 
 export { DEFAULT_THRESHOLD, RECOMMENDED_JUDGE_MODEL } from './judge/index.ts'
@@ -40,6 +44,8 @@ export type {
   BlindPair,
   ConfigJudgeOptions,
   FakeAnalysisModel,
+  FakeInsights,
+  FakeInsightsInput,
   FakeJudgeModel,
   FakeNoteInput,
   FakeVote,

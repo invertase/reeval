@@ -50,6 +50,14 @@ export const SHAPES: PersistedShape[] = [
     versionField: 'schemaVersion',
   },
   {
+    name: 'insights',
+    file: 'src/view/insights.ts',
+    type: 'RunInsights',
+    where:
+      "A run's insights from reeval analyze --insights: <run>/insights.json in the history folder",
+    versionField: 'schemaVersion',
+  },
+  {
     name: 'debug-request',
     file: 'src/view/debug.ts',
     type: 'DebugRequest',

@@ -55,6 +55,7 @@ export const FLAGS = {
   save: { type: 'boolean' },
   context: { type: 'boolean' },
   'no-cache': { type: 'boolean' },
+  insights: { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
   bare: { type: 'boolean' },
@@ -228,7 +229,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
-    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
+    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache', 'insights'],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
@@ -239,7 +240,10 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --save                      Also write it into the run's history folder: <run>/analysis/
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
-    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again`,
+    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+    --insights                  Write a recorded run's insights instead: what each eval asks and
+                                its answer, citing the facts, into <run>/insights.json (never
+                                rewritten); reeval show prints them. Takes --json`,
   },
   mcp: {
     flags: ['http', 'port', 'host', 'token'],
