@@ -2,12 +2,15 @@
 # Conventional Commits on main; merging tags reeval-vX.Y.Z and reeval-python-vX.Y.Z separately.
 # Then ci.yml runs on that commit; npm publishes the packed tarball with trusted publishing (OIDC,
 # environment `npm`). PyPI publishes from packages/reeval-python with OIDC, environment `pypi`.
+# Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
+# GitHub environments that allow deployment from branch `main` still approve the job.
 name: release
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
+    branches: [main]
 
 permissions: {}
 
@@ -18,7 +21,7 @@ concurrency:
 jobs:
   release-please:
     name: release-please
-    if: github.repository == 'invertase/reeval' && github.event_name == 'push'
+    if: github.repository == 'invertase/reeval' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -59,7 +62,7 @@ jobs:
   test:
     name: test
     needs: release-please
-    if: github.event_name == 'push' && needs.release-please.outputs.any_created == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.any_created == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
@@ -67,7 +70,7 @@ jobs:
   publish:
     name: publish to npm
     needs: [release-please, test]
-    if: github.event_name == 'push' && needs.release-please.outputs.npm_created == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.npm_created == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: npm
@@ -90,7 +93,7 @@ jobs:
   publish-pypi:
     name: publish to PyPI
     needs: [release-please, test]
-    if: github.event_name == 'push' && needs.release-please.outputs.pypi_created == 'true'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.pypi_created == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: pypi
@@ -101,7 +104,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.sha }}
+          ref: main
       - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
       - name: Build sdist and wheel
         working-directory: packages/reeval-python
@@ -112,7 +115,7 @@ jobs:
 
   publish-testpypi:
     name: publish to TestPyPI (manual)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: testpypi
@@ -123,6 +126,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: main
       - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
       - name: Build sdist and wheel
         working-directory: packages/reeval-python
