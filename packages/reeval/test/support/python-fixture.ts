@@ -9,7 +9,7 @@ const sdkRoot = (): string => resolve(join(testDir, '..', '..', 'reeval-python')
 export function syncPythonFixtureProject(dir: string): void {
   const pyproject = join(dir, 'pyproject.toml')
   if (!existsSync(pyproject)) return
-  const sdk = sdkRoot()
+  const sdk = sdkRoot().replace(/\\/g, '/')
   const toml = readFileSync(pyproject, 'utf8').replace(
     /path = "[^"]*reeval-python"/,
     `path = "${sdk}"`,
