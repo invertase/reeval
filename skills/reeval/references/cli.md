@@ -39,6 +39,9 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
 - `reeval query --schema` lists every view and its columns; `--json` on any query for a program.
+  `--run last` (or a run id) binds `:run`: `reeval query failing_attempts --run last`, or
+  `reeval query "SELECT … FROM cells WHERE run_id = :run" --run last`. Without it a query spans
+  every run.
 - If your client has a `reeval` MCP server (`reeval mcp`), prefer its tools for reading results:
   `failures` is the quickest way from "it failed" to why (failed checks and judge scores, check
   logs, the transcript's tail, and whether the cell failed in earlier runs), far smaller than

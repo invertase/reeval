@@ -28,6 +28,7 @@ export const FLAGS = {
   limit: { type: 'string' },
   'fail-on-regression': { type: 'boolean' },
   runs: { type: 'string' },
+  run: { type: 'string' },
   profile: { type: 'string' },
   'dry-run': { type: 'boolean' },
   force: { type: 'boolean' },
@@ -206,13 +207,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 (default dir: .reeval/checkouts/<run>)`,
   },
   query: {
-    flags: ['json', 'schema', 'rebuild'],
+    flags: ['json', 'schema', 'rebuild', 'run'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,
                                 skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
                                 verdict_flips, check_discrimination. No argument lists them
+    --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
+                                or table name, only that run's rows
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
@@ -522,7 +525,7 @@ function checkOne(
   if (command === 'query' && tables && positionals.length === 1) {
     const text = positionals[0] as string
     if (/^[A-Za-z_]\w*$/.test(text) && !tables.includes(text)) {
-      return `reeval query ${text}: no view or table named ${text} (views: ${tables.join(', ')})`
+      return `reeval query ${text}: no view or table named ${text} (views and tables: ${tables.join(', ')})`
     }
   }
   return null

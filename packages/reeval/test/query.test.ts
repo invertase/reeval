@@ -10,7 +10,7 @@ import { describe, test } from 'node:test'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
 import { type ClassContext, classifyCall } from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
-import { statementCount } from '../src/query.ts'
+import { statementCount, usesRunParameter } from '../src/query.ts'
 import { harnessLabel } from '../src/view/model.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, readRun, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
@@ -450,6 +450,21 @@ describe('reeval query plumbing', () => {
       ['', 0],
     ]
     for (const [sql, n] of cases) assert.equal(statementCount(sql), n, sql)
+  })
+
+  test(':run is found outside quotes and comments only', () => {
+    const cases: Array<[string, boolean]> = [
+      ['SELECT * FROM runs WHERE run_id = :run', true],
+      ['SELECT $run', true],
+      ['SELECT @run', true],
+      ["SELECT ':run'", false],
+      ['SELECT ":run" FROM t', false],
+      ['SELECT 1 -- :run', false],
+      ['SELECT 1 /* :run */', false],
+      ['SELECT :runner', false],
+      ['SELECT run FROM t', false],
+    ]
+    for (const [sql, uses] of cases) assert.equal(usesRunParameter(sql), uses, sql)
   })
 
   test('the Node floor is where node:sqlite arrives, in engines too', () => {
