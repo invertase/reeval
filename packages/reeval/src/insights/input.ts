@@ -330,3 +330,82 @@ export function classificationKey(
     JSON.stringify({ id: e.id, sources, prompts, judgeQuestions, checks, model, promptVersion }),
   )
 }
+
+/** A fact as the model sees it: its short id (`F1`), which is what it cites. */
+export type ModelFact = InsightFact & { id: string }
+
+/** An attempt as the model sees it: `A1`, its cell's fact id, and its lines citable as `A1#L<n>`. */
+export type ModelAttempt = Omit<InsightAttempt, 'id' | 'cell'> & { id: string; cell: string }
+
+/** One eval's call as the model sees it: facts, attempts and row slots by short id. */
+export type ModelInsightInput = Omit<InsightInput, 'facts' | 'attempts' | 'slots'> & {
+  facts: ModelFact[]
+  attempts: ModelAttempt[]
+  slots?: Omit<InsightSlots, 'rows'> & { rows: string[] }
+}
+
+/** The headline call as the model sees it: each eval by its short id. */
+export type ModelHeadlineInput = Omit<HeadlineInput, 'evals'> & {
+  evals: Array<HeadlineInput['evals'][number] & { id: string }>
+}
+
+/** Turns the model's short ids back into paths; anything it doesn't know stays as written. */
+export type Ids = {
+  cite: (cite: string) => string
+  row: (row: string) => string
+  attempt: (attempt: string) => string
+}
+
+const TRANSCRIPT_ID = /^(A\d+)#L(\d+)$/
+
+/**
+ * The eval's input with a short id for each fact (`F1`…) and attempt (`A1`…), and the map back:
+ * the model cites ids, not the long percent-encoded paths, and the validator sees paths again.
+ */
+export function modelInput(input: InsightInput): { input: ModelInsightInput; ids: Ids } {
+  const factIds = new Map(input.facts.map((f, i) => [f.path, `F${i + 1}`]))
+  const attemptIds = new Map(input.attempts.map((a, i) => [a.id, `A${i + 1}`]))
+  const facts = new Map([...factIds].map(([path, id]) => [id, path]))
+  const attempts = new Map([...attemptIds].map(([path, id]) => [id, path]))
+  const view: ModelInsightInput = {
+    ...input,
+    facts: input.facts.map((f) => ({ id: factIds.get(f.path) as string, ...f })),
+    attempts: input.attempts.map((a) => ({
+      ...a,
+      id: attemptIds.get(a.id) as string,
+      cell: factIds.get(a.cell) ?? a.cell,
+    })),
+    ...(input.slots
+      ? { slots: { ...input.slots, rows: input.slots.rows.map((r) => factIds.get(r) ?? r) } }
+      : {}),
+  }
+  const cite = (c: string) => {
+    const t = TRANSCRIPT_ID.exec(c.trim())
+    if (t) {
+      const attempt = attempts.get(t[1] as string)
+      return attempt ? `transcript:${attempt}#L${t[2]}` : c
+    }
+    return facts.get(c.trim()) ?? c
+  }
+  return {
+    input: view,
+    ids: {
+      cite,
+      row: (r) => facts.get(r.trim()) ?? r,
+      attempt: (a) => attempts.get(a.trim()) ?? a,
+    },
+  }
+}
+
+/** The headline call's input with a short id for each eval, and the map back to their paths. */
+export function modelHeadlineInput(input: HeadlineInput): {
+  input: ModelHeadlineInput
+  ids: Ids
+} {
+  const paths = new Map(input.evals.map((e, i) => [`F${i + 1}`, e.path]))
+  const cite = (c: string) => paths.get(c.trim()) ?? c
+  return {
+    input: { ...input, evals: input.evals.map((e, i) => ({ id: `F${i + 1}`, ...e })) },
+    ids: { cite, row: cite, attempt: (a) => a },
+  }
+}

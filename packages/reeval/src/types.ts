@@ -1,5 +1,5 @@
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
-import type { HeadlineInput, InsightInput } from './insights/input.ts'
+import type { ModelHeadlineInput, ModelInsightInput } from './insights/input.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -1598,7 +1598,7 @@ export type FakeAnalysisModel = {
 }
 
 /** What a fake insights function is given: one eval's scoped facts, or the run's evals for the headline. */
-export type FakeInsightsInput = InsightInput | HeadlineInput
+export type FakeInsightsInput = ModelInsightInput | ModelHeadlineInput
 
 /**
  * A fake insight answer. Each call takes its part: `intent` the classification, `answer`,

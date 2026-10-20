@@ -200,13 +200,13 @@ analysis: {
       input.call === 'classify'
         ? { intent: { job: 'finish', question: 'Does it build?' } }
         : input.call === 'insights'
-          ? { answer: { text: 'Yes: every try passed.', cites: [input.eval.path] } }
+          ? { answer: { text: 'Yes: every try passed.', cites: [input.facts[0].id] } }
           : { headline: null },
   }),
 }
 ```
 
-`insights` answers [`reeval analyze --insights`](/reference/cli/analyze#insights): fixed insights, or a function of each call's input. `input.call` is `classify` (the eval's name, prompts, judge questions, check labels and facts; answer `intent`), `insights` (the same, with `intent` and `slots`, the rows that take a sentence; answer `answer`, `findings`, `rows` and `namedTools`), or `headline`, once a run (answer `headline`). Every sentence goes through the validator, so a fake sentence that cites nothing is dropped as a model's would be; `{ error: '…' }` fails every call.
+`insights` answers [`reeval analyze --insights`](/reference/cli/analyze#insights): fixed insights, or a function of each call's input. `input.call` is `classify` (the eval's name, prompts, judge questions, check labels and facts; answer `intent`), `insights` (the same, with `intent` and `slots`, the rows that take a sentence; answer `answer`, `findings`, `rows` and `namedTools`), or `headline`, once a run (answer `headline`). Each fact, attempt and eval carries the short `id` the model cites (`F1`, `A1`, `A1#L12` for a transcript line), and `slots.rows` lists fact ids. Every sentence goes through the validator, so a fake sentence that cites nothing is dropped as a model's would be; `{ error: '…' }` fails every call.
 
 Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails; without `insights`, `reeval analyze --insights` fails.
 

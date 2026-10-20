@@ -33,8 +33,16 @@ export type RunInsights = {
   evals: EvalInsight[]
   /** Remarks about the evals' own quality, ranked. Empty: no kind is raised yet. */
   remarks: Remark[]
-  /** What the checks dropped, and how many sentences were asked for again, so the output can say so. */
-  validation: { dropped: number; regenerated: number }
+  /**
+   * What the checks dropped, and how many sentences were asked for again, so the output can say
+   * so. `drops` is each dropped sentence: its slot (`<eval> › answer`, `› row <path>`, `headline`),
+   * its text and why.
+   */
+  validation: {
+    dropped: number
+    regenerated: number
+    drops?: Array<{ slot: string; text: string; reason: string }>
+  }
   /** Set when insights failed; the facts still print. */
   error?: string
 }

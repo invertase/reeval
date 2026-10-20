@@ -121,61 +121,71 @@ export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdic
   const text = s.text.trim()
   const cites = [...new Set(s.cites.map((x) => x.trim()).filter(Boolean))]
   if (!text) return { dropped: 'empty' }
-  if (!cites.length) return { dropped: `"${text}" cites nothing` }
+  if (!cites.length) return { dropped: 'cites nothing' }
   const texts: string[] = []
   for (const cite of cites) {
     const t = c.resolve(cite)
-    if (t === null) return { dropped: `"${text}" cites ${cite}, which isn't a fact it was shown` }
+    if (t === null) return { dropped: `cites ${cite}, which isn't a fact it was shown` }
     texts.push(t)
   }
   const parts = sentencesOf(text)
   if (parts.length > maxSentences) {
-    return { dropped: `"${text}" is ${parts.length} sentences, more than ${maxSentences}` }
+    return { dropped: `is ${parts.length} sentences, more than ${maxSentences}` }
   }
   const long = parts.find((p) => wordsOf(p) > MAX_WORDS)
-  if (long) return { dropped: `"${long}" is ${wordsOf(long)} words, more than ${MAX_WORDS}` }
+  if (long) {
+    const which = parts.length > 1 ? `"${long}" ` : ''
+    return { dropped: `${which}is ${wordsOf(long)} words, more than ${MAX_WORDS}` }
+  }
   const banned = BANNED.find((b) => b.pattern.test(text) && !b.pattern.test(c.vocabulary))
-  if (banned) return { banned: `"${text}" says "${banned.word}"; use plain words` }
+  if (banned) return { banned: `says "${banned.word}"; use plain words` }
   if (PERCENT.test(text) && triesOf(texts) < PERCENT_MIN_TRIES) {
     return {
-      banned: `"${text}" gives a percentage below ${PERCENT_MIN_TRIES} tries; say N of M tries`,
+      banned: `gives a percentage below ${PERCENT_MIN_TRIES} tries; say N of M tries`,
     }
   }
   const haystack = normal(texts.join('\n'))
   for (const [, quote = ''] of text.matchAll(QUOTE)) {
     if (!haystack.includes(normal(quote))) {
-      return { dropped: `"${text}" quotes "${quote}", which isn't in what it cites` }
+      return { dropped: `quotes "${quote}", which isn't in what it cites` }
     }
   }
   const numbers = unverifiedNumbers(text, texts)
   if (numbers.length) {
-    return { dropped: `"${text}" has ${numbers.join(', ')}, which no cited fact has` }
+    return { dropped: `has ${numbers.join(', ')}, which no cited fact has` }
   }
   const effects = new Set(cites.flatMap(c.effects))
   for (const e of EFFECT_PHRASES) {
     if (e.pattern.test(text) && !effects.has(e.word)) {
-      return { dropped: `"${text}" says "${e.word}", but no cited fact's effect is` }
+      return { dropped: `says "${e.word}", but no cited fact's effect is` }
     }
   }
   return { ok: { text, cites } }
 }
 
-/** What the checks did to one answer: what's kept, what's dropped and what may be asked again. */
-export type Checked<T> = { value: T; dropped: string[]; banned: string[] }
+/** A sentence the checks refused: where it was going, what it said, and why. */
+export type Drop = { slot: string; text: string; reason: string }
 
-function tally<T>(value: T, verdicts: Verdict[]): Checked<T> {
-  return {
-    value,
-    dropped: verdicts.flatMap((v) => ('dropped' in v ? [v.dropped] : [])),
-    banned: verdicts.flatMap((v) => ('banned' in v ? [v.banned] : [])),
+/** What the checks did to one answer: what's kept, what's dropped and what may be asked again. */
+export type Checked<T> = { value: T; dropped: Drop[]; banned: Drop[] }
+
+type Judged = { slot: string; text: string; verdict: Verdict }
+
+function tally<T>(value: T, judged: Judged[]): Checked<T> {
+  const out: Checked<T> = { value, dropped: [], banned: [] }
+  for (const { slot, text, verdict: v } of judged) {
+    if ('dropped' in v) out.dropped.push({ slot, text, reason: v.dropped })
+    if ('banned' in v) out.banned.push({ slot, text, reason: v.banned })
   }
+  return out
 }
 
 type EvalSentences = Pick<EvalInsight, 'answer' | 'findings' | 'rows' | 'namedTools'>
 
 /**
  * An eval's insights call, checked. `texts` holds each attempt's whole final message, which a
- * named tool must appear in verbatim.
+ * named tool must appear in verbatim. Each drop's slot names the eval and where the sentence was
+ * going: `answer`, `finding 2`, `row <path under the eval>` or `named tools <attempt>`.
  */
 export function validateEvalInsights(
   output: InsightsOutput,
@@ -184,52 +194,57 @@ export function validateEvalInsights(
   texts: Map<string, string>,
 ): Checked<EvalSentences> {
   const c = citableEval(input)
-  const verdicts: Verdict[] = []
-  const keep = (s: Sentence, max = 1) => {
+  const judged: Judged[] = []
+  const under = (path: string) =>
+    path.startsWith(`${input.eval.path}/`) ? path.slice(input.eval.path.length + 1) : path
+  const slot = (where: string) => `${input.eval.name} › ${where}`
+  const drop = (where: string, text: string, reason: string) =>
+    judged.push({ slot: slot(where), text, verdict: { dropped: reason } })
+  const keep = (s: Sentence, where: string, max = 1) => {
     const v = checkSentence(s, c, max)
-    verdicts.push(v)
+    judged.push({ slot: slot(where), text: s.text, verdict: v })
     return 'ok' in v ? v.ok : null
   }
-  const answer = output.answer ? keep(output.answer, 2) : null
+  const answer = output.answer ? keep(output.answer, 'answer', 2) : null
   const findings = output.findings.flatMap((s, i) => {
     if (!slots.findings) {
-      verdicts.push({ dropped: `findings[${i}]: this eval's layout has no findings` })
+      drop(`finding ${i + 1}`, s.text, "this eval's layout has no findings")
       return []
     }
-    const kept = keep(s)
+    const kept = keep(s, `finding ${i + 1}`)
     return kept ? [kept] : []
   })
   const open = new Set(slots.rows)
   const filled = new Set<string>()
   const rows = output.rows.flatMap((r) => {
+    const where = `row ${under(r.row)}`
     if (!open.has(r.row)) {
-      verdicts.push({
-        dropped: `rows: ${r.row} isn't a row this eval's layout takes a sentence on`,
-      })
+      drop(where, r.text, "isn't a row this eval's layout takes a sentence on")
       return []
     }
     if (filled.has(r.row)) {
-      verdicts.push({ dropped: `rows: a second sentence on ${r.row}` })
+      drop(where, r.text, 'is a second sentence on the row')
       return []
     }
-    const kept = keep(r)
+    const kept = keep(r, where)
     if (!kept) return []
     filled.add(r.row)
     return [{ ...kept, row: r.row }]
   })
   const namedTools = output.namedTools.flatMap((n) => {
+    const where = `named tools ${under(n.attempt)}`
     if (!slots.namedTools) {
-      verdicts.push({ dropped: `namedTools: ${n.attempt} isn't on a choose eval` })
+      drop(where, n.tools.join(', '), "isn't on a choose eval")
       return []
     }
     const text = texts.get(n.attempt)
     if (text === undefined) {
-      verdicts.push({ dropped: `namedTools: ${n.attempt} isn't an attempt it was shown` })
+      drop(where, n.tools.join(', '), "isn't an attempt it was shown")
       return []
     }
     const tools = [...new Set(n.tools.map((t) => t.trim()).filter(Boolean))].filter((t) => {
       if (text.includes(t)) return true
-      verdicts.push({ dropped: `namedTools: "${t}" isn't in ${n.attempt}'s final message` })
+      drop(where, t, "isn't in the attempt's final message")
       return false
     })
     return tools.length ? [{ attempt: n.attempt, tools }] : []
@@ -241,7 +256,7 @@ export function validateEvalInsights(
       ...(rows.length ? { rows } : {}),
       ...(namedTools.length ? { namedTools } : {}),
     },
-    verdicts,
+    judged,
   )
 }
 
@@ -251,5 +266,7 @@ export function validateHeadline(
 ): Checked<Sentence | null> {
   if (!output.headline) return { value: null, dropped: [], banned: [] }
   const v = checkSentence(output.headline, citableHeadline(input))
-  return tally('ok' in v ? v.ok : null, [v])
+  return tally('ok' in v ? v.ok : null, [
+    { slot: 'headline', text: output.headline.text, verdict: v },
+  ])
 }

@@ -64,15 +64,36 @@ const insightOf = (doc: RunInsights, e: EvalResult) => {
 
 const BANNED = 'with-skill helped, well beyond the noise.'
 
+/** The short id the model is shown for a fact's path. */
+const idOf = (input: FakeInsightsInput, path: string) => {
+  const id = input.call === 'headline' ? undefined : input.facts.find((f) => f.path === path)?.id
+  assert.ok(id, path)
+  return id
+}
+
+/** An insight's sentences: what the recipe's fake writes, whatever the prompt version. */
+const sentencesOf = (doc: RunInsights) => ({
+  headline: doc.headline,
+  evals: doc.evals.map(({ evalId, answer, findings, rows, namedTools, intent }) => ({
+    evalId,
+    job: intent.job,
+    answer,
+    findings,
+    rows,
+    namedTools,
+  })),
+})
+
 describe('the insights validator', () => {
   test('the recipe insights pass every check, as the with-insights entry holds them', async () => {
     const doc = await generate(recipeInsights)
-    assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0 })
+    assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
+    assert.equal(doc.promptVersion, 'insights-v2')
     const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
     assert.deepEqual(
-      { ...doc, createdAt: '' },
-      { ...stored, createdAt: '' },
-      're-record with-insights if the recipe changed',
+      sentencesOf(doc),
+      sentencesOf(stored),
+      'add a corpus entry if the recipe changed',
     )
   })
 
@@ -84,6 +105,48 @@ describe('the insights validator', () => {
     )
     assert.equal(insightOf(doc, measure).answer, null)
     assert.equal(doc.validation.dropped, 1)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => [d.slot, d.reason]),
+      [['greets in the house style › answer', 'cites nothing']],
+    )
+  })
+
+  test('canary: a cite to an id the model was never shown is dropped', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights' && a.answer
+          ? { ...a, answer: { ...a.answer, cites: ['F999'] } }
+          : a,
+      ),
+    )
+    assert.equal(insightOf(doc, measure).answer, null)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => d.reason),
+      ["cites F999, which isn't a fact it was shown"],
+    )
+  })
+
+  test('the model cites short ids, and insights.json keeps the fact paths', async () => {
+    let shown: FakeInsightsInput | undefined
+    const doc = await generate(
+      recipeWith(choose.path, (input, a) => {
+        if (input.call === 'insights') shown = input
+        return a
+      }),
+    )
+    assert.ok(shown && shown.call === 'insights')
+    assert.deepEqual(
+      shown.facts.map((f) => f.id),
+      shown.facts.map((_, i) => `F${i + 1}`),
+    )
+    assert.ok(shown.slots?.rows.every((r) => /^F\d+$/.test(r)))
+    assert.ok(shown.attempts.every((x, i) => x.id === `A${i + 1}` && /^F\d+$/.test(x.cell)))
+    const x = insightOf(doc, choose)
+    const paths = new Set(shown.facts.map((f) => f.path))
+    for (const s of [x.answer, ...(x.rows ?? [])])
+      for (const c of s?.cites ?? []) assert.ok(paths.has(c), c)
+    for (const r of x.rows ?? []) assert.ok(paths.has(r.row), r.row)
+    for (const n of x.namedTools ?? []) assert.match(n.attempt, /#\d+$/)
   })
 
   test('canary: a sentence citing a fact it was never shown is dropped', async () => {
@@ -107,16 +170,23 @@ describe('the insights validator', () => {
           ? {
               ...a,
               rows: (a.rows ?? []).map((r) =>
-                r.row === withSkill.path && !(fixed && input.retry) ? { ...r, text: BANNED } : r,
+                r.row === idOf(input, withSkill.path) && !(fixed && input.retry)
+                  ? { ...r, text: BANNED }
+                  : r,
               ),
             }
           : a,
       )
     const twice = await generate(banned(false))
-    assert.deepEqual(twice.validation, { dropped: 1, regenerated: 1 })
+    assert.equal(twice.validation.dropped, 1)
+    assert.equal(twice.validation.regenerated, 1)
+    assert.deepEqual(
+      twice.validation.drops?.map((d) => [d.text, d.reason]),
+      [[BANNED, 'says "noise"; use plain words']],
+    )
     assert.ok(!insightOf(twice, measure).rows?.some((r) => r.row === withSkill.path))
     const fixed = await generate(banned(true))
-    assert.deepEqual(fixed.validation, { dropped: 0, regenerated: 1 })
+    assert.deepEqual(fixed.validation, { dropped: 0, regenerated: 1, drops: [] })
     assert.ok(insightOf(fixed, measure).rows?.some((r) => r.row === withSkill.path))
   })
 
@@ -130,7 +200,11 @@ describe('the insights validator', () => {
               ...a,
               rows: [
                 ...(a.rows ?? []),
-                { row: passing.path, text: 'It names Genkit.', cites: [passing.path] },
+                {
+                  row: idOf(input, passing.path),
+                  text: 'It names Genkit.',
+                  cites: [idOf(input, passing.path)],
+                },
               ],
             }
           : a,
@@ -170,9 +244,15 @@ describe('the insights validator', () => {
               ...a,
               answer: {
                 text: `No: ${'very '.repeat(30)}close.`,
-                cites: [measure.path],
+                cites: [idOf(input, measure.path)],
               },
-              rows: [{ row: plain.path, text: 'plain helped.', cites: [plain.path] }],
+              rows: [
+                {
+                  row: idOf(input, plain.path),
+                  text: 'plain helped.',
+                  cites: [idOf(input, plain.path)],
+                },
+              ],
             }
           : a,
       ),
@@ -293,7 +373,7 @@ describe('reeval analyze --insights', () => {
 
     const flags = await runCli(p.dir, ['analyze', runId, '--insights', '--save'])
     assert.equal(flags.code, 2)
-    assert.match(flags.stderr, /takes a run and --json only, not --save/)
+    assert.match(flags.stderr, /takes a run, --json and -v only, not --save/)
 
     const scratch = await runCli(p.dir, ['run', 'greets in French'])
     assert.ok(scratch.code === 0 || scratch.code === 1, scratch.stderr)
@@ -320,5 +400,45 @@ describe('reeval analyze --insights', () => {
         .find((e) => e.name === 'before-insights')
         ?.runs.map((x) => x.runId) ?? []
     assert.ok(!existsSync(join(p.dir, HISTORY_DIR, runId as string, 'insights.json')))
+  })
+
+  test('-v prints each sentence the checks removed and why, and the file keeps them', async () => {
+    const p = await fixture('fixtures/records/before-insights')
+    writeFileSync(
+      join(p.dir, 'reeval.config.ts'),
+      FAKE_CONFIG.replace("import { insights } from './insights.ts'\n", '').replace(
+        'fakeAnalysis({ insights })',
+        `fakeAnalysis({
+    insights: (input) =>
+      input.call === 'insights' && input.eval.name === 'greets in French'
+        ? { answer: { text: 'It never greets in French.', cites: ['F999'] } }
+        : {},
+  })`,
+      ),
+    )
+    const plain = await runCli(p.dir, ['analyze', '-v'])
+    assert.equal(plain.code, 2)
+    assert.match(plain.stderr, /takes -v only with --insights/)
+    const r = await runCli(p.dir, ['analyze', '--insights', '-v'])
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(r.stderr, /1 sentence removed by the checks/)
+    assert.match(
+      r.stderr,
+      /removed {2}greets in French › answer: "It never greets in French\."\n {9}cites F999, which isn't a fact it was shown/,
+    )
+    const [runId] =
+      corpusEntries()
+        .find((e) => e.name === 'before-insights')
+        ?.runs.map((x) => x.runId) ?? []
+    const doc = readableInsights(
+      JSON.parse(readFileSync(join(p.dir, HISTORY_DIR, runId as string, 'insights.json'), 'utf8')),
+    )
+    assert.deepEqual(doc.validation.drops, [
+      {
+        slot: 'greets in French › answer',
+        text: 'It never greets in French.',
+        reason: "cites F999, which isn't a fact it was shown",
+      },
+    ])
   })
 })

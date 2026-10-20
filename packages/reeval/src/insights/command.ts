@@ -18,7 +18,7 @@ import { generateInsights } from './generate.ts'
 
 type Ctx = {
   config: ResolvedConfig
-  flags: { json?: boolean }
+  flags: { json?: boolean; verbose?: boolean[] }
   out: (s: string) => void
   err: (s: string) => void
 }
@@ -54,6 +54,11 @@ export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promis
   ctx.err(
     `wrote ${fromCwd(file)}: ${insights.evals.length} evals, ${dropped} ${dropped === 1 ? 'sentence' : 'sentences'} removed by the checks${regenerated ? `, ${regenerated} asked for again` : ''}. Commit it with git.`,
   )
+  if (ctx.flags.verbose?.length) {
+    for (const d of insights.validation.drops ?? []) {
+      ctx.err(`removed  ${d.slot}: "${d.text}"\n         ${d.reason}`)
+    }
+  }
   if (ctx.flags.json) ctx.out(JSON.stringify(insights, null, 2))
   else {
     const suite = suiteResult(record)
@@ -67,7 +72,7 @@ export function checkInsightsFlags(flags: Record<string, unknown>) {
   const given = NOT_WITH_INSIGHTS.filter((f) => flags[f] !== undefined && flags[f] !== false)
   if (given.length) {
     throw new UsageError(
-      `reeval analyze --insights takes a run and --json only, not ${given.map((f) => `--${f}`).join(', ')}`,
+      `reeval analyze --insights takes a run, --json and -v only, not ${given.map((f) => `--${f}`).join(', ')}`,
     )
   }
 }

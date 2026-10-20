@@ -298,11 +298,29 @@
           "required": ["costUsd", "inputTokens", "outputTokens"]
         },
         "validation": {
-          "description": "What the checks dropped, and how many sentences were asked for again, so the output can say so.",
+          "description": "What the checks dropped, and how many sentences were asked for again, so the output can say so. `drops` is each dropped sentence: its slot (`<eval> › answer`, `› row <path>`, `headline`), its text and why.",
           "type": "object",
           "properties": {
             "dropped": {
               "type": "number"
+            },
+            "drops": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "slot": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["reason", "slot", "text"]
+              }
             },
             "regenerated": {
               "type": "number"

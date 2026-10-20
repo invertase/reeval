@@ -229,7 +229,18 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
-    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache', 'insights'],
+    flags: [
+      'vs',
+      'eval',
+      'json',
+      'md',
+      'save',
+      'context',
+      'dry-run',
+      'no-cache',
+      'insights',
+      'verbose',
+    ],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
@@ -243,7 +254,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
     --insights                  Write a recorded run's insights instead: what each eval asks and
                                 its answer, citing the facts, into <run>/insights.json (never
-                                rewritten); reeval show prints them. Takes --json`,
+                                rewritten); reeval show prints them. Takes --json and -v
+    -v, --verbose               With --insights, print each sentence the checks removed and why`,
   },
   mcp: {
     flags: ['http', 'port', 'host', 'token'],

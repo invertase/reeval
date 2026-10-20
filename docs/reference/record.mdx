@@ -1023,7 +1023,7 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
   "schemaVersion": 1,
   "runId": "20261020T231903Z_2e69951_cursor-agent_8s1m",
   "model": "fake",
-  "promptVersion": "insights-v1",
+  "promptVersion": "insights-v2",
   "factsHash": "sha256:0d56643daa2ea23e32a66492facca73fc5b3a85c6051d4f8690abec7c5281a18",
   "usage": { "inputTokens": 0, "outputTokens": 0, "costUsd": null },
   "headline": {
@@ -1047,7 +1047,7 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
     "namedTools": [{ "attempt": "…/a chat app/advisor+-+fake#1", "tools": ["Genkit", "LangChain"] }]
   }],
   "remarks": [],
-  "validation": { "dropped": 0, "regenerated": 0 }
+  "validation": { "dropped": 0, "regenerated": 0, "drops": [] }
 }
 ```
 
@@ -1064,7 +1064,8 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
 | `evals[].rows` | A sentence under each row it names (`row`, a fact path) |
 | `evals[].namedTools` | On a choose eval, the tools each attempt's final message names (`<cell path>#<n>`) |
 | `remarks` | Reserved for later remarks on the run; empty |
-| `validation` | Sentences the checks dropped, and those asked for again |
+| `validation` | `dropped`, the sentences the checks dropped, and `regenerated`, those asked for again |
+| `validation.drops` | Each dropped sentence: `slot` (`<eval> › answer`, `› finding <n>`, `› row <path>`, `› named tools <attempt>` or `headline`), `text` and `reason`; absent in files written before it |
 | `error` | Set when writing the insights failed; `reeval show` prints it instead |
 
 Each sentence is `{ text, cites }`. A cite is a fact path (`<eval>`, `<eval>/<cell>`, `<eval>/<cell>/checks/<label>`, `<eval>/<cell>/effort`, `<family>/<case>`) or a transcript line, `transcript:<cell path>#<n>#L<line>`. Paths percent-encode `%`, `/` and `+` inside each part.

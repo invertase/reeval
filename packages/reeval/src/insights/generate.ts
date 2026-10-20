@@ -16,7 +16,12 @@ import {
   classificationKey,
   evalInput,
   type HeadlineInput,
+  type Ids,
   type InsightInput,
+  type ModelHeadlineInput,
+  type ModelInsightInput,
+  modelHeadlineInput,
+  modelInput,
 } from './input.ts'
 import {
   CLASSIFY_PROMPT,
@@ -30,7 +35,7 @@ import {
   type InsightsOutput,
   insightsSchema,
 } from './schema.ts'
-import { type Checked, validateEvalInsights, validateHeadline } from './validate.ts'
+import { type Checked, type Drop, validateEvalInsights, validateHeadline } from './validate.ts'
 
 export type InsightOptions = {
   record: RunRecord
@@ -44,9 +49,11 @@ export type InsightOptions = {
 
 type Usage = { inputTokens: number; outputTokens: number }
 type Call = 'classify' | 'insights' | 'headline'
+type ModelInput = ModelInsightInput | ModelHeadlineInput
+type Counts = { dropped: number; regenerated: number; drops: Drop[] }
 
 /** The part of a fake's answer one call returns, as the model's JSON would have it. */
-function fakePart(call: Call, answer: FakeInsights, input: InsightInput | HeadlineInput): unknown {
+function fakePart(call: Call, answer: FakeInsights, input: ModelInput): unknown {
   if (call === 'classify') {
     const i = answer.intent
     return {
@@ -69,7 +76,7 @@ function fakePart(call: Call, answer: FakeInsights, input: InsightInput | Headli
 async function languageModel(
   model: ResolvedAnalysisModel,
   call: Call,
-  input: InsightInput | HeadlineInput,
+  input: ModelInput,
 ): Promise<LanguageModel> {
   if (!model.fake) return providerModel(model)
   const insights = model.fake.insights
@@ -88,7 +95,7 @@ async function ask<S extends z.ZodType>(
   call: Call,
   schema: S,
   system: string,
-  input: InsightInput | HeadlineInput,
+  input: ModelInput,
   usage: Usage,
 ): Promise<z.infer<S>> {
   const result = await generateText({
@@ -105,21 +112,42 @@ async function ask<S extends z.ZodType>(
   return result.output as z.infer<S>
 }
 
+const sentenceFrom = <S extends Sentence>(s: S, ids: Ids): S => ({
+  ...s,
+  cites: s.cites.map(ids.cite),
+})
+
+/** The model's sentences with its short ids turned back into paths, for the validator and the file. */
+function fromModel(out: InsightsOutput, ids: Ids): InsightsOutput {
+  return {
+    answer: out.answer && sentenceFrom(out.answer, ids),
+    findings: out.findings.map((s) => sentenceFrom(s, ids)),
+    rows: out.rows.map((r) => ({ ...sentenceFrom(r, ids), row: ids.row(r.row) })),
+    namedTools: out.namedTools.map((n) => ({ ...n, attempt: ids.attempt(n.attempt) })),
+  }
+}
+
+/** How a refused sentence is put to the model when it's asked again. */
+const retryLine = (d: Drop) => `${d.slot}: "${d.text}" ${d.reason}`
+
 /** Checks an answer, and asks once more when the lint refused a sentence; what's refused twice is dropped. */
 async function checked<T, O>(
   first: O,
   again: (retry: string[]) => Promise<O>,
   check: (output: O) => Checked<T>,
-  counts: RunInsights['validation'],
+  counts: Counts,
 ): Promise<T> {
   const one = check(first)
   if (!one.banned.length) {
     counts.dropped += one.dropped.length
+    counts.drops.push(...one.dropped)
     return one.value
   }
   counts.regenerated += one.banned.length
-  const two = check(await again(one.banned))
-  counts.dropped += two.dropped.length + two.banned.length
+  const two = check(await again(one.banned.map(retryLine)))
+  const drops = [...two.dropped, ...two.banned]
+  counts.dropped += drops.length
+  counts.drops.push(...drops)
   return two.value
 }
 
@@ -127,7 +155,7 @@ async function evalInsight(
   o: InsightOptions,
   e: EvalResult,
   usage: Usage,
-  counts: RunInsights['validation'],
+  counts: Counts,
 ): Promise<EvalInsight> {
   const base = await evalInput(o.record, o.runDir, e)
   const classified = (await ask(
@@ -135,7 +163,7 @@ async function evalInsight(
     'classify',
     classificationSchema,
     CLASSIFY_PROMPT,
-    { call: 'classify', ...base },
+    modelInput({ call: 'classify', ...base }).input,
     usage,
   )) as ClassificationOutput
   const job: Job = classified.confidence === 'low' ? 'other' : classified.job
@@ -150,15 +178,19 @@ async function evalInsight(
     intent: { job, question: classified.question, subject },
     slots,
   }
-  const askInsights = (retry?: string[]) =>
-    ask(
-      o,
-      'insights',
-      insightsSchema,
-      INSIGHTS_PROMPT,
-      retry ? { ...input, retry } : input,
-      usage,
-    ) as Promise<InsightsOutput>
+  const model = modelInput(input)
+  const askInsights = async (retry?: string[]) =>
+    fromModel(
+      (await ask(
+        o,
+        'insights',
+        insightsSchema,
+        INSIGHTS_PROMPT,
+        retry ? { ...model.input, retry } : model.input,
+        usage,
+      )) as InsightsOutput,
+      model.ids,
+    )
   const texts = attemptTexts(o.record, e)
   const sentences = await checked(
     await askInsights(),
@@ -206,7 +238,7 @@ export const insightEvals = (suite: SuiteResult) =>
 export async function generateInsights(o: InsightOptions): Promise<RunInsights> {
   const suite = suiteResult(o.record)
   const usage: Usage = { inputTokens: 0, outputTokens: 0 }
-  const validation = { dropped: 0, regenerated: 0 }
+  const validation: Counts = { dropped: 0, regenerated: 0, drops: [] }
   const evals = await mapLimit(insightEvals(suite), o.concurrency ?? 4, (e) =>
     evalInsight(o, e, usage, validation),
   )
@@ -221,15 +253,18 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
       answer: byPath.get(e.path)?.answer?.text ?? null,
     })),
   }
-  const askHeadline = (retry?: string[]) =>
-    ask(
+  const headlineModel = modelHeadlineInput(headlineInput)
+  const askHeadline = async (retry?: string[]): Promise<HeadlineOutput> => {
+    const out = (await ask(
       o,
       'headline',
       headlineSchema,
       HEADLINE_PROMPT,
-      retry ? { ...headlineInput, retry } : headlineInput,
+      retry ? { ...headlineModel.input, retry } : headlineModel.input,
       usage,
-    ) as Promise<HeadlineOutput>
+    )) as HeadlineOutput
+    return { headline: out.headline && sentenceFrom(out.headline, headlineModel.ids) }
+  }
   const headline: Sentence | null = await checked(
     await askHeadline(),
     askHeadline,

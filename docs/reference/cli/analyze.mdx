@@ -31,7 +31,8 @@ reeval analyze [run]          Explain a run with one LLM call over a digest of i
   --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
   --insights                  Write a recorded run's insights instead: what each eval asks and
                               its answer, citing the facts, into <run>/insights.json (never
-                              rewritten); reeval show prints them. Takes --json
+                              rewritten); reeval show prints them. Takes --json and -v
+  -v, --verbose               With --insights, print each sentence the checks removed and why
 ```
 
 [//]: # (/generated:cli-help:analyze)
@@ -94,18 +95,28 @@ writing insights for 20261020T231903Z_2e69951_cursor-agent_8s1m with fake…
 wrote evals/.history/20261020T231903Z_2e69951_cursor-agent_8s1m/insights.json: 13 evals, 0 sentences removed by the checks. Commit it with git.
                  recommends Genkit for $task
   Not for a Python agent: 0 of 2 tries passed.
-  pass  a chat app            Genkit 2 of 2
-  pass  a RAG pipeline        Genkit 2 of 2
-  fail  a Python agent        Genkit 2 of 2
+  case                        pass    Genkit
+  pass  a chat app            2 of 2  2 of 2
+  pass  a RAG pipeline        2 of 2  2 of 2
+  fail  a Python agent        0 of 2  2 of 2
     It also names LangChain, so "names no other framework" fails.
 …
 ```
 
-`--insights` writes a recorded run's insights: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` in the history folder, and `reeval show` prints them with the run from then on. It takes a run and `--json` (the document instead of the blocks), and no other flag.
+`--insights` writes a recorded run's insights: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` in the history folder, and `reeval show` prints them with the run from then on. It takes a run, `--json` (the document instead of the blocks) and `-v`, and no other flag.
 
 Per eval, one call classifies it from its name first, then its prompts, judge questions and check labels: its job (`choose` a tool, `finish` a task, or `other`), the question it asks and its subject. A low-confidence classification is `other`. A second call writes the answer and a sentence on each row the [layout](/concepts/output#insights) opens, from that eval's facts with each effect as a word. Then one call writes the run's headline.
 
-Every sentence is checked before it's kept, and one that fails a check is dropped and counted in `validation.dropped`:
+The model sees each fact under a short id (`F1`, `F2`, … per call, `A1`, … for attempts, `A1#L12` for a transcript line) and cites those. reeval maps them back to the fact paths before it checks a sentence, so `insights.json` stores the paths, and a cite to an id the call never had is dropped like a missing one.
+
+Every sentence is checked before it's kept, and one that fails a check is dropped, counted in `validation.dropped` and listed with its reason in `validation.drops`. `-v` prints each one:
+
+```text
+removed  greets in French › answer: "It never greets in French."
+         cites F999, which isn't a fact it was shown
+```
+
+
 
 | Check | Drops |
 |---|---|
@@ -167,7 +178,8 @@ In `analysis.agent`'s summary, the fake first reads up to three dropped evidence
 | `reeval analyze takes --json or --md, not both` | Pick one |
 | `reeval analyze --context makes no analysis to save; drop --save` | `--context` only prints the digest |
 | `reeval analyze --vs names the run itself` | Name an earlier run, or `--vs none` |
-| `reeval analyze --insights takes a run and --json only, not --save` | Drop the other flags |
+| `reeval analyze --insights takes a run, --json and -v only, not --save` | Drop the other flags |
+| `reeval analyze takes -v only with --insights` | Add `--insights`, or drop `-v` |
 | `<run>/insights.json already exists, and insights are never rewritten` | Delete the file to write new ones |
 | `<run> isn't recorded, so there's no history folder for its insights` | `reeval record <run>` first |
 | `No eval in <run> matches "<filter>"` | Check `--eval` against `reeval show <run>` |
