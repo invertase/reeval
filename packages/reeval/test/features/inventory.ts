@@ -1722,6 +1722,16 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'query.check-rates',
+    area: 'Records and studio',
+    name: 'Each labelled check\u2019s pass rate per cell, control and variant alike (`check_rates`)',
+    tests: [
+      query(
+        'check_rates gives each labelled check’s pass rate per cell, on both arms of a compare',
+      ),
+    ],
+  },
+  {
     id: 'summary.judge-keys',
     area: 'Records and studio',
     name: 'Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts',

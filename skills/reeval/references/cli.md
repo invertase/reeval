@@ -34,7 +34,9 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
   cell, skill and `first_failed_check` (the label of the first check that failed).
 - `reeval query lift` and `reeval query effort` list every variant cell's lift and effort from
   recorded runs. `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE
-  verdict LIKE 'both-%'"` finds checks that don't tell a variant from its control.
+  verdict LIKE 'both-%'"` finds checks that don't tell a variant from its control, and
+  `reeval query "SELECT cell_key, role, rate FROM check_rates WHERE label = 'flow works'"` is one
+  check's pass rate per cell (`pass / (pass + fail)`; errors and not-run left out).
 - `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.

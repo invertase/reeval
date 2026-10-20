@@ -89,6 +89,64 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.match(text.stderr, /history\.db: 1 runs/)
   })
 
+  test('check_rates gives each labelled check’s pass rate per cell, on both arms of a compare', async () => {
+    const p = await project('query-check-rates', {
+      'reeval.config.ts': fakeConfig({
+        harness:
+          "{ files: { 'ok.txt': 'y' }, withSkill: { files: { 'ok.txt': 'y', 'styled.txt': 'Ahoy' } } }",
+      }),
+      'skills/house/SKILL.md': skill('house'),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const styled = defineEnvironment('styled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/house')],
+}))
+evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }, async (c) => {
+  await c.send('go')
+  await expect.soft(c, 'writes ok.txt').toHaveFile('ok.txt')
+  await expect.soft(c, 'house style').toHaveFile('styled.txt', /Ahoy/)
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { run } = readRun(p.dir)
+    const cells = await query(p.dir, 'SELECT key, harness FROM cells ORDER BY key')
+    const harness = (key: string) => cells.find((c) => c.key === key)?.harness
+    assert.ok(harness('fake/plain/fake'))
+
+    const rows = await query(p.dir, 'SELECT * FROM check_rates ORDER BY role, label')
+    const row = (cell: string, environment: string, role: string, label: string) => ({
+      run_id: run.runId,
+      eval_key: 'evals/s.eval.ts › greets',
+      cell_key: cell,
+      harness: harness(cell),
+      environment,
+      role,
+      label,
+    })
+    assert.deepEqual(rows, [
+      {
+        ...row('fake/plain/fake', 'plain', 'control', 'house style'),
+        ...{ pass: 0, fail: 2, error: 0, not_run: 0, rate: 0 },
+      },
+      {
+        ...row('fake/plain/fake', 'plain', 'control', 'writes ok.txt'),
+        ...{ pass: 2, fail: 0, error: 0, not_run: 0, rate: 1 },
+      },
+      {
+        ...row('fake/styled/fake', 'styled', 'variant', 'house style'),
+        ...{ pass: 2, fail: 0, error: 0, not_run: 0, rate: 1 },
+      },
+      {
+        ...row('fake/styled/fake', 'styled', 'variant', 'writes ok.txt'),
+        ...{ pass: 2, fail: 0, error: 0, not_run: 0, rate: 1 },
+      },
+    ])
+  })
+
   test('reasoning effort, requested and served, is its own column; the effort view is the metric', async () => {
     const p = await project('query-reasoning-effort', {
       'reeval.config.ts': fakeConfig({
@@ -230,7 +288,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: check_discrimination, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_context, attempts, cell_checks, cells,/,
+        /no view or table named "nope"\. Views: check_discrimination, check_rates, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_context, attempts, cell_checks, cells,/,
       ],
     ]
     for (const [sql, message] of cases) {

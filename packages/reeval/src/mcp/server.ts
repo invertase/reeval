@@ -43,6 +43,8 @@ const VIEW_ROWS: Record<string, string> = {
   verdict_flips: 'judge question per cell whose pass rate changed from its previous run',
   check_discrimination:
     'check (expect label) per variant cell per run: its passes, failures and not-run on both sides, and whether it discriminates (both-pass and both-fail checks measure nothing)',
+  check_rates:
+    'check (expect label) per cell per run, control and variant alike: harness, environment, role, passes, failures, errors, not-run and rate = pass / (pass + fail), null when none',
 }
 
 const READ_ONLY = {
