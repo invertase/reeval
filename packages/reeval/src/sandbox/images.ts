@@ -3,6 +3,8 @@ import {
   type BakedHarness,
   contextHash,
   dockerfileTag,
+  type Engine,
+  engineSpec,
   harnessImageFor,
   imageFor,
   imageInfo,
@@ -12,7 +14,7 @@ import {
   REEVAL_BASE_ARG,
   resolveFrom,
 } from '@reeval/sandbox-docker'
-import { sandboxId } from '../options.ts'
+import { sandboxId, sandboxProvider } from '../options.ts'
 import type {
   AttemptImage,
   DockerSandboxDescriptor,
@@ -44,8 +46,8 @@ export function imageTargets(
     if (sandbox.kind !== 'docker') continue
     const harness = imageHarness(use.harness)
     // What's in the image, not the limits or user the container runs with.
-    const { image, from, dockerfile, install } = sandbox
-    const key = JSON.stringify({ harness, image: { image, from, dockerfile, install } })
+    const { engine, image, from, dockerfile, install } = sandbox
+    const key = JSON.stringify({ harness, engine, image: { image, from, dockerfile, install } })
     const target = targets.get(key) ?? {
       id: harness === 'cursor' ? sandboxId(sandbox) : `${sandboxId(sandbox)} · ${harness}`,
       harness,
@@ -84,8 +86,15 @@ export type Stage = {
 const short = (digest: string) => digest.replace(/^sha256:/, '').slice(0, 12)
 
 /** `from`'s image, checked against what the tag names now (a registry lookup, no pull). */
-async function fromStatus(from: string, ref: string): Promise<Pick<Stage, 'status' | 'detail'>> {
-  const [cached, now] = await Promise.all([imageInfo(ref), resolveFrom(from)])
+async function fromStatus(
+  from: string,
+  ref: string,
+  engine?: Engine,
+): Promise<Pick<Stage, 'status' | 'detail'>> {
+  const [cached, now] = await Promise.all([
+    imageInfo(ref, engine),
+    resolveFrom(from, undefined, engine),
+  ])
   if (!cached) {
     if (!('error' in now)) return { status: 'build', detail: `on ${from} (${short(now.digest)})` }
     // A registry that's down or rate-limiting says nothing about whether the tag exists.
@@ -107,10 +116,11 @@ async function fromStatus(from: string, ref: string): Promise<Pick<Stage, 'statu
 /** How each target's image is made, in build order, and how each step stands, building nothing. */
 export async function imageStages(target: ImageTarget, root: string): Promise<Stage[]> {
   const { sandbox, harness } = target
+  const { engine } = sandbox
   const stages: Stage[] = []
   type Probe = { info: Awaited<ReturnType<typeof imageInfo>>; status: StageStatus; detail: string }
   const exists = async (ref: string): Promise<Probe> => {
-    const info = await imageInfo(ref)
+    const info = await imageInfo(ref, engine)
     return {
       info,
       status: info ? 'ready' : 'build',
@@ -118,7 +128,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     }
   }
   const reevalBase = async (): Promise<Probe> => {
-    const info = await imageInfo(imageFor(harness))
+    const info = await imageInfo(imageFor(harness), engine)
     if (!info) return { info, status: 'build', detail: 'not built yet' }
     return info.labels[LABEL.context] === contextHash()
       ? { info, status: 'ready', detail: `built (${short(info.id)})` }
@@ -130,7 +140,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   }
   let parent: string | null = null
   if (sandbox.image) {
-    const found = await imageInfo(sandbox.image)
+    const found = await imageInfo(sandbox.image, engine)
     parent = found?.id ?? null
     stages.push({
       what: 'image',
@@ -142,8 +152,8 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     })
   } else if (sandbox.from) {
     const ref = harnessImageFor(harness, sandbox.from)
-    const status = await fromStatus(sandbox.from, ref)
-    parent = status.status === 'ready' ? ((await imageInfo(ref))?.id ?? null) : null
+    const status = await fromStatus(sandbox.from, ref, engine)
+    parent = status.status === 'ready' ? ((await imageInfo(ref, engine))?.id ?? null) : null
     stages.push({
       what: `from ${sandbox.from}`,
       ref,
@@ -161,7 +171,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
       ref: tag,
-      action: 'docker build (layer cache), tagged by content hash',
+      action: `${engineSpec(engine).bin} build (layer cache), tagged by content hash`,
       status: built.status,
       detail: built.info || !onReeval ? built.detail : `${built.detail} (${real})`,
     })
@@ -296,7 +306,7 @@ export async function buildImages(
 ): Promise<BuiltImage[]> {
   const providers = createProviders({ refresh: options.force ? 'force' : 'check' })
   const prepared = targets.map((t) => ({
-    kind: 'docker',
+    kind: sandboxProvider(t.sandbox),
     key: dockerKey(t.sandbox, harnessFor(t.harness)),
     label: t.id,
     sandbox: t.sandbox,

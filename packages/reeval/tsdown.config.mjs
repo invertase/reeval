@@ -234,6 +234,21 @@ export default defineConfig({
             licenseText: readFileSync(join(studioWeb, 'src/components/ui/LICENSE'), 'utf8'),
             source: 'https://github.com/shadcn-ui/ui',
             files: shadcn,
+            into: 'the studio app (`dist/studio-app`)',
+            modified: true,
+          },
+          {
+            title: 'moby/profiles (Docker default seccomp profile)',
+            license: 'Apache-2.0',
+            licenseText: readFileSync(
+              join(here, '../../scripts/third-party-licenses/moby-profiles'),
+              'utf8',
+            ),
+            source:
+              'https://github.com/moby/profiles/blob/6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef/seccomp/default.json',
+            files: ['packages/sandbox-docker/src/seccomp-profile.ts'],
+            into: "reeval's bundle (`dist/`), as data",
+            modified: false,
           },
         ]),
       )

@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { Duplex } from 'node:stream'
 import { docker } from '../docker-cli.ts'
+import { type Engine, engineEnv, engineSpec } from '../engine.ts'
 import { traceDocker } from '../trace.ts'
 import { createCertificateAuthority } from './cert.ts'
 import { createMux, forwarderScript, link } from './mux.ts'
@@ -44,7 +45,7 @@ export type Gateway = {
   close(): void
 }
 
-const installCa = (containerId: string, cert: string, signal?: AbortSignal) =>
+const installCa = (containerId: string, cert: string, signal?: AbortSignal, engine?: Engine) =>
   docker(
     [
       'exec',
@@ -55,7 +56,7 @@ const installCa = (containerId: string, cert: string, signal?: AbortSignal) =>
       '-c',
       `umask 022 && mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`,
     ],
-    { input: cert, signal },
+    { input: cert, signal, engine },
   )
 
 /**
@@ -66,9 +67,10 @@ export async function startGateway(
   containerId: string,
   options: GatewayOptions,
   signal?: AbortSignal,
+  engine?: Engine,
 ): Promise<Gateway> {
   const ca = createCertificateAuthority()
-  const installed = await installCa(containerId, ca.cert, signal)
+  const installed = await installCa(containerId, ca.cert, signal, engine)
   if (installed.exitCode !== 0) {
     throw new Error(`couldn't install the gateway CA: ${installed.stderr.trim()}`)
   }
@@ -85,8 +87,13 @@ export async function startGateway(
   ]
   const startedAt = Date.now()
   // Own process group, like every docker call: reeval handles Ctrl-C and tears the gateway down.
-  const child = spawn('docker', args, { stdio: 'pipe', detached: true })
-  child.once('close', (code) => traceDocker(args, startedAt, { exitCode: code, stderr }))
+  const { bin } = engineSpec(engine)
+  const child = spawn(bin, args, {
+    stdio: 'pipe',
+    detached: true,
+    env: { ...process.env, ...engineEnv(engine) },
+  })
+  child.once('close', (code) => traceDocker(args, startedAt, { exitCode: code, stderr }, bin))
   let stderr = ''
   child.stderr.on('data', (d) => {
     stderr += d

@@ -108,7 +108,12 @@ docker({ memory: '8g', cpus: 4, pids: 4096 })
 docker({ memory: '4g', swap: 0 })
 // opt in to apt-get at run time (default: user reeval)
 docker({ root: true })
+// the same sandbox and options on rootless Podman 4+ (cell id `podman`)
+podman({ from: 'python:3.12-slim' })
 ```
+
+Use `podman()` only where the user runs Podman instead of Docker: it takes every `docker()`
+option and confines the container the same way (bridge network, Docker's seccomp profile).
 
 The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds
 run as root. `root: true` or `capabilities` print a warning at the start of every run, so prefer

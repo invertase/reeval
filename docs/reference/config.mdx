@@ -143,7 +143,7 @@ A project without TypeScript can write its config as YAML. It takes the same key
 | In `reeval.config.ts` | In `reeval.yaml` |
 |---|---|
 | `cursor({ model: 'composer-2.5' })` | `{ kind: cursor, model: composer-2.5 }`, and so on for each harness |
-| `docker({ from: 'node:24' })`, `fakeSandbox()` | `{ kind: docker, from: 'node:24' }`, `{ kind: fake }` |
+| `docker({ from: 'node:24' })`, `podman({ from: 'node:24' })`, `fakeSandbox()` | `{ kind: docker, from: 'node:24' }`, `{ kind: docker, engine: podman, from: 'node:24' }`, `{ kind: fake }` |
 | `secret({ hosts: [...] })`, `secret.fromEnv('X')` | `{ kind: secret, hosts: [...] }`, `{ kind: secret, from: X }` |
 | `defineEnvironment('base', spec)` | `{ kind: environment, name: base, layers: [{ name: base, spec }] }` |
 | `file('./notes.md')` | `{ kind: file, path: ./notes.md }` |

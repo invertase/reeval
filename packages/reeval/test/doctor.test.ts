@@ -2,8 +2,9 @@
 // the command end to end. No key's value appears in any output, text or JSON.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { loadConfig } from '../src/config.ts'
 import {
@@ -22,7 +23,7 @@ import {
   probeKey,
 } from '../src/doctor.ts'
 import { runtimeInfo } from '../src/history/provenance.ts'
-import { dockerProblem } from '../src/sandbox/providers.ts'
+import { dockerProblem, podmanInfoProblem } from '../src/sandbox/providers.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 
 const SECRET = 'sk-live-doctor-9f8e7d6c5b4a'
@@ -36,6 +37,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   dockerCapacity: async () => ({ cpus: 8, memoryBytes: 16 * 1024 ** 3 }),
   imageExists: async () => true,
   imageTags: async () => [],
+  podmanConfinement: async () => null,
   gitIgnored: async (_, paths) => paths.map(() => true),
   gitVisibleEnvFiles: async () => [],
   fetch: async () => new Response('{}', { status: 200 }),
@@ -48,7 +50,7 @@ async function configOf(name: string, body: string) {
     'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
-import { docker, fakeSandbox } from 'reeval/sandbox'
+import { docker, fakeSandbox, podman } from 'reeval/sandbox'
 export default defineConfig(${body})
 `,
   })
@@ -164,6 +166,66 @@ describe('reeval doctor checks', () => {
       (await checkDocker(profiled, deps({ dockerState: down }))).checks[0]?.status,
       'fail',
     )
+  })
+
+  test('podman: down, too old, missing cgroup controllers, and running beside Docker', async () => {
+    assert.match(
+      dockerProblem('down', 'linux', 'podman') ?? '',
+      /Podman isn't answering: `podman info` failed\. Install Podman 4/,
+    )
+    assert.match(dockerProblem('down', 'darwin', 'podman') ?? '', /podman machine start/)
+    const linux = (version: string, rootless: boolean, controllers: string[] | null) =>
+      podmanInfoProblem({ version, rootless, controllers })
+    assert.equal(linux('4.9.3', true, ['cpuset', 'cpu', 'io', 'memory', 'pids']), null)
+    assert.match(
+      linux('3.4.4', true, ['cpu', 'memory', 'pids'])?.problem ?? '',
+      /Podman 3\.4\.4 is too old/,
+    )
+    const delegated = linux('5.4.0', true, ['memory', 'pids'])
+    assert.equal(
+      delegated?.problem,
+      "rootless Podman can't limit a sandbox's cpu: your user's cgroup doesn't have the cpu controller",
+    )
+    assert.match(delegated?.fix ?? '', /Delegate=cpu cpuset io memory pids/)
+    assert.equal(linux('5.4.0', false, ['memory']), null, 'rootful Podman has every controller')
+
+    const config = await configOf(
+      'podman',
+      `{ harness: cursor({ model: 'composer-2.5' }), environment: defineEnvironment('p', { sandbox: podman() }) }`,
+    )
+    const ok = await checkDocker(config, deps())
+    assert.deepEqual(
+      ok.checks.map((c) => [c.id, c.status]),
+      [['podman', 'ok']],
+    )
+    assert.match(ok.checks[0]?.summary ?? '', /^running · 8 CPUs/)
+    const down = await checkDocker(
+      config,
+      deps({ dockerState: async (engine) => (engine === 'podman' ? 'down' : 'running') }),
+    )
+    assert.equal(down.running, false)
+    assert.match(down.checks[0]?.summary ?? '', /config's podman\(\) sandboxes need it/)
+    const confined = await checkDocker(
+      config,
+      deps({ podmanConfinement: async () => ({ problem: 'no cpu', fix: 'delegate it' }) }),
+    )
+    assert.deepEqual(confined.checks[0], {
+      id: 'podman',
+      status: 'fail',
+      summary: 'no cpu',
+      fix: 'delegate it',
+    })
+
+    const both = await configOf(
+      'podman-and-docker',
+      `{ harness: cursor({ model: 'composer-2.5' }), environment: defineEnvironment('p', { sandbox: podman() }), profiles: { d: { defaults: { environment: defineEnvironment('d', { sandbox: docker() }) } } } }`,
+    )
+    assert.deepEqual(
+      (await checkDocker(both, deps())).checks.map((c) => c.id),
+      ['docker', 'podman'],
+    )
+    const images = await checkImages(config, deps({ imageExists: async () => false }))
+    assert.match(images.checks[0]?.summary ?? '', /in Podman/)
   })
 
   test('images: present, missing (with the build fix), and left from another version', async () => {
@@ -421,6 +483,38 @@ describe('reeval doctor checks', () => {
     const check = await checkEnvFiles(root, deps({ gitVisibleEnvFiles }))
     assert.equal(check?.status, 'warn')
     assert.match(check?.summary ?? '', /^\.env\.example \(GEMINI_API_KEY\) has key values/)
+  })
+
+  test("image tags come through sandbox-docker's podman CLI, which retries a dropped SSH handshake", async () => {
+    // A podman CLI whose first `image ls` loses its handshake (exit 125); a Node script behind an
+    // sh and a .cmd wrapper, so it runs on every OS.
+    const bin = await mkdtemp(join(tmpdir(), 'reeval-doctor-podman-'))
+    const log = join(bin, 'calls.log')
+    await writeFile(
+      join(bin, 'podman.js'),
+      `const fs = require('node:fs')
+const args = process.argv.slice(2)
+if (args[0] !== 'image') process.exit(1)
+fs.appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
+if (fs.readFileSync(${JSON.stringify(log)}, 'utf8').trim().split('\\n').length === 1) {
+  process.stderr.write('Error: ssh: handshake failed: EOF\\n')
+  process.exit(125)
+}
+console.log('localhost/reeval-sandbox:cursor-0.1.5')
+`,
+    )
+    await writeFile(join(bin, 'podman'), `#!/bin/sh\nexec node "$(dirname "$0")/podman.js" "$@"\n`)
+    await chmod(join(bin, 'podman'), 0o755)
+    await writeFile(join(bin, 'podman.cmd'), '@node "%~dp0podman.js" %*\r\n')
+    const path = process.env.PATH
+    process.env.PATH = `${bin}${delimiter}${path}`
+    try {
+      const tags = await defaultDeps().imageTags('reeval-sandbox', 'podman')
+      assert.deepEqual(tags, ['reeval-sandbox:cursor-0.1.5'])
+      assert.equal((await readFile(log, 'utf8')).trim().split('\n').length, 2, 'retried once')
+    } finally {
+      process.env.PATH = path
+    }
   })
 })
 

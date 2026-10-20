@@ -127,6 +127,79 @@ describe('reading a failed build', () => {
   })
 })
 
+// `podman build` (Podman 4.9, buildah), rootless: the same failures as buildah prints them.
+const WARN = (cap: string) =>
+  `time="2026-10-20T06:20:31Z" level=warning msg="can't raise ambient capability CAP_${cap}: operation not permitted"`
+const BUILDAH_RUN = `STEP 1/5: FROM docker.io/library/busybox
+STEP 2/5: RUN echo hello
+${WARN('CHOWN')}
+hello
+--> c5e4b8d3facc
+STEP 3/5: RUN echo out-line-1 && echo err-line >&2 && exit 7
+${WARN('CHOWN')}
+${WARN('SETUID')}
+out-line-1
+err-line
+Error: building at STEP "RUN echo out-line-1 && echo err-line >&2 && exit 7": while running runtime: exit status 7
+`
+const BUILDAH_KILLED = `STEP 1/2: FROM docker.io/library/busybox
+STEP 2/2: RUN exit 137
+${WARN('SYS_CHROOT')}
+Error: building at STEP "RUN exit 137": while running runtime: exit status 137
+`
+const BUILDAH_SYNTAX = `STEP 1/2: FROM docker.io/library/busybox
+STEP 2/2: COPYY a b
+time="2026-10-20T06:20:31Z" level=error msg="+(UNHANDLED LOGLEVEL) &imagebuilder.Step{Command:"copyy"}"
+Error: building at STEP "COPYY ": Build error: Unknown instruction: "COPYY" &imagebuilder.Step{Env:[]string{"PATH=/usr/local/sbin"}, Command:"copyy", Original:"COPYY a b"}
+`
+const BUILDAH_SHORT_NAME = `STEP 1/1: FROM nonexistent:1
+Error: creating build container: short-name "nonexistent:1" did not resolve to an alias and no unqualified-search registries are defined in "/etc/containers/registries.conf"
+`
+const BUILDAH_UNREACHABLE = `STEP 1/1: FROM 127.0.0.1:5999/x/y:1
+Error: creating build container: initializing source docker://127.0.0.1:5999/x/y:1: pinging container registry 127.0.0.1:5999: Get "https://127.0.0.1:5999/v2/": dial tcp 127.0.0.1:5999: connect: connection refused
+`
+
+describe('reading a failed podman build (buildah)', () => {
+  test("the failing step's own lines, without buildah's warnings or the earlier steps", () => {
+    const parsed = parseBuildOutput(BUILDAH_RUN)
+    assert.equal(parsed.error, 'while running runtime: exit status 7')
+    assert.equal(parsed.exitCode, 7)
+    // Canary: step 2's `hello`, the warnings and the layer id aren't the failing step's output.
+    assert.deepEqual(parsed.output, ['out-line-1', 'err-line'])
+  })
+
+  test('a syntax error is the instruction, without the builder struct', () => {
+    const parsed = parseBuildOutput(BUILDAH_SYNTAX)
+    assert.equal(parsed.error, 'Build error: Unknown instruction: "COPYY"')
+    assert.deepEqual(parsed.output, [])
+    assert.equal(parsed.exitCode, null)
+  })
+
+  test('exit 137 is named; failing steps, syntax and short names are not retried; a refused registry is', () => {
+    const killed = parseBuildOutput(BUILDAH_KILLED)
+    assert.equal(failureCause(killed.error ?? '', killed.exitCode), 'oom')
+    for (const text of [BUILDAH_RUN, BUILDAH_KILLED, BUILDAH_SYNTAX, BUILDAH_SHORT_NAME]) {
+      assert.equal(isTransient(text), false, text)
+    }
+    assert.equal(isTransient(BUILDAH_UNREACHABLE), true)
+  })
+
+  test('canary: BuildKit output still reads as BuildKit', () => {
+    assert.equal(parseBuildOutput(KILLED).exitCode, 137)
+    assert.equal(parseBuildOutput(KILLED).output[0], 'dying')
+  })
+
+  test('the cause names the engine the build ran on', () => {
+    const message = failureMessage({
+      headline: 'x',
+      cause: 'enospc',
+      output: [],
+      engine: 'podman',
+    })
+    assert.match(message, /free space for Podman \(podman system df/)
+  })
+})
+
 describe('retrying transient failures', () => {
   const failure = (transient: boolean) =>
     new ImageBuildError('x', { stage: 'from', ref: 'r', transient, cause: null, log: null })

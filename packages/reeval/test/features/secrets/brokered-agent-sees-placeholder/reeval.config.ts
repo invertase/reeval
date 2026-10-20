@@ -1,7 +1,7 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 
-// REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D).
+// REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, docker (D) or podman.
 export default defineConfig({
   // As the agent: print the brokered secret, then the proxy the gateway sets (or "no-proxy").
   harness: fakeHarness({
