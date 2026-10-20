@@ -164,7 +164,7 @@ evals/skill.eval.ts › house greeting › greets in the house style    1       
 evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
-With `--profile nightly` (`defaults: { runs: 3 }`) the same suite is 57 attempts. The estimate is the median of each eval's recent attempts on that harness, else 3 minutes each.
+With `--profile nightly` (`defaults: { runs: 3 }`) the same suite is 57 attempts. The estimate is the median of each eval's recent attempts on that harness, else 3 minutes each (for `fakeHarness`, 1 second in `fakeSandbox()` and 30 seconds in a container).
 
 <Info>
   An eval has one sandbox. Comparing toolchains needs different checks, so that's a separate eval, not another axis.

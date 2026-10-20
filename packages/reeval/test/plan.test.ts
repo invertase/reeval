@@ -158,9 +158,15 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     assert.ok(plan.concurrency >= 1)
     assert.equal(
       plan.estimateMs,
-      plan.totals.attempts * 1000,
-      'the fake agent is estimated at 1s an attempt',
+      plan.totals.attempts * 30_000,
+      'the fake agent in a Docker sandbox is estimated at its 30s setup an attempt',
     )
+  })
+
+  test('with no history, the fake agent in the fake sandbox is estimated at 1s an attempt', async () => {
+    const plan = await planJson({ dir: 'profiles', args: [] })
+    assert.ok(plan.totals.attempts > 0)
+    assert.equal(plan.estimateMs, plan.totals.attempts * 1000)
   })
 
   test('REEVAL_PROFILE picks a profile, as --profile does', async () => {

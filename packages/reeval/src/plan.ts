@@ -22,9 +22,14 @@ import type {
 } from './types.ts'
 import { EFFORT_ALPHA, EFFORT_MIN_RUNS } from './view/effort.ts'
 
-/** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
+/**
+ * With no history for a harness, an attempt is assumed to take this long. The fake agent takes
+ * no time, so its attempt is the sandbox's: 1s in the fake sandbox, and in a container the start,
+ * the workspace, `setup` steps such as an install, and the checks.
+ */
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
 const DEFAULT_FAKE_MS = 1000
+const DEFAULT_SANDBOX_SETUP_MS = 30_000
 /** The most recent runs whose durations feed the estimate. */
 const HISTORY_RUNS = 30
 
@@ -91,12 +96,13 @@ export async function historyDurations(root: string, historyDir: string) {
       }
     }
   }
-  return (id: string, harness: string, kind: string) => {
+  return (id: string, harness: string, kind: string, sandbox: string) => {
     const own = byEval.get(`${id}\0${harness}`)
     if (own?.length) return median(own)
     const any = byHarness.get(harness)
     if (any?.length) return median(any)
-    return kind === 'fake' ? DEFAULT_FAKE_MS : DEFAULT_ATTEMPT_MS
+    if (kind !== 'fake') return DEFAULT_ATTEMPT_MS
+    return sandbox === 'fake' ? DEFAULT_FAKE_MS : DEFAULT_SANDBOX_SETUP_MS
   }
 }
 
@@ -142,7 +148,7 @@ export async function buildPlan(options: {
     }
     attempts++
     cells.add(`${id}\0${attempt.cell.key}`)
-    estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind)
+    estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind, attempt.sandbox.kind)
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
     harnesses.add(attempt.cell.harness)
