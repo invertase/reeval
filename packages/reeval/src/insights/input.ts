@@ -77,10 +77,11 @@ export type InsightInput = {
   retry?: string[]
 }
 
-/** The headline call's input: each eval's verdict and answer, and the run's tally. */
+/** The headline call's input: each eval's verdict and answer, and the run's tally with its total. */
 export type HeadlineInput = {
   call: 'headline'
-  tally: SuiteResult['tally']
+  /** Each case counts one, as the tally line does; `total` is their sum, so no count is the model's arithmetic. */
+  tally: SuiteResult['tally'] & { total: number }
   evals: Array<{ path: string; name: string; verdict: string; answer: string | null }>
   retry?: string[]
 }

@@ -89,5 +89,5 @@ When retry is set, your earlier sentences were refused for those reasons: write 
 export const HEADLINE_PROMPT = `You write the one-sentence headline of a reeval run for the developer who wrote its evals: what the run found, leading with what needs work. You get each eval's path, name, verdict and answer, and the tally.
 
 - 25 words or fewer, plain words, citing the eval paths it's about, copied exactly from evals[].path.
-- Counts come from the evals and the tally ("2 of 4 evals"). Never: interval, significance, noise, p-value, confidence, pass@1, lift, control, variant, arm, cell.
+- Counts come from the evals and the tally, where each case counts one and \`total\` is their sum ("9 of 22 fail"). Never: interval, significance, noise, p-value, confidence, pass@1, lift, control, variant, arm, cell.
 When retry is set, your earlier headline was refused for those reasons: write it again within the rules.`
