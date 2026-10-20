@@ -684,7 +684,7 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (c) => {
   expect(await c.judge('Did it write hello.txt?')).toPass()
 `),
     })
-    const r = await runCli(p.dir)
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /judge {2}pass 0\.90 \(≥ 0\.8\) {2}Did it write hello\.txt\?/)
 
@@ -856,7 +856,10 @@ evaluate('copy', async (c) => {
       'evals/agent.eval.ts': agentEval(`console.log('hello from', 'the eval')
   await expect(c.exec('cat hello.txt')).toSucceed()`),
     })
-    const r = await runCli(p.dir)
+    const quiet = await runCli(p.dir)
+    assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
+    assert.doesNotMatch(quiet.stdout, /sandbox ready|hello from/, 'a pass prints no detail')
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const tag = /^\[agent#1 fake\] {2}\+0:\d\d /
     const detail = r.stdout
@@ -902,7 +905,14 @@ evaluate('fails', async (c) => {
       runCli(p.dir, ['run', '--ui', 'plain', '--concurrency', '2', ...flags])
     const lines = (out: string) => out.slice(0, out.indexOf('\nSummary')).split('\n')
 
-    const stream = await run('--log-order', 'stream', '--log-prefix', 'task')
+    const stream = await run(
+      '--log-order',
+      'stream',
+      '--log-prefix',
+      'task',
+      '--output-logs',
+      'full',
+    )
     assert.equal(stream.code, 1, stream.stdout + stream.stderr)
     assert.match(stream.stdout, / · stream logs$/m)
     const logs = lines(stream.stdout).filter((l) => /(stdout|stderr) \| log from/.test(l))
@@ -1755,7 +1765,7 @@ evaluate('fine', async () => {})
         'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
         'evals/agent.eval.ts': agentEval(''),
       })
-      const r = await runCli(p.dir, ['run'], {
+      const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
         onOutput: (stdout, pid) => {
           if (/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) {
             signal(pid)
@@ -1790,7 +1800,7 @@ boom.unref()
 `,
       'evals/agent.eval.ts': agentEval(''),
     })
-    const r = await runCli(p.dir, ['run'], {
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
       env: { REEVAL_TEST_API_KEY: secret },
       onOutput: (stdout) => {
         if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
@@ -1832,7 +1842,7 @@ evaluate('agent eval', async (c) => {
 })
 `,
       })
-      const r = await runCli(p.dir, ['run'], {
+      const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
         onOutput: (stdout, pid) => {
           if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
           stop(pid, p.dir)

@@ -402,7 +402,7 @@ for (const name of ['a', 'b']) {
       'evals/a.eval.ts': tracedEval('a', '{ runs: 3 }'),
       'evals/b.eval.ts': tracedEval('b', '{ runs: 3 }'),
     })
-    const r = await runCli(p.dir, ['run', '--concurrency', '3'], {
+    const r = await runCli(p.dir, ['run', '--concurrency', '3', '--output-logs', 'full'], {
       onOutput: (stdout, pid) => {
         if ((stdout.match(/ turn 1 started$/gm) ?? []).length < 3) return false
         process.kill(-pid, 'SIGINT')
