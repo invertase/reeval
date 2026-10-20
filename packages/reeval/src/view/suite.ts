@@ -372,6 +372,20 @@ function checksOf(
   })
 }
 
+const informative = (line: string) => /[\p{L}\p{N}]/u.test(line)
+
+/**
+ * An error's one line: its first line with any letter or digit in it, joined with the next one
+ * when it ends with `:`, since `Docker failed:` alone says nothing. A log line's `| ` is dropped.
+ */
+export function messageLine(text: string): string {
+  const [first = '', next] = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(informative)
+  return first.endsWith(':') && next ? `${first} ${next.replace(/^[|>]\s*/, '')}` : first
+}
+
 /**
  * The errors of a cell's failed and infra-error attempts that no failed check explains: every
  * timeout, infra error and abort, and an assertion or judge error on an attempt whose recorded
@@ -380,7 +394,7 @@ function checksOf(
 function errorsOf(e: EvalEntry, cell: CellRecord): CellError[] {
   const out: CellError[] = []
   const add = (kind: CellError['kind'], text: string) => {
-    const message = text.trim().split('\n')[0]?.trim() ?? ''
+    const message = messageLine(text)
     const same = out.find((x) => x.kind === kind && x.message === message)
     if (same) same.attempts++
     else out.push({ kind, message, attempts: 1 })

@@ -14,6 +14,7 @@ import {
   type Effect,
   effectOf,
   factSegment,
+  messageLine,
   type SuiteResult,
   suiteResult,
 } from '../src/view/suite.ts'
@@ -261,6 +262,24 @@ describe('a record with checks that never ran', () => {
       cell.path,
       'evals%2Fskill.eval.ts › house greeting › greets in the house style/fake+plain+docker',
     )
+  })
+})
+
+describe('messageLine', () => {
+  test('keeps a one-line message', () => {
+    assert.equal(messageLine('sandbox died'), 'sandbox died')
+  })
+  test('joins a first line ending in a colon with the next, without its log prefix', () => {
+    assert.equal(
+      messageLine('Building the image failed:\n    | E: Unable to locate package jqq\n    | more'),
+      'Building the image failed: E: Unable to locate package jqq',
+    )
+  })
+  test('skips lines with no letter or digit', () => {
+    assert.equal(messageLine('\n  ---\n:\nDocker is not running\nrest'), 'Docker is not running')
+  })
+  test('keeps a lone colon-ended line when nothing follows', () => {
+    assert.equal(messageLine('Docker failed:'), 'Docker failed:')
   })
 })
 
