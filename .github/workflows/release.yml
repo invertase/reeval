@@ -1,13 +1,13 @@
-# Releases reeval. release-please keeps a release PR open from the Conventional
-# Commits on main (version, CHANGELOG.md); merging it tags vX.Y.Z and creates the GitHub release.
-# Then ci.yml runs on that commit, and the tarball its pack job uploads is published to npm with
-# trusted publishing (OIDC, no token). npm's trusted publisher for the package names this file
-# and the `npm` environment, so keep both names in sync with npm.
+# Releases reeval (npm) and reeval-python (PyPI). release-please keeps release PRs open from
+# Conventional Commits on main; merging tags reeval-vX.Y.Z and reeval-python-vX.Y.Z separately.
+# Then ci.yml runs on that commit; npm publishes the packed tarball with trusted publishing (OIDC,
+# environment `npm`). PyPI publishes from packages/reeval-python with OIDC, environment `pypi`.
 name: release
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions: {}
 
@@ -18,14 +18,16 @@ concurrency:
 jobs:
   release-please:
     name: release-please
-    if: github.repository == 'invertase/reeval'
+    if: github.repository == 'invertase/reeval' && github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     outputs:
-      created: ${{ steps.release.outputs.release_created }}
+      any_created: ${{ steps.release.outputs.release_created == 'true' || steps.release.outputs['packages/reeval-python--release_created'] == 'true' }}
+      npm_created: ${{ steps.release.outputs.release_created }}
+      pypi_created: ${{ steps.release.outputs['packages/reeval-python--release_created'] }}
     steps:
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
@@ -42,21 +44,30 @@ jobs:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
           if [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then
-            echo "::error::The release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
+            echo "::error::The reeval release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
+            exit 1
+          fi
+      - if: steps.release.outputs['packages/reeval-python--release_created'] == 'true'
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs['packages/reeval-python--sha'] }}
+        run: |
+          if [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::The reeval-python release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
             exit 1
           fi
 
   test:
     name: test
     needs: release-please
-    if: needs.release-please.outputs.created == 'true'
+    if: github.event_name == 'push' && needs.release-please.outputs.any_created == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: publish to npm
-    needs: test
+    needs: [release-please, test]
+    if: github.event_name == 'push' && needs.release-please.outputs.npm_created == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: npm
@@ -75,3 +86,48 @@ jobs:
       # Provenance is automatic with trusted publishing, but npm only generates it for public
       # repositories.
       - run: npm publish --access public "$RUNNER_TEMP"/package/*.tgz
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: [release-please, test]
+    if: github.event_name == 'push' && needs.release-please.outputs.pypi_created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - name: Build sdist and wheel
+        working-directory: packages/reeval-python
+        run: uv build
+      - uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26 # v1.14.2
+        with:
+          packages-dir: packages/reeval-python/dist
+
+  publish-testpypi:
+    name: publish to TestPyPI (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: testpypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - name: Build sdist and wheel
+        working-directory: packages/reeval-python
+        run: uv build
+      - uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: packages/reeval-python/dist

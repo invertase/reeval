@@ -21,5 +21,8 @@ export default defineConfig({
           script: [[{ write: { 'greet.py': 'print("hi")\n' } }, { reply: 'Created greet.py.' }]],
         }),
   sandbox,
-  judge: { model: fakeJudge({ score: 1 }) },
+  judge:
+    process.env.REEVAL_FIXTURE_JUDGE === 'real'
+      ? { model: 'google/gemini-3.8-flash', threshold: 0.8 }
+      : { model: fakeJudge({ score: 1 }) },
 })
