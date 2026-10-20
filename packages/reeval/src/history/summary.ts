@@ -70,19 +70,22 @@ export function liftLabel(lift: NonNullable<CellRecord['lift']>): string {
   return `lift ${signedPoints(lift.points)} pts (${range}, ${counts})${lift.withinNoise ? ', within noise' : ''}`
 }
 
-const answered = (t: CheckTally) => t.pass + t.fail + t.notRun
+/** The counted attempts that reached a check: one stopped before it by a hard failure didn't. */
+const answered = (t: CheckTally) => t.pass + t.fail
+
+/** `2/3`, or `not run` when no counted attempt reached the check. */
+const rate = (t: CheckTally) => (answered(t) ? `${t.pass}/${answered(t)}` : 'not run')
 
 const VERDICT_ORDER: Record<string, number> = { discriminates: 0, mixed: 1 }
 
 /**
  * A variant cell's checks against its control's, those that tell them apart first:
- * `loads the skill 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`. Empty
- * without a control's tally.
+ * `loads the skill 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`, and
+ * `reached 2/2 vs not run` for one a side never ran, which has no verdict. Empty without a
+ * control's tally.
  */
 export function checksLabel(cell: CellRecord): string {
-  const rows = (cell.checks ?? []).flatMap((k) =>
-    k.control && k.verdict ? [{ ...k, control: k.control }] : [],
-  )
+  const rows = (cell.checks ?? []).flatMap((k) => (k.control ? [{ ...k, control: k.control }] : []))
   return rows
     .map((k, i) => ({ k, i }))
     .sort(
@@ -92,12 +95,12 @@ export function checksLabel(cell: CellRecord): string {
     )
     .map(({ k }) => {
       const { control } = k
-      const notRun = k.notRun + control.notRun
+      const notRun = [k, control].filter(answered).reduce((n, t) => n + t.notRun, 0)
       const notes = [
         notRun ? `${notRun} not run` : '',
         k.verdict === 'both-pass' || k.verdict === 'both-fail' ? "doesn't discriminate" : '',
       ].filter(Boolean)
-      return `${k.label} ${k.pass}/${answered(k)} vs ${control.pass}/${answered(control)}${notes.length ? ` (${notes.join(', ')})` : ''}`
+      return `${k.label} ${rate(k)} vs ${rate(control)}${notes.length ? ` (${notes.join(', ')})` : ''}`
     })
     .join(' · ')
 }

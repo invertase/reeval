@@ -71,7 +71,9 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   `await expect.soft(c, 'exports greet').toHaveFile('greet.js', /export/)`. Every matcher call
   is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).
   In a compare, prefer `expect.soft` for independent requirements: a hard failure ends the
-  attempt, and the checks after it count as not run. Under each variant the summary prints
+  attempt, and the checks after it count as not run: a side that never reached a check reads
+  `not run` and the check gets no verdict, so it can't say which arm met it. Under each variant
+  the summary prints
   `checks: house greeting 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`, and
   `Checks that don't discriminate` lists the ones that pass (or fail) on both sides. After a
   run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict

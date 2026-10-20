@@ -254,7 +254,7 @@ A check that passes on both sides, or fails on both, measures nothing about the 
 
 A labelled judge (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`) is one of these checks, and its label replaces the question everywhere it's shown.
 
-Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early the later checks never run: they read `0/2 (2 not run)` and count against the control. The same verdicts are in `reeval query`'s `check_discrimination` view:
+Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early the later checks never run: they read `2/2 vs not run` and have no verdict, since the control never answered them. The same verdicts are in `reeval query`'s `check_discrimination` view:
 
 ```bash
 npx reeval query "SELECT label, variant_pass, control_pass, verdict
