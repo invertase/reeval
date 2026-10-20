@@ -1874,6 +1874,22 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'analyze.insights',
+    area: 'Records and studio',
+    name: "`reeval analyze --insights`: each eval's intent, answer and row sentences, citing the facts and checked by the validator, written create-only to `<run>/insights.json`; `reeval show` prints them, and leaves out ones written for other facts",
+    tests: [
+      'reeval/test/insights.test.ts › canary: an uncited answer is dropped',
+      'reeval/test/insights.test.ts › canary: a sentence citing a fact it was never shown is dropped',
+      'reeval/test/insights.test.ts › canary: a banned word is asked for once more, then dropped',
+      'reeval/test/insights.test.ts › canary: a sentence on a row the layout keeps closed',
+      'reeval/test/insights.test.ts › canary: a named tool the final message never names is dropped',
+      'reeval/test/insights.test.ts › canary: job choose on a finish-shaped eval prints the choose layout',
+      'reeval/test/insights.test.ts › insights written for other facts are left out, with a note',
+      'reeval/test/insights.test.ts › writes a recorded run insights.json once',
+      'reeval/test/output.test.ts › insights add only their sentences',
+    ],
+  },
+  {
     id: 'analysis.agent',
     area: 'Records and studio',
     name: '`analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/`',

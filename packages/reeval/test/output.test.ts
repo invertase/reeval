@@ -12,6 +12,7 @@ import {
   type CompareGolden,
   GOLDENS,
   goldenCompare,
+  goldenInsights,
   goldenRender,
   goldenSuite,
   OUTPUT_DIR,
@@ -107,6 +108,27 @@ describe('every layout', () => {
       /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
     )
     assert.deepEqual(withModel, without.slice(0, -1))
+  })
+
+  test('insights add only their sentences: every fact row prints as it does without them', () => {
+    // A choose eval's layout is its own (the subject's count on each row), so it's left out here.
+    for (const g of GOLDENS.filter((x) => x.insights && x.name !== 'insights-choose')) {
+      const suite = goldenSuite(g)
+      const stored = goldenInsights(g, suite)
+      assert.ok(stored, g.name)
+      const insights = { ...stored, evals: stored.evals.filter((e) => e.intent.job !== 'choose') }
+      const sentences = new Set(
+        [
+          insights.headline,
+          ...insights.evals.flatMap((e) => [e.answer, ...e.findings, ...(e.rows ?? [])]),
+        ].flatMap((s) => (s ? [s.text] : [])),
+      )
+      const filled = render(suite, insights, { color: false, verbose: false, hint: false })
+      const bare = render(suite, null, { color: false, verbose: false, hint: false })
+      const facts = filled.filter((l) => !sentences.has(l.trim()))
+      assert.ok(facts.length < filled.length, `${g.name}: some sentence prints`)
+      assert.deepEqual(facts, bare, g.name)
+    }
   })
 
   test('an analysis model is analysis.model only, never the judge', () => {
