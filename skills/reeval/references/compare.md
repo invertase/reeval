@@ -34,14 +34,15 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 
 ## Gates and lift
 
-- Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's miss
-  prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent output), never under
-  `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
+- Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's misses
+  show in its arm's count (`plain  0 of 2`) and never fail the run. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
 - With `runs > 1`, a cell passes only if every counted attempt passes (pass^k), unless
   `gate: { passRate: 0.8 }` (a pass@1 threshold; pass@1 is passes over passes and fails). Infra errors don't count; a cell is `infra_error`
   only when nothing counted.
-- **Lift** is variant pass@1 minus control pass@1, with a 95% interval; with few runs it's
-  usually "within noise". The summary still prints that interval at 1 vs 1. `reeval analyze`
+- **Lift** is variant pass@1 minus control pass@1, with a 95% interval. The result block
+  prints it as an effect word after the variant's count: `helped`, `made it worse`, or `can't
+  tell yet` below four tries a side or when the interval crosses 0; `-v` adds the difference
+  and interval. `reeval analyze`
   treats fewer than two counted attempts a side as `insufficient` (not measured), never a
   results line. When the eval's sources changed across the compared runs, that pass@1
   difference is `not comparable: the eval changed`, not an effect, and mixed counts such as
@@ -51,17 +52,16 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 
 ## Effort and contrasts
 
-- The summary also prints
-  **effort** under each variant (median tool
-  calls, agent time and, when both sides reported usage, tokens vs the control's), which often
-  shows a skill's effect before pass@1 does:
-  `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
+- From four tries a side the result block adds an **effort** table: each arm's median tool
+  calls, agent time and, when both sides reported usage, tokens, which often shows a skill's
+  effect before pass@1 does:
+  `effort  tools  time  tokens` / `plain  54  1m 39s  2,890k` / `with-house-greeting  3  6.6s  57k`.
   A cell without usage (Goose) is left out of the token sample only; if either side then
-  has none, the token metric is omitted, not `insufficient`. Effort's test needs `runs: 4`
-  a cell (3 vs 3 can't reach p < 0.05; the plan hints so); from 3 a side, a metric whose ranges
-  don't overlap prints `(×0.68, no overlap)`: a direction, not an effect.
-- With two variants or more, `contrasts` (summary, `reeval show`, `reeval query contrasts`) set every
-  pair of arms side by side, variant against variant too.
+  has none, the token metric is omitted, not `insufficient`. Effort's rank test needs
+  `runs: 4` a cell (3 vs 3 can't reach p < 0.05; the plan hints so); `reeval query effort` has
+  its p-values, verdicts and whether the ranges are `separated`.
+- With two variants or more, `reeval query contrasts` sets every pair of arms side by side,
+  variant against variant too.
 - `reeval query skill_files` says which declared files (`SKILL.md`, references, rules) each
   attempt opened, and `context_use` counts its tool calls as `context`, `dependency`
   (`node_modules`, `--help`), `web`, `verify` or `workspace`: a heuristic, read it as counts.
@@ -73,11 +73,10 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   is recorded (`evals[].attempts[].assertions`; unlabelled ones get `<matcher> <first arg>`).
   In a compare, prefer `expect.soft` for independent requirements: a hard failure ends the
   attempt, and the checks after it count as not run: a side that never reached a check reads
-  `not run` and the check gets no verdict, so it can't say which arm met it. Under each variant
-  the summary prints
-  `checks: house greeting 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`, and
-  `Checks that don't discriminate` lists the ones that pass (or fail) on both sides. After a
-  run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict
+  `not run` and the check gets no verdict, so it can't say which arm met it. The result block's
+  check table puts a row per check under each arm (`house greeting  0 of 2  2 of 2`) with the
+  first failure's message, and folds the checks that passed everywhere into `+2 more passed`.
+  After a run, `reeval query "SELECT eval_key, label, verdict FROM check_discrimination WHERE verdict
   LIKE 'both-%'"` and rework or drop those checks: they measure nothing about the variant.
   Changing a label changes the eval's fingerprint. Label judges too
   (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`): the label replaces the clipped
@@ -105,11 +104,11 @@ compare: {
   compare and never gate: pass, fail and the exit code stay the checks'.
   `reeval analyze` puts each answer in the digest (rates by pair kind, votes,
   ties, a failed call, a sample of reasons) as annotation, not a results line.
+  The result block prints each side's wins under the question (`with-house-greeting  won 4 of 4`).
   Each pair is voted in both orders; one whose orders disagree is a split (the
-  position decided), counted on the summary line (`2/9 pairs split by order`).
-  With three arms or more, read the head-to-head line (`no-skill 2–0
-  current-skill (1 split)`) or `reeval query question_pairs`, not the pooled
-  rates, which count a split as a win for each side.
+  position decided). With three arms or more, read `reeval query question_pairs`
+  (head to head, with splits), not the pooled wins, which count a split as a win
+  for each side.
   A vote may carry a short `reason` (capped); do not gate on its wording. Their
   model is the entry's `model`, else the cascaded `question.model`, else
   `analysis.model`, else the judge's when

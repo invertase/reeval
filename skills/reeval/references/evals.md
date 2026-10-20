@@ -17,7 +17,7 @@
   one pass rate over the cases and, with `compare`, one lift paired by case, which `minLift` gates
   (not each case's). Prefer it to separate evals when the cases are one population: six cases at
   `runs: 1` can reach a lift verdict where each case alone is within noise. Fewer than six
-  discordant cases reads `insufficient`. `evaluate.each(cases, { pool: false })` keeps the cases
+  discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`). `evaluate.each(cases, { pool: false })` keeps the cases
   independent; eval options go after the name, never beside the cases.
   A comment on an eval describes the current check (why a canary fails, which path it reads),
   not what used to be true or which product a prompt was ported from.
