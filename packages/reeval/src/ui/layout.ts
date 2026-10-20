@@ -421,10 +421,6 @@ function subjectTries(slots: Slots, cells: CellResult[]): string {
   return `${n} of ${countedOf(cells)}`
 }
 
-/** `Genkit 0 of 4`, a choose case's count. */
-const subjectCount = (slots: Slots, cells: CellResult[]) =>
-  slots.subject ? `${slots.subject} ${subjectTries(slots, cells)}` : ''
-
 /** Web searches or fetches over the tries, when every try reported a number. */
 function webItems(cells: CellResult[], indent: number): Item[] {
   const row = (name: string, counts: Array<number | null>): Item[] =>
@@ -650,9 +646,13 @@ function familyBlock(
   const head = `${' '.repeat(HEAD)}${e.template ?? e.name}`
   const questions = questionLines(c, e.questions, 2)
   if (kind === 'choose') {
-    const items: Item[] = []
+    const subject = slots.subject ? [t(slots.subject, c.dim)] : []
+    const items: Item[] = [{ indent: 2, cells: ['case', t('pass', c.dim), ...subject] }]
     for (const k of cases) {
-      items.push({ indent: 2, cells: [lead(caseWord(k), k.label), subjectCount(slots, k.cells)] })
+      const passed = k.cells.reduce((n, x) => n + x.passed, 0)
+      const count = `${passed} of ${countedOf(k.cells)}`
+      const tries = slots.subject ? [subjectTries(slots, k.cells)] : []
+      items.push({ indent: 2, cells: [lead(caseWord(k), k.label), count, ...tries] })
       items.push(...rowLine(slots, k.path, 4))
       if (!k.cells.every(clean)) items.push(...chooseDetail(c, k.cells, 4, slots))
     }
