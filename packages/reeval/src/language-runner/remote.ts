@@ -33,10 +33,11 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
   const rel = relative(root, file).replaceAll('\\', '/')
   let runner = runners.get(root)
   if (!runner) {
-    const command = adapter.runnerCommand!(root)
+    const command = adapter.runnerCommand(root)
     runner = await startLanguageRunner(command, root, runnerEnv(root, adapter))
     runners.set(root, runner)
   }
+  const liveRunner = runner
   runner.send({ t: 'collect', file: rel })
   const { tree } = await runner.nextSession('declared')
 
@@ -61,7 +62,7 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
     for (const attempt of live.values()) attempt.gone(reason)
   })
 
-  declareTree(tree.children, (body) => remoteBody(runner!, live, body, rel))
+  declareTree(tree.children, (body) => remoteBody(liveRunner, live, body, rel))
 }
 
 function remoteBody(

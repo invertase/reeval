@@ -61,14 +61,16 @@ flowchart TD
 
 Defined in `packages/reeval/src/language-runner/adapter.ts`:
 
-| Field | Purpose |
+| Type / field | Purpose |
 |---|---|
+| `LanguageAdapter` | `InProcessAdapter \| RemoteAdapter` — discriminated on `remote` |
+| `InProcessAdapter` | `remote: false`; no `runnerCommand` (TypeScript) |
+| `RemoteAdapter` | `remote: true`; required `runnerCommand(root)` (Python) |
 | `id` | Stable name (`typescript`, `python`, …) |
 | `extensions` | Eval file suffixes (e.g. `.eval.ts`, `.eval.py`) |
 | `includeGlobs` | Default discovery patterns merged into config `include` |
-| `remote` | `false`: body runs in the worker with jiti; `true`: out-of-process runner |
 | `load(file, root)` | Worker **collect**: register evals via `evaluate` / `group` (TS) or remote `declareTree` |
-| `runnerCommand(root)?` | When `remote`, spawn the SDK (`resolvePythonRunnerCommand` in `python-runner.ts`: `uv run … python -m reeval_python`, `.venv/bin/python`, or `python3`) |
+| `runnerCommand(root)` | **Remote only:** spawn the SDK (`resolvePythonRunnerCommand` in `python-runner.ts`: `uv run … python -m reeval_python`, `.venv/bin/python`, or `python3`) |
 
 Entry point: `loadEvalModule()` in `language-runner/load.ts` →
 `adapterForFile(file).load(...)`.

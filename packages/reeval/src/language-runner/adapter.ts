@@ -6,18 +6,25 @@ import { ownFile } from '../root.ts'
 import { resolvePythonRunnerCommand } from './python-runner.ts'
 import type { RunnerCommand } from './transport.ts'
 
-/** How reeval loads an eval file while `collect()` is active in the worker. */
-export type LanguageAdapter = {
+type AdapterBase = {
   id: string
   extensions: readonly string[]
   includeGlobs: readonly string[]
-  remote: boolean
   load(file: string, root: string): Promise<unknown>
-  /** Starts the SDK runner; only when `remote` is true. */
-  runnerCommand?: (root: string) => RunnerCommand
 }
 
-export const TYPESCRIPT_ADAPTER: LanguageAdapter = {
+/** Eval file loads in the worker process (TypeScript today). */
+export type InProcessAdapter = AdapterBase & { remote: false; runnerCommand?: never }
+
+/** Eval file loads in an SDK runner over the attempt protocol (Python today). */
+export type RemoteAdapter = AdapterBase & {
+  remote: true
+  runnerCommand: (root: string) => RunnerCommand
+}
+
+export type LanguageAdapter = InProcessAdapter | RemoteAdapter
+
+export const TYPESCRIPT_ADAPTER: InProcessAdapter = {
   id: 'typescript',
   extensions: ['.eval.ts', '.eval.mts', '.eval.cts', '.eval.js', '.eval.mjs', '.eval.cjs'],
   includeGlobs: ['evals/**/*.eval.ts'],
@@ -31,7 +38,7 @@ const repoPythonSdk = (): string | undefined => {
   return undefined
 }
 
-const PYTHON_ADAPTER: LanguageAdapter = {
+const PYTHON_ADAPTER: RemoteAdapter = {
   id: 'python',
   extensions: ['.eval.py'],
   includeGlobs: ['evals/**/*.eval.py'],
