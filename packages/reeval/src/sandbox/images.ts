@@ -30,8 +30,8 @@ import type { PrepareFailure } from './provider.ts'
 import { attemptImage, createProviders, dockerKey } from './providers.ts'
 
 /**
- * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, plus
- * the harness unless it's Cursor, `+ install`, and a number where that's still ambiguous.
+ * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, the
+ * harness, `+ install`, and a number where that's still ambiguous.
  */
 export type ImageTarget = {
   id: string
@@ -81,7 +81,7 @@ export function imageTargets(uses: ImageUse[]) {
     const { engine, image, from, dockerfile, install } = sandbox
     const key = JSON.stringify({ harness, engine, image: { image, from, dockerfile, install } })
     const target = targets.get(key) ?? {
-      id: harness === 'cursor' ? sandboxId(sandbox) : `${sandboxId(sandbox)} · ${harness}`,
+      id: `${sandboxId(sandbox)} · ${harness}`,
       harness,
       sandbox,
       evals: 0,
@@ -267,14 +267,16 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   }
   const steps = installSteps(sandbox)
   if (steps.length) {
-    const layer: Pick<Probe, 'status' | 'detail'> = parent
-      ? await exists(installLayerTag({ id: parent }, steps))
+    // The tag hashes its base's image id, so it's known only once the base is built.
+    const ref = parent ? installLayerTag({ id: parent }, steps) : null
+    const layer: Pick<Probe, 'status' | 'detail'> = ref
+      ? await exists(ref)
       : unanswered
         ? { status: 'unknown', detail: unanswered }
         : { status: 'build', detail: 'not built yet' }
     stages.push({
       what: `install ${steps.length} command${steps.length === 1 ? '' : 's'}`,
-      ref: 'reeval-install:<base id + commands>',
+      ref: ref ?? 'reeval-install:<base id + commands>',
       action: 'build unless cached',
       status: layer.status,
       detail: layer.detail,

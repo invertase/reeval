@@ -111,18 +111,18 @@ npx reeval image build --dry-run
 
 ```text
 images  7 sandbox images (nothing built: --dry-run)
-docker · 23 evals
+docker · cursor · 23 evals
   + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
 docker · claude-code · 1 eval
   + base  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12  (to build: not built yet)
 …
-docker+0ab0e263 + install · 1 eval
+docker+0ab0e263 · cursor + install · 1 eval
   + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
-python · 1 eval
+python · cursor · 1 eval
   + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
 …
-docker:sqlite · 1 eval
+docker:sqlite · cursor · 1 eval
   + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-9efec1fbf61588d3))
   + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.5 not built yet)
 ```

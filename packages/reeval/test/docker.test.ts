@@ -621,14 +621,14 @@ evaluate('nope', { environment: defineEnvironment('nope', { sandbox: docker({ fr
 
       const r = await runCli(p.dir, ['image', 'build'], slow)
       assert.equal(r.code, 3, r.stdout + r.stderr)
-      assert.match(r.stdout, /^✓ docker: reeval-sandbox:cursor-[\d.]+ [0-9a-f]{12}$/m)
+      assert.match(r.stdout, /^✓ docker · cursor: reeval-sandbox:cursor-[\d.]+ [0-9a-f]{12}$/m)
       assert.match(
         r.stdout,
-        /^✗ docker:bad\.Dockerfile \(1 eval\): Building evals\/bad\.Dockerfile failed: a RUN step exited 42$/m,
+        /^✗ docker:bad\.Dockerfile · cursor \(1 eval\): Building evals\/bad\.Dockerfile failed: a RUN step exited 42$/m,
       )
       assert.match(
         r.stdout,
-        /^✗ docker:nonexistent-reeval-image-\d+:1 \(1 eval\): Building the toolchain layer FROM nonexistent-reeval-image-\d+:1 failed/m,
+        /^✗ docker:nonexistent-reeval-image-\d+:1 · cursor \(1 eval\): Building the toolchain layer FROM nonexistent-reeval-image-\d+:1 failed/m,
       )
       assert.match(r.stdout, /^2 of 3 images failed to build$/m)
       // Canary: without the broken images there's nothing to fail.
@@ -809,7 +809,7 @@ evaluate('deb', { environment: defineEnvironment('deb', { sandbox: docker({ dock
       assert.match(planned.stdout, /^images {2}1 sandbox image/m)
       const build = await runCli(p.dir, ['image', 'build', 'deb'], { timeoutMs: 600_000 })
       assert.equal(build.code, 0, build.stdout + build.stderr)
-      const debRef = /^✓ docker:deb\.Dockerfile: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      const debRef = /^✓ docker:deb\.Dockerfile · cursor: (\S+)/m.exec(build.stdout)?.[1] ?? ''
       assert.match(debRef, /^reeval-sandbox:cursor-[\d.]+-reeval-dockerfile-deb-dockerfile-/)
       refs.add(debRef)
 

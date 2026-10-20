@@ -6,7 +6,7 @@ evals/e.eval.ts › effort cells  claude-code:claude-sonnet-5[effort=high]/-/doc
 excluded: —
 image docker · claude-code · 1 evals
   base  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12  (reeval's image: built when missing or when its base changed)
-image docker · 1 evals
+image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
 image docker · pi · 1 evals
   base  reeval-sandbox:pi-0.2.7  (reeval's image: built when missing or when its base changed)

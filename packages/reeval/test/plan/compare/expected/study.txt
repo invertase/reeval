@@ -7,5 +7,5 @@ evals/study.eval.ts › a study: every cell ungated, three runs a cell  a/base/d
                                                                       b/skilled/docker  variant skilled  ungated  ×3
                                                                       b/terse/docker    variant terse    ungated  ×3
 excluded: —
-image docker · 1 evals
+image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
