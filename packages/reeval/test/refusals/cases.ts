@@ -27,7 +27,7 @@ import {
   pi,
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
-import { docker } from '../../src/sandbox.ts'
+import { docker, podman } from '../../src/sandbox.ts'
 import type { EnvironmentHelpers } from '../../src/types.ts'
 
 export type Case = [name: string, run: () => unknown]
@@ -174,7 +174,15 @@ export const CASES: Record<string, Case[]> = {
     ['an unknown key and a bad value', any(docker, { cpus: 0, mem: '1g' })],
     ['two bad values', any(docker, { pids: 0, root: 'yes' })],
     ['a good one', any(docker, { from: 'node:24', memory: '4g', swap: 0, install: ['ls'] })],
+    ['podman: a memory size podman does not take', any(podman, { memory: '4GB' })],
+    ['podman: an unknown key', any(podman, { colour: 'blue' })],
+    ['podman: a good one', any(podman, { from: 'node:24', memory: '4g', install: ['ls'] })],
     ['data: not docker() or fakeSandbox()', options({ sandbox: { kind: 'vm' } })],
+    [
+      'data: podman with a bad memory',
+      options({ sandbox: { kind: 'docker', engine: 'podman', memory: '4GB' } }),
+    ],
+    ['data: an unknown engine', options({ sandbox: { kind: 'docker', engine: 'lxc' } })],
     ['data: maxConcurrent 0', options({ sandbox: { kind: 'docker', maxConcurrent: 0 } })],
     ['data: a typo', options({ sandbox: { kind: 'docker', memswap: '8g' } })],
     ['data: a bad memory', options({ sandbox: { kind: 'docker', memory: '4GB' } })],

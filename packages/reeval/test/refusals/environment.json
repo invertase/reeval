@@ -7,7 +7,7 @@
   "install beside the sandbox": "DefinitionError: \"install\" isn't an environment field (defineEnvironment(\"e\")). Put the image on the sandbox: sandbox: docker({ install: … }).",
   "steps instead of setup": "DefinitionError: Unknown field \"steps\" in defineEnvironment(\"e\"). Did you mean \"setup\"?",
   "an unknown field": "DefinitionError: Unknown field \"colour\" in defineEnvironment(\"e\").",
-  "a sandbox that is not one": "DefinitionError: sandbox in defineEnvironment(\"e\") must come from docker() or fakeSandbox() (got \"docker\")",
+  "a sandbox that is not one": "DefinitionError: sandbox in defineEnvironment(\"e\") must come from docker(), podman() or fakeSandbox() (got \"docker\")",
   "a sandbox maxConcurrent 0": "DefinitionError: sandbox.maxConcurrent in defineEnvironment(\"e\") must be a whole number of at least 1 (got 0)",
   "a missing dockerfile as data": "DefinitionError: sandbox.dockerfile in defineEnvironment(\"e\"): <dir>/nope/Dockerfile doesn't exist. Paths are relative to the file that defines the environment.",
   "a dockerfile as data": null,
