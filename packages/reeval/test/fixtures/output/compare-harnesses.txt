@@ -1,0 +1,11 @@
+fail             greets in the house style on each agent
+  harness           pass
+  skilled           1 of 1
+  terse             0 of 1
+    house greeting  failed
+      expected command to succeed, exit code 1
+    exclaims        not run
+    +1 more passed
+
+1 fail
+Set analysis.model in reeval.config.ts for answers to what each eval asks.

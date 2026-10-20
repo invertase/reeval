@@ -1,0 +1,24 @@
+pass             writes greet.js
+
+fail             greets in French
+  french greeting  failed
+    expected command to succeed, exit code 1
+  +1 more passed
+
+fail             explains why greet.js fails
+  2 tries               1 of 2
+  names the root cause  1 of 2
+    expected 'Docker is down' to contain 'null'
+  +1 more passed
+
+fail             reads the fixture repo
+  error            the fixture repo is missing
+
+infra error      starts its sandbox
+  infra error      the fake sandbox fell over
+
+skipped          greets in Welsh
+todo             greets in Klingon
+
+3 fail · 1 pass · 1 infra error · 2 skipped
+Set analysis.model in reeval.config.ts for answers to what each eval asks.

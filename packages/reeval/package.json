@@ -67,6 +67,7 @@
     "schema:check": "node --experimental-strip-types --no-warnings scripts/schema/check.ts",
     "schema:update": "node --experimental-strip-types --no-warnings scripts/schema/check.ts --update",
     "corpus:add": "node --experimental-strip-types --no-warnings scripts/corpus/add.ts",
+    "output:preview": "node --experimental-strip-types --no-warnings scripts/output/preview.ts",
     "test": "node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/*.test.ts",
     "test:plan": "node --test --experimental-strip-types --no-warnings test/plan.test.ts",
     "test:features": "node --test --experimental-strip-types --no-warnings test/features.test.ts",
