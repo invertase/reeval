@@ -3,7 +3,7 @@ title: Output modes
 description: How reeval run picks live, plain or agent output, what each eval's result block shows, and how grouped and stream logs differ.
 ---
 
-`reeval run` prints for whoever is reading: a person at a terminal, a CI log or a coding agent. It picks a mode on its own, and a few flags, named after Turborepo's, change the details. Every mode ends the same way: a result block per eval, the tally and a hint.
+`reeval run` prints for whoever is reading: a person at a terminal, a CI log or a coding agent. It picks a mode on its own, and a few flags, named after Turborepo's, change the details. Every mode ends the same way: a result block per eval and the tally.
 
 ```bash
 reeval run --ui plain --log-order grouped --log-prefix task \
@@ -71,6 +71,8 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 The tally counts each eval (and each case of a family) once, fails first, and leaves zeros out. An infra error isn't a fail, and the [exit code](/reference/exit-codes) says which happened. `not gated` marks an eval whose cells are all ungated, a study, so it never reads `pass` beside `0 of 2`.
+
+The last line, `Set analysis.model…`, prints only when no analysis model resolves: `analysis.model` is unset and the judge isn't a language model. With one, the tally ends the run.
 
 ## The layout follows what the eval varies
 

@@ -243,7 +243,6 @@ pass             greet module › adds a default name in a follow-up turn
 
 16s · 144k in (64k cached) · 863 out · results .reeval/runs/20261020T220141Z_…/summary.md
 2 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
 recorded evals/.history/20261020T220141Z_….json + 10 artifact files in evals/.history/20261020T220141Z_…/ (41.8 KB). Commit it with git.
 ```
 
