@@ -84,7 +84,9 @@ evals/skill.eval.ts › house greeting › greets in the house style    1       
 evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
-`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed. The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history.
+`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed.
+
+The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history. With no history, `fakeHarness` is 1 second an attempt in `fakeSandbox()` and 30 seconds in a container, for the sandbox's setup.
 
 ```bash
 npx reeval run --dry-run --profile nightly

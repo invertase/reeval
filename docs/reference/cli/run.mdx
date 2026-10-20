@@ -69,7 +69,7 @@ Every run starts with it, before anything runs:
 plan  run 20260101T000000Z_nogit_ada-lovelace_k3f9 · 1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 ```
 
-The estimate is the median of each eval's recent attempts on that harness (the last 30 runs, recorded and scratch), else the harness's median, else 3 minutes an attempt. With a profile and a budget it also says which profile, why, and whether the plan fits:
+The estimate is the median of each eval's recent attempts on that harness (the last 30 runs, recorded and scratch), else the harness's median, else 3 minutes an attempt. A `fakeHarness` attempt with no history is 1 second in `fakeSandbox()` and 30 seconds in `docker()` or `podman()`, the sandbox's setup. With a profile and a budget it also says which profile, why, and whether the plan fits:
 
 ```text
 plan  run 20260926T174055Z_b010670_ci_vdfy · profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
