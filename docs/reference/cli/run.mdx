@@ -15,6 +15,7 @@ npx reeval run hello --runs 2 --ui plain
 
 ```text
 reeval run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+                              (parts of one kind OR; a name and a cell key are one kind)
   --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                               default: defaultProfile.ci in CI, else defaultProfile.local)
   --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
@@ -57,7 +58,8 @@ npx reeval run skill antigravity        # skill.eval.ts's Antigravity cells
 ```
 
 - A filter part that names an eval file picks files. Every other part picks evals by name or cell key, as a case-sensitive substring of the eval id or the cell key (`cursor:composer-2.5/with-house-greeting/docker`).
-- Parts of one kind add up. The two kinds narrow each other, and the plan's rows and totals count only the cells that are left.
+- Parts of one kind add up (OR). The two kinds narrow each other, and the plan's rows and totals count only the cells that are left.
+- An eval name and a cell key, harness included, are the same kind. `reeval run claude-code:claude-sonnet-5 "greets by name"` plans every Claude Code Sonnet cell plus `greets by name` on every harness. To run one eval on one harness, filter by the eval and set a profile's [`limit.harness`](/reference/profiles#limit).
 - A part that matches nothing exits 2 and names it.
 - `--tag slow` keeps evals tagged `slow`, `--tag '!slow'` drops them. Repeated `--tag`s must all hold. A profile's `tags` work the same way.
 

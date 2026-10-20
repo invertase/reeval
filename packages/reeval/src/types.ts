@@ -1815,6 +1815,7 @@ export type CellRole = 'control' | 'variant'
 export type Cell = {
   key: string
   harness: string
+  /** The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix). */
   environment: string
   sandbox: string
   role: CellRole

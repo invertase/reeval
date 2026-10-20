@@ -134,6 +134,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: Number.POSITIVE_INFINITY,
     help: `
   reeval run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+                                (parts of one kind OR; a name and a cell key are one kind)
     --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
