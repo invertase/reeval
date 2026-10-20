@@ -109,13 +109,35 @@ test("dockerState: running, down, or Windows containers, from the CLI's own answ
   }
 })
 
-test('imageInfo without a docker CLI at all is no image, not a spawn error', async () => {
+test('imageInfo: null only for no such image; a daemon or spawn error throws, naming it', async () => {
+  // A docker CLI that prints $FAKE_INSPECT_STDERR and exits 1, as `image inspect` does.
+  const bin = mkdtempSync(join(tmpdir(), 'reeval-docker-inspect-'))
+  writeFileSync(
+    join(bin, 'docker.js'),
+    'process.stderr.write(process.env.FAKE_INSPECT_STDERR ?? ""); process.exit(1)\n',
+  )
+  writeFileSync(join(bin, 'docker'), `#!/bin/sh\nexec node "$(dirname "$0")/docker.js" "$@"\n`)
+  chmodSync(join(bin, 'docker'), 0o755)
+  writeFileSync(join(bin, 'docker.cmd'), '@node "%~dp0docker.js" %*\r\n')
   const path = process.env.PATH
-  process.env.PATH = mkdtempSync(join(tmpdir(), 'reeval-no-docker-'))
+  const ref = 'reeval-sandbox:cursor-0.1.0'
+  const inspect = (stderr: string) => {
+    process.env.FAKE_INSPECT_STDERR = stderr
+    return imageInfo(ref)
+  }
   try {
-    assert.equal(await imageInfo('reeval-sandbox:cursor-0.1.0'), null)
+    process.env.PATH = `${bin}${delimiter}${path}`
+    assert.equal(await inspect(`Error response from daemon: No such image: ${ref}\n`), null)
+    assert.equal(await inspect(`Error: ${ref}: image not known\n`), null, "Podman's wording")
+    await assert.rejects(
+      inspect('Cannot connect to the Docker daemon at unix:///var/run/docker.sock.\n'),
+      /^Error: docker image inspect reeval-sandbox:cursor-0\.1\.0 failed: Cannot connect to the Docker daemon/,
+    )
+    process.env.PATH = mkdtempSync(join(tmpdir(), 'reeval-no-docker-'))
+    await assert.rejects(imageInfo(ref), /docker image inspect .* couldn't run: /)
   } finally {
     process.env.PATH = path
+    delete process.env.FAKE_INSPECT_STDERR
   }
 })
 

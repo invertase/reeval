@@ -323,7 +323,8 @@ export async function resolveFrom(
         .replace(/^ERROR: /, '')
         .replace(/\s+/g, ' ') || null
   }
-  const local = await imageInfo(from, engine)
+  // An engine that can't inspect it leaves the registry's error as the answer.
+  const local = await imageInfo(from, engine).catch(() => null)
   if (local) return { digest: local.id, local: true }
   return { error: error || `${from} doesn't resolve` }
 }

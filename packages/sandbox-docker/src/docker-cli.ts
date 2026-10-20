@@ -239,21 +239,33 @@ export async function imageTags(repository: string, engine?: Engine): Promise<st
     .map((t) => t.replace(/^localhost\//, ''))
 }
 
+/** `image inspect`'s answer when the engine has no such image (Docker's wording, then Podman's). */
+export const isNoSuchImage = (stderr: string) => /no such image|image not known/i.test(stderr)
+
+/**
+ * The image, or null when the engine says it has no such image. A CLI that can't start or a daemon
+ * that doesn't answer throws instead, naming the error: that's not knowing, not a missing image.
+ */
 export async function imageInfo(image: string, engine?: Engine): Promise<ImageInfo | null> {
-  const id = engineSpec(engine).imageId
+  const { bin, imageId } = engineSpec(engine)
   const r = await docker(
     [
       'image',
       'inspect',
       '--format',
       // `.Config.Labels` is a template error, not null, on images without labels.
-      `{"config":{{json .Config}},"id":{{json ${id}}},"repoDigests":{{json .RepoDigests}}}`,
+      `{"config":{{json .Config}},"id":{{json ${imageId}}},"repoDigests":{{json .RepoDigests}}}`,
       image,
     ],
     { engine },
-  ).catch(() => null)
-  // No docker CLI at all (spawn ENOENT) is no image, as a daemon that doesn't have it is.
-  if (r?.exitCode !== 0) return null
+  ).catch((error: Error) => {
+    throw new Error(`${bin} image inspect ${image} couldn't run: ${error.message}`)
+  })
+  if (r.exitCode !== 0) {
+    const stderr = r.stderr.trim()
+    if (isNoSuchImage(stderr)) return null
+    throw new Error(`${bin} image inspect ${image} failed: ${stderr || `exit ${r.exitCode}`}`)
+  }
   const info = JSON.parse(r.stdout.toString('utf8'))
   const repoDigests = ((info.repoDigests ?? []) as string[]).filter(isRegistryDigest)
   return { labels: info.config?.Labels ?? {}, id: normalizeImageId(info.id), repoDigests }
