@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 10
+const DB_VERSION = 11
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -285,6 +285,15 @@ CREATE VIEW check_discrimination AS
   JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key
   WHERE c.role = 'variant' AND k.verdict IS NOT NULL;
 
+-- Each check (expect label) per cell per run, on every cell (control and variant alike), over the
+-- cell's counted attempts. rate = pass / (pass + fail): an error (the matcher couldn't answer) and
+-- a not-run (a hard expect before it failed) are left out; null when neither passed nor failed.
+CREATE VIEW check_rates AS
+  SELECT k.run_id, k.eval_key, k.cell_key, c.harness, c.environment, c.role, k.label, k.pass,
+    k.fail, k.error, k.not_run, CAST(k.pass AS REAL) / NULLIF(k.pass + k.fail, 0) AS rate
+  FROM cell_checks k
+  JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key;
+
 -- One eval per run: outcome and pass@1, with the branch and pull request.
 CREATE VIEW eval_trend AS
   SELECT e.eval_key, r.run_id, r.started_at, r.branch, r.pr_number, r.recorded, e.outcome,
@@ -323,6 +332,7 @@ export const VIEW_NAMES = [
   'eval_trend',
   'verdict_flips',
   'check_discrimination',
+  'check_rates',
 ]
 
 const json = (value: unknown) => JSON.stringify(value)

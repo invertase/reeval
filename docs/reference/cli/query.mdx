@@ -19,7 +19,8 @@ npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift
 reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                               rebuilt from the records); views: lift, effort, factor_effects,
                               skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                              verdict_flips, check_discrimination. No argument lists them
+                              verdict_flips, check_discrimination, check_rates. No argument lists
+                              them
   --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                               or table name, only that run's rows
   --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
@@ -60,6 +61,7 @@ npx reeval query failing_attempts --run last
 | Name | Columns |
 |---|---|
 | `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
+| `check_rates` | `run_id`, `eval_key`, `cell_key`, `harness`, `environment`, `role`, `label`, `pass`, `fail`, `error`, `not_run`, `rate` |
 | `context_use` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `class`, `calls`, `first_line`, `example` |
 | `contrasts` | `run_id`, `eval_key`, `harness`, `sandbox`, `a_key`, `b_key`, `a_environment`, `b_environment`, `a_pass`, `a_counted`, `b_pass`, `b_counted`, `points`, `lo`, `hi`, `pass_verdict`, `a_tools_median`, `b_tools_median`, `tools_ratio`, `tools_p`, `separated`, `verdict`, `agent_s_ratio`, `time_separated`, `time_verdict`, `tokens_ratio`, `tokens_separated`, `tokens_verdict`, `checks`, `discriminating` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
@@ -92,10 +94,69 @@ npx reeval query failing_attempts --run last
 | `context_use` | Attempt and tool-call class: `context` (a placed skill, rules file or MCP tool), `dependency` (`node_modules`, `site-packages`, `vendor`, `.venv`, `--help`), `web`, `verify` (a check's command, or a test, build, lint or typecheck) or `workspace`, with the count, the first call's line and an example target. The classes are a heuristic over tool names and paths |
 | `skill_files` | Attempt and file its environment declared (each skill's files, rules and config): how many tool calls opened it, directly or through a glob, and the first one's line (`NULL`: never opened) |
 | `verdict_flips` | Judge question per cell whose pass rate changed from its previous run |
+| `check_discrimination` | Check (`expect` label) of a variant cell per run, beside its control's: passes, failures and not-run on both sides, and whether it tells them apart |
+| `check_rates` | Check (`expect` label) per cell per run, control and variant alike: its harness, environment and `role`, `pass`, `fail`, `error`, `not_run` over the cell's counted attempts, and `rate` = `pass / (pass + fail)` (`NULL` when neither). An `error` (a matcher that couldn't answer) and a `not_run` (a hard `expect` before it failed) are left out of `rate` |
 
 In the text table, `·` is SQL `NULL`; `--json` has `null`. On `factor_effects`, a `pooled` row has `run_id` `NULL` (it spans runs), and a row pooled across evals (with `strata` set and `runs` `NULL`) has `eval_key` and `runs` `NULL` too.
 
 Several views repeat a cell's key across evals in a run, so join `attempts` and `cells` on `eval_key` as well as `cell_key`; on `cell_key` alone each attempt matches every eval's cell of that key and is counted once per eval.
+
+## Per-cell rates
+
+`lift` pools each attempt's pass, every check at once. `check_rates` gives one labelled check's rate per cell, here from `examples/hello` on the fake config:
+
+```bash
+npx reeval query "SELECT cell_key, role, label, pass, fail, rate
+  FROM check_rates WHERE label = 'house greeting'"
+```
+
+```text
+cell_key                       role     label           pass  fail  rate
+fake/plain/fake                control  house greeting  0     1     0
+fake/with-house-greeting/fake  variant  house greeting  1     0     1
+…
+```
+
+Adoption, whether an arm used what its environment gave it, is the share of counted attempts with at least one `context` call in `context_use` (a placed skill, rules file or MCP tool of the environment). The `LEFT JOIN` keeps attempts with no such call, so they count as not adopted. Here on the harness contract's recorded runs on Cursor, Claude Code and Codex:
+
+```bash
+npx reeval query "SELECT a.eval_key, a.cell_key, COUNT(*) AS attempts,
+  COUNT(u.attempt_key) AS adopted,
+  CAST(COUNT(u.attempt_key) AS REAL) / COUNT(*) AS adoption
+FROM attempts a
+LEFT JOIN context_use u ON u.run_id = a.run_id
+  AND u.attempt_key = a.key AND u.class = 'context'
+WHERE a.outcome IN ('pass', 'fail')
+GROUP BY a.run_id, a.eval_key, a.cell_key"
+```
+
+```text
+eval_key                        cell_key                                     attempts  adopted  adoption
+…
+evals/mcp.eval.ts › mcp         claude-code:claude-haiku-4-5/stamped/docker  1         1        1
+evals/mcp.eval.ts › mcp canary  claude-code:claude-haiku-4-5/stamped/docker  1         0        0
+evals/skill.eval.ts › skill     codex:gpt-5.4-mini/skilled/docker            1         1        1
+…
+```
+
+For one MCP server or one shell command, match `tool_calls` instead: an MCP tool is `mcp__<server>__<tool>`, and a shell command's `target` is its command line (`t.target LIKE '%<cli> <subcommand>%'`):
+
+```bash
+npx reeval query "SELECT a.eval_key, a.cell_key,
+  COUNT(DISTINCT a.key) AS attempts, COUNT(DISTINCT t.attempt_key) AS used
+FROM attempts a
+LEFT JOIN tool_calls t ON t.run_id = a.run_id AND t.attempt_key = a.key
+  AND t.tool LIKE 'mcp__stamp__%'
+GROUP BY a.run_id, a.eval_key, a.cell_key"
+```
+
+```text
+eval_key                        cell_key                                     attempts  used
+…
+evals/mcp.eval.ts › mcp         cursor:composer-2.5/stamped/docker           1         1
+evals/mcp.eval.ts › mcp canary  cursor:composer-2.5/stamped/docker           1         0
+…
+```
 
 ## Tables
 
