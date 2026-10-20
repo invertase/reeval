@@ -14,7 +14,7 @@ import { type Gateway, type GatewayOptions, startGateway } from './egress/gatewa
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
-import { type Engine, engineSpec } from './engine.ts'
+import { type Engine, engineEnv, engineSpec } from './engine.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_USER } from './image.ts'
 import { shellQuote as q } from './process.ts'
 import { traceDocker } from './trace.ts'
@@ -432,7 +432,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       const child = spawn(spec.bin, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: true,
-        env: env ? { ...process.env, ...env } : process.env,
+        env: { ...process.env, ...engineEnv(engine), ...env },
       })
       const exited = new Promise<{ exitCode: number }>((resolve) =>
         child.on('close', (code) => {

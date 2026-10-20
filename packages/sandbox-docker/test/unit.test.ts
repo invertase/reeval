@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { createHash, X509Certificate } from 'node:crypto'
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -21,7 +22,16 @@ import {
   installLayerTag,
   installScript,
 } from '../src/build-image.ts'
-import { dockerState, imageInfo, isRegistryDigest } from '../src/docker-cli.ts'
+import {
+  docker,
+  dockerState,
+  imageInfo,
+  isConnectionFailure,
+  isRegistryDigest,
+  removalDone,
+  removeContainerDetached,
+  retryConnection,
+} from '../src/docker-cli.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
@@ -33,7 +43,15 @@ import {
   type OutboundRequest,
   type RequestTransformation,
 } from '../src/egress/rules.ts'
-import { dockerSeccompFile, ENGINES, normalizeImageId } from '../src/engine.ts'
+import {
+  dockerSeccompFile,
+  ENGINES,
+  engineEnv,
+  machineHost,
+  normalizeImageId,
+  type PodmanHostInputs,
+  podmanHostEnv,
+} from '../src/engine.ts'
 import { DEFAULT_IMAGE, HARNESS_PACKAGES, harnessLabel, imageFor } from '../src/image.ts'
 import { memorySwap } from '../src/session.ts'
 import { type DockerCommand, onDockerCommand, traceDocker } from '../src/trace.ts'
@@ -601,6 +619,199 @@ describe('engines', () => {
   test('podman removes without the grace period; docker as before', () => {
     assert.deepEqual(ENGINES.podman.rmForce, ['rm', '-f', '--time', '0'])
     assert.deepEqual(ENGINES.docker.rmForce, ['rm', '-f'])
+  })
+})
+
+describe('podman machine connection', () => {
+  const SOCKET = '/var/folders/x/T/podman/podman-machine-default-api.sock'
+  const inspect = [
+    {
+      Name: 'podman-machine-default',
+      ConnectionInfo: {
+        PodmanSocket: { Path: SOCKET },
+        PodmanPipe: { Path: '\\\\.\\pipe\\podman-machine-default' },
+      },
+    },
+  ]
+  const hostEnv = (over: Partial<PodmanHostInputs> = {}) =>
+    podmanHostEnv({
+      platform: 'darwin',
+      env: {},
+      inspect: () => inspect,
+      connections: () => [{ Name: 'podman-machine-default', Default: true }],
+      exists: () => true,
+      ...over,
+    })
+
+  test("macOS and Windows talk to the machine's API socket, not over SSH", () => {
+    assert.deepEqual(hostEnv(), { CONTAINER_HOST: `unix://${SOCKET}` })
+    assert.deepEqual(hostEnv({ platform: 'win32' }), {
+      CONTAINER_HOST: 'npipe:////./pipe/podman-machine-default',
+    })
+    const rootful = () => [{ Name: 'podman-machine-default-root', Default: true }]
+    assert.deepEqual(hostEnv({ connections: rootful }), { CONTAINER_HOST: `unix://${SOCKET}` })
+    assert.deepEqual(hostEnv({ connections: () => undefined }), {
+      CONTAINER_HOST: `unix://${SOCKET}`,
+    })
+  })
+
+  test('the socket is left alone where the user chose a host, or there is none', () => {
+    assert.deepEqual(hostEnv({ platform: 'linux' }), {}, 'Linux runs podman locally')
+    assert.deepEqual(hostEnv({ env: { CONTAINER_HOST: 'ssh://core@box/run/podman.sock' } }), {})
+    assert.deepEqual(hostEnv({ env: { CONTAINER_CONNECTION: 'work' } }), {})
+    assert.deepEqual(hostEnv({ connections: () => [{ Name: 'work', Default: true }] }), {})
+    assert.deepEqual(hostEnv({ exists: () => false }), {}, 'the machine is stopped')
+    assert.deepEqual(hostEnv({ inspect: () => undefined }), {}, 'no machine')
+    assert.deepEqual(hostEnv({ inspect: () => [{ ConnectionInfo: {} }] }), {})
+    assert.equal(machineHost(inspect, 'linux'), null)
+  })
+
+  test('docker gets no environment of its own', () => {
+    assert.deepEqual(engineEnv('docker'), {})
+  })
+
+  test('a connection failure is exit 125 with an SSH or socket error, nothing else', () => {
+    const handshake = 'Error: ssh: handshake failed: EOF\n'
+    assert.equal(isConnectionFailure({ exitCode: 125, stderr: handshake }), true)
+    const socket = 'Cannot connect to Podman. … unable to connect to Podman socket: …'
+    assert.equal(isConnectionFailure({ exitCode: 125, stderr: socket }), true)
+    assert.equal(isConnectionFailure({ exitCode: 1, stderr: handshake }), false)
+    assert.equal(isConnectionFailure({ exitCode: 125, stderr: 'Error: no such image' }), false)
+  })
+
+  test('retryConnection backs off while the command never reached Podman, then gives up', async () => {
+    const waits: number[] = []
+    const wait = async (ms: number) => {
+      waits.push(ms)
+    }
+    const failed = { exitCode: 125, stderr: 'ssh: handshake failed: EOF' }
+    const results = [failed, failed, { exitCode: 0, stderr: '' }]
+    let calls = 0
+    const counted = <R>(result: R) => {
+      calls++
+      return result
+    }
+    const r = await retryConnection(async () => counted(results[calls] ?? failed), {
+      delays: [1, 2, 3, 4],
+      wait,
+    })
+    assert.deepEqual([r.exitCode, calls, waits], [0, 3, [1, 2]])
+    calls = 0
+    waits.length = 0
+    const given = await retryConnection(async () => counted(failed), { delays: [1, 2], wait })
+    assert.deepEqual([given.exitCode, calls, waits], [125, 3, [1, 2]], 'gives up after the delays')
+    calls = 0
+    const real = { exitCode: 1, stderr: 'Error: no such image' }
+    const other = await retryConnection(async () => counted(real), { wait })
+    assert.deepEqual([other.exitCode, calls], [1, 1], 'a real failure is not retried')
+  })
+
+  test('removal is done once the container is gone, removed or not there at all', () => {
+    assert.equal(removalDone({ exitCode: 0, stderr: '' }), true)
+    const podmanMissing = 'Error: no container with name or ID "x" found: no such container'
+    assert.equal(removalDone({ exitCode: 1, stderr: podmanMissing }), true)
+    assert.equal(removalDone({ exitCode: 1, stderr: 'Error: No such container: x' }), true)
+    assert.equal(removalDone({ exitCode: 125, stderr: 'ssh: handshake failed: EOF' }), false)
+  })
+
+  /**
+   * A podman CLI whose first `$FAKE_FAILS` calls fail with `$FAKE_STDERR` (exit `$FAKE_EXIT`),
+   * logging each call's arguments; a Node script behind an sh and a .cmd wrapper.
+   */
+  const fakePodman = () => {
+    const bin = mkdtempSync(join(tmpdir(), 'reeval-fake-podman-'))
+    const log = join(bin, 'calls.log')
+    writeFileSync(
+      join(bin, 'podman.js'),
+      `const fs = require('node:fs')
+const args = process.argv.slice(2)
+if (args[0] === 'machine' || args[0] === 'system') process.exit(1)
+fs.appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
+const n = fs.readFileSync(${JSON.stringify(log)}, 'utf8').trim().split('\\n').length
+if (n <= Number(process.env.FAKE_FAILS ?? 0)) {
+  process.stderr.write(process.env.FAKE_STDERR ?? '')
+  process.exit(Number(process.env.FAKE_EXIT ?? 125))
+}
+console.log('ok')
+`,
+    )
+    writeFileSync(join(bin, 'podman'), `#!/bin/sh\nexec node "$(dirname "$0")/podman.js" "$@"\n`)
+    chmodSync(join(bin, 'podman'), 0o755)
+    writeFileSync(join(bin, 'podman.cmd'), '@node "%~dp0podman.js" %*\r\n')
+    const calls = () =>
+      existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) : []
+    return { bin, calls }
+  }
+
+  const withEnv = async <T>(env: Record<string, string>, fn: () => Promise<T>): Promise<T> => {
+    const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]))
+    Object.assign(process.env, env)
+    try {
+      return await fn()
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k]
+        else process.env[k] = v
+      }
+    }
+  }
+
+  test('a podman command that loses its SSH handshake runs again', async () => {
+    const fake = fakePodman()
+    const env = {
+      PATH: `${fake.bin}${delimiter}${process.env.PATH}`,
+      FAKE_FAILS: '2',
+      FAKE_EXIT: '125',
+      FAKE_STDERR: 'Error: ssh: handshake failed: EOF\n',
+    }
+    const r = await withEnv(env, () => docker(['ps', '-q'], { engine: 'podman' }))
+    assert.equal(r.exitCode, 0)
+    assert.equal(r.stdout.toString().trim(), 'ok')
+    assert.deepEqual(fake.calls(), ['ps -q', 'ps -q', 'ps -q'])
+
+    const other = fakePodman()
+    const failed = await withEnv(
+      { ...env, PATH: `${other.bin}${delimiter}${process.env.PATH}`, FAKE_STDERR: 'Error: nope' },
+      () => docker(['ps', '-q'], { engine: 'podman' }),
+    )
+    assert.equal(failed.exitCode, 125)
+    assert.deepEqual(other.calls(), ['ps -q'], 'any other failure is the answer')
+  })
+
+  // spawn finds podman.exe, not a .cmd wrapper, on Windows.
+  const posixFake = process.platform === 'win32' && 'needs a POSIX fake podman'
+  test('removeContainerDetached retries a failed removal until the container is gone', {
+    skip: posixFake,
+  }, async () => {
+    const fake = fakePodman()
+    const env = {
+      PATH: `${fake.bin}${delimiter}${process.env.PATH}`,
+      FAKE_FAILS: '2',
+      FAKE_EXIT: '125',
+      FAKE_STDERR: 'Error: ssh: handshake failed: EOF\n',
+    }
+    await withEnv(env, () => removeContainerDetached('abc', 'podman', { delays: [1, 1, 1] }))
+    assert.deepEqual(fake.calls(), Array(3).fill('rm -f --time 0 abc'))
+
+    const gone = fakePodman()
+    await withEnv(
+      {
+        ...env,
+        PATH: `${gone.bin}${delimiter}${process.env.PATH}`,
+        FAKE_FAILS: '1',
+        FAKE_EXIT: '1',
+        FAKE_STDERR: 'Error: No such container: abc\n',
+      },
+      () => removeContainerDetached('abc', 'podman'),
+    )
+    assert.deepEqual(gone.calls(), ['rm -f --time 0 abc'], 'already gone is done')
+
+    const stuck = fakePodman()
+    await withEnv(
+      { ...env, PATH: `${stuck.bin}${delimiter}${process.env.PATH}`, FAKE_FAILS: '99' },
+      () => removeContainerDetached('abc', 'podman', { delays: [1, 1] }),
+    )
+    assert.equal(stuck.calls().length, 3, 'gives up after the delays, and still resolves')
   })
 })
 

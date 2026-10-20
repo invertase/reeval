@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, renameSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -80,6 +81,93 @@ export const ENGINES: Record<Engine, EngineSpec> = {
 }
 
 export const engineSpec = (engine: Engine = 'docker'): EngineSpec => ENGINES[engine]
+
+type MachineInspect = {
+  Name?: string
+  ConnectionInfo?: { PodmanSocket?: { Path?: string }; PodmanPipe?: { Path?: string } }
+}
+type Connection = { Name?: string; Default?: boolean }
+
+/**
+ * The `CONTAINER_HOST` that reaches a `podman machine` straight through its API socket (macOS) or
+ * named pipe (Windows), from `podman machine inspect`'s JSON.
+ */
+export function machineHost(
+  inspect: unknown,
+  platform: NodeJS.Platform,
+): { host: string; path: string; name: string } | null {
+  const machine = (Array.isArray(inspect) ? inspect[0] : undefined) as MachineInspect | undefined
+  const info = machine?.ConnectionInfo
+  const name = machine?.Name ?? 'podman-machine-default'
+  if (platform === 'darwin' && info?.PodmanSocket?.Path) {
+    const path = info.PodmanSocket.Path
+    return { host: `unix://${path}`, path, name }
+  }
+  if (platform === 'win32' && info?.PodmanPipe?.Path) {
+    const path = info.PodmanPipe.Path
+    return { host: `npipe://${path.replaceAll('\\', '/')}`, path, name }
+  }
+  return null
+}
+
+export type PodmanHostInputs = {
+  platform: NodeJS.Platform
+  env: NodeJS.ProcessEnv
+  /** `podman machine inspect`'s JSON, or undefined when it failed. */
+  inspect: () => unknown
+  /** `podman system connection list --format json`'s JSON, or undefined when it failed. */
+  connections: () => unknown
+  exists: (path: string) => boolean
+}
+
+/**
+ * The environment every podman command gets. On macOS and Windows the client talks to the
+ * machine's VM over SSH, a connection per command, and sshd's `MaxStartups` drops some of a burst
+ * (exit 125, `ssh: handshake failed`), so commands go through the machine's API socket instead.
+ * Not when the user picked a host (`CONTAINER_HOST`, `CONTAINER_CONNECTION`, or a default
+ * connection that isn't the machine's), or the socket isn't there.
+ */
+export function podmanHostEnv(inputs: PodmanHostInputs): Record<string, string> {
+  const { platform, env } = inputs
+  if (platform !== 'darwin' && platform !== 'win32') return {}
+  if (env.CONTAINER_HOST || env.CONTAINER_CONNECTION) return {}
+  const machine = machineHost(inputs.inspect(), platform)
+  if (!machine || !inputs.exists(machine.path)) return {}
+  const connections = inputs.connections()
+  const chosen = Array.isArray(connections)
+    ? (connections as Connection[]).find((c) => c.Default)?.Name
+    : undefined
+  if (chosen && chosen !== machine.name && chosen !== `${machine.name}-root`) return {}
+  return { CONTAINER_HOST: machine.host }
+}
+
+const readJson = (bin: string, args: string[]): unknown => {
+  try {
+    const out = execFileSync(bin, args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 10_000,
+      windowsHide: true,
+    })
+    return JSON.parse(out)
+  } catch {
+    return undefined
+  }
+}
+
+let podmanEnv: Record<string, string> | undefined
+/** What every command on `engine` adds to its environment; read once per process. */
+export function engineEnv(engine: Engine = 'docker'): Record<string, string> {
+  if (engine !== 'podman') return {}
+  podmanEnv ??= podmanHostEnv({
+    platform: process.platform,
+    env: process.env,
+    inspect: () => readJson('podman', ['machine', 'inspect']),
+    connections: () => readJson('podman', ['system', 'connection', 'list', '--format', 'json']),
+    exists: existsSync,
+  })
+  return podmanEnv
+}
 
 /** Docker's ids are `sha256:…`; Podman's are the bare hex. */
 export const normalizeImageId = (id: string) => (id.includes(':') ? id : `sha256:${id}`)

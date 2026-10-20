@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { type Engine, engineSpec, normalizeImageId } from './engine.ts'
+import { type Engine, engineEnv, engineSpec, normalizeImageId } from './engine.ts'
 import { type RunResult, run } from './process.ts'
 import { traceDocker } from './trace.ts'
 
@@ -13,20 +13,63 @@ export type DockerOptions = {
   engine?: Engine
 }
 
+/** How long to wait before each retry of a command that never reached Podman. */
+export const CONNECTION_RETRY_MS = [100, 250, 500, 1000, 2000]
+
+/**
+ * Whether a podman command failed before reaching the engine: the remote client's SSH handshake
+ * or socket connection to `podman machine`, so running it again is safe.
+ */
+export const isConnectionFailure = (r: { exitCode: number | null; stderr: string }) =>
+  r.exitCode === 125 && /ssh: handshake failed|unable to connect to Podman socket/.test(r.stderr)
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ms)
+    function done() {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      resolve()
+    }
+    signal?.addEventListener('abort', done, { once: true })
+  })
+
+/**
+ * Runs `attempt` again, after each of `delays`, while its result is a connection failure (see
+ * {@link isConnectionFailure}), and returns the last result.
+ */
+export async function retryConnection<R extends { exitCode: number | null; stderr: string }>(
+  attempt: () => Promise<R>,
+  options: { delays?: number[]; signal?: AbortSignal; wait?: typeof sleep } = {},
+): Promise<R> {
+  const { delays = CONNECTION_RETRY_MS, signal, wait = sleep } = options
+  let r = await attempt()
+  for (const ms of delays) {
+    if (!isConnectionFailure(r) || signal?.aborted) break
+    await wait(ms, signal)
+    r = await attempt()
+  }
+  return r
+}
+
 /** Runs the docker (or podman) CLI. `env` values are passed via the CLI's environment, never argv. */
 export async function docker(args: string[], options: DockerOptions = {}): Promise<DockerResult> {
   const { engine, ...rest } = options
   const { bin } = engineSpec(engine)
-  const startedAt = Date.now()
   const stdin = options.input?.length ?? 0
-  try {
-    const r = await run(bin, args, { ...rest, binary: true })
-    traceDocker(args, startedAt, { ...r, stdin }, bin)
-    return r
-  } catch (error) {
-    traceDocker(args, startedAt, { error }, bin)
-    throw error
+  const env = { ...engineEnv(engine), ...rest.env }
+  const once = async () => {
+    const startedAt = Date.now()
+    try {
+      const r = await run(bin, args, { ...rest, env, binary: true })
+      traceDocker(args, startedAt, { ...r, stdin }, bin)
+      return r
+    } catch (error) {
+      traceDocker(args, startedAt, { error }, bin)
+      throw error
+    }
   }
+  return engine === 'podman' ? retryConnection(once, { signal: options.signal }) : once()
 }
 
 export async function dockerOk(args: string[], opts?: DockerOptions) {
@@ -37,23 +80,62 @@ export async function dockerOk(args: string[], opts?: DockerOptions) {
   return r.stdout.toString('utf8').trim()
 }
 
-/** Removes a container in its own process group, so removal survives this process being killed. */
-export function removeContainerDetached(id: string, engine?: Engine): Promise<void> {
+/** Whether `rm -f` left the container gone: it removed it, or it was already gone. */
+export const removalDone = (r: { exitCode: number | null; stderr: string }) =>
+  r.exitCode === 0 || /no such container/i.test(r.stderr)
+
+/** How long to wait before each retry of a removal that failed. */
+export const REMOVAL_RETRY_MS = [250, 500, 1000, 2000, 4000]
+
+/**
+ * Removes a container in its own process group, so removal survives this process being killed,
+ * and tries again while it fails. Resolves either way.
+ */
+export async function removeContainerDetached(
+  id: string,
+  engine?: Engine,
+  options: { delays?: number[]; wait?: (ms: number) => Promise<void> } = {},
+): Promise<void> {
   const { bin, rmForce } = engineSpec(engine)
-  return new Promise((resolve) => {
-    // A detached child doesn't keep the event loop alive on its own.
-    const keepAlive = setInterval(() => {}, 1000)
-    const startedAt = Date.now()
-    const args = [...rmForce, id]
-    const done = (exitCode: number | null) => {
-      clearInterval(keepAlive)
-      traceDocker(args, startedAt, { exitCode }, bin)
-      resolve()
-    }
-    const child = spawn(bin, args, { detached: true, stdio: 'ignore', windowsHide: true })
-    child.on('error', () => done(null))
-    child.on('close', done)
-  })
+  const { delays = REMOVAL_RETRY_MS, wait = sleep } = options
+  const args = [...rmForce, id]
+  const env = { ...process.env, ...engineEnv(engine) }
+  const once = () =>
+    new Promise<{ exitCode: number | null; stderr: string }>((resolve) => {
+      // A detached child doesn't keep the event loop alive on its own.
+      const keepAlive = setInterval(() => {}, 1000)
+      const startedAt = Date.now()
+      let stderr = ''
+      let settled = false
+      const done = (exitCode: number | null) => {
+        if (settled) return
+        settled = true
+        clearInterval(keepAlive)
+        traceDocker(args, startedAt, { exitCode, stderr }, bin)
+        resolve({ exitCode, stderr })
+      }
+      const child = spawn(bin, args, {
+        detached: true,
+        stdio: ['ignore', 'ignore', 'pipe'],
+        windowsHide: true,
+        env,
+      })
+      child.stderr.on('data', (d) => {
+        stderr += d
+      })
+      child.on('error', (error) => {
+        stderr += String(error)
+        done(null)
+      })
+      child.on('close', done)
+    })
+  let r = await once()
+  for (const ms of delays) {
+    // No exit code: the CLI didn't start, and won't on a retry.
+    if (removalDone(r) || r.exitCode === null) return
+    await wait(ms)
+    r = await once()
+  }
 }
 
 /**
@@ -82,7 +164,7 @@ for (let i = 0; i < Number(seconds); i++) {
       stdio: 'ignore',
       windowsHide: true,
       // A compiled reeval (bun build --compile) runs as plain Bun, which takes -e, only when told.
-      env: { ...process.env, BUN_BE_BUN: '1' },
+      env: { ...process.env, ...engineEnv(engine), BUN_BE_BUN: '1' },
     },
   )
   child.on('error', () => {})

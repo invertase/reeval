@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { Duplex } from 'node:stream'
 import { docker } from '../docker-cli.ts'
-import { type Engine, engineSpec } from '../engine.ts'
+import { type Engine, engineEnv, engineSpec } from '../engine.ts'
 import { traceDocker } from '../trace.ts'
 import { createCertificateAuthority } from './cert.ts'
 import { createMux, forwarderScript, link } from './mux.ts'
@@ -88,7 +88,11 @@ export async function startGateway(
   const startedAt = Date.now()
   // Own process group, like every docker call: reeval handles Ctrl-C and tears the gateway down.
   const { bin } = engineSpec(engine)
-  const child = spawn(bin, args, { stdio: 'pipe', detached: true })
+  const child = spawn(bin, args, {
+    stdio: 'pipe',
+    detached: true,
+    env: { ...process.env, ...engineEnv(engine) },
+  })
   child.once('close', (code) => traceDocker(args, startedAt, { exitCode: code, stderr }, bin))
   let stderr = ''
   child.stderr.on('data', (d) => {
