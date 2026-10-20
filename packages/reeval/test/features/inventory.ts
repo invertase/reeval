@@ -415,8 +415,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'skill.git',
     area: 'Environments',
-    name: '`skill.git`: ref, `path`, `only` and the recorded commit',
-    fixtures: ['skills/git-ref'],
+    name: '`skill.git`: ref, `path` (else `skills/` when the root has no SKILL.md), `only` and the recorded commit',
+    fixtures: ['skills/git-ref', 'skills/git-skills-dir'],
     tests: [unit('git refs and repo shorthands'), options('skills come from a git URL at a ref')],
   },
   {

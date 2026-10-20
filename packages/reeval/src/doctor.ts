@@ -2,6 +2,7 @@
 // every key it checks and never prints a key's value.
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import type { DockerState, Engine } from '@reeval/sandbox-docker'
 import type { Flags } from './cli-spec.ts'
@@ -12,6 +13,7 @@ import {
   configPathFor,
   defaultConcurrency,
   loadConfig,
+  selectProfile,
   UsageError,
 } from './config.ts'
 import { unenforceable } from './egress.ts'
@@ -20,12 +22,13 @@ import { environmentSandbox } from './environment.ts'
 import { credentialOf } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
-import { fromCwd } from './ids.ts'
+import { fromCwd, newRunId } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import { judgeCredentials } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
 import { redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
+import type { ImageTarget, ImageUse } from './sandbox/images.ts'
 import type { EgressPolicy, HarnessDescriptor, ResolvedConfig, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip'
@@ -51,8 +54,10 @@ export type DoctorDeps = {
   dockerCapacity: (engine?: Engine) => Promise<{ cpus: number; memoryBytes: number } | null>
   /** Why Podman can't confine a sandbox (too old, cgroup controllers missing), or null. */
   podmanConfinement: () => Promise<{ problem: string; fix: string } | null>
-  /** Whether the image is in the local Docker (or Podman). */
+  /** Whether the image is in the local Docker (or Podman); throws when the engine can't say. */
   imageExists: (ref: string, engine?: Engine) => Promise<boolean>
+  /** The harnesses and sandboxes the evals plan, as `reeval image build` resolves them. */
+  plannedUses: (config: ResolvedConfig) => Promise<ImageUse[]>
   /** `repository:tag` of every local image in a repository. */
   imageTags: (repository: string, engine?: Engine) => Promise<string[]>
   /** Which of `paths` git ignores in `root`, or null outside a git repository. */
@@ -84,6 +89,20 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     podmanConfinement: async () =>
       (await import('./sandbox/providers.ts')).podmanConfinementProblem(),
     imageExists: async (ref, engine) => !!(await (await sandbox()).imageInfo(ref, engine)),
+    plannedUses: async (config) => {
+      const { plannedImageUses } = await import('./sandbox/images.ts')
+      const { stagingDir } = await import('./results.ts')
+      const profile = selectProfile(config, undefined, env)
+      const runId = newRunId(new Date(), null, 'doctor')
+      return plannedImageUses({
+        runId,
+        stagingDir: stagingDir(config.root, runId),
+        config,
+        tags: profile?.tags ?? [],
+        concurrency: config.concurrency ?? availableParallelism(),
+        profile,
+      })
+    },
     imageTags: async (repository, engine) => (await sandbox()).imageTags(repository, engine),
     gitIgnored: async (root, paths) => {
       if ((await run('git', ['rev-parse', '--git-dir'], root)).code !== 0) return null
@@ -169,10 +188,27 @@ export function configuredUses(config: ResolvedConfig) {
   return uses
 }
 
+/** What a run would use: the evals' planned attempts, or why they didn't load. */
+type Planned = { uses: ImageUse[] } | { error: string }
+
+const planUses = (config: ResolvedConfig, deps: DoctorDeps): Promise<Planned> =>
+  deps.plannedUses(config).then(
+    (uses) => ({ uses }),
+    (error: Error) => ({ error: redactSecrets(error.message.split('\n')[0] ?? '') }),
+  )
+
+/** The planned uses, or the config's own harnesses on its sandbox when the evals didn't load. */
+const usesOf = (config: ResolvedConfig, planned: Planned): ImageUse[] =>
+  'uses' in planned
+    ? planned.uses
+    : configuredUses(config)
+        .filter((u) => !u.profile)
+        .map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox }))
+
 export function describeConfig(config: ResolvedConfig): string {
   const profiles = Object.keys(config.profiles)
   return [
-    `harness ${config.harness.map(harnessId).join(', ')}`,
+    `harness ${config.harness.map(harnessId).join(', ')}${config.optionKeys?.includes('harness') ? '' : " (reeval's default)"}`,
     `sandbox ${sandboxId(environmentSandbox(config.environment, config.sandbox))}`,
     profiles.length ? `profiles ${profiles.join(', ')}` : 'no profiles',
   ].join(', ')
@@ -320,27 +356,43 @@ async function checkDockerEngine(
   }
 }
 
-/** reeval's sandbox image for each Docker harness in the config: present, missing or left from an older reeval. */
+/**
+ * reeval's sandbox image for each Docker harness the evals plan, as `reeval image build` resolves
+ * them: present, missing, unanswered by Docker, or left from an older reeval.
+ */
 export async function checkImages(
   config: ResolvedConfig,
   deps: DoctorDeps,
-): Promise<{ checks: Check[]; missing: string[] }> {
+  planned?: Planned,
+): Promise<{ checks: Check[]; missing: string[]; targets: ImageTarget[] }> {
   const { imageFor } = await import('@reeval/sandbox-docker')
   const { imageTargets, reevalImages } = await import('./sandbox/images.ts')
-  const targets = imageTargets(
-    configuredUses(config).map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
-  )
   const checks: Check[] = []
+  const targets = imageTargets(usesOf(config, planned ?? (await planUses(config, deps))))
   const missing: string[] = []
+  const exists = async (ref: string, engine: Engine, what: string) => {
+    try {
+      return await deps.imageExists(ref, engine)
+    } catch (error) {
+      checks.push({
+        id: 'image',
+        status: 'fail',
+        summary: `${ref} (${what}) couldn't be checked: ${(error as Error).message}`,
+        fix: `check that ${engine === 'podman' ? 'Podman' : 'Docker'} answers (${engine} info), then run reeval doctor again`,
+      })
+      return null
+    }
+  }
   for (const engine of ['docker', 'podman'] as const) {
     const own = targets.filter((t) => (t.sandbox.engine ?? 'docker') === engine)
     // Podman keeps its own images: say which store a podman() sandbox's image is missing from.
     const on = engine === 'podman' ? ', in Podman' : ''
     for (const harness of reevalImages(own)) {
       const ref = imageFor(harness)
-      if (await deps.imageExists(ref, engine)) {
+      const found = await exists(ref, engine, `${harness}${on}`)
+      if (found) {
         checks.push({ id: 'image', status: 'ok', summary: `${ref} (${harness}${on})` })
-      } else {
+      } else if (found === false) {
         missing.push(ref)
         checks.push({
           id: 'image',
@@ -368,7 +420,7 @@ export async function checkImages(
   for (const t of targets.filter((t) => t.sandbox.image)) {
     const ref = t.sandbox.image as string
     const engine = t.sandbox.engine ?? 'docker'
-    if (!(await deps.imageExists(ref, engine))) {
+    if ((await exists(ref, engine, `${engine}({ image })`)) === false) {
       checks.push({
         id: 'image',
         status: 'fail',
@@ -379,7 +431,7 @@ export async function checkImages(
   }
   if (!checks.length)
     checks.push({ id: 'image', status: 'skip', summary: 'no reeval sandbox images to check' })
-  return { checks, missing }
+  return { checks, missing, targets }
 }
 
 // ---- Keys ----------------------------------------------------------------------------------
@@ -477,17 +529,29 @@ async function keyCheck(
   }
 }
 
-/** Each agent harness's key, from the environment and `.env.local` / `.env`. */
+/**
+ * Each agent harness's key, from the environment and `.env.local` / `.env`: required for the
+ * harnesses the evals plan, a warning for a key only another profile's harness needs.
+ */
 export async function checkKeys(
   config: ResolvedConfig,
   deps: DoctorDeps,
   online: boolean,
   envFile: string,
+  planned?: Planned,
 ): Promise<Check[]> {
   const byKey = new Map<string, { who: string[]; required: boolean }>()
-  for (const use of configuredUses(config)) {
+  const uses = [
+    ...usesOf(config, planned ?? (await planUses(config, deps))).map((u) => ({
+      harness: u.harness,
+      profile: undefined,
+    })),
+    ...configuredUses(config).filter((u) => u.profile),
+  ]
+  const needed = new Set(uses.flatMap((u) => (u.profile ? [] : [credentialOf(u.harness)])))
+  for (const use of uses) {
     const key = credentialOf(use.harness)
-    if (!key) continue
+    if (!key || (use.profile && needed.has(key))) continue
     const entry = byKey.get(key) ?? { who: [], required: false }
     const who = use.profile
       ? `${harnessId(use.harness)} in profile ${use.profile}`
@@ -658,11 +722,17 @@ export type DoctorReport = {
 export async function doctor(
   flags: Flags,
   deps: DoctorDeps,
-): Promise<{ report: DoctorReport; config?: ResolvedConfig; missingImages: string[] }> {
+): Promise<{
+  report: DoctorReport
+  config?: ResolvedConfig
+  missingImages: string[]
+  imageTargets: ImageTarget[]
+}> {
   const checks: Check[] = [checkRuntime(deps.runtime, deps.nodeVersion)]
   let configPath: string | undefined
   let config: ResolvedConfig | undefined
   let missingImages: string[] = []
+  let imageTargets: ImageTarget[] = []
   let ambiguous: string | undefined
   try {
     configPath = configPathFor(flags.config)
@@ -699,12 +769,22 @@ export async function doctor(
   if (config) {
     loadEnvFiles(configPath)
     const envFile = fromCwd(join(config.root, '.env.local')) || '.env.local'
+    const planned = await planUses(config, deps)
+    if ('error' in planned) {
+      checks.push({
+        id: 'evals',
+        status: 'warn',
+        summary: `didn't load, so the images and keys checked are the config's: ${planned.error}`,
+        fix: 'reeval run --dry-run shows why',
+      })
+    }
     const docker = await checkDocker(config, deps)
     checks.push(...docker.checks)
     if (docker.running) {
-      const images = await checkImages(config, deps)
+      const images = await checkImages(config, deps, planned)
       checks.push(...images.checks)
       missingImages = images.missing
+      imageTargets = images.targets
     } else if (docker.checks[0]?.status === 'fail') {
       const why = docker.windowsContainers
         ? 'Docker runs Windows containers'
@@ -712,7 +792,7 @@ export async function doctor(
       checks.push({ id: 'image', status: 'skip', summary: why })
     }
     const online = !!flags.online
-    checks.push(...(await checkKeys(config, deps, online, envFile)))
+    checks.push(...(await checkKeys(config, deps, online, envFile, planned)))
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...checkEgress(config))
     checks.push(await checkGitignore(config.root, deps))
@@ -731,6 +811,7 @@ export async function doctor(
     },
     config,
     missingImages,
+    imageTargets,
   }
 }
 
@@ -771,7 +852,7 @@ export async function doctorCommand(
   io: DoctorIO,
   deps = defaultDeps(),
 ): Promise<number> {
-  const { report, config, missingImages } = await doctor(flags, deps)
+  const { report, config, missingImages, imageTargets } = await doctor(flags, deps)
   if (flags.json) {
     io.out(JSON.stringify(report, null, 2))
     return report.healthy ? 0 : 1
@@ -782,11 +863,8 @@ export async function doctorCommand(
       `Build ${missingImages.join(', ')} now with reeval image build? [y/N] `,
     )
     if (build) {
-      const { buildImages, imageTargets } = await import('./sandbox/images.ts')
-      const targets = imageTargets(
-        configuredUses(config).map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
-      )
-      const built = await buildImages(targets, config.root, { log: (line) => io.out(line) })
+      const { buildImages } = await import('./sandbox/images.ts')
+      const built = await buildImages(imageTargets, config.root, { log: (line) => io.out(line) })
       for (const b of built) if (!b.ok) io.out(`✗ ${b.id}: ${b.failure.message.split('\n')[0]}`)
       io.out(
         built.every((b) => b.ok)

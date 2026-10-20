@@ -58,7 +58,7 @@ On Windows, `sh` is [Git for Windows](https://git-scm.com/download/win)' `sh.exe
 | Real harnesses | Refused: `The Cursor harness needs the Docker sandbox: set sandbox: docker() …` |
 | Egress policy | Not enforced. A plan with `'deny-all'` or an allowlist stops before it runs. |
 | Egress record | Not recorded: the record's `egress.recorded` is `false` |
-| Credential brokering | No gateway, so a brokered secret's placeholder is never swapped for its value |
+| Credential brokering | No gateway, so a secret with `hosts` keeps its placeholder, never swapped for its value. The plan's notes say so: `not brokered (fake sandbox, placeholder only): GEMINI_API_KEY → generativelanguage.googleapis.com` |
 | Images | None: `docker()` options don't apply |
 
 An eval that asks for an egress policy the fake sandbox can't enforce is an error:

@@ -897,14 +897,26 @@ export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): Unbrokered
 /** An optional secret whose host variable isn't set never reaches the sandbox, so it gets no warning. */
 const reachesSandbox = (s: UnbrokeredSecret) => !s.optional || Boolean(process.env[s.from])
 
-/** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret an attempt brokers. */
-export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [
+/** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret with `hosts`. */
+const withHosts = (env: EnvVars, attempt: PlannedAttempt): string[] => [
   ...new Set(
     plannedSecrets(env, attempt.environment.layers).flatMap((s) =>
       s.hosts ? [`${s.label} → ${s.hosts.join(', ')}`] : [],
     ),
   ),
 ]
+
+/** The secrets an attempt brokers: only Docker's egress gateway swaps a placeholder for its value. */
+export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
+  attempt.sandbox.kind === 'docker' ? withHosts(env, attempt) : []
+
+/** The plan's note for secrets with `hosts` on the fake sandbox, which only ever has their placeholder. */
+function unbrokeredOnFake(env: EnvVars, attempts: PlannedAttempt[]): string[] {
+  const names = [
+    ...new Set(attempts.flatMap((a) => (a.sandbox.kind === 'fake' ? withHosts(env, a) : []))),
+  ]
+  return names.length ? [`not brokered (fake sandbox, placeholder only): ${names.join('; ')}`] : []
+}
 
 /** The host variables an attempt's secrets read, brokered or not. */
 export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [
@@ -985,7 +997,11 @@ export function evalPlan(
 ): EvalPlan {
   const { resolved, skip } = r
   const capture = captureNote(resolved.capture)
-  const notes = capture ? [...r.notes, capture] : r.notes
+  const notes = [
+    ...r.notes,
+    ...(capture ? [capture] : []),
+    ...unbrokeredOnFake(resolved.env, attempts),
+  ]
   return {
     harnesses: skip ? 0 : resolved.harness.length,
     variants: resolved.compare

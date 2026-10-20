@@ -356,9 +356,10 @@ describe('unbrokered secrets', () => {
         }),
       },
     }))
-    assert.deepEqual(brokeredIn({}, { environment: applied(https) } as PlannedAttempt), [
-      'mcp.remote.headers.auth → mcp.example.com',
-    ])
+    const on = (kind: 'fake' | 'docker') =>
+      ({ sandbox: { kind }, environment: applied(https) }) as PlannedAttempt
+    assert.deepEqual(brokeredIn({}, on('docker')), ['mcp.remote.headers.auth → mcp.example.com'])
+    assert.deepEqual(brokeredIn({}, on('fake')), [])
     assert.deepEqual(unbrokeredSecrets({}, env.layers), [
       { label: 'mcp.local.headers.auth', from: 'ACME_USER' },
       { label: 'mcp.local.headers.auth', from: 'ACME_PASS' },

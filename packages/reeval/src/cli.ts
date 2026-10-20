@@ -45,7 +45,7 @@ import {
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { clip } from './text.ts'
-import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
+import type { RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
@@ -241,28 +241,18 @@ async function imageBuildCommand(
   configPath: string | undefined,
   filters: string[],
 ): Promise<number> {
-  const { buildImages, imagePlanLines, imageTargets } = await import('./sandbox/images.ts')
+  const { buildImages, imagePlanLines, imageTargets, plannedImageUses } = await import(
+    './sandbox/images.ts'
+  )
   const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
   const ctx = await startRun(setup)
   const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
   const root = config.root
-  const { runEngine } = await import('./engine/node.ts')
-  let planned: PlannedItem[] = []
-  await runEngine({
-    run: JSON.parse(
-      JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
-    ),
+  const uses = await plannedImageUses(
+    { runId, stagingDir, config, runs, tags, concurrency, profile },
     filters,
-    onPlan: async (collected) => {
-      if (collected.unmatched.length) throw unmatchedFilter(config, collected.unmatched)
-      planned = collected.planned.filter((p) => !p.attempt.plan.skip)
-      return false
-    },
-  })
-  const uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> =
-    planned.length
-      ? planned.map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox }))
-      : config.harness.map((harness) => ({ id: '', harness, sandbox: config.sandbox }))
+    (parts) => unmatchedFilter(config, parts),
+  )
   const targets = imageTargets(uses)
   if (targets.length === 0) {
     console.log('No eval runs in a Docker sandbox, so there are no images to build.')

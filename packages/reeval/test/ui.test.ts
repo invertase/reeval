@@ -575,6 +575,51 @@ describe('collapsed judges, per-key rates and tokens', () => {
     assert.doesNotMatch(out, /0\.50/)
   })
 
+  test('an eval its gate passes shows ! with an infra error or no counted attempt, never ✓', () => {
+    const base = entry(greetResult, 1)
+    const [first] = base.attempts
+    assert.ok(first)
+    const ungated = (outcomes: Array<'pass' | 'fail' | 'infra_error'>): EvalEntry => {
+      const count = (o: string) => outcomes.filter((x) => x === o).length
+      const cell = {
+        key: CELL,
+        harness: 'fake',
+        environment: 'default',
+        sandbox: 'fake',
+        role: 'control',
+        gate: 'none',
+        overrides: [],
+        runs: outcomes.length,
+        pass: count('pass'),
+        fail: count('fail'),
+        infraError: count('infra_error'),
+        skipped: 0,
+        passRate: null,
+        outcome: 'pass',
+      } as unknown as EvalEntry['cells'][number]
+      return {
+        ...base,
+        outcome: 'pass',
+        cells: [cell],
+        attempts: outcomes.map((outcome, i) => ({
+          ...first,
+          id: `${CELL}#${i + 1}`,
+          n: i + 1,
+          outcome,
+        })),
+      }
+    }
+    const markOf = (e: EvalEntry) =>
+      summaryOf([e])
+        .split('\n')
+        .find((l) => l.includes(` ${e.name} `))
+        ?.trim()
+        .slice(0, 1)
+    assert.equal(markOf(ungated(['infra_error', 'infra_error', 'infra_error'])), '!', '0/0')
+    assert.equal(markOf(ungated(['fail', 'infra_error'])), '!', 'a miss and an infra error')
+    assert.equal(markOf(ungated(['pass', 'pass'])), '✓')
+  })
+
   test('null usage is omitted, never printed as zero', () => {
     const e = withAttempt(entry(greetResult, 1, 0.92), { usage: null })
     const out = summaryOf([e])
