@@ -3,7 +3,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import type { DockerState, Engine } from '@reeval/sandbox-docker'
 import type { Flags } from './cli-spec.ts'
 import {
@@ -17,14 +17,15 @@ import {
   UsageError,
 } from './config.ts'
 import { unenforceable } from './egress.ts'
+import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
 import { environmentSandbox } from './environment.ts'
 import { credentialOf } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
-import { fromCwd, newRunId } from './ids.ts'
+import { fromCwd, newRunId, relativeFile } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
-import { judgeCredentials } from './judge/index.ts'
+import { judgeCredentials, RECOMMENDED_JUDGE_MODEL } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
 import { redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
@@ -36,7 +37,7 @@ export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip'
 type Runtime = NonNullable<Stack['runtime']>
 
 export type Check = {
-  /** The area: runtime, config, docker, image, key, judge, egress, gitignore or env-files. */
+  /** The area: runtime, config, docker, image, key, judge, analysis, egress, gitignore or env-files. */
   id: string
   status: CheckStatus
   summary: string
@@ -585,7 +586,17 @@ export async function checkJudge(
     }),
   ]
   if (!models.length) {
-    return [{ id: 'judge', status: 'skip', summary: 'no judge model (c.judge needs one)' }]
+    const callers = await judgeCallers(config)
+    if (!callers.length) return []
+    const named = callers.length > 2 ? `${callers.slice(0, 2).join(', ')}, …` : callers.join(', ')
+    return [
+      {
+        id: 'judge',
+        status: 'warn',
+        summary: `no judge model, and ${named} ${callers.length === 1 ? 'calls' : 'call'} c.judge`,
+        fix: `set judge: { model: '${RECOMMENDED_JUDGE_MODEL}' } in the config, or fakeJudge()`,
+      },
+    ]
   }
   return Promise.all(
     models.map(({ model, profile }) => {
@@ -597,6 +608,50 @@ export async function checkJudge(
       return keyCheck('judge', keys, who, !profile, deps, online, envFile)
     }),
   )
+}
+
+const JUDGE_CALL = /\.judge\s*\(/
+const RELATIVE_IMPORT = /\bfrom\s+['"](\.{1,2}\/[^'"]+)['"]/g
+
+/**
+ * The eval files that call `.judge(`, in their own source or a module they import by a relative
+ * path, relative to the root. Read as text, not run: a call further away isn't seen.
+ */
+export async function judgeCallers(config: ResolvedConfig): Promise<string[]> {
+  const root = config.root
+  const files = await findEvalFiles(root, config.include, [
+    ...DEFAULT_EXCLUDE,
+    '**/.reeval/**',
+    `${relativeFile(root, config.history.dir)}/**`,
+  ])
+  const text = (path: string) => (existsSync(path) ? readFileSync(path, 'utf8') : '')
+  return files
+    .filter((file) => {
+      const source = text(file)
+      if (JUDGE_CALL.test(source)) return true
+      return [...source.matchAll(RELATIVE_IMPORT)].some(([, spec]) =>
+        JUDGE_CALL.test(text(resolve(dirname(file), spec as string))),
+      )
+    })
+    .map((file) => relativeFile(root, file))
+}
+
+/** `analysis.model`'s key: a problem when `analysis.agent` makes every run need it. */
+export async function checkAnalysis(
+  config: ResolvedConfig,
+  deps: DoctorDeps,
+  online: boolean,
+  envFile: string,
+): Promise<Check[]> {
+  const model = config.analysis.model
+  if (model === undefined) return []
+  if (typeof model !== 'string') {
+    return [{ id: 'analysis', status: 'ok', summary: 'fakeAnalysis() needs no key' }]
+  }
+  const keys = judgeCredentials(model)
+  const who = `${model} (analysis.model)`
+  if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: `${who} needs no key` }]
+  return [await keyCheck('analysis', keys, who, !!config.analysis.agent, deps, online, envFile)]
 }
 
 // ---- Egress and git ------------------------------------------------------------------------
@@ -794,6 +849,7 @@ export async function doctor(
     const online = !!flags.online
     checks.push(...(await checkKeys(config, deps, online, envFile, planned)))
     checks.push(...(await checkJudge(config, deps, online, envFile)))
+    checks.push(...(await checkAnalysis(config, deps, online, envFile)))
     checks.push(...checkEgress(config))
     checks.push(await checkGitignore(config.root, deps))
     const envFiles = await checkEnvFiles(config.root, deps)

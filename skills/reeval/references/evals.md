@@ -68,9 +68,54 @@
 
 ## Trustworthy evals
 
-Before a real run, run it on two fake configs: an oracle
-`fakeHarness` that does the task right (must pass) and a canary that cheats or gets it wrong
-(must fail); a canary that passes means a check isn't checking. Keep grading out of the
+Before a real run, prove each check can pass and fail with the fake harness in the eval's real
+sandbox: an oracle `fakeHarness` that does the task right (must pass) and a canary that cheats
+or gets it wrong (must fail). A canary that passes means a check isn't checking. Give each check
+you rely on a canary that only it catches.
+
+```ts
+// reeval.config.ts: the real harness, plus two profiles that swap only the harness and judge
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+  profiles: {
+    oracle: {
+      defaults: {
+        harness: fakeHarness({ files: { 'greet.js': 'export const greet = …' } }),
+        judge: { model: fakeJudge({ score: 0.95 }) },
+      },
+    },
+    canary: {
+      defaults: {
+        harness: fakeHarness({ files: { 'greet.test.js': "test('greets', () => {})\n" } }),
+        judge: { model: fakeJudge({ score: 0.1 }) },
+      },
+    },
+  },
+})
+```
+
+```bash
+npx reeval image build --profile oracle   # once: the eval's images
+npx reeval run --profile oracle           # every check passes, exit 0
+npx reeval run --profile canary           # the checks you meant fail, exit 1
+```
+
+- Set `defaults.harness`, never `defaults.sandbox`: the environment's `docker()` (image,
+  `install`, egress, brokered secrets) stays, so the checks run where they will for real. A
+  profile's `sandbox` only fills in for an environment that omits one, and the fake harness
+  without `layout` uses Cursor's image; `layout: 'claude-code'` (or another agent id) uses that
+  agent's image and reads rules and skills where it does.
+- `script` steps (`{ exec }`, `{ write }`, `{ mcp }`) run inside the container as the agent, so an
+  oracle can run the real fix (`{ exec: 'node scripts/solve.mjs' }`) or call a brokered API.
+- `fakeJudge` checks the wiring (a low score fails the check); keep the real `judge.model` on the
+  oracle, with its key, to check that a question passes good work.
+- `fakeSandbox()` isn't the oracle's sandbox: it runs on the host, brokers nothing and enforces no
+  egress. It's for trying reeval and testing configs without Docker.
+- An eval or group that sets its own `harness` keeps it (the plan notes `harness set by the
+  eval`), and an ungated cell (`compare: { gate: 'none' }`, a control) reads a failed check as an
+  expected miss that doesn't change the exit code: read the summary's counts there.
+
+Keep grading out of the
 agent's reach: place hidden tests after the turn with `c.writeFile`, so the agent never sees
 them, seed tests in `files` only when the agent should see them, and guard seeded files
 with `expect(await c.readFile(path)).toBe(original)`. `not.toHaveEdited(path)` is not a guard:

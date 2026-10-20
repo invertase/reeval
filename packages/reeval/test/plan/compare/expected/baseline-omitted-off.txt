@@ -6,5 +6,5 @@ evals/omitted.eval.ts › inherits › the group environment  a/base/docker     
 evals/omitted.eval.ts › its own environment               a/base/docker      control  ungated  ×1  compare off (profile off)
                                                           b/base/docker      control  ungated  ×1
 excluded: —
-image docker · 3 evals
+image docker · cursor · 3 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

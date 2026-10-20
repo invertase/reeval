@@ -257,7 +257,13 @@ export const inventory: InventoryFeature[] = [
     id: 'profiles',
     area: 'Config and selection',
     name: 'Profiles: `defaults`, `limit`, `pin`, selection and typos',
-    plan: ['profiles/local-none', 'profiles/pr-in-ci', 'profiles/nightly'],
+    plan: [
+      'profiles/local-none',
+      'profiles/pr-in-ci',
+      'profiles/nightly',
+      'oracle/oracle',
+      'oracle/canary',
+    ],
     tests: [
       unit('selectProfile: --profile, then REEVAL_PROFILE'),
       unit('cascade: profile defaults sit under evals'),

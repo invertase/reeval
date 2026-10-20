@@ -123,14 +123,14 @@ npx reeval image build --dry-run
 
 ```text
 images  4 sandbox images (nothing built: --dry-run)
-docker · 15 evals
+docker · cursor · 15 evals
   base  reeval-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
-docker+0ab0e263 + install · 1 eval
+docker+0ab0e263 · cursor + install · 1 eval
   base               reeval-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
   install 1 command  reeval-install:<base id + commands>  (build unless cached)
-python · 1 eval
+python · cursor · 1 eval
   from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
-docker:sqlite · 1 eval
+docker:sqlite · cursor · 1 eval
   dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-9630558fd3724574  (docker build (layer cache), tagged by content hash)
   harness                              reeval-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.0)
 ```
@@ -195,7 +195,7 @@ evaluate(
 
 ```text
 images  1 sandbox image (nothing built: --dry-run)
-flutter · 1 eval
+flutter · cursor · 1 eval
   from ghcr.io/cirruslabs/flutter:3.38.10  reeval-sandbox:cursor-0.1.0-ghcr-io-cirruslabs-flutter-3-38-10-ef09bba3  (rebuild: Node, git and the harness bootstrap on top)
 ```
 

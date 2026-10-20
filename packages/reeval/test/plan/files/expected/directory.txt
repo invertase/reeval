@@ -5,5 +5,5 @@ evals/files.eval.ts › without the default ignores  fake/everything/docker  con
 evals/files.eval.ts › a variant adds a directory   fake/whole/docker       control           ungated  ×1  files README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts
                                                    fake/composed/docker    variant composed  gated    ×1  files NOTES.md, README.md, lib/build/tool.ts, package.json, py/notes.py, src/gen/keep.ts, src/gen/out.ts, src/index.test.ts, src/index.ts, tools/notes.py
 excluded: —
-image docker · 4 evals
+image docker · cursor · 4 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

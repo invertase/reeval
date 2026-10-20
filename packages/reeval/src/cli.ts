@@ -5,7 +5,7 @@ import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
 import type { NoteRun } from './analysis/agent/index.ts'
 import { parseCli } from './cli-parse.ts'
-import { type Flags, helpText } from './cli-spec.ts'
+import { commandHelpText, type Flags, helpText } from './cli-spec.ts'
 import type { EvalQuestions, questionRunner } from './compare/questions.ts'
 import {
   configLabel,
@@ -91,6 +91,10 @@ async function run(argv: string[]): Promise<number> {
     return EXIT.ok
   }
   const [command, ...filters] = positionals
+  if (values.help && command) {
+    console.log(commandHelpText(version, positionals))
+    return EXIT.ok
+  }
   if (values.help || !command) {
     console.log(HELP)
     return values.help ? EXIT.ok : EXIT.usage

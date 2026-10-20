@@ -47,7 +47,7 @@ jobs:
   # Which jobs this run needs. Off PRs and the queue, and with the ci:full label, all of them
   # (`full`: also extended.yml and npm 10.9). Coverage is nightly, dispatch and release only.
   # Otherwise from the files changed against the base (the merge group's base in the queue).
-  # Docs-only changes (docs/, docs.json, root-level *.md, .agents/, issue templates) need only
+  # Docs-only changes (docs/, docs.json, root-level *.md, skills/, .agents/, issue templates) need only
   # `checks`, which always runs. Any other change needs `unit` unless it's only in
   # packages/studio-web. On the light tier, the rest follow their own paths, and a change to CI,
   # the lockfile or the workspace needs every job; on the full tier, every code change needs every
@@ -86,7 +86,7 @@ jobs:
             echo "Tier: $PR_TIER"
             while IFS= read -r f; do
               case $f in
-                docs/* | docs.json | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
+                docs/* | docs.json | skills/* | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
                 */*) ;;
                 *.md | LICENSE) continue ;;
               esac

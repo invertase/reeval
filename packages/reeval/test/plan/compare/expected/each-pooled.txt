@@ -22,5 +22,5 @@ evals/each.eval.ts › each on its own for grace       a/base/docker     control
 evals/each.eval.ts › one case is not a family: only  a/-/docker        control          gated    ×1
                                                      b/-/docker        control          gated    ×1
 excluded: —
-image docker · 6 evals
+image docker · cursor · 6 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

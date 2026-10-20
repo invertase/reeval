@@ -30,6 +30,8 @@ reeval image build [filter...]
 
 [//]: # (/generated:cli-help:image-build)
 
+Filters match as [`reeval run`'s](/reference/cli/run) do: a substring of an eval file's path, an eval's name or a cell. A cell names its harness, so `reeval image build claude-code` builds only the images Claude Code's cells need. A filter that matches nothing exits 2.
+
 It collects the evals with `--config`, `--profile` or `REEVAL_PROFILE`, and filters (not `--tag`), then prepares every image, three at a time, the way `reeval run` does before a run. A profile's `defaults.harness` and `defaults.sandbox` pick the images and its `tags` narrow the evals, as they would for the run; an unknown profile exits 2.
 
 1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.5`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
@@ -39,11 +41,11 @@ It collects the evals with `--config`, `--profile` or `REEVAL_PROFILE`, and filt
 `--force` rebuilds all of them and pulls each base again. It keeps going past a failure, then prints a line per image and exits 3 if any failed (2 if the only failures are a missing `docker({ image })`):
 
 ```text
-✓ docker: reeval-sandbox:cursor-0.1.0 e04d443bc8e2
-✗ docker:bad.Dockerfile (1 eval): Building evals/bad.Dockerfile failed: a RUN step exited 42
+✓ docker · cursor: reeval-sandbox:cursor-0.1.0 e04d443bc8e2
+✗ docker:bad.Dockerfile · cursor (1 eval): Building evals/bad.Dockerfile failed: a RUN step exited 42
     | broken
   (full log: .reeval/cache/images/reeval-dockerfile-bad-dockerfile-6d9d1a5c9d335eb6.log)
-✓ docker:debian:bookworm-slim: reeval-sandbox:cursor-0.1.0-debian-bookworm-slim-12f2bc40 41f80062675e
+✓ docker:debian:bookworm-slim · cursor: reeval-sandbox:cursor-0.1.0-debian-bookworm-slim-12f2bc40 41f80062675e
 …
 2 of 4 images failed to build
 ```
@@ -52,16 +54,18 @@ A real `--dry-run` in `examples/hello`, where `✓` is ready, `+` to build, `~` 
 
 ```text
 images  7 sandbox images (nothing built: --dry-run)
-docker · 23 evals
+docker · cursor · 23 evals
   + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
 …
-docker+0ab0e263 + install · 1 eval
+docker+0ab0e263 · cursor + install · 1 eval
   + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
-python · 1 eval
+python · cursor · 1 eval
   + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
 …
 ```
+
+Each block names its sandbox and the harness whose image it builds on. An `install` layer's tag hashes its base image's id, so it reads `reeval-install:<base id + commands>` until the base is built, and its real tag after.
 
 When Docker can't say whether an image is there (the daemon doesn't answer, or `docker` won't start), the step is `?` unchecked, with Docker's error, never "not built yet". `reeval run --dry-run`'s `images` line counts it the same way:
 
