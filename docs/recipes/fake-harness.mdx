@@ -82,39 +82,46 @@ npx reeval run --config reeval.fake.config.ts --log-order grouped --output-logs 
 ```
 
 ```text
-[runs#1 fake] ✓ evals/scripted.eval.ts › runs the tests after a follow-up  131ms
-[runs#1 fake]  +0:00 sandbox ready 18ms
+[runs#1 fake] ▶ evals/scripted.eval.ts › runs the tests after a follow-up
+[runs#1 fake]  +0:00 sandbox ready 21ms
 [runs#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 3 file edits
-[runs#1 fake]  +0:00 turn 2 done 76ms · 1 tool call, 3 file edits
+[runs#1 fake]  +0:00 turn 2 done 94ms · 1 tool call, 3 file edits
 …
-Summary
- evals/hello.eval.ts
-   greet module
-     ✓ creates a tested greet module              134ms  judge 0.95  1 turn
-     ✓ adds a default name in a follow-up turn    153ms  judge 0.95  2 turns
- evals/scripted.eval.ts
-   ✓ runs the tests after a follow-up             131ms  2 turns
+pass             greet module › creates a tested greet module
+pass             greet module › adds a default name in a follow-up turn
+pass             runs the tests after a follow-up
 
-   Evals  3 passed (3)
-Duration  944ms
+1s · results .reeval/runs/20261020T214611Z_…/summary.md
+3 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`c.exec`, `toHaveFile`, `c.judge`) run for real against what it wrote.
 
-When a coding agent runs reeval for you, agent output prints only the failures, and the expected misses of ungated cells as `MISS`. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose:
+When a coding agent runs reeval for you, agent output prints the plan, the result blocks and the tally, with no per-attempt lines. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose and the check that tells the arms apart shows its failure:
 
 ```bash
 REEVAL_UI=agent npx reeval run --config reeval.fake.config.ts
 ```
 
 ```text
-plan  10 evals · 11 cells · 11 attempts · ~3s serial (~633ms at concurrency 4)
-reeval run: 3 eval files
-MISS evals/skill.eval.ts › house greeting › greets in the house style [control] (152ms, assertion, not gated)
-  Error: expected command to succeed, exit code 1
-  record: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/evals-skill-eval-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
-10 passed, 1 missed, not gated (11 attempts, 10 evals)
-summary: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
+plan  run 20261020T211638Z_… · 16 evals · 23 cells · 23 attempts · ~2s serial (~426ms at concurrency 4)
+reeval run: 20261020T211638Z_… · 4 eval files
+…
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 1
+  with-house-greeting  1 of 1  can't tell yet
+  check                plain   with-house-greeting
+  house greeting       0 of 1  1 of 1
+    expected command to succeed, exit code 1
+  +2 more passed
+  question  Which greet.js reads more like our house style?
+    no pairs to judge: tries that failed their checks are left out
+
+2s · results .reeval/runs/20261020T211638Z_…/summary.md
+16 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 <Warning>
@@ -235,21 +242,26 @@ npx reeval run --profile canary  # must fail
 ```
 
 ```text
-Summary
- evals/hygiene.eval.ts
-   ✗ fixes greet, not its test     …  1 turn
-   ✗ summarises the orders         …  fail 0.10/0.80  1 turn
+[fixes#1 fake]  - Expected
+[fixes#1 fake]  + Received
+[fixes#1 fake]
+[fixes#1 fake]    import { test } from 'node:test'
+[fixes#1 fake]  - import assert from 'node:assert/strict'
+[fixes#1 fake]  - import { greet } from './greet.js'
+[fixes#1 fake]  - test('greets', () => assert.equal(greet('Ada'), 'Hello, Ada!'))
+[fixes#1 fake]  + test('greets', () => {})
 …
-   - Expected
-   + Received
+fail             fixes greet, not its test
+  toBe import { test } from 'node:test' import…  failed
+    expected 'import { test } from \'node:test\'\nt…' to be 'import { test } from \'node:test\'\ni…' // Object.is equality
 
-     import { test } from 'node:test'
-   - import assert from 'node:assert/strict'
-   - import { greet } from './greet.js'
-   - test('greets', () => assert.equal(greet('Ada'), 'Hello, Ada!'))
-   + test('greets', () => {})
-…
-   Evals  2 failed (2)
+fail             summarises the orders
+  toPass Does it say 3 orders totalling 50?  failed
+    judge score 0.10 is below 0.8 for "Does it say 3 orders totalling 50?" (fake)
+  +1 more passed
+
+3s · results .reeval/runs/20261020T214629Z_…/summary.md
+2 fail
 ```
 
 `--profile oracle` passes and exits 0; the canary exits 1. The rewritten test passes `node --test`, so only the `c.readFile` guard catches it.
@@ -263,7 +275,7 @@ A canary that writes `greet = () => 'Hello, Ada!'` passes the seeded test too, a
 | Rules and skills where your agent reads them | `fakeHarness({ layout: 'claude-code', … })`, which also uses that agent's image |
 
 <Warning>
-  Don't validate checks on `fakeSandbox()`. It runs commands on your host with your tools, brokers no secrets and enforces no egress, so a check can pass there and fail in the eval's `docker()`. An eval or group that sets its own `harness` keeps it under the profile, and an ungated cell (a `gate: 'none'` study, or a control) reports a failed check as an expected miss without changing the exit code: read the summary's counts there.
+  Don't validate checks on `fakeSandbox()`. It runs commands on your host with your tools, brokers no secrets and enforces no egress, so a check can pass there and fail in the eval's `docker()`. An eval or group that sets its own `harness` keeps it under the profile, and an ungated cell (a `gate: 'none'` study, or a control) can fail its checks without changing the exit code: read its arm's count there.
 </Warning>
 
 ## Simulate an infra failure
@@ -285,13 +297,17 @@ npx reeval run --config reeval.fail.config.ts
 ```
 
 ```text
-Infra errors (1)
- ! evals/scripted.eval.ts › runs the tests after a follow-up
-   infra error
-   the agent CLI crashed on start
-…
-   Evals  1 infra error (1)
-Duration  727ms
+[runs#1 fake] ▶ evals/scripted.eval.ts › runs the tests after a follow-up
+[runs#1 fake]  +0:00 sandbox starting
+[runs#1 fake]  +0:00 cleaning up
+[runs#1 fake]  infra error
+[runs#1 fake]  the agent CLI crashed on start
+
+infra error      runs the tests after a follow-up
+  infra error      the agent CLI crashed on start
+
+765ms · results .reeval/runs/20261020T214612Z_…/summary.md
+1 infra error
 ```
 
 The run exits 3, so you can check how your CI treats an infrastructure error before a real one happens.

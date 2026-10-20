@@ -96,37 +96,41 @@ evals/skill.eval.ts › house greeting › greets in the house style  1         
 This is a real Cursor run of the same eval in `examples/hello` (`--runs 2`, no `minLift`):
 
 ```text
-Summary
- evals/skill.eval.ts
-   house greeting
-     ✓ greets in the house style      2/4 · pass@1 100% gated  4 attempts
-         cursor:composer-2.5/plain/docker                control    0/2  pass@1   0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
-           effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 2
+  with-house-greeting  2 of 2  can't tell yet
+  check                plain   with-house-greeting
+  house greeting       0 of 2  2 of 2
+    expected command to succeed, exit code 1
+  +2 more passed
 …
-Attempts  2 passed · 2 missed, not gated (4 attempts, 1 evals)
-Duration  24s
-  Tokens  362k in (169k cached) · 3,525 out
+1m 31s · 5,383k in (2,593k cached) · 12k out · results .reeval/runs/20261020T213308Z_…/summary.md
+1 pass
 ```
 
-Without the skill, the control attempts wrote `Welcome home, Ada!` and `Welcome to the house, Ada!`. With it, both variant attempts wrote `Ahoy, Ada!`.
+Without the skill, the control attempts wrote greetings such as `Welcome home, Ada!`. With it, both variant attempts wrote `Ahoy, Ada!`.
 
 ## Read the lift
 
-The recipe as written, under the [fake harness](/recipes/fake-harness) (which writes the house greeting only when it has a skill):
+The recipe as written, under the [fake harness](/recipes/fake-harness) (which writes the house greeting only when it has a skill), with `-v`:
 
 ```text
-     ✓ greets in the house style      3/6 · pass@1 100% gated  6 attempts
-         fake/plain/fake                control    0/3  pass@1   0%   not gated
-         fake/with-house-greeting/fake  variant    3/3  pass@1 100%   lift +100 pts (95% +21…+100, 3/3 vs 0/3) (minLift 0)   gate passRate 0.6
-           effort: tools 0 vs 0 (×–), agent <0.1s vs <0.1s: too few attempts to test
+pass             house greeting › greets in the house style
+  arm                                               pass
+  plain                                             0 of 3
+  with-house-greeting                               3 of 3  can't tell yet
+    difference +100 points, 95% interval +21…+100
+  check                                             plain   with-house-greeting
+  toSucceed node -e "import('./greet.js').then((m…  0 of 3  3 of 3
+    expected command to succeed, exit code 1
 ```
 
-- `2/4` or `3/6` counts every attempt. `pass@1 100%` is the share of attempts that pass in the cells that gate, which here is only the variant.
-- `lift +100 pts` is the variant's pass@1 minus the control's.
-- `95% +21…+100` is the interval on that difference. Its lower bound is above `minLift`, so the cell passes.
-- The control's misses print as `not gated`, apart from failures, so they don't change the exit code.
-- The fake agent makes no tool calls, so its `effort` line compares zeros.
+- Each arm's count is its passing tries out of those that counted: `0 of 3` and `3 of 3`.
+- The word after the variant's count is its effect: `helped`, `made it worse` or `can't tell yet`. Below four tries a side it's always `can't tell yet`.
+- `-v` adds the difference in points and its 95% interval. The interval's lower bound is above `minLift` (0), so the eval passes.
+- The control has no gate, so its misses don't change the exit code.
+- The check table shows which check told the arms apart. An unlabelled check is named by its matcher and argument; label it with `expect`'s second argument.
 
 ## Read the effort
 
@@ -136,32 +140,42 @@ npx reeval query effort
 npx reeval analyze
 ```
 
-A skill can help without changing the pass rate: the agent gets there with less searching. The `effort:` line under each variant compares medians with the control's. In the real run above, the variant used 3 tool calls against 8, and 9 s of agent time against 18 s.
+A skill can help without changing the pass rate: the agent gets there with less searching. At four tries a side, the block adds an effort table of each arm's medians. A real Cursor run in `examples/hello`:
 
-`×0.38` is the variant's median divided by the control's. The verdict comes from a rank test on tool calls, and needs four attempts a side to reach significance:
+```text
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 4
+  with-house-greeting  4 of 4  helped
+  check                plain   with-house-greeting
+  house greeting       0 of 4  4 of 4
+    expected command to succeed, exit code 1
+  +2 more passed
+  effort               tools  time    tokens
+  plain                54     1m 39s  2,890k
+  with-house-greeting  3      6.6s    57k
+…
+2m 00s · 13,147k in (6,400k cached) · 28k out · results .reeval/runs/20261020T214734Z_…/summary.md
+1 pass
+```
 
-| Verdict | When |
-|---|---|
-| `fewer tool calls`, `more tool calls` | The test is significant, with its p |
-| `within noise` | It isn't |
-| `too few attempts to test` | The counts can't reach significance at all, as at two or three attempts a side |
-
-Tokens join that test when both sides reported usage. [Effort](/concepts/lift#effort-next-to-lift) has the details.
+The variant needed 3 tool calls against the control's 54. Behind the table is a rank test on tool calls, agent time and tokens (when both sides reported usage); `reeval query effort` has its p-values and verdicts (`fewer`, `more`, `noise`, `insufficient`). [Effort](/concepts/lift#effort-next-to-lift) has the details.
 
 `reeval query effort` lists the same numbers for every recorded run. [`reeval analyze`](/reference/cli/analyze) explains a run in plain words, lift and effort included, with each claim tied to a fact from the run.
 
 ## When the skill doesn't help
 
-The same eval, with an agent that already writes `Ahoy` without the skill:
+The same eval, with an agent that already writes `Ahoy` without the skill, with `-v`:
 
 ```text
-     ✗ greets in the house style      6/6 · pass@1 100% gated  6 attempts
-         fake/plain/fake                control    3/3  pass@1 100%
-         fake/with-house-greeting/fake  variant    3/3  pass@1 100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise (minLift 0) ✗   gate passRate 0.6
-           effort: tools 0 vs 0 (×–), agent <0.1s vs <0.1s: too few attempts to test
+fail             house greeting › greets in the house style
+  arm                  pass
+  plain                3 of 3
+  with-house-greeting  3 of 3  can't tell yet, not by minLift 0
+    difference +0 points, 95% interval −56…+56
 
-Lift below minLift (1)
- ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise: its lower bound is below minLift 0
+836ms · results .reeval/runs/20261020T214748Z_…/summary.md
+1 fail
 ```
 
 Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidence that the skill is no worse, and three attempts per side can't give it.
