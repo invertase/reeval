@@ -74,10 +74,8 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
           await eventually(`a container for ${label}`, async () => labelled(label) === '', 10_000)
         } catch {
           left.push(`${ms}ms`)
-          execFileSync('sh', [
-            '-c',
-            `docker rm -f $(docker ps -aq --filter label=ai.reeval.test=${label})`,
-          ])
+          const ids = labelled(label).split(/\s+/).filter(Boolean)
+          if (ids.length) execFileSync(CLI, ['rm', '-f', ...ids])
         }
       }),
     )
