@@ -9,6 +9,7 @@ import { describe, test } from 'node:test'
 import { loadConfig } from '../src/config.ts'
 import {
   type Check,
+  checkAnalysis,
   checkDocker,
   checkEgress,
   checkEnvFiles,
@@ -21,6 +22,7 @@ import {
   type DoctorDeps,
   defaultDeps,
   filledSecrets,
+  judgeCallers,
   probeKey,
 } from '../src/doctor.ts'
 import { runtimeInfo } from '../src/history/provenance.ts'
@@ -491,7 +493,22 @@ evaluate('a', async () => {})
       'judge-none',
       `{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }) }`,
     )
-    assert.deepEqual(statuses(await checkJudge(none, deps(), false, '.env.local')), ['skip'])
+    // No eval calls c.judge, so there's no line at all.
+    assert.deepEqual(await checkJudge(none, deps(), false, '.env.local'), [])
+    await mkdir(join(none.root, 'evals/support'), { recursive: true })
+    await writeFile(join(none.root, 'evals/plain.eval.ts'), "evaluate('a', async () => {})\n")
+    await writeFile(
+      join(none.root, 'evals/graded.eval.ts'),
+      "import { grade } from './support/grade.ts'\nevaluate('b', grade)\n",
+    )
+    await writeFile(
+      join(none.root, 'evals/support/grade.ts'),
+      "export const grade = async (c) => { await c.judge('ok?') }\n",
+    )
+    assert.deepEqual(await judgeCallers(none), ['evals/graded.eval.ts'])
+    const unset = await checkJudge(none, deps(), false, '.env.local')
+    assert.deepEqual(statuses(unset), ['warn'])
+    assert.equal(unset[0]?.summary, 'no judge model, and evals/graded.eval.ts calls c.judge')
     const fake = await configOf(
       'judge-fake',
       `{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }), judge: { model: fakeJudge({ score: 1 }) } }`,
@@ -512,6 +529,34 @@ evaluate('a', async () => {})
     )
     assert.equal(gateway[0]?.status, 'ok')
     noSecret(gateway)
+  })
+
+  test("analysis: analysis.model's key, required only with analysis.agent", async () => {
+    const off = await configOf('analysis-off', '{ harness: fakeHarness() }')
+    assert.deepEqual(await checkAnalysis(off, deps(), false, '.env.local'), [])
+    const model = await configOf(
+      'analysis-model',
+      "{ harness: fakeHarness(), analysis: { model: 'google/gemini-3.8-flash' } }",
+    )
+    const unset = await checkAnalysis(model, deps(), false, '.env.local')
+    assert.deepEqual(statuses(unset), ['warn'])
+    assert.match(
+      unset[0]?.summary ?? '',
+      /^GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY.* for google\/gemini-3\.8-flash \(analysis\.model\): not set$/,
+    )
+    const set = await checkAnalysis(
+      model,
+      deps({ env: { GOOGLE_GENERATIVE_AI_API_KEY: SECRET } }),
+      false,
+      '.env.local',
+    )
+    assert.deepEqual(statuses(set), ['ok'])
+    noSecret(set)
+    const agent = await configOf(
+      'analysis-agent',
+      "{ harness: fakeHarness(), analysis: { model: 'google/gemini-3.8-flash', agent: true } }",
+    )
+    assert.deepEqual(statuses(await checkAnalysis(agent, deps(), false, '.env.local')), ['fail'])
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {

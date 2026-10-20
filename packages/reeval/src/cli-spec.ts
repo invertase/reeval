@@ -123,9 +123,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 0,
     help: `
   reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
-                                images, each harness's and the judge's key, egress, .gitignore and
-                                keys in .env files git sees; exit 1 on a problem, each with its
-                                fix. Never prints a key
+                                images, the keys of each harness, the judge and analysis.model,
+                                egress, .gitignore and keys in .env files git sees; exit 1 on a
+                                problem, each with its fix. Never prints a key
     --online                    Also try each key with one tiny authenticated request
     --json                      The checks as JSON`,
   },
