@@ -48,6 +48,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -74,6 +76,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -100,6 +104,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -126,6 +132,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -152,6 +160,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -178,6 +188,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -204,12 +216,15 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       }

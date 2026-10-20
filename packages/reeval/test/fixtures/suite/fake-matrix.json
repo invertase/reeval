@@ -48,6 +48,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -74,12 +76,21 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › fails its check",
@@ -116,6 +127,14 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "assertion",
+                    "message": "expected command to succeed, exit code 1",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -142,12 +161,21 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › fails its judge",
@@ -184,6 +212,14 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "judge",
+                    "message": "judge score 0.80 is below 0.95 for \"Is greet.js perfect?\" (fake)",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -210,12 +246,21 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › is skipped for now",
@@ -252,6 +297,8 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               },
@@ -278,12 +325,15 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › greets in Welsh",
@@ -320,12 +370,15 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       },
@@ -367,6 +420,14 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "assertion",
+                    "message": "expected command to succeed, exit code 1",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -396,6 +457,8 @@
                   "high": 1
                 },
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -422,6 +485,14 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               },
@@ -448,12 +519,21 @@
                 "effect": "unclear",
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       }
@@ -529,12 +609,15 @@
                 "effect": null,
                 "interval": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0, 0, 0],
                 "fetches": [0, 0, 0]
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       }
