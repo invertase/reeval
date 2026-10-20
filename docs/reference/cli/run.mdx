@@ -3,7 +3,7 @@ title: reeval run
 description: Plan and run evals, with every flag, filter rule and output option.
 ---
 
-`reeval run` plans the evals that match `include` and your filters, prints the plan, runs every attempt and prints a summary.
+`reeval run` plans the evals that match `include` and your filters, prints the plan, runs every attempt and prints a result block per eval.
 
 ```bash
 npx reeval run hello --runs 2 --ui plain
@@ -148,7 +148,7 @@ npx reeval run --config reeval.fake.config.ts --json > results.json
 }
 ```
 
-`--json` prints the run's facts as one JSON document on stdout when the run ends; the progress and summary go to stderr. It's `suiteResult(record)` from `{{ pkg }}/view`, recomputed from the record, so `reeval show --json` still prints the record itself. The exit code is the same as without `--json`.
+`--json` prints the run's facts as one JSON document on stdout when the run ends; the progress and result blocks go to stderr. It's `suiteResult(record)` from `{{ pkg }}/view`, recomputed from the record, so `reeval show --json` still prints the record itself. The exit code is the same as without `--json`.
 
 | Field | What |
 |---|---|
@@ -207,7 +207,7 @@ Then it prepares every sandbox image the plan needs, three at a time, once each:
 
 | Flag | Values | Default |
 |---|---|---|
-| `--ui` | `live`, `plain`, `agent` | `agent` under a coding agent, `plain` in CI or when piped, else `live` (which prints plain for now) |
+| `--ui` | `live`, `plain`, `agent` | `agent` under a coding agent, `plain` in CI or when piped, else `live` (the logs under one redrawn progress line) |
 | `--log-order` | `stream`, `grouped` | `grouped` in CI, else `stream` |
 | `--log-prefix` | `task`, `none` | `task`, `none` inside GitHub Actions groups |
 | `--output-logs` | `full`, `errors-only`, `none` | `errors-only`: only failing attempts print their detail lines. `full` with `-v` or `-vv` |
@@ -215,24 +215,21 @@ Then it prepares every sandbox image the plan needs, three at a time, once each:
 
 Each has an environment variable: `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`. See [Output modes](/concepts/output).
 
-## The summary's eval line
+## The result blocks
 
-An eval with several attempts shows its passes over every counted attempt, then its pass@1 (passes over passes and fails), which counts only the gated cells:
+Every mode ends with a block per eval, in file-path order and then source order, then the tally and a hint. `summary.md` and `reeval show` print the same blocks. A block starts with the eval's verdict and name:
 
-| Eval | Line |
+| Verdict | The eval |
 |---|---|
-| Every cell gated | `3/4  pass@1  75%  4 attempts` |
-| Some cells not gated (controls under `compare.gate: 'variants'`) | `2/4 · pass@1 100% gated  4 attempts` |
+| `pass` | Passed its gate, with no infra error |
+| `fail` | Failed its gate, or a pooled family's `minLift` |
+| `infra error` | Couldn't run: a sandbox, workspace or setup step failed |
+| `skipped`, `todo` | `evaluate.skip` or `evaluate.todo` |
+| `not gated` | Passed with every cell ungated (a study), so it doesn't read `pass` beside `0 of 2` |
 
-The `gated` label says the rate leaves out the ungated cells, whose failures don't fail the eval. The studio's eval history labels the rate the same way.
+Under the name, a pass prints nothing more. A fail prints each failed check with its first assertion (`failed` on one try, `N of M` on several), `not run` for a check that never ran, an error no check explains (`error`, `judge`, `timeout`, `cancelled`, `turn error`), and `+N more passed`. A compare prints a row per arm with `N of M` and its effect, then those checks a column per arm, then an effort table from four counted tries a side; [Output modes](/concepts/output#the-layout-follows-what-the-eval-varies) has each layout.
 
-The eval's mark is `✓` only when it passed with at least one counted attempt and no infra error. An eval its gate lets through anyway (`gate: 'none'`, say) with an infra error, or with no counted attempt (`0/0`), is marked `!`, in the terminal and in `summary.md`.
-
-A single-attempt eval's line shows each judge as `pass 0.92/0.80` or `fail 0.78/0.80`. Three or more judges collapse to the lowest score plus a count (`fail 0.33/0.80 · 3 judges`). Token usage, when the harness reported it, follows the turns.
-
-An eval with several attempts also prints each judge key's passes over counted attempts on the cell row (`login 4/5 · checkout 0/5`). Questions that share a prefix show the distinctive tail (`…email sign-in 4/5 · …social sign-in 0/5`), so the rates stay matchable.
-
-A judge key shows lift on a variant only when both sides have at least two counted attempts. The cell's tokens are the sum of its counted attempts; a harness that reports none leaves the field blank, never `0`.
+The tally counts each eval, and each case of a family, once: `3 fail · 1 pass · 1 infra error · 2 skipped`, fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`; `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
 
 ## What it writes
 

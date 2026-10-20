@@ -180,8 +180,12 @@ Before any attempt, reeval fetches each `workspace: git(…)` repository on the 
 ✗ workspace https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts failed to prepare (set by environment react-ts; only its attempts fail)
   Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).
 …
-   ! adds a reset button     17ms  0 turns
-   ✓ writes a README          5ms  0 turns
+infra error      adds a reset button
+  infra error      Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit…
+
+pass             writes a README
+…
+1 pass · 1 infra error
 ```
 
 Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace as its `ref`.

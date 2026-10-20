@@ -68,17 +68,19 @@ description: Write and run your first eval in two minutes, with no API keys or D
     ```
 
     ```text
-    plan  profile fake (--profile) · 1 eval · 1 cell · 1 attempt · ~1s serial
-    reeval 0.0.1 · 1 eval file · harness fake · …
+    plan  run … · profile fake (--profile) · 1 eval · 1 cell · 1 attempt · ~1s serial
+    reeval 0.10.0 · run … · 1 eval file · harness fake · …
     [creates#1 fake] ▶ evals/greet.eval.ts › creates greet.js
-    [creates#1 fake] ✓ evals/greet.eval.ts › creates greet.js  56ms
+    …
+    [creates#1 fake]  +0:00 turn 1 done 1ms · 0 tool calls, 1 file edit
+    [creates#1 fake]  +0:00 $ node -e "import('./greet.js').then((m) =>…  exit 0 23ms
+    [creates#1 fake]  +0:00 cleaning up
 
-    Summary
-     evals/greet.eval.ts
-       ✓ creates greet.js     56ms  1 turn
+    pass             creates greet.js
 
-       Evals  1 passed (1)
-    Duration  721ms
+    758ms · results .reeval/runs/…/summary.md
+    1 pass
+    Set analysis.model in reeval.config.ts for answers to what each eval asks.
     ```
   </Step>
 </Steps>

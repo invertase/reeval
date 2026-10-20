@@ -21,12 +21,13 @@ group('house greeting', {
 Run under the fake agent, which writes the house greeting only when it has the skill:
 
 ```text
-Summary
- evals/skill.eval.ts
-   house greeting
-     ✓ greets in the house style     5/10 · pass@1 100% gated  10 attempts
-         fake/plain/fake                control    0/5  pass@1   0%   not gated
-         fake/with-house-greeting/fake  variant    5/5  pass@1 100%   lift +100 pts (95% +39…+100, 5/5 vs 0/5) (minLift 0)   gate passRate 0.8
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 5
+  with-house-greeting  5 of 5  helped
+  check                plain   with-house-greeting
+  house greeting       0 of 5  5 of 5
+    expected command to succeed, exit code 1
 …
 ```
 
@@ -36,7 +37,7 @@ Summary
 
 | `compare.gate` | Variant cells | Control cell |
 |---|---|---|
-| `'variants'` (default) | Gate | Report only: misses print under `Expected misses, not gated` |
+| `'variants'` (default) | Gate | Report only: its misses print, but never fail the eval |
 | `'all'` | Gate | Gate |
 | `'none'` | Report only | Report only |
 
@@ -66,11 +67,18 @@ flowchart LR
   L --> I["95% interval +39…+100"]
 ```
 
-When the interval spans 0, the summary adds `within noise`: at this many attempts, the variant and the control can't be told apart. The Wilson interval stays sensible at 0/n and n/n, which is where small evals usually land.
+The arm's effect word comes from the interval: `helped` when it's above 0, `made it worse` when it's below, `can't tell yet` when it spans 0, and blank when the two sides passed alike. Below four counted attempts a side it's always `can't tell yet`. `-v` prints the interval under the arm:
+
+```text
+  with-house-greeting  5 of 5  helped
+    difference +100 points, 95% interval +39…+100
+```
+
+The Wilson interval stays sensible at 0/n and n/n, which is where small evals usually land.
 
 Lift gates; the win rates of a [compare question](/guide/questions) only annotate, and never change a cell's outcome.
 
-Each judge key also has its own pass rate on the cell (`login 4/5 · checkout 0/5`). A key's lift prints only when both sides have at least two counted attempts, the floor at which an all-or-nothing split can exclude 0.
+Each judge key also has its own pass rate on the cell (`login 4/5 · checkout 0/5`) in the studio. A key's lift shows only when both sides have at least two counted attempts, the floor at which an all-or-nothing split can exclude 0.
 
 ## Why two runs is usually noise
 
@@ -87,16 +95,18 @@ The interval is wide when attempts are few. These are reeval's own intervals for
 | 10/10 | 5/10 | +50 | +12…+76 | no |
 | 20/20 | 10/20 | +50 | +24…+70 | no |
 
-At two runs per cell only an all-or-nothing difference clears noise. reeval's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
+At two runs per cell only an all-or-nothing difference clears noise, and reeval still says `can't tell yet` there: two tries a side is too few to call. The same eval at `--runs 2 -v`:
 
 ```text
-     ✓ fixes a broken config and explains it      5/6 · pass@1 100% gated  6 attempts
-         cursor:composer-2.5/broken-project/reeval-tarball  control    1/2  pass@1  50%   not gated
-         cursor:composer-2.5/reeval-weak/reeval-tarball         variant    2/2  pass@1 100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
-         cursor:composer-2.5/reeval-good/reeval-tarball         variant    2/2  pass@1 100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 2
+  with-house-greeting  2 of 2  can't tell yet
+    difference +100 points, 95% interval +7…+100
+…
 ```
 
-One control attempt failed, so both skills show +50 pts, and neither is distinguishable from +0. The good skill's real effect showed up elsewhere: a median of 10 tool calls against the control's 40. Lift only measures pass@1.
+Lift only measures pass@1. A skill can also show up as fewer tool calls or less time, which the [effort table](#effort-next-to-lift) reports.
 
 <Info>
   Use `reeval query lift` to see every variant cell's lift across runs, with `lo`, `hi` and `within_noise` columns.
@@ -107,10 +117,20 @@ One control attempt failed, so both skills show +50 pts, and neither is distingu
 An [`evaluate.each`](/recipes/eval-each) family with `compare` gets one lift per variant, paired by case: each case ran the control and the variant, so only the cases where they disagree (discordant) move it.
 
 ```text
-   ✓ greets %s in the house style  6 cases · paired
-       ✓ Ada  ✓ Grace  ✓ Linus  ✓ Margaret  ✓ Dennis  ✓ Barbara
-       fake/with-house-greeting/fake  pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031) (minLift 20)
+                 greets %s in the house style
+  pass  Ada
+    arm                  pass
+    plain                0 of 1
+    with-house-greeting  1 of 1
+…
+  pass  all cases
+    arm                  pass
+    plain                0 of 6
+    with-house-greeting  6 of 6  helped
+      with-house-greeting: 6 paired cases, 95% interval +45…+100
 ```
+
+The `all cases` row pools the cases into one effect; `-v` adds its paired interval. `reeval query lift` has the p-value.
 
 | Runs per cell | Interval | p | `insufficient` below |
 |---|---|---|---|
@@ -121,21 +141,24 @@ Six discordant cases are the fewest whose exact p can fall below 0.05 (2 · 0.5�
 
 ## Effort next to lift
 
-Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. From a real run of Cursor and Antigravity at `--runs 2`:
+Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So a measure-a-change block ends with an effort table: each arm's median tool calls, agent time and, when the harness reports them, tokens. It needs four counted attempts a side, and shows when the eval failed or an arm's effort differs from its baseline's by the rank test below. From a run of three arms at four tries each:
 
 ```text
-     ✓ greets in the house style                    4/8 · pass@1 100% gated  8 attempts
-         cursor:composer-2.5/plain/docker                                control    0/2  pass@1   0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
-           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
-         antigravity:gemini-3.8-flash-medium/plain/docker                control    0/2  pass@1   0%   not gated
-         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
-           effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
+fail             greets in the house style
+  arm              pass
+  plain            0 of 4
+  with-skill       4 of 4  helped
+  with-doc         0 of 4
+…
+  effort           tools  time
+  plain            1      0s
+  with-skill       1      0s
+  with-doc         1      0s
 ```
 
 The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure; agent time and tokens get their own verdicts in `reeval query effort`. Effort never fails a run.
 
-Tokens join the line when both sides reported usage. An attempt with no usage (Goose's, say) drops out of the token sample only, and when either side has none left the token metric is omitted, not `insufficient`.
+Tokens join the table when both sides reported usage. An attempt with no usage (Goose's, say) drops out of the token sample only, and when either side has none left the token metric is omitted, not `insufficient`.
 
 **Effort** always means this measure, an output read from the attempt. A harness factory's `effort` option, as in `codex({ effort: 'high' })`, is **reasoning effort**, an input to the model, which `reeval query` has as `reasoning_effort`.
 
@@ -159,11 +182,11 @@ So `reeval run` hints when a compare runs 2 or 3 times a cell: `hint: 1 compare 
 
 ### No overlap at small n
 
-```text
-effort: tools 26 vs 38 (×0.68, no overlap), agent 1m 03s vs 1m 38s (×0.64, no overlap), tokens 430k vs 1,094k (×0.39, no overlap): too few attempts to test (n = 3 vs 3)
-```
+At three or more attempts a side, a metric whose two ranges don't overlap is marked `separated` (`time_separated`, `tokens_separated`) in `reeval query effort`, even when its test is `insufficient`. It's a direction, not an effect: one ordering in ten separates by chance at 3 vs 3.
 
-At three or more attempts a side, a metric whose two ranges don't overlap says `no overlap` even when its test is `insufficient`. It's a direction, not an effect: one ordering in ten separates by chance at 3 vs 3. `reeval query effort` has it as `separated`, `time_separated` and `tokens_separated`.
+```bash
+reeval query "SELECT eval_key, tools_median, separated FROM effort WHERE role = 'variant'"
+```
 
 ## Effects across runs
 
@@ -192,10 +215,12 @@ evals/skill.eval.ts › house greeting › greets in the house…   environment 
 `minLift` (points from -1 to 1) fails a variant cell whose interval's **lower bound** is below it, so it asks for confidence, not a lucky point estimate. `minLift: 0` means "confidently no worse than the control". With `minLift: 0.5` at `runs: 2`, a perfect +100 still fails:
 
 ```text
-         fake/with-house-greeting/fake  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2) (minLift 50) ✗   gate passRate 0.8
+fail             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 2
+  with-house-greeting  2 of 2  can't tell yet, not by minLift 50
 …
-Lift below minLift (1)
- ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +100 pts (95% +7…+100, 2/2 vs 0/2): its lower bound is below minLift 50
+1 fail
 ```
 
 A variant below its `minLift` fails the run with exit 1: add runs until the interval narrows. On an `evaluate.each` family, `minLift` gates the pooled lift's lower bound, not each case's, so more cases narrow it too.
