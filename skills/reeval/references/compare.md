@@ -29,7 +29,8 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
   `sandbox` uses the cascaded `sandbox` option, else implicit Docker; `.extend()` keeps the
   parent env's sandbox when the child omits it. `compare: false` is not an eval or group option.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
-  the baseline. `compare: false` on `evaluate` or `group` is an error.
+  the baseline, which then gates like an eval without compare (as does `maxVariants: 0`), whatever
+  `compare.gate` says. `compare: false` on `evaluate` or `group` is an error.
 
 ## Gates and lift
 

@@ -78,7 +78,7 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. Any
 </Property>
 
 <Property name="compare" type="false | { maxVariants: number }" optional>
-  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants. A limit that leaves only the control, `false` or `{ maxVariants: 0 }`, also drops the compare's `question`s, and the plan notes `questions off (profile pr)`.
+  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants. A limit that leaves only the control, `false` or `{ maxVariants: 0 }`, also drops the compare's `question`s, and the plan notes `questions off (profile pr)`. That lone control gates on the eval's `gate`, as without `compare`, whatever `compare.gate` says.
 </Property>
 
 <Property name="harness" type="string[]" optional>

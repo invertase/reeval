@@ -47,6 +47,8 @@ npx reeval image build --profile nightly   # the images nightly's plan needs
 | `limit.compare` | Over every eval | `false` runs the control only; `{ maxVariants: n }` keeps the first n |
 | `limit.harness` | Over every eval | Keeps only these harness ids; an eval left with none is skipped |
 
+With `compare: false` (or `maxVariants: 0`), the lone control gates like an eval without `compare`, on the eval's `gate`, whatever `compare.gate` says.
+
 An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it, and `--runs` on the command line beats both.
 
 A profile can also set a default `judge`, when to `record`, and `tags` filters like `--tag`.
