@@ -5,8 +5,8 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "component": "reeval",
       "package-name": "reeval",
+      "include-component-in-tag": false,
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "extra-files": [
@@ -16,6 +16,7 @@
     "packages/reeval-python": {
       "release-type": "python",
       "component": "reeval-python",
+      "include-component-in-tag": true,
       "package-name": "reeval-python",
       "changelog-path": "packages/reeval-python/CHANGELOG.md",
       "bump-minor-pre-major": true

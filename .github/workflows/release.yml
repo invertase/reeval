@@ -1,5 +1,5 @@
 # Releases reeval (npm) and reeval-python (PyPI). release-please keeps release PRs open from
-# Conventional Commits on main; merging tags reeval-vX.Y.Z and reeval-python-vX.Y.Z separately.
+# Conventional Commits on main; merging tags vX.Y.Z (npm) and reeval-python-vX.Y.Z (PyPI) separately.
 # Then ci.yml runs on that commit; npm publishes the packed tarball with trusted publishing (OIDC,
 # environment `npm`). PyPI publishes from packages/reeval-python with OIDC, environment `pypi`.
 # Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
