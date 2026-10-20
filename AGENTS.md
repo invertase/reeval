@@ -267,9 +267,10 @@ with recorded runs, and `REEVAL_STUDIO_PROJECT=/tmp/reeval-demo pnpm --filter st
 app with hot reload on port 4985 against it. The browser test needs Chrome or Chromium and skips
 without one.
 
-**Result layouts.** `pnpm --filter reeval output:preview [run.json | corpus-name | all] [-v]` prints
-the result blocks `reeval run` ends with (`src/ui/layout.ts`) for a recorded run, a corpus entry's
-runs, or every corpus run and golden, straight from `src/` with no build. The goldens in
+**Result layouts.** `pnpm --filter reeval output:preview [run.json | corpus-name | golden | all] [-v]`
+prints the result blocks `reeval run` ends with (`src/ui/layout.ts`) for a recorded run, a corpus
+entry's runs, one golden (`results`, `measure-a-change`, …), or every corpus run and golden,
+straight from `src/` with no build. The goldens in
 `test/fixtures/output/` render the `with-layouts` corpus entry (recorded from
 `scripts/output/project`); `test/output.test.ts` holds them, and `REEVAL_UPDATE_SNAPSHOTS=1` rewrites
 them.

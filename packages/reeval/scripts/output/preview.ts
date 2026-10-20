@@ -1,6 +1,6 @@
-// `pnpm --filter reeval output:preview [run.json | corpus-name | all] [-v]`: prints the result
-// blocks `reeval run` ends with for a recorded run, a corpus entry's runs, or every corpus run and
-// golden, straight from src/ so a layout change shows without a build.
+// `pnpm --filter reeval output:preview [run.json | corpus-name | golden | all] [-v]`: prints the
+// result blocks `reeval run` ends with for a recorded run, a corpus entry's runs, one golden, or
+// every corpus run and golden, straight from src/ so a layout change shows without a build.
 import { readFileSync } from 'node:fs'
 import type { RunRecord } from '../../src/history/types.ts'
 import { render } from '../../src/ui/layout.ts'
@@ -26,9 +26,10 @@ if (target.endsWith('.json')) {
   print(target, render(suiteResult(fromFile(target)), null, opts))
 } else {
   const named = entries.filter((e) => target === 'all' || e.name === target)
-  if (!named.length && target !== 'all') {
+  const goldens = GOLDENS.filter((g) => target === 'all' || g.name === target)
+  if (!named.length && !goldens.length) {
     process.stderr.write(
-      `No corpus entry ${target}. Entries: ${entries.map((e) => e.name).join(', ')}\n`,
+      `No corpus entry or golden ${target}. Entries: ${entries.map((e) => e.name).join(', ')}. Goldens: ${GOLDENS.map((g) => g.name).join(', ')}\n`,
     )
     process.exit(2)
   }
@@ -37,10 +38,8 @@ if (target.endsWith('.json')) {
       print(`${entry.name} ${run.runId}`, render(suiteResult(fromFile(run.file)), null, opts))
     }
   }
-  if (target === 'all') {
-    for (const g of GOLDENS) {
-      const lines = render(goldenSuite(g), null, { color, verbose: verbose || !!g.verbose })
-      print(`golden ${g.name}`, lines)
-    }
+  for (const g of goldens) {
+    const lines = render(goldenSuite(g), null, { color, verbose: verbose || !!g.verbose })
+    print(`golden ${g.name}`, lines)
   }
 }

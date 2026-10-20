@@ -113,5 +113,5 @@ test('output:preview renders every corpus run and golden from src/', () => {
     { cwd: PACKAGE_DIR, encoding: 'utf8' },
   )
   assert.equal(bad.status, 2)
-  assert.match(bad.stderr, /^No corpus entry no-such-entry\. Entries: /)
+  assert.match(bad.stderr, /^No corpus entry or golden no-such-entry\. Entries: /)
 })
