@@ -40,9 +40,12 @@ whether it comes from a helper (`file()`, `skill.local()`, `skill.npm()`, `git()
 | Implicit Docker (reeval's image: Node 22, git, pnpm, the agent CLI) | Neither is set |
 
 A named env is a total override: no skills, files or sandbox inherit from the config
-environment. A fake config puts `sandbox: fakeSandbox()` on `defineConfig` so `plain` and skill
-variants run without Docker. Don't put `fakeSandbox()` on `plain` itself: real Cursor runs need
-Docker.
+environment. A fake profile or config puts `sandbox: fakeSandbox()` on `defaults` or
+`defineConfig` so `plain` and skill variants run without Docker; that's for trying configs, not
+for validating checks (an environment's own `docker()` still wins). Don't put `fakeSandbox()`
+on `plain` itself: real Cursor runs need Docker. An oracle or canary profile sets only
+`defaults.harness`, so each eval keeps its sandbox: see
+[evals.md](evals.md#trustworthy-evals).
 
 ## Harnesses, keys and effort
 

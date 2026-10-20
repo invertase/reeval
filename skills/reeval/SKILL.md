@@ -132,9 +132,11 @@ a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 's
 steps per turn), `layout` (an agent's id, such as `'claude-code'`), `failWith`, `delayMs`,
 `flakeRate`, `reasoning`, `tools` and `id`.
 
-Keep a fake config next to the real one and run it
-with `--config reeval.fake.config.ts`. Don't put `fakeSandbox()` on an environment that real
-harnesses use: real Cursor runs need Docker.
+`fakeSandbox()` is for trying reeval and testing configs without Docker (`reeval init`'s
+`fake` profile). It runs commands on your host with your tools, brokers no secrets and enforces
+no egress, so an eval passing there says nothing about its checks in the eval's real sandbox.
+Don't use it to validate an eval, and don't put it on an environment that real harnesses use:
+real Cursor runs need Docker.
 
 ## Evals
 
@@ -173,10 +175,15 @@ group('hello', () => {
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
   Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
-- Make the eval trustworthy. Before a real run, run it on two fake configs: an oracle
-  `fakeHarness` that does the task right (must pass) and a canary that cheats or gets it wrong
-  (must fail); a canary that passes means a check isn't checking. Keep grading out of the
-  agent's reach: place hidden tests after the turn with `c.writeFile`, and guard seeded files
+- Make the eval trustworthy. Before a real run, swap in the fake harness, and only the harness,
+  so the eval runs in its real sandbox (its `docker()` image, `install`, egress and brokered
+  secrets): an oracle `fakeHarness` that does the task right must pass, and a canary that cheats
+  or gets it wrong must fail. A canary that passes means a check isn't checking. Put them in the
+  one config as profiles that set `defaults.harness` (and `defaults.judge`), never
+  `defaults.sandbox`, then `reeval image build --profile oracle` and
+  `reeval run --profile oracle` / `--profile canary` (needs Docker, no keys); see
+  [references/evals.md](references/evals.md#trustworthy-evals). Not `fakeSandbox()`.
+  Keep grading out of the agent's reach: place hidden tests after the turn with `c.writeFile`, and guard seeded files
   with `expect(await c.readFile(path)).toBe(original)` or `expect(c).not.toHaveChanged(['test/**'])`.
   When the behaviour is the outcome, judge the program's output, not the diff:
   `c.judge(q, { on: (await c.exec('node app.js')).stdout })`.

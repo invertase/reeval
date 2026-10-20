@@ -165,11 +165,11 @@ Prefer checks: they're exact, free and never change their mind. Use the judge fo
 ## Make the eval trustworthy
 
 ```bash
-npx reeval run --config reeval.oracle.config.ts  # the oracle: must pass
-npx reeval run --config reeval.canary.config.ts  # the canary: must fail
+npx reeval run --profile oracle  # the oracle: must pass
+npx reeval run --profile canary  # the canary: must fail
 ```
 
-**Prove it can pass and fail** before you spend tokens: a fake agent that does the task right (an oracle) must pass, and one that cheats (a canary) must fail. See [Oracle and canary](/recipes/fake-harness#oracle-and-canary).
+**Prove it can pass and fail** before you spend tokens: a fake agent that does the task right (an oracle) must pass, and one that cheats (a canary) must fail. Each is a profile that swaps only the harness, so the eval keeps its real `docker()` sandbox; `fakeSandbox()` is for trying reeval without Docker, not for this. See [Oracle and canary](/recipes/fake-harness#oracle-and-canary).
 
 ```ts title="evals/hygiene.eval.ts"
 const greetTest = [/* a test that expects greet('Ada') to be 'Hello, Ada!' */]

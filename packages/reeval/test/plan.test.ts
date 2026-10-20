@@ -40,6 +40,8 @@ export const cases: PlanCase[] = [
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },
+  { dir: 'oracle', name: 'oracle', args: ['--profile', 'oracle'] },
+  { dir: 'oracle', name: 'canary', args: ['--profile', 'canary'] },
   { dir: 'yaml', name: 'default', args: [] },
   { dir: 'yaml', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'yaml', name: 'nightly', args: ['--profile', 'nightly'] },
