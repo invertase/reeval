@@ -172,10 +172,10 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
     ctx.out(JSON.stringify(run, null, 2))
     return 0
   }
-  const hint = !hasAnalysisModel(config)
   const insights = entry.recorded
     ? await readInsights(insightsFile(config.history.dir, entry.runId))
     : null
+  const hint = !insights && !hasAnalysisModel(config)
   if (ctx.flags.md) ctx.out(renderSummary(run, { hint, insights }).trimEnd())
   else ctx.out(formatShow(run, { hint, insights }))
   return 0

@@ -29,6 +29,9 @@ reeval analyze [run]          Explain a run with one LLM call over a digest of i
   --context                   Print the digest and rules for your own coding agent (no key, no call)
   --dry-run                   Print the digest's size and the cache key, without calling the model
   --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+  --insights                  Write a recorded run's insights instead: what each eval asks and
+                              its answer, citing the facts, into <run>/insights.json (never
+                              rewritten); reeval show prints them. Takes --json
 ```
 
 [//]: # (/generated:cli-help:analyze)
@@ -80,6 +83,44 @@ flowchart LR
 3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged, including on anomalies. An anomaly (or claim) that quotes a judge score which is not the cited attempt's recorded score is dropped, so a wrong score cannot stay in the written explanation. Each verify command must parse as reeval's own CLI, with only that command's flags, and an `reeval run` or `reeval image build` must select an eval of the run (`reeval run` with filters or `--tag`; `reeval image build` with filters only). The digest lists each eval's tags. A `--tag` no eval has, or any other command the CLI rejects, drops the action. A rejected verify is not printed. After those checks, reeval caps `confidence.overall`: not `high` when `invalid`, `dropped` or `rejected` is above zero; `low` when a claim was dropped or a command was rejected. The capped value sits with the TL;DR; the counts stay in the footer.
 4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into. With `analysis.agent`, `reeval run` also caches a note on each eval and harness in `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`, and, once the run is written, the run's summary under the key `reeval analyze <run>` computes, so `reeval analyze` prints it from the cache (`--save` keeps it). Before that summary's call, the model may read evidence the cap dropped and open attempts (steps, checks and diff) with tools, and it can cite what it read. A summary whose call failed is cached with `error`: the studio shows it, and `reeval analyze` treats it as a miss.
 
+## Insights
+
+```bash
+npx reeval analyze latest --insights
+```
+
+```text
+writing insights for 20261020T231903Z_2e69951_cursor-agent_8s1m with fake…
+wrote evals/.history/20261020T231903Z_2e69951_cursor-agent_8s1m/insights.json: 13 evals, 0 sentences removed by the checks. Commit it with git.
+                 recommends Genkit for $task
+  Not for a Python agent: 0 of 2 tries passed.
+  pass  a chat app            Genkit 2 of 2
+  pass  a RAG pipeline        Genkit 2 of 2
+  fail  a Python agent        Genkit 2 of 2
+    It also names LangChain, so "names no other framework" fails.
+…
+```
+
+`--insights` writes a recorded run's insights: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` in the history folder, and `reeval show` prints them with the run from then on. It takes a run and `--json` (the document instead of the blocks), and no other flag.
+
+Per eval, one call classifies it from its name first, then its prompts, judge questions and check labels: its job (`choose` a tool, `finish` a task, or `other`), the question it asks and its subject. A low-confidence classification is `other`. A second call writes the answer and a sentence on each row the [layout](/concepts/output#insights) opens, from that eval's facts with each effect as a word. Then one call writes the run's headline.
+
+Every sentence is checked before it's kept, and one that fails a check is dropped and counted in `validation.dropped`:
+
+| Check | Drops |
+|---|---|
+| Citations | A sentence with no cite, or one naming a fact the eval wasn't shown |
+| Numbers and quotes | A number or quoted span the cited facts don't hold |
+| Effect words | `helped`, `made it worse`, `no difference` or `can't tell yet` that isn't the cited effect |
+| Length | A sentence over 25 words, or an answer over two sentences |
+| Plain words | Statistics jargon (`within noise`, `interval`, `variant`, `lift`, …), asked for once more (`validation.regenerated`) |
+| Slots | A row sentence on a row the layout keeps closed, such as a passing case |
+| Named tools | On a choose eval, a tool that isn't verbatim in that attempt's final message |
+
+What the model writes never changes a verdict or the exit code. A model call that fails writes nothing, so the command can run again. Only recorded runs take insights.
+
+The file is never rewritten: delete it to write new insights. When the run's facts no longer hash to its `factsHash`, `reeval show` leaves the insights out with a note. See [the insights file](/reference/record#insights) for its fields.
+
 ## Configuration
 
 ```ts title="reeval.config.ts"
@@ -115,7 +156,7 @@ export default defineConfig({
   The answer's cap, at least 500. Default 8000.
 </Property>
 
-For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. A function that throws is a failed call.
+For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. A function that throws is a failed call. `fakeAnalysis({ insights })` answers `--insights` the same way; see [fakeAnalysis](/reference/judges#fakeanalysis).
 
 In `analysis.agent`'s summary, the fake first reads up to three dropped evidence items and three failing attempts with the tools, and the function gets the digest with the evidence it read. reeval has no prices, so the footer shows tokens used and no cost.
 
@@ -126,6 +167,9 @@ In `analysis.agent`'s summary, the fake first reads up to three dropped evidence
 | `reeval analyze takes --json or --md, not both` | Pick one |
 | `reeval analyze --context makes no analysis to save; drop --save` | `--context` only prints the digest |
 | `reeval analyze --vs names the run itself` | Name an earlier run, or `--vs none` |
+| `reeval analyze --insights takes a run and --json only, not --save` | Drop the other flags |
+| `<run>/insights.json already exists, and insights are never rewritten` | Delete the file to write new ones |
+| `<run> isn't recorded, so there's no history folder for its insights` | `reeval record <run>` first |
 | `No eval in <run> matches "<filter>"` | Check `--eval` against `reeval show <run>` |
 | A missing key, or an evaluation model | Set the key, set `analysis.model`, or use `--context` with your own agent |
 

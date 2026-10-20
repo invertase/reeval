@@ -18,6 +18,7 @@ evals/.history/                            commit this
   .gitignore                               un-ignores recorded files (`*.log` and the rest)
   <runId>.json                             the record
   <runId>/summary.md                       the run as Markdown
+  <runId>/insights.json                    reeval analyze --insights' sentences, create-only
   <runId>/worktree.patch                   uncommitted changes, when the run was dirty
   <runId>/<eval-slug>/questions/<n>.json   what compare question n's model was sent
   <runId>/<eval-slug>/<cell-slug>/<n>/     one directory per attempt
@@ -1011,6 +1012,62 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
 </Property>
 
 [//]: # (/generated:record-types)
+
+## Insights
+
+`reeval analyze <run> --insights` writes `<runId>/insights.json` beside the record, once: delete it to write new ones. `reeval show` prints it with the run. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record.
+
+```json title="evals/.history/<runId>/insights.json (trimmed)"
+{
+  "kind": "reeval-insights",
+  "schemaVersion": 1,
+  "runId": "20261020T231903Z_2e69951_cursor-agent_8s1m",
+  "model": "fake",
+  "promptVersion": "insights-v1",
+  "factsHash": "sha256:0d56643daa2ea23e32a66492facca73fc5b3a85c6051d4f8690abec7c5281a18",
+  "usage": { "inputTokens": 0, "outputTokens": 0, "costUsd": null },
+  "headline": {
+    "text": "9 fail; start with \"recommends Genkit for $task\".",
+    "cites": ["evals%2Fchoose.eval.ts › recommends Genkit for $task"]
+  },
+  "evals": [{
+    "evalId": "evals%2Fchoose.eval.ts › recommends Genkit for $task",
+    "intent": {
+      "job": "choose", "across": "none",
+      "question": "Does the agent pick Genkit?",
+      "subject": { "tool": "Genkit" },
+      "name": "states-intent", "key": "2c0c59de…"
+    },
+    "answer": {
+      "text": "Not for a Python agent: 0 of 2 tries passed.",
+      "cites": ["evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent"]
+    },
+    "findings": [],
+    "rows": [{ "row": "…/a Python agent", "text": "It also names LangChain, …", "cites": ["…"] }],
+    "namedTools": [{ "attempt": "…/a chat app/advisor+-+fake#1", "tools": ["Genkit", "LangChain"] }]
+  }],
+  "remarks": [],
+  "validation": { "dropped": 0, "regenerated": 0 }
+}
+```
+
+| Field | What it holds |
+|---|---|
+| `model`, `promptVersion` | The analysis model and the prompts' version that wrote it |
+| `factsHash` | `sha256:` of the run's facts as canonical JSON; when the facts no longer match, `reeval show` leaves the insights out with a note |
+| `usage` | Tokens over every call; `costUsd` is `null`, since reeval has no prices |
+| `headline` | One sentence on the run, printed before the tally, or `null` |
+| `evals[].evalId` | The eval's or family's path: its file and name, `›` between them |
+| `evals[].intent` | The classification: `job` (`choose`, `finish` or `other`), `across`, `question`, `subject` (`tool`, `change`), `name` (`states-intent`, `no-intent` or `contradicts`) and `key`, the hash of what it read |
+| `evals[].answer` | Its answer, at most two sentences, or `null` |
+| `evals[].findings` | Sentences under a choose or finish eval that measures a change |
+| `evals[].rows` | A sentence under each row it names (`row`, a fact path) |
+| `evals[].namedTools` | On a choose eval, the tools each attempt's final message names (`<cell path>#<n>`) |
+| `remarks` | Reserved for later remarks on the run; empty |
+| `validation` | Sentences the checks dropped, and those asked for again |
+| `error` | Set when writing the insights failed; `reeval show` prints it instead |
+
+Each sentence is `{ text, cites }`. A cite is a fact path (`<eval>`, `<eval>/<cell>`, `<eval>/<cell>/checks/<label>`, `<eval>/<cell>/effort`, `<family>/<case>`) or a transcript line, `transcript:<cell path>#<n>#L<line>`. Paths percent-encode `%`, `/` and `+` inside each part.
 
 ## What a record can't pin down
 
