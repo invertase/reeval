@@ -481,32 +481,29 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
   const columns = cases[0]?.cells ?? []
   const pooled = e.pooled ?? []
   const pooledOutcome: Outcome = pooled.some((p) => p.outcome === 'fail') ? 'fail' : 'pass'
-  const words = [
-    ...cases.map((k) => VERDICT[k.outcome]),
-    ...(pooled.length ? [VERDICT[pooledOutcome]] : []),
-  ]
-  const wordWidth = Math.max(...words.map((w) => w.length))
-  const lead = (o: Outcome, name: string): Text => {
-    const word = VERDICT[o]
-    return {
-      text: `${word.padEnd(wordWidth)}  ${name}`,
-      paint: (s) => `${paintOutcome(c, o)(word)}${s.slice(word.length)}`,
-    }
-  }
+  const caseWord = (k: CaseResult) =>
+    verdict(c, { outcome: k.outcome, todo: false, cells: k.cells })
+  const pooledWord = t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))
+  const words = [...cases.map(caseWord), ...(pooled.length ? [pooledWord] : [])]
+  const wordWidth = Math.max(...words.map((w) => w.text.length))
+  const lead = (word: Text, name: string): Text => ({
+    text: `${word.text.padEnd(wordWidth)}  ${name}`,
+    paint: (s) => `${show(word)}${s.slice(word.text.length)}`,
+  })
   const head = `${' '.repeat(HEAD)}${e.template ?? e.name}`
   const questions = questionLines(c, e.questions, 2)
   if (columns.length <= 1) {
     const items: Item[] = []
     for (const k of cases) {
       const cell = k.cells[0]
-      items.push({ indent: 2, cells: [lead(k.outcome, k.label), cell ? cellCount(cell) : ''] })
+      items.push({ indent: 2, cells: [lead(caseWord(k), k.label), cell ? cellCount(cell) : ''] })
       if (cell && !clean(cell)) items.push(...evidence(c, cell, 4))
     }
     return [head, ...table(items), ...questions]
   }
   const out = [head]
   for (const k of cases) {
-    out.push(`  ${show(lead(k.outcome, k.label))}`)
+    out.push(`  ${show(lead(caseWord(k), k.label))}`)
     const failed = k.outcome !== 'pass'
     out.push(...cellsBody(c, kind, k.cells, 4, { failed, verbose, effects: false }))
   }
@@ -525,7 +522,7 @@ function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: bo
       })
       if (p && verbose) items.push({ indent: 6, free: t(pooledStats(p, label(col)), c.dim) })
     }
-    out.push(`  ${show(lead(pooledOutcome, 'all cases'))}`, ...table(items))
+    out.push(`  ${show(lead(pooledWord, 'all cases'))}`, ...table(items))
   }
   return [...out, ...questions]
 }

@@ -88,6 +88,25 @@ describe('every layout', () => {
     assert.match(text, /^ {2}question {2}Which reads better\?\n {4}4 votes, every one a tie$/m)
   })
 
+  test('a family case whose cells are all ungated reads not gated, never pass beside 0 of 1', () => {
+    const g = GOLDENS.find((x) => x.name === 'family')
+    assert.ok(g)
+    const suite = goldenSuite(g)
+    const e = suite.files.flatMap((f) => f.evals).find((x) => x.cases?.length)
+    assert.ok(e?.cases)
+    for (const k of e.cases) {
+      k.outcome = 'pass'
+      for (const cell of k.cells) {
+        cell.gated = false
+        cell.passed = 0
+        cell.failed = 1
+      }
+    }
+    const text = render(suite, null, { color: false, verbose: false }).join('\n')
+    assert.match(text, /^ {2}not gated {2}\S.* +0 of 1$/m)
+    assert.doesNotMatch(text, /^ {2}pass {2}\S.* +0 of 1$/m)
+  })
+
   test('the tally puts fail first, leaves zeros out and counts infra errors and skips apart', () => {
     const c = colors(false)
     assert.equal(tallyLine(c, { pass: 2, fail: 5, infraError: 0, skipped: 0 }), '5 fail · 2 pass')
