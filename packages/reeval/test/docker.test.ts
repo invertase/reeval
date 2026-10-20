@@ -469,7 +469,9 @@ evaluate('ok', async (c) => {
       }
       const lines = r.stdout.split('\n')
       const failedAt = lines.findIndex((l) =>
-        /✗ docker\+[0-9a-f]+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(l),
+        /✗ docker\+[0-9a-f]+ · \S+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(
+          l,
+        ),
       )
       assert.ok(failedAt >= 0, r.stdout)
       assert.ok(
@@ -684,7 +686,7 @@ evaluate('base', { environment: defineEnvironment('base', { sandbox: docker({ fr
       const dry = await runCli(p.dir, ['run', '--dry-run'])
       assert.match(
         dry.stdout,
-        /^ {2}~ \S+ +stale: from .+ moved upstream \([0-9a-f]{12} → [0-9a-f]{12}\): reeval image build rebuilds it$/m,
+        /^ {2}~ \S+ · \S+ +stale: from .+ moved upstream \([0-9a-f]{12} → [0-9a-f]{12}\): reeval image build rebuilds it$/m,
       )
       const kept = await runCli(p.dir, ['run'], slow)
       assert.equal(kept.code, 0, 'reeval run keeps the build it has')

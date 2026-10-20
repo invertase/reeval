@@ -2568,28 +2568,28 @@ evaluate('fake', { environment: defineEnvironment('host', { sandbox: fakeSandbox
     assert.match(
       out,
       new RegExp(
-        `^docker\\+[0-9a-f]+ \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale|unchecked): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
+        `^docker\\+[0-9a-f]+ · cursor \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale|unchecked): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:tools · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(.+\\)\\n {2}${st}harness +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(`,
+        `^docker:tools · cursor · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(.+\\)\\n {2}${st}harness +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:py\\.Dockerfile · 1 eval\\n {2}${st}dockerfile evals/py\\.Dockerfile +reeval-dockerfile:py-dockerfile-[0-9a-f]{16} .*\\n {2}${st}harness +reeval-sandbox:cursor-[\\d.]+-reeval-dockerfile-py-dockerfile-`,
+        `^docker:py\\.Dockerfile · cursor · 1 eval\\n {2}${st}dockerfile evals/py\\.Dockerfile +reeval-dockerfile:py-dockerfile-[0-9a-f]{16} .*\\n {2}${st}harness +reeval-sandbox:cursor-[\\d.]+-reeval-dockerfile-py-dockerfile-`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:python:3\\.12-slim · 1 eval\\n {2}${st}from python:3\\.12-slim +reeval-sandbox:cursor-[\\d.]+-python-3-12-slim-[0-9a-f]{8}`,
+        `^docker:python:3\\.12-slim · cursor · 1 eval\\n {2}${st}from python:3\\.12-slim +reeval-sandbox:cursor-[\\d.]+-python-3-12-slim-[0-9a-f]{8}`,
         'm',
       ),
     )
@@ -2623,7 +2623,7 @@ evaluate('tools', { tags: ['tools'], environment: defineEnvironment('tools', { s
     })
     const cursor = /^ {2}[✓+~✗?] base +reeval-sandbox:cursor-[\d.]+ /m
     const claude = /^ {2}[✓+~✗?] base +reeval-sandbox:claude-code-[\w.-]+ /m
-    const tools = /^docker:tools · 1 eval$/m
+    const tools = /^docker:tools · [\w-]+ · 1 eval$/m
     const dry = async (args: string[], env?: Record<string, string>) => {
       const r = await runCli(p.dir, ['image', 'build', '--dry-run', ...args], env ? { env } : {})
       assert.equal(r.code, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
