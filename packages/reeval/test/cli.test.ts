@@ -5,7 +5,14 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { parseCli } from '../src/cli-parse.ts'
-import { COMMANDS, FLAGS, type FlagName, GLOBAL, helpText } from '../src/cli-spec.ts'
+import {
+  COMMANDS,
+  commandHelpText,
+  FLAGS,
+  type FlagName,
+  GLOBAL,
+  helpText,
+} from '../src/cli-spec.ts'
 import { UsageError } from '../src/config.ts'
 import { fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 
@@ -33,7 +40,7 @@ describe('cli', () => {
     assert.equal(text, readFileSync(GOLDEN, 'utf8'))
   })
 
-  test('every command prints the same help with --help and -h, exit 0', async () => {
+  test('every command prints its own help with --help and -h, exit 0', async () => {
     const p = await project('cli-help', { 'reeval.config.ts': fakeConfig() })
     const golden = readFileSync(GOLDEN, 'utf8').replace('reeval VERSION', `reeval ${version}`)
     const lines = [[], ...PATHS.map((c) => c.path), ['image']]
@@ -41,11 +48,26 @@ describe('cli', () => {
       lines.flatMap((path) =>
         ['--help', '-h'].map(async (flag) => {
           const r = await runCli(p.dir, [...path, flag])
+          const expected = path.length ? `${commandHelpText(version, path)}\n` : golden
           assert.equal(r.code, 0, `reeval ${path.join(' ')} ${flag}: ${r.stderr}`)
-          assert.equal(r.stdout, golden, `reeval ${path.join(' ')} ${flag}`)
+          assert.equal(r.stdout, expected, `reeval ${path.join(' ')} ${flag}`)
         }),
       ),
     )
+  })
+
+  test('a command help names only that command, and image lists its subcommands', () => {
+    const build = commandHelpText('V', ['image', 'build'])
+    assert.match(build, /^ {2}reeval image build \[filter\.\.\.\]$/m)
+    assert.match(build, /--force/)
+    assert.doesNotMatch(build, /^ {2}reeval (run|init)\b/m)
+    assert.match(build, /^Options: --config <path>/m)
+    assert.equal(commandHelpText('V', ['image']), build)
+    const studio = commandHelpText('V', ['studio'])
+    assert.match(studio, /reeval studio build/)
+    assert.doesNotMatch(commandHelpText('V', ['studio', 'build']), /--no-token/)
+    assert.equal(commandHelpText('V', ['run', 'greet']), commandHelpText('V', ['run']))
+    assert.equal(commandHelpText('V', ['bogus']), helpText('V'))
   })
 
   test('reeval alone prints the help and exits 2; --version prints the version', async () => {

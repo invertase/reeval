@@ -303,24 +303,44 @@ export const COMMANDS: Record<string, CommandSpec> = {
 /** Flags every command takes; without `--config`, `reeval` finds the nearest config. */
 export const GLOBAL: FlagName[] = ['config', 'help', 'version']
 
-/** `reeval --help`: every command's help lines, in the order of `COMMANDS`. */
-export function helpText(version: string): string {
-  const commands = Object.values(COMMANDS).flatMap((spec) => [
-    spec.help,
-    ...Object.values(spec.sub ?? {}).map((sub) => sub.help),
-  ])
-  return `reeval ${version} — eval runner for coding agents
-
-Usage:${commands.join('')}
-  reeval --version
-  reeval --help
-
-Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
-Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
+const HELP_FOOTER = `Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs, .cjs,
 or reeval.yaml, in the current directory or above)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
 143 terminated (SIGTERM)
 `
+
+const helpLines = (spec: CommandSpec) => [
+  spec.help,
+  ...Object.values(spec.sub ?? {}).map((sub) => sub.help),
+]
+
+/** `reeval --help`: every command's help lines, in the order of `COMMANDS`. */
+export function helpText(version: string): string {
+  return `reeval ${version} — eval runner for coding agents
+
+Usage:${Object.values(COMMANDS).flatMap(helpLines).join('')}
+  reeval --version
+  reeval --help
+
+Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
+${HELP_FOOTER}`
+}
+
+/**
+ * `reeval <command> [sub] --help`: that command's help lines (and its subcommands' when no
+ * subcommand is named), or the whole of `reeval --help` for a command it doesn't know.
+ */
+export function commandHelpText(version: string, path: string[]): string {
+  const [name = '', subName = ''] = path
+  const spec = COMMANDS[name]
+  if (!spec) return helpText(version)
+  const sub = spec.sub?.[subName]
+  const lines = sub ? [sub.help] : helpLines(spec)
+  return `reeval ${version} — eval runner for coding agents
+
+Usage:${lines.join('')}
+
+${HELP_FOOTER}`
 }
 
 /** Splits a command line on whitespace, honouring single and double quotes. */

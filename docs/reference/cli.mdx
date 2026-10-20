@@ -26,7 +26,7 @@ npx reeval run --dry-run
 | `reeval image build`, `reeval clean` | Build sandbox images; remove local debug data | [reeval image build, reeval clean](/reference/cli/image-clean) |
 | `reeval report [run]` | Collect a redacted bug report, then file it as an issue | [reeval report](/reference/cli/report) |
 
-`reeval --help` prints the full help and exits 0. `reeval` with no command prints it and exits 2. `reeval --version` prints the version.
+`reeval --help` prints the full help and exits 0; `reeval <command> --help` prints that command's. `reeval` with no command prints it and exits 2. `reeval --version` prints the version.
 
 A command takes only its own flags, after its name, plus the shared flags below anywhere. Another command's flag, a missing value or an extra argument exits 2:
 
@@ -39,10 +39,12 @@ reeval: reeval show takes at most 1 argument (got latest extra)
 
 <Property name="--config" type="string" optional>
   The config file every command reads, relative to the current directory. Without it, reeval uses the nearest `reeval.config.ts` (or `.mts`, `.cts`, `.js`, `.mjs`, `.cjs`, or a `reeval.yaml` or `reeval.yml`) in the current directory or above: see [Loading](/reference/config#loading). An explicit path that doesn't exist fails with `Config file not found`. `reeval run` and `reeval image build` fail if none is found (`No reeval.config.ts … here or above. Run reeval init.`); other commands then use their defaults in the current directory.
+
+  The file can live outside your project, such as `/tmp/reeval.images.config.ts`. Its imports of `{{ pkg }}` and its subpaths resolve to the reeval that runs it, so it needs no `node_modules` beside it. Its directory is still the project root: `include`, relative paths, `.env.local` and `.reeval/` resolve against it.
 </Property>
 
 <Property name="-h, --help" type="boolean" optional>
-  Print the help and exit 0.
+  Print the help and exit 0. After a command, it prints only that command's help: `reeval image build --help` shows the `image build` block and the shared options. `reeval image --help` lists its subcommands.
 </Property>
 
 [//]: # (generated:cli-help:footer)
