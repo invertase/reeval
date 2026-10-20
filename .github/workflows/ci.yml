@@ -112,6 +112,14 @@ jobs:
                   engine=true ;;
               esac
               case $f in
+                packages/reeval-python/* | \
+                packages/reeval/src/language-runner/* | \
+                packages/reeval/test/python-sdk.test.ts | \
+                packages/reeval/test/language-runner.test.ts)
+                  unit=true
+                  features=true ;;
+              esac
+              case $f in
                 packages/reeval/src/engine/* | \
                 packages/reeval/src/attempt/* | \
                 packages/reeval/src/capture/* | \
@@ -197,6 +205,16 @@ jobs:
       # docs.page's own check: internal links, assets and frontmatter targets.
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - name: reeval-python (uv sync, ruff, pyright, pytest)
+        if: ${{ !cancelled() }}
+        working-directory: packages/reeval-python
+        run: |
+          uv sync --dev
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+          uv run pytest
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
   # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.
@@ -215,6 +233,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
@@ -249,6 +268,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
@@ -305,6 +325,8 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+        if: matrix.package == 'reeval'
       - uses: ./.github/actions/sandbox-images
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"

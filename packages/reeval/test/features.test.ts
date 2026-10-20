@@ -44,6 +44,7 @@ import {
   reserveAttempts,
 } from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
+import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
 /**
@@ -2185,6 +2186,13 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'python-sdk/hello',
+    tiers: ['fake', 'docker', 'real'],
+    env: '-',
+    canary: /expected.*to succeed/i,
+    prepare: (dir) => syncPythonFixtureProject(dir),
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',
@@ -2357,8 +2365,9 @@ test('every feature fixture is in the table, with one check and a canary', () =>
     .sort()
   assert.deepEqual(dirs, features.map((f) => f.dir).sort())
   for (const dir of dirs) {
-    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => f.endsWith('.eval.ts'))
-    assert.deepEqual(evals.sort(), ['canary.eval.ts', 'lands.eval.ts'], dir)
+    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))
+    const ext = evals.some((f) => f.endsWith('.eval.py')) ? '.eval.py' : '.eval.ts'
+    assert.deepEqual(evals.sort(), [`canary${ext}`, `lands${ext}`].sort(), dir)
     assert.ok(existsSync(join(root, dir, 'reeval.config.ts')), dir)
   }
 })

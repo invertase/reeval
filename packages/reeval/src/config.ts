@@ -27,6 +27,7 @@ import {
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
+import { defaultIncludeGlobs } from './language-runner/adapter.ts'
 import { isObjectLike } from './object.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
 import { ownFileURL } from './root.ts'
@@ -487,7 +488,7 @@ export function resolveConfig(
     )
   }
   checkOptions(user, file, CONFIG_KEYS)
-  const include = user.include ?? ['evals/**/*.eval.ts']
+  const include = user.include ?? defaultIncludeGlobs()
   if (!Array.isArray(include) || include.some((p) => typeof p !== 'string')) {
     throw new UsageError(
       `include in ${file} must be a list of glob patterns, e.g. include: ['evals/**/*.eval.ts'] (got ${JSON.stringify(include)})`,
