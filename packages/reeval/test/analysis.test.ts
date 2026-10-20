@@ -617,6 +617,8 @@ describe('reeval CLI spec', () => {
       'reeval image build --dry-run',
       `reeval query "SELECT * FROM effort WHERE verdict = 'fewer'"`,
       'reeval run --record && reeval query effort',
+      'reeval query effort --run last',
+      `reeval query "SELECT * FROM effort WHERE run_id = :run" --run last`,
     ]
     for (const c of ok) assert.equal(checkCommand(c, tables), null, c)
     const bad: Array<[string, RegExp]> = [
@@ -624,7 +626,11 @@ describe('reeval CLI spec', () => {
       ['reeval eval fix-config --debug-judge', /reeval eval isn't a reeval command/],
       ['reeval run --eval scaffold', /--eval isn't an option of reeval run/],
       ['reeval image build --tag smoke', /--tag isn't an option of reeval image build/],
-      ['reeval query efficiency', /no view or table named efficiency/],
+      [
+        'reeval query efficiency',
+        /no view or table named efficiency \(views and tables: effort, lift\)/,
+      ],
+      ['reeval query effort --run', /--run needs a value/],
       ['reeval show latest --md --json extra', /takes at most 1 argument/],
       ['reeval run --runs', /--runs needs a value/],
       ['cat evals/x.ts', /isn't a reeval command/],

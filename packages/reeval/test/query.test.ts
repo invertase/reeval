@@ -10,7 +10,7 @@ import { describe, test } from 'node:test'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
 import { type ClassContext, classifyCall } from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
-import { statementCount } from '../src/query.ts'
+import { statementCount, usesRunParameter } from '../src/query.ts'
 import { harnessLabel } from '../src/view/model.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, readRun, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
@@ -230,7 +230,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: check_discrimination, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts/,
+        /no view or table named "nope"\. Views: check_discrimination, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_context, attempts, cell_checks, cells,/,
       ],
     ]
     for (const [sql, message] of cases) {
@@ -239,6 +239,63 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       assert.match(r.stderr, message)
     }
     assert.equal((await one(p.dir, 'SELECT COUNT(*) AS n FROM runs')).n, 1, 'nothing was deleted')
+  })
+
+  test('--run binds :run to a run id or the last run; a view filters on run_id', async () => {
+    const p = await project('query-run', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const first = readRun(p.dir).run.runId
+    assert.equal((await runCli(p.dir)).code, 0)
+    const last = readRun(p.dir).run.runId
+    assert.notEqual(first, last)
+    const rows = async (args: string[]) => {
+      const r = await runCli(p.dir, ['query', ...args, '--json'])
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      return JSON.parse(r.stdout) as Row[]
+    }
+    const byRun = 'SELECT run_id FROM runs WHERE run_id = :run'
+    assert.deepEqual(await rows([byRun, '--run', 'last']), [{ run_id: last }])
+    assert.deepEqual(await rows([byRun, '--run', first]), [{ run_id: first }])
+    assert.deepEqual(await rows(['SELECT $run AS id', '--run', 'last']), [{ id: last }])
+    assert.deepEqual(
+      (await rows(['eval_trend', '--run', first])).map((r) => r.run_id),
+      [first],
+      'a bare view name with --run keeps that run’s rows',
+    )
+    assert.equal((await rows(['eval_trend'])).length, 2, 'without --run, every run')
+    assert.deepEqual(
+      await rows(["SELECT ':run' AS s"]),
+      [{ s: ':run' }],
+      'a string, not a parameter',
+    )
+
+    const cases: Array<[string[], RegExp]> = [
+      [[byRun], /uses :run but no --run was given: pass --run <id\|last>/],
+      [['SELECT 1', '--run', 'last'], /--run binds :run, which the statement doesn't use/],
+      [[byRun, '--run', 'nope'], /--run nope: no run "nope" in \.reeval\/history\.db/],
+      [['flaky_cells', '--run', 'last'], /flaky_cells has no run_id column/],
+    ]
+    for (const [args, message] of cases) {
+      const r = await runCli(p.dir, ['query', ...args])
+      assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, message)
+    }
+  })
+
+  test('the text table prints sqlite_schema.sql in full; other long text is clipped', async () => {
+    const p = await project('query-sql-column', { 'reeval.config.ts': fakeConfig() })
+    const r = await runCli(p.dir, [
+      'query',
+      "SELECT name, sql FROM sqlite_master WHERE name = 'runs'",
+    ])
+    assert.equal(r.code, 0, r.stderr)
+    assert.doesNotMatch(r.stdout, /…/)
+    assert.match(r.stdout, /CREATE TABLE runs \([\s\S]*skipped INTEGER\n\)/)
+    const long = await runCli(p.dir, ['query', `SELECT '${'x'.repeat(80)}' AS other`])
+    assert.match(long.stdout, /x…$/m)
   })
 
   test('skill_reads counts a dedicated skill load, not only a path under skills/', async () => {
@@ -393,6 +450,21 @@ describe('reeval query plumbing', () => {
       ['', 0],
     ]
     for (const [sql, n] of cases) assert.equal(statementCount(sql), n, sql)
+  })
+
+  test(':run is found outside quotes and comments only', () => {
+    const cases: Array<[string, boolean]> = [
+      ['SELECT * FROM runs WHERE run_id = :run', true],
+      ['SELECT $run', true],
+      ['SELECT @run', true],
+      ["SELECT ':run'", false],
+      ['SELECT ":run" FROM t', false],
+      ['SELECT 1 -- :run', false],
+      ['SELECT 1 /* :run */', false],
+      ['SELECT :runner', false],
+      ['SELECT run FROM t', false],
+    ]
+    for (const [sql, uses] of cases) assert.equal(usesRunParameter(sql), uses, sql)
   })
 
   test('the Node floor is where node:sqlite arrives, in engines too', () => {

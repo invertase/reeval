@@ -916,8 +916,8 @@ export type QueryResult = { columns: string[]; rows: Array<Record<string, unknow
 
 export type HistoryDb = {
   sync: SyncResult
-  /** Runs one read-only statement, with `params` bound to its `?`s. */
-  query(sql: string, params?: SQLInputValue[]): QueryResult
+  /** Runs one read-only statement, with `params` bound to its `?`s, or by name (`:run`). */
+  query(sql: string, params?: SQLInputValue[] | Record<string, SQLInputValue>): QueryResult
   /** Every table and view, with its columns. */
   schema(): Array<{ name: string; type: 'table' | 'view'; columns: string[] }>
   close(): void
@@ -949,7 +949,9 @@ export async function openHistoryDb(
     query(sql, params = []) {
       try {
         const statement = db.prepare(sql)
-        const rows = statement.all(...params) as Array<Record<string, unknown>>
+        const rows = (
+          Array.isArray(params) ? statement.all(...params) : statement.all(params)
+        ) as Array<Record<string, unknown>>
         // `columns()` is newer than the Node floor; without it, a query with no rows has none.
         const columns =
           typeof statement.columns === 'function'
