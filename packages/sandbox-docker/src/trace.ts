@@ -1,7 +1,9 @@
 import { isUtf8 } from 'node:buffer'
 
-/** One docker CLI invocation, for debug traces. Values passed through `env` never appear here. */
+/** One docker (or podman) CLI invocation, for debug traces. Values passed through `env` never appear here. */
 export type DockerCommand = {
+  /** The CLI: `docker` or `podman`. */
+  bin: string
   args: string[]
   /** Null when the command was killed or failed to start. */
   exitCode: number | null
@@ -42,9 +44,10 @@ export function traceDocker(
   result:
     | { exitCode: number | null; stdout?: Buffer | string; stderr?: string; stdin?: number }
     | { error: unknown },
+  bin = 'docker',
 ): void {
   if (!listener) return
-  const base = { args: args.map((a) => clip(a, MAX_ARG)), ms: Date.now() - startedAt }
+  const base = { bin, args: args.map((a) => clip(a, MAX_ARG)), ms: Date.now() - startedAt }
   try {
     if ('error' in result) {
       const error = result.error instanceof Error ? result.error.message : String(result.error)
