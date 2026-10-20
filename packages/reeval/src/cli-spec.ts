@@ -140,6 +140,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
                                 with --json, as one JSON document (every cell, and what's excluded)
+    --json                      Print the run's results (suiteResult from reeval/view) as one JSON
+                                document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at

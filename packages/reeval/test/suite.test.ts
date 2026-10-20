@@ -1,5 +1,5 @@
 // `suiteResult`, the facts view-model: every corpus run builds one, three of them against JSON
-// goldens (test/fixtures/suite/), the effect table and not-run checks.
+// goldens (test/fixtures/suite/), the effect table, not-run checks and `reeval run --json`.
 // REEVAL_UPDATE_SNAPSHOTS=1 rewrites the goldens; review the diff.
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -17,6 +17,7 @@ import {
   type SuiteResult,
   suiteResult,
 } from '../src/view/suite.ts'
+import { fakeConfig, project, runCli } from './helpers.ts'
 import { corpusEntries } from './support/corpus.ts'
 import { testDir } from './support/fixture.ts'
 
@@ -223,3 +224,58 @@ describe('a record with checks that never ran', () => {
   })
 })
 
+describe('reeval run --json', () => {
+  test('prints the suite result as the only stdout, and the progress on stderr', async () => {
+    const p = await project('suite-json', {
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'hello.txt': 'hi\\n' } }` }),
+      'evals/hello.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const bye = defineEnvironment('bye', { files: { 'bye.txt': 'bye' } })
+evaluate('writes hello.txt', { compare: { baseline: plain, variants: [bye] } }, async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('test -f hello.txt'), 'hello.txt exists').toSucceed()
+  await expect(c.exec('test -f bye.txt'), 'has bye.txt').toSucceed()
+  await expect(c.exec('false'), 'fails after').toSucceed()
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--json', '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stderr)
+    const s = JSON.parse(r.stdout) as SuiteResult
+    assert.match(r.stderr, /writes hello\.txt/)
+    assert.equal(s.outcome, 'fail')
+    assert.deepEqual(s.tally, { pass: 0, fail: 1, infraError: 0, skipped: 0 })
+    const e = s.files[0]?.evals[0]
+    assert.equal(e?.across, 'change')
+    const status = (environment: string) =>
+      e?.cells
+        ?.find((c) => c.environment === environment)
+        ?.checks.map((k) => [k.label, k.outcome.status])
+    assert.deepEqual(status('plain'), [
+      ['hello.txt exists', 'ran'],
+      ['has bye.txt', 'ran'],
+      ['fails after', 'not run'],
+    ])
+    assert.deepEqual(status('bye'), [
+      ['hello.txt exists', 'ran'],
+      ['has bye.txt', 'ran'],
+      ['fails after', 'ran'],
+    ])
+    const shown = await runCli(p.dir, ['show', '--json'])
+    assert.equal(JSON.parse(shown.stdout).kind, 'reeval-run', 'reeval show --json is the record')
+  })
+
+  test('with --dry-run still prints the plan', async () => {
+    const p = await project('suite-json-plan', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/hello.eval.ts': `import { evaluate } from 'reeval'
+evaluate('plans', async (c) => { await c.send('hi') })
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run', '--json'])
+    assert.equal(r.code, 0, r.stderr)
+    const plan = JSON.parse(r.stdout)
+    assert.equal(plan.totals.attempts, 1)
+    assert.equal(plan.evals.length, 1)
+  })
+})

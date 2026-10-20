@@ -316,8 +316,9 @@ async function runCommand(
   if (stepStart) await appendFile(stepStart, `run ${ctx.runId}\n`).catch(() => {})
   const { engineVersions } = await import('./engine/node.ts')
   const renderer = createRenderer({
-    // The JSON plan is the only output of `--dry-run --json`.
-    out: setup.json ? { write: () => true } : process.stdout,
+    // The JSON plan is the only output of `--dry-run --json`; a run's JSON is the only stdout of
+    // `--json`, so its progress goes to stderr.
+    out: setup.json ? (setup.dryRun ? { write: () => true } : process.stderr) : process.stdout,
     output: setup.output,
     verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',
@@ -422,7 +423,13 @@ async function runCommand(
   if (autoRecord && record.status !== 'interrupted') {
     const { record: recordCmd } = await import('./commands.ts')
     const allow = record.status === 'budget' ? { 'allow-incomplete': true } : {}
-    console.log(await recordCmd(config, record.runId, { ...flags, ...allow }))
+    const line = await recordCmd(config, record.runId, { ...flags, ...allow })
+    if (setup.json) console.error(line)
+    else console.log(line)
+  }
+  if (setup.json) {
+    const { suiteResult } = await import('./view/suite.ts')
+    process.stdout.write(`${JSON.stringify(suiteResult(record), null, 2)}\n`)
   }
 
   if (interrupted || engineRun.cancelled) return stopCode
@@ -446,11 +453,6 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
     isTTY: !!process.stdout.isTTY,
     agent: detectAgent().name,
   })
-  if (flags.json && !flags['dry-run']) {
-    throw new UsageError(
-      'reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.',
-    )
-  }
   const path = requireConfig(configPath)
   loadEnvFiles(path)
   const named = flags.profile ?? (process.env.REEVAL_PROFILE || undefined)
@@ -690,7 +692,7 @@ async function executeRun(
         .filter((p) => !p.attempt.plan.skip)
         .map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox })),
     )
-    if (setup.json) {
+    if (setup.json && setup.dryRun) {
       const images = await Promise.all(
         targets.map(async (t) => ({
           id: t.id,

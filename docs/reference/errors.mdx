@@ -126,7 +126,6 @@ See [Profiles and budgets](/reference/profiles).
 | `cursor: session did not become ready within 90s (tried twice)` | The harness's session start (its bootstrap) hung twice. The attempt is an infra error, its sandbox is destroyed and the other attempts carry on. Raise the harness's `startTimeout` if it's legitimately slow. |
 | `The worker running evals/a.eval.ts exited unexpectedly (signal SIGKILL)` | The process running that file died: killed, or out of memory. Its unfinished attempts fail and the run exits 1. |
 | `The reeval at <path> runs eval files with engine protocol N, but this reeval speaks M` | The project resolves another version of reeval than the `reeval` you ran. Run the project's own: `npx reeval`. |
-| `reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.` | Add `--dry-run`, or use `reeval show --json` after the run. |
 | `--runs must be a whole number of at least 1 (got 0)` | Pass a positive whole number. |
 | `--json doesn't take a value: pass --json on its own.` | Drop the `=…` after a yes/no flag. A flag that needs a value and has none gets `--runs needs a value (--runs <n>)`. |
 | `No run matches "abc". Pass latest, latest~N, a run id or a git SHA; reeval history lists them.` | `reeval show`, `compare` and the other history commands take one of those. |
