@@ -313,7 +313,7 @@
       "additionalProperties": false
     },
     "DockerSandboxDescriptor": {
-      "description": "A local Docker container, made by `docker()`.",
+      "description": "A local Docker container, made by `docker()`, or a Podman one, made by `podman()`.",
       "type": "object",
       "properties": {
         "capabilities": {
@@ -334,13 +334,18 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "engine": {
+          "description": "The container CLI the sandbox runs on: `podman` for `podman()`, Docker when unset.",
+          "type": "string",
+          "enum": ["docker", "podman"]
+        },
         "from": {
           "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
           "type": "string",
           "pattern": "\\S"
         },
         "id": {
-          "description": "Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash.",
+          "description": "Cell id; defaults to `docker` (`podman`), or `docker:<image>` for other images, plus an install hash.",
           "type": "string",
           "pattern": "\\S"
         },

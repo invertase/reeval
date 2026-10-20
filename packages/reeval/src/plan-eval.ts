@@ -21,6 +21,7 @@ import {
   matchesTags,
   type PlannedAttempt,
   type Resolved,
+  sandboxProvider,
   sandboxSetBy,
   secretVarsIn,
   unbrokered,
@@ -221,7 +222,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
 function attemptLimits(planned: PlannedAttempt, concurrency: number): Limits {
   const limits: Limits = { attempts: concurrency }
   const { sandbox, harness } = planned
-  if (sandbox.maxConcurrent) limits[`sandbox:${sandbox.kind}`] = sandbox.maxConcurrent
+  if (sandbox.maxConcurrent) limits[`sandbox:${sandboxProvider(sandbox)}`] = sandbox.maxConcurrent
   if (harness.maxConcurrent) limits[`harness:${harness.kind}`] = harness.maxConcurrent
   return limits
 }

@@ -1084,7 +1084,7 @@ function checkSandbox(value: unknown, where: string): asserts value is SandboxDe
   const kind = isObjectLike(value) ? value.kind : undefined
   if (!isObjectLike(value) || (kind !== 'docker' && kind !== 'fake')) {
     throw new DefinitionError(
-      `sandbox in ${where} must come from docker() or fakeSandbox() (got ${JSON.stringify(value)})`,
+      `sandbox in ${where} must come from docker(), podman() or fakeSandbox() (got ${JSON.stringify(value)})`,
     )
   }
   const max = value.maxConcurrent

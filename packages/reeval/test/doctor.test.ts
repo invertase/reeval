@@ -2,8 +2,9 @@
 // the command end to end. No key's value appears in any output, text or JSON.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { loadConfig } from '../src/config.ts'
 import {
@@ -16,13 +17,14 @@ import {
   checkJudge,
   checkKeys,
   checkRuntime,
+  configuredUses,
   type DoctorDeps,
   defaultDeps,
   filledSecrets,
   probeKey,
 } from '../src/doctor.ts'
 import { runtimeInfo } from '../src/history/provenance.ts'
-import { dockerProblem } from '../src/sandbox/providers.ts'
+import { dockerProblem, podmanInfoProblem } from '../src/sandbox/providers.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 
 const SECRET = 'sk-live-doctor-9f8e7d6c5b4a'
@@ -35,7 +37,13 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   dockerState: async () => 'running',
   dockerCapacity: async () => ({ cpus: 8, memoryBytes: 16 * 1024 ** 3 }),
   imageExists: async () => true,
+  // What planning finds when no eval picks a harness: the config's own, on its sandbox.
+  plannedUses: async (config) =>
+    configuredUses(config)
+      .filter((u) => !u.profile)
+      .map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
   imageTags: async () => [],
+  podmanConfinement: async () => null,
   gitIgnored: async (_, paths) => paths.map(() => true),
   gitVisibleEnvFiles: async () => [],
   fetch: async () => new Response('{}', { status: 200 }),
@@ -48,7 +56,7 @@ async function configOf(name: string, body: string) {
     'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
-import { docker, fakeSandbox } from 'reeval/sandbox'
+import { docker, fakeSandbox, podman } from 'reeval/sandbox'
 export default defineConfig(${body})
 `,
   })
@@ -166,6 +174,66 @@ describe('reeval doctor checks', () => {
     )
   })
 
+  test('podman: down, too old, missing cgroup controllers, and running beside Docker', async () => {
+    assert.match(
+      dockerProblem('down', 'linux', 'podman') ?? '',
+      /Podman isn't answering: `podman info` failed\. Install Podman 4/,
+    )
+    assert.match(dockerProblem('down', 'darwin', 'podman') ?? '', /podman machine start/)
+    const linux = (version: string, rootless: boolean, controllers: string[] | null) =>
+      podmanInfoProblem({ version, rootless, controllers })
+    assert.equal(linux('4.9.3', true, ['cpuset', 'cpu', 'io', 'memory', 'pids']), null)
+    assert.match(
+      linux('3.4.4', true, ['cpu', 'memory', 'pids'])?.problem ?? '',
+      /Podman 3\.4\.4 is too old/,
+    )
+    const delegated = linux('5.4.0', true, ['memory', 'pids'])
+    assert.equal(
+      delegated?.problem,
+      "rootless Podman can't limit a sandbox's cpu: your user's cgroup doesn't have the cpu controller",
+    )
+    assert.match(delegated?.fix ?? '', /Delegate=cpu cpuset io memory pids/)
+    assert.equal(linux('5.4.0', false, ['memory']), null, 'rootful Podman has every controller')
+
+    const config = await configOf(
+      'podman',
+      `{ harness: cursor({ model: 'composer-2.5' }), environment: defineEnvironment('p', { sandbox: podman() }) }`,
+    )
+    const ok = await checkDocker(config, deps())
+    assert.deepEqual(
+      ok.checks.map((c) => [c.id, c.status]),
+      [['podman', 'ok']],
+    )
+    assert.match(ok.checks[0]?.summary ?? '', /^running · 8 CPUs/)
+    const down = await checkDocker(
+      config,
+      deps({ dockerState: async (engine) => (engine === 'podman' ? 'down' : 'running') }),
+    )
+    assert.equal(down.running, false)
+    assert.match(down.checks[0]?.summary ?? '', /config's podman\(\) sandboxes need it/)
+    const confined = await checkDocker(
+      config,
+      deps({ podmanConfinement: async () => ({ problem: 'no cpu', fix: 'delegate it' }) }),
+    )
+    assert.deepEqual(confined.checks[0], {
+      id: 'podman',
+      status: 'fail',
+      summary: 'no cpu',
+      fix: 'delegate it',
+    })
+
+    const both = await configOf(
+      'podman-and-docker',
+      `{ harness: cursor({ model: 'composer-2.5' }), environment: defineEnvironment('p', { sandbox: podman() }), profiles: { d: { defaults: { environment: defineEnvironment('d', { sandbox: docker() }) } } } }`,
+    )
+    assert.deepEqual(
+      (await checkDocker(both, deps())).checks.map((c) => c.id),
+      ['docker', 'podman'],
+    )
+    const images = await checkImages(config, deps({ imageExists: async () => false }))
+    assert.match(images.checks[0]?.summary ?? '', /in Podman/)
+  })
+
   test('images: present, missing (with the build fix), and left from another version', async () => {
     const config = await configOf(
       'images',
@@ -203,6 +271,114 @@ describe('reeval doctor checks', () => {
     const ownMissing = await checkImages(own, deps({ imageExists: async () => false }))
     assert.deepEqual(statuses(ownMissing.checks), ['fail'])
     assert.match(ownMissing.checks[0]?.fix ?? '', /docker pull mine:1/)
+  })
+
+  test("images: Docker that can't answer is a failed check naming its error, not a missing image", async () => {
+    const config = await configOf(
+      'images-unanswered',
+      "{ harness: cursor({ model: 'composer-2.5' }) }",
+    )
+    const result = await checkImages(
+      config,
+      deps({
+        imageExists: async (ref) => {
+          throw new Error(`docker image inspect ${ref} failed: Cannot connect to the Docker daemon`)
+        },
+      }),
+    )
+    assert.deepEqual(statuses(result.checks), ['fail'])
+    assert.match(
+      result.checks[0]?.summary ?? '',
+      /^reeval-sandbox:cursor-\S+ \(cursor\) couldn't be checked: docker image inspect .* Cannot connect/,
+    )
+    assert.doesNotMatch(result.checks[0]?.summary ?? '', /isn't built/)
+    assert.deepEqual(result.missing, [], 'nothing to offer to build')
+  })
+
+  test('images: the ones reeval image build plans, so a profile-only harness lists no default cursor', async () => {
+    // The config names only claudeCode, in its default profile: cursor is reeval's default harness,
+    // which no eval runs.
+    const p = await project('doctor-planned-images', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { claudeCode } from 'reeval/harness'
+export default defineConfig({
+  profiles: { dev: { defaults: { harness: claudeCode({ model: 'claude-sonnet-5' }) } } },
+  defaultProfile: { local: 'dev', ci: 'dev' },
+})
+`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+evaluate('a', async () => {})
+`,
+    })
+    const config = await loadConfig(join(p.dir, 'reeval.config.ts'))
+    const planned = await checkImages(config, deps({ plannedUses: defaultDeps().plannedUses }))
+    const refs = planned.checks.map((c) => c.summary.split(' ')[0])
+    assert.equal(refs.length, 1, JSON.stringify(planned.checks))
+    assert.match(refs[0] ?? '', /^reeval-sandbox:claude-code-/)
+    // The config alone (what doctor read before) lists the default cursor image too.
+    const fromConfig = await checkImages(config, deps())
+    assert.ok(fromConfig.checks.some((c) => c.summary.startsWith('reeval-sandbox:cursor-')))
+
+    const dry = await runCli(p.dir, ['image', 'build', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(dry.stdout, /^images {2}1 sandbox image /m)
+    assert.ok(dry.stdout.includes(refs[0] as string), dry.stdout)
+  })
+
+  test('keys: the harnesses the evals plan, so a profile-only harness asks for no CURSOR_API_KEY', async () => {
+    const config = `import { defineConfig } from 'reeval'
+import { claudeCode, codex } from 'reeval/harness'
+export default defineConfig({
+  profiles: {
+    dev: { defaults: { harness: claudeCode({ model: 'claude-sonnet-5' }) } },
+    openai: { defaults: { harness: codex({ model: 'gpt-5.4-mini' }) } },
+  },
+  defaultProfile: { local: 'dev', ci: 'dev' },
+})
+`
+    const p = await project('doctor-planned-keys', {
+      'reeval.config.ts': config,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+evaluate('a', async () => {})
+`,
+    })
+    const loaded = await loadConfig(join(p.dir, 'reeval.config.ts'))
+    const keys = await checkKeys(
+      loaded,
+      deps({ plannedUses: defaultDeps().plannedUses }),
+      false,
+      '.env.local',
+    )
+    assert.deepEqual(
+      keys.map((c) => `${c.status} ${c.summary}`),
+      [
+        'fail ANTHROPIC_API_KEY for claude-code:claude-sonnet-5: not set',
+        'warn OPENAI_API_KEY for codex:gpt-5.4-mini in profile openai: not set',
+      ],
+    )
+
+    // Evals that don't load leave the config's harnesses, reeval's default included, and say so.
+    const broken = await project('doctor-planned-keys-broken', {
+      'reeval.config.ts': config,
+      '.gitignore': '.reeval/\n.env*\n',
+      'evals/a.eval.ts': `throw new Error('broken eval file')\n`,
+    })
+    const r = await runCli(broken.dir, ['doctor', '--json'], {
+      env: { ANTHROPIC_API_KEY: '', CURSOR_API_KEY: '', OPENAI_API_KEY: '' },
+    })
+    const report = JSON.parse(r.stdout)
+    const evals = report.checks.find((c: Check) => c.id === 'evals')
+    assert.equal(evals?.status, 'warn', r.stdout)
+    assert.match(
+      evals?.summary ?? '',
+      /^didn't load, so the images and keys checked are the config's: /,
+    )
+    assert.ok(
+      report.checks.some(
+        (c: Check) => c.id === 'key' && c.summary.startsWith('CURSOR_API_KEY for cursor:'),
+      ),
+      r.stdout,
+    )
   })
 
   test("keys: each harness's, required unless only a profile uses it, never printed", async () => {
@@ -422,6 +598,38 @@ describe('reeval doctor checks', () => {
     assert.equal(check?.status, 'warn')
     assert.match(check?.summary ?? '', /^\.env\.example \(GEMINI_API_KEY\) has key values/)
   })
+
+  test("image tags come through sandbox-docker's podman CLI, which retries a dropped SSH handshake", async () => {
+    // A podman CLI whose first `image ls` loses its handshake (exit 125); a Node script behind an
+    // sh and a .cmd wrapper, so it runs on every OS.
+    const bin = await mkdtemp(join(tmpdir(), 'reeval-doctor-podman-'))
+    const log = join(bin, 'calls.log')
+    await writeFile(
+      join(bin, 'podman.js'),
+      `const fs = require('node:fs')
+const args = process.argv.slice(2)
+if (args[0] !== 'image') process.exit(1)
+fs.appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
+if (fs.readFileSync(${JSON.stringify(log)}, 'utf8').trim().split('\\n').length === 1) {
+  process.stderr.write('Error: ssh: handshake failed: EOF\\n')
+  process.exit(125)
+}
+console.log('localhost/reeval-sandbox:cursor-0.1.5')
+`,
+    )
+    await writeFile(join(bin, 'podman'), `#!/bin/sh\nexec node "$(dirname "$0")/podman.js" "$@"\n`)
+    await chmod(join(bin, 'podman'), 0o755)
+    await writeFile(join(bin, 'podman.cmd'), '@node "%~dp0podman.js" %*\r\n')
+    const path = process.env.PATH
+    process.env.PATH = `${bin}${delimiter}${path}`
+    try {
+      const tags = await defaultDeps().imageTags('reeval-sandbox', 'podman')
+      assert.deepEqual(tags, ['reeval-sandbox:cursor-0.1.5'])
+      assert.equal((await readFile(log, 'utf8')).trim().split('\n').length, 2, 'retried once')
+    } finally {
+      process.env.PATH = path
+    }
+  })
 })
 
 describe('reeval doctor', () => {
@@ -475,6 +683,53 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), judge:
       text.stdout,
       /problems?, \d+ warnings?\. Fix (it|them) and run reeval doctor again\./,
     )
+  })
+
+  test("Docker that answers info but not image inspect: unchecked images, never 'not built'", async () => {
+    // A docker CLI whose daemon is up for `info` but fails `image inspect`, as under a burst of calls.
+    const bin = await mkdtemp(join(tmpdir(), 'reeval-flaky-docker-'))
+    await writeFile(
+      join(bin, 'docker.js'),
+      `const args = process.argv.slice(2)
+if (args[0] === 'info') {
+  console.log(args.join(' ').includes('NCPU') ? '8 17179869184' : '29.1.0 linux')
+} else if (args[0] === 'image' && args[1] === 'inspect') {
+  process.stderr.write('Error response from daemon: context deadline exceeded\\n')
+  process.exit(1)
+}
+`,
+    )
+    await writeFile(join(bin, 'docker'), '#!/bin/sh\nexec node "$(dirname "$0")/docker.js" "$@"\n')
+    await chmod(join(bin, 'docker'), 0o755)
+    await writeFile(join(bin, 'docker.cmd'), '@node "%~dp0docker.js" %*\r\n')
+    const p = await project('doctor-flaky-docker', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+`,
+      'evals/a.eval.ts': "import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n",
+      '.gitignore': '.reeval/\n.env*\n',
+    })
+    const env = { PATH: `${bin}${delimiter}${process.env.PATH}`, CURSOR_API_KEY: 'set' }
+
+    const dry = await runCli(p.dir, ['image', 'build', '--dry-run'], { env })
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(
+      dry.stdout,
+      /\? base +reeval-sandbox:cursor-\S+ +\(unchecked: docker image inspect \S+ failed: Error response from daemon: context deadline exceeded\)/,
+    )
+    assert.doesNotMatch(dry.stdout, /not built yet/)
+
+    const plan = await runCli(p.dir, ['run', '--dry-run'], { env })
+    assert.equal(plan.code, 0, plan.stdout + plan.stderr)
+    assert.match(plan.stdout, /^images {2}1 sandbox image: 1 unchecked$/m)
+
+    const doctor = await runCli(p.dir, ['doctor'], { env })
+    assert.match(
+      doctor.stdout,
+      /✗ image +reeval-sandbox:cursor-\S+ \(cursor\) couldn't be checked: docker image inspect .* context deadline exceeded/,
+    )
+    assert.doesNotMatch(doctor.stdout, /isn't built/)
   })
 
   test('no config, a broken config and a bad flag', async () => {

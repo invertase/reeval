@@ -1471,7 +1471,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a sandbox that is not docker() or fakeSandbox() on evaluate',
       `evaluate('e', { sandbox: { kind: 'vm' } as never }, async () => {})`,
-      /sandbox in evaluate\("e"\) must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in evaluate\("e"\) must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
     [
       'an old option name',
@@ -1922,12 +1922,12 @@ ${body}
     [
       'a sandbox that is not docker() or fakeSandbox() on defineConfig',
       `sandbox: { kind: 'vm' } as never,`,
-      /sandbox in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
     [
       'a sandbox that is not docker() or fakeSandbox() on profile defaults',
       `profiles: { pr: { defaults: { sandbox: { kind: 'vm' } as never } } },`,
-      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
   ]
   for (const [what, extra, message] of configCases) {
@@ -2564,11 +2564,11 @@ evaluate('fake', { environment: defineEnvironment('host', { sandbox: fakeSandbox
     const out = r.stdout
     assert.match(out, /^images {2}4 sandbox images \(nothing built: --dry-run\)$/m)
     // Each step's standing depends on what this machine has built, so only its shape is checked.
-    const st = '[✓+~✗] '
+    const st = '[✓+~✗?] '
     assert.match(
       out,
       new RegExp(
-        `^docker\\+[0-9a-f]+ \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
+        `^docker\\+[0-9a-f]+ \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale|unchecked): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
         'm',
       ),
     )
@@ -2621,8 +2621,8 @@ evaluate('plain', async () => {})
 evaluate('tools', { tags: ['tools'], environment: defineEnvironment('tools', { sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }) }, async () => {})
 `,
     })
-    const cursor = /^ {2}[✓+~✗] base +reeval-sandbox:cursor-[\d.]+ /m
-    const claude = /^ {2}[✓+~✗] base +reeval-sandbox:claude-code-[\w.-]+ /m
+    const cursor = /^ {2}[✓+~✗?] base +reeval-sandbox:cursor-[\d.]+ /m
+    const claude = /^ {2}[✓+~✗?] base +reeval-sandbox:claude-code-[\w.-]+ /m
     const tools = /^docker:tools · 1 eval$/m
     const dry = async (args: string[], env?: Record<string, string>) => {
       const r = await runCli(p.dir, ['image', 'build', '--dry-run', ...args], env ? { env } : {})

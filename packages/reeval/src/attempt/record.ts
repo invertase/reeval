@@ -5,6 +5,7 @@ import { allowedHosts } from '../egress.ts'
 import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
+import { sandboxProvider } from '../options.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
@@ -56,7 +57,7 @@ export async function recordOom(
   if (oom) debugLog('teardown', `oom_kill ${oom.kills} at ${at}`)
   if (!oom?.kills) return undefined
   const processes = oom.kills === 1 ? '1 process' : `${oom.kills} processes`
-  const message = `out of memory: ${processes} killed at ${at}; raise docker({ memory })`
+  const message = `out of memory: ${processes} killed at ${at}; raise ${sandboxProvider(a.spec.sandbox)}({ memory })`
   a.record.error = { kind: 'infra', message, resource: { cause: 'oom', kills: oom.kills } }
   a.record.outcome = 'infra_error'
   return new InfraError(message)

@@ -152,6 +152,8 @@ An eval with several attempts shows its passes over every counted attempt, then 
 
 The `gated` label says the rate leaves out the ungated cells, whose failures don't fail the eval. The studio's eval history labels the rate the same way.
 
+The eval's mark is `✓` only when it passed with at least one counted attempt and no infra error. An eval its gate lets through anyway (`gate: 'none'`, say) with an infra error, or with no counted attempt (`0/0`), is marked `!`, in the terminal and in `summary.md`.
+
 A single-attempt eval's line shows each judge as `pass 0.92/0.80` or `fail 0.78/0.80`. Three or more judges collapse to the lowest score plus a count (`fail 0.33/0.80 · 3 judges`). Token usage, when the harness reported it, follows the turns.
 
 An eval with several attempts also prints each judge key's passes over counted attempts on the cell row (`login 4/5 · checkout 0/5`). Questions that share a prefix show the distinctive tail (`…email sign-in 4/5 · …social sign-in 0/5`), so the rates stay matchable.

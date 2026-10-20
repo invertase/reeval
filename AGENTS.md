@@ -10,6 +10,29 @@ language runtime (Dart, Go, …) should load
 [`.agents/skills/add-a-language/SKILL.md`](./.agents/skills/add-a-language/SKILL.md). The
 [README](./README.md) has the pitch.
 
+## Before you finish
+
+A change is done when these pass, run from the repo root in this order:
+
+```bash
+pnpm format                          # Biome rewrites the formatting; pnpm lint fails on any it would change
+pnpm lint
+pnpm typecheck                       # after touching src/contract/, the only check of each _SameAsSchema
+pnpm build                           # the tests run dist/, not src/
+cd packages/reeval && node --test --experimental-strip-types --no-warnings test/<area>.test.ts && cd -
+pnpm docs:gen && pnpm docs:check     # after any user-visible change
+```
+
+- **The tests** are the files for what you changed. A plan change runs `pnpm test:plan`, a fixture
+ `pnpm test:features` and a new refusal `test/refusals.test.ts` (in `packages/reeval`); `pnpm test`
+ runs them all.
+- **A new feature or option** takes the tier the [feature contract](./packages/reeval/test/features/README.md#which-tier)'s
+ table gives it (a plan case or a fixture), an `inventory.ts` entry and `pnpm features:matrix --write`.
+- **A user-visible change** updates its page in `docs/reference/` (see [Docs](#docs)).
+- **After touching `src/contract/`** run `pnpm --filter reeval typecheck` and
+ `pnpm --filter reeval schema:check`: each module's `_SameAsSchema` holds its hand-written type to
+ the Zod schema, and only the compiler sees it.
+
 reeval is an open-source eval runner for coding agents. You write an eval, then a real agent does
 the task in a local Docker container. reeval checks the result with deterministic assertions and an
 LLM judge, prints a pass/fail summary and writes a result JSON file.

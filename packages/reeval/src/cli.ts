@@ -45,7 +45,7 @@ import {
 } from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { clip } from './text.ts'
-import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
+import type { RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
@@ -204,10 +204,16 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
       : `No debug data to remove in ${where}`,
   )
   if (flags.images) {
-    const { pruneImages } = await import('@reeval/sandbox-docker')
+    const { dockerAvailable, pruneImages } = await import('@reeval/sandbox-docker')
     const { requireDocker } = await import('./sandbox/providers.ts')
-    await requireDocker()
-    const removed = await pruneImages()
+    // Docker's images and Podman's are separate stores: prune each one that answers.
+    const engines: Array<'docker' | 'podman'> = []
+    for (const engine of ['docker', 'podman'] as const) {
+      if (await dockerAvailable(engine)) engines.push(engine)
+    }
+    if (!engines.length) await requireDocker()
+    let removed = 0
+    for (const engine of engines) removed += await pruneImages(engine)
     console.log(
       removed
         ? `Removed ${removed} image${removed === 1 ? '' : 's'} reeval built that nothing uses`
@@ -235,28 +241,18 @@ async function imageBuildCommand(
   configPath: string | undefined,
   filters: string[],
 ): Promise<number> {
-  const { buildImages, imagePlanLines, imageTargets } = await import('./sandbox/images.ts')
+  const { buildImages, imagePlanLines, imageTargets, plannedImageUses } = await import(
+    './sandbox/images.ts'
+  )
   const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
   const ctx = await startRun(setup)
   const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
   const root = config.root
-  const { runEngine } = await import('./engine/node.ts')
-  let planned: PlannedItem[] = []
-  await runEngine({
-    run: JSON.parse(
-      JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
-    ),
+  const uses = await plannedImageUses(
+    { runId, stagingDir, config, runs, tags, concurrency, profile },
     filters,
-    onPlan: async (collected) => {
-      if (collected.unmatched.length) throw unmatchedFilter(config, collected.unmatched)
-      planned = collected.planned.filter((p) => !p.attempt.plan.skip)
-      return false
-    },
-  })
-  const uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> =
-    planned.length
-      ? planned.map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox }))
-      : config.harness.map((harness) => ({ id: '', harness, sandbox: config.sandbox }))
+    (parts) => unmatchedFilter(config, parts),
+  )
   const targets = imageTargets(uses)
   if (targets.length === 0) {
     console.log('No eval runs in a Docker sandbox, so there are no images to build.')
@@ -334,9 +330,12 @@ async function runCommand(
   }
   const { engineRun, plan, sandboxVersions, budgetReached, live, notes, questions } = executed
   invocation.unhandledErrors = engineRun.unhandledErrors
-  if ((interrupted || engineRun.cancelled) && plan?.sandboxes.some((s) => s.kind === 'docker')) {
+  const engines = [
+    ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
+  ]
+  if ((interrupted || engineRun.cancelled) && engines.length) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
-    await removeRunContainers(ctx.runId)
+    await removeRunContainers(ctx.runId, engines)
   }
   if (notes) {
     // Before the record is written: the notes read the staged attempts, which it removes.
@@ -466,10 +465,12 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
       : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
-    // Sized from the Docker VM when Docker answers, as a real run is, so --dry-run shows the same.
-    if (!sandboxes.some((s) => s.kind === 'docker')) return hostCapacity()
+    // Sized from the Docker (or Podman) VM when it answers, as a real run is, so --dry-run shows
+    // the same.
+    const container = sandboxes.find((s) => s.kind === 'docker')
+    if (!container) return hostCapacity()
     const { dockerCapacity } = await import('@reeval/sandbox-docker')
-    return (await dockerCapacity()) ?? hostCapacity()
+    return (await dockerCapacity(container.engine)) ?? hostCapacity()
   })
   return {
     output,
@@ -535,7 +536,7 @@ async function startRun({
     if (!dryRun) {
       try {
         const { removeRunContainers } = await import('./sandbox/docker.ts')
-        await removeRunContainers(target.runId)
+        await removeRunContainers(target.runId, ['docker', 'podman'])
       } catch {}
     }
     return {
@@ -702,11 +703,15 @@ async function executeRun(
       const todos = excluded.filter((e) => e.mode === 'todo').map((e) => e.id)
       lines.push(...planTable(plan, todos))
       const { imageStatusLines } = await import('./sandbox/images.ts')
-      const { dockerAvailable } = await import('@reeval/sandbox-docker')
-      if (targets.length && (await dockerAvailable())) {
+      const { dockerAvailable, engineSpec } = await import('@reeval/sandbox-docker')
+      const engines = [...new Set(targets.map((t) => t.sandbox.engine ?? 'docker'))]
+      const down: typeof engines = []
+      for (const engine of engines) if (!(await dockerAvailable(engine))) down.push(engine)
+      if (targets.length && !down.length) {
         lines.push(...(await imageStatusLines(targets, config.root)))
       } else if (targets.length) {
-        lines.push('images  not checked: Docker is not running')
+        const names = down.map((e) => engineSpec(e).name).join(' and ')
+        lines.push(`images  not checked: ${names} ${down.length === 1 ? 'is' : 'are'} not running`)
       }
     }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))

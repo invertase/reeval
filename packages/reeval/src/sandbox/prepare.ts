@@ -7,6 +7,8 @@ import {
   buildInstallLayer,
   contextHash,
   dockerfileTag,
+  type Engine,
+  engineSpec,
   harnessImageFor,
   harnessLabel,
   type ImageInfo,
@@ -58,6 +60,8 @@ export type Builds = {
    * whose tag moved upstream. `force` (`reeval image build --force`): rebuild and pull everything.
    */
   refresh: Refresh
+  /** The container CLI every build runs on. */
+  engine: Engine
 }
 
 export type Refresh = 'none' | 'check' | 'force'
@@ -76,6 +80,7 @@ export function createBuilds(options: Partial<Omit<Builds, 'once'>> = {}): Build
     retry: options.retry ?? ((step) => step()),
     log: options.log ?? (() => {}),
     refresh: options.refresh ?? 'none',
+    engine: options.engine ?? 'docker',
   }
 }
 
@@ -92,8 +97,8 @@ const buildLogger = (root: string, ref: string) => {
   }
 }
 
-const built = async (ref: string) => {
-  const info = await imageInfo(ref)
+const built = async (ref: string, engine: Engine) => {
+  const info = await imageInfo(ref, engine)
   if (!info) throw new Error(`The image ${ref} disappeared after building`)
   return info
 }
@@ -106,15 +111,16 @@ export const reevalImage = (
   b: Builds,
 ) => {
   const ref = imageFor(harness)
+  const { engine } = b
   return b.once(ref, async () => {
-    const info = await imageInfo(ref)
+    const info = await imageInfo(ref, engine)
     const current = info?.labels[LABEL.context] === contextHash()
     if (info && current && b.refresh !== 'force') return info
     b.log(info && !current ? `Rebuilding ${ref}: reeval's base image changed` : `Building ${ref}`)
     const output = buildLogger(root, ref)
     const pull = b.refresh === 'force'
-    await b.retry(() => buildImage(b.log, { harness, signal, output, pull }))
-    return built(ref)
+    await b.retry(() => buildImage(b.log, { harness, signal, output, pull, engine }))
+    return built(ref, engine)
   })
 }
 
@@ -130,13 +136,14 @@ async function harnessBase(
   signal: AbortSignal,
   b: Builds,
 ): Promise<{ ref: string; info: ImageInfo; dockerfile: AttemptImage['dockerfile'] }> {
+  const { engine } = b
   const bake = (from: string) => {
     const ref = harnessImageFor(harness, from)
     return b.once(ref, async () => {
-      const cached = b.refresh === 'force' ? null : await imageInfo(ref)
+      const cached = b.refresh === 'force' ? null : await imageInfo(ref, engine)
       if (cached && b.refresh === 'check') {
         // `reeval image build` refreshes a tag that moved upstream; a pinned digest never moves.
-        const now = await resolveFrom(from, signal)
+        const now = await resolveFrom(from, signal, engine)
         const was = cached.labels[LABEL.fromDigest]
         if ('digest' in now && was && now.digest !== was) {
           b.log(`Rebuilding ${ref}: ${from} moved upstream`)
@@ -144,16 +151,17 @@ async function harnessBase(
       } else if (cached) return cached
       const output = buildLogger(root, ref)
       const pull = b.refresh === 'force'
-      await b.retry(() => buildImage(b.log, { harness, from, signal, output, pull }))
-      return built(ref)
+      await b.retry(() => buildImage(b.log, { harness, from, signal, output, pull, engine }))
+      return built(ref, engine)
     })
   }
 
   if (sandbox.image) {
     const image = sandbox.image
     const info = await b.once(image, async () => {
-      const found = await imageInfo(image)
+      const found = await imageInfo(image, engine)
       if (found) return found
+      const { name, fn } = engineSpec(engine)
       throw new PrepareError({
         class: 'config',
         stage: 'image',
@@ -161,7 +169,7 @@ async function harnessBase(
         cause: null,
         log: null,
         usage: true,
-        message: `Docker image ${image} not found. docker({ image }) is used as is, so pull or build it first (or use from or dockerfile to have reeval build it).`,
+        message: `${name} image ${image} not found. ${fn}({ image }) is used as is, so pull or build it first (or use from or dockerfile to have reeval build it).`,
       })
     })
     return { ref: image, info, dockerfile: null }
@@ -178,7 +186,7 @@ async function harnessBase(
     const { tag, sha256 } = dockerfileTag(path, harness, reevalBase)
     const dockerfile = { path: projectPath(root, path), sha256 }
     const info = await b.once(tag, async () => {
-      const cached = b.refresh === 'force' ? null : await imageInfo(tag)
+      const cached = b.refresh === 'force' ? null : await imageInfo(tag, engine)
       if (cached) return cached
       b.log(`Building ${dockerfile.path} as ${tag}`)
       const output = buildLogger(root, tag)
@@ -191,9 +199,10 @@ async function harnessBase(
           output,
           force: true,
           pull: b.refresh === 'force',
+          engine,
         }),
       )
-      return built(tag)
+      return built(tag, engine)
     })
     // Built on this harness's image, so its CLI is already there. Any other base, including
     // another harness's image, gets this harness baked on.
@@ -235,13 +244,13 @@ export async function prepareImage(
   const parent = { ref: base.ref, id: base.info.id }
   const ref = installLayerTag(parent, steps)
   const info = await b.once(ref, async () => {
-    const cached = await imageInfo(ref)
+    const cached = await imageInfo(ref, b.engine)
     if (cached) return cached
     b.log(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
     const output = buildLogger(root, ref)
     // The user's own commands: a failure is theirs, never retried.
-    await buildInstallLayer(parent, steps, { signal, output })
-    return built(ref)
+    await buildInstallLayer(parent, steps, { signal, output, engine: b.engine })
+    return built(ref, b.engine)
   })
   return { ref, id: info.id, ...image }
 }

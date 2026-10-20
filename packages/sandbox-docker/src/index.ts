@@ -32,6 +32,7 @@ export {
   usesReevalBase,
 } from './build-image.ts'
 export {
+  type DockerOptions,
   type DockerResult,
   type DockerState,
   docker,
@@ -41,6 +42,7 @@ export {
   dockerState,
   type ImageInfo,
   imageInfo,
+  imageTags,
   isRegistryDigest,
   removeContainerDetached,
 } from './docker-cli.ts'
@@ -70,6 +72,14 @@ export {
 } from './egress/rules.ts'
 export { placeholder, type SubstituteIn, type Substitution } from './egress/substitution.ts'
 export type { DerivedTokens } from './egress/tokens.ts'
+export {
+  dockerSeccompFile,
+  ENGINES,
+  type Engine,
+  type EngineSpec,
+  engineSpec,
+  normalizeImageId,
+} from './engine.ts'
 export {
   adapterVersion,
   BAKED_HARNESSES,

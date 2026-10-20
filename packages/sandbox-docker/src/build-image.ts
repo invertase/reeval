@@ -13,6 +13,7 @@ import {
   parseBuildOutput,
 } from './build-failure.ts'
 import { docker, dockerOk, imageInfo } from './docker-cli.ts'
+import { type Engine, engineSpec } from './engine.ts'
 import {
   BASE_IMAGE,
   type BakedHarness,
@@ -24,8 +25,7 @@ import {
   SANDBOX_USER,
   WORKSPACE_DIR,
 } from './image.ts'
-
-import { shellQuote as q } from './process.ts'
+import { shellQuote as q, run } from './process.ts'
 import { createDockerSession } from './session.ts'
 
 const PNPM_VERSION = '10.33.3'
@@ -168,10 +168,12 @@ const tail = (text: string) => text.trim().split('\n').slice(-15).join('\n')
 const clipLine = (text: string, max = 300) =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text
 
-/** Why a `docker build` failed, in a line: the failing step's exit, or BuildKit's own error. */
-function buildReason(error: string | null): string {
-  if (!error) return 'docker build failed'
-  const exit = /^process ".*" did not complete successfully: exit code: (\d+)$/s.exec(error)
+/** Why a `docker build` failed, in a line: the failing step's exit, or BuildKit's (or buildah's) own error. */
+function buildReason(error: string | null, engine?: Engine): string {
+  if (!error) return `${engineSpec(engine).bin} build failed`
+  const exit =
+    /^process ".*" did not complete successfully: exit code: (\d+)$/s.exec(error) ??
+    /^while running runtime: exit status (\d+)$/.exec(error)
   return exit ? `a RUN step exited ${exit[1]}` : clipLine(error.replace(/\s+/g, ' '))
 }
 
@@ -181,7 +183,13 @@ function buildReason(error: string | null): string {
  */
 function buildError(
   output: string,
-  what: { stage: ImageStage; ref: string; headline: string; log?: string | null },
+  what: {
+    stage: ImageStage
+    ref: string
+    headline: string
+    log?: string | null
+    engine?: Engine | undefined
+  },
   reason?: (parsed: ReturnType<typeof parseBuildOutput>) => string | null,
   keep: (line: string) => boolean = () => true,
 ): ImageBuildError {
@@ -189,13 +197,14 @@ function buildError(
   const text = [parsed.error ?? '', ...parsed.output].join('\n')
   const cause = failureCause(text, parsed.exitCode)
   parsed.output = parsed.output.filter(keep)
-  const why = reason?.(parsed) ?? buildReason(parsed.error)
+  const why = reason?.(parsed) ?? buildReason(parsed.error, what.engine)
   return new ImageBuildError(
     failureMessage({
       headline: `${what.headline} failed: ${why}`,
       cause,
       output: parsed.output,
       log: what.log ?? null,
+      ...(what.engine ? { engine: what.engine } : {}),
     }),
     {
       stage: what.stage,
@@ -214,9 +223,9 @@ const BUILT_BY = ['--label', `${LABEL.managed}=image`]
  * Removes the images reeval built that nothing tags any more (a rebuild's old image) and the
  * intermediate `-base` tags of `from` builds. Returns how many it removed.
  */
-export async function pruneImages(): Promise<number> {
+export async function pruneImages(engine?: Engine): Promise<number> {
   const list = async (args: string[]) =>
-    (await docker(['image', 'ls', ...args])).stdout
+    (await docker(['image', 'ls', ...args], { engine })).stdout
       .toString('utf8')
       .split('\n')
       .map((l) => l.trim())
@@ -236,9 +245,53 @@ export async function pruneImages(): Promise<number> {
   )
   let removed = 0
   for (const ref of [...bases, ...new Set(dangling)]) {
-    if ((await docker(['image', 'rm', ref]).catch(() => null))?.exitCode === 0) removed++
+    if ((await docker(['image', 'rm', ref], { engine }).catch(() => null))?.exitCode === 0) {
+      removed++
+    }
   }
   return removed
+}
+
+/** Docker's names for Node's architectures, as image indexes list platforms. */
+const OCI_ARCH: Record<string, string> = {
+  x64: 'amd64',
+  arm64: 'arm64',
+  arm: 'arm',
+  ppc64: 'ppc64le',
+}
+
+/**
+ * A registry digest for `from` without Docker's buildx: skopeo's, which is the same digest
+ * buildx gives, or else this platform's manifest from `podman manifest inspect`.
+ */
+async function podmanRemoteDigest(
+  from: string,
+  signal?: AbortSignal,
+): Promise<{ digest: string } | { error: string }> {
+  const skopeo = await run('skopeo', ['inspect', '--format', '{{.Digest}}', `docker://${from}`], {
+    ...(signal ? { signal } : {}),
+  }).catch(() => null)
+  const digest = skopeo?.exitCode === 0 ? skopeo.stdout.trim() : ''
+  if (digest.startsWith('sha256:')) return { digest }
+  const r = await docker(['manifest', 'inspect', from], { signal, engine: 'podman' }).catch(
+    () => null,
+  )
+  if (r?.exitCode === 0) {
+    const manifest = JSON.parse(r.stdout.toString('utf8')) as {
+      manifests?: Array<{ digest?: string; platform?: { architecture?: string; os?: string } }>
+    }
+    const arch = OCI_ARCH[process.arch] ?? process.arch
+    const own = manifest.manifests?.find(
+      (m) => m.platform?.os === 'linux' && m.platform.architecture === arch,
+    )?.digest
+    if (own?.startsWith('sha256:')) return { digest: own }
+  }
+  const stderr = r?.stderr.trim() || skopeo?.stderr.trim() || ''
+  return {
+    error:
+      stderr.replace(/^(?:Error|time="[^"]*" level=fatal msg=): ?/, '').replace(/\s+/g, ' ') ||
+      `${from} doesn't resolve`,
+  }
 }
 
 /**
@@ -248,28 +301,37 @@ export async function pruneImages(): Promise<number> {
 export async function resolveFrom(
   from: string,
   signal?: AbortSignal,
+  engine?: Engine,
 ): Promise<{ digest: string; local: boolean } | { error: string }> {
   const pinned = /@(sha256:[0-9a-f]{64})$/.exec(from)?.[1]
   if (pinned) return { digest: pinned, local: false }
-  const remote = await docker(
-    ['buildx', 'imagetools', 'inspect', '--format', '{{json .Manifest.Digest}}', from],
-    { signal },
-  ).catch(() => null)
-  const digest = remote?.exitCode === 0 ? JSON.parse(remote.stdout.toString('utf8').trim()) : null
-  if (typeof digest === 'string' && digest.startsWith('sha256:')) return { digest, local: false }
-  const local = await imageInfo(from)
+  let error: string | null = null
+  if (engine === 'podman') {
+    const remote = await podmanRemoteDigest(from, signal)
+    if ('digest' in remote) return { digest: remote.digest, local: false }
+    error = remote.error
+  } else {
+    const remote = await docker(
+      ['buildx', 'imagetools', 'inspect', '--format', '{{json .Manifest.Digest}}', from],
+      { signal },
+    ).catch(() => null)
+    const digest = remote?.exitCode === 0 ? JSON.parse(remote.stdout.toString('utf8').trim()) : null
+    if (typeof digest === 'string' && digest.startsWith('sha256:')) return { digest, local: false }
+    error =
+      remote?.stderr
+        .trim()
+        .replace(/^ERROR: /, '')
+        .replace(/\s+/g, ' ') || null
+  }
+  // An engine that can't inspect it leaves the registry's error as the answer.
+  const local = await imageInfo(from, engine).catch(() => null)
   if (local) return { digest: local.id, local: true }
-  const error =
-    remote?.stderr
-      .trim()
-      .replace(/^ERROR: /, '')
-      .replace(/\s+/g, ' ') || `${from} doesn't resolve`
-  return { error }
+  return { error: error || `${from} doesn't resolve` }
 }
 
 /** Removes a tag or an image reeval replaced, unless something still uses it. */
-const removeQuietly = async (ref: string) => {
-  await docker(['image', 'rm', ref]).catch(() => {})
+const removeQuietly = async (ref: string, engine?: Engine) => {
+  await docker(['image', 'rm', ref], { engine }).catch(() => {})
 }
 
 /** The hash of reeval's base image build context, which its images carry as a label. */
@@ -299,11 +361,12 @@ export async function buildImage(
     output?: BuildOutput
     /** Pull the base again even when it's cached: `reeval image build --force`. */
     pull?: boolean
+    engine?: Engine
   },
 ): Promise<{ image: string; agentVersion: string }> {
-  const { harness, from, signal } = options
+  const { harness, from, signal, engine } = options
   // Built on the digest `from` names now, and labelled with it, so a moved tag is visible.
-  const resolved = from ? await resolveFrom(from, signal) : null
+  const resolved = from ? await resolveFrom(from, signal, engine) : null
   const digest = resolved && 'digest' in resolved ? resolved.digest : null
   const pinned =
     from && digest && resolved && 'local' in resolved && !resolved.local && !from.includes('@')
@@ -312,7 +375,10 @@ export async function buildImage(
   const bootstrap = BOOTSTRAPS[harness]
   const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(harness, from) : imageFor(harness)
-  const previous = [(await imageInfo(target))?.id, from ? null : (await imageInfo(base))?.id]
+  const previous = [
+    (await imageInfo(target, engine))?.id,
+    from ? null : (await imageInfo(base, engine))?.id,
+  ]
   log(`Building ${base}${from ? ` from ${from}` : ''}`)
   const build = from
     ? await docker(
@@ -326,7 +392,7 @@ export async function buildImage(
           base,
           '-',
         ],
-        { input: toolchainDockerfile(pinned ?? from), signal },
+        { input: toolchainDockerfile(pinned ?? from), signal, engine },
       )
     : await docker(
         [
@@ -342,9 +408,7 @@ export async function buildImage(
           base,
           DOCKER_CONTEXT,
         ],
-        {
-          signal,
-        },
+        { signal, engine },
       )
   const output = `${build.stdout.toString('utf8')}${build.stderr}`
   options.output?.write(output)
@@ -358,6 +422,7 @@ export async function buildImage(
           ? `Building the toolchain layer FROM ${from}`
           : "Building reeval's base image",
         log: options.output?.path ?? null,
+        engine,
       },
       (parsed) => parsed.output.find((l) => l.startsWith('reeval needs a Debian')) ?? null,
     )
@@ -369,27 +434,31 @@ export async function buildImage(
     image: base,
     lifetimeMs: 30 * 60_000,
     ...(signal ? { abortSignal: signal } : {}),
+    ...(engine ? { engine } : {}),
   })
   let agentVersion: string
   try {
     agentVersion = await bake(session, bootstrap)
     log(`${bootstrap.name} ${bootstrap.version ? '' : 'CLI '}${agentVersion}`)
-    await dockerOk([
-      'commit',
-      '--change',
-      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`}`,
-      '--change',
-      `WORKDIR ${SANDBOX_ROOT}`,
-      // Not the bootstrap's user: Dockerfiles `FROM ${REEVAL_BASE}` build as root.
-      '--change',
-      'USER root',
-      '--change',
-      'ENTRYPOINT []',
-      '--change',
-      'CMD ["bash"]',
-      session.id,
-      target,
-    ])
+    await dockerOk(
+      [
+        'commit',
+        '--change',
+        `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`}`,
+        '--change',
+        `WORKDIR ${SANDBOX_ROOT}`,
+        // Not the bootstrap's user: Dockerfiles `FROM ${REEVAL_BASE}` build as root.
+        '--change',
+        'USER root',
+        '--change',
+        'ENTRYPOINT []',
+        '--change',
+        'CMD ["bash"]',
+        session.id,
+        target,
+      ],
+      { engine },
+    )
   } catch (error) {
     if (signal?.aborted || error instanceof ImageBuildError) throw error
     const [first = '', ...rest] = (error as Error).message.split('\n')
@@ -401,6 +470,7 @@ export async function buildImage(
         cause,
         output: outputTail(rest.join('\n')),
         log: options.output?.path ?? null,
+        ...(engine ? { engine } : {}),
       }),
       {
         stage: 'harness',
@@ -413,9 +483,9 @@ export async function buildImage(
   } finally {
     await session.destroy()
   }
-  if (from) await removeQuietly(base)
-  const now = (await imageInfo(target))?.id
-  for (const id of previous) if (id && id !== now) await removeQuietly(id)
+  if (from) await removeQuietly(base, engine)
+  const now = (await imageInfo(target, engine))?.id
+  for (const id of previous) if (id && id !== now) await removeQuietly(id, engine)
   return { image: target, agentVersion }
 }
 
@@ -481,11 +551,14 @@ export type BuildOutput = { write: (text: string) => void; path: string }
 export async function buildInstallLayer(
   parent: { ref: string; id: string },
   steps: InstallStep[],
-  options: { signal?: AbortSignal; output?: BuildOutput } = {},
+  options: { signal?: AbortSignal; output?: BuildOutput; engine?: Engine } = {},
 ): Promise<string> {
-  const { signal } = options
+  const { signal, engine } = options
   const tag = installLayerTag(parent, steps)
-  const exists = await docker(['image', 'inspect', '--format', '{{.Id}}', tag], { signal })
+  const exists = await docker(['image', 'inspect', '--format', '{{.Created}}', tag], {
+    signal,
+    engine,
+  })
   if (exists.exitCode === 0) return tag
   const script = installScript(steps)
   // Base64, so no command's quoting or newlines can break the Dockerfile.
@@ -505,6 +578,7 @@ export async function buildInstallLayer(
   const build = await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', tag, '-'], {
     input: dockerfile,
     signal,
+    engine,
   })
   const output = `${build.stdout.toString('utf8')}${build.stderr}`
   options.output?.write(`${script}\n${dockerfile}\n\n${output}`)
@@ -518,6 +592,7 @@ export async function buildInstallLayer(
         ref: tag,
         headline: `Building the install layer (${count})`,
         log: options.output?.path ?? null,
+        engine,
       },
       () =>
         failed ? `install ${failed[1]} exited ${failed[2]}: ${clipLine(failed[3] ?? '')}` : null,
@@ -640,11 +715,12 @@ export async function buildDockerfile(
     force?: boolean
     /** Pull its `FROM` again: `reeval image build --force`. */
     pull?: boolean
+    engine?: Engine
   },
 ): Promise<string> {
-  const { harness, signal } = options
+  const { harness, signal, engine } = options
   const { tag } = dockerfileTag(dockerfile, harness, options.reevalBase ?? null)
-  const previous = (await imageInfo(tag))?.id
+  const previous = (await imageInfo(tag, engine))?.id
   if (previous && !options.force) return tag
   const build = await docker(
     [
@@ -661,7 +737,7 @@ export async function buildDockerfile(
       tag,
       dirname(dockerfile),
     ],
-    { signal },
+    { signal, engine },
   )
   const output = `${build.stdout.toString('utf8')}${build.stderr}`
   options.output?.write(output)
@@ -671,9 +747,10 @@ export async function buildDockerfile(
       ref: tag,
       headline: `Building ${options.name ?? dockerfile}`,
       log: options.output?.path ?? null,
+      engine,
     })
   }
-  const now = (await imageInfo(tag))?.id
-  if (previous && previous !== now) await removeQuietly(previous)
+  const now = (await imageInfo(tag, engine))?.id
+  if (previous && previous !== now) await removeQuietly(previous, engine)
   return tag
 }

@@ -1,6 +1,7 @@
 // Tiers F, D and C: one directory per feature under test/features/, each with one check
 // (evals/lands.eval.ts) and a canary that must fail (evals/canary.eval.ts). The same fixture runs on
-// the fake sandbox, in Docker when Docker and reeval's image are there, and on real Cursor with
+// the fake sandbox, in Docker when Docker and reeval's image are there, in rootless Podman when
+// Podman and its copy of the image are there, and on real Cursor with
 // REEVAL_TEST_REAL=1 and CURSOR_API_KEY. The oracle here checks the record from outside; see
 // test/features/README.md for adding one.
 import assert from 'node:assert/strict'
@@ -46,8 +47,11 @@ import { type EvalExpectation, expectRun } from './support/oracle.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
-/** `real` is Docker with real Cursor (REEVAL_FIXTURE_HARNESS=cursor), one fixture at a time. */
-type Tier = 'fake' | 'docker' | 'real'
+/**
+ * `podman` is `podman()` where `docker` is `docker()`; `real` is Docker with real Cursor
+ * (REEVAL_FIXTURE_HARNESS=cursor), one fixture at a time.
+ */
+type Tier = 'fake' | 'docker' | 'podman' | 'real'
 
 type Feature = {
   /** Under `test/features/`. */
@@ -55,7 +59,7 @@ type Feature = {
   tiers: Tier[]
   /** The environment the evals run in: attempt ids are `fake/<env>/<sandbox>#1`. */
   env: string
-  /** Cell sandbox id, when it isn't the tier default (`fake` or `docker`). */
+  /** Cell sandbox id, when it isn't the tier default (`fake`, `docker` or `podman`). */
   sandbox?: string
   /**
    * Cell environments in plan order, when an eval runs more than one (a compare).
@@ -92,7 +96,7 @@ type Feature = {
     runDir: string
     tier: Tier
   }) => void | Promise<void>
-  /** reeval's image the Docker tier needs, when it isn't Cursor's (a fake agent with `layout`). */
+  /** reeval's image the Docker and Podman tiers need, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
   /**
    * The harness the real tier runs it on, with that contract row's model and key, when it isn't
@@ -486,6 +490,24 @@ export const features: Feature[] = [
       assert.equal(workspaceOf(run)?.commit, git(join(project, 'repo'), 'rev-parse', 'v1')),
   },
   {
+    dir: 'skills/git-skills-dir',
+    tiers: ['fake', 'docker'],
+    env: 'skills-dir',
+    canary: /to contain 'Hello there, <name>\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'skill-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'skills')
+    },
+    record: ({ run }) => {
+      const [skill] = skills(run)
+      assert.equal(skill?.name, 'house-greeting')
+      assert.match(skill?.source ?? '', /\/repo:skills$/, 'the source names the skills/ it used')
+    },
+  },
+  {
     dir: 'skills/registry-version',
     tiers: ['fake', 'docker'],
     env: 'registry-v1',
@@ -626,7 +648,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'secrets/brokered-agent-sees-placeholder',
-    tiers: ['fake', 'docker'],
+    tiers: ['fake', 'docker', 'podman'],
     env: 'keys',
     hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
     canary: /expected 'reeval_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
@@ -696,7 +718,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'egress/allowed-host-reachable',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'listed',
     canaryEnv: 'closed',
     hostEnv: egressEnv,
@@ -716,7 +738,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'egress/blocked-host-recorded',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'listed',
     canary:
       /expected 'blocked by the reeval egress policy: …' not to contain 'blocked by the reeval egress policy'/,
@@ -761,7 +783,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'egress/deny-all',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'closed',
     canaryEnv: 'open',
     hostEnv: egressEnv,
@@ -832,10 +854,22 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/unprivileged',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'plain',
     canaryEnv: 'rooted',
     canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+  },
+  {
+    dir: 'sandbox/podman-bridge',
+    tiers: ['podman'],
+    env: 'bridged',
+    canary: /expected \[\] to have a length of 1 but got \+0/,
+  },
+  {
+    dir: 'sandbox/no-unshare',
+    tiers: ['docker', 'podman'],
+    env: 'plain',
+    canary: /expected 'unshare: unshare failed: Operation no…' to be 'exit=0'/,
   },
   {
     dir: 'sandbox/read-before-send',
@@ -863,7 +897,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/write-file',
-    tiers: ['fake', 'docker'],
+    tiers: ['fake', 'docker', 'podman'],
     env: 'greeting',
     canary: /to deeply equal \[ 'greet\.js', 'notes\.md' \]/,
   },
@@ -895,7 +929,7 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/limits',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'plain',
     canaryEnv: 'unlimited',
     canary:
@@ -910,14 +944,14 @@ export const features: Feature[] = [
   },
   {
     dir: 'sandbox/oom-is-infra',
-    tiers: ['docker'],
+    tiers: ['docker', 'podman'],
     env: 'small',
     lands: {
       outcome: 'infra_error',
       error: {
         kind: 'infra',
         message:
-          /^out of memory: \d+ process(es)? killed at the 128m limit \(\+128m swap\); raise docker\(\{ memory \}\)$/,
+          /^out of memory: \d+ process(es)? killed at the 128m limit \(\+128m swap\); raise (docker|podman)\(\{ memory \}\)$/,
       },
     },
     canary: /expected command to succeed, exit code 137/,
@@ -2188,9 +2222,11 @@ function filesNamed(dir: string, name: string): string[] {
     .filter(Boolean)
 }
 
-const imageBuilt = (ref: string) => {
+/** The container CLI a tier runs on. */
+const cliOf = (tier: Tier) => (tier === 'podman' ? 'podman' : 'docker')
+const imageBuilt = (ref: string, cli = 'docker') => {
   try {
-    execFileSync('docker', ['image', 'inspect', ref], { stdio: 'ignore' })
+    execFileSync(cli, ['image', 'inspect', ref], { stdio: 'ignore' })
     return true
   } catch {
     return false
@@ -2198,6 +2234,8 @@ const imageBuilt = (ref: string) => {
 }
 const dockerReady = imageBuilt(DEFAULT_IMAGE)
 const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
+const podmanReady = imageBuilt(DEFAULT_IMAGE, 'podman')
+const requirePodman = process.env.REEVAL_TEST_REQUIRE_PODMAN === '1'
 /** Real Cursor, for the attempt ledger (support/harnesses.ts). */
 const cursorRow = harnesses.find((h) => h.id === 'cursor') as (typeof harnesses)[number]
 /** The contract row a fixture's real tier runs on: Cursor, or its `realHarness`. */
@@ -2212,11 +2250,11 @@ const realModel = process.env.REEVAL_REAL_MODEL ?? 'composer-2.5'
 const only = process.env.REEVAL_FIXTURE_TIERS?.split(',')
 
 /** Containers are removed by a detached `docker rm`, which may finish after the CLI exits. */
-async function containersGone(runId: string, deadlineMs = 20_000): Promise<void> {
+async function containersGone(runId: string, cli: string, deadlineMs = 20_000): Promise<void> {
   const until = Date.now() + deadlineMs
   let left = ''
   do {
-    left = execFileSync('docker', ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
+    left = execFileSync(cli, ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
       encoding: 'utf8',
     }).trim()
     if (!left) return
@@ -2235,6 +2273,10 @@ function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string |
     if (!dockerReady) return `needs Docker and ${DEFAULT_IMAGE}`
     if (image && !imageBuilt(imageFor(image))) return `needs ${imageFor(image)}`
   }
+  if (tier === 'podman' && !requirePodman) {
+    if (!podmanReady) return `needs Podman and ${DEFAULT_IMAGE} (reeval image build with podman())`
+    if (image && !imageBuilt(imageFor(image), 'podman')) return `needs ${imageFor(image)} in Podman`
+  }
   return false
 }
 
@@ -2246,7 +2288,8 @@ function fixtureTests(tiers: Tier[]) {
   for (const f of features) {
     for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
       const timeout =
-        f.timeoutMs?.[tier] ?? { fake: FAKE_TIMEOUT_MS, docker: 240_000, real: 600_000 }[tier]
+        f.timeoutMs?.[tier] ??
+        { fake: FAKE_TIMEOUT_MS, docker: 240_000, podman: 240_000, real: 600_000 }[tier]
       test(`${f.dir} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
         timeout,
@@ -2264,7 +2307,7 @@ function fixtureTests(tiers: Tier[]) {
           {
             env: {
               ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
-              REEVAL_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
+              REEVAL_FIXTURE_SANDBOX: tier === 'real' ? 'docker' : tier,
               ...(tier === 'real'
                 ? {
                     REEVAL_FIXTURE_HARNESS: harnessOf(row),
@@ -2276,7 +2319,7 @@ function fixtureTests(tiers: Tier[]) {
             timeoutMs: timeout - 10_000,
           },
         )
-        const sandbox = f.sandbox ?? (tier === 'fake' ? 'fake' : 'docker')
+        const sandbox = f.sandbox ?? (tier === 'real' ? 'docker' : tier)
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'
         const ids = (names: string[]) => names.map((env) => `${harness}/${env}/${sandbox}#1`)
@@ -2300,13 +2343,13 @@ function fixtureTests(tiers: Tier[]) {
         })
         await f.record?.({ run, project: p.dir, runDir, tier })
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
-        if (tier !== 'fake') await containersGone(run.runId)
+        if (tier !== 'fake') await containersGone(run.runId, cliOf(tier))
       })
     }
   }
 }
 
-describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker']))
+describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker', 'podman']))
 // Real attempts run one at a time, each within its own timeout.
 describe('feature fixtures on real Cursor', { concurrency: 1 }, () => fixtureTests(['real']))
 

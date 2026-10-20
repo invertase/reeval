@@ -337,6 +337,46 @@ jobs:
         with:
           name: docker-${{ strategy.job-index }}
 
+  # podman(): sandbox-docker's container tests and the fixtures' Podman tier, on the rootless
+  # Podman GitHub's Ubuntu image ships. systemd delegates only memory and pids to a user's cgroup,
+  # so a drop-in adds cpu (podman({ cpus })) before the user manager restarts. Fails without Podman.
+  podman:
+    name: podman (rootless)
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      REEVAL_TEST_ENGINE: podman
+      REEVAL_TEST_REQUIRE_PODMAN: '1'
+      REEVAL_FIXTURE_TIERS: podman
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - name: rootless Podman with the cpu, memory and pids controllers
+        run: |
+          sudo mkdir -p /etc/systemd/system/user@.service.d
+          printf '[Service]\nDelegate=cpu cpuset io memory pids\n' |
+            sudo tee /etc/systemd/system/user@.service.d/delegate.conf
+          sudo systemctl daemon-reload
+          sudo loginctl enable-linger "$(id -u)"
+          sudo systemctl restart "user@$(id -u).service"
+          podman system migrate
+          podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}} {{.Host.CgroupManager}} {{.Host.CgroupControllers}} {{.Host.NetworkBackend}}'
+      - run: pnpm build
+      - name: reeval's image, in Podman's store
+        run: |
+          node --input-type=module -e "
+            import { buildImage } from './packages/sandbox-docker/dist/index.js'
+            await buildImage(console.log, { harness: 'cursor', engine: 'podman' })"
+      - name: sandbox-docker on Podman
+        working-directory: packages/sandbox-docker
+        run: pnpm test
+      - name: the fixtures' Podman tier
+        working-directory: packages/reeval
+        run: node --test --experimental-strip-types --no-warnings --test-name-pattern='\[podman\]' test/features.test.ts
+
   studio:
     name: studio
     needs: changes
@@ -464,7 +504,7 @@ jobs:
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
-    needs: [changes, checks, unit, features, docker, studio, engine-coverage, pack, extended]
+    needs: [changes, checks, unit, features, docker, podman, studio, engine-coverage, pack, extended]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

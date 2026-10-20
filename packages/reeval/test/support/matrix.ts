@@ -2,9 +2,9 @@
 // feature. Pure, so matrix.test.ts can prove the check fails on a made-up inventory.
 import { AREAS, type InventoryFeature } from '../features/inventory.ts'
 
-export const TIERS = ['unit', 'plan', 'fake', 'docker', 'real'] as const
+export const TIERS = ['unit', 'plan', 'fake', 'docker', 'podman', 'real'] as const
 export type Tier = (typeof TIERS)[number]
-const FIXTURE_TIERS: readonly string[] = ['fake', 'docker', 'real']
+const FIXTURE_TIERS: readonly string[] = ['fake', 'docker', 'podman', 'real']
 
 export type Sources = {
   /** The rows of features.test.ts, and whether each directory has a canary. */
@@ -141,7 +141,7 @@ export function renderMarkdown({ rows }: Matrix): string {
     '',
     '- **unit**: plain `node:test` cases, including runner-level tests through the CLI',
     '- **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`',
-    '- **fake**, **docker**: feature fixtures in `features.test.ts` on the fake sandbox and in Docker',
+    '- **fake**, **docker**, **podman**: feature fixtures in `features.test.ts` on the fake sandbox, in Docker and in rootless Podman',
     '- **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness',
     '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing',
     '',

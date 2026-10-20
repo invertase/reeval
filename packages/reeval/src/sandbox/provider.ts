@@ -55,7 +55,8 @@ export type PrepareContext = {
 }
 
 export interface SandboxProvider<D extends SandboxDescriptor = SandboxDescriptor> {
-  kind: D['kind']
+  /** The sandbox's kind, or `podman` for Docker sandboxes on Podman. */
+  kind: string
   /**
    * Once per run, before anything is prepared: credentials and connectivity. Throws a
    * {@link PrepareError}, which stops the run.

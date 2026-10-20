@@ -10,7 +10,7 @@ export type InventoryFeature = {
   area: Area
   /** The feature as the docs name it. */
   name: string
-  /** Directories under test/features/. Their tiers (fake, docker, real) come from features.test.ts. */
+  /** Directories under test/features/. Their tiers (fake, docker, podman, real) come from features.test.ts. */
   fixtures?: string[]
   /** Plan cases in plan.test.ts, as `dir/name`. */
   plan?: string[]
@@ -415,8 +415,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'skill.git',
     area: 'Environments',
-    name: '`skill.git`: ref, `path`, `only` and the recorded commit',
-    fixtures: ['skills/git-ref'],
+    name: '`skill.git`: ref, `path` (else `skills/` when the root has no SKILL.md), `only` and the recorded commit',
+    fixtures: ['skills/git-ref', 'skills/git-skills-dir'],
     tests: [unit('git refs and repo shorthands'), options('skills come from a git URL at a ref')],
   },
   {
@@ -768,7 +768,7 @@ export const inventory: InventoryFeature[] = [
     id: 'docker.confinement',
     area: 'Sandbox',
     name: 'Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })`',
-    fixtures: ['sandbox/unprivileged'],
+    fixtures: ['sandbox/unprivileged', 'sandbox/no-unshare'],
     tests: [
       sandboxDocker(
         'confinement',
@@ -792,6 +792,21 @@ export const inventory: InventoryFeature[] = [
         'the forwarder, its port and the gateway CA are out of the sandbox user’s reach',
       ),
       sandboxDocker('confinement', 'a root: true sandbox is still detached from every network'),
+    ],
+  },
+  {
+    id: 'podman.sandbox',
+    area: 'Sandbox',
+    name: "`podman({ … })`: `docker()`'s sandbox on rootless Podman, on the bridge network with Docker's seccomp profile",
+    fixtures: ['sandbox/podman-bridge', 'sandbox/no-unshare'],
+    plan: ['environments/podman'],
+    tests: [
+      sandboxDocker(
+        'unit',
+        "podman runs every container on the bridge with Docker's seccomp profile",
+      ),
+      sandboxDocker('build-failure', 'reading a failed podman build (buildah)'),
+      'reeval/test/doctor.test.ts › podman: down, too old, missing cgroup controllers',
     ],
   },
   {
