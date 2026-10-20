@@ -407,7 +407,7 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   const web = (n: number | null, what: string) =>
     n === null ? `${what} not reported` : `${n} ${what}`
   lines.push(
-    `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${formatDuration(act.reasoningMs)} reasoning`,
+    `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${formatDuration(act.reasoningMs)} reasoning${act.stalledTools ? ` · ${act.stalledTools} stalled tool${act.stalledTools === 1 ? '' : 's'} (≥2m)${act.maxToolMs ? `, longest ${formatDuration(act.maxToolMs)}` : ''}` : ''}`,
   )
   for (const { judgement: j, label, labelled } of labelledJudgements(a)) {
     const retried = j.retries?.length

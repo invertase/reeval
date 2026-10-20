@@ -193,6 +193,10 @@ export type AttemptRecord = {
     webSearches: number | null
     webFetches: number | null
     reasoningMs: number
+    /** Transcript tool events with `stalled: true` (long shell or edit). */
+    stalledTools: number
+    /** Longest tool `durationMs` in the transcript; null when none reported a duration. */
+    maxToolMs: number | null
   }
   judgements: JudgementRecord[]
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */

@@ -79,10 +79,14 @@ export function turnSender(
     debugTrace('harness', 'prompt', { turn: turnNumber, prompt }, `turn ${turnNumber} prompt`)
     // An agent that ignores the abort would hold the attempt, and the run, until it finishes.
     const { cutoff, cancel } = cutOff(a.signal, entry.startedAt)
+    const sendStarted = Date.now()
     const { raw, ...result } = await a
       .timed('agentMs', () => Promise.race([agent.send(prompt, a.signal), cutoff]))
       .finally(cancel)
-    Object.assign(entry, result, raw ? { raw } : {})
+    const sendWallMs = Date.now() - sendStarted
+    Object.assign(entry, result, raw ? { raw } : {}, {
+      durationMs: Math.max(result.durationMs, sendWallMs),
+    })
     for (const event of result.transcript) {
       debugTrace(
         'harness',

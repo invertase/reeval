@@ -517,7 +517,15 @@ describe('view-models over a real history', () => {
       ...entry,
       attempts: entry.attempts.map((a) => ({
         ...a,
-        activity: { tools: 1, fileEdits: 0, webSearches: null, webFetches: null, reasoningMs: 0 },
+        activity: {
+          tools: 1,
+          fileEdits: 0,
+          webSearches: null,
+          webFetches: null,
+          reasoningMs: 0,
+          stalledTools: 0,
+          maxToolMs: null,
+        },
         timings: { setupMs: 0, agentMs: 100, diffMs: 0, checksMs: 0, judgeMs: 0 },
       })),
     })

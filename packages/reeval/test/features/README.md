@@ -2,6 +2,10 @@
 
 Every user-facing feature or option lands with its tests in the same change. Pick the tier first.
 
+While implementing, do not run `pnpm test:features` or full `pnpm test` in an agent turn — use
+targeted `node --test test/<file>.test.ts` and the [Before you finish](../../../../AGENTS.md#before-you-finish)
+block instead ([AGENTS.md](../../../../AGENTS.md#while-you-work)).
+
 ## Which tier
 
 **Does `reeval run --dry-run` show the change?** Then it's a plan case, not a fixture: an option,

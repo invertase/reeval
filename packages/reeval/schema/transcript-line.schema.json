@@ -49,6 +49,10 @@
                 }
               ]
             },
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
+              "type": "boolean"
+            },
             "toolCallId": {
               "type": "string"
             },
@@ -96,6 +100,10 @@
               "type": "boolean"
             },
             "output": {},
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
+              "type": "boolean"
+            },
             "tool": {
               "type": "string"
             },
@@ -159,6 +167,10 @@
                 }
               ]
             },
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
+              "type": "boolean"
+            },
             "toolCallId": {
               "type": "string"
             },
@@ -200,6 +212,10 @@
               ]
             },
             "ok": {
+              "type": "boolean"
+            },
+            "stalled": {
+              "description": "True when a shell-like tool or edit ran at least two minutes.",
               "type": "boolean"
             },
             "toolCallId": {
