@@ -1445,9 +1445,11 @@ test('a check a side never ran has no verdict, and not-run attempts are not fail
 
 test('effort under 10s reads in tenths, so a ratio matches its times', async () => {
   const { formatSeconds } = await import('../src/view/effort.ts')
-  assert.deepEqual([0, 40, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
-    '0s',
-    '0s',
+  assert.deepEqual([0, 40, 49, 50, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
+    '<0.1s',
+    '<0.1s',
+    '<0.1s',
+    '0.1s',
     '0.2s',
     '0.4s',
     '1.5s',
