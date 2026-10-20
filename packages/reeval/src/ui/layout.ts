@@ -422,6 +422,12 @@ function questionLines(c: Colors, questions: QuestionResult[], indent: number): 
         `${pad}  ${c.dim('no pairs to judge: tries that failed their checks are left out')}`,
       ]
     }
+    if (q.rates.length === 0 && q.error === null) {
+      return [
+        head,
+        `${pad}  ${c.dim(`${q.votes} ${q.votes === 1 ? 'vote' : 'votes'}, every one a tie`)}`,
+      ]
+    }
     const cuts = new Set(q.rates.map((r) => r.cut)).size > 1
     const rows = table(
       q.rates.map((r) => ({

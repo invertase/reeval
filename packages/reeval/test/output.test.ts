@@ -77,6 +77,17 @@ describe('every layout', () => {
     assert.match(text, /^ {2}\+1 more passed$/m)
   })
 
+  test('a question whose every vote was a tie says so under its heading', () => {
+    const g = GOLDENS.find((x) => x.name === 'measure-a-change')
+    assert.ok(g)
+    const suite = goldenSuite(g)
+    const e = suite.files[0]?.evals[0]
+    assert.ok(e)
+    e.questions = [{ question: 'Which reads better?', votes: 4, rates: [], error: null }]
+    const text = render(suite, null, { color: false, verbose: false }).join('\n')
+    assert.match(text, /^ {2}question {2}Which reads better\?\n {4}4 votes, every one a tie$/m)
+  })
+
   test('the tally puts fail first, leaves zeros out and counts infra errors and skips apart', () => {
     const c = colors(false)
     assert.equal(tallyLine(c, { pass: 2, fail: 5, infraError: 0, skipped: 0 }), '5 fail · 2 pass')
