@@ -235,7 +235,7 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
 
 /**
  * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new or
- * changed (not comparable) eval that fails, since nothing earlier vouches for it.
+ * changed (can't compare) eval that fails, since nothing earlier vouches for it.
  */
 export const regressions = (rows: CompareRow[]) =>
   rows.filter(

@@ -200,7 +200,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     positionals: 2,
     help: `
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
-                                --md --json --fail-on-regression; -v adds each cell's lift and effort`,
+                                --md --json --fail-on-regression
+    -v, --verbose               Also each cell's lift and effort, base → head, and the stack changes`,
   },
   checkout: {
     flags: [],
