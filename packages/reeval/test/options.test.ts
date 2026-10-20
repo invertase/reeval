@@ -58,14 +58,13 @@ group('g', { runs: 2 }, () => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts · ~/m)
-    assert.match(r.stdout, /^\[writes#1 good\] ✓ evals\/m\.eval\.ts › g › writes ok\.txt/m)
-    assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.eval\.ts › g › writes ok\.txt/m)
+    assert.match(r.stdout, /^\[writes#1 good\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
+    assert.match(r.stdout, /^\[writes#2 bad\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
     assert.match(
       r.stdout,
-      /✗ writes ok\.txt +2\/4 +pass@1 +50% +4 attempts\n +good\/fake\/fake +2\/2 +pass@1 100%/,
+      /^fail {13}g › writes ok\.txt\n {2}harness {14}pass\n {2}good {17}2 of 2\n {2}bad {18}0 of 2\n {4}toHaveFile ok\.txt {2}0 of 2\n/m,
     )
-    assert.match(r.stdout, /bad\/fake\/fake +0\/2 +pass@1 +0%/)
-    assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
+    assert.match(r.stdout, /^1 fail$/m)
     const thirds = await project('matrix-thirds', {
       'reeval.config.ts': config('', `fakeHarness({ id: 'one' })`),
       'evals/t.eval.ts': `import { evaluate } from 'reeval'
@@ -79,9 +78,10 @@ evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal(rounded.code, 0, rounded.stdout + rounded.stderr)
     assert.match(
       rounded.stdout,
-      /✓ two of three +2\/3 +pass@1 +67% +3 attempts\n +one\/fake\/fake +2\/3 +pass@1 +67% /,
-      'pass rates round to the nearest percent',
+      /^pass {13}two of three\n {2}3 tries {10}2 of 3$/m,
+      'counts read N of M, never a percentage',
     )
+    assert.doesNotMatch(rounded.stdout, /\d%/)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.summary.attempts, 4)
     assert.deepEqual(
@@ -295,20 +295,20 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^ +✓ writes ok\.txt for %s {2}6 cases · paired$/m)
+    // The case is outer and its arms inner; the pooled effect is on `all cases`.
     assert.match(
       r.stdout,
-      /^ +✓ ada {2}✓ grace {2}✓ linus {2}✓ margaret {2}✓ dennis {2}✓ barbara$/m,
+      /^ {17}writes ok\.txt for %s\n {2}pass {2}ada\n {4}arm {12}pass\n {4}base {11}0 of 1\n {4}skilled {8}1 of 1\n/m,
     )
-    assert.match(
-      r.stdout,
-      /fake\/skilled\/fake {2}pass@1 100% vs 0% {2}lift \+100 pts \(95% \+45…\+100, paired, 6 vs 0 discordant, p 0\.031\) \(minLift 20\)$/m,
-    )
-    assert.match(
-      r.stdout,
-      /^ ○ evals\/e\.eval\.ts › writes ok\.txt for %s {2}6 attempts on fake\/base\/fake$/m,
-    )
-    assert.match(r.stdout, /^Families {2}1 passed \(1\)$/m)
+    for (const name of ['grace', 'linus', 'margaret', 'dennis', 'barbara'])
+      assert.match(r.stdout, new RegExp(`^ {2}pass {2}${name}$`, 'm'), name)
+    const pooled =
+      /^ {2}pass {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped$/m
+    assert.match(r.stdout, pooled)
+    assert.match(r.stdout, /^6 pass$/m)
+    const verbose = await runCli(p.dir, ['run', '-v'])
+    assert.match(verbose.stdout, /^ {6}skilled: 6 paired cases, 95% interval \+45…\+100$/m)
+    assert.doesNotMatch(r.stdout, /95% interval/, 'statistics only with -v')
 
     const { run, evals, read } = readRun(p.dir)
     assert.deepEqual(
@@ -344,14 +344,11 @@ evaluate.each(${cases}${options})(
       ['fake/base/fake', 6, { variantOnly: 6, controlOnly: 0 }, 'newcombe-paired', 'lift', 'pass'],
     )
     assert.equal(family?.outcome, 'pass')
-    assert.match(read('summary.md'), /^## Families$/m)
+    assert.match(read('summary.md'), pooled)
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 0, agent.stdout + agent.stderr)
-    assert.match(
-      agent.stdout,
-      /^family evals\/e\.eval\.ts › writes ok\.txt for %s: 6 cases · paired · fake\/skilled\/fake pass@1 100% vs 0% {2}lift \+100 pts .*\(minLift 20\)$/m,
-    )
+    assert.match(agent.stdout, pooled)
 
     const q = await runCli(p.dir, [
       'query',
@@ -388,10 +385,12 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /^ +✗ writes ok\.txt for %s {2}6 cases · paired$/m)
-    assert.match(r.stdout, /\(minLift 60 ✗\)$/m)
-    assert.match(r.stdout, /^Families {2}1 failed \(1\)$/m)
-    assert.match(r.stdout, /pooled pass@1 .*: its lower bound is below minLift 60$/m)
+    assert.match(
+      r.stdout,
+      /^ {2}fail {2}all cases\n {4}arm {12}pass\n {4}base {11}0 of 6\n {4}skilled {8}6 of 6 {2}helped, not by minLift 60$/m,
+    )
+    assert.match(r.stdout, /^ {2}pass {2}ada$/m, 'the case passed on its own')
+    assert.match(r.stdout, /^1 fail · 6 pass$/m, 'the pooled gate is a fail of its own')
     const { run, evals } = readRun(p.dir)
     assert.equal(run.families?.[0]?.outcome, 'fail')
     assert.ok(
@@ -408,7 +407,8 @@ evaluate.each(${cases}${options})(
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.doesNotMatch(r.stdout, /cases · paired|^Families/m)
+    assert.doesNotMatch(r.stdout, /all cases|writes ok\.txt for %s/)
+    assert.match(r.stdout, /^pass {13}writes ok\.txt for ada$/m)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.families, undefined)
     assert.equal(evals.length, 6)
@@ -428,10 +428,8 @@ evaluate.each(${cases}${options})(
       [lift?.pairs, lift?.points, lift?.interval.method, lift?.verdict, lift?.outcome],
       [3, 1, 't-cases', 'insufficient', 'pass'],
     )
-    assert.match(
-      r.stdout,
-      /\(95% \+100…\+100, paired, 3 cases, p 0\.25\), insufficient \(minLift 20\)$/m,
-    )
+    // Three pairs are too few to tell, however one-sided they are.
+    assert.match(r.stdout, /^ {4}skilled {8}6 of 6 {2}can't tell yet$/m)
   })
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
@@ -454,21 +452,11 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts/m)
-    assert.match(r.stdout, /^\[writes#1 control\] ○ .*\(not gated\)$/m)
-    assert.match(r.stdout, /^\[writes#1 skilled\] ✓ /m)
-    assert.match(r.stdout, /fake\/base\/fake +control +0\/2 +pass@1 +0% +not gated/)
-    assert.match(r.stdout, /fake\/skilled\/fake +variant +2\/2 +pass@1 100% +lift \+100 pts/)
-    assert.match(r.stdout, /overrides: env\.MODE/)
     // A successful compare reads as one: the control's expected misses aren't failures.
-    assert.doesNotMatch(r.stdout, /✗|Failures|Assertion failures|failed/)
-    assert.match(r.stdout, /^Expected misses, not gated \(2\)$/m)
-    assert.match(r.stdout, /^ ○ evals\/c\.eval\.ts › g › writes ok\.txt {2}fake\/base\/fake#1$/m)
-    const section = r.stdout.slice(
-      r.stdout.indexOf('Expected misses'),
-      r.stdout.indexOf('Attempts'),
-    )
-    assert.equal(section.trim().split('\n').length, 1 + 2 * 3, 'a name, a reason and a record each')
-    assert.match(r.stdout, /2 passed · 2 missed, not gated \(4 attempts, 1 evals\)/)
+    const block =
+      /^pass {13}g › writes ok\.txt\n {2}arm {16}pass\n {2}base {15}0 of 2\n {2}skilled {12}2 of 2 {2}can't tell yet\n {2}check {14}base {5}skilled\n {2}toBe base {10}2 of 2 {3}not run\n {2}toHaveFile ok\.txt {2}0 of 2 {3}2 of 2\n/m
+    assert.match(r.stdout, block)
+    assert.match(r.stdout, /^1 pass$/m)
 
     const colour = await runCli(p.dir, ['run'], { env: { FORCE_COLOR: '1' } })
     assert.equal(colour.code, 0, colour.stdout + colour.stderr)
@@ -476,12 +464,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
 
     const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 0, agent.stdout + agent.stderr)
-    assert.doesNotMatch(agent.stdout, /^FAIL /m)
-    assert.match(
-      agent.stdout,
-      /^MISS evals\/c\.eval\.ts › g › writes ok\.txt \[.*\] \(.*, assertion, not gated\)$/m,
-    )
-    assert.match(agent.stdout, /^2 passed, 2 missed, not gated \(4 attempts, 1 evals\)$/m)
+    assert.match(agent.stdout, block)
 
     const gha = await runCli(p.dir, ['run', '--log-order', 'grouped', '--output-logs', 'full'], {
       env: { GITHUB_ACTIONS: 'true' },
@@ -491,8 +474,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     assert.equal(gha.stdout.match(/^::group::/gm)?.length, 4, 'expected misses collapse too')
 
     const md = readRun(p.dir).read('summary.md')
-    assert.match(md, /^2 passed · 2 missed, not gated \(4 attempts, 1 evals\)/m)
-    assert.doesNotMatch(md, /✗|failed/)
+    assert.match(md, block)
     assert.match(md, /^#### ○ fake\/base\/fake#1 · missed, not gated$/m)
     assert.match(md, /^<details><summary>Why it missed<\/summary>$/m)
     const { run, evals } = readRun(p.dir)
@@ -522,7 +504,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
       envRecords.skilled?.skills.map((s) => [s.name, s.source, s.placement]),
       [['house-greeting', 'local:skills', 'harness']],
     )
-    assert.match(readRun(p.dir).read('summary.md'), /fake\/skilled\/fake 2\/2 \(lift \+100 pts/)
+    assert.match(readRun(p.dir).read('summary.md'), block)
   })
 
   test("gate 'all' gates the control, and minLift fails a variant cell below it", async () => {
@@ -551,14 +533,15 @@ evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 
     assert.equal(noWorse?.cells[1]?.outcome, 'fail')
     assert.equal(noWorse?.outcome, 'pass', "gate 'none' reports but never fails")
     // The canary: a gated control's failure is still a failure; only the ungated miss moves.
-    assert.match(r.stdout, /^Failures \(1\)$/m)
-    assert.match(r.stdout, /^ ✗ evals\/c\.eval\.ts › all gated {2}fake\/base\/fake#1$/m)
-    assert.match(r.stdout, /^Expected misses, not gated \(1\)$/m)
-    assert.match(r.stdout, /^ ○ evals\/c\.eval\.ts › no worse {2}fake\/skilled\/fake#1$/m)
     assert.match(
       r.stdout,
-      /lift −100 pts \(95% −100…\+12, 0\/1 vs 1\/1\), within noise \(minLift 50\) ✗/,
+      /^fail {13}all gated\n {2}arm {16}pass\n {2}base {15}0 of 1\n {2}skilled {12}1 of 1 {2}can't tell yet\n {2}check {14}base {4}skilled\n {2}toHaveFile ok\.txt {2}0 of 1 {2}1 of 1\n/m,
     )
+    assert.match(
+      r.stdout,
+      /^not gated {8}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}can't tell yet, not by minLift 50\n {4}error {2}the variant is worse$/m,
+    )
+    assert.match(r.stdout, /^1 fail · 1 pass$/m)
   })
 
   test('compare.harness scopes variants; other harnesses run the control only', async () => {
@@ -621,7 +604,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
       r.stderr,
       /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) needs a language model to answer it\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\), or give the question its own, \{ question: '…', model: 'google\/gemini-3\.8-flash' \}, or set question: \{ model \} on its group or eval\./,
     )
-    assert.doesNotMatch(r.stdout, /✓|✗/, 'no attempt ran')
+    assert.doesNotMatch(r.stdout, /▶|^(pass|fail) /m, 'no attempt ran')
     assert.equal(existsSync(join(p.dir, '.reeval/runs')), false)
   })
 
@@ -776,8 +759,11 @@ export default defineConfig({
     const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'pass')
     assert.ok(e?.answers?.[0]?.votes.every((v) => v.reason === 'the first slot writes ok.txt'))
-    assert.match(r.stdout, /the first slot writes ok\.txt/)
-    assert.match(readRun(p.dir).read('summary.md'), /the first slot writes ok\.txt/)
+    // The reasons are for analysis: the result shows each side's wins.
+    const wins =
+      /^ {2}question {2}Which is cleaner\?\n {4}base {11}won 1 of 2\n {4}skilled {8}won 1 of 2$/m
+    assert.match(r.stdout, wins)
+    assert.match(readRun(p.dir).read('summary.md'), wins)
     const { digest } = await (async () => {
       const out = await runCli(p.dir, ['analyze', '--context', '--vs', 'none'])
       assert.equal(out.code, 0, out.stderr)
@@ -823,14 +809,10 @@ evaluate('asks', { compare: { baseline: none, variants: [current, next], gate: '
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.answers?.[0]?.votes.length, 18)
-    const pairs =
-      'within fake: no-skill 0–0 current-skill (3 splits) · no-skill 0–0 new-skill (3 splits) · current-skill 0–0 new-skill (3 splits)'
-    const splits = /18 votes, 0 ties, 9\/9 pairs split by order, all to the side shown first/
-    assert.match(r.stdout, splits)
-    assert.ok(r.stdout.includes(pairs), r.stdout)
-    const summary = readRun(p.dir).read('summary.md')
-    assert.match(summary, splits)
-    assert.ok(summary.includes(`  - ${pairs}`), summary)
+    const wins =
+      /^ {2}question {2}Which delivers a better user experience\?\n {4}no-skill {7}won \d+ of \d+\n {4}current-skill {2}won \d+ of \d+\n {4}new-skill {6}won \d+ of \d+$/m
+    assert.match(r.stdout, wins)
+    assert.match(readRun(p.dir).read('summary.md'), wins)
     const q = await runCli(p.dir, [
       'query',
       'SELECT a, b, pairs, a_wins, b_wins, ties, splits, splits_first FROM question_pairs',
@@ -855,7 +837,9 @@ evaluate('asks', { compare: { baseline: none, variants: [current, next], gate: '
       (f) => f.kind === 'compare-question',
     )
     assert.equal(fact?.splits, '9/9 pairs split by order, all to the side shown first')
-    assert.deepEqual(fact?.headToHead, [pairs])
+    assert.deepEqual(fact?.headToHead, [
+      'within fake: no-skill 0–0 current-skill (3 splits) · no-skill 0–0 new-skill (3 splits) · current-skill 0–0 new-skill (3 splits)',
+    ])
   })
 
   // Three harnesses: `two` writes an extra file, which the fake vote prefers, and `bad` fails
@@ -928,14 +912,13 @@ export default defineConfig({
         { cut: 'across', name: 'two', wins: 8, n: 8 },
       ],
     )
-    assert.match(
-      r.stdout,
-      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
-    )
+    const wins =
+      /^ {2}question {2}Which is cleaner\?\n {4}base \(within\) {5}won 2 of 4\n {4}skilled \(within\) {2}won 2 of 4\n {4}one \(across\) {6}won 0 of 8\n {4}two \(across\) {6}won 8 of 8$/m
+    assert.match(r.stdout, wins)
     const run = readRun(asked.dir)
     assert.match(
       run.read('summary.md'),
-      /^- Question: "Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake · \[what the model saw\]\(evals-q-eval-ts-asks-[0-9a-f]+\/questions\/1\.json\)$/m,
+      /^- Question: "Which is cleaner\?" · \[what the model saw\]\(evals-q-eval-ts-asks-[0-9a-f]+\/questions\/1\.json\)$/m,
     )
     // One call per vote, in the same order; a vote's A is its a unless it's the swapped repeat.
     const input = JSON.parse(run.read(answer.input?.path ?? 'missing'))
@@ -950,10 +933,7 @@ export default defineConfig({
     )
     const agent = await runCli(asked.dir, ['run', '--ui', 'agent'])
     assert.equal(agent.code, 1, agent.stdout + agent.stderr)
-    assert.match(
-      agent.stdout,
-      /^question evals\/q\.eval\.ts › asks: "Which is cleaner\?" within: .* · 16 votes, 4 ties, 2\/8 pairs split by order, all to the side shown first · fake$/m,
-    )
+    assert.match(agent.stdout, wins)
     // Recorded, the input goes with the eval's other files, and is unset where those aren't kept.
     const kept = await runCli(asked.dir, ['record', 'latest', '--artifacts', 'all'])
     assert.equal(kept.code, 0, kept.stdout + kept.stderr)
@@ -987,7 +967,7 @@ export default defineConfig({
     assert.ok(!answer.rates.some((x) => x.cut === 'across'))
     assert.match(
       r.stdout,
-      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · 8 votes, 4 ties, 2\/4 pairs split by order, all to the side shown first · fake$/m,
+      /^ {2}question {2}Which is cleaner\?\n {4}base {11}won 2 of 4\n {4}skilled {8}won 2 of 4$/m,
     )
   })
 
@@ -1066,7 +1046,7 @@ export default defineConfig({
     )
     assert.match(
       r.stdout,
-      /question {2}"Which is cleaner\?" 0 votes, 0 ties · fake · failed: the model is over quota$/m,
+      /^ {2}question {2}Which is cleaner\?\n {4}the model call failed: the model is over quota$/m,
     )
     const run = readRun(p.dir)
     const [e] = run.evals
@@ -1129,7 +1109,12 @@ group('rated', { gate: { passRate: 0.6 } }, () => {
       ['inherits 0.6', { passRate: 0.6 }, 0.8, 'pass', 'pass'],
       ['back to all', 'all', 0.8, 'fail', 'fail'],
     ])
-    assert.match(r.stdout, /gate passRate 0\.8/, 'the summary names a non-default gate')
+    assert.match(
+      r.stdout,
+      /^fail {13}default\n {2}5 tries {10}4 of 5\n {2}error {12}the third attempt fails$/m,
+    )
+    assert.match(r.stdout, /^pass {13}at 0\.8\n {2}5 tries {10}4 of 5$/m)
+    assert.match(r.stdout, /^3 fail · 2 pass$/m)
 
     const quiet = await runCli(p.dir, ['run', 'at 0.8'])
     assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
@@ -2267,8 +2252,8 @@ evaluate('greets', { compare: { baseline: plain, variants: [withSkill] } }, asyn
     })
     const r = await runCli(p.dir, ['run'], { env: { REEVAL_TEST_HOST_TOKEN: 's3cret-value-123' } })
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^\[greets#1 with-skill\] ✓ evals\/e\.eval\.ts › greets/m)
-    assert.match(r.stdout, /with-skill\/fake +variant +1\/1 +pass@1 100% +lift \+100 pts/)
+    assert.match(r.stdout, /^\[greets#1 with-skill\] ▶ evals\/e\.eval\.ts › greets/m)
+    assert.match(r.stdout, /^ {2}with-skill +1 of 1 {2}can't tell yet$/m)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
     assert.deepEqual(Object.keys(envs).sort(), ['plain', 'with-skill'])

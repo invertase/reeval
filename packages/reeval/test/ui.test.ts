@@ -2,16 +2,18 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { EvalEntry, JudgementRecord, RunRecord } from '../src/history/types.ts'
-import type { AttemptMeta, CompareAnswer, TokenUsage } from '../src/types.ts'
+import type { RunRecord } from '../src/history/types.ts'
+import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent } from '../src/ui/events.ts'
+import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
-import { renderSummary } from '../src/ui/summary.ts'
 import { Tagger } from '../src/ui/tags.ts'
+import { readableRecord } from '../src/view/record.ts'
 import { pkgRoot } from './helpers.ts'
+import { corpusEntries } from './support/corpus.ts'
 
 const T0 = 1_790_000_000_000
 const s = (seconds: number) => T0 + seconds * 1000
@@ -88,38 +90,18 @@ const defaultResult: EvalResult = {
   meta: { outcome: 'fail', errorKind: 'assertion', judgements: [], recordPath: '' },
 }
 
-const entry = (r: EvalResult, turns: number, judge?: number): EvalEntry =>
-  ({
-    id: r.id,
-    slug: 'slug',
-    file: r.file,
-    group: r.group,
-    name: r.name,
-    outcome: r.meta?.outcome ?? 'pass',
-    cells: [],
-    attempts: [
-      {
-        id: `${CELL}#1`,
-        cell: CELL,
-        n: 1,
-        outcome: r.meta?.outcome ?? 'pass',
-        error: r.meta?.errorKind ? { kind: r.meta.errorKind, message: r.errors[0] ?? '' } : null,
-        durationMs: r.durationMs,
-        turns: Array.from({ length: turns }, () => ({})),
-        judgements:
-          judge === undefined
-            ? []
-            : [{ verdict: 'pass', score: judge, threshold: 0.8, question: 'q', key: '0:q' }],
-      },
-    ],
-  }) as unknown as EvalEntry
-
-const record = {
+/** The run's record: the with-layouts corpus run's results.eval.ts, every no-model result shape. */
+const layouts = corpusEntries()
+  .find((e) => e.name === 'with-layouts')
+  ?.runs.at(-1)
+assert.ok(layouts, 'the with-layouts corpus entry')
+const recorded = readableRecord(layouts.raw as unknown as RunRecord)
+const record: RunRecord = {
+  ...recorded,
   durationMs: 365_000,
-  cost: { usage: null },
-  summary: { evals: 2, attempts: 2, pass: 1, fail: 1, notGated: 0, infraError: 0, skipped: 0 },
-  evals: [entry(greetResult, 1, 0.92), entry(defaultResult, 2)],
-} as unknown as RunRecord
+  evals: recorded.evals.filter((e) => e.file === 'evals/results.eval.ts'),
+  families: [],
+}
 
 /** Two attempts running at once, interleaved as they'd arrive with two workers. */
 const interleaved: ReevalEvent[] = [
@@ -247,8 +229,6 @@ function render(events: ReevalEvent[], output: OutputOptions, color = false): st
     colors: colors(color),
     output,
     harness: 'cursor',
-    attemptDir: (id, _cell, n) =>
-      `.reeval/runs/run-1/${id.split(' › ').at(-1)?.split(' ')[0]}/${n}`,
     now: () => now,
     timers: false,
   })
@@ -265,32 +245,33 @@ function render(events: ReevalEvent[], output: OutputOptions, color = false): st
 
 const lines = (...l: string[]) => `${l.join('\n')}\n`
 
-const SUMMARY = [
+const RESULT = [
   '',
-  'Summary',
-  ' evals/hello.eval.ts',
-  '   greet module',
-  '     ✓ creates a tested greet module             3m 12s  pass 0.92/0.80  1 turn',
-  '     ✗ adds a default name in a follow-up turn   6m 03s  2 turns',
+  'pass             writes greet.js',
   '',
-  'Failures (1)',
+  'fail             greets in French',
+  '  french greeting  failed',
+  '    expected command to succeed, exit code 1',
+  '  +1 more passed',
   '',
-  'Assertion failures (1)',
-  ' ✗ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
-  '   AssertionError: expected 1 to be 2 // Object.is equality',
+  'fail             explains why greet.js fails',
+  '  2 tries               1 of 2',
+  '  names the root cause  1 of 2',
+  "    expected 'Docker is down' to contain 'null'",
+  '  +1 more passed',
   '',
-  '   - Expected',
-  '   + Received',
+  'fail             reads the fixture repo',
+  '  error            the fixture repo is missing',
   '',
-  '   - 2',
-  '   + 1',
+  'infra error      starts its sandbox',
+  '  infra error      the fake sandbox fell over',
   '',
-  '    ❯ evals/hello.eval.ts:31:20',
-  '   record  .reeval/runs/run-1/adds/1',
+  'skipped          greets in Welsh',
+  'todo             greets in Klingon',
   '',
-  '   Evals  1 passed · 1 failed (2)',
-  'Duration  6m 05s',
-  ' Results  .reeval/runs/run-1/summary.md',
+  '6m 05s · results .reeval/runs/run-1/summary.md',
+  '3 fail · 1 pass · 1 infra error · 2 skipped',
+  NO_MODEL_HINT,
 ]
 
 describe('plain renderer', () => {
@@ -299,19 +280,17 @@ describe('plain renderer', () => {
       render(interleaved, options()),
       lines(
         'reeval 0.1.0 · run 20260101T000000Z_nogit_test_abcd · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · grouped logs',
+        '… 2 running after 1m 00s: [creates#1 cursor] turn 1 1m 00s, [adds#1 cursor] turn 1 59s',
+        '… 2 running after 2m 00s: [creates#1 cursor] turn 1 2m 00s, [adds#1 cursor] turn 1 1m 59s',
+        '… 2 running after 3m 00s: [creates#1 cursor] cleanup 3m 00s, [adds#1 cursor] turn 1 2m 59s',
         '[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
-        '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
-        '… 2 running after 1m 01s: [creates#1 cursor] turn 1 1m 01s, [adds#1 cursor] turn 1 1m 00s',
-        '… 2 running after 2m 01s: [creates#1 cursor] turn 1 2m 01s, [adds#1 cursor] turn 1 2m 00s',
-        '… 2 running after 3m 01s: [creates#1 cursor] cleanup 3m 01s, [adds#1 cursor] turn 1 3m 00s',
-        '[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  3m 12s',
         '[creates#1 cursor]  +0:01 sandbox ready 4s',
         '[creates#1 cursor]  +0:05 turn 1 done 2m 45s · 6 tool calls, 2 file edits',
         '[creates#1 cursor]  +2:50 $ node --test  exit 0 1s',
         '[creates#1 cursor]  +2:52 judge  pass 0.92 (≥ 0.8)  Accurate summary?',
         '… 1 running after 4m 12s: [adds#1 cursor] turn 2 4m 11s',
         '… 1 running after 5m 12s: [adds#1 cursor] turn 2 5m 11s',
-        '[adds#1 cursor] ✗ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  6m 03s',
+        '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
         '[adds#1 cursor]  +0:01 sandbox ready 4s',
         '[adds#1 cursor]  +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file edit',
         '[adds#1 cursor]  +1:09 stdout | seeding greet.js',
@@ -326,7 +305,7 @@ describe('plain renderer', () => {
         '[adds#1 cursor]  + 1',
         '[adds#1 cursor]',
         '[adds#1 cursor]   ❯ evals/hello.eval.ts:31:20',
-        ...SUMMARY,
+        ...RESULT,
       ),
     )
   })
@@ -354,11 +333,11 @@ describe('plain renderer', () => {
 
   test('GitHub Actions: passing attempts collapse into groups, failures stay open and annotate', () => {
     const out = render(interleaved, options({ githubActions: true, logPrefix: 'none' }))
-    const block = out.slice(out.indexOf('::group::'), out.indexOf('\nSummary'))
+    const block = out.slice(out.indexOf('::group::'), out.indexOf('\n', out.indexOf('::error')) + 1)
     assert.equal(
       block,
       lines(
-        '::group::[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  3m 12s',
+        '::group::[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
         ' +0:01 sandbox ready 4s',
         ' +0:05 turn 1 done 2m 45s · 6 tool calls, 2 file edits',
         ' +2:50 $ node --test  exit 0 1s',
@@ -366,7 +345,7 @@ describe('plain renderer', () => {
         '::endgroup::',
         '… 1 running after 4m 12s: [adds#1 cursor] turn 2 4m 11s',
         '… 1 running after 5m 12s: [adds#1 cursor] turn 2 5m 11s',
-        '[adds#1 cursor] ✗ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  6m 03s',
+        '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
         ' +0:01 sandbox ready 4s',
         ' +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file edit',
         ' +1:09 stdout | seeding greet.js',
@@ -396,356 +375,43 @@ describe('plain renderer', () => {
     const out = render(interleaved, options({ githubActions: true }), true)
     assert.ok(out.includes('\x1b[36m[creates#1 cursor]\x1b[39m'))
     assert.ok(out.includes('\x1b[35m[adds#1 cursor]\x1b[39m'))
-    assert.match(out, /^::group::\[creates#1 cursor\] ✓ /m)
+    assert.match(out, /^::group::\[creates#1 cursor\] ▶ /m)
   })
 
   test('the heartbeat stays quiet while other lines are printing, and when it is off', () => {
     const out = render(interleaved, options({ heartbeatMs: 0 }))
     assert.doesNotMatch(out, /running after/)
   })
-})
 
-/** The same run with the first eval's compare questions answered, one of them failed. */
-const answered: ReevalEvent[] = interleaved.map((e) => {
-  if (e.type !== 'run-end') return e
-  const [first, ...rest] = e.record.evals
-  const answers: CompareAnswer[] = [
-    {
-      question: 'Which is cleaner?',
-      model: 'google/gemini-3.8-flash',
-      votes: [
-        {
-          question: 'Which is cleaner?',
-          cut: 'across',
-          arm: '-',
-          run: 1,
-          a: 'cursor',
-          b: 'codex',
-          winner: 'codex',
-          swapped: false,
-        },
-        {
-          question: 'Which is cleaner?',
-          cut: 'across',
-          arm: '-',
-          run: 1,
-          a: 'cursor',
-          b: 'codex',
-          winner: 'tie',
-          swapped: true,
-        },
-      ],
-      rates: [
-        { cut: 'across', name: 'cursor', wins: 0, n: 1 },
-        { cut: 'across', name: 'codex', wins: 1, n: 1 },
-      ],
-    },
-    {
-      question: 'Which is shorter?',
-      model: 'google/gemini-3.8-flash',
-      votes: [],
-      rates: [],
-      error: 'quota exceeded',
-    },
-  ]
-  return { ...e, record: { ...e.record, evals: [{ ...first, answers } as EvalEntry, ...rest] } }
-})
-
-const ANSWER_LINES = [
-  '"Which is cleaner?" across: cursor 0/1 (0%), codex 1/1 (100%) · 2 votes, 1 tie, 0/1 pairs split by order · google/gemini-3.8-flash',
-  '"Which is shorter?" 0 votes, 0 ties · google/gemini-3.8-flash · failed: quota exceeded',
-]
-
-describe('compare answers in the summary', () => {
-  test('plain: one line per question under its eval', () => {
-    const out = render(answered, options())
-    assert.ok(
-      out.includes(
+  test('no line says how an attempt ended; with --output-logs none, nothing prints per attempt', () => {
+    for (const logOrder of ['stream', 'grouped'] as const) {
+      const out = render(interleaved, options({ logOrder, outputLogs: 'none', heartbeatMs: 0 }))
+      assert.equal(
+        out,
         lines(
-          '     ✓ creates a tested greet module             3m 12s  pass 0.92/0.80  1 turn',
-          ...ANSWER_LINES.map((l) => `         question  ${l}`),
-          '     ✗ adds a default name in a follow-up turn   6m 03s  2 turns',
+          `reeval 0.1.0 · run 20260101T000000Z_nogit_test_abcd · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · ${logOrder} logs`,
+          ...RESULT,
         ),
-      ),
-      out,
-    )
+      )
+    }
+    assert.doesNotMatch(render(interleaved, options({ logOrder: 'stream' })), / [✓✗] evals\//)
   })
 
-  test('agent: one line per question before the totals', () => {
-    let text = ''
-    const renderer = new AgentRenderer({
-      out: { write: (chunk: string) => (text += chunk) },
-      attemptDir: () => '.reeval/runs/run-1/adds/1',
-    })
-    for (const e of answered) renderer.onEvent(e)
+  test('live: one status line under the logs, rewritten in place, cleared before the result', () => {
+    const out = render(interleaved, options({ requested: 'live', outputLogs: 'none' }))
+    const clear = '\r\x1b[2K'
+    assert.ok(out.includes(`${clear}2 evals · 0/2 tries`), out)
+    assert.ok(out.includes(`${clear}2 evals · 1/2 tries`), out)
+    assert.ok(out.includes(`${clear}2 evals · 2/2 tries${clear}\n`), out)
+    assert.doesNotMatch(out, /running after/)
+    assert.ok(out.endsWith(lines(...RESULT)))
+    const logs = render(interleaved, options({ requested: 'live', logOrder: 'stream' }))
     assert.ok(
-      text.endsWith(
-        lines(
-          ...ANSWER_LINES.map((l) => `question ${GREET}: ${l}`),
-          '1 passed, 1 failed',
-          'summary: .reeval/runs/run-1/summary.md',
-        ),
+      logs.includes(
+        `${clear}[adds#1 cursor]  +1:09 stdout | seeding greet.js\n2 evals · 0/2 tries`,
       ),
-      text,
+      'a log line prints above the status line, which is drawn again under it',
     )
-  })
-})
-
-const judgement = (
-  question: string,
-  verdict: 'pass' | 'fail',
-  score: number,
-  key: string,
-  threshold = 0.8,
-): JudgementRecord => ({ question, verdict, score, threshold, model: 'fake', key })
-
-const usage = (input: number, output: number): TokenUsage => ({
-  input,
-  output,
-  cacheRead: 0,
-  cacheWrite: 0,
-  reasoning: null,
-})
-
-function summaryOf(evals: EvalEntry[]): string {
-  const attempts = evals.reduce((n, e) => n + e.attempts.length, 0)
-  return renderSummary(
-    colors(false),
-    {
-      type: 'run-end',
-      at: T0,
-      record: {
-        durationMs: 1000,
-        cost: { usage: null },
-        summary: {
-          evals: evals.length,
-          attempts,
-          pass: 0,
-          fail: 0,
-          notGated: 0,
-          infraError: 0,
-          skipped: 0,
-        },
-        evals,
-      } as unknown as RunRecord,
-      summaryPath: '.reeval/runs/run-1/summary.md',
-      results: [],
-      unhandledErrors: [],
-    },
-    () => '.reeval/runs/run-1/x/1',
-  ).join('\n')
-}
-
-function withAttempt(base: EvalEntry, patch: Partial<EvalEntry['attempts'][number]>): EvalEntry {
-  const [first, ...rest] = base.attempts
-  assert.ok(first)
-  return { ...base, attempts: [{ ...first, ...patch }, ...rest] }
-}
-
-describe('collapsed judges, per-key rates and tokens', () => {
-  test('a collapsed attempt line shows verdict and score/threshold, and usage when reported', () => {
-    const e = withAttempt(entry(greetResult, 1, 0.92), {
-      usage: usage(1270, 80),
-      judgements: [judgement('Accurate summary?', 'pass', 0.92, '0:acc')],
-    })
-    const out = summaryOf([e])
-    assert.match(out, /pass 0\.92\/0\.80/)
-    assert.match(out, /1,270 in · 80 out/)
-    assert.doesNotMatch(out, /judge 0\.92[^/]/)
-  })
-
-  test('two judges print as fail 0.78/0.80 · pass 0.99/0.80; many collapse to the min plus a count', () => {
-    const two = withAttempt(entry(greetResult, 1), {
-      judgements: [
-        judgement('login', 'fail', 0.78, '0:login'),
-        judgement('checkout', 'pass', 0.99, '1:checkout'),
-      ],
-    })
-    assert.match(summaryOf([two]), /fail 0\.78\/0\.80 · pass 0\.99\/0\.80/)
-
-    const many = withAttempt(entry(greetResult, 1), {
-      judgements: [
-        judgement('a', 'fail', 0.5, '0:a'),
-        judgement('b', 'fail', 0.33, '1:b'),
-        judgement('c', 'pass', 0.9, '2:c'),
-      ],
-    })
-    const out = summaryOf([many])
-    assert.match(out, /fail 0\.33\/0\.80 · 3 judges/)
-    assert.doesNotMatch(out, /0\.50/)
-  })
-
-  test('an eval its gate passes shows ! with an infra error or no counted attempt, never ✓', () => {
-    const base = entry(greetResult, 1)
-    const [first] = base.attempts
-    assert.ok(first)
-    const ungated = (outcomes: Array<'pass' | 'fail' | 'infra_error'>): EvalEntry => {
-      const count = (o: string) => outcomes.filter((x) => x === o).length
-      const cell = {
-        key: CELL,
-        harness: 'fake',
-        environment: 'default',
-        sandbox: 'fake',
-        role: 'control',
-        gate: 'none',
-        overrides: [],
-        runs: outcomes.length,
-        pass: count('pass'),
-        fail: count('fail'),
-        infraError: count('infra_error'),
-        skipped: 0,
-        passRate: null,
-        outcome: 'pass',
-      } as unknown as EvalEntry['cells'][number]
-      return {
-        ...base,
-        outcome: 'pass',
-        cells: [cell],
-        attempts: outcomes.map((outcome, i) => ({
-          ...first,
-          id: `${CELL}#${i + 1}`,
-          n: i + 1,
-          outcome,
-        })),
-      }
-    }
-    const markOf = (e: EvalEntry) =>
-      summaryOf([e])
-        .split('\n')
-        .find((l) => l.includes(` ${e.name} `))
-        ?.trim()
-        .slice(0, 1)
-    assert.equal(markOf(ungated(['infra_error', 'infra_error', 'infra_error'])), '!', '0/0')
-    assert.equal(markOf(ungated(['fail', 'infra_error'])), '!', 'a miss and an infra error')
-    assert.equal(markOf(ungated(['pass', 'pass'])), '✓')
-  })
-
-  test('null usage is omitted, never printed as zero', () => {
-    const e = withAttempt(entry(greetResult, 1, 0.92), { usage: null })
-    const out = summaryOf([e])
-    assert.doesNotMatch(out, /0 in/)
-    assert.doesNotMatch(out, /0 out/)
-  })
-
-  test('cell rows show per-key rates, lift only when both sides have enough counted, and a usage sum', () => {
-    const cell = (
-      key: string,
-      role: 'control' | 'variant',
-      env: string,
-    ): EvalEntry['cells'][number] =>
-      ({
-        key,
-        harness: 'fake',
-        environment: env,
-        sandbox: 'fake',
-        role,
-        gate: role === 'control' ? 'none' : 'all',
-        overrides: [],
-        runs: 2,
-        pass: role === 'variant' ? 2 : 0,
-        fail: role === 'variant' ? 0 : 2,
-        infraError: 0,
-        skipped: 0,
-        passRate: role === 'variant' ? 1 : 0,
-        outcome: role === 'variant' ? 'pass' : 'fail',
-      }) as EvalEntry['cells'][number]
-
-    const attemptOf = (
-      cellKey: string,
-      n: number,
-      outcome: 'pass' | 'fail',
-      login: 'pass' | 'fail',
-      checkout: 'pass' | 'fail',
-      tokens: TokenUsage | null,
-    ) =>
-      ({
-        id: `${cellKey}#${n}`,
-        cell: cellKey,
-        n,
-        outcome,
-        usage: tokens,
-        turns: [{}],
-        judgements: [
-          judgement('login', login, login === 'pass' ? 0.95 : 0.2, '0:login'),
-          judgement('checkout', checkout, checkout === 'pass' ? 0.91 : 0.1, '1:checkout'),
-        ],
-      }) as unknown as EvalEntry['attempts'][number]
-
-    const multi: EvalEntry = {
-      ...entry(greetResult, 1),
-      cells: [
-        cell('fake/plain/fake', 'control', 'plain'),
-        cell('fake/skill/fake', 'variant', 'skill'),
-      ],
-      attempts: [
-        attemptOf('fake/plain/fake', 1, 'fail', 'fail', 'fail', usage(100, 10)),
-        attemptOf('fake/plain/fake', 2, 'fail', 'pass', 'fail', usage(100, 10)),
-        attemptOf('fake/skill/fake', 1, 'pass', 'pass', 'fail', usage(80, 8)),
-        attemptOf('fake/skill/fake', 2, 'pass', 'pass', 'fail', usage(80, 8)),
-      ],
-    }
-    const out = summaryOf([multi])
-    assert.match(out, /login 1\/2/)
-    assert.match(out, /checkout 0\/2/)
-    assert.match(out, /login 2\/2 \(\+50 pts\)/)
-    assert.match(out, /200 in · 20 out/)
-    assert.match(out, /160 in · 16 out/)
-
-    const thin: EvalEntry = {
-      ...multi,
-      cells: multi.cells.map((c) => ({
-        ...c,
-        runs: 1,
-        pass: c.role === 'variant' ? 1 : 0,
-        fail: c.role === 'variant' ? 0 : 1,
-      })),
-      attempts: multi.attempts.filter((a) => a.n === 1),
-    }
-    const thinOut = summaryOf([thin])
-    assert.match(thinOut, /login 1\/1/)
-    assert.doesNotMatch(thinOut, /\(\+\d+ pts\)/)
-  })
-
-  test('cell rows distinguish judges that share a clipped prefix', () => {
-    const email = 'Does this change implement email sign-in?'
-    const social = 'Does this change implement social sign-in?'
-    const colliding: EvalEntry = {
-      ...entry(greetResult, 1),
-      cells: [
-        {
-          key: 'fake/plain/fake',
-          harness: 'fake',
-          environment: 'plain',
-          sandbox: 'fake',
-          role: 'control',
-          gate: 'all',
-          overrides: [],
-          runs: 2,
-          pass: 0,
-          fail: 2,
-          infraError: 0,
-          skipped: 0,
-          passRate: 0,
-          outcome: 'fail',
-        } as EvalEntry['cells'][number],
-      ],
-      attempts: [1, 2].map((n) => ({
-        id: `fake/plain/fake#${n}`,
-        cell: 'fake/plain/fake',
-        n,
-        outcome: 'fail',
-        usage: null,
-        turns: [{}],
-        judgements: [
-          judgement(email, n === 1 ? 'pass' : 'fail', n === 1 ? 0.9 : 0.2, '0:email'),
-          judgement(social, 'fail', 0.1, '1:social'),
-        ],
-      })) as EvalEntry['attempts'],
-    }
-    const out = summaryOf([colliding])
-    assert.match(out, /…email sign-in 1\/2/)
-    assert.match(out, /…social sign-in 0\/2/)
-    assert.doesNotMatch(out, /Does this change…/)
   })
 })
 
@@ -794,7 +460,6 @@ test('browser-download names the binary, version, size and cache', () => {
   let agent = ''
   const renderer = new AgentRenderer({
     out: { write: (chunk: string) => (agent += chunk) },
-    attemptDir: () => '.reeval/runs/run-1/greet/1',
   })
   for (const e of events) renderer.onEvent(e)
   assert.match(
@@ -804,33 +469,13 @@ test('browser-download names the binary, version, size and cache', () => {
 })
 
 describe('agent renderer', () => {
-  test('prints failures only, each with its record path, and ends with the summary path', () => {
+  test('prints nothing per attempt, then the result without colour', () => {
     let text = ''
-    const renderer = new AgentRenderer({
-      out: { write: (chunk: string) => (text += chunk) },
-      attemptDir: () => '.reeval/runs/run-1/adds/1',
-    })
+    const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
     for (const e of interleaved) renderer.onEvent(e)
     assert.equal(
       text,
-      lines(
-        'reeval run: 20260101T000000Z_nogit_test_abcd · 1 eval file',
-        'FAIL evals/hello.eval.ts › greet module › adds a default name in a follow-up turn (6m 03s, assertion)',
-        '  AssertionError: expected 1 to be 2 // Object.is equality',
-        '',
-        '  - Expected',
-        '  + Received',
-        '',
-        '  - 2',
-        '  + 1',
-        '',
-        '   ❯ evals/hello.eval.ts:31:20',
-        '  console:',
-        '    seeding greet.js',
-        '  record: .reeval/runs/run-1/adds/1',
-        '1 passed, 1 failed',
-        'summary: .reeval/runs/run-1/summary.md',
-      ),
+      lines('reeval run: 20260101T000000Z_nogit_test_abcd · 1 eval file', ...RESULT),
     )
     assert.ok(!text.includes('\x1b['))
   })

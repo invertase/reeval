@@ -8,6 +8,7 @@ import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { defaultIncludeGlobs } from '../src/language-runner/adapter.ts'
+import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import {
   fakeConfig,
   liveSandboxes,
@@ -36,11 +37,11 @@ describe('engine', () => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stderr)
-    assert.match(r.stdout, /✓ evals\/math\.eval\.ts › math/)
-    assert.match(r.stdout, /Evals {2}1 passed \(1\)/)
+    assert.match(r.stdout, /^pass {13}math$/m)
+    assert.match(r.stdout, /^1 pass$/m)
     assert.match(
       r.stdout,
-      /Results {2}\.reeval\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+_[0-9a-z]{4}\/summary\.md/,
+      / · results \.reeval\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+_[0-9a-z]{4}\/summary\.md$/m,
     )
     for (const leak of [/vitest/i, /RUN v/, /testTimeout/]) {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
@@ -69,7 +70,7 @@ describe('engine', () => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /✗ evals\/math\.eval\.ts › math/)
+    assert.match(r.stdout, /^fail {13}math\n {2}toBe 2 {11}failed\n {4}expected 1 to be 2/m)
     assert.doesNotMatch(r.stdout + r.stderr, /vitest/i)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'fail')
@@ -195,8 +196,8 @@ evaluate('top level', async () => {})
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /✗ evals\/g\.eval\.ts › outer › inner › slow/)
-    assert.match(r.stdout, /✓ evals\/g\.eval\.ts › outer › fast/)
+    assert.match(r.stdout, /^fail {13}outer › inner › slow\n {2}timeout {10}The eval timed out$/m)
+    assert.match(r.stdout, /^pass {13}outer › fast$/m)
     const evals = readRun(p.dir).evals
     assert.deepEqual(
       evals.map((e) => [e.group, e.name, e.outcome]),
@@ -306,9 +307,9 @@ group('area', () => {
 
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    const summary = r.stdout.slice(r.stdout.indexOf('\nSummary'))
-    for (const name of ['later', 'someday', 'nested someday'])
-      assert.match(summary, new RegExp(`↓ ${name} +todo$`, 'm'), name)
+    for (const name of ['later', 'someday', 'area › nested someday'])
+      assert.match(r.stdout, new RegExp(`^todo {13}${name}$`, 'm'), name)
+    assert.match(r.stdout, /^1 pass · 3 skipped$/m)
     const { run, read } = readRun(p.dir)
     assert.deepEqual(
       run.evals.map((e) => [e.id, e.outcome, e.todo]),
@@ -319,7 +320,7 @@ group('area', () => {
         ['evals/g.eval.ts › area › nested someday', 'skipped', true],
       ],
     )
-    assert.match(read('summary.md'), /\| ↓ \| evals\/g\.eval\.ts › someday \| todo \|/)
+    assert.match(read('summary.md'), /^todo {13}someday$/m)
   })
 
   test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
@@ -879,7 +880,8 @@ evaluate('copy', async (c) => {
         'cleaning up',
       ],
     )
-    assert.match(r.stdout, /^\[agent#1 fake\] ✓ evals\/agent\.eval\.ts › agent eval {2}\d+m?s$/m)
+    assert.match(r.stdout, /^\[agent#1 fake\] ▶ evals\/agent\.eval\.ts › agent eval$/m)
+    assert.match(r.stdout, /^pass {13}agent eval$/m)
   })
 
   test('--log-order, --log-prefix and --output-logs shape what reeval run prints', async () => {
@@ -903,7 +905,7 @@ evaluate('fails', async (c) => {
     })
     const run = (...flags: string[]) =>
       runCli(p.dir, ['run', '--ui', 'plain', '--concurrency', '2', ...flags])
-    const lines = (out: string) => out.slice(0, out.indexOf('\nSummary')).split('\n')
+    const lines = (out: string) => out.slice(0, out.search(/\n\n(pass|fail) /)).split('\n')
 
     const stream = await run(
       '--log-order',
@@ -934,14 +936,14 @@ evaluate('fails', async (c) => {
     assert.match(grouped.stdout, / · grouped logs$/m)
     const out = lines(grouped.stdout)
     assert.ok(!out.some((l) => l.includes('log from passes')), 'a passing attempt prints no detail')
-    const head = out.findIndex((l) => l.startsWith('[fails#1 fake] ✗ evals/o.eval.ts › fails'))
+    const head = out.indexOf('[fails#1 fake] ▶ evals/o.eval.ts › fails')
     const rest = out.slice(head + 1)
     const next = rest.findIndex((l) => l.startsWith('['))
     const block = next < 0 ? rest : rest.slice(0, next)
     assert.ok(head >= 0, grouped.stdout)
     assert.ok(
       block.some((l) => /^ \+0:\d\d stderr \| log from fails$/.test(l)),
-      `the failing attempt's detail follows its result line, unprefixed:\n${grouped.stdout}`,
+      `the failing attempt's detail follows its header, unprefixed:\n${grouped.stdout}`,
     )
 
     const none = await run('--output-logs', 'none')
@@ -957,7 +959,7 @@ evaluate('fails', async (c) => {
     assert.match(bad.stderr, /--log-order is one of stream, grouped, auto \(got sideways\)/)
   })
 
-  test('agent mode prints failures only, with record and summary paths, and no colour', async () => {
+  test('agent mode prints the plan and the result blocks only, with no colour', async () => {
     const p = await project('agent-mode', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
       'evals/agent.eval.ts': `${agentEval(`expect(await c.judge('ok?')).toPass()`)}
@@ -971,16 +973,18 @@ evaluate('passes', async () => {})
     const [plan, ...out] = r.stdout.trimEnd().split('\n')
     assert.match(plan ?? '', /^plan {2}(?:run \S+ · )?2 evals · 2 cells · 2 attempts · ~/)
     assert.match(out[0] ?? '', /^reeval run: \S+ · 1 eval file$/)
-    assert.match(out[1] ?? '', /^FAIL evals\/agent\.eval\.ts › agent eval \(\d+m?s, judge\)$/)
-    assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
-    assert.match(
-      out[3] ?? '',
-      /^ {2}record: \.reeval\/runs\/[^/]+\/evals-agent-eval-ts-agent-eval-[0-9a-f]{6}\/fake-fake-fake-[0-9a-f]{6}\/1$/,
-    )
-    assert.equal(out[4], '1 passed, 1 failed')
-    assert.match(out[5] ?? '', /^summary: \.reeval\/runs\/[^/]+\/summary\.md$/)
-    assert.equal(out.length, 6)
-    assert.ok(existsSync(join(p.dir, (out[3] ?? '').replace('  record: ', ''))))
+    assert.deepEqual(out.slice(1, 8), [
+      '',
+      'fail             agent eval',
+      '  toPass ok?       failed',
+      '    judge score 0.30 is below 0.8 for "ok?" (fake)',
+      '',
+      'pass             passes',
+      '',
+    ])
+    assert.match(out[8] ?? '', /^\d+m?s · results \.reeval\/runs\/[^/]+\/summary\.md$/)
+    assert.deepEqual(out.slice(9), ['1 fail · 1 pass', NO_MODEL_HINT])
+    assert.ok(existsSync(join(p.dir, (out[8] ?? '').replace(/^.* · results /, ''))))
     assert.ok(!r.stdout.includes('\x1b['))
   })
 
@@ -992,16 +996,19 @@ evaluate('passes', async () => {})
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
     assert.match(r.stdout, /judge {2}fail 0\.30/)
-    assert.match(r.stdout, /Judge failures \(1\)\n ✗ evals\/agent\.eval\.ts › agent eval/)
+    assert.match(
+      r.stdout,
+      /^fail {13}agent eval\n {2}toPass ok\? {7}failed\n {4}judge score 0\.30 is below 0\.8/m,
+    )
     const [e] = readRun(p.dir).evals
     assert.equal(e?.trial.judgements[0]?.verdict, 'fail')
     assert.equal(e?.error?.kind, 'judge')
     const shown = await runCli(p.dir, ['show'])
-    assert.match(shown.stdout, /judge fail 0\.30 \(≥ 0\.8\) {2}ok\?/)
-    assert.doesNotMatch(shown.stdout, /judge score/, 'the verdict is printed once')
+    assert.match(shown.stdout, /^ {2}toPass ok\? {7}failed\n {4}judge score 0\.30 is below 0\.8/m)
     const summary = readRun(p.dir).read('summary.md')
-    assert.match(summary, /Judge \*\*fail\*\* 0\.30/)
-    assert.doesNotMatch(summary, /judge score/, 'the verdict is printed once')
+    const attempts = summary.slice(summary.indexOf('## Attempts'))
+    assert.match(attempts, /Judge \*\*fail\*\* 0\.30/)
+    assert.doesNotMatch(attempts, /judge score/, 'the verdict is printed once')
   })
 
   test('a model judge makes a real provider call: the request carries the question and transcript, the verdict the reply', async () => {
@@ -1437,14 +1444,13 @@ evaluate('huge diff', async () => {
     })
     const plain = await runCli(p.dir)
     assert.equal(plain.code, 1, plain.stdout + plain.stderr)
-    const summary = plain.stdout.slice(plain.stdout.indexOf('\nSummary'))
-    assert.match(summary, new RegExp(`\\n {3}turn 1 error: ${billing}\\n`))
+    assert.match(plain.stdout, new RegExp(`^ {2}turn error {7}${billing}$`, 'm'))
     assert.match(plain.stdout, new RegExp(`turn 1 error: ${billing} \\d+m?s · 0 tool calls`))
     const { run, read } = readRun(p.dir)
     assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.error, billing)
     assert.match(read('summary.md'), new RegExp(`- Error: ${billing}`))
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
-    assert.match(agent.stdout, new RegExp(`\\n {2}turn 1 error: ${billing}\\n`))
+    assert.match(agent.stdout, new RegExp(`^ {2}turn error {7}${billing}$`, 'm'))
   })
 
   test('the resolved model variant is in the record, the stack, -v and summary.md', async () => {
@@ -1515,7 +1521,11 @@ evaluate('huge diff', async () => {
     assert.equal(byName['unawaited pass']?.trial.checks[0]?.exitCode, 0, 'the check completed')
     assert.equal(byName.awaited?.trial.outcome, 'pass', out)
     assert.equal(run.summary.fail, 2)
-    assert.doesNotMatch(out, /Summary[\s\S]*\n\s*error: /, 'no stray error after the summary')
+    assert.doesNotMatch(
+      r.stdout.slice(r.stdout.search(/\n\n(pass|fail) /)),
+      /^error: /m,
+      'no stray error among the results',
+    )
   })
 
   test('expect.soft, expect.poll and expect.assertions work inside an attempt', async () => {
@@ -1583,12 +1593,11 @@ evaluate('studied', { compare: { baseline: plain, variants: [skilled], gate: 'no
 `,
     })
     const r = await runCli(p.dir)
-    const summary = r.stdout.slice(r.stdout.indexOf('\nSummary'))
-    // The control's two failures count in 2/4, but only the gated variant's 2/2 in the rate.
-    assert.match(summary, /✓ compared +2\/4 · pass@1 100% gated {2}4 attempts\n/)
-    assert.match(summary, /✗ repeated +3\/4 +pass@1 +75% {2}4 attempts\n/)
-    // Nothing gates a study, so its misses get the miss mark, never ✓ beside 0/4.
-    assert.match(summary, /○ studied +0\/4 · not gated {2}4 attempts\n/)
+    // The control's two failures don't fail it: only the gated variant's 2 of 2 gate.
+    assert.match(r.stdout, /^pass {13}compared\n {2}arm {16}pass\n {2}plain {14}0 of 2\n/m)
+    assert.match(r.stdout, /^fail {13}repeated\n {2}4 tries {10}3 of 4\n/m)
+    // Nothing gates a study, so it never reads pass beside 0 of 2.
+    assert.match(r.stdout, /^not gated {8}studied\n {2}arm {18}pass\n {2}plain {16}0 of 2\n/m)
   })
 
   test("a harness whose session never becomes ready is an infra error, once retried; its sandbox goes, other evals don't wait", async () => {
@@ -1672,7 +1681,11 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 3, r.stdout)
-    assert.match(r.stdout, /! evals\/agent\.eval\.ts › agent eval/)
+    assert.match(
+      r.stdout,
+      /^infra error {6}agent eval\n {2}infra error {6}agent CLI failed to start$/m,
+    )
+    assert.match(r.stdout, /^1 infra error$/m)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'infra_error')
     assert.deepEqual(e?.error, { kind: 'infra', message: 'agent CLI failed to start' })
@@ -1779,8 +1792,8 @@ evaluate('fine', async () => {})
       assert.equal(run.status, 'interrupted')
       assert.equal(evals[0]?.outcome, 'fail')
       assert.equal(evals[0]?.error?.kind, 'aborted')
-      assert.match(r.stdout, /Cancelled \(1\)\n ✗ evals\/agent\.eval\.ts › agent eval/)
-      assert.match(r.stdout, /Evals {2}1 cancelled/)
+      assert.match(r.stdout, /^fail {13}agent eval\n {2}cancelled {8}The run was cancelled$/m)
+      assert.match(r.stdout, /^Interrupted: attempts that hadn’t finished were cancelled$/m)
       assert.deepEqual(liveSandboxes(p), [])
     })
   }

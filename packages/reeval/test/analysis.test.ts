@@ -47,13 +47,7 @@ import { createStudioApp } from '../src/studio/server.ts'
 import type { EvalResult } from '../src/ui/events.ts'
 import { formatTokens } from '../src/usage.ts'
 import { type AnalysisNote, analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
-import {
-  contrastEffort,
-  directional,
-  EFFORT_MIN_RUNS,
-  effortChangeLabel,
-  effortLabel,
-} from '../src/view/effort.ts'
+import { contrastEffort, directional, EFFORT_MIN_RUNS, effortLabel } from '../src/view/effort.ts'
 import { formatUsage, parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
@@ -494,31 +488,6 @@ describe('effort next to lift', () => {
     assert.doesNotMatch(effortLabel(c), /no overlap/)
   })
 
-  test('agent times both under a tenth of a second print <0.1s and no ratio', () => {
-    const c = contrastEffort(
-      [4, 5, 5].map((tools, i) => sample(tools, { agentMs: 10 + i })),
-      [30, 40, 50].map((tools, i) => sample(tools, { agentMs: 30 + i })),
-    )
-    assert.ok(c)
-    assert.deepEqual(directional(c), ['tools', 'agentS'])
-    assert.equal(
-      effortLabel(c),
-      'tools 5 vs 40 (×0.13, no overlap), agent <0.1s vs <0.1s: too few attempts to test (n = 3 vs 3)',
-    )
-    const one = contrastEffort([sample(4, { agentMs: 20 })], [sample(30, { agentMs: 400 })])
-    assert.ok(one)
-    assert.match(effortLabel(one), /agent <0\.1s vs 0\.4s \(×0\.05\)/, 'one side over keeps it')
-    const tally = (agentMs: number) => ({ tools: { median: 4 }, agentMs: { median: agentMs } })
-    assert.equal(
-      effortChangeLabel(tally(20), tally(40)),
-      'tools 4 → 4 (×1.00) · agent <0.1s → <0.1s',
-    )
-    assert.equal(
-      effortChangeLabel(tally(20), tally(400)),
-      'tools 4 → 4 (×1.00) · agent <0.1s → 0.4s (×20.00)',
-    )
-  })
-
   test('effort needs 4 runs a cell to be testable', () => {
     assert.equal(EFFORT_MIN_RUNS, 4)
     assert.ok(minimumP(3, 3) >= 0.05)
@@ -540,7 +509,7 @@ describe('effort next to lift', () => {
     )
   })
 
-  test('reeval run, summary.md and reeval compare show each variant cell\u2019s effort beside its lift', async () => {
+  test('reeval run and summary.md print the arms without an effort table below four tries a side, and reeval compare still shows effort', async () => {
     const p = await project('effort-summary', {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
@@ -560,12 +529,11 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     })
     const first = await runCli(p.dir)
     assert.equal(first.code, 0, first.stdout)
-    assert.match(
-      first.stdout,
-      /skilled.*lift \+100 pts[^\n]*\n\s+effort: tools \d+ vs \d+ \(×[\d.–]+\), agent (?:<0\.1s vs <0\.1s|<?[\d.]+s vs <?[\d.]+s \(×[\d.–]+\)): too few attempts to test/,
-    )
+    // Two tries a side is below the effort table's four, so only the arms print.
+    assert.match(first.stdout, /^ {2}skilled {12}2 of 2 {2}can't tell yet$/m)
+    assert.doesNotMatch(first.stdout, /^ {2}effort /m)
     const { read } = readRun(p.dir)
-    assert.match(read('summary.md'), /effort tools \d+ vs \d+/)
+    assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}can't tell yet$/m)
     assert.equal((await runCli(p.dir)).code, 0)
     const compare = await runCli(p.dir, ['compare', 'latest~1', 'latest'])
     assert.equal(compare.code, 0, compare.stderr)
@@ -648,8 +616,6 @@ describe('reeval CLI spec', () => {
       'reeval image build --dry-run',
       `reeval query "SELECT * FROM effort WHERE verdict = 'fewer'"`,
       'reeval run --record && reeval query effort',
-      'reeval query effort --run last',
-      `reeval query "SELECT * FROM effort WHERE run_id = :run" --run last`,
     ]
     for (const c of ok) assert.equal(checkCommand(c, tables), null, c)
     const bad: Array<[string, RegExp]> = [
@@ -657,11 +623,7 @@ describe('reeval CLI spec', () => {
       ['reeval eval fix-config --debug-judge', /reeval eval isn't a reeval command/],
       ['reeval run --eval scaffold', /--eval isn't an option of reeval run/],
       ['reeval image build --tag smoke', /--tag isn't an option of reeval image build/],
-      [
-        'reeval query efficiency',
-        /no view or table named efficiency \(views and tables: effort, lift\)/,
-      ],
-      ['reeval query effort --run', /--run needs a value/],
+      ['reeval query efficiency', /no view or table named efficiency/],
       ['reeval show latest --md --json extra', /takes at most 1 argument/],
       ['reeval run --runs', /--runs needs a value/],
       ['cat evals/x.ts', /isn't a reeval command/],
@@ -1088,12 +1050,12 @@ evaluate('hello', async (c) => {
 
   test('one counted attempt a side is insufficient lift, not a results verdict', async () => {
     const p = await compareProject('analyze-sparse-lift', 1)
-    const run = await runCli(p.dir)
+    const run = await runCli(p.dir, ['run', '-v'])
     assert.equal(run.code, 0, run.stdout)
     assert.match(
       run.stdout,
-      /lift \+100 pts \(95% −12…\+100, 1\/1 vs 0\/1\), within noise/,
-      'the run summary still prints the interval',
+      /^ {2}\S+ +1 of 1 {2}can't tell yet\n {4}difference \+100 points, 95% interval −12…\+100$/m,
+      '-v still prints the interval',
     )
     const { digest } = await digestOf(p.dir)
     const pass = digest.facts.find((f) => f.kind === 'pass@1')
@@ -2127,7 +2089,7 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
       /^analysis note on evals\/w\.eval\.ts › writes ok\.txt \(wobbly\) failed: the model is down$/m,
     )
     assert.match(r.stdout, /^analysis: 4 notes \(4 failed\) in /m)
-    assert.match(r.stdout, /8 passed \(8 attempts, 2 evals\)/)
+    assert.match(r.stdout, /^2 pass$/m)
     const { notes } = notesOf(p.dir)
     assert.ok(notes.every((n) => n.error === 'the model is down' && n.text === ''))
     assert.ok(readRun(p.dir).run.evals.every((e) => e.outcome === 'pass'))
@@ -2414,7 +2376,7 @@ describe("analysis.agent: the run's summary after reeval run", () => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^analysis summary failed: the model is down$/m)
-    assert.match(r.stdout, /8 passed \(8 attempts, 2 evals\)/)
+    assert.match(r.stdout, /^2 pass$/m)
     const [cached] = summaryDocs(p.dir)
     assert.equal(cached?.doc.error, 'the model is down')
     assert.equal(cached?.doc.analysis.tldr, '')
@@ -2468,23 +2430,14 @@ describe('a study: several arms, every cell ungated', () => {
     const run = await runCli(p.dir)
     assert.equal(run.code, 0, run.stdout + run.stderr)
     const show = await runCli(p.dir, ['show'])
+    // Judges go by their expect labels, a column per arm, the control by its environment.
     assert.match(
       show.stdout,
-      /fake\/no-skill\/fake 0\/3 \(control, not gated, Email sign-in 3\/3 · Social OAuth 3\/3 · Anonymous upgrade 0\/3 · MFA 0\/3\)/,
+      /^ {2}check {14}no-skill {2}current-skill {2}new-skill\n {2}Social OAuth {7}3 of 3 {4}0 of 3 {9}3 of 3\n {4}judge score 0\.12 is below 0\.8 for "Does it implement social sign-in\?" \(fake\)$/m,
       'the control names its judges by their expect labels',
     )
+    assert.match(show.stdout, /^ {2}MFA {16}0 of 3 /m)
     assert.doesNotMatch(show.stdout, /…social sign-in|Does it upgrade an…/, 'no clipped question')
-    const newSkill =
-      /fake\/new-skill\/fake 0\/3 \(([^)]*\([^)]*\))*[^)]*\)/.exec(show.stdout)?.[0] ?? ''
-    assert.doesNotMatch(
-      newSkill,
-      /Social OAuth 3\/3 \(/,
-      'a labelled judge in the checks is not repeated',
-    )
-    assert.match(
-      show.stdout,
-      /judge pass 0\.94 \(≥ 0\.8\) {2}Social OAuth: Does it implement social sign-in\?/,
-    )
     const summary = readRun(p.dir).read('summary.md')
     assert.match(
       summary,
@@ -2550,9 +2503,8 @@ describe('a study: several arms, every cell ungated', () => {
       | undefined
     const vs = effort?.cells.flatMap((c) => (c.vsControl ? [c.vsControl] : [])) ?? []
     assert.equal(vs.length, 2)
-    for (const v of vs as Array<{ n: string; agentS?: string }>) {
+    for (const v of vs) {
       assert.equal(v.n, '3 vs 3')
-      assert.doesNotMatch(v.agentS ?? '', /^0 vs 0 /, 'two sub-50 ms medians have no ratio')
       assert.deepEqual(Object.keys(v.separated ?? {}).slice(0, 2), ['tools', 'agentS'])
     }
     const current = digest.attempts['r1/auth/current-skill#1']
@@ -2618,26 +2570,16 @@ test('the prompt and rules say a study compares arms, and a label no arm meets e
 })
 
 describe('contrasts: each pair of arms, variant against variant too', () => {
-  test('show, summary.md, the run summary, reeval query contrasts and the digest set every pair side by side', async () => {
+  test('show, summary.md and the run set every arm side by side, and reeval query contrasts and the digest every pair', async () => {
     const p = await project('study-contrasts', studyFiles({ gate: 'none' }))
     const run = await runCli(p.dir)
     assert.equal(run.code, 0, run.stdout + run.stderr)
-    // Every attempt misses MFA, so pass@1 can't tell the arms apart; the checks do.
-    const pair =
-      /new-skill vs current-skill: lift \+0 pts \(95% [^)]*0\/3 vs 0\/3\), within noise, checks Social OAuth 3\/3 vs 0\/3, effort tools/
-    assert.match(run.stdout, /contrasts \(each pair of arms, same harness\)/)
-    assert.match(run.stdout, pair)
-    const show = await runCli(p.dir, ['show'])
-    assert.match(
-      show.stdout,
-      /current-skill vs no-skill: lift \+0 pts[^\n]*checks Social OAuth 0\/3 vs 3\/3/,
-    )
-    assert.match(show.stdout, /new-skill vs no-skill: lift \+0 pts[^\n]*no check tells them apart/)
-    assert.match(show.stdout, pair)
-    assert.match(
-      readRun(p.dir).read('summary.md'),
-      /Contrasts \(each pair of arms, same harness\):\n\n- current-skill vs no-skill/,
-    )
+    // Every attempt misses MFA, so pass can't tell the arms apart; the check matrix does.
+    const matrix =
+      /^ {2}check {14}no-skill {2}current-skill {2}new-skill\n {2}Social OAuth {7}3 of 3 {4}0 of 3 {9}3 of 3$/m
+    assert.match(run.stdout, matrix)
+    assert.match((await runCli(p.dir, ['show'])).stdout, matrix)
+    assert.match(readRun(p.dir).read('summary.md'), matrix)
     const rows = await query(
       p.dir,
       'SELECT a_environment, b_environment, a_pass, b_pass, pass_verdict, discriminating, checks FROM contrasts',

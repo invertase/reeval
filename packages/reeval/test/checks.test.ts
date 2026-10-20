@@ -42,14 +42,11 @@ describe('named check results', () => {
     const p = await compareProject('checks-compare')
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(
-      r.stdout,
-      /^ +checks: house style 2\/2 vs 0\/2 · writes ok\.txt 2\/2 vs 2\/2 \(doesn't discriminate\) · toSucceed test -f ok\.txt 2\/2 vs not run$/m,
-    )
-    assert.match(
-      r.stdout,
-      /^Checks that don't discriminate \(1\)\n · evals\/s\.eval\.ts › greets {2}fake\/styled\/fake {2}writes ok\.txt: passes on both$/m,
-    )
+    // The matrix has the checks that failed or didn't run on some arm; the rest pass on both.
+    const matrix =
+      /^ {2}check {21}plain {4}styled\n {2}house style {15}0 of 2 {3}2 of 2\n {4}expected file styled\.txt to exist\n {2}toSucceed test -f ok\.txt {2}not run {2}2 of 2\n {2}\+1 more passed$/m
+    assert.match(r.stdout, matrix)
+    assert.doesNotMatch(r.stdout, /toSucceed test -f ok\.txt +0 of/, 'not run, never 0 of N')
 
     const { run, read } = readRun(p.dir)
     const entry = run.evals[0]
@@ -72,16 +69,15 @@ describe('named check results', () => {
       [
         ['writes ok.txt', 2, 2, 0, 'both-pass'],
         ['house style', 2, 0, 0, 'discriminates'],
-        ['toSucceed test -f ok.txt', 2, 0, 2, undefined],
+        ['toSucceed test -f ok.txt', 2, 0, 2, 'discriminates'],
       ],
-      'the control never reaches the last check, so it has no verdict',
     )
     assert.equal(
       entry?.cells.find((c) => c.role === 'control')?.checks?.[0]?.verdict,
       undefined,
       'the control has tallies, not verdicts',
     )
-    assert.match(read('summary.md'), /checks house style 2\/2 vs 0\/2 · /)
+    assert.match(read('summary.md'), matrix)
 
     assert.deepEqual(
       await query(
@@ -94,6 +90,13 @@ describe('named check results', () => {
           variant_pass: 2,
           control_pass: 0,
           control_not_run: 0,
+          verdict: 'discriminates',
+        },
+        {
+          label: 'toSucceed test -f ok.txt',
+          variant_pass: 2,
+          control_pass: 0,
+          control_not_run: 2,
           verdict: 'discriminates',
         },
         {
@@ -118,13 +121,10 @@ describe('named check results', () => {
     ])
 
     const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
-    assert.match(
-      agent.stdout,
-      /^check doesn't discriminate: evals\/s\.eval\.ts › greets {2}fake\/styled\/fake {2}writes ok\.txt: passes on both$/m,
-    )
+    assert.match(agent.stdout, matrix)
   })
 
-  test('without a compare the attempts record their assertions and the summary has no checks line', async () => {
+  test('without a compare the attempts record their assertions and the result has no check matrix', async () => {
     const p = await project('checks-single', {
       'reeval.config.ts': fakeConfig({ harness: "{ files: { 'ok.txt': 'y' } }" }),
       'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
@@ -137,7 +137,7 @@ evaluate('writes', { runs: 2 }, async (c) => {
     })
     const r = await runCli(p.dir, ['run', '-v'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.doesNotMatch(r.stdout, /checks:|Checks that don't discriminate/)
+    assert.doesNotMatch(r.stdout, /^ {2}check {2}/m)
     assert.match(
       r.stdout,
       /assert ✓ toHaveFile ok\.txt #2 \(toHaveFile, pass\)/,

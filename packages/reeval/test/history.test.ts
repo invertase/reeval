@@ -541,7 +541,7 @@ describe('recording runs into evals/.history', () => {
     symlinkSync(p.dir, link, 'junction')
     const r = await runCli(p.dir, ['run', '--record', '--config', join(link, 'reeval.config.ts')])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^ Results {2}\.reeval\/runs\/\S+\/summary\.md$/m)
+    assert.match(r.stdout, / · results \.reeval\/runs\/\S+\/summary\.md$/m)
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
     assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
   })
@@ -926,7 +926,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     // Twin: the parent's config, found from its own tree or named with --config, runs its eval.
     const parent = await runCli(join(p.dir, 'evals'))
     assert.equal(parent.code, 1, parent.stdout + parent.stderr)
-    assert.match(parent.stdout, /✗ evals\/parent\.eval\.ts › parent/)
+    assert.match(parent.stdout, /^fail {13}parent$/m)
     const named = await runCli(lib, ['run', '--config', '../../../../reeval.config.ts'])
     assert.equal(named.code, 1, named.stdout + named.stderr)
     assert.deepEqual(
@@ -1017,7 +1017,7 @@ describe('records from before a field existed', () => {
       r.evals.map((e) => e.todo),
       [false, false],
     )
-    assert.match(renderSummary(r), /\| ✓ \| evals\/greet\.es\.ts › writes greet\.js \|/)
+    assert.match(renderSummary(r), /^pass {13}writes greet\.js$/m)
   })
 
   test('a newer record keeps what it has', () => {
