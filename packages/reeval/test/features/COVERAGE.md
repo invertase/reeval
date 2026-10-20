@@ -29,7 +29,7 @@
 | Compare questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded | ✓ 5 | ✓ 2 | ● 4 | ● 1 | — | — |
 | `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 3 | — | — | — | — | — |
 | The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'` | ✓ 1 | ✓ 2 | — | — | — | — |
-| Profiles: `defaults`, `limit`, `pin`, selection and typos | ✓ 3 | ✓ 3 | — | — | — | — |
+| Profiles: `defaults`, `limit`, `pin`, selection and typos | ✓ 3 | ✓ 5 | — | — | — | — |
 | `reeval.yaml`: the config as data, with profiles, `--config` and one config per directory | ✓ 2 | ✓ 4 | — | — | — | — |
 | One path rule for reeval.yaml, TypeScript and declaration trees: a relative host path (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`), from a helper or its data form, resolves against the directory of the file it's written in | ✓ 6 | ✓ 6 | — | — | — | — |
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — | — |
