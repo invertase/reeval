@@ -28,6 +28,7 @@ reeval query [sql | view]     Read-only SQL over every recorded and scratch run 
 ## Behaviour
 
 - **Argument:** a view or table name runs `SELECT * FROM <name>`. Anything else is a SQL statement. No argument lists the views and tables with examples.
+- **SQL from a file:** `reeval query "$(cat q.sql)"` works when the file opens with a `-- comment`: an argument with whitespace before any `=` is SQL, never a flag. `--json`, `--schema` and `--rebuild` go before or after it, and `--` ends option parsing: `reeval query --json -- "<sql>"`.
 - **Read-only, one statement at a time.**
 - **Always current:** each query re-reads only records that are new or changed. A recorded run wins over its scratch copy. `--rebuild` rebuilds the database from scratch, and you can delete it at any time.
 - **Output:** an aligned table, or JSON rows with `--json`. The sync line (`history.db: 13 runs`) goes to stderr, so output pipes cleanly.
