@@ -1471,7 +1471,7 @@ describe('common mistakes', { concurrency: 4 }, () => {
     [
       'a sandbox that is not docker() or fakeSandbox() on evaluate',
       `evaluate('e', { sandbox: { kind: 'vm' } as never }, async () => {})`,
-      /sandbox in evaluate\("e"\) must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in evaluate\("e"\) must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
     [
       'an old option name',
@@ -1922,12 +1922,12 @@ ${body}
     [
       'a sandbox that is not docker() or fakeSandbox() on defineConfig',
       `sandbox: { kind: 'vm' } as never,`,
-      /sandbox in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
     [
       'a sandbox that is not docker() or fakeSandbox() on profile defaults',
       `profiles: { pr: { defaults: { sandbox: { kind: 'vm' } as never } } },`,
-      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
+      /sandbox in profiles\.pr\.defaults in reeval\.config\.ts must come from docker\(\), podman\(\) or fakeSandbox\(\)/,
     ],
   ]
   for (const [what, extra, message] of configCases) {
