@@ -153,7 +153,7 @@ jobs:
         with:
           persist-credentials: false
           ref: main
-      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Build sdist and wheel
         working-directory: packages/reeval-python
         run: uv build
