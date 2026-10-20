@@ -193,6 +193,7 @@
       "tab": "reference",
       "pages": [
         { "title": "docker()", "href": "/reference/sandbox/docker" },
+        { "title": "podman()", "href": "/reference/sandbox/podman" },
         { "title": "fakeSandbox()", "href": "/reference/sandbox/fake" },
         { "title": "Sandbox providers", "href": "/reference/sandbox/providers" },
         { "title": "Egress", "href": "/reference/egress" }

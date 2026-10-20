@@ -231,6 +231,23 @@ warning: extra capabilities in the sandbox: reeval.config.ts (docker({ capabilit
 
 Either one is printed at the start of every run that uses it, naming where it was set, and kept in the run record.
 
+## Run on Podman
+
+```ts title="evals/env.ts"
+import { defineEnvironment } from '{{ pkg }}'
+import { podman } from '{{ pkg }}/sandbox'
+
+export const python = defineEnvironment('python', {
+  sandbox: podman({ from: 'python:3.12-slim' }),
+})
+```
+
+`podman()` takes the same options as `docker()` and runs the same sandbox on Podman 4 or later. Every container joins Podman's bridge network with Docker's default seccomp profile, so rootless Podman confines it as Docker does, and a restricted egress policy fails closed if it can't. Podman keeps its own images; `reeval image build` and `reeval doctor` cover them. See [podman()](/reference/sandbox/podman).
+
+<Info>
+reeval is tested on rootless Podman on Linux. macOS and Windows run Podman in a `podman machine` VM, which hasn't been tested yet.
+</Info>
+
 ## One sandbox per eval
 
 | Cell key | Harness | Environment | Sandbox |
