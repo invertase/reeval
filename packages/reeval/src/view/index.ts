@@ -31,3 +31,4 @@ export {
   readableRecord,
   readableTranscriptLine,
 } from './record.ts'
+export * from './suite.ts'
