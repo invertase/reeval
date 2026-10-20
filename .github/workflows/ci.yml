@@ -205,7 +205,7 @@ jobs:
       # docs.page's own check: internal links, assets and frontmatter targets.
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
-      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: reeval-python (uv sync, ruff, pyright, pytest)
         if: ${{ !cancelled() }}
         working-directory: packages/reeval-python
@@ -233,7 +233,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
@@ -268,7 +268,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
@@ -325,7 +325,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - uses: astral-sh/setup-uv@0c5e2b8115b80b4c7c5ddf6ffdd634974642d182 # v5.4.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         if: matrix.package == 'reeval'
       - uses: ./.github/actions/sandbox-images
       - if: needs.changes.outputs.coverage == 'true'
