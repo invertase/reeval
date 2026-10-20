@@ -210,6 +210,7 @@
       "type": "object",
       "properties": {
         "environment": {
+          "description": "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
           "type": "string"
         },
         "harness": {

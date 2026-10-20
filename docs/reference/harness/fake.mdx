@@ -37,7 +37,7 @@ npx reeval run --config reeval.fake.config.ts
 </Property>
 
 <Property name="files" type="Record<string, string>" optional>
-  Files the agent writes on every turn, keyed by workspace path, after its `script`. Each shows as a `file-edit` event.
+  Files the agent writes on every turn, keyed by workspace path (or `~/` for the home directory), after its `script`. Each shows as a `file-edit` event.
 </Property>
 
 <Property name="text" type="string" optional>
@@ -107,12 +107,14 @@ Each step is an object with exactly one key:
 | Step | What it does | Reported as |
 |---|---|---|
 | `{ exec: 'npm test' }` | Runs the command in the sandbox, with the sandbox's variables (not the checks' secrets) | A `tool` event named `shell`, with stdout as its output |
-| `{ write: { 'a.js': '…' } }` | Writes the files | `file-edit` events |
+| `{ write: { 'a.js': '…' } }` | Writes the files, creating their directories: a workspace path, or `~/` for the home directory | `file-edit` events |
 | `{ reply: 'Done.' }` | Sets the turn's final message, instead of `text` | The final `text` event |
 | `{ mcp: 'docs/search' }` | Starts the environment's stdio MCP server `docs` in the sandbox and calls its `search` tool with no arguments | A `tool` event named `mcp__docs__search` |
 | `{ error: 'Credit balance is too low' }` | Ends the turn there with `status: 'error'`, as a provider error would; later steps and `files` are skipped | An `error` event |
 
 An `mcp` step needs a stdio server of that name in the environment; anything else is an infra error for the attempt.
+
+Steps run in the attempt's sandbox. On `docker()` that's the container, where your host's files and tools (a host path to `tsx`, say) don't exist: `write` a script first, then `exec` it. See [Oracle and canary](/recipes/fake-harness#oracle-and-canary).
 
 ## What a turn looks like
 

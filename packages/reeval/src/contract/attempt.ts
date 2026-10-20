@@ -594,7 +594,11 @@ export const cellSchema = z
   .strictObject({
     key: z.string(),
     harness: z.string(),
-    environment: z.string(),
+    environment: z
+      .string()
+      .describe(
+        "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
+      ),
     sandbox: z.string(),
     role: cellRoleSchema,
     variant: z.string().optional().describe("The variant's name, for variant cells."),
