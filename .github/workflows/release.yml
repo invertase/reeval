@@ -131,7 +131,18 @@ jobs:
           path: ${{ runner.temp }}/package
       # Provenance is automatic with trusted publishing, but npm only generates it for public
       # repositories.
-      - run: npm publish --access public "$RUNNER_TEMP"/package/*.tgz
+      - name: Publish to npm
+        run: |
+          set -euo pipefail
+          tgz=$(ls "$RUNNER_TEMP"/package/*.tgz)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ver=$(tar -xOf "$tgz" package/package.json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
+            if npm view "reeval@${ver}" version >/dev/null 2>&1; then
+              echo "::notice::reeval@${ver} is already on npm, skipping publish"
+              exit 0
+            fi
+          fi
+          npm publish --access public "$tgz"
 
   publish-pypi:
     name: publish to PyPI
@@ -157,6 +168,8 @@ jobs:
       - name: Build sdist and wheel
         working-directory: packages/reeval-python
         run: uv build
-      - uses: pypa/gh-action-pypi-publish@release/v1.14.2
+      # v1.14.3 (aef6c9b): commit SHAs are not published to ghcr.io; the release tag is.
+      - uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
           packages-dir: packages/reeval-python/dist
+          skip-existing: true
