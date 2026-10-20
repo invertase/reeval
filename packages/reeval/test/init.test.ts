@@ -36,6 +36,7 @@ describe('reeval init', () => {
     const init = await runCli(p.dir, ['init', '--harness', 'none'])
     assert.equal(init.code, 0, init.stderr)
     for (const file of FILES) assert.match(init.stdout, new RegExp(`create +${file}`), file)
+    assert.match(init.stdout, /create +\.gitignore +node_modules\/, \.reeval\/, \.env\*$/m)
     assert.match(init.stdout, /npx reeval run +passes now/)
     const run = await runCli(p.dir, ['run'])
     assert.equal(run.code, 0, run.stdout + run.stderr)
@@ -45,7 +46,7 @@ describe('reeval init', () => {
     assert.deepEqual(manifest.devDependencies, { [pkg]: `^${version}` })
     assert.equal(
       p.read('.gitignore'),
-      '# reeval: scratch runs and debug data; local keys\n.reeval/\n.env*\n',
+      'node_modules/\n\n# reeval: scratch runs and debug data; local keys\n.reeval/\n.env*\n',
     )
   })
 

@@ -158,13 +158,22 @@ function gitignore(dir: string): InitAction {
   const existing = read(join(dir, '.gitignore'))
   const missing = missingGitignoreEntries(existing ?? '')
   if (!missing.length) return { path: '.gitignore', action: 'keep', note: GITIGNORE.join(', ') }
+  if (existing === undefined) {
+    const entries = ['node_modules/', ...missing]
+    return {
+      path: '.gitignore',
+      action: 'create',
+      note: entries.join(', '),
+      content: `node_modules/\n\n# reeval: scratch runs and debug data; local keys\n${missing.join('\n')}\n`,
+    }
+  }
   const lead = existing && !existing.endsWith('\n') ? '\n' : ''
   const block = `${existing ? `${lead}\n` : ''}# reeval: scratch runs and debug data; local keys\n${missing.join('\n')}\n`
   return {
     path: '.gitignore',
-    action: existing === undefined ? 'create' : 'update',
+    action: 'update',
     note: missing.join(', '),
-    content: `${existing ?? ''}${block}`,
+    content: `${existing}${block}`,
   }
 }
 

@@ -37,7 +37,7 @@ A real `reeval init --yes` in an empty directory:
 reeval init · .
   create    reeval.config.ts       harness cursor:composer-2.5; profiles fake, pr, nightly
   create    evals/greet.eval.ts  one eval, passes on the fake agent
-  create    .gitignore         .reeval/, .env*
+  create    .gitignore         node_modules/, .reeval/, .env*
   create    package.json       script eval, devDependency {{ pkg }}
 Next:
   npm install
@@ -50,7 +50,7 @@ Next:
 |---|---|
 | `reeval.config.ts` | The chosen agent in `docker()`, with profiles `fake` (the fake agent and sandbox), `pr` (one attempt per cell, the CI default) and `nightly` (three, recorded). With `--harness none`, the fake agent is the config's harness. |
 | `evals/greet.eval.ts` | One deterministic eval: the agent writes `greet.js`, and a command checks it |
-| `.gitignore` | Appends `.reeval/` and `.env*` when they're missing |
+| `.gitignore` | Appends `.reeval/` and `.env*` when they're missing; a new `.gitignore` also gets `node_modules/` |
 | `package.json` | Adds an `eval` script (`reeval run`) and {{ pkg }} as a devDependency, unless it has them; creates the file when there's none |
 
 ## Existing files
