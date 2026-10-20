@@ -55,24 +55,33 @@ The default output is a state table (commit, dirty patch, lockfiles, images, har
 ```text
 reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                               --md --json --fail-on-regression
+  -v, --verbose               Also each cell's lift and effort, base → head, and the stack changes
 ```
 
 [//]: # (/generated:cli-help:compare)
 
 - **Defaults:** head is `latest`. Base is the nearest recorded, complete run on head's git ancestry, falling back to the previous run by time.
-- **Statuses:** `regressed`, `fixed`, `changed (not comparable)`, `infra error`, `new`, `removed` and `same`.
-- **Not comparable** means a fingerprint part or the grader changed, and reeval says which: `not comparable: evals/helpers.ts changed`.
-- **Filtered runs:** when base and head ran different cells of an eval, the eval is classified on the cells both ran, and the rest are listed (`same · cells removed: …`). With no cell in common, it's not comparable.
-- `--md` prints a `### reeval: head vs base` heading and a table for a PR comment. `--json` returns `{ base, head, changes, rows }`.
-- **No earlier recorded run:** every eval is `new`, with `No earlier recorded run to compare <run> with: every eval is new.`, and `--json` has `base: null`. That's not an error.
-- `--fail-on-regression` exits 1 when any eval regressed, or when a `new` or `changed (not comparable)` eval fails, since no comparable earlier run vouches for it. A changed eval that passes doesn't count. Without the flag, `reeval compare` exits 0.
+- **Blocks:** one per eval that changed, in file order: `regressed` (both run ids and each check that flipped, `pass → fail` with its message, or `not run`), `fixed` (the checks that pass now), `can't compare` (what changed, and each side's id and result), `infra error`, `new` and `removed`. Runs of unchanged evals collapse to `+N same`. The last line is the tally, regressed first, zeros left out.
+- **Can't compare** means a fingerprint part or the grader changed, and reeval names it: `changed  evals/helpers.ts`.
+- **Not run:** a check head never reached reads `not run`, never `fail`. A check neither side reached isn't printed.
+- **Filtered runs:** when base and head ran different cells of an eval, the eval is classified on the cells both ran, and the rest are listed as `cells added` or `cells removed`. With no cell in common, it can't compare them.
+- `-v` adds each cell's lift and effort, base → head, and every stack change. The default output has no statistics.
+- `--md` prints a `### reeval compare: head vs base` heading and the same blocks in a text block, for a PR comment. `--json` returns `{ base, head, changes, rows }`.
+- **No earlier recorded run:** `No earlier recorded run to compare <run> with, so every eval is new.`, then head's result blocks and `N new evals`; `--json` has `base: null`. That's not an error.
+- `--fail-on-regression` exits 1 when any eval regressed, or when a `new` or `can't compare` eval fails, since no comparable earlier run vouches for it. A changed eval that passes doesn't count. Without the flag, `reeval compare` exits 0.
 
 ```text
-base 20260926T173923Z_7e5376d_ada-lovelace_t2ea (7e5376d) → head 20260926T173927Z_7e5376d_ada-lovelace_j03w (7e5376d, not recorded)
-0 regressed · 0 fixed · 0 not comparable · 10 same
+regressed        greets in the house style
+  base             20261020T231407Z_ea2a649_ada-lovelace_8h1n
+  head             20261020T231408Z_b2c98b4_ada-lovelace_fypq
+  house greeting   pass → fail
+    expected command to succeed, exit code 1
+  sign-off         not run
+  +1 more passed
 
-  ✓ → ✓  same                      evals/hello.eval.ts › greet module › creates a tested greet module
++2 same
 …
+1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same
 ```
 
 ## reeval checkout
