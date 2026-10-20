@@ -161,6 +161,8 @@ export type CellResult = {
   effect: Effect | null
   /** The stored 95% interval on the variant's difference from its baseline. Not for display. */
   interval: Interval | null
+  /** On a variant, the compare's `minLift`, a fraction like the interval; null without one. */
+  minLift: number | null
   /** Medians over the counted attempts; null below `EFFECT_MIN_COUNTED` of them. */
   effort: EffortCounters | null
   /** On a variant, its tool calls, agent time or tokens differ from its baseline's by the rank test. */
@@ -204,9 +206,12 @@ export type CheckOutcome =
       assertion: string | null
     }
 
-/** One distinct error over a cell's attempts: its kind, its message's first line, and how often. */
+/**
+ * One distinct error over a cell's attempts: its kind (`turn` for a turn the harness ended with
+ * an error), its message's first line, and how often.
+ */
 export type CellError = {
-  kind: ErrorKind
+  kind: ErrorKind | 'turn'
   message: string
   attempts: number
 }
@@ -236,6 +241,8 @@ export type PooledArm = {
   /** Cases with counted attempts on both sides. */
   pairs: number
   interval: Interval
+  /** The compare's `minLift`, a fraction like the interval, which gates its low end; null without one. */
+  minLift: number | null
   outcome: 'pass' | 'fail'
 }
 
@@ -368,19 +375,24 @@ function checksOf(
 /**
  * The errors of a cell's failed and infra-error attempts that no failed check explains: every
  * timeout, infra error and abort, and an assertion or judge error on an attempt whose recorded
- * checks all passed (a throw in the eval's body).
+ * checks all passed (a throw in the eval's body), plus each turn's error, which is often why.
  */
 function errorsOf(e: EvalEntry, cell: CellRecord): CellError[] {
   const out: CellError[] = []
+  const add = (kind: CellError['kind'], text: string) => {
+    const message = text.trim().split('\n')[0]?.trim() ?? ''
+    const same = out.find((x) => x.kind === kind && x.message === message)
+    if (same) same.attempts++
+    else out.push({ kind, message, attempts: 1 })
+  }
   for (const a of e.attempts) {
-    if (a.cell !== cell.key || !a.error) continue
+    if (a.cell !== cell.key) continue
     if (a.outcome !== 'fail' && a.outcome !== 'infra_error') continue
+    for (const turn of a.turns ?? []) if (turn.error) add('turn', turn.error)
+    if (!a.error) continue
     const checked = a.error.kind === 'assertion' || a.error.kind === 'judge'
     if (checked && (a.assertions ?? []).some((x) => x.status !== 'pass')) continue
-    const message = a.error.message.trim().split('\n')[0]?.trim() ?? ''
-    const same = out.find((x) => x.kind === a.error?.kind && x.message === message)
-    if (same) same.attempts++
-    else out.push({ kind: a.error.kind, message, attempts: 1 })
+    add(a.error.kind, a.error.message)
   }
   return out
 }
@@ -457,6 +469,7 @@ function cellsOf(record: RunRecord, e: EvalEntry, parent: string): CellResult[] 
       checks: checksOf(e, cell, baseline, path),
       effect: cell.role === 'variant' ? cellEffect(cell, baseline, interval) : null,
       interval,
+      minLift: lift?.minLift ?? null,
       effort: effortOf(e, cell),
       effortDiffers: cell.role === 'variant' && effortDiffers(e, cell, baseline),
       errors: errorsOf(e, cell),
@@ -529,6 +542,7 @@ function familyResult(
         effect: pooledEffect(lift),
         pairs: lift.pairs,
         interval: { low: lift.interval.lo, high: lift.interval.hi },
+        minLift: lift.minLift ?? null,
         outcome: lift.outcome,
       }
     }),

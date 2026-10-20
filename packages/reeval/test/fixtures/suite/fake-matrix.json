@@ -47,6 +47,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [],
@@ -75,6 +76,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -126,6 +128,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -160,6 +163,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -211,6 +215,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -245,6 +250,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -296,6 +302,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [],
@@ -324,6 +331,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [],
@@ -369,6 +377,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [],
@@ -419,6 +428,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -456,6 +466,7 @@
                   "low": -0.122,
                   "high": 1
                 },
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [],
@@ -484,6 +495,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -518,6 +530,7 @@
                 "checks": [],
                 "effect": "unclear",
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [
@@ -608,6 +621,7 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
                 "effortDiffers": false,
                 "errors": [],
