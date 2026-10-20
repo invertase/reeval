@@ -7,21 +7,17 @@ import http from 'node:http'
 import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import { buildInstallLayer } from '../src/build-image.ts'
-import { dockerCapacity } from '../src/docker-cli.ts'
+import { dockerCapacity, imageInfo } from '../src/docker-cli.ts'
 import { CA_BUNDLE, CA_PATH, PROXY_PORT } from '../src/egress/gateway.ts'
 import { DEFAULT_IMAGE, SANDBOX_HOME, SANDBOX_USER } from '../src/image.ts'
-import {
-  createDockerSession,
-  DEFAULT_LIMITS,
-  type DockerSession,
-  type SessionOptions,
-} from '../src/session.ts'
+import { DEFAULT_LIMITS, type DockerSession, type SessionOptions } from '../src/session.ts'
+import { CLI, createSession, ENGINE } from './engine.ts'
 
 const dockerReady =
   process.env.REEVAL_TEST_REQUIRE_DOCKER === '1' ||
   (() => {
     try {
-      execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
+      execFileSync(CLI, ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
       return true
     } catch {
       return false
@@ -67,7 +63,7 @@ describe('sandbox confinement in Docker', {
 }, () => {
   const sessions: DockerSession[] = []
   const open = async (options: Partial<SessionOptions> = {}) => {
-    const s = await createDockerSession({ image: DEFAULT_IMAGE, ...options })
+    const s = await createSession({ image: DEFAULT_IMAGE, ...options })
     sessions.push(s)
     return s
   }
@@ -117,7 +113,7 @@ describe('sandbox confinement in Docker', {
 
   test('default limits: memory with as much swap on top, CPUs and processes', async () => {
     const s = await open()
-    const cpus = Math.min(DEFAULT_LIMITS.cpus, (await dockerCapacity())?.cpus ?? Infinity)
+    const cpus = Math.min(DEFAULT_LIMITS.cpus, (await dockerCapacity(ENGINE))?.cpus ?? Infinity)
     assert.deepEqual(
       {
         memory: await cgroup(s, 'memory.max'),
@@ -139,7 +135,7 @@ describe('sandbox confinement in Docker', {
     assert.equal(await cgroup(s, 'memory.max'), String(256 * 1024 ** 2))
     assert.equal(await cgroup(s, 'cpu.max'), '50000 100000')
     assert.equal(await cgroup(s, 'pids.max'), '200')
-    const host = (await dockerCapacity())?.cpus
+    const host = (await dockerCapacity(ENGINE))?.cpus
     if (host) {
       const wide = await open({ limits: { cpus: host + 64 } })
       assert.equal(await cgroup(wide, 'cpu.max'), `${host * 100_000} 100000`)
@@ -192,15 +188,17 @@ describe('sandbox confinement in Docker', {
   test('install layers put ~ in the sandbox user’s home, owned by it', async () => {
     const parent = {
       ref: DEFAULT_IMAGE,
-      id: execFileSync('docker', ['image', 'inspect', '--format', '{{.Id}}', DEFAULT_IMAGE], {
-        encoding: 'utf8',
-      }).trim(),
+      id: (await imageInfo(DEFAULT_IMAGE, ENGINE))?.id ?? '',
     }
-    const tag = await buildInstallLayer(parent, [
-      {
-        run: 'test "$(id -u)" = 0 && mkdir -p ~/.tool/bin && printf "#!/bin/sh\\necho tool ok\\n" > ~/.tool/bin/t && chmod +x ~/.tool/bin/t',
-      },
-    ])
+    const tag = await buildInstallLayer(
+      parent,
+      [
+        {
+          run: 'test "$(id -u)" = 0 && mkdir -p ~/.tool/bin && printf "#!/bin/sh\\necho tool ok\\n" > ~/.tool/bin/t && chmod +x ~/.tool/bin/t',
+        },
+      ],
+      { engine: ENGINE },
+    )
     const s = await open({ image: tag })
     const r = await s.run({ command: '~/.tool/bin/t && touch ~/.tool/cache && stat -c %U ~/.tool' })
     assert.equal(r.stdout, `tool ok\n${SANDBOX_USER}\n`, r.stderr)
@@ -213,7 +211,7 @@ describe('the egress gateway as the sandbox user', {
   const sessions: DockerSession[] = []
   let listener: { port: number; hits: number; close(): void }
   const open = async (options: Partial<SessionOptions> = {}) => {
-    const s = await createDockerSession({
+    const s = await createSession({
       image: NET_TOOLS_IMAGE,
       egress: {
         policy: { mode: 'custom', allowedHosts: ['upstream.test'] },
@@ -232,7 +230,7 @@ describe('the egress gateway as the sandbox user', {
     })
 
   before(() => {
-    execFileSync('docker', ['build', '-q', '-t', NET_TOOLS_IMAGE, '-'], {
+    execFileSync(CLI, ['build', '-q', '-t', NET_TOOLS_IMAGE, '-'], {
       input: `FROM ${DEFAULT_IMAGE}\nRUN apt-get update && apt-get install -y --no-install-recommends iptables iproute2 && rm -rf /var/lib/apt/lists/*\n`,
       stdio: ['pipe', 'ignore', 'inherit'],
     })
@@ -327,7 +325,7 @@ describe('the egress gateway as the sandbox user', {
     const r = await s.run({ command: `curl -sS --noproxy '*' --max-time 3 http://1.1.1.1/` })
     assert.notEqual(r.exitCode, 0)
     const networks = spawnSync(
-      'docker',
+      CLI,
       ['inspect', '--format', '{{json .NetworkSettings.Networks}}', s.id],
       { encoding: 'utf8' },
     ).stdout

@@ -33,6 +33,7 @@ import {
   type OutboundRequest,
   type RequestTransformation,
 } from '../src/egress/rules.ts'
+import { dockerSeccompFile, ENGINES, normalizeImageId } from '../src/engine.ts'
 import { DEFAULT_IMAGE, HARNESS_PACKAGES, harnessLabel, imageFor } from '../src/image.ts'
 import { memorySwap } from '../src/session.ts'
 import { type DockerCommand, onDockerCommand, traceDocker } from '../src/trace.ts'
@@ -573,6 +574,34 @@ test('only registry-qualified or namespaced digests count as pushed', () => {
   assert.equal(isRegistryDigest(`invertase/reeval-sandbox${d}`), true)
   assert.equal(isRegistryDigest(`ghcr.io/invertase/reeval${d}`), true)
   assert.equal(isRegistryDigest(`localhost:5000/reeval${d}`), true)
+  // Podman's local images are `localhost/<name>`: no registry anyone pulls from.
+  assert.equal(isRegistryDigest(`localhost/reeval-sandbox${d}`), false)
+})
+
+describe('engines', () => {
+  test("podman runs every container on the bridge with Docker's seccomp profile; docker adds nothing", () => {
+    assert.deepEqual(ENGINES.docker.runArgs(), [])
+    const [network, bridge, opt, seccomp] = ENGINES.podman.runArgs()
+    assert.deepEqual([network, bridge, opt], ['--network', 'bridge', '--security-opt'])
+    const file = (seccomp ?? '').replace(/^seccomp=/, '')
+    const profile = JSON.parse(readFileSync(file, 'utf8'))
+    assert.equal(profile.defaultAction, 'SCMP_ACT_ERRNO')
+    // Canary: Docker's profile allows unshare only with CAP_SYS_ADMIN, which sandboxes never have.
+    const unshare = profile.syscalls.filter((s: { names: string[] }) => s.names.includes('unshare'))
+    assert.ok(unshare.length > 0)
+    for (const rule of unshare) assert.deepEqual(rule.includes?.caps, ['CAP_SYS_ADMIN'])
+    assert.equal(dockerSeccompFile(), file, 'written once')
+  })
+
+  test('image ids read the same on both: sha256:<hex>', () => {
+    assert.equal(normalizeImageId('aaef90e0'), 'sha256:aaef90e0')
+    assert.equal(normalizeImageId('sha256:aaef90e0'), 'sha256:aaef90e0')
+  })
+
+  test('podman removes without the grace period; docker as before', () => {
+    assert.deepEqual(ENGINES.podman.rmForce, ['rm', '-f', '--time', '0'])
+    assert.deepEqual(ENGINES.docker.rmForce, ['rm', '-f'])
+  })
 })
 
 describe('package boundary', () => {
@@ -765,6 +794,7 @@ describe('docker command traces', () => {
         stdout: Buffer.from([0, 255, 1]),
       })
       traceDocker(['exec', 'c1', 'node', '-e', 'x'.repeat(400)], at, { error: new Error('killed') })
+      traceDocker(['ps'], at, { exitCode: 0 }, 'podman')
     } finally {
       onDockerCommand(undefined)
     }
@@ -772,15 +802,30 @@ describe('docker command traces', () => {
     assert.deepEqual(
       seen.map(({ ms: _, ...c }) => c),
       [
-        { args: ['version'], exitCode: 0, stdout: '29.8.1\n', stderr: '', stdin: 3 },
-        { args: ['exec', 'c1', 'cat', '--', '/f'], exitCode: 0, stdout: '<3 bytes>', stderr: '' },
         {
+          bin: 'docker',
+          args: ['version'],
+          exitCode: 0,
+          stdout: '29.8.1\n',
+          stderr: '',
+          stdin: 3,
+        },
+        {
+          bin: 'docker',
+          args: ['exec', 'c1', 'cat', '--', '/f'],
+          exitCode: 0,
+          stdout: '<3 bytes>',
+          stderr: '',
+        },
+        {
+          bin: 'docker',
           args: ['exec', 'c1', 'node', '-e', `${'x'.repeat(300)}… (100 more)`],
           exitCode: null,
           stdout: '',
           stderr: '',
           error: 'killed',
         },
+        { bin: 'podman', args: ['ps'], exitCode: 0, stdout: '', stderr: '' },
       ],
       'nothing once the listener is gone',
     )

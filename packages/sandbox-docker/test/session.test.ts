@@ -6,11 +6,12 @@ import http from 'node:http'
 import { after, describe, test } from 'node:test'
 import { PROXY_PORT } from '../src/egress/gateway.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
-import { createDockerSession, type DockerSession } from '../src/session.ts'
+import type { DockerSession } from '../src/session.ts'
+import { CLI, createSession } from './engine.ts'
 
 const dockerReady = (() => {
   try {
-    execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
+    execFileSync(CLI, ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
     return true
   } catch {
     return false
@@ -41,7 +42,7 @@ const longCommand = () => `sleep 3000.${process.pid}${++n}`
 
 /** Containers, running or not, with the test label `value`. */
 const labelled = (value: string) =>
-  execFileSync('docker', ['ps', '-aq', '--filter', `label=ai.reeval.test=${value}`], {
+  execFileSync(CLI, ['ps', '-aq', '--filter', `label=ai.reeval.test=${value}`], {
     encoding: 'utf8',
   }).trim()
 
@@ -59,7 +60,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
         const controller = new AbortController()
         setTimeout(() => controller.abort(new Error('stop')), ms)
         try {
-          const s = await createDockerSession({
+          const s = await createSession({
             image: DEFAULT_IMAGE,
             labels: { 'ai.reeval.test': label },
             abortSignal: controller.signal,
@@ -89,7 +90,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
 
   test('the leak check sees a live container (twin: it can fail)', async () => {
     const label = `twin-${process.pid}`
-    const s = await createDockerSession({
+    const s = await createSession({
       image: DEFAULT_IMAGE,
       labels: { 'ai.reeval.test': label },
     })
@@ -118,7 +119,7 @@ const get = (url: string, ms: number) =>
 
 describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () => {
   test('the session reports it, and ports fail fast with the reason', async () => {
-    const s = await createDockerSession({
+    const s = await createSession({
       image: DEFAULT_IMAGE,
       labels: { 'ai.reeval.test': 'forwarder' },
       egress: true,
@@ -137,7 +138,7 @@ describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () =>
       // The forwarder is the one process whose command line has the proxy port. It runs as root,
       // out of the sandbox user's reach, so kill it as root.
       const pattern = `[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}`
-      const killed = spawnSync('docker', [
+      const killed = spawnSync(CLI, [
         'exec',
         '--user',
         '0:0',
@@ -171,7 +172,7 @@ describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () =>
 describe('exec in a container', { skip, timeout: 60_000 }, () => {
   const sessions: DockerSession[] = []
   const open = async () => {
-    const s = await createDockerSession({
+    const s = await createSession({
       image: DEFAULT_IMAGE,
       labels: { 'ai.reeval.test': 'session' },
     })

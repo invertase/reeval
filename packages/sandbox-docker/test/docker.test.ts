@@ -10,14 +10,15 @@ import { PROXY_PORT } from '../src/egress/gateway.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
 import type { Substitution } from '../src/egress/substitution.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
-import { createDockerSession, type DockerSession, type EgressOptions } from '../src/session.ts'
+import type { DockerSession, EgressOptions, SessionOptions } from '../src/session.ts'
+import { CLI, createSession, DEFAULT_NETWORK, ENGINE } from './engine.ts'
 
 // REEVAL_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
 const dockerReady =
   process.env.REEVAL_TEST_REQUIRE_DOCKER === '1' ||
   (() => {
     try {
-      execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
+      execFileSync(CLI, ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
       return true
     } catch {
       return false
@@ -28,7 +29,7 @@ const dockerReady =
 const PYTHON_IMAGE = `reeval-test-python:${DEFAULT_IMAGE.split(':')[1]}`
 const pythonImage = () => {
   try {
-    execFileSync('docker', ['build', '-q', '-t', PYTHON_IMAGE, '-'], {
+    execFileSync(CLI, ['build', '-q', '-t', PYTHON_IMAGE, '-'], {
       input: `FROM ${DEFAULT_IMAGE}\nRUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*\n`,
       stdio: ['pipe', 'ignore', 'pipe'],
     })
@@ -100,7 +101,7 @@ const sh = async (s: DockerSession, command: string, env?: Record<string, string
 
 /** As root in the container, outside the session: what the gateway's own execs run as. */
 const asRoot = (s: DockerSession, command: string) =>
-  spawnSync('docker', ['exec', '--user', '0:0', s.id, 'sh', '-c', command], { encoding: 'utf8' })
+  spawnSync(CLI, ['exec', '--user', '0:0', s.id, 'sh', '-c', command], { encoding: 'utf8' })
 
 // Interfaces with IFF_UP set. Docker Desktop's kernel adds tunnel devices (gre0, sit0…) that stay
 // down, and names an interface attached later eth1 rather than eth0.
@@ -119,8 +120,8 @@ describe('egress gateway in Docker', {
 }, () => {
   let upstream: { port: number; close(): void }
   const sessions: DockerSession[] = []
-  const open = async (options: Parameters<typeof createDockerSession>[0]) => {
-    const s = await createDockerSession(options)
+  const open = async (options: SessionOptions) => {
+    const s = await createSession(options)
     sessions.push(s)
     return s
   }
@@ -466,21 +467,23 @@ describe('egress gateway in Docker', {
 
   test('without node the gateway falls back (allow-all) or refuses (restricted)', async () => {
     try {
-      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+      execFileSync(CLI, ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
     } catch {
       return
     }
     // busybox has no sandbox user, so root; without it, the session says why it can't start.
     await assert.rejects(
-      createDockerSession({
+      createSession({
         image: 'busybox:1.37',
         labels: { 'ai.reeval.test': 'no-user' },
       }),
-      /busybox:1\.37 has no reeval user to run the sandbox as[\s\S]*docker\(\{ root: true \}\)/,
+      new RegExp(
+        `busybox:1\\.37 has no reeval user to run the sandbox as[\\s\\S]*${CLI}\\(\\{ root: true \\}\\)`,
+      ),
     )
     await retry(async () =>
       assert.equal(
-        execFileSync('docker', ['ps', '-aq', '--filter', 'label=ai.reeval.test=no-user'], {
+        execFileSync(CLI, ['ps', '-aq', '--filter', 'label=ai.reeval.test=no-user'], {
           encoding: 'utf8',
         }).trim(),
         '',
@@ -492,7 +495,7 @@ describe('egress gateway in Docker', {
     assert.equal(s.addRequestTransformations, undefined)
     assert.equal(s.setNetworkPolicy, undefined)
     await assert.rejects(
-      createDockerSession({
+      createSession({
         image: 'busybox:1.37',
         root: true,
         labels: { 'ai.reeval.test': 'fallback' },
@@ -500,25 +503,29 @@ describe('egress gateway in Docker', {
       }),
       /Can't enforce the egress policy/,
     )
-    const left = execFileSync(
-      'docker',
-      ['ps', '-aq', '--filter', 'label=ai.reeval.test=fallback'],
-      { encoding: 'utf8' },
-    )
+    const left = execFileSync(CLI, ['ps', '-aq', '--filter', 'label=ai.reeval.test=fallback'], {
+      encoding: 'utf8',
+    })
     assert.equal(left.trim(), '', 'the refused container was removed')
   })
 
   test('destroy stops the tunnel and removes the container', async () => {
-    const s = await createDockerSession({ image: DEFAULT_IMAGE, egress: egress() })
-    const tunnels = () =>
-      execFileSync('ps', ['-eo', 'args'], { encoding: 'utf8' })
+    const s = await createSession({ image: DEFAULT_IMAGE, egress: egress() })
+    // Rootless Podman re-executes itself in its user namespace, so a tunnel whose parent is
+    // also a tunnel is the same one.
+    const tunnels = () => {
+      const procs = execFileSync('ps', ['-eo', 'pid=,ppid=,args='], { encoding: 'utf8' })
         .split('\n')
-        .filter((l) => l.startsWith(`docker exec --interactive --user 0:0 ${s.id} node -e`)).length
+        .map((l) => l.trim().match(/^(\d+)\s+(\d+)\s+(.*)$/))
+        .filter((m) => m?.[3].startsWith(`${CLI} exec --interactive --user 0:0 ${s.id} node -e`))
+      const pids = new Set(procs.map((m) => m?.[1]))
+      return procs.filter((m) => !pids.has(m?.[2])).length
+    }
     assert.equal(tunnels(), 1)
     await s.destroy()
     await new Promise((r) => setTimeout(r, 500))
     assert.equal(tunnels(), 0)
-    const exists = execFileSync('docker', ['ps', '-aq', '--filter', `id=${s.id}`], {
+    const exists = execFileSync(CLI, ['ps', '-aq', '--filter', `id=${s.id}`], {
       encoding: 'utf8',
     })
     assert.equal(exists.trim(), '')
@@ -538,7 +545,7 @@ describe('egress policy in Docker', {
   let hostAddress: string
   const sessions: DockerSession[] = []
   const open = async (policy: NetworkPolicy) => {
-    const s = await createDockerSession({ image: DEFAULT_IMAGE, egress: egress({ policy }) })
+    const s = await createSession({ image: DEFAULT_IMAGE, egress: egress({ policy }) })
     sessions.push(s)
     return s
   }
@@ -652,31 +659,29 @@ describe('egress policy in Docker', {
       }
     }
     const network = `reeval-test-${process.pid}`
-    execFileSync('docker', ['network', 'create', network], { stdio: 'ignore' })
-    const s = await createDockerSession({ image: DEFAULT_IMAGE, egress: egress() })
+    execFileSync(CLI, ['network', 'create', network], { stdio: 'ignore' })
+    const s = await createSession({ image: DEFAULT_IMAGE, egress: egress() })
     try {
-      execFileSync('docker', ['network', 'connect', network, s.id])
+      execFileSync(CLI, ['network', 'connect', network, s.id])
       const networks = () =>
         Object.keys(
           JSON.parse(
-            execFileSync(
-              'docker',
-              ['inspect', '--format', '{{json .NetworkSettings.Networks}}', s.id],
-              { encoding: 'utf8' },
-            ),
+            execFileSync(CLI, ['inspect', '--format', '{{json .NetworkSettings.Networks}}', s.id], {
+              encoding: 'utf8',
+            }),
           ) ?? {},
         ).sort()
-      assert.deepEqual(networks(), ['bridge', network])
+      assert.deepEqual(networks(), [DEFAULT_NETWORK, network].sort())
       await s.setNetworkPolicy?.(denyAll)
       assert.deepEqual(networks(), [])
       assert.deepEqual(await upInterfaces(s), ['lo'])
       await s.setNetworkPolicy?.(custom)
       assert.deepEqual(networks(), [], 'restricted → restricted changes nothing')
       await s.setNetworkPolicy?.(allowAll)
-      assert.deepEqual(networks(), ['bridge', network], 'both networks come back')
+      assert.deepEqual(networks(), [DEFAULT_NETWORK, network].sort(), 'both networks come back')
     } finally {
       await s.destroy()
-      execFileSync('docker', ['network', 'rm', network], { stdio: 'ignore' })
+      execFileSync(CLI, ['network', 'rm', network], { stdio: 'ignore' })
     }
   })
 
@@ -752,18 +757,18 @@ async function retry<T>(fn: () => Promise<T>, tries = 30): Promise<T> {
 describe('image info', { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}` }, () => {
   test('reads labelled images and images without labels', async () => {
     const { imageInfo } = await import('../src/docker-cli.ts')
-    const ours = await imageInfo(DEFAULT_IMAGE)
+    const ours = await imageInfo(DEFAULT_IMAGE, ENGINE)
     assert.match(ours?.labels['ai.reeval.agent-version'] ?? '', /\d/)
     // Built here, so no registry digest, on the classic and the containerd image store alike.
     assert.deepEqual(ours?.repoDigests, [])
     try {
-      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+      execFileSync(CLI, ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
     } catch {
       return
     }
-    const plain = await imageInfo('busybox:1.37')
+    const plain = await imageInfo('busybox:1.37', ENGINE)
     assert.deepEqual(plain?.labels, {})
     assert.match(plain?.id ?? '', /^sha256:/)
-    assert.equal(await imageInfo('reeval-no-such-image:missing'), null)
+    assert.equal(await imageInfo('reeval-no-such-image:missing', ENGINE), null)
   })
 })
