@@ -42,6 +42,7 @@ export {
   dockerState,
   type ImageInfo,
   imageInfo,
+  imageTags,
   isRegistryDigest,
   removeContainerDetached,
 } from './docker-cli.ts'

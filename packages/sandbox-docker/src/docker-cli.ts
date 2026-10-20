@@ -225,6 +225,20 @@ export type ImageInfo = {
   repoDigests: string[]
 }
 
+/** `repository:tag` of every local image in `repository`; none when the CLI fails. */
+export async function imageTags(repository: string, engine?: Engine): Promise<string[]> {
+  const r = await docker(['image', 'ls', '--format', '{{.Repository}}:{{.Tag}}', repository], {
+    engine,
+  }).catch(() => null)
+  if (r?.exitCode !== 0) return []
+  // Podman names local images `localhost/…`.
+  return r.stdout
+    .toString('utf8')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((t) => t.replace(/^localhost\//, ''))
+}
+
 export async function imageInfo(image: string, engine?: Engine): Promise<ImageInfo | null> {
   const id = engineSpec(engine).imageId
   const r = await docker(

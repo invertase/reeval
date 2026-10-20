@@ -84,22 +84,7 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     podmanConfinement: async () =>
       (await import('./sandbox/providers.ts')).podmanConfinementProblem(),
     imageExists: async (ref, engine) => !!(await (await sandbox()).imageInfo(ref, engine)),
-    imageTags: async (repository, engine = 'docker') => {
-      const r = await run(engine, [
-        'image',
-        'ls',
-        '--format',
-        '{{.Repository}}:{{.Tag}}',
-        repository,
-      ])
-      // Podman names local images `localhost/…`.
-      return r.code === 0
-        ? r.stdout
-            .split('\n')
-            .filter(Boolean)
-            .map((t) => t.replace(/^localhost\//, ''))
-        : []
-    },
+    imageTags: async (repository, engine) => (await sandbox()).imageTags(repository, engine),
     gitIgnored: async (root, paths) => {
       if ((await run('git', ['rev-parse', '--git-dir'], root)).code !== 0) return null
       return Promise.all(

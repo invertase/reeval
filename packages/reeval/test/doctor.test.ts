@@ -2,8 +2,9 @@
 // the command end to end. No key's value appears in any output, text or JSON.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { loadConfig } from '../src/config.ts'
 import {
@@ -482,6 +483,38 @@ describe('reeval doctor checks', () => {
     const check = await checkEnvFiles(root, deps({ gitVisibleEnvFiles }))
     assert.equal(check?.status, 'warn')
     assert.match(check?.summary ?? '', /^\.env\.example \(GEMINI_API_KEY\) has key values/)
+  })
+
+  test("image tags come through sandbox-docker's podman CLI, which retries a dropped SSH handshake", async () => {
+    // A podman CLI whose first `image ls` loses its handshake (exit 125); a Node script behind an
+    // sh and a .cmd wrapper, so it runs on every OS.
+    const bin = await mkdtemp(join(tmpdir(), 'reeval-doctor-podman-'))
+    const log = join(bin, 'calls.log')
+    await writeFile(
+      join(bin, 'podman.js'),
+      `const fs = require('node:fs')
+const args = process.argv.slice(2)
+if (args[0] !== 'image') process.exit(1)
+fs.appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
+if (fs.readFileSync(${JSON.stringify(log)}, 'utf8').trim().split('\\n').length === 1) {
+  process.stderr.write('Error: ssh: handshake failed: EOF\\n')
+  process.exit(125)
+}
+console.log('localhost/reeval-sandbox:cursor-0.1.5')
+`,
+    )
+    await writeFile(join(bin, 'podman'), `#!/bin/sh\nexec node "$(dirname "$0")/podman.js" "$@"\n`)
+    await chmod(join(bin, 'podman'), 0o755)
+    await writeFile(join(bin, 'podman.cmd'), '@node "%~dp0podman.js" %*\r\n')
+    const path = process.env.PATH
+    process.env.PATH = `${bin}${delimiter}${path}`
+    try {
+      const tags = await defaultDeps().imageTags('reeval-sandbox', 'podman')
+      assert.deepEqual(tags, ['reeval-sandbox:cursor-0.1.5'])
+      assert.equal((await readFile(log, 'utf8')).trim().split('\n').length, 2, 'retried once')
+    } finally {
+      process.env.PATH = path
+    }
   })
 })
 

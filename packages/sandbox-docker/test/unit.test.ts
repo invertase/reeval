@@ -26,6 +26,7 @@ import {
   docker,
   dockerState,
   imageInfo,
+  imageTags,
   isConnectionFailure,
   isRegistryDigest,
   removalDone,
@@ -732,7 +733,7 @@ if (n <= Number(process.env.FAKE_FAILS ?? 0)) {
   process.stderr.write(process.env.FAKE_STDERR ?? '')
   process.exit(Number(process.env.FAKE_EXIT ?? 125))
 }
-console.log('ok')
+console.log(process.env.FAKE_STDOUT ?? 'ok')
 `,
     )
     writeFileSync(join(bin, 'podman'), `#!/bin/sh\nexec node "$(dirname "$0")/podman.js" "$@"\n`)
@@ -776,6 +777,35 @@ console.log('ok')
     )
     assert.equal(failed.exitCode, 125)
     assert.deepEqual(other.calls(), ['ps -q'], 'any other failure is the answer')
+  })
+
+  test("imageTags lists Podman's tags without localhost/, through the retry", async () => {
+    const fake = fakePodman()
+    const tags = await withEnv(
+      {
+        PATH: `${fake.bin}${delimiter}${process.env.PATH}`,
+        FAKE_FAILS: '1',
+        FAKE_EXIT: '125',
+        FAKE_STDERR: 'Error: ssh: handshake failed: EOF\n',
+        FAKE_STDOUT: 'localhost/reeval-sandbox:cursor-0.1.5\nreeval-sandbox:pi-0.2.7',
+      },
+      () => imageTags('reeval-sandbox', 'podman'),
+    )
+    assert.deepEqual(tags, ['reeval-sandbox:cursor-0.1.5', 'reeval-sandbox:pi-0.2.7'])
+    const ls = 'image ls --format {{.Repository}}:{{.Tag}} reeval-sandbox'
+    assert.deepEqual(fake.calls(), [ls, ls])
+
+    const broken = fakePodman()
+    const none = await withEnv(
+      {
+        PATH: `${broken.bin}${delimiter}${process.env.PATH}`,
+        FAKE_FAILS: '9',
+        FAKE_EXIT: '1',
+        FAKE_STDERR: 'Error: boom',
+      },
+      () => imageTags('reeval-sandbox', 'podman'),
+    )
+    assert.deepEqual(none, [], 'a failing CLI lists nothing')
   })
 
   // spawn finds podman.exe, not a .cmd wrapper, on Windows.
