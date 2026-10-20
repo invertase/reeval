@@ -22,7 +22,7 @@ import {
   probeKey,
 } from '../src/doctor.ts'
 import { runtimeInfo } from '../src/history/provenance.ts'
-import { dockerProblem } from '../src/sandbox/providers.ts'
+import { dockerProblem, podmanInfoProblem } from '../src/sandbox/providers.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 
 const SECRET = 'sk-live-doctor-9f8e7d6c5b4a'
@@ -36,6 +36,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   dockerCapacity: async () => ({ cpus: 8, memoryBytes: 16 * 1024 ** 3 }),
   imageExists: async () => true,
   imageTags: async () => [],
+  podmanConfinement: async () => null,
   gitIgnored: async (_, paths) => paths.map(() => true),
   gitVisibleEnvFiles: async () => [],
   fetch: async () => new Response('{}', { status: 200 }),
@@ -48,7 +49,7 @@ async function configOf(name: string, body: string) {
     'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
-import { docker, fakeSandbox } from 'reeval/sandbox'
+import { docker, fakeSandbox, podman } from 'reeval/sandbox'
 export default defineConfig(${body})
 `,
   })
@@ -164,6 +165,66 @@ describe('reeval doctor checks', () => {
       (await checkDocker(profiled, deps({ dockerState: down }))).checks[0]?.status,
       'fail',
     )
+  })
+
+  test('podman: down, too old, missing cgroup controllers, and running beside Docker', async () => {
+    assert.match(
+      dockerProblem('down', 'linux', 'podman') ?? '',
+      /Podman isn't answering: `podman info` failed\. Install Podman 4/,
+    )
+    assert.match(dockerProblem('down', 'darwin', 'podman') ?? '', /podman machine start/)
+    const linux = (version: string, rootless: boolean, controllers: string[] | null) =>
+      podmanInfoProblem({ version, rootless, controllers })
+    assert.equal(linux('4.9.3', true, ['cpuset', 'cpu', 'io', 'memory', 'pids']), null)
+    assert.match(
+      linux('3.4.4', true, ['cpu', 'memory', 'pids'])?.problem ?? '',
+      /Podman 3\.4\.4 is too old/,
+    )
+    const delegated = linux('5.4.0', true, ['memory', 'pids'])
+    assert.equal(
+      delegated?.problem,
+      "rootless Podman can't limit a sandbox's cpu: your user's cgroup doesn't have the cpu controller",
+    )
+    assert.match(delegated?.fix ?? '', /Delegate=cpu cpuset io memory pids/)
+    assert.equal(linux('5.4.0', false, ['memory']), null, 'rootful Podman has every controller')
+
+    const config = await configOf(
+      'podman',
+      `{ harness: cursor({ model: 'composer-2.5' }), environment: defineEnvironment('p', { sandbox: podman() }) }`,
+    )
+    const ok = await checkDocker(config, deps())
+    assert.deepEqual(
+      ok.checks.map((c) => [c.id, c.status]),
+      [['podman', 'ok']],
+    )
+    assert.match(ok.checks[0]?.summary ?? '', /^running · 8 CPUs/)
+    const down = await checkDocker(
+      config,
+      deps({ dockerState: async (engine) => (engine === 'podman' ? 'down' : 'running') }),
+    )
+    assert.equal(down.running, false)
+    assert.match(down.checks[0]?.summary ?? '', /config's podman\(\) sandboxes need it/)
+    const confined = await checkDocker(
+      config,
+      deps({ podmanConfinement: async () => ({ problem: 'no cpu', fix: 'delegate it' }) }),
+    )
+    assert.deepEqual(confined.checks[0], {
+      id: 'podman',
+      status: 'fail',
+      summary: 'no cpu',
+      fix: 'delegate it',
+    })
+
+    const both = await configOf(
+      'podman-and-docker',
+      `{ harness: cursor({ model: 'composer-2.5' }), environment: defineEnvironment('p', { sandbox: podman() }), profiles: { d: { defaults: { environment: defineEnvironment('d', { sandbox: docker() }) } } } }`,
+    )
+    assert.deepEqual(
+      (await checkDocker(both, deps())).checks.map((c) => c.id),
+      ['docker', 'podman'],
+    )
+    const images = await checkImages(config, deps({ imageExists: async () => false }))
+    assert.match(images.checks[0]?.summary ?? '', /in Podman/)
   })
 
   test('images: present, missing (with the build fix), and left from another version', async () => {

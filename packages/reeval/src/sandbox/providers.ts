@@ -84,11 +84,34 @@ export async function requireDocker(engine: Engine = 'docker'): Promise<void> {
   if (problem) throw new UsageError(problem)
 }
 
+/** What `podman info` says about the host's Podman, for {@link podmanInfoProblem}. */
+type PodmanInfo = { version: string; rootless: boolean; controllers: string[] | null }
+
 /**
  * Why Podman can't confine a sandbox as reeval needs, or null: too old for the bridge network
  * rootless, or a rootless cgroup without the controllers `--cpus`, `--memory` and `--pids-limit`
  * need (systemd before 252 delegates only memory and pids).
  */
+export function podmanInfoProblem(info: PodmanInfo): { problem: string; fix: string } | null {
+  const major = Number(/^(\d+)/.exec(info.version)?.[1])
+  if (major < 4) {
+    return {
+      problem: `Podman ${info.version} is too old for reeval's sandboxes, which need Podman 4 or later (its rootless bridge network)`,
+      fix: 'upgrade Podman',
+    }
+  }
+  const missing = ['cpu', 'memory', 'pids'].filter((c) => !(info.controllers ?? []).includes(c))
+  if (info.rootless && missing.length) {
+    const names = missing.join(', ')
+    return {
+      problem: `rootless Podman can't limit a sandbox's ${names}: your user's cgroup doesn't have the ${names} controller${missing.length === 1 ? '' : 's'}`,
+      fix: 'delegate them with a systemd drop-in for user@.service (Delegate=cpu cpuset io memory pids), then log in again',
+    }
+  }
+  return null
+}
+
+/** {@link podmanInfoProblem} for this host's Podman; null when `podman info` doesn't answer. */
 export async function podmanConfinementProblem(): Promise<{
   problem: string
   fix: string
@@ -108,22 +131,7 @@ export async function podmanConfinementProblem(): Promise<{
     .trim()
     .split(/\s+/)
     .map((v) => JSON.parse(v)) as [string, boolean, string[] | null]
-  const major = Number(/^(\d+)/.exec(version)?.[1])
-  if (major < 4) {
-    return {
-      problem: `Podman ${version} is too old for reeval's sandboxes, which need Podman 4 or later (its rootless bridge network)`,
-      fix: 'upgrade Podman',
-    }
-  }
-  const missing = ['cpu', 'memory', 'pids'].filter((c) => !(controllers ?? []).includes(c))
-  if (rootless && missing.length) {
-    const names = missing.join(', ')
-    return {
-      problem: `rootless Podman can't limit a sandbox's ${names}: your user's cgroup doesn't have the ${names} controller${missing.length === 1 ? '' : 's'}`,
-      fix: 'delegate them with a systemd drop-in for user@.service (Delegate=cpu cpuset io memory pids), then log in again',
-    }
-  }
-  return null
+  return podmanInfoProblem({ version, rootless, controllers })
 }
 
 /** Docker or Podman: one image per key, each sub-image built once per provider (so once per run). */
