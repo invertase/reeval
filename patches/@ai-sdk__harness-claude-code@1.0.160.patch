@@ -1,5 +1,5 @@
 diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
-index e8da8699576b55f0cc271d7839d01d51cc5d649a..43a76dfe3a0bf0841e97b4c4d7a60e9e12296d46 100644
+index e21cffa448869313e6b9a136c91b69c60850cb26..e3a92309bd1eaa2ec0444a6fc0cec1360d793987 100644
 --- a/dist/bridge/index.mjs
 +++ b/dist/bridge/index.mjs
 @@ -730,7 +730,7 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
