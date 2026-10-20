@@ -3,7 +3,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { DockerState } from '@reeval/sandbox-docker'
+import type { DockerState, Engine } from '@reeval/sandbox-docker'
 import type { Flags } from './cli-spec.ts'
 import {
   badCharacterAt,
@@ -47,12 +47,14 @@ export type DoctorDeps = {
   /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
   nodeVersion: string
   platform: NodeJS.Platform
-  dockerState: () => Promise<DockerState>
-  dockerCapacity: () => Promise<{ cpus: number; memoryBytes: number } | null>
-  /** Whether the image is in the local Docker. */
-  imageExists: (ref: string) => Promise<boolean>
+  dockerState: (engine?: Engine) => Promise<DockerState>
+  dockerCapacity: (engine?: Engine) => Promise<{ cpus: number; memoryBytes: number } | null>
+  /** Why Podman can't confine a sandbox (too old, cgroup controllers missing), or null. */
+  podmanConfinement: () => Promise<{ problem: string; fix: string } | null>
+  /** Whether the image is in the local Docker (or Podman). */
+  imageExists: (ref: string, engine?: Engine) => Promise<boolean>
   /** `repository:tag` of every local image in a repository. */
-  imageTags: (repository: string) => Promise<string[]>
+  imageTags: (repository: string, engine?: Engine) => Promise<string[]>
   /** Which of `paths` git ignores in `root`, or null outside a git repository. */
   gitIgnored: (root: string, paths: string[]) => Promise<boolean[] | null>
   /** `.env` and `.env.*` files under `root` that git doesn't ignore, relative; null outside a repository. */
@@ -77,18 +79,26 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     runtime: runtimeInfo(),
     nodeVersion: process.versions.node,
     platform: process.platform,
-    dockerState: async () => (await sandbox()).dockerState(),
-    dockerCapacity: async () => (await sandbox()).dockerCapacity(),
-    imageExists: async (ref) => !!(await (await sandbox()).imageInfo(ref)),
-    imageTags: async (repository) => {
-      const r = await run('docker', [
+    dockerState: async (engine) => (await sandbox()).dockerState(engine),
+    dockerCapacity: async (engine) => (await sandbox()).dockerCapacity(engine),
+    podmanConfinement: async () =>
+      (await import('./sandbox/providers.ts')).podmanConfinementProblem(),
+    imageExists: async (ref, engine) => !!(await (await sandbox()).imageInfo(ref, engine)),
+    imageTags: async (repository, engine = 'docker') => {
+      const r = await run(engine, [
         'image',
         'ls',
         '--format',
         '{{.Repository}}:{{.Tag}}',
         repository,
       ])
-      return r.code === 0 ? r.stdout.split('\n').filter(Boolean) : []
+      // Podman names local images `localhost/…`.
+      return r.code === 0
+        ? r.stdout
+            .split('\n')
+            .filter(Boolean)
+            .map((t) => t.replace(/^localhost\//, ''))
+        : []
     },
     gitIgnored: async (root, paths) => {
       if ((await run('git', ['rev-parse', '--git-dir'], root)).code !== 0) return null
@@ -192,17 +202,89 @@ const DOCKER_FIX: Partial<Record<NodeJS.Platform, string>> = {
     'install or start Docker Desktop with the WSL 2 backend and Linux containers (https://docs.docker.com/desktop/setup/install/windows-install/)',
 }
 
+const PODMAN_FIX: Partial<Record<NodeJS.Platform, string>> = {
+  linux:
+    "install Podman 4 or later (your distribution's podman package), then check podman info works as you",
+  darwin: 'start its machine: podman machine init, then podman machine start',
+  win32: 'start its machine: podman machine init, then podman machine start',
+}
+
+/** The engines the config's container sandboxes run on, Docker first. */
+const enginesOf = (config: ResolvedConfig): Engine[] => {
+  const used = new Set(
+    configuredUses(config).flatMap((u) =>
+      u.sandbox.kind === 'docker' ? [u.sandbox.engine ?? 'docker'] : [],
+    ),
+  )
+  return (['docker', 'podman'] as const).filter((e) => used.has(e))
+}
+
+/** Podman answers, is new enough, and can apply every limit; with the machine's size. */
+async function checkPodman(deps: DoctorDeps): Promise<{ check: Check; running: boolean }> {
+  if ((await deps.dockerState('podman')) !== 'running') {
+    return {
+      check: {
+        id: 'podman',
+        status: 'fail',
+        summary:
+          "isn't answering (podman info failed), and the config's podman() sandboxes need it",
+        fix: PODMAN_FIX[deps.platform] ?? PODMAN_FIX.linux,
+      },
+      running: false,
+    }
+  }
+  const problem = await deps.podmanConfinement()
+  if (problem) {
+    return {
+      check: { id: 'podman', status: 'fail', summary: problem.problem, fix: problem.fix },
+      running: true,
+    }
+  }
+  const capacity = await deps.dockerCapacity('podman')
+  if (!capacity) return { check: { id: 'podman', status: 'ok', summary: 'running' }, running: true }
+  const gb = capacity.memoryBytes / 1024 ** 3
+  const summary = `running · ${capacity.cpus} CPUs, ${gb.toFixed(1)} GB memory (default concurrency ${defaultConcurrency(capacity)})`
+  return {
+    check:
+      gb < 4
+        ? {
+            id: 'podman',
+            status: 'warn',
+            summary: `${summary}; an attempt may use up to 4 GB`,
+            fix: 'give the Podman machine more memory (podman machine set --memory), or lower podman({ memory })',
+          }
+        : { id: 'podman', status: 'ok', summary },
+    running: true,
+  }
+}
+
 export async function checkDocker(
   config: ResolvedConfig,
   deps: DoctorDeps,
 ): Promise<{ checks: Check[]; running: boolean; windowsContainers?: boolean }> {
-  const docker = configuredUses(config).filter((u) => u.sandbox.kind === 'docker')
-  if (!docker.length) {
+  const engines = enginesOf(config)
+  if (engines.includes('podman')) {
+    const podman = await checkPodman(deps)
+    if (!engines.includes('docker')) return { checks: [podman.check], running: podman.running }
+    const docker = await checkDockerEngine(deps)
+    return {
+      ...docker,
+      checks: [...docker.checks, podman.check],
+      running: docker.running && podman.running,
+    }
+  }
+  if (!engines.length) {
     return {
       checks: [{ id: 'docker', status: 'skip', summary: 'no sandbox in the config uses Docker' }],
       running: false,
     }
   }
+  return checkDockerEngine(deps)
+}
+
+async function checkDockerEngine(
+  deps: DoctorDeps,
+): Promise<{ checks: Check[]; running: boolean; windowsContainers?: boolean }> {
   const state = await deps.dockerState()
   if (state === 'windows-containers') {
     return {
@@ -265,42 +347,48 @@ export async function checkImages(
   )
   const checks: Check[] = []
   const missing: string[] = []
-  for (const harness of reevalImages(targets)) {
-    const ref = imageFor(harness)
-    if (await deps.imageExists(ref)) {
-      checks.push({ id: 'image', status: 'ok', summary: `${ref} (${harness})` })
-    } else {
-      missing.push(ref)
-      checks.push({
-        id: 'image',
-        status: 'fail',
-        summary: `${ref} (${harness}) isn't built`,
-        fix: 'reeval image build',
-      })
-    }
-    const [repository] = ref.split(':')
-    const prefix = `${repository}:${harness}-`
-    // Derived images of this version (`<ref>-python-…`, from docker({ from })) are current.
-    const stale = (await deps.imageTags(repository as string)).filter(
-      (tag) => tag.startsWith(prefix) && tag !== ref && !tag.startsWith(`${ref}-`),
-    )
-    if (stale.length) {
-      checks.push({
-        id: 'image',
-        status: 'warn',
-        summary: `${stale.join(', ')}: built by another reeval version, unused by this one`,
-        fix: `docker image rm ${stale.join(' ')}`,
-      })
+  for (const engine of ['docker', 'podman'] as const) {
+    const own = targets.filter((t) => (t.sandbox.engine ?? 'docker') === engine)
+    // Podman keeps its own images: say which store a podman() sandbox's image is missing from.
+    const on = engine === 'podman' ? ', in Podman' : ''
+    for (const harness of reevalImages(own)) {
+      const ref = imageFor(harness)
+      if (await deps.imageExists(ref, engine)) {
+        checks.push({ id: 'image', status: 'ok', summary: `${ref} (${harness}${on})` })
+      } else {
+        missing.push(ref)
+        checks.push({
+          id: 'image',
+          status: 'fail',
+          summary: `${ref} (${harness}${on}) isn't built`,
+          fix: 'reeval image build',
+        })
+      }
+      const [repository] = ref.split(':')
+      const prefix = `${repository}:${harness}-`
+      // Derived images of this version (`<ref>-python-…`, from docker({ from })) are current.
+      const stale = (await deps.imageTags(repository as string, engine)).filter(
+        (tag) => tag.startsWith(prefix) && tag !== ref && !tag.startsWith(`${ref}-`),
+      )
+      if (stale.length) {
+        checks.push({
+          id: 'image',
+          status: 'warn',
+          summary: `${stale.join(', ')}: built by another reeval version, unused by this one`,
+          fix: `${engine} image rm ${stale.join(' ')}`,
+        })
+      }
     }
   }
   for (const t of targets.filter((t) => t.sandbox.image)) {
     const ref = t.sandbox.image as string
-    if (!(await deps.imageExists(ref))) {
+    const engine = t.sandbox.engine ?? 'docker'
+    if (!(await deps.imageExists(ref, engine))) {
       checks.push({
         id: 'image',
         status: 'fail',
-        summary: `${ref} (docker({ image })) isn't in Docker`,
-        fix: `docker pull ${ref}, or build it`,
+        summary: `${ref} (${engine}({ image })) isn't in ${engine === 'podman' ? 'Podman' : 'Docker'}`,
+        fix: `${engine} pull ${ref}, or build it`,
       })
     }
   }
@@ -635,7 +723,7 @@ export async function doctor(
     } else if (docker.checks[0]?.status === 'fail') {
       const why = docker.windowsContainers
         ? 'Docker runs Windows containers'
-        : "Docker isn't running"
+        : `${docker.checks[0]?.id === 'podman' ? 'Podman' : 'Docker'} isn't running`
       checks.push({ id: 'image', status: 'skip', summary: why })
     }
     const online = !!flags.online

@@ -1,4 +1,4 @@
-// Every docker command an attempt runs, into its trace (`-vv`, and trace.ndjson). Imported for its
+// Every docker (or podman) command an attempt runs, into its trace (`-vv`, and trace.ndjson). Imported for its
 // side effect by the modules that drive Docker; commands outside an attempt aren't traced.
 import { onDockerCommand } from '@reeval/sandbox-docker'
 import { attemptDebug } from './attempt.ts'
@@ -9,7 +9,7 @@ const word = (arg: string) =>
 onDockerCommand((command) => {
   const debug = attemptDebug()
   if (!debug) return
-  const line = ['docker', ...command.args].map(word).join(' ')
+  const line = [command.bin, ...command.args].map(word).join(' ')
   const result = command.error ? `failed: ${command.error}` : `exit ${command.exitCode}`
   const detail = [
     command.stdin ? `stdin: ${command.stdin} bytes` : '',

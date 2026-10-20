@@ -715,10 +715,15 @@ export type FakeSandboxDescriptor = {
   /** The most attempts on this sandbox kind at once, across the run. */
   maxConcurrent?: number
 }
-/** A local Docker container, made by `docker()`. */
+/** A local Docker container, made by `docker()`, or a Podman one, made by `podman()`. */
 export type DockerSandboxDescriptor = {
   kind: 'docker'
-  /** Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash. */
+  /** The container CLI the sandbox runs on: `podman` for `podman()`, Docker when unset. */
+  engine?: 'docker' | 'podman'
+  /**
+   * Cell id; defaults to `docker` (`podman`), or `docker:<image>` for other images, plus an
+   * install hash.
+   */
   id?: string
   /** An image that already has the harness baked in, used as is. */
   image?: string

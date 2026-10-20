@@ -129,16 +129,21 @@ function installId(install: readonly InstallStep[] | undefined): string {
   return `+${createHash('sha256').update(key).digest('hex').slice(0, 8)}`
 }
 
+/** The provider a sandbox runs on: its kind, or `podman` for a Docker sandbox on Podman. */
+export const sandboxProvider = (s: SandboxDescriptor): 'docker' | 'podman' | 'fake' =>
+  s.kind === 'docker' && s.engine === 'podman' ? 'podman' : s.kind
+
 export function sandboxId(s: SandboxDescriptor): string {
   if (s.id) return s.id
   if (s.kind === 'fake') return 'fake'
   const install = s.kind === 'docker' ? installId(s.install) : ''
+  const engine = s.engine ?? 'docker'
   if (s.dockerfile) {
     const [file = '', dir = ''] = s.dockerfile.split(/[\\/]/).reverse()
-    return `docker:${sanitize(file === 'Dockerfile' ? dir || file : file)}${install}`
+    return `${engine}:${sanitize(file === 'Dockerfile' ? dir || file : file)}${install}`
   }
   const image = s.image ?? s.from
-  return image ? `docker:${sanitize(image)}${install}` : `docker${install}`
+  return image ? `${engine}:${sanitize(image)}${install}` : `${engine}${install}`
 }
 
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
@@ -222,7 +227,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const kind = (o.sandbox as { kind?: string }).kind
     if (kind !== 'docker' && kind !== 'fake') {
       throw new UsageError(
-        `sandbox in ${where} must come from docker() or fakeSandbox() (got ${describe(o.sandbox)})`,
+        `sandbox in ${where} must come from docker(), podman() or fakeSandbox() (got ${describe(o.sandbox)})`,
       )
     }
     const max = o.sandbox.maxConcurrent

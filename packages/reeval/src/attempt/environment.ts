@@ -46,7 +46,8 @@ export async function prepareEnvironment(
     const { attemptImage, dockerProvider } = await import('../sandbox/providers.ts')
     signal.throwIfAborted()
     // Preflight prepared every image before the run: an attempt only looks its image up.
-    const prepared = preparedFor(root, runId, dockerProvider(), spec.sandbox, spec.harness)
+    const provider = dockerProvider({ engine: spec.sandbox.engine ?? 'docker' })
+    const prepared = preparedFor(root, runId, provider, spec.sandbox, spec.harness)
     if (!prepared) {
       throw new InfraError(`The sandbox image for ${where} wasn't prepared before the run started`)
     }

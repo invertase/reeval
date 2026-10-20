@@ -30,18 +30,40 @@ export type { DockerOptions } from './contract/docker.ts'
  * `capabilities` adds specific ones back.
  */
 export function docker(options: DockerOptions = {}): DockerSandboxDescriptor {
+  return containerSandbox(options, 'docker')
+}
+
+/**
+ * {@link docker}, on Podman: the same options, images, egress gateway and records, with containers
+ * run by the `podman` CLI (rootless works). Every container is on Podman's bridge network with
+ * Docker's default seccomp profile, so it's confined as on Docker, and a restricted egress policy
+ * leaves it no route out. `from` and Dockerfile `FROM` names Podman can't resolve need their
+ * registry: `docker.io/library/python:3.12-slim`.
+ */
+export function podman(options: DockerOptions = {}): DockerSandboxDescriptor {
+  return containerSandbox(options, 'podman')
+}
+
+function containerSandbox(
+  options: DockerOptions,
+  engine: 'docker' | 'podman',
+): DockerSandboxDescriptor {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-    throw new UsageError(`docker() takes an options object (got ${JSON.stringify(options)})`)
+    throw new UsageError(`${engine}() takes an options object (got ${JSON.stringify(options)})`)
   }
-  checkDockerOptions(options)
+  checkDockerOptions(options, engine)
   const { dockerfile, ...rest } = options
-  const descriptor: DockerSandboxDescriptor = { kind: 'docker', ...structuredClone(rest) }
+  const descriptor: DockerSandboxDescriptor = {
+    kind: 'docker',
+    ...(engine === 'podman' ? { engine } : {}),
+    ...structuredClone(rest),
+  }
   if (dockerfile !== undefined) {
     const path = dockerfile instanceof URL ? fileURLToPath(dockerfile) : dockerfile
     const full = isAbsolute(path) ? path : resolve(callerDir() ?? process.cwd(), path)
     if (!existsSync(full) || !statSync(full).isFile()) {
       throw new UsageError(
-        `docker({ dockerfile: ${JSON.stringify(path)} }): ${full} doesn't exist. Paths are relative to the file that calls docker().`,
+        `${engine}({ dockerfile: ${JSON.stringify(path)} }): ${full} doesn't exist. Paths are relative to the file that calls ${engine}().`,
       )
     }
     descriptor.dockerfile = full

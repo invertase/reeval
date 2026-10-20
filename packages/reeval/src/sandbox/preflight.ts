@@ -5,7 +5,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { RETRY_DELAYS } from '@reeval/sandbox-docker'
-import { levelOf } from '../options.ts'
+import { levelOf, sandboxProvider } from '../options.ts'
 import type { HarnessDescriptor, SandboxDescriptor } from '../types.ts'
 import {
   type PreparedHandle,
@@ -24,6 +24,7 @@ export type PrepareUse = {
 
 /** One distinct environment to prepare, with every level that asked for it. */
 export type PrepareTarget = {
+  /** The provider: the sandbox's kind, or `podman` for a Docker sandbox on Podman. */
   kind: string
   key: string
   /** How the terminal names it, e.g. `docker:python`. */
@@ -60,11 +61,12 @@ export function prepareTargets(
 ): PrepareTarget[] {
   const targets = new Map<string, PrepareTarget>()
   for (const use of uses) {
-    const provider = providers[use.sandbox.kind]
+    const kind = sandboxProvider(use.sandbox)
+    const provider = providers[kind]
     if (!provider) continue
-    const key = `${use.sandbox.kind}\0${provider.key(use.sandbox, use.harness)}`
+    const key = `${kind}\0${provider.key(use.sandbox, use.harness)}`
     const target = targets.get(key) ?? {
-      kind: use.sandbox.kind,
+      kind,
       key: provider.key(use.sandbox, use.harness),
       label: label(use),
       sandbox: use.sandbox,
@@ -245,7 +247,7 @@ export function preparedFor(
     } catch {}
     read.set(file, doc)
   }
-  const entry = read.get(file)?.[sandbox.kind]?.[provider.key(sandbox, harness)]
+  const entry = read.get(file)?.[sandboxProvider(sandbox)]?.[provider.key(sandbox, harness)]
   if (!entry) return undefined
   if ('failure' in entry) {
     throw new PrepareError({

@@ -81,10 +81,10 @@ export async function preflight(
   writePrepared(options.root, options.runId, outcomes)
   const images: SandboxImage[] = []
   for (const o of outcomes) {
-    if (!o.ok || o.target.kind !== 'docker') continue
+    if (!o.ok || o.target.sandbox.kind !== 'docker') continue
     const { ref, id, agentCli } = attemptImage(o.handle)
     if (images.some((i) => i.id === id)) continue
-    const info = await imageInfo(ref)
+    const info = await imageInfo(ref, o.target.sandbox.engine)
     images.push({
       ref,
       id,
