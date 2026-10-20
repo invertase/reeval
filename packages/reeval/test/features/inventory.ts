@@ -310,6 +310,12 @@ export const inventory: InventoryFeature[] = [
     plan: ['compare/max-variants'],
   },
   {
+    id: 'profiles.compare-off',
+    area: 'Config and selection',
+    name: '`limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare',
+    plan: ['compare/off-study', 'compare/zero-variants', 'compare/baseline-omitted-off'],
+  },
+  {
     id: 'plan.json',
     area: 'Config and selection',
     name: '`reeval run --dry-run` and `--dry-run --json`',

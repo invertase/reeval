@@ -2,7 +2,7 @@ profile pr (auto: CI is set) · 3 evals (1 skipped) · 4 cells · 6 attempts · 
 hint: 1 eval runs more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
 hint: 1 compare runs 2 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
 evals/p.eval.ts › plain        a/-/fake        control          gated    ×1  runs 3 → 1 (profile pr)
-evals/p.eval.ts › compared     a/plain/fake    control          ungated  ×1  compare off (profile pr)
+evals/p.eval.ts › compared     a/plain/fake    control          gated    ×1  compare off (profile pr)
 evals/p.eval.ts › regression   a/plain/fake    control          ungated  ×2  pinned: compare, runs
                                a/skilled/fake  variant skilled  gated    ×2
 evals/p.eval.ts › own harness  skipped: no harness left: profile pr allows a

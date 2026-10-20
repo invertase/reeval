@@ -804,7 +804,9 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
             sandbox: sid,
             role: 'control' as const,
           },
-          gate: gateIf(!compare || compare.gate === 'all'),
+          // A compare a profile's limit left without variants has nothing to compare the
+          // control against, so it gates like an eval without compare.
+          gate: gateIf(!compare || compare.variants.length === 0 || compare.gate === 'all'),
         }
       })(),
     ]
