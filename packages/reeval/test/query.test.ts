@@ -193,6 +193,28 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.match(again.stderr, /rebuilt, 1 read/)
   })
 
+  test('SQL that starts with a -- comment is the statement, with flags before, after or --', async () => {
+    const p = await project('query-dash-comment', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const sql = '-- attempts per run\nSELECT COUNT(*) AS n FROM attempts'
+    for (const argv of [
+      ['query', sql, '--json'],
+      ['query', '--json', sql],
+      ['query', '--json', '--', sql],
+      ['query', '-- one line comment\n-- and another\nSELECT 1 AS n', '--json'],
+    ]) {
+      const r = await runCli(p.dir, argv)
+      assert.equal(r.code, 0, `${JSON.stringify(argv)}: ${r.stderr}`)
+      assert.deepEqual(JSON.parse(r.stdout), [{ n: 1 }], JSON.stringify(argv))
+    }
+    const rebuilt = await runCli(p.dir, ['query', sql, '--rebuild', '--json'])
+    assert.equal(rebuilt.code, 0, rebuilt.stderr)
+    assert.match(rebuilt.stderr, /rebuilt, 1 read/)
+  })
+
   test('it is read-only and runs one statement; mistakes exit 2 with a fix', async () => {
     const p = await project('query-readonly', {
       'reeval.config.ts': fakeConfig(),

@@ -41,6 +41,7 @@ export function parseCli(argv: string[]): ParsedCli {
   })
   for (const [name, spec] of Object.entries(COMMANDS)) {
     const command = configure(program.command(name), `reeval ${name}`, spec.flags)
+    if (name === 'query') takeStatements(command)
     command.argument('[args...]').action(() => {
       // `reeval image` has no action of its own: the dispatcher names its subcommand.
       const max = spec.sub && !spec.help ? Number.POSITIVE_INFINITY : spec.positionals
@@ -76,6 +77,26 @@ function configure(command: Command, name: string, flags: FlagName[]): Command {
     })
   for (const flag of flags) command.addOption(OPTIONS[flag]())
   return command
+}
+
+/**
+ * Makes an argument that starts with `-` but has whitespace before any `=` (SQL opening with a
+ * `-- comment`) a positional: no flag looks like that, and commander would refuse it as one.
+ */
+function takeStatements(command: Command): void {
+  const parseOptions = command.parseOptions.bind(command)
+  command.parseOptions = (args) => {
+    const held = new Map<string, string>()
+    const masked = args.map((arg, i) => {
+      if (!arg.startsWith('-') || !/\s/.test(arg.split('=')[0] ?? '')) return arg
+      const token = `\0statement-${i}`
+      held.set(token, arg)
+      return token
+    })
+    const restore = (list: string[]) => list.map((arg) => held.get(arg) ?? arg)
+    const { operands, unknown } = parseOptions(masked)
+    return { operands: restore(operands), unknown: restore(unknown) }
+  }
 }
 
 function done(
@@ -119,9 +140,10 @@ function valuesOf(command: Command, flags: FlagName[]): Flags {
 /** Commander's error, in reeval's words, naming the command whose flag it is. */
 function usageError(error: CommanderError, command: string): UsageError {
   const text = error.message.replace(/^error: /, '')
-  const [first = '', ...rest] = text.split('\n')
+  const [first = ''] = text.split('\n')
   if (error.code === 'commander.unknownOption') {
-    const arg = /'([^']+)'/.exec(first)?.[1] ?? ''
+    // The argument may hold quotes and newlines; only the suggestion follows it, on its own line.
+    const [, arg = '', suggestion] = /^unknown option '([\s\S]*)'(?:\n\((.*)\))?$/.exec(text) ?? []
     const [flag = '', value] = arg.replace(/^--?/, '').split('=')
     const known = arg.startsWith('--')
       ? (FLAGS as Record<string, { type: string }>)[flag]
@@ -133,8 +155,10 @@ function usageError(error: CommanderError, command: string): UsageError {
       return new UsageError(`--${flag} doesn't take a value: pass --${flag} on its own.`)
     }
     if (known) return new UsageError(`--${long} isn't an option of ${command}. Run reeval --help.`)
-    const hint = rest.join(' ').replace(/^\(|\)$/g, '')
-    return new UsageError(`Unknown option '${arg}'. ${hint ? `${hint} ` : ''}Run reeval --help.`)
+    const shown = arg.replace(/\r/g, '\\r').replace(/\n/g, '\\n')
+    return new UsageError(
+      `Unknown option '${shown}'. ${suggestion ? `${suggestion} ` : ''}Run reeval --help.`,
+    )
   }
   if (error.code === 'commander.optionMissingArgument') {
     const usage = /'([^']+)'/.exec(first)?.[1] ?? ''

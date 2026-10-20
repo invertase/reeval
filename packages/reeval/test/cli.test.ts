@@ -117,6 +117,24 @@ describe('cli', () => {
     })
     assert.deepEqual(parseCli(['run', '--', '--odd', 'x']).positionals, ['run', '--odd', 'x'])
     assert.deepEqual(parseCli(['query', 'select 1']).positionals, ['query', 'select 1'])
+    const sql = '-- fix rate\nSELECT 1'
+    assert.deepEqual(parseCli(['query', sql]), { positionals: ['query', sql], values: {} })
+    assert.deepEqual(parseCli(['query', '--json', sql, '--rebuild']), {
+      positionals: ['query', sql],
+      values: { json: true, rebuild: true },
+    })
+    assert.deepEqual(parseCli(['--config', 'c.ts', 'query', sql, '--schema']), {
+      positionals: ['query', sql],
+      values: { config: 'c.ts', schema: true },
+    })
+    assert.deepEqual(parseCli(['query', '-- one line, no newline']).positionals, [
+      'query',
+      '-- one line, no newline',
+    ])
+    assert.deepEqual(parseCli(['query', '--json', '--', sql]), {
+      positionals: ['query', sql],
+      values: { json: true },
+    })
     assert.deepEqual(parseCli(['compare', 'a', 'b']).positionals, ['compare', 'a', 'b'])
     assert.deepEqual(parseCli(['image', 'build', 'x', 'y', '--dry-run']), {
       positionals: ['image', 'build', 'x', 'y'],
@@ -152,6 +170,10 @@ describe('cli', () => {
     usage(['--bogus'], /^Unknown option '--bogus'\. Run reeval --help\.$/)
     usage(['run', '--dry-runn'], /^Unknown option '--dry-runn'\. Did you mean --dry-run\?/)
     usage(['run', '-x'], /^Unknown option '-x'/)
+    // The whole argument, on one line, for every command.
+    usage(['run', '-- x\nSELECT 1'], /^Unknown option '-- x\\nSELECT 1'\. Run reeval --help\.$/)
+    usage(['show', "--it's\r\nx"], /^Unknown option '--it's\\r\\nx'\. Run reeval --help\.$/)
+    usage(['query', '--jsonn'], /^Unknown option '--jsonn'\. Did you mean --json\? Run reeval/)
     usage(['run', '--runs'], /^--runs needs a value, e\.g\. --runs <value>\. Run reeval --help\.$/)
     usage(['run', '--json=1'], /^--json doesn't take a value: pass --json on its own\.$/)
     usage(['run', '--port', '3'], /^--port isn't an option of reeval run\. Run reeval --help\.$/)
@@ -195,6 +217,10 @@ describe('cli', () => {
         /^reeval: Unknown command "image foo"\. Did you mean reeval image build\?\n$/,
       ],
       [['--bogus'], /^reeval: Unknown option '--bogus'\. Run reeval --help\.\n$/],
+      [
+        ['run', '-- x\nSELECT 1'],
+        /^reeval: Unknown option '-- x\\nSELECT 1'\. Run reeval --help\.\n$/,
+      ],
       [
         ['run', '--runs'],
         /^reeval: --runs needs a value, e\.g\. --runs <value>\. Run reeval --help\.\n$/,
