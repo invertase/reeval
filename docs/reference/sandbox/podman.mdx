@@ -89,9 +89,19 @@ images  1 sandbox image: 1 ready
 | `the container's network is pasta, which Podman can't detach it from, so a restricted policy would still have a route out` | The container isn't on the bridge network | Check `podman network ls` lists `podman` and `podman info` shows `netavark` |
 | `out of memory: 1 process killed at the 128m limit (+128m swap); raise podman({ memory })` | A process went past `memory` and `swap` | Raise `podman({ memory })` |
 
-<Warning>
-On macOS and Windows, Podman runs containers in a Linux VM (`podman machine`). reeval hasn't been tested there yet; the same options should apply, and the machine's memory and CPUs bound every sandbox's.
-</Warning>
+## macOS and Windows
+
+```bash
+podman machine init --memory 4096
+# or, for a machine you already have (stopped):
+podman machine set --memory 4096
+podman machine start
+reeval doctor
+```
+
+On macOS and Windows, Podman runs containers in a Linux VM, `podman machine`, whose memory and CPUs bound every sandbox's. reeval is tested on macOS with Podman 6.1 on the `applehv` provider; Windows hasn't been tested yet. An attempt may use up to 4 GB, so give the machine at least that: `reeval doctor` warns on the 2 GiB default.
+
+reeval talks to the machine through its API socket (Windows: its named pipe), which `podman machine inspect` names, rather than over SSH, where a burst of commands drops some (`ssh: handshake failed`). It leaves the connection alone when `CONTAINER_HOST` or `CONTAINER_CONNECTION` is set, or the default connection isn't the machine's.
 
 ## Related
 
