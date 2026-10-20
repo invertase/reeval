@@ -18,7 +18,7 @@
       "component": "reeval-python",
       "include-component-in-tag": true,
       "package-name": "reeval-python",
-      "changelog-path": "packages/reeval-python/CHANGELOG.md",
+      "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true
     }
   }
