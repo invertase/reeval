@@ -28,6 +28,7 @@ const REQUIRED = [
   'todo',
   'status budget',
   'saved analysis',
+  'run insights',
   'transcript',
   'diff',
   'tokens',
@@ -42,7 +43,12 @@ const REQUIRED = [
   'before the reeval sandbox user',
 ]
 
-function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: boolean): string[] {
+function covers(
+  record: RunRecord,
+  raw: Record<string, unknown>,
+  hasAnalysis: boolean,
+  hasInsights: boolean,
+): string[] {
   const out = new Set<string>()
   const attempts = record.evals.flatMap((e) => e.attempts)
   if (record.evals.some((e) => e.cells.some((c) => c.lift))) out.add('compare with lift')
@@ -61,6 +67,7 @@ function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: bo
   out.add(`status ${record.status}`)
   for (const h of record.stack.harnesses) out.add(`harness ${h.kind}`)
   if (hasAnalysis) out.add('saved analysis')
+  if (hasInsights) out.add('run insights')
   if (!('sandboxWarnings' in (raw.plan as object))) out.add('before plan.sandboxWarnings')
   if (JSON.stringify(raw).includes('/es/workspace/')) out.add('before the reeval sandbox user')
   return [...out]
@@ -71,7 +78,12 @@ describe('the record corpus', { concurrency: 4 }, () => {
     const found = new Set(
       entries.flatMap((e) =>
         e.runs.flatMap((r) =>
-          covers(readableRecord(structuredClone(r.raw) as never), r.raw, r.analyses > 0),
+          covers(
+            readableRecord(structuredClone(r.raw) as never),
+            r.raw,
+            r.analyses > 0,
+            r.insights,
+          ),
         ),
       ),
     )
@@ -157,6 +169,13 @@ describe('the record corpus', { concurrency: 4 }, () => {
         const text = await ok(['show', run.runId])
         for (const row of STATE_ROWS)
           assert.match(text, new RegExp(`\\n {2}${row} +\\S`), `${entry.name} ${run.runId}: ${row}`)
+        if (run.insights) {
+          const { headline } = JSON.parse(
+            readFileSync(join(p.dir, HISTORY_DIR, run.runId, 'insights.json'), 'utf8'),
+          ) as { headline: { text: string } | null }
+          if (headline) assert.ok(text.includes(headline.text), `${run.runId}: the headline`)
+          assert.doesNotMatch(text, /insights left out|insights failed/)
+        }
         await ok(['show', run.runId, '--md'])
         const shown = JSON.parse(await ok(['show', run.runId, '--json']))
         assert.deepEqual(shown, readableRecord(structuredClone(run.raw) as never))

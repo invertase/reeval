@@ -31,6 +31,8 @@ config API like any other project.
 | `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/invertase/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |
 | `with-layouts` | The fake harness on `scripts/output/project`: an eval of each result layout (results with not-run checks, a throw, an infra error, skipped and todo; a change with two variants; harnesses; harnesses and a change; families with and without a change), the record the output goldens render |
 | `with-compare` | The fake harness on `scripts/output/compare`: a base run and a head run (`REEVAL_COMPARE_SIDE=head`) with an eval that regressed (a check flipped and one after it never ran), a fixed family case, an eval whose environment changed, a new and a removed eval, and evals that stayed the same, the pair the compare goldens render |
+| `before-insights` | The fake harness on `scripts/output/project`, with its choose family (`recommends Genkit for $task`), from before a run's `insights.json` |
+| `with-insights` | The same recipe with the `insights.json` `reeval analyze --insights` wrote on the recipe's fake analysis model: each eval's intent, answer, row sentences, findings and named tools, and the headline. The output goldens with insights render it |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:

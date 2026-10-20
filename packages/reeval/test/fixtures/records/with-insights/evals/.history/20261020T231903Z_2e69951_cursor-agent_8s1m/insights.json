@@ -1,0 +1,432 @@
+{
+  "kind": "reeval-insights",
+  "schemaVersion": 1,
+  "runId": "20261020T231903Z_2e69951_cursor-agent_8s1m",
+  "model": "fake",
+  "promptVersion": "insights-v1",
+  "factsHash": "sha256:0d56643daa2ea23e32a66492facca73fc5b3a85c6051d4f8690abec7c5281a18",
+  "createdAt": "2026-10-20T23:19:05.839Z",
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "costUsd": null
+  },
+  "headline": {
+    "text": "9 fail; start with \"recommends Genkit for $task\".",
+    "cites": [
+      "evals%2Fchoose.eval.ts › recommends Genkit for $task"
+    ]
+  },
+  "evals": [
+    {
+      "evalId": "evals%2Fchoose.eval.ts › recommends Genkit for $task",
+      "intent": {
+        "job": "choose",
+        "across": "none",
+        "question": "Does the agent pick Genkit?",
+        "subject": {
+          "tool": "Genkit"
+        },
+        "name": "states-intent",
+        "key": "2c0c59dee9140a3b3e80499d025ddc47cb6916cfb1506d0cff43bf5b4c4ed8c2"
+      },
+      "answer": {
+        "text": "Not for a Python agent: 0 of 2 tries passed.",
+        "cites": [
+          "evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent"
+        ]
+      },
+      "findings": [],
+      "rows": [
+        {
+          "text": "It also names LangChain, so \"names no other framework\" fails.",
+          "cites": [
+            "evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent",
+            "evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent/advisor+-+fake/checks/names no other framework"
+          ],
+          "row": "evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent"
+        }
+      ],
+      "namedTools": [
+        {
+          "attempt": "evals%2Fchoose.eval.ts › recommends Genkit for $task/a chat app/advisor+-+fake#1",
+          "tools": [
+            "Genkit",
+            "LangChain"
+          ]
+        },
+        {
+          "attempt": "evals%2Fchoose.eval.ts › recommends Genkit for $task/a chat app/advisor+-+fake#2",
+          "tools": [
+            "Genkit",
+            "LangChain"
+          ]
+        },
+        {
+          "attempt": "evals%2Fchoose.eval.ts › recommends Genkit for $task/a RAG pipeline/advisor+-+fake#1",
+          "tools": [
+            "Genkit",
+            "LangChain"
+          ]
+        },
+        {
+          "attempt": "evals%2Fchoose.eval.ts › recommends Genkit for $task/a RAG pipeline/advisor+-+fake#2",
+          "tools": [
+            "Genkit",
+            "LangChain"
+          ]
+        },
+        {
+          "attempt": "evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent/advisor+-+fake#1",
+          "tools": [
+            "Genkit",
+            "LangChain"
+          ]
+        },
+        {
+          "attempt": "evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent/advisor+-+fake#2",
+          "tools": [
+            "Genkit",
+            "LangChain"
+          ]
+        }
+      ]
+    },
+    {
+      "evalId": "evals%2Ffamily.eval.ts › adds a $name button that builds",
+      "intent": {
+        "job": "finish",
+        "across": "none",
+        "question": "Does the agent finish: adds a $name button that builds?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "0e6012b81a91da27b3747b55c1d73999bebdbadcdbe9d12b7dabbc80bdc98cbd"
+      },
+      "answer": {
+        "text": "Not for double: 0 of 1 tries passed.",
+        "cites": [
+          "evals%2Ffamily.eval.ts › adds a $name button that builds/double"
+        ]
+      },
+      "findings": [],
+      "rows": [
+        {
+          "text": "Only 0 of 1 passed \"build\".",
+          "cites": [
+            "evals%2Ffamily.eval.ts › adds a $name button that builds/double/fake+-+fake/checks/build"
+          ],
+          "row": "evals%2Ffamily.eval.ts › adds a $name button that builds/double"
+        }
+      ]
+    },
+    {
+      "evalId": "evals%2Ffamily.eval.ts › greets %25s in the house style",
+      "intent": {
+        "job": "finish",
+        "across": "change",
+        "question": "Does the agent finish: greets %s in the house style?",
+        "subject": {
+          "change": "with-skill"
+        },
+        "name": "states-intent",
+        "key": "7cd6e262298033ea34164aecd6a8abc02c53f72b0f4508b31e434db72c89c613"
+      },
+      "answer": {
+        "text": "Yes: all 4 cases pass.",
+        "cites": [
+          "evals%2Ffamily.eval.ts › greets %25s in the house style"
+        ]
+      },
+      "findings": []
+    },
+    {
+      "evalId": "evals%2Fharnesses.eval.ts › greets in the house style on each agent",
+      "intent": {
+        "job": "finish",
+        "across": "harness",
+        "question": "Does the agent finish: greets in the house style on each agent?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "5c619bef41bd75842a7384884c7c65a3530006e6fc19fff7f9cb3aea9bcf5219"
+      },
+      "answer": {
+        "text": "No: only 0 of 1 passed \"house greeting\" on terse.",
+        "cites": [
+          "evals%2Fharnesses.eval.ts › greets in the house style on each agent/terse+-+fake/checks/house greeting"
+        ]
+      },
+      "findings": [],
+      "rows": [
+        {
+          "text": "Only 0 of 1 passed \"house greeting\".",
+          "cites": [
+            "evals%2Fharnesses.eval.ts › greets in the house style on each agent/terse+-+fake/checks/house greeting"
+          ],
+          "row": "evals%2Fharnesses.eval.ts › greets in the house style on each agent/terse+-+fake"
+        }
+      ]
+    },
+    {
+      "evalId": "evals%2Fharnesses.eval.ts › learns the house style from the skill",
+      "intent": {
+        "job": "finish",
+        "across": "both",
+        "question": "Does the agent finish: learns the house style from the skill?",
+        "subject": {
+          "change": "with-skill"
+        },
+        "name": "states-intent",
+        "key": "859fd688824843c4738b83cd08426b62a6e473c0fb80cb3af306fa9a9e3dfaf7"
+      },
+      "answer": {
+        "text": "No: only 0 of 4 passed \"house greeting\" with plain.",
+        "cites": [
+          "evals%2Fharnesses.eval.ts › learns the house style from the skill/learner+plain+fake/checks/house greeting"
+        ]
+      },
+      "findings": [],
+      "rows": [
+        {
+          "text": "Only 0 of 4 passed \"house greeting\".",
+          "cites": [
+            "evals%2Fharnesses.eval.ts › learns the house style from the skill/learner+plain+fake/checks/house greeting"
+          ],
+          "row": "evals%2Fharnesses.eval.ts › learns the house style from the skill/learner+plain+fake"
+        },
+        {
+          "text": "with-skill helped: 4 of 4 tries passed.",
+          "cites": [
+            "evals%2Fharnesses.eval.ts › learns the house style from the skill/learner+with-skill+fake"
+          ],
+          "row": "evals%2Fharnesses.eval.ts › learns the house style from the skill/learner+with-skill+fake"
+        },
+        {
+          "text": "Only 0 of 4 passed \"house greeting\".",
+          "cites": [
+            "evals%2Fharnesses.eval.ts › learns the house style from the skill/terse+plain+fake/checks/house greeting"
+          ],
+          "row": "evals%2Fharnesses.eval.ts › learns the house style from the skill/terse+plain+fake"
+        },
+        {
+          "text": "Only 0 of 4 passed \"house greeting\".",
+          "cites": [
+            "evals%2Fharnesses.eval.ts › learns the house style from the skill/terse+with-skill+fake/checks/house greeting"
+          ],
+          "row": "evals%2Fharnesses.eval.ts › learns the house style from the skill/terse+with-skill+fake"
+        }
+      ]
+    },
+    {
+      "evalId": "evals%2Fmeasure.eval.ts › greets in the house style",
+      "intent": {
+        "job": "finish",
+        "across": "change",
+        "question": "Does the agent finish: greets in the house style?",
+        "subject": {
+          "change": "with-skill"
+        },
+        "name": "states-intent",
+        "key": "0fc048362d4d632476352ff605c87d76ebe1d9c1a0a5f8eba73c45fbde2a21ae"
+      },
+      "answer": {
+        "text": "No: only 0 of 4 passed \"house greeting\" with plain.",
+        "cites": [
+          "evals%2Fmeasure.eval.ts › greets in the house style/fake+plain+fake/checks/house greeting"
+        ]
+      },
+      "findings": [
+        {
+          "text": "with-skill helped: 4 of 4 tries passed with it, against 0 of 4 tries on plain.",
+          "cites": [
+            "evals%2Fmeasure.eval.ts › greets in the house style/fake+with-skill+fake",
+            "evals%2Fmeasure.eval.ts › greets in the house style/fake+plain+fake"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "text": "Only 0 of 4 passed \"house greeting\".",
+          "cites": [
+            "evals%2Fmeasure.eval.ts › greets in the house style/fake+plain+fake/checks/house greeting"
+          ],
+          "row": "evals%2Fmeasure.eval.ts › greets in the house style/fake+plain+fake"
+        },
+        {
+          "text": "with-skill helped: 4 of 4 tries passed.",
+          "cites": [
+            "evals%2Fmeasure.eval.ts › greets in the house style/fake+with-skill+fake"
+          ],
+          "row": "evals%2Fmeasure.eval.ts › greets in the house style/fake+with-skill+fake"
+        },
+        {
+          "text": "Only 0 of 4 passed \"house greeting\".",
+          "cites": [
+            "evals%2Fmeasure.eval.ts › greets in the house style/fake+with-doc+fake/checks/house greeting"
+          ],
+          "row": "evals%2Fmeasure.eval.ts › greets in the house style/fake+with-doc+fake"
+        }
+      ]
+    },
+    {
+      "evalId": "evals%2Fmeasure.eval.ts › keeps the plain greeting",
+      "intent": {
+        "job": "finish",
+        "across": "change",
+        "question": "Does the agent finish: keeps the plain greeting?",
+        "subject": {
+          "change": "with-skill"
+        },
+        "name": "states-intent",
+        "key": "c2453b414fd6d39cc2dada1af2f650e38018747a05a341fc3424283444c988aa"
+      },
+      "answer": {
+        "text": "No: only 0 of 4 passed \"says hello\" with with-skill.",
+        "cites": [
+          "evals%2Fmeasure.eval.ts › keeps the plain greeting/fake+with-skill+fake/checks/says hello"
+        ]
+      },
+      "findings": [
+        {
+          "text": "with-skill made it worse: 0 of 4 tries passed with it, against 4 of 4 tries on plain.",
+          "cites": [
+            "evals%2Fmeasure.eval.ts › keeps the plain greeting/fake+with-skill+fake",
+            "evals%2Fmeasure.eval.ts › keeps the plain greeting/fake+plain+fake"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "text": "with-skill made it worse: 0 of 4 tries passed.",
+          "cites": [
+            "evals%2Fmeasure.eval.ts › keeps the plain greeting/fake+with-skill+fake"
+          ],
+          "row": "evals%2Fmeasure.eval.ts › keeps the plain greeting/fake+with-skill+fake"
+        }
+      ]
+    },
+    {
+      "evalId": "evals%2Fmeasure.eval.ts › greets once",
+      "intent": {
+        "job": "finish",
+        "across": "change",
+        "question": "Does the agent finish: greets once?",
+        "subject": {
+          "change": "with-skill"
+        },
+        "name": "states-intent",
+        "key": "566b4e793bafa4aab1c9a2ce3463f7a0f924ec9cfc29b3fcb1cd68b52f03ba81"
+      },
+      "answer": {
+        "text": "Yes: every try passed.",
+        "cites": [
+          "evals%2Fmeasure.eval.ts › greets once"
+        ]
+      },
+      "findings": [],
+      "rows": [
+        {
+          "text": "Only 0 of 1 passed \"house greeting\".",
+          "cites": [
+            "evals%2Fmeasure.eval.ts › greets once/fake+plain+fake/checks/house greeting"
+          ],
+          "row": "evals%2Fmeasure.eval.ts › greets once/fake+plain+fake"
+        }
+      ]
+    },
+    {
+      "evalId": "evals%2Fresults.eval.ts › writes greet.js",
+      "intent": {
+        "job": "finish",
+        "across": "none",
+        "question": "Does the agent finish: writes greet.js?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "1a65073996f3282e726d122485f231a04e0add1a681de1f863bbcba5b35a889a"
+      },
+      "answer": {
+        "text": "Yes: every try passed.",
+        "cites": [
+          "evals%2Fresults.eval.ts › writes greet.js"
+        ]
+      },
+      "findings": []
+    },
+    {
+      "evalId": "evals%2Fresults.eval.ts › greets in French",
+      "intent": {
+        "job": "finish",
+        "across": "none",
+        "question": "Does the agent finish: greets in French?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "fdbf96457baf2d2f4e0dc5cbd5a189a69ab26f0088009cc6fa69425836b72c3f"
+      },
+      "answer": {
+        "text": "No: only 0 of 1 passed \"french greeting\".",
+        "cites": [
+          "evals%2Fresults.eval.ts › greets in French/fake+-+fake/checks/french greeting"
+        ]
+      },
+      "findings": []
+    },
+    {
+      "evalId": "evals%2Fresults.eval.ts › explains why greet.js fails",
+      "intent": {
+        "job": "other",
+        "across": "none",
+        "question": "Does the agent find the root cause?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "c8c7f3609eda69592a9d50b8a3cae4ffe54637192717331dc5660fc951568da3"
+      },
+      "answer": {
+        "text": "No: only 1 of 2 passed \"names the root cause\".",
+        "cites": [
+          "evals%2Fresults.eval.ts › explains why greet.js fails/fake+-+fake/checks/names the root cause"
+        ]
+      },
+      "findings": []
+    },
+    {
+      "evalId": "evals%2Fresults.eval.ts › reads the fixture repo",
+      "intent": {
+        "job": "finish",
+        "across": "none",
+        "question": "Does the agent finish: reads the fixture repo?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "90e3ba96ebdfe439d15c4ef87a1fe931c10efbd90cc02cdd9efa2f44504737b6"
+      },
+      "answer": {
+        "text": "No: it never finished.",
+        "cites": [
+          "evals%2Fresults.eval.ts › reads the fixture repo/fake+-+fake"
+        ]
+      },
+      "findings": []
+    },
+    {
+      "evalId": "evals%2Fresults.eval.ts › starts its sandbox",
+      "intent": {
+        "job": "finish",
+        "across": "none",
+        "question": "Does the agent finish: starts its sandbox?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "8bf1388c541db4f24e7de90bc3d8175c4bb52154bd596a79dac53a33cf315261"
+      },
+      "answer": {
+        "text": "No: it never finished.",
+        "cites": [
+          "evals%2Fresults.eval.ts › starts its sandbox/broken+-+fake"
+        ]
+      },
+      "findings": []
+    }
+  ],
+  "remarks": [],
+  "validation": {
+    "dropped": 0,
+    "regenerated": 0
+  }
+}
