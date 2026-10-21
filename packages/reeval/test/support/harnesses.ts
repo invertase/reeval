@@ -137,15 +137,15 @@ export const harnesses: HarnessRow[] = [
     // response.
     id: 'opencode-anthropic',
     harness: 'opencode',
-    model: 'anthropic/claude-haiku-4-5',
+    model: 'anthropic/claude-sonnet-5-5',
     key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
     image: 'opencode',
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.anthropic.com', 'mcp.exa.ai'],
     apiHost: 'api.anthropic.com',
     tokens: true,
-    servedModel: /^claude-haiku-4-5/,
-    wireModel: /^claude-haiku-4-5/,
+    servedModel: /^claude-sonnet-5-5/,
+    wireModel: /^claude-sonnet-5-5/,
   },
   {
     // And OpenAI's: a Bearer key, the Responses API over HTTP (not OpenCode's WebSocket), and

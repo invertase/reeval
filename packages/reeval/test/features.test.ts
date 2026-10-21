@@ -1368,7 +1368,7 @@ export const features: Feature[] = [
     record: ({ run }) => {
       const attempt = landed(run)
       assert.ok(
-        attempt?.servedModels?.some((m) => /^claude-haiku-4-5/.test(m)),
+        attempt?.servedModels?.some((m) => /^claude-sonnet-5-5/.test(m)),
         JSON.stringify(attempt?.servedModels),
       )
       assert.ok(
