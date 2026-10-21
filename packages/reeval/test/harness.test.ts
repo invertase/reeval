@@ -65,6 +65,7 @@ import {
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
+  claudePluginFiles,
   cursorMcpServers,
   gooseMcpServers,
   LAYOUTS,
@@ -162,6 +163,7 @@ describe('the Claude Code harness', () => {
       workspaceSkillDir: '.claude/skills',
       harnessSkillDir: '.claude/skills',
       pluginPlacement: 'namespaced',
+      pluginFiles: claudePluginFiles,
     })
     assert.equal(layoutOf(cursor({ model: 'composer-2.5' })).rulesFile, 'AGENTS.md')
     assert.equal(workspaceSkillDir(cursor({ model: 'composer-2.5' })), '.cursor/skills')
@@ -1137,7 +1139,7 @@ async function adapterRules(kind: AgentKind, env: Record<string, string>, model 
   return withHostEnv(env, async () => {
     const descriptor = { kind, model } as AgentHarnessDescriptor
     const agent = agentFor(descriptor)
-    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
     const { session, rules } = recordingSession()
     await assert.rejects(
       adapter.doStart({ sessionId: 's', sandboxSession: session }),
@@ -1308,6 +1310,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: antigravity({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1416,7 +1419,7 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
       const descriptor = opencode({ model: 'google/m' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1456,6 +1459,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: goose({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1505,7 +1509,7 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ OPENAI_API_KEY: 'sk-real' }, async () => {
       const descriptor = fx({ model: 'gpt-4.1-mini' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1563,6 +1567,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: grokBuild({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
