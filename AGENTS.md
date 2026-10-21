@@ -422,6 +422,12 @@ Follow [the feature contract](./packages/reeval/test/features/README.md). It say
 a change needs (plan case, fixture with a canary, runner test or error-message row), the shape of
 a fixture, how to run and debug the tiers, and what "done" means.
 
+**Options, cascades and refusals** (not attempt behaviour): plan cases live under
+`packages/reeval/test/plan/`, refusal rows under `packages/reeval/test/refusals/`, and cascade
+behaviour in `options.test.ts` — not under `test/features/`. Register each eval option in
+`test/features/eval-options.ts`; `matrix.test.ts` fails when `--dry-run` coverage or refusals are
+missing.
+
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable
 updates its page in the docs' Reference tab (`docs/reference/`), and a change to how people use
