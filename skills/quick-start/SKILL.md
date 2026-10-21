@@ -102,10 +102,12 @@ Pick the low-hanging fruit, in this order:
 
 Each eval:
 
-- **Check a rule only the skill teaches.** Read the skill and pick its most specific rule: a
-  house convention, a helper or file it names, a version-specific API, a non-obvious default.
-  Ask: would a strong agent do this unprompted? If yes (deny public access, validate input),
-  both arms pass and there's no lift to see; pick another.
+- **Check rules only the skill teaches.** Read the skill and pick two or three of its most
+  specific rules that one task touches: a house convention, a helper or file it names, a
+  version-specific API, a non-obvious default. Ask of each: would a strong agent do this
+  unprompted? If yes (index a foreign key, deny public access, validate input), both arms pass
+  it; pick another. One labelled check per rule, so the check table shows which ones the skill
+  changed.
 - **One task, one prompt, that doesn't name the answer.** Ask for the outcome in the user's
   words ("an invoices table with its total"), never the rule the check looks for ("store the
   total in cents"). Reread the prompt: if it restates the rule, the control passes too.
@@ -122,8 +124,11 @@ Each eval:
   `evals/environments.ts` exists, append your environments below what's there and leave its
   lines, comments included, as they are.
 
-Add a **canary** profile when a check is a regex or a script you wrote: a fake agent that does the
-task wrong must fail every check, so you know the checks check (Template A shows one).
+When a check is a regex or a script you wrote, add two fake-agent profiles (Template A shows
+both): a **canary** that does the task wrong must fail every check, so the checks check; an
+**oracle** that does it right, written another way than you'd expect (another helper name,
+another order), must pass, so the checks don't demand one spelling. A regex that wants
+`isValidUser` fails the agent that calls it `isValidNote`.
 
 ## 5. Check it plans, then the machine
 
@@ -139,8 +144,9 @@ npx reeval doctor               # Docker, image, keys; exit 1 names each fix
   analysis key is a warning only: runs pass or fail the same without insights.
 - No Docker, or `doctor` says the image isn't built: the user installs or starts Docker, then
   runs `npx reeval image build` once (minutes, cached).
-- With Docker and a canary profile: `npx reeval run --profile canary --no-insights` must exit 1
-  with every eval failing. Needs no keys. A canary that passes means a check isn't checking.
+- With Docker: `npx reeval run --profile canary --no-insights` must fail every check you wrote,
+  and `--profile oracle` must pass them. Needs no keys, seconds each. A canary that passes means
+  a check isn't checking; an oracle that fails means a check is too narrow. Fix the check.
 
 Only start a real `npx reeval run` if the user asked for it or agrees: it runs a real agent on
 their key. One compare at `runs: 2` on Cursor is a few minutes.
@@ -154,15 +160,20 @@ End with a short message, not a report:
    found it; then what's missing, as commands: the `.env.local` lines, `npx reeval image
    build`, Docker.
 3. The command to run: `npx reeval run` (or `npx reeval run <eval-name>` for one).
-4. How to read the output, in a few lines:
+4. How to read the output, in a few lines. A real Cursor run of Template A:
 
 ```text
 pass             stores invoice totals in cents with the billing skill
-  arm                 pass
-  plain               0 of 2
-  with-billing-skill  2 of 2  can't tell yet
+  We can't tell yet: with-billing-skill passed 2 of 2 tries, while plain failed 2 of 2 tries.
+  arm                     pass
+  plain                   0 of 2
+  with-billing-skill      2 of 2  can't tell yet
   check                   plain   with-billing-skill
   total in integer cents  0 of 2  2 of 2
+  a currency column       0 of 2  2 of 2
+  +1 more passed
+13s · 232k in (108k cached) · 3,026 out · results .reeval/runs/…/summary.md
+1 pass
 ```
 
 - Each arm's `N of M` is passing attempts. The variant's word is its effect against the control:

@@ -6,10 +6,10 @@ edit.
 
 ## A. A skill, with and without
 
-Say the project has `skills/acme-billing/SKILL.md`, and one of its rules is "money is an integer
-number of cents, in a column whose name ends in `_cents`". A capable agent without the skill
-writes `numeric(10,2)`, so the rule tells the arms apart. The task asks for the table, not the
-rule.
+Say the project has `skills/acme-billing/SKILL.md`, with two rules among others: "money is an
+integer number of cents, in a column whose name ends in `_cents`" and "every money column has a
+`currency char(3)` beside it". A capable agent without the skill writes `numeric(10,2)` and no
+currency, so the rules tell the arms apart. The task asks for the table, not the rules.
 
 ```ts
 // evals/environments.ts
@@ -44,16 +44,19 @@ evaluate(
     const sql = ((await c.readFile(migration)) ?? '').toLowerCase()
     expect.soft(sql, 'creates invoices').toMatch(/create table[^;]*invoices/)
     expect.soft(sql, 'total in integer cents').toMatch(/\btotal\w*_cents\s+(big)?int/)
+    expect.soft(sql, 'a currency column').toMatch(/\bcurrency\w*\s+(char|varchar)\s*\(\s*3/)
   },
 )
 ```
 
-Read the skill you're evaluating and choose its own most specific rule that a file or a command
-can check; the example's rule is only a shape. A rule every agent already follows shows no lift
-(both arms `2 of 2`), which is a real answer but a dull first run.
+Read the skill you're evaluating and choose its own most specific rules that a file or a command
+can check; the example's rules are only a shape. A rule every agent already follows shows no
+lift (both arms `2 of 2`), which is a real answer but a dull first run.
 
-The canary: a profile in `reeval.config.ts` whose fake agent writes the wrong answer. Add
-`fakeHarness` to the harness import.
+The canary and the oracle: profiles in `reeval.config.ts` whose fake agent writes a wrong and a
+right answer. Write the oracle's answer differently from the one you had in mind (other column
+names, another order, `bigint` for `integer`), so it catches a check that wants one spelling.
+Add `fakeHarness` to the harness import.
 
 ```ts
 import { cursor, fakeHarness } from 'reeval/harness'
@@ -70,11 +73,25 @@ import { cursor, fakeHarness } from 'reeval/harness'
         }),
       },
     },
+    // A fake agent with a right answer: every eval must pass.
+    oracle: {
+      defaults: {
+        harness: fakeHarness({
+          files: {
+            'migrations/001_invoices.sql':
+              'CREATE TABLE invoices (\n  id bigserial PRIMARY KEY,\n' +
+              '  currency_code varchar(3) NOT NULL,\n  total_amount_cents bigint NOT NULL\n);\n',
+          },
+          text: 'Done.',
+        }),
+      },
+    },
 ```
 
-`npx reeval run --profile canary --no-insights` runs it in the real Docker sandbox with no keys
-(after `npx reeval image build`) and must exit 1. One canary per check you wrote yourself is
-plenty; a check that reads the project's own test command needs none.
+`npx reeval run --profile canary --no-insights` and `--profile oracle` run them in the real
+Docker sandbox with no keys (after `npx reeval image build`): the canary must exit 1 and the
+oracle 0. One of each per eval
+is plenty; a check that runs the project's own tests needs neither.
 
 ## B. A task in this repository
 
