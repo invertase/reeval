@@ -588,7 +588,7 @@ export type Stack = {
     effort: string | null
     /**
      * The models the harness reported serving, across every turn in the run, with the variant it
-     * resolved (`composer-2.5[fast=true]` for `composer-2.5` with no `params`); empty when it
+     * resolved (`composer-2.5[fast=false]` for `composer-2.5` with no `params`); empty when it
      * reports none.
      */
     resolvedModels: string[]

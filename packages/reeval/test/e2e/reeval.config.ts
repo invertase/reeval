@@ -19,7 +19,7 @@ const model = process.env.REEVAL_CONTRACT_MODEL ?? ''
 const harness = () => {
   switch (process.env.REEVAL_CONTRACT_HARNESS) {
     case 'cursor':
-      // fast=false: the cheaper variant; an unset parameter takes the catalog's default (fast=true).
+      // fast=false: the standard-priced variant, pinned though it is the default.
       return cursor({ model, params: { fast: 'false' } })
     case 'antigravity':
       return antigravity({ model })

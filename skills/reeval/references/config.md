@@ -64,8 +64,9 @@ Harnesses (`reeval/harness`), each with a required `model`; a list runs each as 
 | `grokBuild({ model, effort? })` | `XAI_API_KEY` | xAI's Grok Build CLI; an xAI model id, e.g. `grok-4.6`; `effort` is `default_reasoning_effort`. It finds MCP tools with its `search_tool` before calling them |
 | `fakeHarness(…)` | None | See the fake trio in SKILL.md |
 
-OpenCode, Goose, pi and Codex refuse `mcp.sse`. Unset Cursor params take Cursor's default, which
-the record shows (`composer-2.5[fast=true]`), so pin them for reproducible evals.
+OpenCode, Goose, pi and Codex refuse `mcp.sse`. Cursor's `fast` defaults to `'false'` (standard
+price; `{ fast: 'true' }` costs several times more). Other unset Cursor params take Cursor's
+default, which the record shows (`composer-2.5[fast=false]`), so pin them for reproducible evals.
 
 `effort` is the same field on every factory but `fx()`, with whatever values that CLI takes (no shared
 enum); Fast is not effort. The default harness id includes `[effort=<value>]` when it's set, and

@@ -69,7 +69,7 @@ describe('createCursorSdk', () => {
     assert.equal(visible(parts).at(-1)?.type, 'finish')
   })
 
-  test("unset model parameters are sent explicitly, from the catalog's default variant", async () => {
+  test("unset model parameters are sent explicitly, from the catalog's default variant, Fast off", async () => {
     // As Cursor's catalog lists composer-2.5: the first allowed value is false, the default is true.
     const catalog = [
       {
@@ -80,6 +80,28 @@ describe('createCursorSdk', () => {
           { params: [{ id: 'fast', value: 'false' }], displayName: 'Composer 2.5' },
         ],
       },
+      {
+        id: 'grok-4.7',
+        parameters: [
+          { id: 'reasoning_effort', values: [{ value: 'low' }, { value: 'high' }] },
+          { id: 'fast', values: [{ value: 'false' }, { value: 'true' }] },
+        ],
+        variants: [
+          {
+            params: [
+              { id: 'reasoning_effort', value: 'high' },
+              { id: 'fast', value: 'true' },
+            ],
+            isDefault: true,
+          },
+        ],
+      },
+      {
+        id: 'fast-only',
+        parameters: [{ id: 'fast', values: [{ value: 'true' }] }],
+        variants: [{ params: [{ id: 'fast', value: 'true' }], isDefault: true }],
+      },
+      { id: 'no-variants', parameters: [{ id: 'fast', values: [{ value: 'false' }] }] },
       { id: 'gpt-5.2' },
     ]
     const model = async (settings: Parameters<typeof createCursorSdk>[0], id = 'composer-2.5') => {
@@ -90,10 +112,26 @@ describe('createCursorSdk', () => {
     }
     assert.deepEqual(await model({}), {
       id: 'composer-2.5',
+      params: [{ id: 'fast', value: 'false' }],
+    })
+    assert.deepEqual(await model({ modelParams: { fast: 'true' } }), {
+      id: 'composer-2.5',
       params: [{ id: 'fast', value: 'true' }],
     })
-    assert.deepEqual(await model({ modelParams: { fast: 'false' } }), {
-      id: 'composer-2.5',
+    assert.deepEqual(await model({}, 'grok-4.7'), {
+      id: 'grok-4.7',
+      params: [
+        { id: 'reasoning_effort', value: 'high' },
+        { id: 'fast', value: 'false' },
+      ],
+    })
+    assert.deepEqual(
+      await model({}, 'fast-only'),
+      { id: 'fast-only', params: [{ id: 'fast', value: 'true' }] },
+      'a model with no standard speed keeps its only value',
+    )
+    assert.deepEqual(await model({}, 'no-variants'), {
+      id: 'no-variants',
       params: [{ id: 'fast', value: 'false' }],
     })
     assert.deepEqual(await model({}, 'gpt-5.2'), { id: 'gpt-5.2' }, 'no variants, no params')
