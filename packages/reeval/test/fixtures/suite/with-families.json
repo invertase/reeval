@@ -5,7 +5,7 @@
     "outcome": "fail",
     "tally": {
       "pass": 0,
-      "fail": 2,
+      "fail": 3,
       "infraError": 7,
       "skipped": 2
     },

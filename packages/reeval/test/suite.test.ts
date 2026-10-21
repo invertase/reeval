@@ -58,9 +58,12 @@ describe('suiteResult over the record corpus', () => {
           assert.equal((e.cells === null) !== (e.cases === null), true, 'cells or cases, not both')
           assert.equal(e.family, e.cases !== null)
         }
-        // A family case or an eval with no cases is one block; each eval in the record is one.
+        // Each eval in the record is one, and a family whose pooled gate failed one more.
         const t = s.tally
-        assert.equal(t.pass + t.fail + t.infraError + t.skipped, record.evals.length)
+        const gates = (record.families ?? []).filter((f) =>
+          f.lifts.some((l) => l.outcome === 'fail'),
+        ).length
+        assert.equal(t.pass + t.fail + t.infraError + t.skipped, record.evals.length + gates)
         assert.deepEqual(
           s.files.map((f) => f.path),
           [...s.files.map((f) => f.path)].sort(),
@@ -197,6 +200,43 @@ describe('a record with checks that never ran', () => {
     assert.deepEqual(variant.interval, { low: 0.307, high: 1 })
   })
 
+  test('a baseline with no counted attempt makes each variant check unclear, not null', () => {
+    const record = read(raw)
+    const e = record.evals.find((x) => x.name === 'greets in the house style')
+    const control = e?.cells.find((c) => c.key === 'fake/plain/docker')
+    assert.ok(e && control)
+    delete control.checks
+    Object.assign(control, { pass: 0, fail: 0, infraError: control.runs })
+    for (const a of e.attempts) if (a.cell === control.key) a.outcome = 'infra_error'
+    const s = suiteResult(record)
+    const variant = cellsOf(s).find((c) => c.key === 'fake/with-house-greeting/docker')
+    assert.ok(variant?.checks.length)
+    assert.equal(variant.vs, control.key)
+    for (const k of variant.checks) assert.equal(k.effect, 'unclear', k.label)
+    const baseline = cellsOf(s).find((c) => c.key === control.key)
+    assert.deepEqual(baseline?.checks, [])
+  })
+
+  test("a check's assertion is a failure's message before an error's", () => {
+    const record = read(raw)
+    const e = record.evals.find((x) => x.name === 'greets in the house style')
+    const control = e?.cells.find((c) => c.key === 'fake/plain/docker')
+    const attempt = e?.attempts.find((a) => a.cell === control?.key)
+    const check = control?.checks?.[0]
+    assert.ok(e && control && attempt && check)
+    const failed = attempt.assertions?.find((x) => x.label === check.label)
+    assert.ok(failed)
+    Object.assign(failed, { status: 'fail', message: 'expected it to pass' })
+    const errored = { ...attempt, id: `${attempt.id}-e`, n: attempt.n + 1 }
+    errored.assertions = [{ ...failed, status: 'error', message: "couldn't read it" }]
+    e.attempts.unshift(errored)
+    const s = suiteResult(record)
+    const k = cellsOf(s)
+      .find((c) => c.key === control.key)
+      ?.checks.find((x) => x.label === check.label)
+    assert.equal(k?.outcome.status === 'ran' && k.outcome.assertion, 'expected it to pass')
+  })
+
   test('effort is set only from 4 counted attempts', () => {
     const s = suiteResult(fourEach())
     const four = cellsOf(s).filter(
@@ -232,6 +272,8 @@ describe('reeval run --json', () => {
 const plain = defineEnvironment('plain', {})
 const bye = defineEnvironment('bye', { files: { 'bye.txt': 'bye' } })
 evaluate('writes hello.txt', { compare: { baseline: plain, variants: [bye] } }, async (c) => {
+  console.log('a log line from the eval')
+  process.stdout.write('a direct write\\n')
   await c.send('write hello.txt')
   await expect(c.exec('test -f hello.txt'), 'hello.txt exists').toSucceed()
   await expect(c.exec('test -f bye.txt'), 'has bye.txt').toSucceed()

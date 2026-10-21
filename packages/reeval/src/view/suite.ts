@@ -55,9 +55,15 @@ export const EFFECT_MIN_COUNTED = 4
 export type SuiteResult = {
   runId: string
   status: RunRecord['status']
-  /** The run's outcome, as `reeval run`'s exit code has it. */
+  /**
+   * The run's outcome, as `reeval run`'s exit code has it. An error thrown outside any attempt
+   * isn't in the record, so `reeval run` exits 1 on one whatever this says.
+   */
   outcome: Outcome
-  /** Outcomes counted per block: each family case is one, and each eval with no cases is one. */
+  /**
+   * Outcomes counted per block: each family case is one, each eval with no cases is one, and a
+   * family whose pooled gate failed is one more fail.
+   */
   tally: { pass: number; fail: number; infraError: number; skipped: number }
   /** Sorted by path. */
   files: ResultFile[]
@@ -156,7 +162,10 @@ export type CheckResult = {
   /** First-seen order across the eval's attempts. */
   order: number
   outcome: CheckOutcome
-  /** On a variant, this check against the baseline's; null on a control or without one. */
+  /**
+   * On a variant, this check against the baseline's (`unclear` when the baseline never ran it);
+   * null on a control or without one.
+   */
   effect: Effect | null
   /** Set when the check is a judge verdict. */
   judge: JudgeResult | null
@@ -285,11 +294,21 @@ function checksOf(
   const attempts = e.attempts.filter((a) => a.cell === cell.key && counted(a))
   return (cell.checks ?? []).map((k, order) => {
     const ran = k.pass + k.fail + k.error
+    const answered = attempts
+      .flatMap((a) => a.assertions ?? [])
+      .filter((x) => x.label === k.label && x.message)
     const assertion =
-      attempts
-        .flatMap((a) => a.assertions ?? [])
-        .find((x) => x.label === k.label && x.status !== 'pass' && x.message)?.message ?? null
-    const control = baseline?.checks?.find((x) => x.label === k.label)
+      (answered.find((x) => x.status === 'fail') ?? answered.find((x) => x.status === 'error'))
+        ?.message ?? null
+    // A baseline with no counted attempt records no checks: it never ran this one.
+    const control = baseline
+      ? (baseline.checks?.find((x) => x.label === k.label) ?? {
+          pass: 0,
+          fail: 0,
+          error: 0,
+          notRun: 0,
+        })
+      : undefined
     const judged = attempts.flatMap((a) =>
       labelledJudgements(a)
         .filter((j) => j.check === k.label)
@@ -515,6 +534,7 @@ export function suiteResult(record: RunRecord): SuiteResult {
     }
     if (seen.has(family.id)) continue
     seen.add(family.id)
+    if (family.outcome === 'fail' && family.lifts.some((l) => l.outcome === 'fail')) tally.fail++
     const cases = record.evals.filter((x) => x.family?.id === family.id)
     evals.push(familyResult(record, family, cases, evals.length))
   }
