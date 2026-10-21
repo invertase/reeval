@@ -98,7 +98,9 @@ Code and Grok Build load every part but `rules` (narrow with `only`), namespaced
 host variable is refused there: declare it in `mcp`. Other real harnesses refuse plugins
 (`--dry-run` exits 2 naming the harness), so keep plugins off their cells. `build: 'npm ci && npm run build'` (or `{ run, cwd: '.' }` to run
 from the source's root) builds the plugin in a cached Docker image layer, as root with no
-secrets; only `path` is placed, so the output must land inside it. Docker only. A server run with
+secrets, without the source's `.git` (pass a version in its commands instead of `git describe`);
+only `path` is placed, so the output must land inside it. Docker only. Its content is fixed when the
+image is prepared: an npm spec re-resolving or a local plugin edited mid-run waits for the next run. A server run with
 `npx`/`uvx` needs its registry in `egress`, or a build that installs it.
 
 A named env is a total override: no skills, files or sandbox inherit from the config

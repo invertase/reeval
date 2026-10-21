@@ -198,7 +198,7 @@ Every source takes:
 </Property>
 
 <Property name="build" type="string | string[] | { run: string | string[], cwd?: string }" optional>
-  Commands that build the plugin in its own cached Docker image layer, on the harness image, as root, with no secrets. They get the whole source and run from the plugin's `path`, or from `cwd` relative to the source's root (`'.'` for the root, for a monorepo's workspace install). Only `path` is placed afterwards, so the build's output belongs inside it; what it leaves elsewhere is dropped. Docker only: on `fakeSandbox()` the plan refuses it. The record's `plugins[].build` is the layer's tag. See [Docker](/reference/sandbox/docker#images-and-caching).
+  Commands that build the plugin in its own cached Docker image layer, on the harness image, as root, with no secrets. They get the whole source and run from the plugin's `path`, or from `cwd` relative to the source's root (`'.'` for the root, for a monorepo's workspace install). Only `path` is placed afterwards, so the build's output belongs inside it; what it leaves elsewhere is dropped. The source's `.git` isn't there, so a build that needs git metadata gets it another way, such as a version in its commands. Docker only: on `fakeSandbox()` the plan refuses it. The record's `plugins[].build` is the layer's tag. See [Docker](/reference/sandbox/docker#images-and-caching).
 
 ```ts
 plugin.git('github:acme/agent-plugins', {
