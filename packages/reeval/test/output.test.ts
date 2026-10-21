@@ -59,7 +59,7 @@ describe('every layout', () => {
     }
   })
 
-  test('the hint prints only when no analysis model resolves; with one, the tally ends the run', () => {
+  test('the hint prints only while analysis.model is unset; with it, the tally ends the run', () => {
     const g = GOLDENS.find((x) => x.name === 'suite')
     assert.ok(g)
     const without = render(goldenSuite(g), null, { color: false, verbose: false, hint: true })
@@ -70,13 +70,13 @@ describe('every layout', () => {
     assert.deepEqual(withModel, without.slice(0, -1))
   })
 
-  test('an analysis model resolves from analysis.model, else a language-model judge', () => {
+  test('an analysis model is analysis.model only, never the judge', () => {
     const config = (analysis: unknown, judge: unknown) =>
       ({ analysis: { model: analysis }, judge: { model: judge } }) as unknown as ResolvedConfig
     assert.equal(hasAnalysisModel(config(undefined, undefined)), false)
     assert.equal(hasAnalysisModel(config(undefined, 'typesafe-ai/jev-1.14.0')), false)
     assert.equal(hasAnalysisModel(config(undefined, { kind: 'fake' })), false)
-    assert.equal(hasAnalysisModel(config(undefined, 'google/gemini-3.8-flash')), true)
+    assert.equal(hasAnalysisModel(config(undefined, 'google/gemini-3.8-flash')), false)
     assert.equal(
       hasAnalysisModel(config('google/gemini-3.8-flash', 'typesafe-ai/jev-1.14.0')),
       true,

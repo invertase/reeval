@@ -145,6 +145,7 @@ pass             greet module › adds a default name in a follow-up turn
 
 17s · 132k in (49k cached) · 1,489 out · results .reeval/runs/…/summary.md
 2 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
 `hello` is a filter: it matches the file `evals/hello.eval.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict (`pass 1.00 (≥ 0.8)`: its score against the threshold).

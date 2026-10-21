@@ -50,7 +50,7 @@ export type RenderOptions = {
   verbose: boolean
   /** Lines between the blocks and the tally, as they are: the run's time and where its results are. */
   notes?: string[]
-  /** Ends with `NO_MODEL_HINT`: no analysis model resolves (see `hasAnalysisModel`). */
+  /** Ends with `NO_MODEL_HINT`: `analysis.model` is unset (see `hasAnalysisModel`). */
   hint: boolean
 }
 

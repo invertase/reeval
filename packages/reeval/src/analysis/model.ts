@@ -19,7 +19,13 @@ export const isFake = (m: unknown): m is FakeAnalysisModel =>
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-const defaultModel = analysisModelOf
+/** `reeval analyze`'s model: `analysis.model`, else the judge's when it's a language model. */
+function defaultModel(config: ResolvedConfig): string | FakeAnalysisModel | undefined {
+  const model = analysisModelOf(config)
+  if (model !== undefined) return model
+  const judge = config.judge.model
+  return typeof judge === 'string' && !isEvaluationModel(judge) ? judge : undefined
+}
 
 /** ` (the judge, typesafe-ai/jev-1.14.0, is an evaluation model: it scores yes/no questions and can't <task>)`, when it is one. */
 function judgeAside(config: ResolvedConfig, task: string): string {

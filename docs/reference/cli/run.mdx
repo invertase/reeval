@@ -217,7 +217,7 @@ Each has an environment variable: `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_P
 
 ## The result blocks
 
-Every mode ends with a block per eval, in file-path order and then source order, then the tally, and a hint to set `analysis.model` when no analysis model resolves (none set, and no language-model judge to fall back on). `summary.md` and `reeval show` print the same blocks. A block starts with the eval's verdict and name:
+Every mode ends with a block per eval, in file-path order and then source order, then the tally, and a hint to set `analysis.model` while `analysis.model` is unset (the judge's model never stands in for it). `summary.md` and `reeval show` print the same blocks. A block starts with the eval's verdict and name:
 
 | Verdict | The eval |
 |---|---|
