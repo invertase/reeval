@@ -104,6 +104,7 @@ const PAIR = new RegExp(
 )
 const FACT_PAIR = /\b(\d+) of (\d+)\b/g
 const OUTCOME_VERB = /\b(?:pass|fail|succeed|miss)\w*/gi
+const PASSED_AFTER = /^\s+(?:tries\s+|checks\s+)?pass(?:ed|es|ing)?\b/i
 const SMALL = /(?<![\w.#/:-])\d(?![\w/]|\.\d)/g
 
 const countOf = (raw: string) => {
@@ -113,19 +114,26 @@ const countOf = (raw: string) => {
 
 /**
  * The counts and numbers in `text` that what it cites doesn't hold. An `N of M` must be a cited
- * fact's own count (a transcript line's text isn't a count), or its complement when the nearest
- * verb before it is a fail (`failed 4 of 4` over `0 of 4 passed`). Any other number must be in
- * what it cites, as `unverifiedNumbers` reads them, and a digit from 0 to 9 exactly.
+ * fact's own count (a transcript line's text isn't a count). When the facts count passes and the
+ * nearest verb before it is a fail, it counts failures: `failed 4 of 4` over `0 of 4 passed`, and
+ * `failed 0 of 4` there is dropped, unless `passed` follows it. Any other number must be in what
+ * it cites, as `unverifiedNumbers` reads them, and a digit from 0 to 9 exactly.
  */
-function unheldNumbers(text: string, facts: string[], all: string[]): string[] {
+function unheldNumbers(
+  text: string,
+  facts: string[],
+  all: string[],
+  passCounts: boolean,
+): string[] {
   const known = new Set(facts.flatMap((f) => [...f.matchAll(FACT_PAIR)].map((m) => m[0])))
   const out: string[] = []
   for (const m of text.matchAll(PAIR)) {
     const n = countOf(m[1] as string)
     const of = countOf(m[2] as string)
-    if (known.has(`${n} of ${of}`)) continue
     const verb = [...text.slice(0, m.index).matchAll(OUTCOME_VERB)].at(-1)?.[0] ?? ''
-    if (/^(fail|miss)/i.test(verb) && known.has(`${of - n} of ${of}`)) continue
+    const passedAfter = PASSED_AFTER.test(text.slice((m.index ?? 0) + m[0].length))
+    const failures = passCounts && /^(fail|miss)/i.test(verb) && !passedAfter
+    if (known.has(failures ? `${of - n} of ${of}` : `${n} of ${of}`)) continue
     out.push(m[0])
   }
   const rest = text.replace(PAIR, ' ')
@@ -154,6 +162,8 @@ export type Citable = {
   effects: (cite: string) => string[]
   /** The eval's own names, lower-cased: a banned word that's one of them may be used. */
   vocabulary: string
+  /** Whether each `N of M` it cites counts passes, so one after a fail verb counts failures. */
+  passCounts: boolean
 }
 
 export function citableEval(
@@ -183,7 +193,7 @@ export function citableEval(
       ...input.facts.flatMap((f) => [f.label, f.arm, f.harness, f.sandbox].map(flatText)),
     ].join('\n'),
   )
-  return { resolve, effects, vocabulary }
+  return { resolve, effects, vocabulary, passCounts: true }
 }
 
 export function citableHeadline(input: HeadlineInput): Citable {
@@ -199,6 +209,7 @@ export function citableHeadline(input: HeadlineInput): Citable {
     },
     effects: () => [],
     vocabulary: normal(input.evals.map((e) => e.name).join('\n')),
+    passCounts: false,
   }
 }
 
@@ -254,7 +265,7 @@ export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdic
       return { dropped: `quotes "${quote}", which isn't in what it cites` }
     }
   }
-  const numbers = unheldNumbers(text, factTexts, texts)
+  const numbers = unheldNumbers(text, factTexts, texts, c.passCounts)
   if (numbers.length) {
     return { dropped: `has ${numbers.join(', ')}, which no cited fact has` }
   }

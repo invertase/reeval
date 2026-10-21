@@ -5,7 +5,7 @@
 import { z } from 'zod'
 
 /** Bumped when a prompt or output schema changes: older insights were asked differently. */
-export const INSIGHTS_PROMPT_VERSION = 'insights-v3'
+export const INSIGHTS_PROMPT_VERSION = 'insights-v4'
 
 const sentence = z.object({
   text: z.string(),
@@ -76,7 +76,7 @@ You get the eval (its name is its question), the classification (intent), the sl
 Rules, checked by code: a sentence that breaks one is dropped.
 - Every sentence cites at least one fact by its id from facts[].id (F3), or <attempt id>#L<n> (A2#L14) for a line in that attempt's lines. Cite the facts whose numbers and words you use; never cite a path.
 - Ids go in cites only, never in the text: the reader never sees them.
-- Numbers come from the cited facts. Counts read "N of M tries", never a percentage below 10 tries.
+- Numbers come from the cited facts. Counts read "passed N of M tries", as the facts count passes; after "failed" a count is the failures ("failed 4 of 4 tries" when 0 of 4 passed). Never a percentage below 10 tries.
 - An effect is said with the cited fact's effect word only: helped, made it worse, no difference, can't tell yet. Never use an effect word the cited facts don't have.
 - Use the eval's own names ("with the skill", "plain", "on codex"), never: interval, significance, noise, p-value, confidence, Newcombe, Wilson, pass@1, lift, effect size, too close to call, within noise, control, variant, arm, cell, discriminates.
 - Each sentence is 25 words or fewer and leads with the answer. No stacked hedges. Never quote judge questions or thresholds; quote a reply or an assertion only when it is the evidence, in double quotes, copied exactly.

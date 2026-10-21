@@ -90,7 +90,7 @@ describe('the insights validator', () => {
   test('the recipe insights pass every check, as the with-insights entry holds them', async () => {
     const doc = await generate(recipeInsights)
     assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
-    assert.equal(doc.promptVersion, 'insights-v3')
+    assert.equal(doc.promptVersion, 'insights-v4')
     const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
     assert.deepEqual(
       sentencesOf(doc),
@@ -427,6 +427,7 @@ describe('one sentence against what it cites', () => {
     resolve: (cite) => facts[cite]?.text ?? null,
     effects: (cite) => (facts[cite]?.effect ? [facts[cite].effect as string] : []),
     vocabulary: 'greets in the house style\nplain\nwith-skill',
+    passCounts: true,
   }
   const verdict = (text: string, cites = [FACT]) => {
     const v = checkSentence({ text, cites }, c)
@@ -436,6 +437,12 @@ describe('one sentence against what it cites', () => {
   test('canary: a count must be the cited fact own count, even below 6', () => {
     assert.equal(verdict('Plain passed 0 of 4 tries.'), 'kept')
     assert.equal(verdict('Plain failed 4 of 4 tries.'), 'kept')
+    assert.equal(verdict('Plain failed, with 0 of 4 tries passed.'), 'kept')
+    assert.equal(
+      verdict('Plain failed 0 of 4 tries.'),
+      'has 0 of 4, which no cited fact has',
+      'it failed all 4',
+    )
     assert.equal(verdict('Plain passed 4 of 4 tries.'), 'has 4 of 4, which no cited fact has')
     assert.equal(verdict('Plain passed 3 of 4 tries.'), 'has 3 of 4, which no cited fact has')
     assert.equal(
