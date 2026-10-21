@@ -1,8 +1,8 @@
 // Holds the insight model's sentences to the facts and the plain-language rules. A sentence must
 // cite only facts in its input (`SuiteResult` paths, or a transcript line shown to it); its numbers
-// and quotes must be in what it cites; an effect word must be the cited fact's; it is 25 words or
-// fewer a sentence; and a row sentence goes only on a row the layout opened. A sentence that fails
-// is dropped. One that uses the statistics vocabulary (or a percentage under 10 tries) is
+// and quotes must be in what it cites; an effect word must be the cited fact's, unless a stated
+// "can't tell yet if/whether" governs it; it is 25 words or fewer a sentence; and a row sentence
+// goes only on a row the layout opened. A sentence that fails is dropped. One that uses the statistics vocabulary (or a percentage under 10 tries) is
 // `banned`: the caller asks once more, and drops it if it comes back the same.
 import { unverifiedNumbers } from '../analysis/validate.ts'
 import type { EvalInsight, Sentence } from '../view/insights.ts'
@@ -48,6 +48,9 @@ const EFFECT_PHRASES = Object.values(EFFECT_WORDS).map((w) => ({
   word: w,
   pattern: new RegExp(`\\b${w.replace("'", "['’]")}`, 'i'),
 }))
+/** A "can't tell yet if/whether …" clause, up to the end of its sentence, a semicolon or a contrast. */
+const HEDGED =
+  /\bcan['’]t tell yet (if|whether)\b.*?(?=[.;!?]|,\s*(but|while|though|although|whereas)\b|$)/gi
 
 const normal = (s: string) =>
   s.replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -165,8 +168,10 @@ export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdic
     return { dropped: `has ${numbers.join(', ')}, which no cited fact has` }
   }
   const effects = new Set(cites.flatMap(c.effects))
+  // "can't tell yet if it helped" states the unclear effect; the word it governs isn't a claim.
+  const claims = effects.has(EFFECT_WORDS.unclear) ? text.replace(HEDGED, '') : text
   for (const e of EFFECT_PHRASES) {
-    if (e.pattern.test(text) && !effects.has(e.word)) {
+    if (e.pattern.test(e.word === EFFECT_WORDS.unclear ? text : claims) && !effects.has(e.word)) {
       return { dropped: `says "${e.word}", but no cited fact's effect is` }
     }
   }

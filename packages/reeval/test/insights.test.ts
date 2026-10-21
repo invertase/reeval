@@ -36,6 +36,7 @@ const evalNamed = (name: string): EvalResult => {
 const choose = evalNamed('recommends Genkit for $task')
 const measure = evalNamed('greets in the house style')
 const french = evalNamed('greets in French')
+const once = evalNamed('greets once')
 
 type Fake = (input: FakeInsightsInput) => FakeInsights
 
@@ -325,6 +326,39 @@ describe('the insights validator', () => {
     assert.equal(x.answer, null)
     assert.equal(x.rows, undefined)
     assert.equal(doc.validation.dropped, 2)
+  })
+
+  const unclearAnswer = (text: string) => {
+    const withSkill = (once.cells ?? []).find((c) => c.effect === 'unclear')
+    const plain = (once.cells ?? []).find((c) => c.baseline)
+    assert.ok(withSkill && plain)
+    return generate(
+      recipeWith(once.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              answer: { text, cites: [idOf(input, withSkill.path), idOf(input, plain.path)] },
+            }
+          : a,
+      ),
+    )
+  }
+
+  test('an effect word under "can\'t tell yet if" isn\'t a claim, so the sentence is kept', async () => {
+    const text =
+      "The agent can with-skill, passing 1 of 1 tries, but we can't tell yet if it helped over plain's 0 of 1 tries."
+    const doc = await unclearAnswer(text)
+    assert.equal(insightOf(doc, once).answer?.text, text)
+    assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
+  })
+
+  test('canary: a bare "helped" against an unclear effect is dropped', async () => {
+    const doc = await unclearAnswer('It helped, passing 1 of 1 tries.')
+    assert.equal(insightOf(doc, once).answer, null)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => [d.slot, d.reason]),
+      [['greets once › answer', 'says "helped", but no cited fact\'s effect is']],
+    )
   })
 })
 
