@@ -81,6 +81,20 @@ describe('reeval init', () => {
     assert.match(p.read('evals/environments.ts'), /export const greeter = defineEnvironment\(/)
     assert.match(p.read('evals/greet.eval.ts'), /import \{ greeter \} from '\.\/environments\.ts'/)
     assert.match(p.read('evals/greet.eval.ts'), /\{ environment: greeter \}/)
+    assert.match(
+      init.stdout,
+      /^Insights: google\/gemini-3\.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis\.insights: false or --no-insights turns them off$/m,
+    )
+    assert.match(
+      p.read('reeval.config.ts'),
+      /^ {2}analysis: \{ model: 'google\/gemini-3\.8-flash' \},$/m,
+    )
+    const dry = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stderr)
+    assert.match(dry.stdout, /^insights {2}google\/gemini-3\.8-flash · up to 250k tokens$/m)
+    const off = await runCli(p.dir, ['run', '--dry-run', '--no-insights'])
+    // Canary: --no-insights must drop the line the generated config adds.
+    assert.doesNotMatch(off.stdout, /^insights /m)
     const cell = (await planOf(p.dir)).evals[0]?.cells[0]
     assert.equal(cell?.environment, 'greeter')
     assert.deepEqual(cell?.files, ['package.json'])
@@ -124,7 +138,9 @@ describe('reeval init', () => {
       assert.doesNotMatch(`${init.stdout}${init.stderr}${written}`, /fake/i)
       const cell = (doc: { evals: Array<{ cells: Array<{ harness: string }> }> }) =>
         doc.evals[0]?.cells[0]?.harness
-      assert.equal(cell(await planOf(p.dir)), `${h.kind}:${h.model.split('/').at(-1)}`)
+      const plan = await planOf(p.dir)
+      assert.equal(cell(plan), `${h.kind}:${h.model.split('/').at(-1)}`)
+      assert.equal(plan.insights?.model, 'google/gemini-3.8-flash')
       const pr = await planOf(p.dir, ['--profile', 'pr'])
       assert.equal(pr.profile?.name ?? pr.profile, 'pr')
       assert.equal(pr.images[0]?.harness, h.kind)
