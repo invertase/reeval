@@ -34,12 +34,14 @@ An evaluation which surfaces whether changes to your skill has positive uplift v
 ```ts
 import { evaluate, defineEnvironment, expect } from 'reeval';
 
-const baseSkill = defineEnvironment('base-skill', ({ skill }) => ({
-  skills: [skill.git('github:my-org/developer-tool')],
+const baseSkill = defineEnvironment('base-skill', ({ skill, git }) => ({
+  workspace: git('github:vitejs/vite', { path: 'packages/create-vite/template-react-ts' }),
+  setup: ['npm install'],
+  skills: [skill.git('github:my-org/developer-tool', { only: ['brand-skill'] })],
 ));
 
-const updatedSkill = defineEnvironment('updated-skill', ({ skill }) => ({
-  skills: [skill.git('github:my-org/developer-tool', { ref: 'skill-update' })],
+const updatedSkill = baseSkill.extendEnvironment('updated-skill', ({ skill }) => ({
+  skills: [skill.git('github:my-org/developer-tool', { ref: 'skill-update', only: ['brand-skill'] })],
 ));
 
 evaluate('that the new skill improves code output and efficiency',
