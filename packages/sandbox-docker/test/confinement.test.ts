@@ -91,6 +91,19 @@ describe('sandbox confinement in Docker', {
     assert.equal((await r.run({ command: 'id -u' })).stdout.trim(), '0')
   })
 
+  test("runPrivileged reads what the sandbox user keeps to itself, and runs none of that user's binaries", async () => {
+    const s = await open()
+    await s.run({
+      command: `echo mine > private.txt && chmod 600 private.txt && mkdir -p ~/.local/bin && printf '#!/bin/sh\\necho planted\\n' > ~/.local/bin/git && chmod +x ~/.local/bin/git`,
+    })
+    // Twin: the sandbox user's own PATH finds the planted git.
+    assert.equal((await s.run({ command: 'git --version' })).stdout.trim(), 'planted')
+    const r = await s.runPrivileged({
+      command: 'echo "$(id -u) $(cat private.txt) $(git --version | cut -d" " -f1-2)"',
+    })
+    assert.equal(r.stdout.trim(), '0 mine git version')
+  })
+
   test('no capabilities, and no-new-privileges; root: true adds back only what apt-get needs', async () => {
     const s = await open()
     const p = await privileges(s)

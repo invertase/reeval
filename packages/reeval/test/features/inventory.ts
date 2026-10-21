@@ -743,6 +743,13 @@ export const inventory: InventoryFeature[] = [
       'sandbox/snapshot-unreadable',
       'sandbox/diff-private-file',
     ],
+    tests: [
+      unit("the snapshot keeps one commit and no placed file's earlier content"),
+      sandboxDocker(
+        'confinement',
+        "runPrivileged reads what the sandbox user keeps to itself, and runs none of that user's binaries",
+      ),
+    ],
   },
 
   // Sandbox
