@@ -2,8 +2,9 @@
 // cite only facts in its input (`SuiteResult` paths, or a transcript line shown to it); its numbers
 // and quotes must be in what it cites; an effect word must be the cited fact's, unless a stated
 // "can't tell yet if/whether" governs it; it is 25 words or fewer a sentence; and a row sentence
-// goes only on a row the layout opened. A sentence that fails is dropped. One that uses the statistics vocabulary (or a percentage under 10 tries) is
-// `banned`: the caller asks once more, and drops it if it comes back the same.
+// goes only on a row the layout opened. A sentence that fails is dropped. One that uses the
+// statistics vocabulary (or a percentage under 10 tries) is `banned`: the caller asks once more,
+// and drops it if it comes back the same.
 import { unverifiedNumbers } from '../analysis/validate.ts'
 import type { EvalInsight, Sentence } from '../view/insights.ts'
 import {
