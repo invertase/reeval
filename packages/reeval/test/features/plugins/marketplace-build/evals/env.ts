@@ -1,8 +1,7 @@
-import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineEnvironment } from 'reeval'
 import { docker } from 'reeval/sandbox'
 
-const repo = pathToFileURL(fileURLToPath(new URL('../repo', import.meta.url))).href
+const repo = new URL('../repo', import.meta.url).href
 
 // Docker only: a build runs in an image layer, which the fake sandbox refuses.
 export const built = defineEnvironment('built', ({ plugin }) => ({

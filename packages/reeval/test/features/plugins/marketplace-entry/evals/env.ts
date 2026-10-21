@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url'
 import { defineEnvironment } from 'reeval'
 import { docker, fakeSandbox } from 'reeval/sandbox'
 
@@ -7,7 +6,7 @@ const sandbox =
     ? docker()
     : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
-const repo = `file://${fileURLToPath(new URL('../repo', import.meta.url))}`
+const repo = new URL('../repo', import.meta.url).href
 
 export const listed = defineEnvironment('review-entry', ({ plugin }) => ({
   sandbox,

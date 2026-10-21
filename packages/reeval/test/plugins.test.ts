@@ -6,6 +6,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import {
   buildSteps,
   builtPlugins,
@@ -676,7 +677,7 @@ test('a marketplace entry can’t reach the host: refs and urls that git would t
     ],
   })
   write(join(root, 'outside'), { '.claude-plugin/plugin.json': '{"name":"linked"}' })
-  symlinkSync(join(root, 'outside'), join(dir, 'linked'))
+  symlinkSync(join(root, 'outside'), join(dir, 'linked'), 'junction')
   const problem = (name: string) => {
     try {
       readMarketplace(dir, 'call', 'label', name)
@@ -708,19 +709,22 @@ test('a marketplace entry can’t reach the host: refs and urls that git would t
   })
 })
 
-/** A git repository at `dir`, committed, with `v1` tagged on the first commit. */
+/**
+ * A git repository at `dir`, committed, with `v1` tagged on the first commit. Its files check out
+ * byte for byte, as Windows' `core.autocrlf` would otherwise turn `\n` into `\r\n` in a clone.
+ */
 const gitRepo = (dir: string, files: Record<string, string>) => {
   const g = (...args: string[]) =>
     execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
       cwd: dir,
       encoding: 'utf8',
     }).trim()
-  write(dir, files)
+  write(dir, { '.gitattributes': '* -text\n', ...files })
   g('init', '-q', '-b', 'main')
   g('add', '-A')
   g('commit', '-q', '-m', 'v1')
   g('tag', 'v1')
-  return { url: `file://${dir}`, head: g('rev-parse', 'HEAD'), g }
+  return { url: pathToFileURL(dir).href, head: g('rev-parse', 'HEAD'), g }
 }
 
 test('resolving a marketplace entry places that plugin alone and records the marketplace and its commit', async () => {
