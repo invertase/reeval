@@ -1160,6 +1160,27 @@ export const features: Feature[] = [
     canary: /expected \[ 'modified', 'modified' \] to deeply equal \[ 'added', 'modified' \]/,
   },
   {
+    dir: 'sandbox/snapshot-no-history',
+    tiers: ['fake', 'docker'],
+    env: 'seeded',
+    canary: /expected 'pre-seed content in: nowhere' not to be 'pre-seed content in: nowhere'/,
+  },
+  {
+    dir: 'sandbox/snapshot-unreadable',
+    tiers: ['docker', 'podman'],
+    env: 'plain',
+    canaryEnv: 'rooted',
+    canary: /expected 'read' to be 'refused'/,
+  },
+  {
+    dir: 'sandbox/diff-private-file',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    posixModes: true,
+    canary:
+      /expected \[ 'added \.token', 'added private\/key' \] to deeply equal \[ 'added \.token' \]/,
+  },
+  {
     dir: 'sandbox/login-shell-path',
     tiers: ['docker'],
     env: 'plain',

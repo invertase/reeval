@@ -913,6 +913,23 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['sandbox/write-file', 'sandbox/write-file-edit'],
     tests: [unit('c.writeFile refuses absolute paths and paths that leave the workspace')],
   },
+  {
+    id: 'sandbox.snapshot-private',
+    area: 'Sandbox',
+    name: "The diff's snapshot: no pre-seed content the agent can reach, unreadable in Docker",
+    fixtures: [
+      'sandbox/snapshot-no-history',
+      'sandbox/snapshot-unreadable',
+      'sandbox/diff-private-file',
+    ],
+    tests: [
+      unit("the snapshot keeps one commit and no placed file's earlier content"),
+      sandboxDocker(
+        'confinement',
+        "runPrivileged reads what the sandbox user keeps to itself, and runs none of that user's binaries",
+      ),
+    ],
+  },
 
   // Sandbox
   {

@@ -112,19 +112,19 @@ npx reeval image build --dry-run
 ```text
 images  7 sandbox images (nothing built: --dry-run)
 docker · cursor · 23 evals
-  + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+  + base  reeval-sandbox:cursor-0.1.6  (to build: not built yet)
 docker · claude-code · 1 eval
   + base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (to build: not built yet)
 …
 docker+0ab0e263 · cursor + install · 1 eval
-  + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+  + base               reeval-sandbox:cursor-0.1.6  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · cursor · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.6-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
 …
 docker:sqlite · cursor · 1 eval
   + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-9efec1fbf61588d3))
-  + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.5 not built yet)
+  + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.6 not built yet)
 ```
 
 Each step says how it stands: `✓` ready, `+` to build, `~` stale, `✗` missing. `reeval image build` builds what's missing or stale, three at a time, and reports every image that failed (exit 3). Filters, `--profile` and `REEVAL_PROFILE` apply; `--tag` doesn't.

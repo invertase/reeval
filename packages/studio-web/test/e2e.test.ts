@@ -199,7 +199,8 @@ describe('studio in a browser', () => {
 
     await page.waitForSelector('tbody tr')
     assert.equal(await page.locator('tbody tr').count(), 4)
-    assert.equal(await page.getByText('Snapshot').count(), 1)
+    // Anchored: on CI every run's branch is the PR's, which can contain the word.
+    assert.equal(await page.getByText(/^Snapshot · /).count(), 1)
 
     await page.locator('tbody tr', { hasText: 'grace-hopper' }).click()
     await page.waitForSelector('h2')
