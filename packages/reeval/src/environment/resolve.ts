@@ -4,7 +4,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
-import { placeholder, type Substitution } from '@reeval/sandbox-docker'
+import { hostAllowed, placeholder, type Substitution } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
 import { badCharacterAt, parseDuration } from '../config.ts'
@@ -51,6 +51,7 @@ import {
   pluginServerName,
   pluginSourceLabel,
   readPlugin,
+  samePluginTwice,
   skillCall,
 } from './plugins.ts'
 
@@ -529,7 +530,8 @@ export async function resolveEnvironment(
   let egressSet = false
   let workspace: GitWorkspace | undefined
   let sandboxSet = false
-  for (const { spec } of environment.layers) {
+  for (const layer of environment.layers) {
+    const { spec } = layer
     if (spec.sandbox !== undefined) {
       if (sandboxSet) overrides.add('sandbox')
       sandboxSet = true
@@ -586,12 +588,16 @@ export async function resolveEnvironment(
         })
       }
     }
-    const layerPlugins = new Set<string>()
+    const layerPlugins = new Map<string, string>()
     for (const source of spec.plugins ?? []) {
       const found = await resolvePlugin(root, source, envWhere)
-      const { name } = found.contents
-      if (plugins.has(name) && !layerPlugins.has(name)) overrides.add(`plugins.${name}`)
-      layerPlugins.add(name)
+      const { name, call } = found.contents
+      const first = layerPlugins.get(name)
+      if (first) {
+        throw new InfraError(`${envWhere}: ${samePluginTwice(layer.name, name, first, call)}`)
+      }
+      if (plugins.has(name)) overrides.add(`plugins.${name}`)
+      layerPlugins.set(name, call)
       plugins.delete(name)
       plugins.set(name, found)
     }
@@ -634,7 +640,7 @@ export async function resolveEnvironment(
     for (const [name, server] of Object.entries(p.mcp)) {
       if (allowed && server.transport !== 'stdio') {
         const host = new URL(server.url).hostname
-        if (!allowed.includes(host)) {
+        if (!hostAllowed(allowed, host)) {
           throw new InfraError(
             `${envWhere}: the ${p.name} plugin's MCP server "${name}" is at ${host}, which egress doesn't allow: add it to egress.allow`,
           )

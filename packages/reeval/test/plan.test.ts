@@ -394,6 +394,16 @@ export default defineConfig({ harness: fakeHarness(), sandbox: docker({ from: 'n
         /evaluate\("uses it"\) on fake: plugin "fetcher" has a build, which runs in a Docker image layer: use docker\(\)/,
       ],
       [
+        'same-name',
+        "plugin.local('../plugins/fetcher'), plugin.local('../plugins/fetcher-copy')",
+        {
+          'plugins/fetcher-copy/.claude-plugin/plugin.json': '{ "name": "fetcher" }',
+          'plugins/fetcher-copy/agents/a.md': 'A.\n',
+        },
+        undefined,
+        /evaluate\("uses it"\) on fake: environment env lists two plugins named "fetcher", plugin\.local\('plugins\/fetcher'\) and plugin\.local\('plugins\/fetcher-copy'\): rename one, or leave one out/,
+      ],
+      [
         'npx',
         "plugin.local('../plugins/fetcher')",
         {},

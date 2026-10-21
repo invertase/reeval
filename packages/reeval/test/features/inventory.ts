@@ -560,6 +560,18 @@ export const inventory: InventoryFeature[] = [
     real: ['contract › stdio MCP server started and called'],
   },
   {
+    id: 'mcp.startup',
+    area: 'Environments',
+    name: "Each stdio MCP server's start-up time per turn (`turns[].mcpStartup`), and an infra error naming a server that doesn't answer `initialize` within 60s",
+    fixtures: ['mcp/startup-timed', 'mcp/never-answers'],
+    tests: [
+      sandboxDocker('mcp-timer', 'reads newline-delimited JSON-RPC across chunks'),
+      sandboxDocker('mcp-timer', 'reads Content-Length framed messages'),
+      sandboxDocker('mcp-timer', 'passes stdio through untouched and logs the initialize answer'),
+    ],
+    real: ['contract › stdio MCP server started and called'],
+  },
+  {
     id: 'mcp.http',
     area: 'Environments',
     name: '`mcp.http`',

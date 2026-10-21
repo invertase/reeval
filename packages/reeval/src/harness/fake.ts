@@ -218,7 +218,8 @@ async function callMcpTool(
     { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: tool, arguments: {} } },
   ].map((m) => q(JSON.stringify(m)))
   const command = [server.command, ...server.args].map(q).join(' ')
-  // stdin stays open until the call's reply is out (or the server exits, or 30s pass): a server
+  // stdin stays open until the call's reply is out (or the server exits, or 90s pass, past the MCP
+  // timer's 60s, which would log an earlier close as the client leaving rather than a timeout): a server
   // may drop requests it hasn't answered when stdin closes. A pipeline rather than a FIFO, which
   // Git for Windows' sh can't hand to a native server.
   // A server may exit before reading (a crash): the writer ignores SIGPIPE and drops the write's
@@ -231,7 +232,7 @@ async function callMcpTool(
     "  trap '' PIPE",
     `  printf '%s\\n' ${messages.join(' ')} 2>/dev/null`,
     '  i=0',
-    `  while [ $i -lt 300 ] && [ ! -f "$d/code" ] && ! grep -Eq '"id": ?2[,}]' "$d/out"; do sleep 0.1; i=$((i + 1)); done`,
+    `  while [ $i -lt 900 ] && [ ! -f "$d/code" ] && ! grep -Eq '"id": ?2[,}]' "$d/out"; do sleep 0.1; i=$((i + 1)); done`,
     `} | { ${command} > "$d/out" 2> "$d/err"; echo $? > "$d/code"; }`,
     'code=$(cat "$d/code")',
     'cat "$d/out"; cat "$d/err" >&2; rm -rf "$d"; exit $code',

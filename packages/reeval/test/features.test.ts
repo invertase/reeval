@@ -751,6 +751,38 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'mcp/startup-timed',
+    tiers: ['fake', 'docker'],
+    env: 'stamp',
+    canaryEnv: 'crashing',
+    canary: /expected null not to be null/,
+    record: ({ run }) => {
+      const startup = (name: string) =>
+        run.evals.find((e) => e.name === name)?.attempts[0]?.turns.map((t) => t.mcpStartup)
+      const [[lands] = []] = startup('lands') ?? []
+      assert.equal(lands?.server, 'stamp')
+      assert.equal(typeof lands?.ms, 'number', JSON.stringify(lands))
+      assert.deepEqual(startup('canary'), [[{ server: 'stamp', ms: null }]])
+    },
+  },
+  {
+    dir: 'mcp/never-answers',
+    tiers: ['docker'],
+    env: 'silent',
+    canaryEnv: 'quick',
+    lands: {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: /^MCP server stamp didn't answer initialize within 60s$/ },
+    },
+    canary: /expected 'completed' to be 'error'/,
+    record: ({ run }) => {
+      const [turn] = landed(run)?.turns ?? []
+      assert.deepEqual(turn?.mcpStartup, [{ server: 'stamp', ms: null }])
+      assert.equal(turn?.status, 'error')
+      assert.equal(turn?.error, "MCP server stamp didn't answer initialize within 60s")
+    },
+  },
+  {
     dir: 'secrets/checks-hidden-from-agent',
     tiers: ['fake', 'docker'],
     env: 'tokens',

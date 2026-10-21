@@ -28,7 +28,8 @@
   },
   "files": [
     "dist",
-    "docker"
+    "docker",
+    "bin"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

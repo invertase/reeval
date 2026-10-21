@@ -3,6 +3,7 @@
 // reads every plugin (git and npm ones once fetched) the same way.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
+import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
 import { sha256 } from '../ids.ts'
 import type {
@@ -166,6 +167,14 @@ function mcpServers(raw: unknown, plugin: string, file: string): Record<string, 
       }
       if (!Array.isArray(args) || args.some((a) => typeof a !== 'string')) {
         throw new PluginProblem(`${what}: args in ${file} must be a list of strings`)
+      }
+      const variable = [command, ...(args as string[])].find((v) =>
+        v.replaceAll(PLUGIN_ROOT, '').includes('${'),
+      )
+      if (variable !== undefined) {
+        throw new PluginProblem(
+          `${what}: ${JSON.stringify(variable)} in ${file} names a variable; reeval fills in only \${${PLUGIN_ROOT_VAR}} in a command and its args, so pass a host variable through env, e.g. "env": { "TOKEN": "\${TOKEN}" }`,
+        )
       }
       const env: EnvVars = {}
       for (const [k, v] of Object.entries(strings(s.env, 'env'))) {
@@ -414,6 +423,28 @@ export function localPluginServers(layers: readonly EnvironmentLayer[]): Map<str
   return out
 }
 
+/** Why one environment can't list two plugins of one name: neither would replace the other. */
+export const samePluginTwice = (environment: string, name: string, first: string, second: string) =>
+  `environment ${environment} lists two plugins named "${name}", ${first} and ${second}: rename one, or leave one out`
+
+/** The first local plugin a layer lists twice by name, as `samePluginTwice` words it. */
+export function duplicateLocalPlugin(
+  layers: readonly EnvironmentLayer[],
+  root?: string,
+): string | undefined {
+  for (const { name: environment, spec } of layers) {
+    const calls = new Map<string, string>()
+    for (const source of spec.plugins ?? []) {
+      const p = localPlugin(source, root)
+      if (!p || p instanceof PluginProblem) continue
+      const first = calls.get(p.name)
+      if (first) return samePluginTwice(environment, p.name, first, p.call)
+      calls.set(p.name, p.call)
+    }
+  }
+  return undefined
+}
+
 /** A plugin's build as commands and where they run: `cwd` relative to the source's root, or null for the plugin's directory. */
 export function buildSteps(build: PluginBuild): { run: string[]; cwd: string | null } {
   if (typeof build === 'string') return { run: [build], cwd: null }
@@ -528,9 +559,6 @@ function fetcher(
   return undefined
 }
 
-const allows = (allowed: readonly string[], host: string) =>
-  allowed.some((h) => h === host || (h.startsWith('*.') && host.endsWith(h.slice(1))))
-
 /**
  * The plugins' MCP servers and hooks that fetch a package at start (`npx`, `bunx`, `uvx`,
  * `pipx run`): a refusal under a policy that doesn't allow the registry, else notes, since
@@ -565,7 +593,7 @@ export function fetchesAtStart(
       const runsIt = `${what} runs ${f.tool}, which fetches from ${f.host} at start`
       if (allowed === null) {
         notes.push(`${runsIt}; add a build that installs it to keep it off the network`)
-      } else if (!allows(allowed, f.host)) {
+      } else if (!hostAllowed(allowed, f.host)) {
         return {
           refusal: `${runsIt}: add a build that installs it, or allow the host in egress`,
           notes,

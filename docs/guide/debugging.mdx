@@ -95,6 +95,31 @@ npx reeval run brokering -v --ui plain --log-order grouped
 
 `-v` prints one line per event, tagged with its phase. The `plan` lines say where each setting came from, which answers most "why did it use that?" questions. `gateway` lines show every request the sandbox made and whether a key was swapped in.
 
+## Find a slow or stuck MCP server
+
+```text
+[mcp#1 cursor]  09:29:20 env       stdio MCP servers start through reeval's MCP timer
+[mcp#1 cursor]  09:29:20 harness   turn 1 started: "Call the house_stamp tool of the stamp MCP server once, …"
+…
+[mcp#1 cursor]  09:29:29 harness   turn 1 completed in 9s · 1 tool call · 0 file edits · model composer-2.5[fast=false]
+[mcp#1 cursor]  09:29:29 harness   turn 1 mcp stamp answered initialize in 23ms
+```
+
+reeval starts every stdio MCP server through a small timer in the sandbox, which notes when the server answers the agent's `initialize`. `-v` prints each start after its turn, and the record keeps it as `turns[].mcpStartup` (see [the record](/reference/record#mcpstartup)). A server that doesn't answer within 60s fails the attempt instead of holding the turn:
+
+```text
+infra error      lands
+  turn error       MCP server stamp didn't answer initialize within 60s
+  infra error      MCP server stamp didn't answer initialize within 60s
+```
+
+To compare start-up times across runs, query the `mcp_startup` table:
+
+```bash
+npx reeval query "SELECT a.id, m.turn, m.server, m.ms FROM mcp_startup m
+  JOIN attempts a ON a.run_id = m.run_id AND a.key = m.attempt_key"
+```
+
 ## See raw payloads with -vv
 
 ```bash
