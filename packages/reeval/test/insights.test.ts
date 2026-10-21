@@ -1258,8 +1258,9 @@ evaluate('writes missing.txt', async (c) => {
 
 /** A compare whose variant passes both tries and whose baseline neither: a `too-few-tries` remark. */
 const TOO_FEW_TRIES = `import { defineEnvironment, evaluate, expect } from 'reeval'
-const plain = defineEnvironment('plain', {})
-const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
+import { fakeSandbox } from 'reeval/sandbox'
+const plain = defineEnvironment('plain', { sandbox: fakeSandbox() })
+const marked = defineEnvironment('marked', { sandbox: fakeSandbox(), files: { 'marker.txt': 'ok\\n' } })
 evaluate('skill helps', { runs: 2, compare: { baseline: plain, variants: [marked] } }, async (c) => {
   await c.send('go')
   expect.soft(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
@@ -1692,8 +1693,9 @@ evaluate('writes ok.txt', async (c) => {
       }`,
       }),
       'evals/envs.ts': `import { defineEnvironment } from 'reeval'
-export const base = defineEnvironment('base', {})
-export const skilled = defineEnvironment('skilled', {})
+import { fakeSandbox } from 'reeval/sandbox'
+export const base = defineEnvironment('base', { sandbox: fakeSandbox() })
+export const skilled = defineEnvironment('skilled', { sandbox: fakeSandbox() })
 `,
       'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
