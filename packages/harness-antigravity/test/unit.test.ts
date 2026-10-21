@@ -116,9 +116,9 @@ describe('tools', () => {
     )
     assert.deepEqual(common, {
       bash: 'run_command',
-      read: 'view_file',
-      write: 'write_to_file',
-      edit: 'replace_file_content',
+      read: 'read_file',
+      write: 'write_file',
+      edit: 'edit_file',
       grep: 'grep_search',
       glob: 'find_by_name',
       webSearch: 'search_web',
@@ -135,6 +135,22 @@ describe('tools', () => {
       input: { TargetFile: '/w/a.ts', file_path: '/w/a.ts' },
       dynamic: false,
     })
+    for (const [declared, reported, toolName] of [
+      ['view_file', 'read_file', 'read'],
+      ['write_to_file', 'write_file', 'write'],
+      ['replace_file_content', 'edit_file', 'edit'],
+    ]) {
+      const old = declared === 'view_file' ? { AbsolutePath: '/w/a' } : { TargetFile: '/w/a' }
+      for (const [name, params] of [
+        [declared, old],
+        [reported, { Path: '/w/a' }],
+      ] as const) {
+        const call = projectToolCall(name, params)
+        assert.equal(call.toolName, toolName, name)
+        assert.equal(call.input.file_path, '/w/a', name)
+        assert.equal(call.dynamic, false, name)
+      }
+    }
     assert.deepEqual(projectToolCall('grep_search', { Query: 'beta', SearchPath: '/w' }).input, {
       Query: 'beta',
       SearchPath: '/w',

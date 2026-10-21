@@ -7,7 +7,7 @@ import type {
   JudgementRecord,
   Lift,
 } from '../history/types.ts'
-import { liftInterval, round3 } from '../stats.ts'
+import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { clip } from '../text.ts'
 import type { TokenUsage } from '../types.ts'
 import { sumUsage } from '../usage.ts'
@@ -176,7 +176,7 @@ function liftForKey(
     points: round3(points),
     control: { pass: control.pass, counted: control.counted },
     variant: { pass: variant.pass, counted: variant.counted },
-    withinNoise: low < 0 && high > 0,
+    withinNoise: containsZero(low, high),
   }
 }
 
