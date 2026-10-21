@@ -168,15 +168,15 @@ Tokens join the table when both sides reported usage. An attempt with no usage (
 | `noise` | `within noise` | p is 0.05 or more |
 | `insufficient` | `too few attempts to test` | No split of these values could reach p below 0.05 |
 
-Without ties, the smallest p a rank test can give depends only on the attempt counts, so a verdict needs at least four attempts on each side. Tied values (tool calls often are) change that floor, so `2, 2, 2, 3` against `2, 2, 3, 3` is `insufficient` at four a side:
+Without ties, the smallest p a rank test can give depends only on the attempt counts, so a verdict needs at least four attempts on each side. Tied values (tool calls often are) move that floor either way: `2, 2, 2, 3` against `2, 2, 3, 3` is `insufficient` at four a side, while `1, 2, 3` against `4, 4, 4, 4` is `fewer` at p = 0.029. Equal sides still need four:
 
-| Variant vs control | Smallest possible p | Can reach a verdict |
+| Variant vs control | Smallest p without ties | Can reach a verdict |
 |---|---|---|
 | 2 vs 2 | 0.333 | no |
 | 3 vs 3 | 0.100 | no |
-| 3 vs 4 | 0.057 | no |
-| 4 vs 4 | 0.029 | yes |
-| 5 vs 5 | 0.008 | yes |
+| 3 vs 4 | 0.057 | only with ties |
+| 4 vs 4 | 0.029 | yes, unless ties prevent it |
+| 5 vs 5 | 0.008 | yes, unless ties prevent it |
 
 So `reeval run` hints when a compare runs 2 or 3 times a cell: `hint: 1 compare runs 3 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)`.
 
