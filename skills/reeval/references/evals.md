@@ -112,8 +112,8 @@ npx reeval run --profile canary           # the checks you meant fail, exit 1
 - `fakeSandbox()` isn't the oracle's sandbox: it runs on the host, brokers nothing and enforces no
   egress. It's for trying reeval and testing configs without Docker.
 - An eval or group that sets its own `harness` keeps it (the plan notes `harness set by the
-  eval`), and an ungated cell (`compare: { gate: 'none' }`, a control) reads a failed check as an
-  expected miss that doesn't change the exit code: read the summary's counts there.
+  eval`), and an ungated cell's (`compare: { gate: 'none' }`, a control's) failed checks don't change the
+  exit code: its row in the result block shows its count (`plain  0 of 4`).
 
 Keep grading out of the
 agent's reach: place hidden tests after the turn with `c.writeFile`, so the agent never sees

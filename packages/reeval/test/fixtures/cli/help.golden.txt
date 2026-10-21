@@ -54,7 +54,7 @@ Usage:
                                 --artifacts all|failures|none --allow-incomplete --skip-secret-scan
   reeval history [filter]       Pass/fail per recorded eval over recent runs
                                 --limit <n> --all (include unrecorded runs) --json
-  reeval show [run]             One run: table, --md (summary.md) or --json (the record)
+  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                                 --md --json --fail-on-regression
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied

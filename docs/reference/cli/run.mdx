@@ -217,7 +217,7 @@ Each has an environment variable: `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_P
 
 ## The result blocks
 
-Every mode ends with a block per eval, in file-path order and then source order, then the tally, and a hint to set `analysis.model` while `analysis.model` is unset (the judge's model never stands in for it). `summary.md` and `reeval show` print the same blocks. A block starts with the eval's verdict and name:
+Every mode ends with a block per eval, in file-path order and then source order, then the tally and, while `analysis.model` is unset, a hint to set it (the judge's model never stands in for it). `summary.md` and `reeval show` print the same blocks. A block starts with the eval's verdict and name:
 
 | Verdict | The eval |
 |---|---|
@@ -229,7 +229,7 @@ Every mode ends with a block per eval, in file-path order and then source order,
 
 Under the name, a pass prints nothing more. A fail prints each failed check with its first assertion (`failed` on one try, `N of M` on several), `not run` for a check that never ran, an error no check explains (`error`, `judge`, `timeout`, `cancelled`, `turn error`), and `+N more passed`. A compare prints a row per arm with `N of M` and its effect, then those checks a column per arm, then an effort table from four counted tries a side; [Output modes](/concepts/output#the-layout-follows-what-the-eval-varies) has each layout.
 
-The tally counts each eval, and each case of a family, once: `3 fail · 1 pass · 1 infra error · 2 skipped`, fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`; `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
+The tally counts each eval, and each case of a family, once: `3 fail · 1 pass · 1 infra error · 2 skipped`, fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
 
 ## What it writes
 

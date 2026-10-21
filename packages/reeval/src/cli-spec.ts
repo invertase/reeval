@@ -193,7 +193,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     flags: ['json', 'md'],
     positionals: 1,
     help: `
-  reeval show [run]             One run: table, --md (summary.md) or --json (the record)`,
+  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)`,
   },
   compare: {
     flags: ['md', 'json', 'fail-on-regression'],
