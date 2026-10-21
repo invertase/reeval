@@ -400,7 +400,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       id,
       '/bin/sh',
       '-c',
-      o.command,
+      `${EXEC_UMASK}; ${o.command}`,
     ]
     try {
       const r = await docker(args, { signal: o.abortSignal, engine })
