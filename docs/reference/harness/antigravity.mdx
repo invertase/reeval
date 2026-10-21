@@ -97,7 +97,7 @@ The CLI starts a plugin's MCP servers itself, from the plugin's `.mcp.json`. As 
 reeval: evals/review.eval.ts: evaluate("reviews the diff") on antigravity:gemini-3.8-flash-medium: Antigravity loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in
 ```
 
-The CLI runs `SessionStart`, `PreToolUse`, `PostToolUse` and `Stop` hooks, so the plan refuses a plugin with any other event. Each turn is a new process, so a `SessionStart` hook runs on every turn. An install the CLI refuses fails the attempt with `agy plugin install <dir> exited <code>: …`.
+The CLI runs `SessionStart`, `PreToolUse`, `PostToolUse` and `Stop` hooks, so the plan refuses a plugin with any other event, or with a hook that isn't a `command`. Each turn is a new process, so a `SessionStart` hook runs on every turn. An install the CLI refuses fails the attempt with `agy plugin install <dir> exited <code>: …`.
 
 ## Telemetry it sends anyway
 

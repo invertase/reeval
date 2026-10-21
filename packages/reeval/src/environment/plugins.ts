@@ -98,8 +98,8 @@ export type PluginContents = {
   skills: Array<{ dir: string; name: string }>
   agents: string[]
   commands: string[]
-  /** Hook events, and the commands its hooks run. */
-  hooks: { events: string[]; commands: string[] }
+  /** Hook events, the commands its hooks run, and its hooks' types other than `command`. */
+  hooks: { events: string[]; commands: string[]; otherTypes: string[] }
   mcp: Record<string, McpServer>
   rules: string[]
   /** The manifest's text, without `mcpServers` when `only` leaves MCP out. */
@@ -208,8 +208,8 @@ function mcpServers(raw: unknown, plugin: string, file: string): Record<string, 
   return out
 }
 
-/** The commands a `hooks/hooks.json` runs, by event. */
-function hookCommands(raw: unknown, plugin: string): { events: string[]; commands: string[] } {
+/** The events of a `hooks/hooks.json`, the commands it runs, and its other hook types. */
+function hookCommands(raw: unknown, plugin: string): PluginContents['hooks'] {
   const hooks = isRecord(raw) && isRecord(raw.hooks) ? raw.hooks : undefined
   if (!hooks) {
     throw new PluginProblem(
@@ -217,14 +217,17 @@ function hookCommands(raw: unknown, plugin: string): { events: string[]; command
     )
   }
   const commands: string[] = []
+  const otherTypes = new Set<string>()
   for (const entries of Object.values(hooks)) {
     for (const entry of Array.isArray(entries) ? entries : []) {
       for (const hook of isRecord(entry) && Array.isArray(entry.hooks) ? entry.hooks : []) {
         if (isRecord(hook) && typeof hook.command === 'string') commands.push(hook.command)
+        const type = isRecord(hook) && typeof hook.type === 'string' ? hook.type : 'command'
+        if (type !== 'command') otherTypes.add(type)
       }
     }
   }
-  return { events: Object.keys(hooks).sort(), commands }
+  return { events: Object.keys(hooks).sort(), commands, otherTypes: [...otherTypes].sort() }
 }
 
 /**
@@ -264,7 +267,7 @@ export function readPlugin(
   const hooksFile = join(dir, 'hooks', 'hooks.json')
   const hooks = existsSync(hooksFile)
     ? hookCommands(readJson(hooksFile, `the ${name} plugin's hooks/hooks.json`), name)
-    : { events: [], commands: [] }
+    : { events: [], commands: [], otherTypes: [] }
   let mcp: Record<string, McpServer> = {}
   if (manifest.mcpServers !== undefined) {
     const from = manifest.mcpServers
@@ -314,7 +317,7 @@ export function readPlugin(
     skills: kept.includes('skills') ? skills : [],
     agents: kept.includes('agents') ? agents : [],
     commands: kept.includes('commands') ? commands : [],
-    hooks: kept.includes('hooks') ? hooks : { events: [], commands: [] },
+    hooks: kept.includes('hooks') ? hooks : { events: [], commands: [], otherTypes: [] },
     mcp: kept.includes('mcp') ? mcp : {},
     rules: kept.includes('rules') ? rules : [],
     manifest:

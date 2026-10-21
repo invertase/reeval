@@ -975,10 +975,10 @@ const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join
 
 /**
  * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
- * load, a hook event it doesn't run, a plugin MCP server it refuses (named `<plugin>:<server>`)
- * or whose `<plugin>:<server>` key `mcp` already has, or, where it takes plugin items flat, a
- * skill or MCP server whose name another already has, or a subagent or command another plugin
- * unpacks to the same file. `own` names the
+ * load, a hook event or type it doesn't run, a plugin MCP server it refuses (named
+ * `<plugin>:<server>`) or whose `<plugin>:<server>` key `mcp` already has, or, where it takes
+ * plugin items flat, a skill or MCP server whose name another already has, or a subagent, command
+ * or rule another unpacks to the same file. `own` names the
  * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
  * npm ones, at plan time) by their call. Undefined when it can take them.
  */
@@ -1010,10 +1010,13 @@ export function refusedPlugins(
   const runs = layout.pluginHookEvents
   for (const p of runs ? plugins : []) {
     const event = p.hooks.events.find((e) => !runs?.includes(e))
-    if (!event) continue
+    const type = p.hooks.otherTypes[0]
+    if (!event && !type) continue
     const rest = p.kept.filter((part) => part !== 'hooks')
     const fix = rest.length ? `use only: [${quoted(rest)}], or leave` : 'leave'
-    return `${name} can't run the ${p.name} plugin's ${event} hooks (hooks/hooks.json): it runs ${runs?.join(', ')} hooks; ${fix} the plugin out of this cell`
+    return event
+      ? `${name} can't run the ${p.name} plugin's ${event} hooks (hooks/hooks.json): it runs ${runs?.join(', ')} hooks; ${fix} the plugin out of this cell`
+      : `${name} can't run the ${p.name} plugin's ${type} hooks (hooks/hooks.json): it runs only command hooks; ${fix} the plugin out of this cell`
   }
   const servers = Object.fromEntries(
     plugins.flatMap((p) =>
@@ -1093,6 +1096,19 @@ export function refusedPlugins(
         }
         owner.set(item, p.name)
       }
+    }
+  }
+  const rules = layout.pluginUnpack?.rules
+  const ruleOwner = new Map<string, string>()
+  for (const p of rules ? plugins : []) {
+    for (const rule of p.rules) {
+      const file = `${p.name}-${rule.replace(/\.mdc?$/, '')}.mdc`
+      const what = `the ${p.name} plugin's rule "${rule}"`
+      const other = ruleOwner.get(file)
+      if (other) {
+        return `${what} and ${other} would both be placed at ${rules}/${file}: rename one, or narrow one with only`
+      }
+      ruleOwner.set(file, what)
     }
   }
   return undefined

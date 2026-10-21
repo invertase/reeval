@@ -542,11 +542,18 @@ export const inventory: InventoryFeature[] = [
     id: 'harness.plugins.antigravity-cursor',
     area: 'Environments',
     name: 'Plugins on Antigravity (`agy plugin install` as the session starts, hooks translated, rules always on) and Cursor (rules, subagents, commands and hooks unpacked into the workspace’s `.cursor/` before the snapshot, MCP servers in its own config): every part, the hook events each runs, clashes refused',
-    fixtures: ['harness/antigravity-plugin', 'harness/cursor-plugin'],
+    fixtures: [
+      'harness/antigravity-plugin',
+      'harness/cursor-plugin',
+      'harness/cursor-plugin-build',
+    ],
     plan: ['plugins/antigravity-and-cursor'],
     tests: [
       plugin('Cursor and Antigravity load every part'),
       plugin('on Cursor, two plugins’ subagents or commands unpacked to one file clash'),
+      plugin(
+        'on Cursor, two rules unpacked to one file clash, and a hook that isn’t a command is refused',
+      ),
       plugin('unpackPlugins writes a flat agent’s rules, subagents, commands and hooks'),
       plugin('cursorHookMatcher maps Claude Code tool names on the tool events only'),
       planTest('Cursor refuses a plugin item that clashes where it unpacks or places it'),
