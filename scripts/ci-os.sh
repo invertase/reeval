@@ -22,8 +22,14 @@ if command -v docker >/dev/null; then docker info --format '{{.OSType}}' >/dev/n
 case $part in
   unit)
     cd packages/reeval
-    node_test ${2:+--test-shard=$2} \
-      test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real|questions-real).test.ts
+    files=(test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real|questions-real).test.ts)
+    # Shard by each file's running time: a few files take most of it, so round-robin
+    # (--test-shard) can stack them in one shard.
+    if [ -n "${2:-}" ]; then
+      shard=$(node "$root/scripts/test-shard.mjs" "$2" "${files[@]}")
+      mapfile -t files <<<"${shard//$'\r'/}"
+    fi
+    node_test "${files[@]}"
     ;;
 
   tiers)

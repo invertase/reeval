@@ -345,7 +345,13 @@ describe('recording runs into evals/.history', () => {
       ['same'],
     )
     const md = await runCli(p.dir, ['compare', '--md'])
-    assert.match(md.stdout, /commit not in HEAD's history/)
+    assert.match(
+      md.stdout,
+      new RegExp(
+        `^base ${before} ran on a commit that isn't in HEAD's history \\(rebased or dropped\\?\\)$`,
+        'm',
+      ),
+    )
   })
 
   test('recording refuses files that look like secrets, or that changed after the run', async () => {
@@ -679,10 +685,7 @@ evaluate('agent', async (c) => {
     const [row] = (await compareJson(p.dir)).rows
     assert.deepEqual([row?.status, row?.changes], ['drift', ['evals/helpers.ts changed']])
     const text = await runCli(p.dir, ['compare'])
-    assert.match(
-      text.stdout,
-      /changed \(not comparable\) +evals\/agent\.eval\.ts › agent: evals\/helpers\.ts changed/,
-    )
+    assert.match(text.stdout, /^can't compare {4}agent\n {2}changed {10}evals\/helpers\.ts\n/m)
 
     await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt'\n")
     await writeFile(
@@ -712,15 +715,22 @@ evaluate('flips', async (c) => {
     assert.equal((await runCli(p.dir)).code, 0)
     const first = await compareCode()
     assert.equal(first.code, 0, first.out)
-    assert.match(first.out, /No earlier recorded run to compare \S+ with: every eval is new\./)
-    assert.match(first.out, /✓ {2}new {2}evals\/a\.eval\.ts › flips/)
+    assert.match(
+      first.out,
+      /^No earlier recorded run to compare \S+ with, so every eval is new\.$/m,
+    )
+    assert.match(first.out, /^pass {13}flips$/m)
+    assert.match(first.out, /^1 new eval \(1 pass\)$/m)
     assert.equal((await compareCode('--fail-on-regression')).code, 0)
     assert.equal(JSON.parse((await compareCode('--json')).out).base, null)
     assert.equal((await runCli(p.dir, ['run'], broken)).code, 1)
     const newFailing = await compareCode('--fail-on-regression')
     assert.equal(newFailing.code, 1, newFailing.out)
-    assert.match(newFailing.out, /every eval is new, and 1 fails\./)
-    assert.match((await compareCode('--md')).out, /^### reeval: \S+\n\nNo earlier recorded run/)
+    assert.match(newFailing.out, /^1 new eval \(1 fail\)$/m)
+    assert.match(
+      (await compareCode('--md')).out,
+      /^### reeval compare: \S+\n\n```text\nNo earlier recorded run/,
+    )
 
     // With a recorded base: pass → fail regresses.
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
@@ -733,7 +743,7 @@ evaluate('flips', async (c) => {
     assert.equal((await runCli(p.dir)).code, 1)
     const added = await compareCode('--fail-on-regression')
     assert.equal(added.code, 1, added.out)
-    assert.match(added.out, /· → ✗ {2}new +evals\/b\.eval\.ts › broken/)
+    assert.match(added.out, /^new {14}broken\n {2}head {13}\S+ {2}fail$/m)
     await writeFile(join(p.dir, 'evals/b.eval.ts'), agent('fresh'))
     assert.equal((await runCli(p.dir)).code, 0)
     const twin = await compareCode('--fail-on-regression')
@@ -757,14 +767,17 @@ evaluate('edited', async (c) => {
     await writeFile(join(p.dir, 'evals/a.eval.ts'), edited('write hello.txt!'))
     assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BREAK: '1' } })).code, 1)
     const failing = await compareCode('--fail-on-regression')
-    assert.match(failing.out, /✓ → ✗ {2}changed \(not comparable\) +evals\/a\.eval\.ts › edited/)
+    assert.match(
+      failing.out,
+      /^can't compare {4}edited\n {2}changed {10}evals\/a\.eval\.ts\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}fail$/m,
+    )
     assert.equal(failing.code, 1, failing.out)
     assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
 
     // Canary: the same edit, passing, isn't a failure.
     assert.equal((await runCli(p.dir)).code, 0)
     const passing = await compareCode('--fail-on-regression')
-    assert.match(passing.out, /✓ → ✓ {2}changed \(not comparable\)/)
+    assert.match(passing.out, /^can't compare {4}edited\n(.*\n){2} {2}head {13}\S+ {2}pass$/m)
     assert.equal(passing.code, 0, passing.out)
   })
 
@@ -1052,7 +1065,7 @@ describe('records from before a field existed', () => {
     assert.match(await ok(['query', 'eval_trend']), /writes greet\.js/)
     assert.match(
       await ok(['compare', oldRun, runs[1] as string]),
-      /✓ → ✓ .* evals\/greet\.es\.ts › writes greet\.js/,
+      /^(\d+ (regressed|fixed|can't compare|infra error|new|removed|same)( · )?)+$/m,
     )
     await ok(['studio', 'build', '--out', join(p.dir, 'site')])
   })

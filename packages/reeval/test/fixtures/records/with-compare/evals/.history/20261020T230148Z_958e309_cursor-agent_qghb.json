@@ -1,0 +1,1583 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261020T230148Z_958e309_cursor-agent_qghb",
+  "status": "complete",
+  "startedAt": "2026-10-20T23:01:48.950Z",
+  "endedAt": "2026-10-20T23:01:49.894Z",
+  "durationMs": 944,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "958e309150a26fffb7ca20f70e466b4c341e07c5",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-10-20T23:01:47+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.10.0",
+    "node": "22.23.3",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.3"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.8",
+      "@reeval/harness-opencode": "0.2.8",
+      "@reeval/harness-goose": "0.1.3",
+      "@reeval/harness-pi": "0.2.7",
+      "@reeval/harness-cursor-sdk": "0.1.5",
+      "@ai-sdk/harness-claude-code": "1.0.158-patch.6c1cff12",
+      "@reeval/harness-codex": "0.1.7",
+      "@reeval/harness-fx": "0.1.0",
+      "@reeval/harness-grok-build": "0.1.0",
+      "ai": "7.0.143",
+      "@ai-sdk/harness": "1.0.154",
+      "@ai-sdk/google": "4.0.99",
+      "@ai-sdk/typesafe-ai": "3.0.21"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "5ca76dcaadfa"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "with-doc",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:26d7ac38e3f5be96c79658c43c98f1588ce2d02ab21eae93d9d6ed0930b81bf9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "docs/billing.md",
+          "sha256": "b372d4121b8f5054581a823d8466f923e1826337ef7ef13ae25a9511c05aa34d"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 8,
+    "cells": 8,
+    "attempts": 8,
+    "estimateMs": 500,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "b40ee69c1dfd97cabeb624fce695d010329ac8d2cfc0c4d2926781101a9a1892"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 8,
+    "attempts": 8,
+    "pass": 4,
+    "fail": 4,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/billing.eval.ts › bills in minor units with the billing doc",
+      "key": "evals/billing.eval.ts › bills in minor units with the billing doc",
+      "slug": "evals-billing-eval-ts-bills-in-minor-units-with-the-billing-a15c29",
+      "file": "evals/billing.eval.ts",
+      "group": [],
+      "name": "bills in minor units with the billing doc",
+      "tags": [],
+      "fingerprint": "9191f341e5ee543053f07d4e82ca53badf6bf12fe03b165b7479d8f0a08cf533",
+      "sources": [
+        {
+          "path": "evals/billing.eval.ts",
+          "sha256": "7d18bf2451a9fe8c386802219d76d1cc849152f32b21f67d6edb54ba5e5f3039"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/with-doc/fake",
+          "harness": "fake",
+          "environment": "with-doc",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "d0578ea442fedbd55152af9eb26d04f77d73667ce0dc20d8a4b3edcf4c474958",
+          "fingerprintParts": {
+            "sources": "b0e12a52fd9f529635cbf6292cb649d19462fd2b10ab0e0630f854f6194da3a8",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:26d7ac38e3f5be96c79658c43c98f1588ce2d02ab21eae93d9d6ed0930b81bf9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:26d7ac38e3f5be96c79658c43c98f1588ce2d02ab21eae93d9d6ed0930b81bf9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "amount in minor units",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/billing.eval.ts › bills in minor units with the billing doc # fake/with-doc/fake#1",
+          "id": "fake/with-doc/fake#1",
+          "cell": "fake/with-doc/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-20T23:01:49.744Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "amount in minor units: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 70,
+          "turns": [
+            {
+              "prompt": "Bill the customer 12.50 GBP.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.779Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 34,
+            "agentMs": 1,
+            "diffMs": 10,
+            "checksMs": 2,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 1
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "amount in minor units",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "amount in minor units: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 4
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q pence docs/billing.md",
+              "exitCode": 1,
+              "durationMs": 2,
+              "log": {
+                "path": "evals-billing-eval-ts-bills-in-minor-units-with-the-billing-a15c29/fake-with-doc-fake-ff0b8e/1/checks/1.log",
+                "sha256": "f3289c61b90e7288c0a90653fa77bd96bd178818bad92ff1ad544a1eaa439aeb",
+                "bytes": 61
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-billing-eval-ts-bills-in-minor-units-with-the-billing-a15c29/fake-with-doc-fake-ff0b8e/1/transcript.jsonl",
+              "sha256": "d799669c89cf47854f3494125e5fce16a76ea0917d4bcaff804b85347bf4596a",
+              "bytes": 615
+            },
+            "diff": {
+              "path": "evals-billing-eval-ts-bills-in-minor-units-with-the-billing-a15c29/fake-with-doc-fake-ff0b8e/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/buttons.eval.ts › adds a reset button that builds",
+      "key": "evals/buttons.eval.ts › adds a reset button that builds",
+      "slug": "evals-buttons-eval-ts-adds-a-reset-button-that-builds-be7407",
+      "file": "evals/buttons.eval.ts",
+      "group": [],
+      "name": "adds a reset button that builds",
+      "tags": [],
+      "family": {
+        "id": "evals/buttons.eval.ts › adds a $name button that builds",
+        "name": "adds a $name button that builds",
+        "case": 0,
+        "cases": 3
+      },
+      "fingerprint": "41b04f6cc4ed15d0660ee016c855ccaa210caf0ea2e52199f7723c3ab0ede948",
+      "sources": [
+        {
+          "path": "evals/buttons.eval.ts",
+          "sha256": "b5c1249e7f4fa021dfc51fcfad7d6fd400bdb95eede395ecee12a4fb38ffdb31"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "4b35f4ead03254e8c8dfecf6f828ad55fe34478f1e1b2a904cdfd60bb94f7850",
+          "fingerprintParts": {
+            "sources": "1a42c2f9d5b0a5c718e94744bb3e7aa7df55f24fb0488f6beabb66a25783bdc7",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "build",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "types",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/buttons.eval.ts › adds a reset button that builds # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-10-20T23:01:49.759Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 100,
+          "turns": [
+            {
+              "prompt": "Add a reset button.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.782Z",
+              "durationMs": 5,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 22,
+            "agentMs": 6,
+            "diffMs": 10,
+            "checksMs": 24,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 5
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "build",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 5
+            },
+            {
+              "label": "types",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 21
+            }
+          ],
+          "checks": [
+            {
+              "command": "true",
+              "exitCode": 0,
+              "durationMs": 4,
+              "log": {
+                "path": "evals-buttons-eval-ts-adds-a-reset-button-that-builds-be7407/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "9d917c80a35c53bb84affe183be41e8e17b6020c8732b66ce13dca6e9cc20f9a",
+                "bytes": 36
+              }
+            },
+            {
+              "command": "true",
+              "exitCode": 0,
+              "durationMs": 21,
+              "log": {
+                "path": "evals-buttons-eval-ts-adds-a-reset-button-that-builds-be7407/fake-fake-70e87d/1/checks/2.log",
+                "sha256": "9d917c80a35c53bb84affe183be41e8e17b6020c8732b66ce13dca6e9cc20f9a",
+                "bytes": 36
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-buttons-eval-ts-adds-a-reset-button-that-builds-be7407/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "c9605332b98bf22424d5057df57b44d8e638c69eef38f1f6b0dcb925a8b772ad",
+              "bytes": 597
+            },
+            "diff": {
+              "path": "evals-buttons-eval-ts-adds-a-reset-button-that-builds-be7407/fake-fake-70e87d/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/buttons.eval.ts › adds a double button that builds",
+      "key": "evals/buttons.eval.ts › adds a double button that builds",
+      "slug": "evals-buttons-eval-ts-adds-a-double-button-that-builds-ff2bf6",
+      "file": "evals/buttons.eval.ts",
+      "group": [],
+      "name": "adds a double button that builds",
+      "tags": [],
+      "family": {
+        "id": "evals/buttons.eval.ts › adds a $name button that builds",
+        "name": "adds a $name button that builds",
+        "case": 1,
+        "cases": 3
+      },
+      "fingerprint": "41b04f6cc4ed15d0660ee016c855ccaa210caf0ea2e52199f7723c3ab0ede948",
+      "sources": [
+        {
+          "path": "evals/buttons.eval.ts",
+          "sha256": "b5c1249e7f4fa021dfc51fcfad7d6fd400bdb95eede395ecee12a4fb38ffdb31"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "4b35f4ead03254e8c8dfecf6f828ad55fe34478f1e1b2a904cdfd60bb94f7850",
+          "fingerprintParts": {
+            "sources": "1a42c2f9d5b0a5c718e94744bb3e7aa7df55f24fb0488f6beabb66a25783bdc7",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "build",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "types",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/buttons.eval.ts › adds a double button that builds # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-10-20T23:01:49.761Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 75,
+          "turns": [
+            {
+              "prompt": "Add a double button.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.779Z",
+              "durationMs": 5,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 16,
+            "agentMs": 5,
+            "diffMs": 31,
+            "checksMs": 10,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 5
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "build",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 5
+            },
+            {
+              "label": "types",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 6
+            }
+          ],
+          "checks": [
+            {
+              "command": "true",
+              "exitCode": 0,
+              "durationMs": 4,
+              "log": {
+                "path": "evals-buttons-eval-ts-adds-a-double-button-that-builds-ff2bf6/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "9d917c80a35c53bb84affe183be41e8e17b6020c8732b66ce13dca6e9cc20f9a",
+                "bytes": 36
+              }
+            },
+            {
+              "command": "true",
+              "exitCode": 0,
+              "durationMs": 6,
+              "log": {
+                "path": "evals-buttons-eval-ts-adds-a-double-button-that-builds-ff2bf6/fake-fake-70e87d/1/checks/2.log",
+                "sha256": "9d917c80a35c53bb84affe183be41e8e17b6020c8732b66ce13dca6e9cc20f9a",
+                "bytes": 36
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-buttons-eval-ts-adds-a-double-button-that-builds-ff2bf6/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "f44c4845cfb8f5730c2f48067c815f3bc423024d660bed21feab34c41c4e0606",
+              "bytes": 599
+            },
+            "diff": {
+              "path": "evals-buttons-eval-ts-adds-a-double-button-that-builds-ff2bf6/fake-fake-70e87d/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/buttons.eval.ts › adds a clear button that builds",
+      "key": "evals/buttons.eval.ts › adds a clear button that builds",
+      "slug": "evals-buttons-eval-ts-adds-a-clear-button-that-builds-9c8b8b",
+      "file": "evals/buttons.eval.ts",
+      "group": [],
+      "name": "adds a clear button that builds",
+      "tags": [],
+      "family": {
+        "id": "evals/buttons.eval.ts › adds a $name button that builds",
+        "name": "adds a $name button that builds",
+        "case": 2,
+        "cases": 3
+      },
+      "fingerprint": "41b04f6cc4ed15d0660ee016c855ccaa210caf0ea2e52199f7723c3ab0ede948",
+      "sources": [
+        {
+          "path": "evals/buttons.eval.ts",
+          "sha256": "b5c1249e7f4fa021dfc51fcfad7d6fd400bdb95eede395ecee12a4fb38ffdb31"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "4b35f4ead03254e8c8dfecf6f828ad55fe34478f1e1b2a904cdfd60bb94f7850",
+          "fingerprintParts": {
+            "sources": "1a42c2f9d5b0a5c718e94744bb3e7aa7df55f24fb0488f6beabb66a25783bdc7",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "build",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "types",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/buttons.eval.ts › adds a clear button that builds # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-10-20T23:01:49.762Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 74,
+          "turns": [
+            {
+              "prompt": "Add a clear button.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.784Z",
+              "durationMs": 6,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 20,
+            "agentMs": 6,
+            "diffMs": 22,
+            "checksMs": 14,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 6
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "build",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 11
+            },
+            {
+              "label": "types",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 3
+            }
+          ],
+          "checks": [
+            {
+              "command": "true",
+              "exitCode": 0,
+              "durationMs": 11,
+              "log": {
+                "path": "evals-buttons-eval-ts-adds-a-clear-button-that-builds-9c8b8b/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "9d917c80a35c53bb84affe183be41e8e17b6020c8732b66ce13dca6e9cc20f9a",
+                "bytes": 36
+              }
+            },
+            {
+              "command": "true",
+              "exitCode": 0,
+              "durationMs": 3,
+              "log": {
+                "path": "evals-buttons-eval-ts-adds-a-clear-button-that-builds-9c8b8b/fake-fake-70e87d/1/checks/2.log",
+                "sha256": "9d917c80a35c53bb84affe183be41e8e17b6020c8732b66ce13dca6e9cc20f9a",
+                "bytes": 36
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-buttons-eval-ts-adds-a-clear-button-that-builds-9c8b8b/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "cff0725cd4bd20f77e5fdd44b1ec7360f3446c8f73a564e15547b4788fa22928",
+              "bytes": 597
+            },
+            "diff": {
+              "path": "evals-buttons-eval-ts-adds-a-clear-button-that-builds-9c8b8b/fake-fake-70e87d/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › greets in the house style",
+      "key": "evals/greet.eval.ts › greets in the house style",
+      "slug": "evals-greet-eval-ts-greets-in-the-house-style-bf5705",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "greets in the house style",
+      "tags": [],
+      "fingerprint": "3cd678d8481d87bc9d2077248d9f07319015b9560c41637bc9cca2aee7fa67f7",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "17482b0f2e1ce25de7acd73d1d885656fadd2ad99341103e9bb38da74508f3df"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "c248d5a015b9fc816c7521379d0341409155eda5610626b0370384053664b5d7",
+          "fingerprintParts": {
+            "sources": "84b6d7754e5549d605ec4e56096f8003313ba06dbe065c1667c3964e272a1f22",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "writes greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            },
+            {
+              "label": "house greeting",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › greets in the house style # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-10-20T23:01:49.808Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "house greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 79,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in our house style.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.828Z",
+              "durationMs": 2,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 19,
+            "agentMs": 2,
+            "diffMs": 19,
+            "checksMs": 4,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 2
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "writes greet.js",
+              "labelled": true,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": true,
+              "durationMs": 1
+            },
+            {
+              "label": "house greeting",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "house greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 5
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Ahoy greet.js",
+              "exitCode": 1,
+              "durationMs": 4,
+              "log": {
+                "path": "evals-greet-eval-ts-greets-in-the-house-style-bf5705/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "28837b7a041ca8b52f963e4b3d1ffc4e31bdae5ca555315daddcaf96022f2067",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-ts-greets-in-the-house-style-bf5705/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "9923b2261dac67b8c3c7302fa60e70a96392e23e260570fcb02515267fe6de90",
+              "bytes": 651
+            },
+            "diff": {
+              "path": "evals-greet-eval-ts-greets-in-the-house-style-bf5705/fake-fake-70e87d/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › writes greet.js",
+      "key": "evals/greet.eval.ts › writes greet.js",
+      "slug": "evals-greet-eval-ts-writes-greet-js-df720a",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "writes greet.js",
+      "tags": [],
+      "fingerprint": "3cd678d8481d87bc9d2077248d9f07319015b9560c41637bc9cca2aee7fa67f7",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "17482b0f2e1ce25de7acd73d1d885656fadd2ad99341103e9bb38da74508f3df"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "c248d5a015b9fc816c7521379d0341409155eda5610626b0370384053664b5d7",
+          "fingerprintParts": {
+            "sources": "84b6d7754e5549d605ec4e56096f8003313ba06dbe065c1667c3964e272a1f22",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "writes greet.js",
+              "pass": 1,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › writes greet.js # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 6,
+          "startedAt": "2026-10-20T23:01:49.836Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 50,
+          "turns": [
+            {
+              "prompt": "Write greet.js.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.853Z",
+              "durationMs": 5,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 16,
+            "agentMs": 5,
+            "diffMs": 13,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 5
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "writes greet.js",
+              "labelled": true,
+              "matcher": "toHaveFile",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 5
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-ts-writes-greet-js-df720a/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "bcaadc9fcd15ceb34e3fa5b741bbbe5fefe4cfc50b98e6a7a2796b031d946a10",
+              "bytes": 589
+            },
+            "diff": {
+              "path": "evals-greet-eval-ts-writes-greet-js-df720a/fake-fake-70e87d/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › greets in French",
+      "key": "evals/greet.eval.ts › greets in French",
+      "slug": "evals-greet-eval-ts-greets-in-french-deb563",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "greets in French",
+      "tags": [],
+      "fingerprint": "3cd678d8481d87bc9d2077248d9f07319015b9560c41637bc9cca2aee7fa67f7",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "17482b0f2e1ce25de7acd73d1d885656fadd2ad99341103e9bb38da74508f3df"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "c248d5a015b9fc816c7521379d0341409155eda5610626b0370384053664b5d7",
+          "fingerprintParts": {
+            "sources": "84b6d7754e5549d605ec4e56096f8003313ba06dbe065c1667c3964e272a1f22",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "french greeting",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › greets in French # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 7,
+          "startedAt": "2026-10-20T23:01:49.838Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "french greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 49,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in French.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.855Z",
+              "durationMs": 5,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 17,
+            "agentMs": 6,
+            "diffMs": 11,
+            "checksMs": 4,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 5
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "french greeting",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "french greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 4
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Bonjour greet.js",
+              "exitCode": 1,
+              "durationMs": 4,
+              "log": {
+                "path": "evals-greet-eval-ts-greets-in-french-deb563/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "d3165a4ecb4cdee34a22e406dadb2acebfc9db90b8cc0cd62ad55b918c898ed4",
+                "bytes": 56
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-ts-greets-in-french-deb563/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "19375a6e5178ac0e22a8c5c411d3969749232c34f995b3caed9dcdeaaa89b27a",
+              "bytes": 633
+            },
+            "diff": {
+              "path": "evals-greet-eval-ts-greets-in-french-deb563/fake-fake-70e87d/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.eval.ts › greets in Spanish",
+      "key": "evals/greet.eval.ts › greets in Spanish",
+      "slug": "evals-greet-eval-ts-greets-in-spanish-c6706f",
+      "file": "evals/greet.eval.ts",
+      "group": [],
+      "name": "greets in Spanish",
+      "tags": [],
+      "fingerprint": "3cd678d8481d87bc9d2077248d9f07319015b9560c41637bc9cca2aee7fa67f7",
+      "sources": [
+        {
+          "path": "evals/greet.eval.ts",
+          "sha256": "17482b0f2e1ce25de7acd73d1d885656fadd2ad99341103e9bb38da74508f3df"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "c248d5a015b9fc816c7521379d0341409155eda5610626b0370384053664b5d7",
+          "fingerprintParts": {
+            "sources": "84b6d7754e5549d605ec4e56096f8003313ba06dbe065c1667c3964e272a1f22",
+            "harness": "b00eacd520faabc9ddcb3e364e924785cbf23cbfd37e9216a23786e26aa9b544",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "55256483bfdfb9ad59fdb3777ceb14c8e3f96311ddc8f3fd83f4e5c449c4c2ee",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail",
+          "checks": [
+            {
+              "label": "spanish greeting",
+              "pass": 0,
+              "fail": 1,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.eval.ts › greets in Spanish # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 8,
+          "startedAt": "2026-10-20T23:01:49.839Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "spanish greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n"
+          },
+          "durationMs": 48,
+          "turns": [
+            {
+              "prompt": "Write greet.js that greets in Spanish.",
+              "status": "completed",
+              "startedAt": "2026-10-20T23:01:49.857Z",
+              "durationMs": 6,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I wrote greet.js."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 17,
+            "agentMs": 6,
+            "diffMs": 10,
+            "checksMs": 3,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 6
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "spanish greeting",
+              "labelled": true,
+              "matcher": "toSucceed",
+              "status": "fail",
+              "soft": false,
+              "message": "spanish greeting: expected command to succeed, exit code 1\n--- stderr ---\n\n--- stdout ---\n",
+              "durationMs": 3
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -q Hola greet.js",
+              "exitCode": 1,
+              "durationMs": 3,
+              "log": {
+                "path": "evals-greet-eval-ts-greets-in-spanish-c6706f/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "da54f124ae9dfe5f69846c7d1848a2a8013b37da771243d5a2deddf9434ad3a9",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-ts-greets-in-spanish-c6706f/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "7a5c8a84a9fddca7298a94af1ed222820179e44318a730cf8703830f2bd25b55",
+              "bytes": 635
+            },
+            "diff": {
+              "path": "evals-greet-eval-ts-greets-in-spanish-c6706f/fake-fake-70e87d/1/diff.patch",
+              "sha256": "652069b01a69942279de86ff89a1c3580108af3c1cf56c43429280c13662451d",
+              "bytes": 168
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "families": [
+    {
+      "id": "evals/buttons.eval.ts › adds a $name button that builds",
+      "file": "evals/buttons.eval.ts",
+      "group": [],
+      "name": "adds a $name button that builds",
+      "cases": 3,
+      "ran": 3,
+      "rates": [
+        {
+          "cell": "fake/-/fake",
+          "cases": 3,
+          "pass": 3,
+          "counted": 3,
+          "rate": 1,
+          "interval": {
+            "lo": 0.439,
+            "hi": 1,
+            "level": 0.95,
+            "method": "wilson"
+          }
+        }
+      ],
+      "lifts": [],
+      "outcome": "pass"
+    }
+  ]
+}

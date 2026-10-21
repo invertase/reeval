@@ -540,7 +540,7 @@ describe('effort next to lift', () => {
     )
   })
 
-  test('reeval run and summary.md print the arms without an effort table below four tries a side, and reeval compare still shows effort', async () => {
+  test('reeval run and summary.md print the arms without an effort table below four tries a side, and reeval compare -v still shows effort', async () => {
     const p = await project('effort-summary', {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
@@ -566,12 +566,14 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     const { read } = readRun(p.dir)
     assert.match(read('summary.md'), /^ {2}skilled {12}2 of 2 {2}can't tell yet$/m)
     assert.equal((await runCli(p.dir)).code, 0)
-    const compare = await runCli(p.dir, ['compare', 'latest~1', 'latest'])
+    const compare = await runCli(p.dir, ['compare', 'latest~1', 'latest', '-v'])
     assert.equal(compare.code, 0, compare.stderr)
     assert.match(
       compare.stdout,
-      /\n {6}fake\/skilled\/fake {2}lift \+100 \(\+\d+…\+100\)( noise)? → \+100[^\n]* · tools \d+ → \d+/,
+      /\n {2}fake\/skilled\/fake +lift \+100 \(\+\d+…\+100\)( noise)? → \+100[^\n]* · tools \d+ → \d+/,
     )
+    const plain = await runCli(p.dir, ['compare', 'latest~1', 'latest'])
+    assert.doesNotMatch(plain.stdout, /lift|tools \d+ →/, 'statistics only with -v')
     const json = JSON.parse(
       (await runCli(p.dir, ['compare', 'latest~1', 'latest', '--json'])).stdout,
     )

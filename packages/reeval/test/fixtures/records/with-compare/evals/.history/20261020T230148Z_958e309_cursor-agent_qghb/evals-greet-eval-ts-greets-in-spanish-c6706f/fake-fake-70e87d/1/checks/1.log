@@ -1,0 +1,4 @@
+$ grep -q Hola greet.js
+exit 1
+--- stdout
+--- stderr
