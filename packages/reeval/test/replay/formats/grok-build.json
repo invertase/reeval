@@ -26,5 +26,8 @@
   "tool_call_update .sessionUpdate",
   "tool_call_update .status",
   "tool_call_update .title",
-  "tool_call_update .toolCallId"
+  "tool_call_update .toolCallId",
+  "user_message_chunk ._meta",
+  "user_message_chunk .content",
+  "user_message_chunk .sessionUpdate"
 ]

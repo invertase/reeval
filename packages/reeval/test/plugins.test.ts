@@ -17,7 +17,14 @@ import {
 } from '../src/environment/plugins.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
-import { AGENTS, refusedPlugins } from '../src/harness/agents.ts'
+import {
+  AGENTS,
+  agentMcp,
+  claudePluginFiles,
+  LAYOUTS,
+  refusedPlugins,
+  writePluginFiles,
+} from '../src/harness/agents.ts'
 import type { PluginBuild, PluginPart } from '../src/types.ts'
 
 const write = (root: string, files: Record<string, string>) => {
@@ -273,9 +280,10 @@ const loading = <T>(kind: keyof typeof AGENTS, parts: PluginPart[], fn: () => T)
   }
 }
 
-test('every real harness refuses every plugin until its placement lands', () => {
+test('a real harness without plugin parts refuses every plugin', () => {
   const p = readPlugin(review(), 'x')
   for (const [kind, agent] of Object.entries(AGENTS)) {
+    if (agent.pluginParts.length) continue
     assert.equal(
       refusedPlugins({ kind } as never, [p], { skills: [], mcp: [] }),
       `${agent.name} can't load plugins yet: leave the review plugin out of this cell`,
@@ -291,22 +299,49 @@ test('every real harness refuses every plugin until its placement lands', () => 
   assert.equal(refusedPlugins({ kind: 'fake' }, [p], { skills: [], mcp: [] }), undefined)
 })
 
+test('Claude Code and Grok Build load every part but rules, and refuse a plugin server’s host secret', () => {
+  const whole = readPlugin(review(), 'x')
+  const kept = readPlugin(review(), 'x', ['skills', 'agents', 'commands', 'hooks'])
+  const withMcp = readPlugin(review(), 'x', ['skills', 'mcp'])
+  for (const [kind, name] of [
+    ['claude-code', 'Claude Code'],
+    ['grok-build', 'Grok Build'],
+  ] as const) {
+    assert.equal(
+      refusedPlugins({ kind } as never, [whole], { skills: [], mcp: [] }),
+      `${name} can't load the review plugin's rules (rules/): use only: ['skills', 'agents', 'commands', 'hooks', 'mcp'], or leave the plugin out of this cell`,
+    )
+    assert.equal(refusedPlugins({ kind } as never, [kept], { skills: [], mcp: [] }), undefined)
+    assert.equal(
+      refusedPlugins({ kind } as never, [withMcp], { skills: [], mcp: [] }),
+      `${name} loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in`,
+    )
+  }
+  assert.equal(
+    refusedPlugins({ kind: 'fake', layout: 'claude-code' } as never, [whole], {
+      skills: [],
+      mcp: [],
+    }),
+    "The fake agent with Claude Code's layout can't load the review plugin's rules (rules/): use only: ['skills', 'agents', 'commands', 'hooks', 'mcp'], or leave the plugin out of this cell",
+  )
+})
+
 test('a part the harness can’t load is refused, naming what it can', () => {
   const p = readPlugin(review(), 'x')
-  loading('codex', ['skills', 'mcp'], () => {
+  loading('cursor', ['skills', 'mcp'], () => {
     assert.equal(
-      refusedPlugins({ kind: 'codex' } as never, [p], { skills: [], mcp: [] }),
-      "Codex can't load the review plugin's agents (agents/) and commands (commands/) and hooks (hooks/hooks.json) and rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell",
+      refusedPlugins({ kind: 'cursor' } as never, [p], { skills: [], mcp: [] }),
+      "Cursor can't load the review plugin's agents (agents/) and commands (commands/) and hooks (hooks/hooks.json) and rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell",
     )
     const narrowed = readPlugin(review(), 'x', ['skills', 'mcp'])
     assert.equal(
-      refusedPlugins({ kind: 'codex' } as never, [narrowed], { skills: [], mcp: [] }),
+      refusedPlugins({ kind: 'cursor' } as never, [narrowed], { skills: [], mcp: [] }),
       undefined,
     )
     const hooksOnly = readPlugin(review(), 'x', ['hooks'])
     assert.equal(
-      refusedPlugins({ kind: 'codex' } as never, [hooksOnly], { skills: [], mcp: [] }),
-      "Codex can't load the review plugin's hooks (hooks/hooks.json): leave the plugin out of this cell",
+      refusedPlugins({ kind: 'cursor' } as never, [hooksOnly], { skills: [], mcp: [] }),
+      "Cursor can't load the review plugin's hooks (hooks/hooks.json): leave the plugin out of this cell",
     )
   })
 })
@@ -344,9 +379,17 @@ test('on a flat harness, a plugin skill or MCP server named like the environment
       `the review plugin's skill "review-lint" and skill.local('skills')'s "review-lint" would both be placed at ~/.agents/skills/review-lint: rename one, or narrow it with only or exclude`,
     )
   })
+  const keyless = readPlugin(
+    write(tmp(), {
+      '.claude-plugin/plugin.json': '{"name":"review"}',
+      'skills/lint/SKILL.md': skillMd('review-lint'),
+      '.mcp.json': JSON.stringify({ mcpServers: { docs: { command: 'node' } } }),
+    }),
+    'x',
+  )
   loading('claude-code', ['skills', 'mcp'], () => {
     assert.equal(
-      refusedPlugins({ kind: 'claude-code' } as never, [p], {
+      refusedPlugins({ kind: 'claude-code' } as never, [keyless], {
         skills: [{ name: 'review-lint', call: "skill.local('skills')" }],
         mcp: ['docs'],
       }),
@@ -514,4 +557,111 @@ test('a plugin server whose <plugin>:<server> key mcp already has is refused on 
       kind,
     )
   }
+})
+
+test('Claude Code enables the placed plugins from a directory marketplace, and namespaced agents start their servers', () => {
+  const placed = [
+    {
+      name: 'review',
+      dir: '/home/reeval/.reeval/plugins/review',
+      parts: [],
+      servers: ['review:docs'],
+    },
+    { name: 'tidy', dir: '/home/reeval/.reeval/plugins/tidy', parts: [], servers: [] },
+  ]
+  const files = Object.fromEntries(
+    claudePluginFiles(placed).map((f) => [f.path, JSON.parse(f.content)]),
+  )
+  assert.deepEqual(files, {
+    '~/.reeval/plugins/.claude-plugin/marketplace.json': {
+      name: 'reeval',
+      owner: { name: 'reeval' },
+      plugins: [
+        { name: 'review', source: './review' },
+        { name: 'tidy', source: './tidy' },
+      ],
+    },
+    '~/.claude/settings.json': {
+      extraKnownMarketplaces: {
+        reeval: { source: { source: 'directory', path: '/home/reeval/.reeval/plugins' } },
+      },
+      enabledPlugins: { 'review@reeval': true, 'tidy@reeval': true },
+    },
+  })
+  assert.deepEqual(claudePluginFiles([]), [])
+  const mcp = { own: { command: 'own' }, 'review:docs': { command: 'docs' } } as never
+  assert.deepEqual(Object.keys(agentMcp(LAYOUTS['claude-code'], mcp, placed)), ['own'])
+  assert.deepEqual(Object.keys(agentMcp(LAYOUTS['grok-build'], mcp, placed)), ['own'])
+  assert.deepEqual(Object.keys(agentMcp(LAYOUTS.cursor, mcp, placed)), ['own', 'review:docs'])
+})
+
+test('Claude Code’s plugin settings merge into a ~/.claude/settings.json files already wrote', async () => {
+  const placed = [
+    { name: 'review', dir: '/home/reeval/.reeval/plugins/review', parts: [], servers: [] },
+  ]
+  const files = new Map<string, string>()
+  const box = {
+    readFile: async (path: string) => files.get(path) ?? null,
+    writeFile: async (path: string, content: string | Uint8Array) => {
+      files.set(path, String(content))
+    },
+  } as never
+  files.set(
+    '~/.claude/settings.json',
+    JSON.stringify({ env: { A: '1' }, enabledPlugins: { 'other@elsewhere': false } }),
+  )
+  const written = await writePluginFiles(box, LAYOUTS['claude-code'], placed)
+  assert.deepEqual(written, [
+    '~/.reeval/plugins/.claude-plugin/marketplace.json',
+    '~/.claude/settings.json',
+  ])
+  const settings = JSON.parse(files.get('~/.claude/settings.json') ?? '')
+  assert.deepEqual(settings.env, { A: '1' })
+  assert.deepEqual(settings.enabledPlugins, { 'other@elsewhere': false, 'review@reeval': true })
+  assert.equal(settings.extraKnownMarketplaces.reeval.source.source, 'directory')
+  // Again, as a retried start writes them: the same file.
+  const once = files.get('~/.claude/settings.json')
+  await writePluginFiles(box, LAYOUTS['claude-code'], placed)
+  assert.equal(files.get('~/.claude/settings.json'), once)
+  files.set('~/.claude/settings.json', '[]')
+  await assert.rejects(
+    writePluginFiles(box, LAYOUTS['claude-code'], placed),
+    /~\/\.claude\/settings\.json isn't a JSON object, so reeval can't enable the session's plugins in it/,
+  )
+  assert.deepEqual(await writePluginFiles(box, LAYOUTS.cursor, placed), [])
+})
+
+test('Grok Build refuses a plugin MCP server named like another, since it keeps one; Claude Code namespaces them', () => {
+  const plugin = (name: string) =>
+    readPlugin(
+      write(tmp(), {
+        '.claude-plugin/plugin.json': JSON.stringify({ name }),
+        '.mcp.json': JSON.stringify({ mcpServers: { docs: { command: 'node' } } }),
+      }),
+      'x',
+    )
+  const [review, tidy] = [plugin('review'), plugin('tidy')]
+  assert.equal(
+    refusedPlugins({ kind: 'grok-build' } as never, [review], { skills: [], mcp: ['docs'] }),
+    `Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp.docs, and keeps only one: rename one, or leave mcp out of the plugin with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'grok-build' } as never, [review, tidy], { skills: [], mcp: [] }),
+    `Grok Build names the tidy plugin's MCP server "docs" by its own name, as it does the review plugin's MCP server "docs", and keeps only one: rename one, or leave mcp out of the plugin with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'fake', layout: 'grok-build' } as never, [review], {
+      skills: [],
+      mcp: ['docs'],
+    }),
+    `The fake agent with Grok Build's layout names the review plugin's MCP server "docs" by its own name, as it does mcp.docs, and keeps only one: rename one, or leave mcp out of the plugin with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'grok-build' } as never, [review], { skills: [], mcp: ['other'] }),
+    undefined,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'claude-code' } as never, [review, tidy], { skills: [], mcp: ['docs'] }),
+    undefined,
+  )
 })

@@ -1,0 +1,5 @@
+{
+  "name": "probe",
+  "description": "The harness contract's probe plugin: a skill, a subagent, a command, an MCP server and a hook",
+  "version": "1.0.0"
+}

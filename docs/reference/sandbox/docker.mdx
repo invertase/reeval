@@ -115,7 +115,7 @@ images  7 sandbox images (nothing built: --dry-run)
 docker · cursor · 23 evals
   + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
 docker · claude-code · 1 eval
-  + base  reeval-sandbox:claude-code-1.0.160-patch.907f9184  (to build: not built yet)
+  + base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (to build: not built yet)
 …
 docker+0ab0e263 · cursor + install · 1 eval
   + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
@@ -146,6 +146,10 @@ docker · cursor + 1 plugin build · 1 eval
 
 A failing build command fails the attempts that use the plugin as infra errors (exit 3), like a failing `install` step: `Building the build of plugin.local('plugins/review') failed: build 2/2 exited 7: exit 7`. So does a `cwd` that isn't a directory in the source (`build cwd tools isn't a directory in the source`), before any command runs. `fakeSandbox()` has no image, so the plan refuses a plugin with a `build` there.
 
+A plugin's content is fixed when its image is prepared, and the record's `plugins[]` shows which content the attempt used. A re-resolved npm spec, or a local plugin you edit mid-run, isn't picked up until the next run; only a moved git ref is noticed.
+
+The build doesn't see the source's `.git` directory. A build that needs git metadata (`git describe`, husky) has to get it another way, such as a version passed in through the build's commands or environment.
+
 `reeval image build --force` rebuilds every image and pulls each base again. A `from` pinned to a digest (`node:22@sha256:…`) never moves.
 
 A rebuild removes the image its tag pointed at before, unless a container or another tag still uses it, and a `from` build drops its intermediate `…-base` tag once the harness is committed, so rebuilds leave no dangling images behind.
@@ -153,7 +157,7 @@ A rebuild removes the image its tag pointed at before, unless a container or ano
 | Harness | Adapter version in the tag |
 |---|---|
 | Cursor | `0.1.5` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.38) |
-| Claude Code | `1.0.160-patch.907f9184` (1.0.160, patched) |
+| Claude Code | `1.0.160-patch.b17cde50` (1.0.160, patched) |
 | Antigravity | `0.1.8` |
 | OpenCode | `0.2.8` |
 | Goose | `0.1.3` |
