@@ -37,10 +37,10 @@ jobs:
       REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build
       # The hard cap for this job: the contract on all eleven rows (20 attempts on a row with a
       # plugin field, Claude Code and Grok Build; 12 on the nine without), the e2e (2) on the nine
-      # harnesses' own rows, and the real-tier fixtures (2 each, 11 of them): 40 + 108 + 18 + 22,
-      # plus 8 of headroom. Each reserves its attempts in the ledger first, and fails rather than go
-      # over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '196'
+      # harnesses' own rows, the over-remarking canary (1, on Cursor) and the real-tier fixtures
+      # (2 each, 11 of them): 40 + 108 + 18 + 1 + 22, plus 8 of headroom. Each reserves its
+      # attempts in the ledger first, and fails rather than go over.
+      REEVAL_REAL_ATTEMPT_BUDGET: '197'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
@@ -60,7 +60,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash scripts/drift/latest-images.sh
       # One suite at a time, one real row at a time; no retries: a failure is reported as it is.
-      - name: harness contract${{ inputs.versions == 'pinned' && ' and e2e CLI scenarios' || '' }}
+      - name: harness contract${{ inputs.versions == 'pinned' && ', e2e CLI scenarios and the over-remarking canary' || '' }}
         working-directory: packages/reeval
         env:
           REEVAL_CONTRACT_SUMMARY: ${{ runner.temp }}/contract-summary.md
@@ -69,7 +69,7 @@ jobs:
         run: |
           mkdir -p "$TMPDIR"
           files=test/contract.test.ts
-          [ "${{ inputs.versions }}" = pinned ] && files="$files test/e2e-real.test.ts"
+          [ "${{ inputs.versions }}" = pinned ] && files="$files test/e2e-real.test.ts test/remarks-real.test.ts"
           node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings $files
       - name: the stored conversation @cursor/sdk declares
         working-directory: packages/reeval
