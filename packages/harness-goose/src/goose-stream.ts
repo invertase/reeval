@@ -17,8 +17,15 @@ const NO_USAGE = {
 const GOOSE_ERROR =
   /^Ran into this error: ([\s\S]*?)\.?\n\nPlease retry if you think this is a transient or recoverable error\.$/
 
-/** An extension's name as Goose keys it: `probe:stamp` becomes `probe_stamp`. */
-const gooseName = (name: string) => name.replace(/[^A-Za-z0-9_-]/g, '_').toLowerCase()
+/**
+ * An extension's name as Goose keys it (`name_to_key`): whitespace dropped, anything but ASCII
+ * letters, digits, `_` and `-` made `_`, lower-cased. `probe:stamp` becomes `probe_stamp`.
+ */
+const gooseExtensionKey = (name: string) =>
+  name
+    .replace(/\s/g, '')
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .toLowerCase()
 
 const isObjectLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
@@ -30,8 +37,8 @@ const record = (value: unknown): Record<string, unknown> => (isObjectLike(value)
  * - A call it couldn't name (`acp_tool_<id>`) is named from the `_meta.goose.toolCall` of Goose's
  *   `tool_call` update: an MCP server's tool (`stamp__house_stamp` from extension `stamp`) as
  *   `mcp__stamp__house_stamp`, Goose's own by its name (`tree`, `extensionmanager__…`). A server
- *   whose name Goose rewrites keeps Goose's name: `probe:stamp`'s tool is
- *   `mcp__probe_stamp__house_stamp`.
+ *   whose name Goose rewrites is named as reeval names it: `probe:stamp`'s tool, which Goose
+ *   reports from extension `probe_stamp`, is `mcp__probe:stamp__house_stamp`.
  * - The `finish` part's usage is dropped: Goose's ACP `PromptResponse.usage` is its last model
  *   call's, not the turn's, and an undercount is worse than none.
  * - A failed model call, which Goose sends as a message in its error template, is an `error`
@@ -42,10 +49,11 @@ export class GooseStreamTranslator {
   /** Messages in Goose's error template, by id, with the error they report. */
   private readonly failures = new Map<string, string>()
   private readonly reported = new Set<string>()
-  private readonly servers: ReadonlySet<string>
+  /** The MCP servers' names, by Goose's key for each. */
+  private readonly servers: ReadonlyMap<string, string>
 
   constructor(options: { mcpServers?: readonly string[] } = {}) {
-    this.servers = new Set((options.mcpServers ?? []).map(gooseName))
+    this.servers = new Map((options.mcpServers ?? []).map((n) => [gooseExtensionKey(n), n]))
   }
 
   push(part: Part): Part {
@@ -71,10 +79,8 @@ export class GooseStreamTranslator {
         const tool = call.toolName.startsWith(`${ext}__`)
           ? call.toolName.slice(ext.length + 2)
           : call.toolName
-        this.names.set(
-          update.toolCallId,
-          this.servers.has(gooseName(ext)) ? `mcp__${ext}__${tool}` : call.toolName,
-        )
+        const server = this.servers.get(gooseExtensionKey(ext))
+        this.names.set(update.toolCallId, server ? `mcp__${server}__${tool}` : call.toolName)
       }
       return part
     }

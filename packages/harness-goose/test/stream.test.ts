@@ -47,10 +47,18 @@ test('names a call from its tool_call metadata, and drops the usage', () => {
   assert.equal(finish.totalUsage.outputTokens?.total, undefined)
 })
 
-test("a plugin's server, whose name Goose rewrites, is named as Goose names it", () => {
+test("a server whose name Goose rewrites, such as a plugin's, is named as reeval names it", () => {
   assert.deepEqual(
-    names(turn(call('m1', 'probe_stamp__house_stamp', 'probe_stamp'), ['probe:stamp'])),
-    ['mcp__probe_stamp__house_stamp'],
+    names(
+      turn(
+        [
+          ...call('m1', 'probe_stamp__house_stamp', 'probe_stamp'),
+          ...call('m2', 'housedocs__search', 'housedocs'),
+        ],
+        ['probe:stamp', 'House Docs'],
+      ),
+    ),
+    ['mcp__probe:stamp__house_stamp', 'mcp__House Docs__search'],
   )
 })
 
