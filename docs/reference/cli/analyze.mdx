@@ -103,7 +103,7 @@ wrote evals/.history/20261020T231903Z_2e69951_cursor-agent_8s1m/insights.json: 1
 …
 ```
 
-`--insights` writes a recorded run's insights: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` in the history folder, and `reeval show` prints them with the run from then on. It takes a run, `--json` (the document instead of the blocks) and `-v`, and no other flag.
+`--insights` writes a recorded run's insights with `analysis.model`, never the judge's model: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` in the history folder, and `reeval show` prints them with the run from then on. It takes a run, `--json` (the document instead of the blocks) and `-v`, and no other flag.
 
 Per eval, one call classifies it from its name first, then its prompts, judge questions and check labels: its job (`choose` a tool, `finish` a task, or `other`), the question it asks and its subject. A low-confidence classification is `other`. A second call writes the answer and a sentence on each row the [layout](/concepts/output#insights) opens, from that eval's facts with each effect as a word. Then one call writes the run's headline.
 
@@ -150,7 +150,7 @@ export default defineConfig({
 ```
 
 <Property name="analysis.model" type="string" optional>
-  A `provider/model` language model. `google/*` goes direct with `GOOGLE_GENERATIVE_AI_API_KEY`; anything else through the Vercel AI Gateway (`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`). Defaults to the judge's model when that's a language model. Evaluation models such as `typesafe-ai/*` only score yes/no questions, so they exit 2 and point at `--context`.
+  A `provider/model` language model. `google/*` goes direct with `GOOGLE_GENERATIVE_AI_API_KEY`; anything else through the Vercel AI Gateway (`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`). Defaults to the judge's model when that's a language model, except for `--insights`, which takes `analysis.model` only. Evaluation models such as `typesafe-ai/*` only score yes/no questions, so they exit 2 and point at `--context`.
 </Property>
 
 <Property name="analysis.agent" type="boolean" optional>
@@ -181,6 +181,7 @@ In `analysis.agent`'s summary, the fake first reads up to three dropped evidence
 | `reeval analyze --context makes no analysis to save; drop --save` | `--context` only prints the digest |
 | `reeval analyze --vs names the run itself` | Name an earlier run, or `--vs none` |
 | `reeval analyze --insights takes a run, --json and -v only, not --save` | Drop the other flags |
+| `reeval analyze --insights needs analysis.model, and never uses the judge's model` | Set `analysis: { model: 'google/gemini-3.8-flash' }` in `reeval.config.ts` |
 | `reeval analyze takes -v only with --insights` | Add `--insights`, or drop `-v` |
 | `<run>/insights.json already exists, and insights are never rewritten` | Delete the file to write new ones |
 | `<run> isn't recorded, so there's no history folder for its insights` | `reeval record <run>` first |

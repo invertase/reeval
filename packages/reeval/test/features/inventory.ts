@@ -1885,6 +1885,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/insights.test.ts › canary: ids never reach the text',
       'reeval/test/insights.test.ts › canary: a headline calling the tally a count of evals is dropped',
       'reeval/test/insights.test.ts › canary: a finding that repeats a row sentence is dropped',
+      'reeval/test/insights.test.ts › canary: with only a judge model, --insights refuses and writes nothing',
       'reeval/test/insights.test.ts › -v prints each sentence the checks removed and why',
       'reeval/test/insights.test.ts › canary: a banned word is asked for once more, then dropped',
       'reeval/test/insights.test.ts › canary: a sentence on a row the layout keeps closed',

@@ -66,6 +66,7 @@ each, off by default, and it never gates.
 job (`choose`, `finish` or `other`, read from its name first, so name evals for what they ask), its
 answer, and a sentence under each failing row, every one citing the facts. `reeval show` prints
 them in the blocks. Delete the file to write new ones; it never changes a verdict or exit code.
+It uses `analysis.model` only (never the judge's model) and exits 2 without it.
 
 ## Config discovery, filters and exit codes
 

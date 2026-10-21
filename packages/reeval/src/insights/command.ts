@@ -28,6 +28,11 @@ export const NOT_WITH_INSIGHTS = ['vs', 'eval', 'md', 'save', 'context', 'dry-ru
 
 export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promise<number> {
   const { config } = ctx
+  if (config.analysis.model === undefined) {
+    throw new UsageError(
+      `reeval analyze --insights needs analysis.model, and never uses the judge's model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}.`,
+    )
+  }
   const entry = resolveRun(await allRuns(config), ref ?? 'latest')
   if (!entry.recorded) {
     throw new CommandError(

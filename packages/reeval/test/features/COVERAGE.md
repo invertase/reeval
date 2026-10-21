@@ -180,7 +180,7 @@
 | Token usage on each attempt and a per-cell sum of counted attempts, in the studio | ✓ 1 | — | — | — | — | — |
 | `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 21 | — | — | — | — | — |
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — | — |
-| `reeval analyze --insights`: each eval's intent, answer and row sentences, citing the facts and checked by the validator, written create-only to `<run>/insights.json`; `reeval show` prints them, and leaves out ones written for other facts | ✓ 15 | — | — | — | — | — |
+| `reeval analyze --insights`: each eval's intent, answer and row sentences, citing the facts and checked by the validator, written create-only to `<run>/insights.json`; `reeval show` prints them, and leaves out ones written for other facts | ✓ 16 | — | — | — | — | — |
 | `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 9 | — | — | — | — | ◐ 1 (1 without a canary) |
 | `analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error | ✓ 6 | — | — | — | — | ◐ 1 (1 without a canary) |
 | `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 7 | ✓ 1 | ● 10 | ● 11 | — | — |

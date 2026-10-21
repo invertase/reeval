@@ -447,6 +447,28 @@ describe('reeval analyze --insights', () => {
     assert.ok(existsSync(file))
   })
 
+  test('canary: with only a judge model, --insights refuses and writes nothing', async () => {
+    const p = await fixture('fixtures/records/before-insights')
+    writeFileSync(
+      join(p.dir, 'reeval.config.ts'),
+      FAKE_CONFIG.replace("import { insights } from './insights.ts'\n", '').replace(
+        'analysis: { model: fakeAnalysis({ insights }) },',
+        "judge: { model: 'google/gemini-3.8-flash' },",
+      ),
+    )
+    const r = await runCli(p.dir, ['analyze', '--insights'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /--insights needs analysis\.model, and never uses the judge's model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in .*reeval\.config\.ts/,
+    )
+    const [runId] =
+      corpusEntries()
+        .find((e) => e.name === 'before-insights')
+        ?.runs.map((x) => x.runId) ?? []
+    assert.ok(!existsSync(join(p.dir, HISTORY_DIR, runId as string, 'insights.json')))
+  })
+
   test('a model that fails writes nothing, so it can be asked again', async () => {
     const p = await fixture('fixtures/records/before-insights')
     writeFileSync(
