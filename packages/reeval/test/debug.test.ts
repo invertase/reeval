@@ -95,7 +95,7 @@ describe('verbosity', () => {
       'reeval.config.ts': fakeConfig({ harness: script }),
       'evals/a.eval.ts': passing,
     })
-    const r = await runCli(p.dir, ['run'])
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     for (const phase of PHASES) assert.doesNotMatch(r.stdout, phaseLine(phase), phase)
     // Twin: the attempt's own lines still print, under the same prefix.

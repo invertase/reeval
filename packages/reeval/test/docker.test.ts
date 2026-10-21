@@ -239,7 +239,11 @@ evaluate('stays unprivileged', async (c) => {
         )
       }
 
-      const r = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/root.eval.ts'], slow)
+      const r = await runCli(
+        p.dir,
+        ['run', '--ui', 'plain', '--output-logs', 'full', 'evals/root.eval.ts'],
+        slow,
+      )
       assert.equal(r.code, 0, r.stdout + r.stderr)
       const rooted = readRun(p.dir)
       warned(r.stdout, rooted.run, rooted.read('summary.md'))

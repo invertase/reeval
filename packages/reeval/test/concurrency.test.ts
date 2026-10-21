@@ -341,7 +341,7 @@ for (const name of ['a', 'b']) {
       'evals/trace.ts': TRACE,
       'evals/a.eval.ts': tracedEval('a', "{ runs: 4, timeout: '3s' }"),
     })
-    const r = await runCli(p.dir, ['run', '--concurrency', '1'])
+    const r = await runCli(p.dir, ['run', '--concurrency', '1', '--output-logs', 'full'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const attempts = readRun(p.dir).run.evals.flatMap((e) => e.attempts)
     // The fourth waited 3.6 s or more, so passing under its 3 s timeout means the wait didn't count.
