@@ -12,7 +12,7 @@ import {
   attemptStartProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
-import { buildRefusal } from '../../src/environment/plugins.ts'
+import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
 import {
@@ -64,6 +64,20 @@ export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
 writeFileSync(join(DIR, 'a.txt'), 'a')
 writeFileSync(join(DIR, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
 mkdirSync(join(DIR, 'empty'))
+
+/** A marketplace whose review entry is a `file:` URL on this machine. */
+const hostEntry = () => {
+  const dir = join(DIR, 'host-market')
+  mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
+  writeFileSync(
+    join(dir, '.claude-plugin', 'marketplace.json'),
+    JSON.stringify({
+      name: 'acme',
+      plugins: [{ name: 'review', source: { source: 'url', url: 'file:///srv/review' } }],
+    }),
+  )
+  return dir
+}
 
 /** What `declareTree` checks before it declares anything. */
 const tree = (children: unknown) => () => {
@@ -610,6 +624,56 @@ export const CASES: Record<string, Case[]> = {
       })),
     ],
     ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    [
+      'plugin.marketplace without a name',
+      helpers(({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] })),
+    ],
+    [
+      'plugin.marketplace name not kebab-case',
+      helpers(({ plugin }) => ({ plugins: [plugin.marketplace('Lint@github:acme/tools')] })),
+    ],
+    [
+      'plugin.marketplace ref on npm',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@npm:@acme/plugins@2.0.0', { ref: 'v1' })],
+      })),
+    ],
+    [
+      'plugin.marketplace tree URL',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@https://github.com/acme/tools/tree/v1/market')],
+      })),
+    ],
+    [
+      'plugin.marketplace option with a typo',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@github:acme/tools', { path: 'x' } as never)],
+      })),
+    ],
+    [
+      'plugin.marketplace with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@https://user:token@github.com/acme/tools')],
+      })),
+    ],
+    [
+      'plugin.marketplace good',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.marketplace('lint@github:acme/tools', { ref: 'v3', only: ['skills'] }),
+          plugin.marketplace('format@npm:@acme/plugins@2.0.0'),
+        ],
+      })),
+    ],
+    [
+      'marketplace entry on this machine, from a remote marketplace',
+      () =>
+        readMarketplace(hostEntry(), 'call', 'https://git.example.com/acme/plugins.git', 'review'),
+    ],
+    [
+      'marketplace entry on this machine, from a local marketplace',
+      () => readMarketplace(hostEntry(), 'call', 'market', 'review', true),
+    ],
     ['plugins not from the helper', env({ plugins: ['./plugins/review'] })],
     ['plugins not a list', env({ plugins: 'x' })],
     [
@@ -628,7 +692,24 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       'data: plugin with an unknown source',
+      env({ plugins: [{ kind: 'plugin', source: 'zip', name: 'x' }] }),
+    ],
+    [
+      'data: plugin marketplace without its source',
       env({ plugins: [{ kind: 'plugin', source: 'marketplace', name: 'x' }] }),
+    ],
+    [
+      'data: plugin marketplace with a typo',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'x',
+            marketplace: { source: 'git', repo: 'github:o/r', rev: 'v1' },
+          },
+        ],
+      }),
     ],
     [
       'data: plugin build empty',
@@ -926,6 +1007,8 @@ export const CASES: Record<string, Case[]> = {
       'yaml: analysis fake with a typo',
       yaml('analysis:\n  model: { kind: fake-analysis, votes: tie }\n'),
     ],
+    ['yaml: analysis agent', yaml('analysis:\n  agent: true\n')],
+    ['yaml: analysis maxTokens 0', yaml('analysis:\n  maxTokens: 0\n')],
     [
       'yaml: capture viewport not whole',
       yaml('capture:\n  viewport: { width: 10.5, height: 10 }\n'),
@@ -961,7 +1044,9 @@ defaultProfile: { ci: pr }
 secrets: { unbrokered: error }
 debug: { keep: 5, traceBufferMb: 2 }
 analysis:
-  model: { kind: fake-analysis, note: fine, vote: { winner: A, reason: shorter } }
+  model: { kind: fake-analysis, vote: { winner: A, reason: shorter } }
+  insights: true
+  maxTokens: 100000
   maxInputTokens: 4000
 profiles:
   pr:

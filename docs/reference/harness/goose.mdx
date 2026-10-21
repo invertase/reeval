@@ -51,6 +51,7 @@ export default defineConfig({
 | Skills (`placement: 'workspace'`) | `.goose/skills` in the workspace |
 | Egress hosts added | `generativelanguage.googleapis.com` |
 | Tokens | Not reported (below) |
+| Plugins | `skills` and `mcp`, beside the eval's own (below) |
 
 Build its image once with `reeval image build` in a project whose config uses `goose()`.
 
@@ -81,13 +82,33 @@ Goose's ACP server reports its last model call's tokens as the turn's, so reeval
 |---|---|
 | `GOOSE_PROVIDER=google`, `GOOSE_MODEL=<model>` | The Gemini API key's provider, and the model the session starts on. |
 | `GOOSE_MODE=auto` | Tool calls run without asking. |
-| `GOOSE_TELEMETRY_OFF=1` | No telemetry. With it, a turn contacts only the Gemini API. |
+| `GOOSE_TELEMETRY_OFF=1` | No telemetry. |
 | `GOOSE_DISABLE_KEYRING=1` | No system keyring in a container. |
 | `GOOSE_DISABLE_SESSION_NAMING=1` | No extra model call to name the session. |
+
+Besides the Gemini API, each session fetches Goose's model catalogue from `models.dev`, which no setting turns off. Nothing needs it: a restricted egress policy refuses it and records it under the record's `egress.expectedBlocked`.
 
 Goose runs with a private home, `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`, so its config and home skills live there, not in the sandbox user's `~/.config/goose`. The attempt's `context` lists them under that path. In the workspace it reads `.goose/skills`, and also `.agents/skills` and `.claude/skills`; nothing turns those off.
 
 MCP servers go in Goose's `config.yaml` as enabled extensions (`stdio`, or `streamable_http` for `http` servers; Goose has no SSE). Servers passed over ACP start disabled in 1.54.0 until the model enables them itself. Their tools are named `mcp__<server>__<tool>` in the transcript.
+
+## Plugins
+
+```ts title="evals/review.eval.ts"
+const review = defineEnvironment('review', ({ plugin }) => ({
+  plugins: [plugin.local('../plugins/review')],
+}))
+```
+
+Goose takes a plugin's skills and MCP servers as if the eval declared them. reeval copies the plugin to `~/.reeval/plugins/<name>/`, places its skills in Goose's home skills directory beside the eval's own, and adds its servers to `config.yaml` as `<plugin>:<server>`, through reeval's MCP timer. Goose renames such an extension (`review:docs` becomes `review_docs`); the transcript still names a call by reeval's name, `mcp__review:docs__<tool>`, so `toHaveCalledMcp('review:docs', …)` matches it.
+
+The names share one space, so the plan refuses a plugin skill or server that another already has, including two servers Goose would key the same. It also refuses hooks and subagents, which Goose doesn't load:
+
+```text
+reeval: evals/p.eval.ts: evaluate("reviews") on goose:gemini-3.8-flash: Goose can't load the review plugin's hooks (hooks/hooks.json): use only: ['skills'], or leave the plugin out of this cell
+```
+
+reeval doesn't use `goose plugin install`: it needs the plugin in a git repository, and it takes only the skills.
 
 ## Errors
 
@@ -99,6 +120,7 @@ MCP servers go in Goose's `config.yaml` as enabled extensions (`stdio`, or `stre
 | Goose doesn't start | `Goose harness failed to start: …` |
 | Goose reports a failed model call as its message | The turn fails with `Goose's model call failed: <error>` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on goose:<model>: Goose has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| Two MCP servers Goose keys the same, such as a plugin's `review:docs` and `mcp.review_docs` (at plan time, exit 2) | `evaluate("<eval>") on goose:<model>: Goose keys the review_docs and review:docs MCP servers both as review_docs, and keeps only one: rename one` |
 
 ## Related
 

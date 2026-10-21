@@ -4,6 +4,8 @@ import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
 
 /** The judge the docs recommend, pinned so a model update never silently moves scores. */
 export const RECOMMENDED_JUDGE_MODEL = 'typesafe-ai/jev-1.14.0'
+/** The language model `reeval init` sets as `analysis.model` and the docs recommend for insights. */
+export const RECOMMENDED_ANALYSIS_MODEL = 'google/gemini-3.8-flash'
 export const DEFAULT_THRESHOLD = 0.8
 
 const GATEWAY_KEYS = ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']

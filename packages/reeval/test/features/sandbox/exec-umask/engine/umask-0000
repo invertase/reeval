@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# `docker` or `podman` (by the name it's called as), except that every `exec` starts under
+# umask 0000, as Docker 29.6+ runs exec wherever dockerd starts containerd itself
+# (Docker-in-Docker, rootless, OrbStack). The fixture's row puts this directory first on PATH.
+here=$(cd "$(dirname "$0")" && pwd)
+PATH=${PATH//"$here:"/}
+engine=$(basename "$0")
+if [[ $1 == exec ]]; then
+  shift
+  args=(exec)
+  while [[ $1 == -* ]]; do
+    case $1 in
+      -e | --env | -w | --workdir | -u | --user | --env-file | --detach-keys)
+        args+=("$1" "$2")
+        shift 2
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+  args+=("$1" sh -c 'umask 0000 && exec "$@"' sh)
+  shift
+  set -- "${args[@]}" "$@"
+fi
+exec "$engine" "$@"

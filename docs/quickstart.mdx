@@ -17,12 +17,13 @@ description: Scaffold a project, then run your first eval on a real agent in Doc
 
     ```text
     reeval init · .
-      create    reeval.config.ts       harness cursor:composer-2.5; profiles pr, nightly
+      create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
       create    evals/environments.ts  environment greeter: a package.json and rules
       create    evals/greet.eval.ts    one eval, in greeter
       create    .gitignore             node_modules/, .reeval/, .env*
       create    package.json           script eval, devDependency {{ pkg }}
       create    tsconfig.json          for editors and tsc: the evals' .ts imports, no emit
+    Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
     Next:
       npm install
       npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
@@ -30,7 +31,7 @@ description: Scaffold a project, then run your first eval on a real agent in Doc
     Docker is running: ready for npx reeval image build
     ```
 
-    In a script, pass `--harness <name>` or `--yes`; `--bare` writes only the config. In an existing project it only adds files and merges into `package.json` and `.gitignore`: see [reeval init](/reference/cli/init).
+    The config also sets `analysis.model`, the model that writes [insights](/concepts/insights): a sentence under each eval's result. In a script, pass `--harness <name>` or `--yes`; `--bare` writes only the config. In an existing project it only adds files and merges into `package.json` and `.gitignore`: see [reeval init](/reference/cli/init).
   </Step>
   <Step title="Install">
     ```bash
@@ -95,12 +96,13 @@ description: Scaffold a project, then run your first eval on a real agent in Doc
     evals/greet.eval.ts › creates greet.js  1          —         1     1
     images  1 sandbox image: 1 to build
       + docker · cursor  to build: base, not built yet
+    insights  google/gemini-3.8-flash · up to 250k tokens
     ```
   </Step>
   <Step title="Build, add your key and run">
     ```bash
     npx reeval image build
-    printf 'CURSOR_API_KEY=...\n' > .env.local
+    printf 'CURSOR_API_KEY=...\nGOOGLE_GENERATIVE_AI_API_KEY=...\n' > .env.local
     npx reeval doctor
     npx reeval run
     ```
@@ -111,12 +113,14 @@ description: Scaffold a project, then run your first eval on a real agent in Doc
     reeval run: … · 1 eval file
 
     pass             creates greet.js
+      Yes, the agent passed 1 of 1 tries creating greet.js.
 
-    7s · 23k in (7,136 cached) · 222 out · results .reeval/runs/…/summary.md
+    All 1 result passed, successfully creating greet.js.
+    17s · 72k in (31k cached) · 383 out · results .reeval/runs/…/summary.md
     1 pass
     ```
 
-    `reeval doctor` names anything missing, such as Docker not running or an unset key, with its fix.
+    `reeval doctor` names anything missing, such as Docker not running or an unset key, with its fix. The Google key is for insights only: without it the run passes or fails the same, and prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }` above the tally.
   </Step>
 </Steps>
 

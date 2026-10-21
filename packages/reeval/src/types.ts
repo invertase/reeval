@@ -1,4 +1,5 @@
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
+import type { ModelHeadlineInput, ModelInsightInput } from './insights/input.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -1037,7 +1038,29 @@ export type PluginSource = {
       /** The plugin's directory in the package; default its root. */
       path?: string
     }
+  | {
+      source: 'marketplace'
+      /** The plugin's entry in the marketplace's `.claude-plugin/marketplace.json`. */
+      name: string
+      /** Where the marketplace is: a git repository (at `ref`) or an npm package. */
+      marketplace: PluginMarketplace
+    }
 )
+
+/** A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`. */
+export type PluginMarketplace =
+  | {
+      source: 'git'
+      /** As written: a URL or `github:owner/repo`. */
+      repo: string
+      /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+      ref?: string
+    }
+  | {
+      source: 'npm'
+      /** An npm package spec. */
+      spec: string
+    }
 
 /**
  * Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root
@@ -1071,6 +1094,11 @@ export type PluginHelper = {
   git(repo: string, options?: PluginOptions & { ref?: string; path?: string }): PluginSource
   /** A pinned npm package spec; the plugin is at `path` inside it (default its root). */
   npm(spec: string, options?: PluginOptions & { path?: string }): PluginSource
+  /**
+   * `'name@source'`: the entry `name` in a Claude Code marketplace, at a git repository (a URL or
+   * `github:owner/repo`, at `ref`) or an npm package (`npm:<spec>`).
+   */
+  marketplace(entry: string, options?: PluginOptions & { ref?: string }): PluginSource
 }
 
 /** One environment in an `extend` chain. */
@@ -1567,27 +1595,62 @@ export type Profile = {
   tags?: string[]
 }
 
-/** What a fake note is written from: the eval, the harness, and what its tools returned. */
-export type FakeNoteInput = {
-  eval: string
-  harness: string
-  attempts: Array<{ id: string; outcome: string }>
-  /** Each failed attempt the fake opened beside a passing one, and the step where they diverged. */
-  compared: Array<{ failed: string; passed: string; divergedAt: number | null }>
-}
-
 /** A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`. */
 export type FakeAnalysisModel = {
   kind: 'fake-analysis'
   /** The model's structured answer, or a function of the digest it was given. */
   output?: unknown | ((digest: unknown) => unknown)
-  /** `analysis.agent`'s note on each eval and harness: text, a function of its tools' results, or an error to throw. */
-  note?: string | ((input: FakeNoteInput) => string) | { error: string }
   /**
    * How it answers compare questions: a fixed pick, a function of the blinded pair, or
    * `{ error }` to fail every call. A pick may be `{ winner, reason? }`. Default `'tie'`.
    */
   vote?: FakePick | ((pair: BlindPair) => FakePick) | { error: string }
+  /**
+   * What insights get back, in `reeval run` and `reeval analyze --insights`: fixed insights, a
+   * function of each call's input (`input.call` is `classify` or `insights`, once each per eval,
+   * or `headline` once; it may return a promise), or `{ error }` to fail every call. It counts a
+   * token per 4 characters of each call's input and answer, so `analysis.maxTokens` applies.
+   */
+  insights?:
+    | FakeInsights
+    | ((input: FakeInsightsInput) => FakeInsights | Promise<FakeInsights>)
+    | { error: string }
+}
+
+/** What a fake insights function is given: one eval's scoped facts, or the run's evals for the headline. */
+export type FakeInsightsInput = ModelInsightInput | ModelHeadlineInput
+
+/**
+ * A fake insight answer. Each call takes its part: `intent` the classification, `answer`,
+ * `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's
+ * left out is empty, and the intent defaults to `job: 'other'`.
+ */
+export type FakeInsights = {
+  intent?: {
+    job: 'choose' | 'finish' | 'other'
+    question?: string
+    subject?: { tool?: string; change?: string }
+    name?: 'states-intent' | 'no-intent' | 'contradicts'
+    /** `low` falls back to `job: 'other'`, as a real classification does. */
+    confidence?: 'high' | 'medium' | 'low'
+  }
+  answer?: { text: string; cites: string[] } | null
+  findings?: Array<{ text: string; cites: string[] }>
+  rows?: Array<{ row: string; text: string; cites: string[] }>
+  namedTools?: Array<{ attempt: string; tools: string[] }>
+  /**
+   * The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are
+   * `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`).
+   * They go through the same gates as a model's, so one missing a part is dropped.
+   */
+  remarks?: Array<{
+    kind: string
+    text: string
+    source?: { at: string; quote: string } | null
+    evidence?: string[]
+    fix?: { at: string; edit: string } | null
+  }>
+  headline?: { text: string; cites: string[] } | null
 }
 
 /** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */
@@ -1626,15 +1689,24 @@ export type BlindSide = BlindTurn & {
   >
 }
 
-/** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
+/** Insights and `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
-  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  /**
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
+   * and compare questions fall back to the judge's when it's a language model.
+   */
   model?: string | FakeAnalysisModel
   /**
-   * `reeval run` writes a note on each eval and harness once its attempts finish, with the analysis
-   * model (default false: one call per eval and harness, every run).
+   * `reeval run` classifies each eval and explains its result with `model` once the attempts
+   * finish (default true when `model` is set; `--no-insights` turns it off for one run).
    */
-  agent?: boolean
+  insights?: boolean
+  /**
+   * Tokens (in and out) that one run's insights may use, over every classification, insight and
+   * headline call (default 250000). Past it, the evals left print without insights; the run's
+   * outcome and exit code never change.
+   */
+  maxTokens?: number
   /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good." */
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
@@ -1693,7 +1765,7 @@ export type ReevalConfig = {
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
-  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
+  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfig
 }
 
@@ -1715,15 +1787,16 @@ export type FakeAnalysisData = {
   kind: 'fake-analysis'
   /** The model's structured answer. */
   output?: unknown
-  /** `analysis.agent`'s note on each eval and harness, or an error to throw. */
-  note?: string | { error: string }
   /** How it answers compare questions: a fixed pick, or `{ error }` to fail every call. */
   vote?: FakePick | { error: string }
 }
 
 /** `AnalysisConfig` as data: the model by name, or a fake analysis. */
 export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
-  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  /**
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
+   * and compare questions fall back to the judge's when it's a language model.
+   */
   model?: string | FakeAnalysisData
 }
 
@@ -1758,7 +1831,7 @@ export type ReevalConfigData = Omit<
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
   profiles?: Record<string, ProfileData>
-  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
+  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfigData
 }
 
@@ -1820,7 +1893,12 @@ export type ResolvedConfig = {
   defaultProfile: { ci?: string; local?: string }
   secrets: { unbrokered: 'warn' | 'error' }
   debug: { keep: number; traceBufferBytes: number }
-  analysis: AnalysisConfig & { maxInputTokens: number; maxOutputTokens: number }
+  analysis: AnalysisConfig & {
+    maxInputTokens: number
+    maxOutputTokens: number
+    insights: boolean
+    maxTokens: number
+  }
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
@@ -1926,11 +2004,15 @@ export type Cell = {
 export type PluginRecord = {
   /** The manifest's `name`. */
   name: string
-  /** Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`. */
+  /** Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source. */
   source: string
-  /** The marketplace it was listed in; null when it was named directly. */
-  marketplace: { name: string; source: string; commit: string } | null
-  /** The commit a git source resolved to; null for a local or npm one. */
+  /**
+   * The marketplace it was listed in, with its `marketplace.json` name, its source as written
+   * (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved
+   * to (null for npm); null when the plugin was named directly.
+   */
+  marketplace: { name: string; source: string; commit: string | null } | null
+  /** The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one. */
   commit: string | null
   /** The hash of the files placed. */
   sha256: string

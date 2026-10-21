@@ -1,0 +1,5 @@
+{
+  "eval": "plan/plugins/evals/marketplace.eval.ts",
+  "plan": "plan/plugins/expected/marketplace.txt",
+  "args": ["evals/marketplace.eval.ts"]
+}

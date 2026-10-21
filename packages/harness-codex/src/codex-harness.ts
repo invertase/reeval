@@ -57,18 +57,36 @@ export const CODEX_ENDPOINTS = [
 /**
  * Codex's defaults but for what it sends besides model requests: its analytics (to
  * `ab.chatgpt.com`), and the plugin sync (the curated list from
- * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use.
+ * `github.com`, the remote catalogue from `chatgpt.com`), which an eval doesn't use. A session
+ * given plugins turns plugins on, and with them the sync, which nothing else stops.
  */
 export const CODEX_QUIET_CONFIG = {
   analytics: { enabled: false },
   features: { plugins: false },
 } as const
 
+/**
+ * Codex's home marketplace, under the sandbox home, which lists the session's plugins. Each entry's
+ * path is relative to the home directory.
+ */
+export const CODEX_MARKETPLACE_FILE = '.agents/plugins/marketplace.json'
+/** The name of that marketplace, so a plugin is installed as `<plugin>@reeval`. */
+export const CODEX_PLUGIN_MARKETPLACE = 'reeval'
+
+/** A plugin directory in the sandbox (absolute, under its home), and the plugin's name. */
+export type CodexPlugin = { readonly name: string; readonly dir: string }
+
 export type CodexHarnessSettings = {
   /** `{ OPENAI_API_KEY }`, the only key used. The host environment is never read. */
   readonly auth: HarnessV1AuthenticationEnvironment
   /** MCP servers in Codex's `[mcp_servers]` shape, keyed by name. */
   readonly mcpServers?: Record<string, Record<string, unknown>>
+  /**
+   * Plugins, in Claude Code's or Codex's plugin layout, which Codex reads either of: listed in its
+   * home marketplace and installed with `codex plugin add` as the session starts, so Codex caches
+   * a copy of each under `~/.codex/plugins/cache/` and loads its skills and MCP servers.
+   */
+  readonly plugins?: readonly CodexPlugin[]
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
   /**
@@ -115,15 +133,18 @@ function toml(value: TomlValue): string {
 }
 
 /**
- * Codex's `config.toml`: the quiet settings, reeval's provider as the model provider, and the MCP
- * servers. Each top-level key is one line, tables inline, so nothing depends on section order.
+ * Codex's `config.toml`: the quiet settings (plugins on when the session has some), reeval's
+ * provider as the model provider, and the MCP servers. Each top-level key is one line, tables
+ * inline, so nothing depends on section order and `codex plugin add` can append its tables.
  */
 export function buildCodexConfig(options: {
   mcpServers?: Record<string, Record<string, unknown>>
   effort?: string
+  plugins?: boolean
 }): string {
   const config: Record<string, TomlValue> = {
     ...CODEX_QUIET_CONFIG,
+    ...(options.plugins ? { features: { ...CODEX_QUIET_CONFIG.features, plugins: true } } : {}),
     ...(options.effort ? { model_reasoning_effort: options.effort } : {}),
     model_provider: CODEX_PROVIDER_ID,
     model_providers: {
@@ -142,6 +163,30 @@ export function buildCodexConfig(options: {
   return `${Object.entries(config)
     .map(([k, v]) => `${JSON.stringify(k)} = ${toml(v)}`)
     .join('\n')}\n`
+}
+
+/** The home marketplace listing the plugins, each by its path relative to `home`. */
+export function buildCodexMarketplace(plugins: readonly CodexPlugin[], home: string): string {
+  const entries = plugins.map((p) => {
+    const path = posix.relative(home, p.dir)
+    if (!path || path.startsWith('..') || posix.isAbsolute(path)) {
+      throw new Error(
+        `Codex lists plugins in its home marketplace, so the ${p.name} plugin must be under ${home} (it's at ${p.dir})`,
+      )
+    }
+    return { name: p.name, source: { source: 'local', path: `./${path}` } }
+  })
+  return `${JSON.stringify({ name: CODEX_PLUGIN_MARKETPLACE, plugins: entries }, null, 2)}\n`
+}
+
+/** `codex plugin add <plugin>@reeval` for each plugin, offline from the home marketplace. */
+export function buildCodexPluginAdd(binDir: string, plugins: readonly CodexPlugin[]): string {
+  return plugins
+    .map(
+      (p) =>
+        `PATH=${shellQuote(binDir)}:"$PATH" codex plugin add ${shellQuote(`${p.name}@${CODEX_PLUGIN_MARKETPLACE}`)} < /dev/null`,
+    )
+    .join(' && ')
 }
 
 const lines = (stream: ReadableStream<Uint8Array>) =>
@@ -236,14 +281,29 @@ async function startSession(
     stateDirectory: stateDir,
     sessionId: options.sessionId,
   })
+  const plugins = settings.plugins ?? []
   await sandbox.writeTextFile({
     path: posix.join(home, CODEX_HOME_DIR, 'config.toml'),
     content: buildCodexConfig({
       ...(settings.mcpServers ? { mcpServers: settings.mcpServers } : {}),
       ...(settings.effort ? { effort: settings.effort } : {}),
+      ...(plugins.length ? { plugins: true } : {}),
     }),
     abortSignal,
   })
+  if (plugins.length) {
+    await sandbox.writeTextFile({
+      path: posix.join(home, CODEX_MARKETPLACE_FILE),
+      content: buildCodexMarketplace(plugins, home),
+      abortSignal,
+    })
+    const added = await sandbox.run({ command: buildCodexPluginAdd(binDir, plugins), abortSignal })
+    if (added.exitCode !== 0) {
+      throw new Error(
+        `codex plugin add failed (exit ${added.exitCode}): ${(added.stderr || added.stdout).trim().slice(-2000)}`,
+      )
+    }
+  }
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   let threadId = resumed.success ? resumed.data.threadId : undefined
   const env = { [CODEX_CREDENTIAL_ENV]: sandboxKey }

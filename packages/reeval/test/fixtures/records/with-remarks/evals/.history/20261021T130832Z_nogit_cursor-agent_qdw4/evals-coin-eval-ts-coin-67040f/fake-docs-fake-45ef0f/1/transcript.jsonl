@@ -1,0 +1,12 @@
+{"ts":"2026-10-21T13:08:33.519Z","atMs":0,"turn":0,"type":"prompt","text":"look it up"}
+{"turn":0,"ts":"2026-10-21T13:08:33.519Z","atMs":0,"type":"text","text":"Working on: look it up","durationMs":0}
+{"turn":0,"ts":"2026-10-21T13:08:33.519Z","atMs":0,"type":"text","text":"Loaded mcp: docs","durationMs":0}
+{"turn":0,"ts":"2026-10-21T13:08:33.519Z","atMs":0,"type":"tool","toolCallId":"call_1","tool":"mcp__docs__lookup","input":{},"output":"ok","ok":true,"durationMs":2149}
+{"turn":0,"ts":"2026-10-21T13:08:35.668Z","atMs":2149,"type":"text","text":"one","durationMs":0}
+{"ts":"2026-10-21T13:08:35.669Z","atMs":2150,"turn":0,"type":"turn-end","status":"completed","durationMs":2150}
+{"ts":"2026-10-21T13:08:35.680Z","atMs":0,"turn":1,"type":"prompt","text":"and again"}
+{"turn":1,"ts":"2026-10-21T13:08:35.680Z","atMs":0,"type":"text","text":"Working on: and again","durationMs":0}
+{"turn":1,"ts":"2026-10-21T13:08:35.680Z","atMs":0,"type":"text","text":"Loaded mcp: docs","durationMs":0}
+{"turn":1,"ts":"2026-10-21T13:08:35.680Z","atMs":0,"type":"tool","toolCallId":"call_2","tool":"mcp__docs__lookup","input":{},"output":"ok","ok":true,"durationMs":2149}
+{"turn":1,"ts":"2026-10-21T13:08:37.829Z","atMs":2149,"type":"text","text":"two","durationMs":0}
+{"ts":"2026-10-21T13:08:37.830Z","atMs":2150,"turn":1,"type":"turn-end","status":"completed","durationMs":2150}

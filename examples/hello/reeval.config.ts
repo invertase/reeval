@@ -5,8 +5,7 @@ export default defineConfig({
   include: ['evals/**/*.eval.ts'],
   harness: composer,
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
-  // agent: true writes a note on each eval and harness after its attempts, on the judge's model:
-  // one more call per eval and harness, every run, so it's off here.
+  // No analysis.model, so reeval run writes no insights here: reeval.analysis.config.ts sets one.
   timeout: '15m',
   // CI runs are PR runs unless a workflow says --profile nightly.
   defaultProfile: { ci: 'pr' },

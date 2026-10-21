@@ -1238,6 +1238,11 @@ describe('common mistakes', { concurrency: 4 }, () => {
       /plugin\.local\("\."\): only lists the parts to place, from 'skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'/,
     ],
     [
+      'a marketplace plugin without its entry name',
+      `defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] }))`,
+      /plugin\.marketplace\(\) needs 'name@source': the plugin's entry and the marketplace's git repository or npm:<package>, e\.g\. plugin\.marketplace\('lint@github:acme\/agent-plugins'\) \(got "github:acme\/agent-plugins"\)/,
+    ],
+    [
       'a plugin without a manifest',
       `evaluate('e', { environment: defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('..')] })) }, async () => {})`,
       /evaluate\("e"\) on fake: plugin\.local\('\.'\) has no \.claude-plugin\/plugin\.json/,
@@ -1404,9 +1409,19 @@ ${body}
       /debug\.traceBufferMb in reeval\.config\.ts must be a number of megabytes above 0 \(got "8MB"\)/,
     ],
     [
-      'analysis.agent as text',
-      `analysis: { agent: 'yes' as never },`,
-      /analysis\.agent in reeval\.config\.ts must be true or false \(got "yes"\)/,
+      'analysis.agent, which insights replaced',
+      `analysis: { agent: true } as never,`,
+      /Unknown option "agent" in analysis in reeval\.config\.ts\. Use model, insights, maxTokens, instructions/,
+    ],
+    [
+      'analysis.insights as text',
+      `analysis: { insights: 'yes' as never },`,
+      /analysis\.insights in reeval\.config\.ts must be true or false \(got "yes"\)/,
+    ],
+    [
+      'a token budget of zero',
+      `analysis: { maxTokens: 0 },`,
+      /analysis\.maxTokens in reeval\.config\.ts must be a whole number of tokens of at least 1, e\.g\. 250000 \(got 0\)/,
     ],
     [
       'a debug folder option',

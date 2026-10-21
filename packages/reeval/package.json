@@ -53,6 +53,7 @@
     "docker",
     "bin",
     "assets",
+    "skills",
     "README.md",
     "THIRD_PARTY_NOTICES.md"
   ],

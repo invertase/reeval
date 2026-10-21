@@ -91,6 +91,18 @@ export type Agent = Layout & {
    */
   expectedBlocked?: ExpectedBlocked
   /**
+   * Why it can't take a plugin that bundles ChatGPT apps, which it would otherwise load with the
+   * plugin; unset for an agent that ignores them.
+   */
+  pluginApps?: string
+  /**
+   * Plugin manifests it reads in place of `.claude-plugin/plugin.json` when a plugin has one, so it
+   * would load what reeval didn't place or rewrite; unset for an agent that reads only that one.
+   */
+  pluginManifestsFirst?: readonly string[]
+  /** It reads a root `plugin.json` only when it names an Agent Plugins `$schema`. */
+  pluginRootManifestNeedsSchema?: true
+  /**
    * Transcript events a turn may have had that its harness didn't report, from the turn's
    * `finish` part's `harnessMetadata`. Each turn carries these as `unreported`, so web matchers
    * refuse instead of passing silently.
@@ -119,14 +131,9 @@ export type Agent = Layout & {
   pluginParts: readonly PluginPart[]
   /**
    * Set for an agent that takes plugins namespaced but names a plugin's MCP servers by their own
-   * keys, in one list with the environment's (Grok Build): it keeps one of two servers of a name.
+   * keys, in one list with the environment's (Grok Build, Codex): it keeps one of two servers of a name.
    */
   pluginServersByName?: true
-  /**
-   * Plugin manifests it reads in place of `.claude-plugin/plugin.json` when a plugin has one, so it
-   * would load what reeval didn't place or rewrite; unset for an agent that reads only that one.
-   */
-  pluginManifestsFirst?: readonly string[]
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -148,7 +155,12 @@ export type ModelSpecific = Pick<Agent, 'credential' | 'endpoints' | 'servedMode
 }
 
 /** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
-export type ExpectedBlocked = { hosts: readonly string[]; why: string }
+export type ExpectedBlocked = {
+  hosts: readonly string[]
+  why: string
+  /** Tried only in a session given plugins; another session's attempt on these hosts is a real block. */
+  withPlugins?: true
+}
 
 const WEB_EVENTS: Record<string, WebEventType> = { webSearch: 'web-search', webFetch: 'web-fetch' }
 
@@ -333,10 +345,31 @@ export function opencodeMcpServers(
   )
 }
 
+/**
+ * The key Goose keeps an extension by (its `name_to_key`): whitespace dropped, anything but ASCII
+ * letters, digits, `_` and `-` made `_`, lower-cased. Of two extensions with one key it keeps one.
+ */
+const gooseKey = (name: string) =>
+  name
+    .replace(/\s/g, '')
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .toLowerCase()
+
 /** Goose's extension shape (its `config.yaml`); it has no SSE transport. */
 export function gooseMcpServers(
   servers: Record<string, ResolvedMcpServer>,
 ): Record<string, Record<string, unknown>> {
+  const byKey = new Map<string, string>()
+  for (const name of Object.keys(servers)) {
+    const key = gooseKey(name)
+    const other = byKey.get(key)
+    if (other !== undefined) {
+      throw new InfraError(
+        `Goose keys the ${other} and ${name} MCP servers both as ${key}, and keeps only one: rename one`,
+      )
+    }
+    byKey.set(key, name)
+  }
   return Object.fromEntries(
     Object.entries(servers).map(([name, s]) => {
       if (s.transport === 'sse') {
@@ -819,12 +852,19 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   goose: {
     ...LAYOUTS.goose,
-    pluginParts: [],
+    // Plugin skills join its home skills; plugin MCP servers are extensions in its config.yaml.
+    pluginParts: ['skills', 'mcp'],
     name: 'Goose',
     factory: 'goose',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
+    // Goose 1.55.0 refreshes its model catalogue from models.dev/api.json in every session, and
+    // falls back to the one it bundles when that's refused.
+    expectedBlocked: {
+      hosts: ['models.dev'],
+      why: "Goose's model catalogue refresh, which no setting turns off",
+    },
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
@@ -860,7 +900,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   codex: {
     ...LAYOUTS.codex,
-    pluginParts: [],
+    // What Codex's plugin format has besides apps; it installs a plugin whole, from a marketplace.
+    pluginParts: ['skills', 'mcp'],
+    pluginApps: 'they need a ChatGPT login',
+    // Codex 0.163.0 reads a root plugin.json (with an Agent Plugins $schema), then
+    // .codex-plugin/plugin.json, then .claude-plugin/plugin.json.
+    pluginManifestsFirst: ['plugin.json', '.codex-plugin/plugin.json'],
+    pluginRootManifestNeedsSchema: true,
+    pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
@@ -868,15 +915,23 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,
+    // Only with plugins on, which a session with plugins needs; it loads them all the same. In a
+    // session without plugins these hosts are a real block.
+    expectedBlocked: {
+      hosts: ['github.com', 'api.github.com', 'chatgpt.com'],
+      why: "Codex's plugin sync, which it runs on every turn once plugins are on",
+      withPlugins: true,
+    },
     servedModel: openaiServedModel,
     mcpServers: codexMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
       (await import('@reeval/harness-codex')).createCodex({
         auth,
         ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
+        ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         requireCredentialBrokering: true,
       }),
   },
@@ -989,10 +1044,10 @@ const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join
 
 /**
  * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
- * load, a hook event or type it doesn't run, a plugin MCP server it refuses (named
- * `<plugin>:<server>`) or whose `<plugin>:<server>` key `mcp` already has, or, where it takes
- * plugin items flat, a skill or MCP server whose name another already has, or a subagent, command
- * or rule another unpacks to the same file. `own` names the
+ * load, apps it can't take (`pluginApps`), a hook event or type it doesn't run, a plugin MCP
+ * server it refuses (named `<plugin>:<server>`) or whose `<plugin>:<server>` key `mcp` already has,
+ * or, where it takes plugin items flat, a skill or MCP server whose name another already has, or a
+ * subagent, command or rule another unpacks to the same file. `own` names the
  * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
  * npm ones, at plan time) by their call. Undefined when it can take them.
  */
@@ -1020,13 +1075,21 @@ export function refusedPlugins(
     const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
     return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
   }
-  const first = (agent ?? mimics)?.pluginManifestsFirst ?? []
+  const reads = agent ?? mimics
+  const first = reads?.pluginManifestsFirst ?? []
   for (const p of plugins) {
-    const other = p.manifests.find((m) => first.includes(m))
+    const other = p.manifests.find(
+      (m) =>
+        first.includes(m) &&
+        (m !== 'plugin.json' || !reads?.pluginRootManifestNeedsSchema || p.rootSchema),
+    )
     if (other) {
       return `${name} reads the ${p.name} plugin's ${other} in place of its ${PLUGIN_MANIFEST}, so reeval can't hold it to the parts it places: remove ${other} from the plugin, or leave the plugin out of this cell`
     }
   }
+  const apps = (agent ?? mimics)?.pluginApps
+  const withApps = apps ? plugins.find((p) => p.apps) : undefined
+  if (withApps) return `${name} can't load the ${withApps.name} plugin's apps: ${apps}`
   const layout = layoutOf(harness)
   const runs = layout.pluginHookEvents
   for (const p of runs ? plugins : []) {
@@ -1048,8 +1111,19 @@ export function refusedPlugins(
     ),
   )
   if (agent && Object.keys(servers).length) {
+    // A flat agent gets the environment's servers in one list with the plugins', so its own name
+    // rules see both; refusedMcp has already checked the environment's servers themselves.
+    const alongside =
+      agent.pluginPlacement === 'flat'
+        ? Object.fromEntries(
+            own.mcp.map((n): [string, ResolvedMcpServer] => [
+              n,
+              { transport: 'stdio', command: 'true', args: [], env: {} },
+            ]),
+          )
+        : {}
     try {
-      agent.mcpServers(servers)
+      agent.mcpServers({ ...alongside, ...servers })
     } catch (error) {
       if (error instanceof InfraError) return error.message
       throw error
@@ -1162,10 +1236,17 @@ export function layoutOf(descriptor: HarnessDescriptor): Layout {
   return descriptor.layout ? LAYOUTS[descriptor.layout] : FAKE_LAYOUT
 }
 
-/** The hosts a harness's agent is known to try; a fake agent with `layout` expects that agent's. */
-export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlocked | undefined {
+/**
+ * The hosts a harness's agent is known to try in a session with or without plugins; a fake agent
+ * with `layout` expects that agent's.
+ */
+export function expectedBlockedFor(
+  descriptor: HarnessDescriptor,
+  plugins: boolean,
+): ExpectedBlocked | undefined {
   const kind = descriptor.kind === 'fake' ? descriptor.layout : descriptor.kind
-  return kind ? AGENTS[kind].expectedBlocked : undefined
+  const expected = kind ? AGENTS[kind].expectedBlocked : undefined
+  return expected?.withPlugins && !plugins ? undefined : expected
 }
 
 /**

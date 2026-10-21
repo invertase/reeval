@@ -61,13 +61,23 @@ const list = (items) =>
 
 const code = (s) => `\`${s}\``
 
+const PART_NAMES = { skills: 'skills', mcp: 'MCP servers', hooks: 'hooks', agents: 'subagents' }
+
 /** Each note is said only while its fact holds. */
 const NOTES = [
   (h) =>
     h.agent.pluginParts.length &&
     LAYOUTS[h.kind]?.pluginPlacement === 'namespaced' &&
     h.kind !== 'antigravity' &&
-    `It loads each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')}), and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+    `It loads ${
+      h.agent.pluginParts.includes('agents')
+        ? `each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')})`
+        : `each plugin's ${list(h.agent.pluginParts.map((p) => PART_NAMES[p] ?? p))} from where reeval copies it, namespaced`
+    }, and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) =>
+    h.agent.pluginParts.length &&
+    LAYOUTS[h.kind]?.pluginPlacement === 'flat' &&
+    `A plugin's skills sit beside the eval's and its MCP servers go in as ${code('<plugin>:<server>')}, so a skill or server whose name another already has is refused at plan time.`,
   (h) =>
     h.agent.pluginParts.length &&
     h.kind === 'antigravity' &&
@@ -147,7 +157,7 @@ const NOTES = [
     `Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.`,
   (h) =>
     h.agent.expectedBlocked &&
-    `Its CLI always tries ${list(h.agent.expectedBlocked.hosts.map(code))}; a restricted egress policy refuses them and records them under the record's ${code('egress.expectedBlocked')}.`,
+    `${h.agent.expectedBlocked.withPlugins ? 'In a session with plugins it' : 'It'} tries ${list(h.agent.expectedBlocked.hosts.map(code))} (${h.agent.expectedBlocked.why}); a restricted egress policy refuses ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} and records ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} under the record's ${code('egress.expectedBlocked')}.`,
 ]
 
 /** The facts for each real harness, in the catalog's order, and whatever doesn't add up. */
@@ -212,11 +222,12 @@ export async function harnessFacts() {
 
 const yes = (ok) => (ok ? '✓' : '✗')
 
-/** The plugin parts the agent loads: ✓ for every part, ✗ for none, else the parts it leaves out. */
+/** The plugin parts the agent loads: ✓ for every part, ✗ for none, else the shorter of the parts it loads and the parts it leaves out. */
 const pluginCell = (parts) => {
   if (!parts.length) return '✗'
   const missing = PLUGIN_PARTS.filter((p) => !parts.includes(p))
-  return missing.length ? `all but ${missing.join(', ')}` : '✓'
+  if (!missing.length) return '✓'
+  return missing.length > parts.length ? parts.join(', ') : `all but ${missing.join(', ')}`
 }
 
 /**
