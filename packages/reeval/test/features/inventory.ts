@@ -561,6 +561,30 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.plugins.opencode-pi-fx',
+    area: 'Environments',
+    name: 'Plugins on OpenCode (skills, MCP servers, and subagents and commands unpacked into the workspace’s `.opencode/` with only the frontmatter it takes), pi (skills, MCP servers as `<plugin>_<server>`, commands as prompt templates in `.pi/prompts/`) and fx (skills and MCP servers): the parts each has no place for refused',
+    fixtures: ['harness/opencode-plugin', 'harness/pi-plugin', 'harness/fx-plugin'],
+    plan: ['plugins/opencode-pi-and-fx'],
+    tests: [
+      plugin('OpenCode, pi and fx load the parts they have a place for, and refuse the rest'),
+      plugin(
+        'unpackPlugins gives OpenCode subagents and commands only the frontmatter it takes; pi takes commands as they are',
+      ),
+      plugin('pi names a plugin MCP server <plugin>_<server>, and refuses one named like another'),
+      planTest(
+        'OpenCode, pi and fx refuse the plugin parts they have no place for, and pi a plugin server named like one in mcp',
+      ),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin subagent available',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
     id: 'skill.exclude',
     area: 'Environments',
     name: 'Skill `exclude`: the defaults and a custom list',

@@ -470,32 +470,34 @@ evaluate('reviews', { environment: review }, async () => {})
       'plugins/review/rules/style.md': 'Write small functions.\n',
       'plugins/review/.mcp.json': JSON.stringify({ mcpServers: { docs: { command: 'docs' } } }),
     }
-    for (const [i, [factory, model, environment, refusal]] of ([
+    for (const [i, [factory, model, environment, refusal]] of (
       [
-        'opencode',
-        'google/gemini-3.8-flash',
-        "{ plugins: [plugin.local('../plugins/review')] }",
-        "OpenCode can't load the review plugin's rules \\(rules/\\): use only: \\['skills', 'agents', 'commands', 'mcp'\\], or leave the plugin out of this cell",
-      ],
-      [
-        'pi',
-        'gemini-3.8-flash',
-        "{ plugins: [plugin.local('../plugins/review')] }",
-        "pi can't load the review plugin's agents \\(agents/\\) and rules \\(rules/\\): use only: \\['skills', 'commands', 'mcp'\\], or leave the plugin out of this cell",
-      ],
-      [
-        'fx',
-        'gpt-4.1',
-        "{ plugins: [plugin.local('../plugins/review')] }",
-        "fx can't load the review plugin's agents \\(agents/\\) and commands \\(commands/\\) and rules \\(rules/\\): use only: \\['skills', 'mcp'\\], or leave the plugin out of this cell",
-      ],
-      [
-        'pi',
-        'gemini-3.8-flash',
-        "{ mcp: { review_docs: mcp.stdio('docs') }, plugins: [plugin.local('../plugins/review', { only: ['mcp'] })] }",
-        'pi names the review:docs MCP server review_docs, as it does the review_docs server, and keeps only one: rename one',
-      ],
-    ] as const).entries()) {
+        [
+          'opencode',
+          'google/gemini-3.8-flash',
+          "{ plugins: [plugin.local('../plugins/review')] }",
+          "OpenCode can't load the review plugin's rules \\(rules/\\): use only: \\['skills', 'agents', 'commands', 'mcp'\\], or leave the plugin out of this cell",
+        ],
+        [
+          'pi',
+          'gemini-3.8-flash',
+          "{ plugins: [plugin.local('../plugins/review')] }",
+          "pi can't load the review plugin's agents \\(agents/\\) and rules \\(rules/\\): use only: \\['skills', 'commands', 'mcp'\\], or leave the plugin out of this cell",
+        ],
+        [
+          'fx',
+          'gpt-4.1',
+          "{ plugins: [plugin.local('../plugins/review')] }",
+          "fx can't load the review plugin's agents \\(agents/\\) and commands \\(commands/\\) and rules \\(rules/\\): use only: \\['skills', 'mcp'\\], or leave the plugin out of this cell",
+        ],
+        [
+          'pi',
+          'gemini-3.8-flash',
+          "{ mcp: { review_docs: mcp.stdio('docs') }, plugins: [plugin.local('../plugins/review', { only: ['mcp'] })] }",
+          'pi names the review:docs MCP server review_docs, as it does the review_docs server, and keeps only one: rename one',
+        ],
+      ] as const
+    ).entries()) {
       const p = await project(`plugin-unpacked-${i}-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'

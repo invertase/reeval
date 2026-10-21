@@ -379,7 +379,8 @@ test('unpackPlugins gives OpenCode subagents and commands only the frontmatter i
     '.opencode/agents/bare.md': '---\nmode: subagent\n---\n\nNo frontmatter.\n',
     '.opencode/agents/reviewer.md':
       '---\ndescription: "Reviews: the diff"\nmode: subagent\n---\n\nReview the diff.\n',
-    '.opencode/commands/review.md': '---\ndescription: Review the tree\n---\n\nReview $ARGUMENTS.\n',
+    '.opencode/commands/review.md':
+      '---\ndescription: Review the tree\n---\n\nReview $ARGUMENTS.\n',
   })
   assert.deepEqual(unpacked(LAYOUTS.pi.pluginUnpack), {
     '.pi/prompts/review.md':
