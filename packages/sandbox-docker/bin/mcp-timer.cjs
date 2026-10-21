@@ -1,29 +1,36 @@
 #!/usr/bin/env node
 // reeval's MCP start-up timer, in the sandbox as bin/mcp-timer.cjs:
 //
-//   mcp-timer.cjs --name <server> -- <command> [args…]
+//   node mcp-timer.cjs --name <server> -- <command> [args…]
 //
 // It runs the stdio MCP server with stdin, stdout and stderr passed through untouched, and appends
 // one JSON line to mcp-startup.jsonl, beside its bin/ directory:
 //   { server, spawnedAt, initializedAt }    the server answered the client's `initialize`
 //   { server, spawnedAt, timeout: true }    it hadn't within 60s: the server is killed, exit 1
 //   { server, spawnedAt, exitCode }         it exited before answering
-// Times are epoch milliseconds. MCP's stdio transport is newline-delimited JSON-RPC; messages framed
-// with Content-Length headers (LSP style) are read too.
+//   { server, spawnedAt, closed: true }     the client closed stdin first, and the server neither
+//                                           answered nor exited within a second: not a timeout
+//   { server, spawnedAt, unread: true }     more than SCAN_LIMIT went by unframed: not timed
+// Times are epoch milliseconds. A timer killed outright (SIGKILL) logs nothing. MCP's stdio
+// transport is newline-delimited JSON-RPC; messages framed with Content-Length headers (LSP style)
+// are read too.
 'use strict'
 const { spawn } = require('node:child_process')
 const { appendFileSync } = require('node:fs')
 const { join } = require('node:path')
 
 const TIMEOUT_MS = 60_000
+/** How long after the client closes stdin the server's own exit or answer is awaited for the log. */
+const CLOSE_GRACE_MS = 1_000
 /** Bytes a direction may buffer while the handshake is still awaited, before it gives up reading. */
 const SCAN_LIMIT = 4 * 1024 * 1024
 
 /**
  * A reader of one direction's JSON-RPC stream: `push` each chunk, and `onMessage` gets every
- * message (each element of a batch) as it completes. Lines that aren't JSON are skipped.
+ * message (each element of a batch) as it completes. Lines that aren't JSON are skipped. Past
+ * SCAN_LIMIT bytes of one unfinished message it stops reading and calls `onGiveUp`.
  */
-function scanner(onMessage) {
+function scanner(onMessage, onGiveUp = () => {}) {
   let buffer = Buffer.alloc(0)
   let stopped = false
   const emit = (text) => {
@@ -63,7 +70,11 @@ function scanner(onMessage) {
       if (stopped) return
       buffer = Buffer.concat([buffer, chunk])
       while (!stopped && next()) {}
-      if (buffer.length > SCAN_LIMIT) stopped = true
+      if (!stopped && buffer.length > SCAN_LIMIT) {
+        stopped = true
+        buffer = Buffer.alloc(0)
+        onGiveUp()
+      }
     },
     stop() {
       stopped = true
@@ -74,23 +85,53 @@ function scanner(onMessage) {
 
 /**
  * Watches both directions for the handshake: the client's `initialize` request, then the server's
- * answer (result or error) to its id. `onInitialized` is called once.
+ * answer (result or error) to its id. `onInitialized` is called once, or else `onUnread` once, if
+ * either direction's scanner gives up first.
  */
-function handshake(onInitialized) {
+function handshake(onInitialized, onUnread = () => {}) {
   let id
   let done = false
-  const server = scanner((m) => {
-    if (done || id === undefined || m.id !== id || !('result' in m || 'error' in m)) return
+  const finish = (then) => {
+    if (done) return
     done = true
     client.stop()
     server.stop()
-    onInitialized()
-  })
-  const client = scanner((m) => {
-    if (id === undefined && m.method === 'initialize' && m.id !== undefined) id = m.id
-  })
+    then()
+  }
+  const server = scanner(
+    (m) => {
+      if (id === undefined || m.id !== id || !('result' in m || 'error' in m)) return
+      finish(onInitialized)
+    },
+    () => finish(onUnread),
+  )
+  const client = scanner(
+    (m) => {
+      if (id === undefined && m.method === 'initialize' && m.id !== undefined) id = m.id
+    },
+    () => finish(onUnread),
+  )
   return { fromClient: (chunk) => client.push(chunk), fromServer: (chunk) => server.push(chunk) }
 }
+
+/**
+ * Starts the server and calls `wire` with it. On Windows (the fake sandbox, on the host) Node can't
+ * spawn what the POSIX shell the client used would run, such as `npx` (a `.cmd`) or `sh`, so those
+ * go through `sh`.
+ */
+function start(command, args, wire) {
+  const options = { stdio: ['pipe', 'pipe', 'inherit'] }
+  const child = spawn(command, args, options)
+  if (process.platform !== 'win32') return wire(child)
+  child.once('spawn', () => wire(child))
+  child.once('error', (error) => {
+    if (error.code !== 'ENOENT' && error.code !== 'EINVAL') return wire(null, error)
+    wire(spawn('sh', ['-c', 'exec "$0" "$@"', command, ...args], options))
+  })
+}
+
+/** The shell's status for a command it couldn't run. */
+const NOT_STARTED = 127
 
 function main(argv) {
   const at = argv.indexOf('--')
@@ -98,61 +139,84 @@ function main(argv) {
   const name = flags[flags.indexOf('--name') + 1]
   const [command, ...args] = at < 0 ? [] : argv.slice(at + 1)
   if (flags.indexOf('--name') < 0 || !name || !command) {
-    process.stderr.write('usage: mcp-timer.cjs --name <server> -- <command> [args…]\n')
+    process.stderr.write('usage: node mcp-timer.cjs --name <server> -- <command> [args…]\n')
     process.exit(2)
-  }
-  const log = (entry) => {
-    try {
-      appendFileSync(
-        join(__dirname, '..', 'mcp-startup.jsonl'),
-        `${JSON.stringify({ server: name, ...entry })}\n`,
-      )
-    } catch {}
   }
   const spawnedAt = Date.now()
   let settled = false
-  const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'inherit'] })
-  const timer = setTimeout(() => {
-    if (settled) return
+  /** Logs the start's outcome, once. */
+  const settle = (entry) => {
+    if (settled) return false
     settled = true
-    log({ spawnedAt, timeout: true })
+    clearTimeout(timer)
+    try {
+      appendFileSync(
+        join(__dirname, '..', 'mcp-startup.jsonl'),
+        `${JSON.stringify({ server: name, spawnedAt, ...entry })}\n`,
+      )
+    } catch {}
+    return true
+  }
+  const watch = handshake(
+    () => settle({ initializedAt: Date.now() }),
+    () => settle({ unread: true }),
+  )
+  /** The server, once it has started; until then the client's input waits in `pending`. */
+  let child
+  let pending = []
+  let ended = false
+  const timer = setTimeout(() => {
+    if (!settle({ timeout: true })) return
     process.stderr.write(
       `reeval: MCP server ${name} didn't answer initialize within ${TIMEOUT_MS / 1000}s\n`,
     )
-    child.kill('SIGKILL')
+    child?.kill('SIGKILL')
     process.exit(1)
   }, TIMEOUT_MS)
-  const watch = handshake(() => {
-    if (settled) return
-    settled = true
-    clearTimeout(timer)
-    log({ spawnedAt, initializedAt: Date.now() })
-  })
-  child.on('error', (error) => {
-    process.stderr.write(`reeval: couldn't start MCP server ${name}: ${error.message}\n`)
-  })
-  child.stdin.on('error', () => {})
   process.stdin.on('data', (chunk) => {
-    child.stdin.write(chunk)
+    if (child) child.stdin.write(chunk)
+    else pending.push(chunk)
     watch.fromClient(chunk)
   })
-  process.stdin.on('end', () => child.stdin.end())
-  child.stdout.on('data', (chunk) => {
-    process.stdout.write(chunk)
-    watch.fromServer(chunk)
-  })
-  process.stdout.on('error', () => child.kill())
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.on(signal, () => child.kill(signal))
-  }
-  child.on('close', (code, signal) => {
+  process.stdin.on('end', () => {
+    ended = true
+    child?.stdin.end()
+    // A server that exits on it (or answers at once) is logged as such; the timeout is off.
     clearTimeout(timer)
-    if (!settled) {
-      settled = true
-      log({ spawnedAt, exitCode: code })
+    setTimeout(() => settle({ closed: true }), CLOSE_GRACE_MS).unref()
+  })
+  process.stdout.on('error', () => child?.kill())
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => (child ? child.kill(signal) : process.exit(128)))
+  }
+  start(command, args, (started, failure) => {
+    if (!started) {
+      process.stderr.write(`reeval: couldn't start MCP server ${name}: ${failure.message}\n`)
+      settle({ exitCode: NOT_STARTED })
+      process.exit(NOT_STARTED)
     }
-    const status = code ?? (signal ? 128 + (require('node:os').constants.signals[signal] ?? 1) : 1)
-    process.stdout.write('', () => process.exit(status))
+    child = started
+    child.on('error', (error) => {
+      process.stderr.write(`reeval: couldn't start MCP server ${name}: ${error.message}\n`)
+    })
+    child.stdin.on('error', () => {})
+    for (const chunk of pending) child.stdin.write(chunk)
+    pending = []
+    if (ended) child.stdin.end()
+    child.stdout.on('data', (chunk) => {
+      process.stdout.write(chunk)
+      watch.fromServer(chunk)
+    })
+    child.on('close', (code, signal) => {
+      const status =
+        code === null
+          ? 128 + (require('node:os').constants.signals[signal] ?? 1)
+          : code < 0
+            ? NOT_STARTED
+            : code
+      settle({ exitCode: code === null ? null : status })
+      process.stdout.write('', () => process.exit(status))
+    })
   })
 }
 

@@ -147,4 +147,57 @@ createInterface({ input: process.stdin }).on('line', (line) => {
       { server: 'crash', exitCode: 5, initializedAt: undefined },
     )
   })
+
+  test('logs a command that cannot start with the shell’s 127', async () => {
+    rmSync(log, { force: true })
+    const { code } = await run(['--name', 'missing', '--', 'reeval-no-such-command'], '')
+    assert.equal(code, 127)
+    assert.deepEqual(
+      entries().map((e) => e.exitCode),
+      [127],
+    )
+  })
+
+  test('a client that closes stdin first leaves a closed start, not a timeout', async () => {
+    rmSync(log, { force: true })
+    // Never answers, and outlives its stdin, like a server a per-turn CLI left behind.
+    const child = spawn(
+      process.execPath,
+      [timer, '--name', 'left', '--', process.execPath, '-e', 'setInterval(() => {}, 1000)'],
+      { stdio: ['pipe', 'ignore', 'ignore'] },
+    )
+    const closed = new Promise((resolve) => child.on('close', resolve))
+    child.stdin.end(`${JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'initialize' })}\n`)
+    const deadline = Date.now() + 10_000
+    while (!readFileSync(log, { flag: 'a+' }).length && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    child.kill()
+    await closed
+    assert.deepEqual(
+      entries().map((e) => [e.server, e.closed, e.timeout]),
+      [['left', true, undefined]],
+    )
+  })
+
+  test('past the scan limit it stops timing but keeps the server and its output', async () => {
+    rmSync(log, { force: true })
+    const noisy = join(root, 'noisy.mjs')
+    writeFileSync(
+      noisy,
+      `process.stdout.write('x'.repeat(5 * 1024 * 1024) + '\\n')
+process.stdin.on('data', () => process.stdout.write('{"jsonrpc":"2.0","id":0,"result":{}}\\n'))
+`,
+    )
+    const { stdout, code } = await run(
+      ['--name', 'noisy', '--', process.execPath, noisy],
+      `${JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'initialize' })}\n`,
+    )
+    assert.equal(code, 0)
+    assert.equal(stdout.length, 5 * 1024 * 1024 + 1 + 37)
+    assert.deepEqual(
+      entries().map((e) => [e.server, e.unread]),
+      [['noisy', true]],
+    )
+  })
 })
