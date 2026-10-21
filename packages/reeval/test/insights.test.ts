@@ -360,6 +360,21 @@ describe('the insights validator', () => {
       [['greets once › answer', 'says "helped", but no cited fact\'s effect is']],
     )
   })
+
+  test('canary: an effect word after the hedged clause ends is a claim, and dropped', async () => {
+    for (const text of [
+      "We can't tell yet if it helped, and it made it worse.",
+      "We can't tell yet if it helped and it made it worse.",
+    ]) {
+      const doc = await unclearAnswer(text)
+      assert.equal(insightOf(doc, once).answer, null, text)
+      assert.deepEqual(
+        doc.validation.drops?.map((d) => d.reason),
+        ['says "made it worse", but no cited fact\'s effect is'],
+        text,
+      )
+    }
+  })
 })
 
 describe('insights in the layouts', () => {

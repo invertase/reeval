@@ -49,9 +49,12 @@ const EFFECT_PHRASES = Object.values(EFFECT_WORDS).map((w) => ({
   word: w,
   pattern: new RegExp(`\\b${w.replace("'", "['’]")}`, 'i'),
 }))
-/** A "can't tell yet if/whether …" clause, up to the end of its sentence, a semicolon or a contrast. */
+/**
+ * A "can't tell yet if/whether …" clause, up to the end of its sentence, a semicolon, a comma before
+ * a conjunction, or an "and" that starts a new clause. It errs short: a word past it is checked.
+ */
 const HEDGED =
-  /\bcan['’]t tell yet (if|whether)\b.*?(?=[.;!?]|,\s*(but|while|though|although|whereas)\b|$)/gi
+  /\bcan['’]t tell yet (if|whether)\b.*?(?=[.;!?]|,\s*(and|but|while|though|although|whereas)\b|\s+and\s+(it|they|the|this|that|its|their|with|plain)\b|$)/gi
 
 const normal = (s: string) =>
   s.replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase()
