@@ -272,7 +272,7 @@ importers:
         specifier: workspace:0.1.3
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
         specifier: workspace:0.2.8

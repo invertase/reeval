@@ -38,8 +38,11 @@ export type Treatments = {
    * `mcp` (`<plugin>:<server>`, `${CLAUDE_PLUGIN_ROOT}` and secrets filled in), so an adapter whose
    * agent loads the plugin's own MCP config can leave them out of `mcp` rather than start them twice.
    */
-  plugins: Array<{ name: string; dir: string; parts: PluginPart[]; servers: string[] }>
+  plugins: PlacedPlugin[]
 }
+
+/** A plugin the session copied into the sandbox. */
+export type PlacedPlugin = { name: string; dir: string; parts: PluginPart[]; servers: string[] }
 
 export interface Harness {
   start(sandbox: Sandbox, signal: AbortSignal, treatments: Treatments): Promise<HarnessSession>

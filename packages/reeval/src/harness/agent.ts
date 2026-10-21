@@ -6,7 +6,7 @@ import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
 import { addUsage } from '../usage.ts'
-import { agentAuth, agentFor, authHint } from './agents.ts'
+import { agentAuth, agentFor, agentMcp, authHint } from './agents.ts'
 import { errorText, normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
@@ -103,15 +103,21 @@ export function observed(
 export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness {
   const catalog = agentFor(descriptor)
   return {
-    async start(sandbox, signal, { skills, mcp }) {
+    async start(sandbox, signal, { skills, mcp, plugins }) {
       const auth = agentAuth(catalog)
       let servedModel: string | null = null
       let finishMetadata: unknown
+      const servers = agentMcp(catalog, mcp, plugins)
       const adapter = await catalog.adapter({
         auth,
         descriptor,
-        ...(Object.keys(mcp).length ? { mcpServers: catalog.mcpServers(mcp) } : {}),
+        plugins,
+        ...(Object.keys(servers).length ? { mcpServers: catalog.mcpServers(servers) } : {}),
       })
+      for (const f of catalog.pluginFiles?.(plugins) ?? []) {
+        await sandbox.writeFile(f.path, f.content)
+        debugLog('env', `plugin settings → ${f.path}`)
+      }
       const agent = new HarnessAgent({
         harness: observed(adapter as HarnessV1, (part) => {
           if (part.type === 'stream-start' && part.modelId) servedModel = part.modelId

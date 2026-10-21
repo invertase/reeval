@@ -49,9 +49,27 @@ export const GROK_QUIET_ENV = {
   GROK_DISABLE_AUTOUPDATER: '1',
 } as const
 
+/** The variable `grok-acp` reads the session's plugin directories from, `:`-separated. */
+export const GROK_PLUGIN_DIRS_ENV = 'GROK_HARNESS_PLUGIN_DIRS'
+
+/**
+ * `grok-acp`: `grok agent --no-leader [--plugin-dir <dir>]… stdio`, a `--plugin-dir` for each
+ * directory in {@link GROK_PLUGIN_DIRS_ENV}. The bootstrap is keyed on the launch arguments, so
+ * they stay the same and the directories come in the environment. `--no-leader`, since a leader
+ * Grok's config turns on ignores `--plugin-dir`.
+ */
+const GROK_LAUNCH = `#!/bin/sh
+set -f
+set -- agent --no-leader
+IFS=:
+for dir in \${${GROK_PLUGIN_DIRS_ENV}:-}; do set -- "$@" --plugin-dir "$dir"; done
+exec "$(dirname "$0")/grok" "$@" stdio
+`
+
 /**
  * Downloads the pinned native build for the sandbox's arch from npm, checks its sha512, and
- * unpacks its brotli-compressed binary into `~/.local/bin`, as the npm package's postinstall does.
+ * unpacks its brotli-compressed binary into `~/.local/bin`, as the npm package's postinstall does;
+ * then writes `grok-acp` beside it.
  */
 export const GROK_INSTALL_COMMAND = `set -eu
 case "$(uname -m)" in
@@ -64,6 +82,9 @@ node -e 'const h = "sha512-" + require("crypto").createHash("sha512").update(req
 rm -rf package && tar -xzf grok.tgz package/bin/grok.br && rm grok.tgz
 node -e 'const fs = require("fs"); fs.writeFileSync(process.argv[1], require("zlib").brotliDecompressSync(fs.readFileSync("package/bin/grok.br")), { mode: 0o755 })' "$HOME/.local/bin/grok"
 rm -rf package
+cat > "$HOME/.local/bin/grok-acp" <<'GROK_LAUNCH'
+${GROK_LAUNCH}GROK_LAUNCH
+chmod +x "$HOME/.local/bin/grok-acp"
 grok --version`
 
 export type GrokBuildHarnessSettings = {
@@ -80,6 +101,11 @@ export type GrokBuildHarnessSettings = {
    * `headers` as `{ name, value }` lists.
    */
   readonly mcpServers?: Record<string, Record<string, unknown>>
+  /**
+   * Plugin directories in the sandbox (absolute), in Claude Code's plugin layout, each loaded with
+   * `--plugin-dir` for every session: trusted, so their hooks and MCP servers start unprompted.
+   */
+  readonly pluginDirs?: readonly string[]
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
   /**
@@ -135,11 +161,11 @@ export function createGrokBuild(
     harnessId: GROK_BUILD_HARNESS_ID,
     builtinTools: GROK_BUILD_BUILTIN_TOOLS,
     source: { type: 'install-command', command: GROK_INSTALL_COMMAND },
-    executable: 'grok',
-    args: ['agent', 'stdio'],
+    executable: 'grok-acp',
+    args: [],
     auth: settings.auth,
     authentication: { methodId: 'xai.api_key' },
-    env: GROK_QUIET_ENV,
+    env: { ...GROK_QUIET_ENV, [GROK_PLUGIN_DIRS_ENV]: (settings.pluginDirs ?? []).join(':') },
     credentialEnv: [GROK_CREDENTIAL_ENV],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[GROK_CREDENTIAL_ENV]
