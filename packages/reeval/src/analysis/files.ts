@@ -6,7 +6,7 @@
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
-import { evalSlug, fromCwd } from '../ids.ts'
+import { fromCwd } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
 import type { AnalysisDoc, AnalysisEntry, AnalysisNote } from '../view/analysis.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../view/record.ts'
@@ -14,8 +14,6 @@ import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../vie
 export const analysisCacheDir = (root: string) => join(root, '.reeval', 'analysis')
 export const notesDir = (root: string, runId: string) =>
   join(analysisCacheDir(root), runId, 'notes')
-export const noteFileName = (evalId: string, harness: string) =>
-  `${evalSlug(evalId)}__${evalSlug(harness)}.json`
 export const savedAnalysisDir = (historyDir: string, runId: string) =>
   join(runDir(historyDir, runId), 'analysis')
 
