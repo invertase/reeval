@@ -645,6 +645,18 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'plugins/build-layer',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '' to contain 'built on linux as uid 0'/,
+    record: ({ run }) => {
+      const [p] = plugins(run)
+      assert.equal(p?.name, 'built')
+      assert.match(p?.build ?? '', /^reeval-plugin:[0-9a-f]{12}-[0-9a-f]{16}$/)
+      assert.ok(run.stack.images.some((i) => i.ref === p?.build))
+    },
+  },
+  {
     dir: 'plugins/git-ref',
     tiers: ['fake', 'docker'],
     env: 'review-v1',

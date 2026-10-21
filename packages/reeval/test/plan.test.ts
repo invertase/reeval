@@ -79,7 +79,8 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
-  { dir: 'images', name: 'install-from-dockerfile', args: [] },
+  { dir: 'images', name: 'install-from-dockerfile', args: ['evals/i.eval.ts'] },
+  { dir: 'images', name: 'plugin-builds', args: ['evals/plugins.eval.ts'] },
   { dir: 'harnesses', name: 'claude-code', args: [] },
   { dir: 'harness-edits', name: 'data-and-functions', args: [] },
   { dir: 'antigravity', name: 'antigravity', args: [] },
@@ -456,13 +457,13 @@ evaluate('reviews', { environment: review }, async () => {})
     }
   })
 
-  test('a plugin the plan reads and refuses exits 2: no manifest, a build, npx under deny-all', async () => {
+  test('a plugin the plan reads and refuses exits 2: no manifest, a build outside Docker, npx under deny-all', async () => {
     const config = `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: fakeHarness(), sandbox: docker({ from: 'node:22-bookworm' }) })
 `
-    for (const [label, call, files, egress, refusal] of [
+    for (const [label, call, files, options, refusal] of [
       [
         'no-manifest',
         "plugin.local('../plugins/bare')",
@@ -474,8 +475,8 @@ export default defineConfig({ harness: fakeHarness(), sandbox: docker({ from: 'n
         'build',
         "plugin.local('../plugins/fetcher', { build: 'npm ci' })",
         {},
-        undefined,
-        /plugin\.local\('plugins\/fetcher'\) has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker\(\{ install \}\)/,
+        ', sandbox: fakeSandbox()',
+        /evaluate\("uses it"\) on fake: plugin "fetcher" has a build, which runs in a Docker image layer: use docker\(\)/,
       ],
       [
         'same-name',
@@ -491,15 +492,16 @@ export default defineConfig({ harness: fakeHarness(), sandbox: docker({ from: 'n
         'npx',
         "plugin.local('../plugins/fetcher')",
         {},
-        'deny-all',
-        /the fetcher plugin's MCP server "search" runs npx, which fetches from registry\.npmjs\.org at start: install it in the image \(docker\(\{ install \}\)\), or allow the host in egress/,
+        ", egress: 'deny-all'",
+        /the fetcher plugin's MCP server "search" runs npx, which fetches from registry\.npmjs\.org at start: add a build that installs it, or allow the host in egress/,
       ],
     ] as const) {
       const p = await project(`plugin-plan-${label}`, {
         'reeval.config.ts': config,
         'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('env', ({ plugin }) => ({ plugins: [${call}] }))
-evaluate('uses it', { environment: env${egress ? `, egress: '${egress}'` : ''} }, async () => {})
+evaluate('uses it', { environment: env${options ?? ''} }, async () => {})
 `,
         'plugins/fetcher/.claude-plugin/plugin.json': JSON.stringify({
           name: 'fetcher',

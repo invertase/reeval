@@ -8,14 +8,16 @@ import {
   ImageBuildError,
   isTransient,
 } from '@reeval/sandbox-docker'
+import { pluginBuildId } from '../environment/plugins.ts'
 import { UsageError } from '../errors.ts'
 import type {
   AttemptImage,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
+  PluginSource,
 } from '../types.ts'
-import type { Refresh } from './prepare.ts'
+import type { PreparedImage, Refresh } from './prepare.ts'
 import {
   type PreparedHandle,
   PrepareError,
@@ -24,10 +26,18 @@ import {
 } from './provider.ts'
 
 /** The key of a Docker sandbox's image: what's in it, not the limits or user it runs with. */
-export const dockerKey = (sandbox: DockerSandboxDescriptor, harness: HarnessDescriptor) => {
+export const dockerKey = (
+  sandbox: DockerSandboxDescriptor,
+  harness: HarnessDescriptor,
+  plugins: readonly PluginSource[] = [],
+) => {
   const kind = harness.kind === 'fake' ? (harness.layout ?? 'cursor') : harness.kind
   const { image, from, dockerfile, install } = sandbox
-  return JSON.stringify({ harness: kind, image: { image, from, dockerfile, install } })
+  return JSON.stringify({
+    harness: kind,
+    image: { image, from, dockerfile, install },
+    ...(plugins.length ? { plugins: plugins.map(pluginBuildId) } : {}),
+  })
 }
 
 /** How Docker's build errors class: a named cause is a resource, a network error transient. */
@@ -159,7 +169,7 @@ export function dockerProvider(
       })
     },
     key: dockerKey,
-    async prepare(sandbox, harness, ctx) {
+    async prepare(sandbox, harness, ctx, plugins = []) {
       const { createBuilds, imageHarness, prepareImage } = await import('./prepare.ts')
       builds ??= createBuilds({
         retry: ctx.retry,
@@ -167,7 +177,14 @@ export function dockerProvider(
         refresh: options.refresh ?? 'none',
         engine,
       })
-      return await prepareImage(sandbox, imageHarness(harness), ctx.root, ctx.signal, builds)
+      return await prepareImage(
+        sandbox,
+        imageHarness(harness),
+        ctx.root,
+        ctx.signal,
+        builds,
+        plugins,
+      )
     },
     classify: classifyDocker,
   }
@@ -177,7 +194,13 @@ export function dockerProvider(
  * The image a Docker sandbox's `prepare` returned. Handles are opaque to preflight and round-trip
  * through `prepared.json`, so only the Docker provider's own type says what this one holds.
  */
-export const attemptImage = (handle: PreparedHandle): AttemptImage => handle as AttemptImage
+export const preparedImage = (handle: PreparedHandle): PreparedImage => handle as PreparedImage
+
+/** {@link preparedImage} as the record has it: the image, without the plugins built into it. */
+export const attemptImage = (handle: PreparedHandle): AttemptImage => {
+  const { plugins: _, ...image } = preparedImage(handle)
+  return image
+}
 
 /** The fake sandbox is a temp directory on the host: nothing to check or prepare. */
 export const fakeProvider = (): SandboxProvider<FakeSandboxDescriptor> => ({
