@@ -1411,11 +1411,57 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   assert.equal(skipped.skip, 'no harness left: profile pr allows a')
 })
 
+test('a check a side never ran has no verdict, and not-run attempts are not failures', async () => {
+  const { checkVerdict } = await import('../src/view/contrasts.ts')
+  const { checksLabel } = await import('../src/history/summary.ts')
+  const t = (pass: number, fail: number, notRun = 0, error = 0) => ({ pass, fail, error, notRun })
+  assert.equal(checkVerdict(t(0, 2), t(0, 0, 2)), undefined, 'failed against never ran')
+  assert.equal(checkVerdict(t(2, 0), t(0, 0, 2)), undefined, 'passed against never ran')
+  assert.equal(checkVerdict(t(2, 0, 1), t(2, 0)), 'both-pass', 'a not-run attempt is no fail')
+  assert.equal(checkVerdict(t(0, 1, 1), t(2, 0)), 'discriminates')
+  assert.equal(checkVerdict(t(1, 1), t(0, 0, 2)), undefined)
+  assert.equal(checkVerdict(t(2, 0), t(0, 2)), 'discriminates')
+
+  const cell = (checks: Array<[string, ReturnType<typeof t>, ReturnType<typeof t>]>) =>
+    ({
+      checks: checks.map(([label, k, control]) => ({
+        label,
+        ...k,
+        control,
+        ...(checkVerdict(k, control) ? { verdict: checkVerdict(k, control) } : {}),
+      })),
+    }) as unknown as Parameters<typeof checksLabel>[0]
+  assert.equal(
+    checksLabel(
+      cell([
+        ['has a README', t(0, 2), t(0, 0, 2)],
+        ['has the marker', t(2, 0), t(0, 2)],
+        ['reached', t(2, 0, 1), t(2, 0)],
+      ]),
+    ),
+    "has the marker 2/2 vs 0/2 · has a README 0/2 vs not run · reached 2/2 vs 2/2 (1 not run, doesn't discriminate)",
+  )
+  assert.equal(checkVerdict(t(2, 0), t(0, 0, 0, 2)), undefined, 'ran but never answered')
+  assert.equal(
+    checksLabel(
+      cell([
+        ['searched', t(2, 0), t(0, 0, 0, 2)],
+        ['fetched', t(1, 0, 0, 1), t(0, 0, 0, 2)],
+        ['in another cell', t(0, 0, 2), t(0, 0, 2)],
+      ]),
+    ),
+    "searched 2/2 vs couldn't answer · fetched 1/1 vs couldn't answer (1 couldn't answer)",
+    'an errored check ran, so it is not "not run"; one neither side reached is left out',
+  )
+})
+
 test('effort under 10s reads in tenths, so a ratio matches its times', async () => {
   const { formatSeconds } = await import('../src/view/effort.ts')
-  assert.deepEqual([0, 40, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
-    '0s',
-    '0s',
+  assert.deepEqual([0, 40, 49, 50, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
+    '<0.1s',
+    '<0.1s',
+    '<0.1s',
+    '0.1s',
     '0.2s',
     '0.4s',
     '1.5s',

@@ -1049,7 +1049,6 @@ export const features: Feature[] = [
           error: 0,
           notRun: 0,
           control: { pass: 0, fail: 0, error: 0, notRun: 1 },
-          verdict: 'discriminates',
         },
       ])
     },

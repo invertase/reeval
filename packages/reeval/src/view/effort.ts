@@ -221,10 +221,16 @@ export const formatCount = (n: number) => (Number.isInteger(n) ? String(n) : n.t
 
 export const formatRatio = (r: number | null) => (r === null ? '×–' : `×${r.toFixed(2)}`)
 
-/** Seconds for agent time: `21s`, `1m 05s`. */
+/** Below this, agent time rounds under a tenth of a second and prints `<0.1s`. */
+const TENTH_MS = 50
+
+/** Two agent times that both print `<0.1s` have no ratio worth printing. */
+export const bothUnderATenth = (a: number, b: number) => a < TENTH_MS && b < TENTH_MS
+
+/** Seconds for agent time: `<0.1s`, `0.4s`, `21s`, `1m 05s`. */
 export function formatSeconds(ms: number): string {
   // Under 10s, a tenth: `0.2s vs 0.4s` reads with its ×0.50 where `0s vs 0s` doesn't.
-  if (ms < 9950) return ms < 50 ? '0s' : `${(ms / 1000).toFixed(1)}s`
+  if (ms < 9950) return ms < TENTH_MS ? '<0.1s' : `${(ms / 1000).toFixed(1)}s`
   const s = Math.round(ms / 1000)
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
@@ -259,14 +265,17 @@ const tokensVerdictText = (c: EffortContrast): string => {
  * `tools 5 vs 43 (×0.11), agent 21s vs 46s (×0.47): too few attempts to test` for a variant
  * against its control; with enough attempts, `fewer tool calls (p = 0.029)`. Tokens fold in
  * when both sides have usage samples; they are omitted (not `insufficient`) when either does not.
- * A metric too small to test whose ranges don't overlap says so: `(×0.37, no overlap)`.
+ * A metric too small to test whose ranges don't overlap says so: `(×0.37, no overlap)`. Agent
+ * times both under a tenth of a second have no ratio: `agent <0.1s vs <0.1s`.
  */
 export function effortLabel(c: EffortContrast): string {
-  const apartOn = new Set(directional(c))
+  const [va, ca] = [c.variant.agentMs.median, c.control.agentMs.median]
+  const tiny = bothUnderATenth(va, ca)
+  const apartOn = new Set(directional(c).filter((m) => !(tiny && m === 'agentS')))
   const r = (metric: EffortMetric, value: number | null) =>
     `(${formatRatio(value)}${apartOn.has(metric) ? ', no overlap' : ''})`
   const tools = `tools ${formatCount(c.variant.tools.median)} vs ${formatCount(c.control.tools.median)} ${r('tools', c.toolsRatio)}`
-  const time = `agent ${formatSeconds(c.variant.agentMs.median)} vs ${formatSeconds(c.control.agentMs.median)} ${r('agentS', c.agentMsRatio)}`
+  const time = `agent ${formatSeconds(va)} vs ${formatSeconds(ca)}${tiny ? '' : ` ${r('agentS', c.agentMsRatio)}`}`
   const parts = [tools, time]
   if (c.tokensVerdict !== null && c.variant.tokens && c.control.tokens) {
     parts.push(
@@ -290,7 +299,9 @@ export function effortChangeLabel(
 ): string {
   const t = ratio(head.tools.median, base.tools.median)
   const a = ratio(head.agentMs.median, base.agentMs.median)
-  const core = `tools ${formatCount(base.tools.median)} → ${formatCount(head.tools.median)} (${formatRatio(t)}) · agent ${formatSeconds(base.agentMs.median)} → ${formatSeconds(head.agentMs.median)} (${formatRatio(a)})`
+  const [ba, ha] = [base.agentMs.median, head.agentMs.median]
+  const agent = `agent ${formatSeconds(ba)} → ${formatSeconds(ha)}${bothUnderATenth(ba, ha) ? '' : ` (${formatRatio(a)})`}`
+  const core = `tools ${formatCount(base.tools.median)} → ${formatCount(head.tools.median)} (${formatRatio(t)}) · ${agent}`
   if (!base.tokens || !head.tokens) return core
   const tok = ratio(head.tokens.median, base.tokens.median)
   return `${core} · tokens ${formatTokens(base.tokens.median)} → ${formatTokens(head.tokens.median)} (${formatRatio(tok)})`

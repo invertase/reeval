@@ -440,6 +440,7 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
       logOrder: flags['log-order'],
       logPrefix: flags['log-prefix'],
       outputLogs: flags['output-logs'],
+      verbose: verbosityOf(flags) > 0,
     },
     env: process.env,
     isTTY: !!process.stdout.isTTY,

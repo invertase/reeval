@@ -200,7 +200,7 @@ plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 ## Run it
 
 ```text
-$ CI=1 reeval run greet
+$ CI=1 reeval run greet --output-logs full
 plan  profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~40s serial (~20s at concurrency 4) · budget 20 attempts ✓
 reeval 0.0.1 · 3 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 [creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module

@@ -483,7 +483,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     )
     assert.match(agent.stdout, /^2 passed, 2 missed, not gated \(4 attempts, 1 evals\)$/m)
 
-    const gha = await runCli(p.dir, ['run', '--log-order', 'grouped'], {
+    const gha = await runCli(p.dir, ['run', '--log-order', 'grouped', '--output-logs', 'full'], {
       env: { GITHUB_ACTIONS: 'true' },
     })
     assert.equal(gha.code, 0, gha.stdout + gha.stderr)

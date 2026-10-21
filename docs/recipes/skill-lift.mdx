@@ -119,7 +119,7 @@ The recipe as written, under the [fake harness](/recipes/fake-harness) (which wr
      ✓ greets in the house style      3/6 · pass@1 100% gated  6 attempts
          fake/plain/fake                control    0/3  pass@1   0%   not gated
          fake/with-house-greeting/fake  variant    3/3  pass@1 100%   lift +100 pts (95% +21…+100, 3/3 vs 0/3) (minLift 0)   gate passRate 0.6
-           effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.50): too few attempts to test
+           effort: tools 0 vs 0 (×–), agent <0.1s vs <0.1s: too few attempts to test
 ```
 
 - `2/4` or `3/6` counts every attempt. `pass@1 100%` is the share of attempts that pass in the cells that gate, which here is only the variant.
@@ -158,7 +158,7 @@ The same eval, with an agent that already writes `Ahoy` without the skill:
      ✗ greets in the house style      6/6 · pass@1 100% gated  6 attempts
          fake/plain/fake                control    3/3  pass@1 100%
          fake/with-house-greeting/fake  variant    3/3  pass@1 100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise (minLift 0) ✗   gate passRate 0.6
-           effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.90): too few attempts to test
+           effort: tools 0 vs 0 (×–), agent <0.1s vs <0.1s: too few attempts to test
 
 Lift below minLift (1)
  ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise: its lower bound is below minLift 0

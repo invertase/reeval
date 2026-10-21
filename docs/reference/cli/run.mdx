@@ -32,7 +32,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               block when it ends); default grouped in CI, else stream
   --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
                               (default task, none inside GitHub Actions groups)
-  --output-logs <level>       full, errors-only or none: whose detail lines print (default full)
+  --output-logs <level>       full, errors-only or none: whose detail lines print (default
+                              errors-only, failing attempts only; full with -v)
   -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                               container, environment, brokering, turns and tool calls, checks,
                               judge calls, gateway requests and teardown
@@ -138,7 +139,7 @@ Then it prepares every sandbox image the plan needs, three at a time, once each:
 | `--ui` | `live`, `plain`, `agent` | `agent` under a coding agent, `plain` in CI or when piped, else `live` (which prints plain for now) |
 | `--log-order` | `stream`, `grouped` | `grouped` in CI, else `stream` |
 | `--log-prefix` | `task`, `none` | `task`, `none` inside GitHub Actions groups |
-| `--output-logs` | `full`, `errors-only`, `none` | `full` |
+| `--output-logs` | `full`, `errors-only`, `none` | `errors-only`: only failing attempts print their detail lines. `full` with `-v` or `-vv` |
 | `-v`, `-vv` | | Off. See [Debug data](/reference/debug-data) |
 
 Each has an environment variable: `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`. See [Output modes](/concepts/output).

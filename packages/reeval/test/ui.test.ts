@@ -881,6 +881,27 @@ describe('output mode', () => {
     assert.equal(resolve({}).color, true)
   })
 
+  test('output logs: errors-only by default, so a pass prints no detail; full on request', () => {
+    assert.equal(resolve({}).outputLogs, 'errors-only')
+    assert.equal(resolve({ CI: '1' }, false).outputLogs, 'errors-only')
+    assert.equal(resolve({ REEVAL_OUTPUT_LOGS: 'auto' }).outputLogs, 'errors-only')
+    assert.equal(resolve({ REEVAL_OUTPUT_LOGS: 'full' }).outputLogs, 'full')
+    assert.equal(resolve({}, true, undefined, { outputLogs: 'full' }).outputLogs, 'full')
+    assert.equal(resolve({}, true, undefined, { verbose: true }).outputLogs, 'full', '-v')
+    assert.equal(
+      resolve({}, true, undefined, { verbose: true, outputLogs: 'errors-only' }).outputLogs,
+      'errors-only',
+    )
+    assert.equal(
+      resolve({ REEVAL_OUTPUT_LOGS: 'full' }, true, undefined, { outputLogs: 'none' }).outputLogs,
+      'none',
+    )
+    assert.throws(
+      () => resolve({}, true, undefined, { outputLogs: 'some' }),
+      /--output-logs is one of full, errors-only, none, auto \(got some\)/,
+    )
+  })
+
   test('heartbeat: 60s by default, configurable, off for agents', () => {
     assert.equal(resolve({}).heartbeatMs, 60_000)
     assert.equal(resolve({ REEVAL_HEARTBEAT: '30s' }).heartbeatMs, 30_000)

@@ -428,9 +428,10 @@ export type CellRecord = Cell & {
 export type CheckTally = { pass: number; fail: number; error: number; notRun: number }
 
 /**
- * One check over a cell's counted attempts. `verdict` (variant cells): `discriminates` when it
- * passes on every counted attempt of one side and none of the other; `both-pass` or `both-fail`
- * when it does the same on both sides, so it can't tell them apart; `mixed` otherwise.
+ * One check over a cell's counted attempts. `verdict` (variant cells), over the attempts that
+ * reached the check: `discriminates` when it passes on every one of one side and none of the
+ * other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them
+ * apart; `mixed` otherwise. No verdict when a side never reached it: not run is not a fail.
  */
 export type CellCheck = CheckTally & {
   label: string

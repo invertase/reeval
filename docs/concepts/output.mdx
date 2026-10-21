@@ -41,7 +41,7 @@ reeval 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker ·
 
 ## Grouped or stream
 
-`--log-order grouped` is the default in CI. Each attempt's start line (`▶`) prints at once, and its detail prints as one block when it finishes, result line first, so concurrent attempts never interleave. From a real `CI=1` run:
+`--log-order grouped` is the default in CI. Each attempt's start line (`▶`) prints at once, and its detail prints as one block when it finishes, result line first, so concurrent attempts never interleave. By default only a failing attempt has a detail block; the samples here pass `--output-logs full`, so passing ones print theirs too. From a real `CI=1` run:
 
 ```text
 [summarises#1 cursor] ▶ evals/jq.eval.ts › summarises a JSON file with jq
@@ -56,7 +56,7 @@ reeval 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker ·
 …
 ```
 
-`--log-order stream`, the default elsewhere, prints every line as it happens, so attempts interleave:
+`--log-order stream`, the default elsewhere, prints every line as it happens with `--output-logs full`, so attempts interleave. With the default `errors-only`, it prints each start and result line as it happens and a failing attempt's detail after its result:
 
 ```text
 …
@@ -94,7 +94,7 @@ REEVAL_HEARTBEAT=30s reeval run   # 0 turns it off
 
 ## GitHub Actions
 
-With `GITHUB_ACTIONS=true`, passing attempts collapse into `::group::` blocks titled with their result line, and failing ones stay open with an `::error` annotation. Colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as this real run did:
+With `GITHUB_ACTIONS=true`, failing attempts stay open under their result line with an `::error` annotation. With `--output-logs full`, passing attempts' detail collapses into `::group::` blocks titled with their result line; by default a pass is its result line alone. Colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as this real `--output-logs full` run did:
 
 ```text
 ::group::[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  10s
@@ -153,7 +153,7 @@ Duration  2m 39s
 
 An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity, OpenCode, pi and Codex do): input includes cached reads, and there's no cost line because reeval prices no models.
 
-Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its attempt's directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure.
+Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its attempt's directory. By default (`--output-logs errors-only`) only failing attempts print their detail lines, so a passing run's stream doesn't sit above the summary. `full` prints every attempt's (the default with `-v`, whose trace is detail lines), and `none` drops them; the summary still has every failure.
 
 Misses in ungated cells (a compare's controls, by default) get their own neutral `Expected misses, not gated` section instead, one line of why each, and `summary.md` folds their detail into `<details>`.
 

@@ -70,18 +70,27 @@ export function liftLabel(lift: NonNullable<CellRecord['lift']>): string {
   return `lift ${signedPoints(lift.points)} pts (${range}, ${counts})${lift.withinNoise ? ', within noise' : ''}`
 }
 
-const answered = (t: CheckTally) => t.pass + t.fail + t.notRun
+/** The counted attempts that passed or failed a check: `error` is a matcher that couldn't answer. */
+const answered = (t: CheckTally) => t.pass + t.fail
+
+/** The counted attempts that reached a check: one stopped before it by a hard failure didn't. */
+const reached = (t: CheckTally) => answered(t) + t.error
+
+/** `2/3`; `couldn't answer` when it reached the check but never answered; else `not run`. */
+const rate = (t: CheckTally) =>
+  answered(t) ? `${t.pass}/${answered(t)}` : t.error ? "couldn't answer" : 'not run'
 
 const VERDICT_ORDER: Record<string, number> = { discriminates: 0, mixed: 1 }
 
 /**
  * A variant cell's checks against its control's, those that tell them apart first:
- * `loads the skill 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`. Empty
- * without a control's tally.
+ * `loads the skill 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`, and
+ * `reached 2/2 vs not run` for one a side never ran, which has no verdict. A check neither side
+ * reached (another cell or an uncounted attempt recorded it) is left out. Empty without a control's tally.
  */
 export function checksLabel(cell: CellRecord): string {
   const rows = (cell.checks ?? []).flatMap((k) =>
-    k.control && k.verdict ? [{ ...k, control: k.control }] : [],
+    k.control && (reached(k) || reached(k.control)) ? [{ ...k, control: k.control }] : [],
   )
   return rows
     .map((k, i) => ({ k, i }))
@@ -92,12 +101,14 @@ export function checksLabel(cell: CellRecord): string {
     )
     .map(({ k }) => {
       const { control } = k
-      const notRun = k.notRun + control.notRun
+      const notRun = [k, control].filter(reached).reduce((n, t) => n + t.notRun, 0)
+      const unanswered = [k, control].filter(answered).reduce((n, t) => n + t.error, 0)
       const notes = [
         notRun ? `${notRun} not run` : '',
+        unanswered ? `${unanswered} couldn't answer` : '',
         k.verdict === 'both-pass' || k.verdict === 'both-fail' ? "doesn't discriminate" : '',
       ].filter(Boolean)
-      return `${k.label} ${k.pass}/${answered(k)} vs ${control.pass}/${answered(control)}${notes.length ? ` (${notes.join(', ')})` : ''}`
+      return `${k.label} ${rate(k)} vs ${rate(control)}${notes.length ? ` (${notes.join(', ')})` : ''}`
     })
     .join(' · ')
 }

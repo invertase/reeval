@@ -16,7 +16,7 @@ import { formatTokens } from '../usage.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
 import { contrastsOf } from '../view/contrasts.ts'
-import { DIRECTIONAL_MIN } from '../view/effort.ts'
+import { bothUnderATenth, DIRECTIONAL_MIN } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
 import { labelledJudgements } from '../view/judgements.ts'
@@ -210,12 +210,21 @@ const ratioText = (r: unknown) => (r == null ? '×–' : `×${Number(r).toFixed(
 const failedLabels = (a: AttemptRecord) =>
   (a.assertions ?? []).filter((x) => x.status !== 'pass').map((x) => clip(x.label, LABEL_CHARS))
 
+/** The counted attempts that reached a check: one stopped before it by a hard failure didn't. */
+const answered = (t: CheckTally) => t.pass + t.fail + t.error
+
 /** Every counted attempt passed (`all`), none did, or some; undefined when none answered. */
 const sideOf = (t: CheckTally): 'all' | 'none' | 'some' | undefined => {
-  const answered = t.pass + t.fail + t.error + t.notRun
-  if (answered === 0) return undefined
-  return t.pass === answered ? 'all' : t.pass === 0 ? 'none' : 'some'
+  const n = answered(t)
+  if (n === 0) return undefined
+  return t.pass === n ? 'all' : t.pass === 0 ? 'none' : 'some'
 }
+
+/** `2/3`, or `not run` when no counted attempt reached the check. */
+const rateOf = (t: CheckTally) => (answered(t) ? `${t.pass}/${answered(t)}` : 'not run')
+
+/** A side of a check with a verdict, counted as the verdict counts it: passes over pass or fail. */
+const verdictRate = (t: CheckTally) => `${t.pass}/${t.pass + t.fail}`
 
 /** Items interleaved by group, groups in order of first appearance: one from each, then the next. */
 function roundRobin<T>(items: T[], key: (item: T) => string): T[] {
@@ -272,7 +281,7 @@ function criteriaOf(e: EvalEntry, tag: (cell: string) => string) {
             const mean = s?.length
               ? ` · ${(s.reduce((x, y) => x + y, 0) / s.length).toFixed(2)}`
               : ''
-            return [tag(c.key), `${k.pass}/${k.pass + k.fail + k.error + k.notRun}${mean}`]
+            return [tag(c.key), `${rateOf(k)}${mean}`]
           }),
         ),
       })
@@ -446,7 +455,12 @@ export async function buildDigestKeepingDropped(
               vsControl: {
                 n: `${row.n} vs ${row.control_n}`,
                 toolCalls: `${row.tools_median} vs ${row.control_tools_median} (${ratioText(row.tools_ratio)})`,
-                agentS: `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
+                agentS: bothUnderATenth(
+                  Number(row.agent_s_median) * 1000,
+                  Number(row.control_agent_s_median) * 1000,
+                )
+                  ? '<0.1 vs <0.1'
+                  : `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
                 p: row.tools_p,
                 verdict: row.verdict,
                 timeVerdict: row.time_verdict,
@@ -912,8 +926,8 @@ export async function buildDigestKeepingDropped(
             : {}),
           checks: apart.map((k) => ({
             label: clip(k.label, LABEL_CHARS),
-            a: `${k.a.pass}/${k.a.pass + k.a.fail + k.a.notRun}`,
-            b: `${k.b.pass}/${k.b.pass + k.b.fail + k.b.notRun}`,
+            a: verdictRate(k.a),
+            b: verdictRate(k.b),
             verdict: k.verdict,
           })),
           sameOnBoth: x.checks.length - apart.length,
@@ -922,7 +936,9 @@ export async function buildDigestKeepingDropped(
                 effort: {
                   n: `${ef.variant.n} vs ${ef.control.n}`,
                   toolCalls: `${ef.variant.tools.median} vs ${ef.control.tools.median} (${ratioText(ef.toolsRatio)})`,
-                  agentS: `${round1(ef.variant.agentMs.median / 1000)} vs ${round1(ef.control.agentMs.median / 1000)} (${ratioText(ef.agentMsRatio)})`,
+                  agentS: bothUnderATenth(ef.variant.agentMs.median, ef.control.agentMs.median)
+                    ? '<0.1 vs <0.1'
+                    : `${round1(ef.variant.agentMs.median / 1000)} vs ${round1(ef.control.agentMs.median / 1000)} (${ratioText(ef.agentMsRatio)})`,
                   verdict: ef.verdict,
                   timeVerdict: ef.timeVerdict,
                   ...(ef.tokensVerdict && ef.variant.tokens && ef.control.tokens
@@ -947,7 +963,9 @@ export async function buildDigestKeepingDropped(
       }
       if (contrasts.length) continue
       for (const c of e.cells) {
-        const rows = (c.checks ?? []).filter((k) => k.control && k.verdict)
+        const rows = (c.checks ?? []).flatMap((k) =>
+          k.control && k.verdict ? [{ ...k, control: k.control }] : [],
+        )
         if (!rows.length) continue
         fact('checks', {
           run: short.get(r.record.runId),
@@ -955,8 +973,8 @@ export async function buildDigestKeepingDropped(
           cell: c.key,
           rows: rows.map((k) => ({
             label: clip(k.label, 80),
-            variant: `${k.pass}/${k.pass + k.fail + k.notRun}`,
-            control: `${k.control?.pass}/${(k.control?.pass ?? 0) + (k.control?.fail ?? 0) + (k.control?.notRun ?? 0)}`,
+            variant: verdictRate(k),
+            control: verdictRate(k.control),
             verdict: k.verdict,
           })),
         })

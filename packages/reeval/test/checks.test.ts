@@ -44,7 +44,7 @@ describe('named check results', () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^ +checks: house style 2\/2 vs 0\/2 · toSucceed test -f ok\.txt 2\/2 vs 0\/2 \(2 not run\) · writes ok\.txt 2\/2 vs 2\/2 \(doesn't discriminate\)$/m,
+      /^ +checks: house style 2\/2 vs 0\/2 · writes ok\.txt 2\/2 vs 2\/2 \(doesn't discriminate\) · toSucceed test -f ok\.txt 2\/2 vs not run$/m,
     )
     assert.match(
       r.stdout,
@@ -72,8 +72,9 @@ describe('named check results', () => {
       [
         ['writes ok.txt', 2, 2, 0, 'both-pass'],
         ['house style', 2, 0, 0, 'discriminates'],
-        ['toSucceed test -f ok.txt', 2, 0, 2, 'discriminates'],
+        ['toSucceed test -f ok.txt', 2, 0, 2, undefined],
       ],
+      'the control never reaches the last check, so it has no verdict',
     )
     assert.equal(
       entry?.cells.find((c) => c.role === 'control')?.checks?.[0]?.verdict,
@@ -93,13 +94,6 @@ describe('named check results', () => {
           variant_pass: 2,
           control_pass: 0,
           control_not_run: 0,
-          verdict: 'discriminates',
-        },
-        {
-          label: 'toSucceed test -f ok.txt',
-          variant_pass: 2,
-          control_pass: 0,
-          control_not_run: 2,
           verdict: 'discriminates',
         },
         {

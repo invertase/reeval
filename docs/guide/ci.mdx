@@ -6,7 +6,7 @@ description: Gate pull requests on your evals in GitHub Actions, with Docker on 
 In CI, `reeval run` needs no extra flags. When `CI` is set it prints plain, grouped output, picks the `pr` profile and records the run.
 
 ```bash
-CI=1 npx reeval run hello jq
+CI=1 npx reeval run hello jq --output-logs full
 ```
 
 ```text
@@ -51,7 +51,7 @@ After 60 seconds without output, plain mode prints what's still running and in w
 ::endgroup::
 ```
 
-When `GITHUB_ACTIONS` is set, passing attempts fold into `::group::` blocks titled with their result line. Failing ones stay open and add an `::error` annotation on the failing line. Lines inside a group drop the `[creates#1 cursor]` prefix unless you pass `--log-prefix task`, as this capture did.
+When `GITHUB_ACTIONS` is set, failing attempts stay open under their result line, and with `--output-logs full` passing attempts' detail folds into `::group::` blocks titled with their result line. A failure also adds an `::error` annotation on the failing line. Lines inside a group drop the `[creates#1 cursor]` prefix unless you pass `--log-prefix task`, as this capture did.
 
 reeval also appends the run's `summary.md` to the job summary (`$GITHUB_STEP_SUMMARY`), so the result is on the run's page. At the start of `reeval run` it writes `run-id=<id>` to `$GITHUB_OUTPUT` and `run <id>` to the step summary, so the job log has the id even when the runner is killed before assemble.
 
