@@ -196,11 +196,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)`,
   },
   compare: {
-    flags: ['md', 'json', 'fail-on-regression'],
+    flags: ['md', 'json', 'fail-on-regression', 'verbose'],
     positionals: 2,
     help: `
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
-                                --md --json --fail-on-regression`,
+                                --md --json --fail-on-regression
+    -v, --verbose               Also each cell's lift and effort, base → head, and the stack changes`,
   },
   checkout: {
     flags: [],

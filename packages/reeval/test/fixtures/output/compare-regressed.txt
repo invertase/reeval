@@ -1,0 +1,9 @@
+regressed        greets in the house style
+  base             20261020T230147Z_958e309_cursor-agent_aamj
+  head             20261020T230148Z_958e309_cursor-agent_qghb
+  house greeting   pass → fail
+    expected command to succeed, exit code 1
+  sign-off         not run
+  +1 more passed
+
+1 regressed

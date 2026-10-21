@@ -14,7 +14,7 @@
 reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p>
                          --record --ui plain -v
 reeval record            reeval history         reeval show [run]
-reeval compare [base] [head] [--md]
+reeval compare [base] [head] [--md] [--fail-on-regression] [-v]
 reeval query lift        reeval query effort
 reeval query "SELECT … FROM failing_attempts"
 reeval analyze           one checked LLM reading of a run; --vs none for this
@@ -85,3 +85,25 @@ no hidden default harness or include.
 Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies them to
 `evals/.history/` to commit. That folder gets a `.gitignore` that un-ignores recorded `*.log`
 files; `reeval record` warns if git still ignores a file it wrote.
+
+`reeval compare` diffs head (default `latest`) against its nearest recorded ancestor. It prints a
+block per eval that changed, then a tally; unchanged evals collapse to `+N same`:
+
+```text
+regressed        greets in the house style
+  base             20261020T231407Z_ea2a649_ada-lovelace_8h1n
+  head             20261020T231408Z_b2c98b4_ada-lovelace_fypq
+  house greeting   pass → fail
+    expected command to succeed, exit code 1
+  sign-off         not run
+  +1 more passed
+
++2 same
+…
+1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same
+```
+
+A check head never reached reads `not run`, not a failure. `can't compare` names what changed
+(`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. `--fail-on-regression`
+exits 1 on a regressed eval, or on a new or can't-compare eval that fails. `-v` adds each cell's
+lift and effort, base → head.

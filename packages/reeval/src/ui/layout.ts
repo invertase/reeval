@@ -59,14 +59,14 @@ export const NO_MODEL_HINT =
   'Set analysis.model in reeval.config.ts for answers to what each eval asks.'
 
 /** Where a block's name starts, after its verdict word. */
-const HEAD = 17
+export const HEAD = 17
 /** The narrowest a row's label column is, so short labels line up under the name. */
 const LABEL = 17
 const ASSERTION_MAX = 160
 const CHECK_LABEL_MAX = 48
 
 /** A check's label on one line: an expected value can carry line breaks. */
-const checkLabel = (label: string) => clip(label.replace(/\s*\n\s*/g, ' '), CHECK_LABEL_MAX)
+export const checkLabel = (label: string) => clip(label.replace(/\s*\n\s*/g, ' '), CHECK_LABEL_MAX)
 
 const VERDICT: Record<Outcome, string> = {
   pass: 'pass',
@@ -82,23 +82,23 @@ const EFFECT: Record<Effect, string> = {
   same: '',
 }
 
-type Text = { text: string; paint?: Paint }
+export type Text = { text: string; paint?: Paint }
 /** One row: its cells line up with the other rows of its table. */
 type Row = { indent: number; cells: Array<string | Text> }
 /** A line printed as it is, under a row. */
 type Free = { indent: number; free: string | Text }
-type Item = Row | Free
+export type Item = Row | Free
 
-const t = (text: string, paint?: Paint): Text => ({ text, paint })
+export const t = (text: string, paint?: Paint): Text => ({ text, paint })
 const textOf = (cell: string | Text) => (typeof cell === 'string' ? cell : cell.text)
-const show = (cell: string | Text) =>
+export const show = (cell: string | Text) =>
   typeof cell === 'string' ? cell : cell.paint ? cell.paint(cell.text) : cell.text
 
 /**
  * Aligned rows: the first column is as wide as the widest label with its indent (at least
  * `LABEL`), the others as their widest cell, two spaces apart. Free lines print as they are.
  */
-function table(items: Item[], width = LABEL): string[] {
+export function table(items: Item[], width = LABEL): string[] {
   const rows = items.filter((i): i is Row => 'cells' in i)
   const first = Math.max(
     width,
@@ -137,7 +137,7 @@ function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): 
   return t(VERDICT[e.outcome], paintOutcome(c, e.outcome))
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /**
  * `3 of 4`, with the attempts that didn't count named: `2 of 3 · 1 infra error · 1 skipped`. A
@@ -162,7 +162,7 @@ const failing = (k: CheckResult) =>
   k.outcome.status === 'not run' || k.outcome.failed + k.outcome.errored > 0
 
 /** A check's result in a cell: `not run`, `failed` for one try, else `1 of 4 · 2 not run`. */
-function checkCount(k: CheckResult, single: boolean): string {
+export function checkCount(k: CheckResult, single: boolean): string {
   const o = k.outcome
   if (o.status === 'not run') return 'not run'
   const answered = o.passed + o.failed + o.errored
@@ -182,7 +182,7 @@ function checkCount(k: CheckResult, single: boolean): string {
 }
 
 /** The check's first failure, less the `label: ` its row already shows. */
-function assertionOf(k: CheckResult): string {
+export function assertionOf(k: CheckResult): string {
   if (k.outcome.status !== 'ran' || !k.outcome.assertion) return ''
   const line = k.outcome.assertion.trim().split('\n')[0]?.trim() ?? ''
   return clip(
@@ -209,9 +209,9 @@ const ERROR_KIND: Record<CellError['kind'], string> = {
   turn: 'turn error',
 }
 
-const errorKind = (err: CellError) => ERROR_KIND[err.kind]
+export const errorKind = (err: CellError) => ERROR_KIND[err.kind]
 
-const errorText = (err: CellError) =>
+export const errorText = (err: CellError) =>
   `${clip(err.message, ASSERTION_MAX)}${err.attempts > 1 ? ` (${plural(err.attempts, 'try', 'tries')})` : ''}`
 
 /** The evidence under a failing cell: its failed and not-run checks, its errors, `+N more passed`. */
@@ -240,7 +240,7 @@ const armOf = (cell: CellResult) =>
   cell.variant ?? (cell.environment === '-' ? 'baseline' : cell.environment)
 
 /** Each cell's label: the parts that vary between them (harness, arm, sandbox). */
-function labeller(cells: CellResult[], parts: Array<'harness' | 'arm' | 'sandbox'>) {
+export function labeller(cells: CellResult[], parts: Array<'harness' | 'arm' | 'sandbox'>) {
   const vary = parts.filter((p) => {
     const of = (cell: CellResult) =>
       p === 'harness' ? cell.harness : p === 'arm' ? armOf(cell) : cell.sandbox
