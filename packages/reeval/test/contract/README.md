@@ -11,6 +11,8 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | rules read | `codeword.txt` holds a word only the rules have | no turn: no word | — |
 | stdio MCP server started and called | the server logged `tools/call`; the transcript names `mcp__stamp__house_stamp` | no turn: no call | the environment lists the server ; on a harness with no MCP client, the MCP evals (tagged `mcp`) are left out of its run, and `--dry-run` of them exits 2 naming the eval, harness and server, while a `--dry-run` of an eval without MCP plans |
 | file edited and command run, both in the transcript | `notes.txt` changed; the transcript has its edit and a tool whose output is `contract-42` | no turn: unchanged | `changedFiles` has `notes.txt` |
+| every tool call in the adapter's catalog | — | replay's: agy 1.4.3's captures as the adapter before it reported them (`read_file`, `edit_file`, `write_file` as unknown tools) | every attempt's transcript names only tools in the adapter's `builtinTools` (or `mcp__<server>__<tool>`), and on a CLI whose native events name the tool (Antigravity, Cursor, pi, Goose) every native name is one the adapter maps; the failure names the harness and each unknown tool |
+| file edits, reads and commands normalised | — | replay's: the same captures, and a command renamed to an unknown tool | in the edit-and-run, skill and egress attempts, the edit of `notes.txt` and `skill-proof.txt` is a `file-edit` event (or a command naming the file), the skill's read a `readonly` or `bash` tool, the `contract-42` command and the `curl` a `bash` tool, by the catalog's `toolUseKind`; the failure names the harness and the tools that carried it instead |
 | tokens recorded where the harness reports them | — | — | every turn has usage (or none, for a harness that reports none) |
 | real key never in the container | after a turn, a scan of every process's environment and command line and every file under the writable roots finds no form of the key | the same scan finds a value planted in the environment and a home file | the key isn't in the run directory |
 | deny-all plus auto hosts works | under `egress: 'deny-all'` the turn completes, and a `curl` to example.com gets a 403 at CONNECT | no turn: the same `curl` isn't a 200 | `egress`: the harness's automatic hosts allowed, its API contacted, example.com:443 refused and recorded |
@@ -38,7 +40,8 @@ anything.
    its image, where its skills show up in `context`, its automatic egress hosts, the host it
    reaches every turn, whether it reports tokens and what its served model looks like.
 2. A case in [`reeval.config.ts`](./reeval.config.ts) (and `../e2e/reeval.config.ts`).
-3. A format in [`../support/stream-formats.ts`](../support/stream-formats.ts), then a real run with
+3. A format in [`../support/stream-formats.ts`](../support/stream-formats.ts) (with `tool` when its
+   events name the tool they call), then a real run with
    `REEVAL_UPDATE_FORMATS=1 REEVAL_UPDATE_CAPTURES=1` to learn its format and capture its replays.
 4. Its secret in `contract.yml`, and its latest version in `scripts/drift/latest-images.sh`.
 5. Once the harness loads plugins, its row's `plugin` field (below).
@@ -101,6 +104,7 @@ fake or phrase differently:
 | key | a hash scan of the container, after a real turn | a grep for the key would need the key in the container |
 | egress | the CONNECT status the `curl` wrote, and the gateway's record | the agent's account of what happened |
 | tokens, served model | the record's numbers and ids, by shape (> 0, a pattern) | exact counts change every run |
+| tool catalog, normalised kinds | each tool's name against the adapter's catalog, and its `toolUseKind` | a tool call that merely mentions the file passes a renamed edit tool the adapter doesn't know; a CLI can rename a tool without changing one event's shape, so the stream format can't see it |
 | stream format | the event kinds and keys, plus every value the protocol defines (ACP's statuses, tool kinds, stop reasons; pi's stop reasons and a failed call's `errorMessage` and `thinkingLevel`; OpenCode's `session_info_update` while it retries a call; the Cursor SDK's statuses and the runner's failure lines; agy's `error_message` steps; Codex's item types and statuses) | which values a run shows is the model's or the provider's doing: a stray write outside the workspace makes a tool call `failed`, a Gemini 503 makes pi's call `error` and OpenCode retry |
 | e2e | exit codes, JSON from `reeval compare`/`reeval query`, files on disk | the CLI's text output changes with the run |
 

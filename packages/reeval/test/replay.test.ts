@@ -22,7 +22,19 @@ import { normaliseStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { replayBridge } from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
-import { knownSignatures, nativeEvents, signatures } from './support/stream-formats.ts'
+import {
+  knownSignatures,
+  nativeEvents,
+  nativeToolNames,
+  signatures,
+} from './support/stream-formats.ts'
+import {
+  type Catalog,
+  catalogOfHarness,
+  misfiled,
+  unmappedNativeTools,
+  unmappedTools,
+} from './support/tool-catalog.ts'
 
 type Line = { turn: number; ms: number; part: { type: string; [k: string]: unknown } }
 const root = join(testDir, 'replay')
@@ -112,8 +124,123 @@ for (const harness of harnesses) {
     test('twin: a capture checked for another behaviour fails', () => {
       assert.throws(() => signals.egress?.(events(parse(read(harness, 'skill.raw.jsonl')))))
     })
+    test(`every tool call is in ${harness}'s catalog, its files and commands normalised`, async () => {
+      const catalog = await catalogOfHarness(harness)
+      for (const file of files) {
+        const normalised = events(parse(read(harness, file)))
+        assert.deepEqual(unmappedTools(catalog, normalised), [], file)
+        assert.deepEqual(misfiled(catalog, behaviourOf(file), normalised), [], file)
+      }
+    })
+    if (nativeToolNames(harness, []) !== null)
+      test(`every tool ${harness}'s CLI called is one its adapter maps`, async () => {
+        const catalog = await catalogOfHarness(harness)
+        for (const file of files) {
+          const names = nativeToolNames(harness, nativeEvents(read(harness, file))) ?? []
+          assert.deepEqual(unmappedNativeTools(catalog, names), [], file)
+        }
+      })
   })
 }
+
+/** The eval a capture's file is named after: `edit-and-run.raw.jsonl` is `edit and run`. */
+const behaviourOf = (file: string) => file.replace('.raw.jsonl', '').replaceAll('-', ' ')
+
+// agy 1.4.3 renamed its file tools (view_file → read_file, write_to_file → write_file,
+// replace_file_content → edit_file) with every event's shape unchanged. The adapter before it
+// knew only the old names, so it passed the new ones on as dynamic tools under their own names:
+// the captures (agy 1.4.3) as that adapter reported them must fail every check that guards the
+// rename, naming the harness and the tool.
+describe("replay: agy's file tools renamed under an adapter that knows only the old names", () => {
+  const NATIVE = { read: 'read_file', write: 'write_file', edit: 'edit_file' } as const
+  const RENAMED = Object.values(NATIVE) as string[]
+  /** A capture's parts as the adapter before agy 1.4.3 reported its tool calls. */
+  const beforeRename = (file: string) =>
+    parse(read('antigravity', file)).map((l) => {
+      const name = NATIVE[l.part.toolName as keyof typeof NATIVE]
+      return (l.part.type === 'tool-call' || l.part.type === 'tool-result') && name
+        ? { ...l, part: { ...l.part, toolName: name, dynamic: true } }
+        : l
+    })
+  /** The catalog that adapter had: agy's new names map to nothing. */
+  const oldCatalog = async (): Promise<Catalog> => {
+    const catalog = await catalogOfHarness('antigravity')
+    return {
+      ...catalog,
+      native: (n) => (RENAMED.includes(n) ? undefined : catalog.native(n)),
+    }
+  }
+
+  test('the captures call the renamed tools', () => {
+    const names = readdirSync(join(root, 'antigravity')).flatMap(
+      (f) => nativeToolNames('antigravity', nativeEvents(read('antigravity', f))) ?? [],
+    )
+    for (const n of RENAMED) assert.ok(names.includes(n), n)
+  })
+
+  test("canary: the tool calls aren't in the catalog", async () => {
+    const catalog = await catalogOfHarness('antigravity')
+    assert.deepEqual(unmappedTools(catalog, events(beforeRename('edit-and-run.raw.jsonl'))), [
+      'edit_file',
+      'read_file',
+    ])
+    assert.deepEqual(unmappedTools(catalog, events(beforeRename('skill.raw.jsonl'))), [
+      'read_file',
+      'write_file',
+    ])
+  })
+
+  test("canary: the CLI's tool names aren't ones the adapter maps", async () => {
+    const catalog = await oldCatalog()
+    const names = readdirSync(join(root, 'antigravity')).flatMap(
+      (f) => nativeToolNames('antigravity', nativeEvents(read('antigravity', f))) ?? [],
+    )
+    assert.deepEqual(unmappedNativeTools(catalog, names), ['edit_file', 'read_file', 'write_file'])
+  })
+
+  test('canary: the edit and the skill read and write are not normalised', async () => {
+    const catalog = await catalogOfHarness('antigravity')
+    // Even with the new names in the catalog as tools of no kind, they aren't edits or reads.
+    const passthrough: Catalog = {
+      ...catalog,
+      tools: new Map([...catalog.tools, ...RENAMED.map((n) => [n, undefined] as const)]),
+    }
+    for (const c of [catalog, passthrough]) {
+      const edit = misfiled(c, 'edit and run', events(beforeRename('edit-and-run.raw.jsonl')))
+      assert.equal(edit.length, 1, edit.join('\n'))
+      assert.match(
+        edit[0] ?? '',
+        /^antigravity: the edit of notes\.txt isn't a file edit or a command: it arrived as read_file \(.+\), edit_file/,
+      )
+      const skill = misfiled(c, 'skill', events(beforeRename('skill.raw.jsonl')))
+      assert.deepEqual(
+        skill.map((s) => s.replace(/:.*/, '')),
+        ['antigravity', 'antigravity'],
+        skill.join('\n'),
+      )
+      assert.match(
+        skill.join('\n'),
+        /the read of the skill isn't a readonly or bash tool: it arrived as read_file/,
+      )
+      assert.match(
+        skill.join('\n'),
+        /the write of skill-proof\.txt isn't a file edit or a command: it arrived as write_file/,
+      )
+    }
+  })
+
+  test('canary: a command that arrives as an unknown tool is not a command', async () => {
+    const catalog = await catalogOfHarness('antigravity')
+    const lines = parse(read('antigravity', 'edit-and-run.raw.jsonl')).map((l) =>
+      l.part.toolName === 'bash' ? { ...l, part: { ...l.part, toolName: 'run_cmd_v2' } } : l,
+    )
+    assert.deepEqual(unmappedTools(catalog, events(lines)), ['run_cmd_v2'])
+    assert.match(
+      misfiled(catalog, 'edit and run', events(lines)).join('\n'),
+      /^antigravity: the command printing contract-42 isn't a bash tool: it arrived as run_cmd_v2 \(not in the catalog\)$/,
+    )
+  })
+})
 
 /** A native tool name in each harness's edit-and-run capture, and a name its adapter doesn't know. */
 const renamedTool: Record<string, [string, string]> = {
