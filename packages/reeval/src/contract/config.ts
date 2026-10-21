@@ -331,7 +331,7 @@ export const reevalConfigDataSchema = z
     analysis: analysisConfigDataSchema
       .optional()
       .describe(
-        "`reeval analyze`, compare questions without a model, and `agent`'s notes during a run.",
+        'Insights during `reeval run`, `reeval analyze`, and compare questions without a model.',
       ),
   })
   .describe(

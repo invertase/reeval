@@ -1404,9 +1404,24 @@ ${body}
       /debug\.traceBufferMb in reeval\.config\.ts must be a number of megabytes above 0 \(got "8MB"\)/,
     ],
     [
-      'analysis.agent as text',
-      `analysis: { agent: 'yes' as never },`,
-      /analysis\.agent in reeval\.config\.ts must be true or false \(got "yes"\)/,
+      'analysis.agent, which insights replaced',
+      `analysis: { agent: true } as never,`,
+      /Unknown option "agent" in analysis in reeval\.config\.ts\. Use model, insights, maxTokens, insightsTimeout/,
+    ],
+    [
+      'analysis.insights as text',
+      `analysis: { insights: 'yes' as never },`,
+      /analysis\.insights in reeval\.config\.ts must be true or false \(got "yes"\)/,
+    ],
+    [
+      'a token budget of zero',
+      `analysis: { maxTokens: 0 },`,
+      /analysis\.maxTokens in reeval\.config\.ts must be a whole number of tokens of at least 1, e\.g\. 250000 \(got 0\)/,
+    ],
+    [
+      'an insights timeout that is not a duration',
+      `analysis: { insightsTimeout: 'soon' as never },`,
+      /analysis\.insightsTimeout in reeval\.config\.ts: /,
     ],
     [
       'a debug folder option',

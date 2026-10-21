@@ -127,7 +127,7 @@ function citedSummary(d: Digest, cites: string[]): Record<string, string> {
   return out
 }
 
-/** A run's digest, ready for the model: what `reeval analyze` and `analysis.agent`'s summary share. */
+/** A run's digest, ready for the model. */
 export type PreparedAnalysis = {
   head: HistoryEntry
   base: HistoryEntry | null

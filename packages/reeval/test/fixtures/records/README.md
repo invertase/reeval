@@ -14,7 +14,7 @@ config API like any other project.
 | `before-answers` | The corpus project's fake-harness runs from before `evals[].answers` (compare questions answered with pairwise win rates) |
 | `before-runtime` | The corpus project's fake-harness runs from before `stack.runtime` and `stack.language` (the runtime reeval ran on, and the evals' language) |
 | `with-answers` | The corpus project's fake-harness runs with `evals[].answers`: a compare question answered with win rates, one whose model call failed, and questions with no pairs to judge |
-| `before-run-summary` | The corpus project's fake-harness runs, with a saved analysis, from before an analysis document's `error` (the run summary `analysis.agent` caches after a run) |
+| `before-run-summary` | The corpus project's fake-harness runs, with a saved analysis, from before an analysis document's `error` (a failed analysis, cached with its error) |
 | `before-baseline-from` | The corpus project's fake-harness runs from before `evals[].compare.from` (a compare whose control came from the cascade because `baseline` was omitted) |
 | `before-oom` | The corpus project's fake-harness runs from before `evals[].attempts[].error.resource` (an OOM kill during an attempt, as an infra error) and `attempts.oom_kills` |
 | `with-oom` | The fake harness in Docker: one attempt whose process the kernel killed at its 128m memory limit, an infra error with `error.resource` |

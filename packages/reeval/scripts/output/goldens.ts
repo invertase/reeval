@@ -26,6 +26,8 @@ export type Golden = {
   verbose?: boolean
   /** Rendered with the run's insights.json, as `reeval show` prints it once insights are written. */
   insights?: boolean
+  /** The insights as `analysis.maxTokens` leaves them when it runs out before the last `n` evals. */
+  budgetSkips?: number
 }
 
 const layouts = (...ids: string[]) => ids.map((id) => `evals/${id}`)
@@ -86,6 +88,7 @@ export const GOLDENS: Golden[] = [
     insights: true,
   })),
   { name: 'insights-suite', entry: 'with-insights', insights: true },
+  { name: 'insights-budget', entry: 'with-insights', insights: true, budgetSkips: 2 },
 ]
 
 export const OUTPUT_DIR = join(CORPUS_DIR, '..', 'output')
@@ -118,9 +121,17 @@ export function goldenInsights(g: Golden, suite: SuiteResult): RunInsights | nul
   if (!g.insights) return null
   const file = join(dirname(goldenRun(g).file), suite.runId, 'insights.json')
   if (!existsSync(file)) throw new Error(`Golden ${g.name}: no ${file}`)
-  const insights = readableInsights(JSON.parse(readFileSync(file, 'utf8')), file)
+  const stored = readableInsights(JSON.parse(readFileSync(file, 'utf8')), file)
+  const insights = g.budgetSkips ? overBudget(stored, g.budgetSkips) : stored
   return { ...insights, factsHash: factsHash(suite), ...(g.evals ? { headline: null } : {}) }
 }
+
+const overBudget = (insights: RunInsights, n: number): RunInsights => ({
+  ...insights,
+  evals: insights.evals.slice(0, -n),
+  headline: null,
+  budget: { maxTokens: 20_000, skipped: insights.evals.slice(-n).map((e) => e.evalId) },
+})
 
 /** The golden's lines: with insights there's an analysis model, so no hint. */
 export function goldenRender(g: Golden, o: { color?: boolean; verbose?: boolean } = {}): string[] {

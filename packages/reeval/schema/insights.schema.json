@@ -222,6 +222,22 @@
       "description": "A run's insights, `<history>/<run>/insights.json`. Written create-only; the record is untouched. They're for the facts they were written from: a `factsHash` that isn't the run's marks them stale.",
       "type": "object",
       "properties": {
+        "budget": {
+          "description": "`analysis.maxTokens`, and the evals (`SuiteResult` paths) it ran out before: they print without insights. Absent when no budget applied.",
+          "type": "object",
+          "properties": {
+            "maxTokens": {
+              "type": "number"
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["maxTokens", "skipped"]
+        },
         "createdAt": {
           "type": "string"
         },
@@ -276,7 +292,7 @@
           "const": 1
         },
         "usage": {
-          "description": "Over every call; `costUsd` is null when reeval doesn't know the model's price.",
+          "description": "Over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it reports them. `costUsd` is null when reeval doesn't know the model's price.",
           "type": "object",
           "properties": {
             "costUsd": {
@@ -293,6 +309,9 @@
               "type": "number"
             },
             "outputTokens": {
+              "type": "number"
+            },
+            "reasoningTokens": {
               "type": "number"
             }
           },

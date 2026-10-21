@@ -1,8 +1,9 @@
 // Run insights: the validator's canaries (each a sentence a model could write that must not
-// print), the layouts insights fill, staleness, and `reeval analyze --insights` end to end on a
-// corpus run with the fake analysis model.
+// print), the layouts insights fill, staleness, `reeval analyze --insights` end to end on a corpus
+// run, and `reeval run` writing them at its end (the budget, its order, the timeout, the cache),
+// all with the fake analysis model.
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { insights as recipeInsights } from '../scripts/output/project/insights.ts'
@@ -12,13 +13,14 @@ import { generateInsights, insightEvals } from '../src/insights/generate.ts'
 import { canonicalJson, factsHash } from '../src/insights/hash.ts'
 import { attemptTexts, evalFacts } from '../src/insights/input.ts'
 import { type Citable, checkSentence } from '../src/insights/validate.ts'
+import { byPriority, insightTier } from '../src/insights/priority.ts'
 import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
 import { colors } from '../src/ui/colors.ts'
 import { evalBlock, render, slotsOf } from '../src/ui/layout.ts'
 import type { RunInsights } from '../src/view/insights.ts'
 import { readableInsights, readableRecord } from '../src/view/record.ts'
 import { type EvalResult, suiteResult } from '../src/view/suite.ts'
-import { runCli } from './helpers.ts'
+import { project, readRun, runCli } from './helpers.ts'
 import { corpusEntries, HISTORY_DIR } from './support/corpus.ts'
 import { fixture } from './support/fixture.ts'
 
@@ -777,7 +779,7 @@ describe('reeval analyze --insights', () => {
     assert.ok(scratch.code === 0 || scratch.code === 1, scratch.stderr)
     const refused = await runCli(p.dir, ['analyze', 'latest', '--insights'])
     assert.notEqual(refused.code, 0)
-    assert.match(refused.stderr, /isn't recorded, so there's no history folder for its insights/)
+    assert.match(refused.stderr, /already exists, and insights are never rewritten/)
     assert.ok(existsSync(file))
 
     writeFileSync(file, '<<<<<<< HEAD\n{')
@@ -867,4 +869,311 @@ describe('reeval analyze --insights', () => {
       },
     ])
   })
+})
+
+describe('the order analysis.maxTokens is spent in', () => {
+  const at = (over: Partial<EvalResult>) =>
+    ({ outcome: 'pass', questions: [], across: 'none', ...over }) as EvalResult
+
+  test('a failure, then made worse, then a compare, then an infra error, then the rest', () => {
+    const rest = at({ name: 'rest' })
+    const infra = at({ name: 'infra', outcome: 'infra_error' })
+    const compare = at({ name: 'compare', across: 'harness' as EvalResult['across'] })
+    const question = at({ name: 'question', questions: [{}] as EvalResult['questions'] })
+    const worse = at({
+      name: 'worse',
+      cells: [{ effect: 'worse', checks: [] }] as unknown as EvalResult['cells'],
+    })
+    const fail = at({ name: 'fail', outcome: 'fail' })
+    assert.deepEqual(
+      [rest, infra, compare, question, worse, fail].map(insightTier),
+      [4, 3, 2, 2, 1, 0],
+    )
+    assert.deepEqual(
+      byPriority([rest, infra, compare, question, worse, fail]).map((e) => e.name),
+      ['fail', 'worse', 'compare', 'question', 'infra', 'rest'],
+    )
+  })
+
+  test('within a tier the output order stands, and the same facts give the same order', () => {
+    const evals = insightEvals(suite)
+    const ordered = byPriority(evals)
+    assert.deepEqual(byPriority(evals), ordered)
+    const tiers = ordered.map(insightTier)
+    assert.deepEqual(
+      tiers,
+      [...tiers].sort((a, b) => a - b),
+    )
+    for (let i = 1; i < ordered.length; i++) {
+      if (tiers[i] !== tiers[i - 1]) continue
+      assert.ok(
+        evals.indexOf(ordered[i] as EvalResult) > evals.indexOf(ordered[i - 1] as EvalResult),
+      )
+    }
+  })
+})
+
+/** Nine passing evals, then one that fails: the budget reaches the failing one first. */
+const RUN_EVALS = {
+  'evals/files.eval.ts': `import { evaluate, expect } from 'reeval'
+for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
+  evaluate(\`writes ok.txt \${n}\`, async (c) => {
+    await c.send('Write ok.txt')
+    await expect(c).toHaveFile('ok.txt')
+  })
+}
+evaluate('writes missing.txt', async (c) => {
+  await c.send('Write missing.txt')
+  await expect(c).toHaveFile('missing.txt')
+})
+`,
+}
+
+/**
+ * A fake harness and an insight model that logs each call (`<call> <eval>`) to calls.log.
+ * `insights` replaces its answer; `analysis` adds keys to `analysis`.
+ */
+const runConfig = (
+  o: { insights?: string; analysis?: string } = {},
+) => `import { appendFileSync } from 'node:fs'
+import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+const log = (input) =>
+  appendFileSync(new URL('./calls.log', import.meta.url), \`\${input.call} \${input.eval?.name ?? ''}\\n\`)
+export default defineConfig({
+  harness: fakeHarness({ files: { 'ok.txt': 'yes' } }),
+  environment: defineEnvironment('fake', {
+    sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  }),
+  analysis: {
+    model: fakeAnalysis({
+      insights: ${
+        o.insights ??
+        `(input) => {
+        log(input)
+        if (input.call === 'headline') return {}
+        return {
+          intent: { job: 'finish' },
+          answer: {
+            text: input.eval.verdict === 'pass' ? 'Yes: every try passed.' : 'No: the file is missing.',
+            cites: [input.facts[0]?.id ?? ''],
+          },
+        }
+      }`
+      },
+    }),
+    ${o.analysis ?? ''}
+  },
+})
+`
+
+const calls = (dir: string) =>
+  existsSync(join(dir, 'calls.log'))
+    ? readFileSync(join(dir, 'calls.log'), 'utf8').trim().split('\n').filter(Boolean)
+    : []
+
+const scratchInsights = (dir: string) => {
+  const { run } = readRun(dir)
+  const file = join(dir, '.reeval/runs', run.runId, 'insights.json')
+  return existsSync(file) ? readableInsights(JSON.parse(readFileSync(file, 'utf8'))) : null
+}
+
+describe('reeval run writes insights at its end', () => {
+  test('each eval gets its insight, printed under its block and written beside the record', async () => {
+    const p = await project('run-insights', { 'reeval.config.ts': runConfig(), ...RUN_EVALS })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(
+      r.stdout + r.stderr,
+      /insights: 10 evals with fake \(up to 60s; --no-insights skips them\)/,
+    )
+    assert.match(r.stdout, /No: the file is missing\./)
+    assert.match(r.stdout, /Yes: every try passed\./)
+    const doc = scratchInsights(p.dir)
+    assert.ok(doc)
+    assert.equal(doc.evals.length, 10)
+    assert.deepEqual(doc.budget, { maxTokens: 250_000, skipped: [] })
+    assert.ok(doc.usage.inputTokens > 0, 'the fake model counts its tokens')
+    assert.equal(calls(p.dir).filter((c) => c.startsWith('classify ')).length, 10)
+    const { run } = readRun(p.dir)
+    assert.match(
+      readFileSync(join(p.dir, '.reeval/runs', run.runId, 'summary.md'), 'utf8'),
+      /No: the file is missing\./,
+    )
+  })
+
+  test('a tiny analysis.maxTokens skips the lowest-priority evals; the failing one keeps its insight', async () => {
+    const p = await project('run-insights-budget', {
+      'reeval.config.ts': runConfig({ analysis: 'maxTokens: 1,' }),
+      ...RUN_EVALS,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const doc = scratchInsights(p.dir)
+    assert.ok(doc)
+    assert.equal(doc.budget?.maxTokens, 1)
+    assert.deepEqual(doc.budget?.skipped, [
+      'evals%2Ffiles.eval.ts › writes ok.txt 8',
+      'evals%2Ffiles.eval.ts › writes ok.txt 9',
+    ])
+    assert.ok(
+      doc.evals.some((e) => e.evalId === 'evals%2Ffiles.eval.ts › writes missing.txt' && e.answer),
+      'the failing eval is explained first',
+    )
+    assert.ok(!calls(p.dir).some((c) => c.startsWith('headline')), 'no headline past the budget')
+    assert.match(
+      r.stdout,
+      /insights skipped for 2 evals: analysis\.maxTokens \(1\) reached — raise it in reeval\.config\.ts/,
+    )
+    assert.match(r.stdout, /No: the file is missing\./)
+  })
+
+  test('canary: insights never change the exit code, whether they fail or are off', async () => {
+    const off = await project('run-insights-off', {
+      'reeval.config.ts': runConfig(),
+      ...RUN_EVALS,
+    })
+    const skipped = await runCli(off.dir, ['run', '--no-insights'])
+    assert.equal(skipped.code, 1, skipped.stdout + skipped.stderr)
+    assert.deepEqual(calls(off.dir), [], '--no-insights makes no call')
+    assert.equal(scratchInsights(off.dir), null)
+    assert.doesNotMatch(skipped.stdout + skipped.stderr, /insights: /)
+
+    const failing = await project('run-insights-fail', {
+      'reeval.config.ts': runConfig({
+        insights: `(input) => { log(input); throw new Error('the model is down') }`,
+      }),
+      ...RUN_EVALS,
+    })
+    const r = await runCli(failing.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /insights failed \(the model is down\): reeval analyze \S+ --insights to retry/,
+    )
+    assert.equal(scratchInsights(failing.dir), null)
+    const classify = calls(failing.dir).filter((c) => c === 'classify writes missing.txt')
+    assert.equal(classify.length, 2, 'a failed call is retried once')
+
+    const passing = await project('run-insights-pass', {
+      'reeval.config.ts': runConfig({
+        insights: `() => { throw new Error('the model is down') }`,
+      }),
+      'evals/files.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes ok.txt', async (c) => {
+  await c.send('Write ok.txt')
+  await expect(c).toHaveFile('ok.txt')
+})
+`,
+    })
+    const ok = await runCli(passing.dir)
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
+    assert.match(ok.stdout, /insights failed \(the model is down\)/)
+  })
+
+  test('analysis.insights: false makes no call', async () => {
+    const p = await project('run-insights-config-off', {
+      'reeval.config.ts': runConfig({ analysis: 'insights: false,' }),
+      ...RUN_EVALS,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.deepEqual(calls(p.dir), [])
+    assert.equal(scratchInsights(p.dir), null)
+  })
+
+  test('canary: insights past analysis.insightsTimeout are left out, and the facts still print', async () => {
+    const p = await project('run-insights-timeout', {
+      'reeval.config.ts': runConfig({
+        insights: `async (input) => { log(input); await new Promise((r) => setTimeout(r, 5000)); return {} }`,
+        analysis: "insightsTimeout: '1s',",
+      }),
+      ...RUN_EVALS,
+    })
+    const started = Date.now()
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /insights still running after 1s, so they're left out: reeval analyze \S+ --insights/,
+    )
+    assert.match(r.stdout, /writes missing\.txt/)
+    assert.equal(scratchInsights(p.dir), null)
+    assert.ok(Date.now() - started < 30_000)
+  })
+
+  test('a classification is cached by its key, and read back from the last recorded run', async () => {
+    const p = await project('run-insights-cache', {
+      'reeval.config.ts': runConfig(),
+      ...RUN_EVALS,
+    })
+    const first = await runCli(p.dir, ['run', '--record'])
+    assert.equal(first.code, 1, first.stdout + first.stderr)
+    const cache = join(p.dir, '.reeval/analysis/classify')
+    assert.equal(readdirSync(cache).length, 10, 'one cached classification per eval')
+    assert.equal(calls(p.dir).filter((c) => c.startsWith('classify ')).length, 10)
+
+    writeFileSync(join(p.dir, 'calls.log'), '')
+    const hit = await runCli(p.dir)
+    assert.equal(hit.code, 1, hit.stdout + hit.stderr)
+    assert.deepEqual(
+      calls(p.dir).filter((c) => c.startsWith('classify ')),
+      [],
+      'the second run classifies nothing',
+    )
+    assert.equal(scratchInsights(p.dir)?.evals.length, 10)
+
+    rmSync(cache, { recursive: true })
+    writeFileSync(join(p.dir, 'calls.log'), '')
+    const readBack = await runCli(p.dir)
+    assert.equal(readBack.code, 1, readBack.stdout + readBack.stderr)
+    assert.deepEqual(
+      calls(p.dir).filter((c) => c.startsWith('classify ')),
+      [],
+      "the recorded run's insights.json answers without the local cache",
+    )
+  })
+})
+
+test('real model: a well-named eval classifies to the job its name states', {
+  skip:
+    process.env.REEVAL_TEST_REAL === '1' ? false : 'set REEVAL_TEST_REAL=1 to call a real model',
+  timeout: 300_000,
+}, async () => {
+  assert.ok(
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    'GOOGLE_GENERATIVE_AI_API_KEY must be set for the real insights smoke',
+  )
+  const p = await project('run-insights-real', {
+    'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: fakeHarness({ files: { 'greet.js': 'export const greet = (name) => \`Hello, \${name}!\`\\n' } }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  analysis: { model: 'google/gemini-3.8-flash' },
+})
+`,
+    'evals/greet.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes a greet(name) function that greets by name', async (c) => {
+  await c.send('Create greet.js exporting greet(name), which returns "Hello, <name>!".')
+  await expect(c).toHaveFile('greet.js')
+})
+`,
+  })
+  const r = await runCli(p.dir, ['run'], {
+    env: { GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+    timeoutMs: 240_000,
+  })
+  assert.equal(r.code, 0, r.stdout + r.stderr)
+  const doc = scratchInsights(p.dir)
+  assert.ok(doc, r.stdout + r.stderr)
+  assert.equal(doc.model, 'google/gemini-3.8-flash')
+  assert.deepEqual(
+    doc.evals.map((e) => [e.intent.job, e.intent.name]),
+    [['finish', 'states-intent']],
+  )
+  assert.ok(doc.usage.inputTokens > 0 && doc.usage.outputTokens > 0)
 })

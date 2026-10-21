@@ -144,7 +144,7 @@ export const readableTranscriptLine = (line: TranscriptLine): TranscriptLine =>
 export const readableAnalysis = (doc: AnalysisDoc, what = 'This analysis'): AnalysisDoc =>
   fillDefaults('analysis', upgrade('analysis', doc, what))
 
-/** An `analysis.agent` note as every reader sees it; one from a newer reeval throws. */
+/** A run's note as every reader sees it; one from a newer reeval throws. */
 export const readableAnalysisNote = (
   note: AnalysisNote,
   what = 'This analysis note',

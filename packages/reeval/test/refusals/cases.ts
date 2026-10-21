@@ -926,6 +926,9 @@ export const CASES: Record<string, Case[]> = {
       'yaml: analysis fake with a typo',
       yaml('analysis:\n  model: { kind: fake-analysis, votes: tie }\n'),
     ],
+    ['yaml: analysis agent', yaml('analysis:\n  agent: true\n')],
+    ['yaml: analysis maxTokens 0', yaml('analysis:\n  maxTokens: 0\n')],
+    ['yaml: analysis insightsTimeout not a duration', yaml('analysis:\n  insightsTimeout: soon\n')],
     [
       'yaml: capture viewport not whole',
       yaml('capture:\n  viewport: { width: 10.5, height: 10 }\n'),
@@ -961,7 +964,10 @@ defaultProfile: { ci: pr }
 secrets: { unbrokered: error }
 debug: { keep: 5, traceBufferMb: 2 }
 analysis:
-  model: { kind: fake-analysis, note: fine, vote: { winner: A, reason: shorter } }
+  model: { kind: fake-analysis, vote: { winner: A, reason: shorter } }
+  insights: true
+  maxTokens: 100000
+  insightsTimeout: 2m
   maxInputTokens: 4000
 profiles:
   pr:
