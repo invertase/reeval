@@ -1999,7 +1999,7 @@
       "type": "object",
       "properties": {
         "build": {
-          "description": "The image layer its build ran in; null without a build.",
+          "description": "The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.",
           "anyOf": [
             {
               "type": "null"
@@ -2847,7 +2847,7 @@
                 ]
               },
               "base": {
-                "description": "The harness image `install` was baked onto: `ref` itself without `install`.",
+                "description": "The harness image `install` and plugin builds were baked onto: `ref` itself without either.",
                 "type": "string"
               },
               "dockerfile": {

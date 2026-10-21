@@ -2,5 +2,8 @@ no profile · 2 evals · 2 cells · 2 attempts
 evals/remote.eval.ts › remote plugins › git and npm read at the attempt  fake/fetched/docker:node:22-bookworm  control  gated  ×1  plugins github:acme/agent-plugins#v1.2.0:plugins/review; npm:@acme/review-plugin@1.2.0
 evals/remote.eval.ts › remote plugins › a child adds another             fake/pinned/docker:node:22-bookworm   control  gated  ×1  plugins github:acme/agent-plugins#v1.2.0:plugins/review; npm:@acme/review-plugin@1.2.0; github:acme/agent-plugins#v1.3.0:plugins/review
 excluded: —
-image docker:node:22-bookworm · cursor · 2 evals
+image docker:node:22-bookworm · cursor · 1 evals
   from node:22-bookworm  reeval-sandbox:cursor-0.1.5-node-22-bookworm-1cb530e9  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+image docker:node:22-bookworm · cursor + 1 plugin build · 1 evals
+  from node:22-bookworm                           reeval-sandbox:cursor-0.1.5-node-22-bookworm-1cb530e9  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  plugin plugin.git('github:acme/agent-plugins')  reeval-plugin:<image id>-<commit + tree + build>       (build unless cached: pnpm install --frozen-lockfile && pnpm build (from .))

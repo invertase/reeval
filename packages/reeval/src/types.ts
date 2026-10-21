@@ -1912,7 +1912,7 @@ export type PluginRecord = {
   commit: string | null
   /** The hash of the files placed. */
   sha256: string
-  /** The image layer its build ran in; null without a build. */
+  /** The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build. */
   build: string | null
   /** What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules. */
   parts: {

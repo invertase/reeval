@@ -512,6 +512,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'environment.plugins.build',
+    area: 'Environments',
+    name: 'Plugin `build`: a cached image layer per built plugin, listed by `--dry-run` and `reeval image build`, refused on the fake sandbox',
+    fixtures: ['plugins/build-layer'],
+    plan: ['images/plugin-builds'],
+    tests: [
+      plugin('a build is commands and where they run, the same for each way of writing it'),
+      plugin('a built plugin keeps only the parts only names: the rest of its directory is removed'),
+      planTest('a plugin the plan reads and refuses exits 2'),
+    ],
+  },
+  {
     id: 'skill.exclude',
     area: 'Environments',
     name: 'Skill `exclude`: the defaults and a custom list',

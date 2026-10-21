@@ -7,7 +7,13 @@ const fetched = defineEnvironment('fetched', ({ plugin }) => ({
   ],
 }))
 const pinned = fetched.extend('pinned', ({ plugin }) => ({
-  plugins: [plugin.git('github:acme/agent-plugins', { ref: 'v1.3.0', path: 'plugins/review' })],
+  plugins: [
+    plugin.git('github:acme/agent-plugins', {
+      ref: 'v1.3.0',
+      path: 'plugins/review',
+      build: { run: ['pnpm install --frozen-lockfile', 'pnpm build'], cwd: '.' },
+    }),
+  ],
 }))
 
 group('remote plugins', { environment: fetched }, () => {
