@@ -56,20 +56,40 @@ export type SuiteResult = {
   runId: string
   status: RunRecord['status']
   /**
-   * The run's outcome, as `reeval run`'s exit code has it. An error thrown outside any attempt
-   * isn't in the record, so `reeval run` exits 1 on one whatever this says.
+   * The run's outcome, which `reeval run`'s exit code is read from: `fail` on any error outside
+   * an attempt, and `skipped` on an interrupted run.
    */
   outcome: Outcome
   /**
-   * Outcomes counted per block: each family case is one, each eval with no cases is one, and a
-   * family whose pooled gate failed is one more fail.
+   * Errors outside any attempt: an eval file that didn't load, a rejection or throw no attempt
+   * awaited, a worker that died. Any one fails the run.
    */
-  tally: { pass: number; fail: number; infraError: number; skipped: number }
+  errors: string[]
+  /**
+   * Outcomes counted per block: each family case is one, each eval with no cases is one, and a
+   * family whose pooled gate failed is one more fail. `errors` counts the run's `errors`.
+   */
+  tally: SuiteTally
   /** Sorted by path. */
   files: ResultFile[]
   /** Every node's `path`, in the order they appear. */
   paths: string[]
 }
+
+export type SuiteTally = {
+  errors: number
+  pass: number
+  fail: number
+  infraError: number
+  cancelled: number
+  skipped: number
+}
+
+/**
+ * An eval's or a family case's outcome: the record's, except `cancelled` where its only failed
+ * gated attempts are ones the run's interrupt cancelled, since the agent didn't fail those.
+ */
+export type ResultOutcome = Outcome | 'cancelled'
 
 export type ResultFile = {
   path: string
@@ -96,12 +116,15 @@ export type EvalResult = {
   /** A placeholder (`evaluate.todo`) that never ran. */
   todo: boolean
   /** On a family: `fail` when a case failed or its pooled gate did. */
-  outcome: Outcome
+  outcome: ResultOutcome
   cells: CellResult[] | null
   cases: CaseResult[] | null
   /** A family's variants against their baseline, pooled over the cases; null on a single eval. */
   pooled: PooledArm[] | null
-  /** Its compare questions' answers; on a family, the first case's. */
+  /**
+   * Its compare questions' answers. On a family, each question asked of any case, in first-asked
+   * order, with its votes and wins summed over the cases that answered it.
+   */
   questions: QuestionResult[]
 }
 
@@ -124,7 +147,7 @@ export type CaseResult = {
   name: string
   /** Its place in the case list. */
   order: number
-  outcome: Outcome
+  outcome: ResultOutcome
   cells: CellResult[]
 }
 
@@ -156,6 +179,10 @@ export type CellResult = {
   fingerprint: string
   /** The skill sources and files the cell's environment placed, as written. */
   context: string[]
+  /**
+   * Every check the eval's attempts recorded (on a family, any case's). A cell with no counted
+   * attempt (every one an infra error or skipped) lists each as `not run`.
+   */
   checks: CheckResult[]
   /** On a variant, against its baseline; null on a control. */
   effect: Effect | null
@@ -174,6 +201,14 @@ export type CellResult = {
   fetches: Array<number | null>
 }
 
+/** A cell's attempts the run's interrupt cancelled: recorded as fails, but not the agent's. */
+export const cancelledOf = (cell: CellResult) =>
+  cell.errors.filter((err) => err.kind === 'aborted').reduce((n, err) => n + err.attempts, 0)
+
+/** A cell's counted tries: its passes and fails, less the ones the interrupt cancelled. */
+export const countedOf = (cell: CellResult) =>
+  Math.max(0, cell.passed + cell.failed - cancelledOf(cell))
+
 export type CheckResult = {
   path: string
   label: string
@@ -190,8 +225,8 @@ export type CheckResult = {
 }
 
 /**
- * `not run`: no counted attempt reached the check, because a hard `expect` before it failed.
- * That is not a failure, and is never `0 of N`. `ran`: counts over the counted attempts that
+ * `not run`: no counted attempt reached the check, because a hard `expect` before it failed or
+ * none counted. That is not a failure, and is never `0 of N`. `ran`: counts over the counted attempts that
  * reached it (`errored` ones couldn't answer), with `notRun` for those that didn't, and the
  * first failure's message.
  */
@@ -315,14 +350,27 @@ function baselineOf(e: EvalEntry, cell: CellRecord): CellRecord | undefined {
       )
 }
 
+/** Every check label the attempts recorded, in first-seen order: the eval's declared checks. */
+function declaredChecks(entries: readonly EvalEntry[]): string[] {
+  return [
+    ...new Set(
+      entries.flatMap((e) => e.attempts.flatMap((a) => (a.assertions ?? []).map((x) => x.label))),
+    ),
+  ]
+}
+
 function checksOf(
   e: EvalEntry,
   cell: CellRecord,
   baseline: CellRecord | undefined,
   base: string,
+  declared: readonly string[],
 ): CheckResult[] {
   const attempts = e.attempts.filter((a) => a.cell === cell.key && counted(a))
-  return (cell.checks ?? []).map((k, order) => {
+  // The record tallies checks over counted attempts only, so a cell with none has no tallies.
+  const tallies =
+    cell.checks ?? declared.map((label) => ({ label, pass: 0, fail: 0, error: 0, notRun: 0 }))
+  return tallies.map((k, order) => {
     const ran = k.pass + k.fail + k.error
     const answered = attempts
       .flatMap((a) => a.assertions ?? [])
@@ -453,7 +501,12 @@ function cellEffect(
   )
 }
 
-function cellsOf(record: RunRecord, e: EvalEntry, parent: string): CellResult[] {
+function cellsOf(
+  record: RunRecord,
+  e: EvalEntry,
+  parent: string,
+  declared: readonly string[],
+): CellResult[] {
   const hasVariants = e.cells.some((c) => c.role === 'variant')
   return e.cells.map((cell, order) => {
     const path = `${parent}/${cellSegment(cell)}`
@@ -480,7 +533,7 @@ function cellsOf(record: RunRecord, e: EvalEntry, parent: string): CellResult[] 
       skipped: cell.skipped,
       fingerprint: cell.fingerprint,
       context: contextOf(record, cell),
-      checks: checksOf(e, cell, baseline, path),
+      checks: checksOf(e, cell, baseline, path, declared),
       effect: cell.role === 'variant' ? cellEffect(cell, baseline, interval) : null,
       interval,
       minLift: lift?.minLift ?? null,
@@ -501,12 +554,44 @@ function pooledEffect(lift: FamilyLift): Effect {
   return 'unclear'
 }
 
-/** Fail beats infra error, which beats pass; skipped only when every one was. */
-function worst(outcomes: Outcome[]): Outcome {
+/** Fail beats infra error, which beats cancelled, which beats pass; skipped only when every one was. */
+function worst(outcomes: ResultOutcome[]): ResultOutcome {
   if (outcomes.includes('fail')) return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'
+  if (outcomes.includes('cancelled')) return 'cancelled'
   if (outcomes.length && outcomes.every((o) => o === 'skipped')) return 'skipped'
   return 'pass'
+}
+
+/** The record's outcome, or `cancelled` when every gated attempt that failed was cancelled. */
+function outcomeOf(e: EvalEntry): ResultOutcome {
+  if (e.outcome !== 'fail') return e.outcome
+  const gated = new Set(e.cells.filter((c) => c.gate !== 'none').map((c) => c.key))
+  const failed = e.attempts.filter((a) => a.outcome === 'fail' && gated.has(a.cell))
+  return failed.length && failed.every((a) => a.error?.kind === 'aborted') ? 'cancelled' : 'fail'
+}
+
+/** Each question any case asked, in first-asked order, with votes and wins summed over the cases. */
+function familyQuestions(cases: readonly EvalEntry[]): QuestionResult[] {
+  const out = new Map<string, QuestionResult>()
+  for (const q of cases.flatMap(questionsOf)) {
+    const have = out.get(q.question)
+    if (!have) {
+      out.set(q.question, { ...q, rates: q.rates.map((r) => ({ ...r })) })
+      continue
+    }
+    have.votes += q.votes
+    have.error ??= q.error
+    for (const r of q.rates) {
+      const same = have.rates.find((x) => x.cut === r.cut && x.name === r.name)
+      if (!same) have.rates.push({ ...r })
+      else {
+        same.wins += r.wins
+        same.n += r.n
+      }
+    }
+  }
+  return [...out.values()]
 }
 
 function familyResult(
@@ -516,9 +601,22 @@ function familyResult(
   order: number,
 ): EvalResult {
   const path = factSegment(family.id)
-  const sample = cases[0] as EvalEntry
   const sorted = [...cases].sort((a, b) => (a.family?.case ?? 0) - (b.family?.case ?? 0))
-  const cellOf = (key: string) => sample.cells.find((c) => c.key === key)
+  const declared = declaredChecks(sorted)
+  const cellOf = (key: string) => sorted.flatMap((c) => c.cells).find((c) => c.key === key)
+  const results = sorted.map((c): CaseResult => {
+    const label = caseLabel(family.name, c.name)
+    const casePath = `${path}/${factSegment(label)}`
+    return {
+      path: casePath,
+      id: c.id,
+      label,
+      name: c.name,
+      order: c.family?.case ?? 0,
+      outcome: outcomeOf(c),
+      cells: cellsOf(record, c, casePath, declared),
+    }
+  })
   return {
     path,
     id: family.id,
@@ -531,22 +629,10 @@ function familyResult(
     todo: false,
     outcome: worst([
       ...(family.outcome === 'fail' ? ['fail' as const] : []),
-      ...sorted.map((c) => c.outcome),
+      ...results.map((c) => c.outcome),
     ]),
     cells: null,
-    cases: sorted.map((c) => {
-      const label = caseLabel(family.name, c.name)
-      const casePath = `${path}/${factSegment(label)}`
-      return {
-        path: casePath,
-        id: c.id,
-        label,
-        name: c.name,
-        order: c.family?.case ?? 0,
-        outcome: c.outcome,
-        cells: cellsOf(record, c, casePath),
-      }
-    }),
+    cases: results,
     pooled: family.lifts.map((lift) => {
       const cell = cellOf(lift.variant)
       return {
@@ -560,7 +646,7 @@ function familyResult(
         outcome: lift.outcome,
       }
     }),
-    questions: questionsOf(sample),
+    questions: familyQuestions(sorted),
   }
 }
 
@@ -576,8 +662,8 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
     across: evalAcross(e.cells),
     family: false,
     todo: e.todo,
-    outcome: e.outcome,
-    cells: cellsOf(record, e, path),
+    outcome: outcomeOf(e),
+    cells: cellsOf(record, e, path, declaredChecks([e])),
     cases: null,
     pooled: null,
     questions: questionsOf(e),
@@ -610,15 +696,23 @@ export function suiteResult(record: RunRecord): SuiteResult {
   const families = new Map((record.families ?? []).map((f) => [f.id, f]))
   const byFile = new Map<string, EvalResult[]>()
   const seen = new Set<string>()
-  const tally = { pass: 0, fail: 0, infraError: 0, skipped: 0 }
-  const count = (o: Outcome) => {
+  const errors = record.errors ?? []
+  const tally: SuiteTally = {
+    errors: errors.length,
+    pass: 0,
+    fail: 0,
+    infraError: 0,
+    cancelled: 0,
+    skipped: 0,
+  }
+  const count = (o: ResultOutcome) => {
     if (o === 'infra_error') tally.infraError++
     else tally[o]++
   }
   for (const e of record.evals) {
     const evals = byFile.get(e.file) ?? []
     byFile.set(e.file, evals)
-    count(e.outcome)
+    count(outcomeOf(e))
     const family = e.family && families.get(e.family.id)
     if (!family) {
       evals.push(evalResult(record, e, evals.length))
@@ -637,6 +731,7 @@ export function suiteResult(record: RunRecord): SuiteResult {
     runId: record.runId,
     status: record.status,
     outcome: runOutcome(record),
+    errors,
     tally,
     files,
     paths: pathsOf(files),

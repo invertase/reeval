@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 12
+const DB_VERSION = 13
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -208,6 +208,11 @@ CREATE VIEW flaky_cells AS SELECT * FROM flaky_m;
 -- paths, and noise = 1 when only agent runtime state changed (not a real change).
 CREATE VIEW drift AS SELECT * FROM drift_m;
 
+-- Each check per cell, comparable fingerprint and branch over recorded runs: how many newest runs
+-- in a row it passed with no fail or error (on a variant, passed on both sides), their tries, and
+-- the run that ended the streak (null: it never failed).
+CREATE VIEW check_streaks AS SELECT * FROM check_streaks_m;
+
 -- Tool calls, agent time and tokens per cell, and a variant's against its control in the same run.
 CREATE VIEW effort AS SELECT * FROM effort_m;
 
@@ -338,6 +343,7 @@ export const VIEW_NAMES = [
   'verdict_flips',
   'check_discrimination',
   'check_rates',
+  'check_streaks',
 ]
 
 const json = (value: unknown) => JSON.stringify(value)
@@ -880,9 +886,12 @@ export type SyncResult = { runs: number; added: number; removed: number; rebuilt
  * Brings the projection up to date with the record files: recorded runs in `historyDir` win over
  * the same run's scratch copy in `.reeval/runs`. Only new, changed or removed files are touched.
  */
-async function sync(db: DatabaseSync, root: string, historyDir: string): Promise<SyncResult> {
-  const rebuilt = !current(db)
-  if (rebuilt) freshSchema(db)
+async function sync(
+  db: DatabaseSync,
+  root: string,
+  historyDir: string,
+  rebuild: boolean,
+): Promise<SyncResult> {
   const wanted = new Map<string, { path: string; recorded: boolean }>()
   for (const [dir, recorded] of [
     [historyDir, true],
@@ -894,18 +903,24 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
       wanted.set(runId, { path: join(dir, name), recorded })
     }
   }
-  const known = new Map(
-    rowsOf<{
-      run_id: string
-      path: string
-      size: number
-      mtime_ms: number
-    }>(db.prepare('SELECT run_id, path, size, mtime_ms FROM files')).map((r) => [r.run_id, r]),
-  )
+  let rebuilt = false
   let added = 0
   let removed = 0
-  db.exec('BEGIN')
+  // IMMEDIATE takes the write lock before the first read, so a second process syncing the same
+  // database waits for this one and then sees its rows, instead of inserting the same runs.
+  db.exec('BEGIN IMMEDIATE')
   try {
+    if (rebuild) db.exec('DROP TABLE IF EXISTS meta')
+    rebuilt = !current(db)
+    if (rebuilt) freshSchema(db)
+    const known = new Map(
+      rowsOf<{
+        run_id: string
+        path: string
+        size: number
+        mtime_ms: number
+      }>(db.prepare('SELECT run_id, path, size, mtime_ms FROM files')).map((r) => [r.run_id, r]),
+    )
     for (const runId of known.keys()) {
       if (!wanted.has(runId)) {
         removeRun(db, runId)
@@ -963,9 +978,10 @@ export async function openHistoryDb(
   const writer = new DatabaseSync(path)
   let synced: SyncResult
   try {
-    writer.exec('PRAGMA busy_timeout = 5000')
-    if (options.rebuild) writer.exec('DROP TABLE IF EXISTS meta')
-    synced = await sync(writer, root, historyDir)
+    // Long enough for another process's first build of a large history; that process is working,
+    // not stuck, and this one finds its rows once it has the lock.
+    writer.exec('PRAGMA busy_timeout = 120000')
+    synced = await sync(writer, root, historyDir, options.rebuild ?? false)
   } finally {
     writer.close()
   }

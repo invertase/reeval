@@ -12,6 +12,7 @@ import {
   attemptStartProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
+import { buildRefusal } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
 import {
@@ -27,8 +28,8 @@ import {
   pi,
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
-import { docker, podman } from '../../src/sandbox.ts'
-import type { EnvironmentHelpers } from '../../src/types.ts'
+import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
+import type { EnvironmentHelpers, PluginSource, SandboxDescriptor } from '../../src/types.ts'
 
 export type Case = [name: string, run: () => unknown]
 
@@ -47,6 +48,11 @@ const yamlIn = (text: string) => () =>
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
+/** What the plan says of a plugin's build in a sandbox. */
+const build = (p: PluginSource, sandbox: SandboxDescriptor, name?: string) => () => {
+  const refusal = buildRefusal(p, sandbox, name)
+  if (refusal) throw new UsageError(refusal)
+}
 const any =
   // biome-ignore lint/suspicious/noExplicitAny: refusals are about values the types refuse
     (f: (...args: any[]) => unknown, ...args: unknown[]) =>
@@ -576,6 +582,108 @@ export const CASES: Record<string, Case[]> = {
       'data: skill with an unknown source',
       env({ skills: [{ kind: 'skill', source: 'ftp', placement: 'harness' }] }),
     ],
+    [
+      'plugin only an unknown part',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.local('.', { only: ['apps' as never] })],
+      })),
+    ],
+    [
+      'plugin only empty',
+      helpers(({ plugin }) => ({ plugins: [plugin.local('.', { only: [] })] })),
+    ],
+    [
+      'plugin option with a typo',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('github:o/r', { refs: 'v1' } as never)],
+      })),
+    ],
+    [
+      'plugin build not a command',
+      helpers(({ plugin }) => ({ plugins: [plugin.npm('pkg@1', { build: 3 as never })] })),
+    ],
+    ['plugin.git without a repo', helpers(({ plugin }) => ({ plugins: [plugin.git('')] }))],
+    [
+      'plugin.git with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('https://user:token@github.com/o/r')],
+      })),
+    ],
+    ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    ['plugins not from the helper', env({ plugins: ['./plugins/review'] })],
+    ['plugins not a list', env({ plugins: 'x' })],
+    [
+      'plugin good',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.local('.', { only: ['skills'] }),
+          plugin.git('github:o/r', { ref: 'v1', path: 'plugins/review' }),
+          plugin.npm('pkg@1', { only: ['mcp'], build: ['npm ci', 'npm run build'] }),
+        ],
+      })),
+    ],
+    [
+      'data: plugin with a typo',
+      env({ plugins: [{ kind: 'plugin', source: 'local', path: '/p', onyl: ['skills'] }] }),
+    ],
+    [
+      'data: plugin with an unknown source',
+      env({ plugins: [{ kind: 'plugin', source: 'marketplace', name: 'x' }] }),
+    ],
+    [
+      'data: plugin build empty',
+      env({ plugins: [{ kind: 'plugin', source: 'npm', spec: 'pkg@1', build: [] }] }),
+    ],
+    [
+      'plugin build from the source root',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.git('github:o/r', { path: 'plugins/review', build: { run: 'pnpm i', cwd: '.' } }),
+        ],
+      })),
+    ],
+    [
+      'plugin build cwd outside the source',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('github:o/r', { build: { run: 'make', cwd: '../x' } })],
+      })),
+    ],
+    [
+      'plugin build with an unknown key',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('pkg@1', { build: { run: 'make', dir: '.' } as never })],
+      })),
+    ],
+    [
+      'plugin build without run',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('pkg@1', { build: { cwd: '.' } as never })],
+      })),
+    ],
+    [
+      'data: plugin build cwd absolute',
+      env({
+        plugins: [
+          { kind: 'plugin', source: 'npm', spec: 'pkg@1', build: { run: 'make', cwd: '/src' } },
+        ],
+      }),
+    ],
+    [
+      'plugin build on the fake sandbox',
+      build(
+        { kind: 'plugin', source: 'npm', spec: 'pkg@1', build: 'make' },
+        fakeSandbox(),
+        'review',
+      ),
+    ],
+    [
+      'plugin build on the fake sandbox, before its manifest is read',
+      build({ kind: 'plugin', source: 'git', repo: 'github:o/r', build: 'make' }, fakeSandbox()),
+    ],
+    [
+      'plugin build on docker',
+      build({ kind: 'plugin', source: 'npm', spec: 'pkg@1', build: 'make' }, docker(), 'review'),
+    ],
     ['mcp.stdio without a command', helpers(({ mcp }) => ({ mcp: { s: mcp.stdio('') } }))],
     ['mcp not from the helper', env({ mcp: { s: { command: 'npx' } } })],
     [
@@ -818,6 +926,8 @@ export const CASES: Record<string, Case[]> = {
       'yaml: analysis fake with a typo',
       yaml('analysis:\n  model: { kind: fake-analysis, votes: tie }\n'),
     ],
+    ['yaml: analysis agent', yaml('analysis:\n  agent: true\n')],
+    ['yaml: analysis maxTokens 0', yaml('analysis:\n  maxTokens: 0\n')],
     [
       'yaml: capture viewport not whole',
       yaml('capture:\n  viewport: { width: 10.5, height: 10 }\n'),
@@ -853,7 +963,9 @@ defaultProfile: { ci: pr }
 secrets: { unbrokered: error }
 debug: { keep: 5, traceBufferMb: 2 }
 analysis:
-  model: { kind: fake-analysis, note: fine, vote: { winner: A, reason: shorter } }
+  model: { kind: fake-analysis, vote: { winner: A, reason: shorter } }
+  insights: true
+  maxTokens: 100000
   maxInputTokens: 4000
 profiles:
   pr:

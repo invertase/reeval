@@ -8,14 +8,16 @@ import {
   ImageBuildError,
   isTransient,
 } from '@reeval/sandbox-docker'
+import { pluginBuildId } from '../environment/plugins.ts'
 import { UsageError } from '../errors.ts'
 import type {
   AttemptImage,
   DockerSandboxDescriptor,
   FakeSandboxDescriptor,
   HarnessDescriptor,
+  PluginSource,
 } from '../types.ts'
-import type { Refresh } from './prepare.ts'
+import type { PreparedImage, Refresh } from './prepare.ts'
 import {
   type PreparedHandle,
   PrepareError,
@@ -24,10 +26,18 @@ import {
 } from './provider.ts'
 
 /** The key of a Docker sandbox's image: what's in it, not the limits or user it runs with. */
-export const dockerKey = (sandbox: DockerSandboxDescriptor, harness: HarnessDescriptor) => {
+export const dockerKey = (
+  sandbox: DockerSandboxDescriptor,
+  harness: HarnessDescriptor,
+  plugins: readonly PluginSource[] = [],
+) => {
   const kind = harness.kind === 'fake' ? (harness.layout ?? 'cursor') : harness.kind
   const { image, from, dockerfile, install } = sandbox
-  return JSON.stringify({ harness: kind, image: { image, from, dockerfile, install } })
+  return JSON.stringify({
+    harness: kind,
+    image: { image, from, dockerfile, install },
+    ...(plugins.length ? { plugins: plugins.map(pluginBuildId) } : {}),
+  })
 }
 
 /** How Docker's build errors class: a named cause is a resource, a network error transient. */
@@ -54,6 +64,15 @@ export function classifyDocker(error: unknown): PrepareFailure {
   }
 }
 
+/** How to install Docker on each platform, as a fix that starts lower-case. */
+export const DOCKER_INSTALL: Partial<Record<NodeJS.Platform, string>> = {
+  linux: 'install Docker Engine (https://docs.docker.com/engine/install/) or Docker Desktop',
+  darwin:
+    'install Docker Desktop (https://docs.docker.com/desktop/setup/install/mac-install/), or another Docker engine such as OrbStack or Colima',
+  win32:
+    'install Docker Desktop with the WSL 2 backend and Linux containers (https://docs.docker.com/desktop/setup/install/windows-install/)',
+}
+
 /** Why Docker (or Podman) can't run a sandbox, as the fix a user needs; null when it can. */
 export function dockerProblem(
   state: DockerState,
@@ -64,6 +83,8 @@ export function dockerProblem(
   if (engine === 'podman') return podmanProblem(platform)
   if (state === 'windows-containers')
     return "Docker is running Windows containers, but reeval's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again."
+  if (state === 'missing')
+    return `Docker isn't installed: there's no docker command on the PATH. ${upper(DOCKER_INSTALL[platform] ?? DOCKER_INSTALL.linux ?? '')}, and try again.`
   return platform === 'win32'
     ? 'Docker is not running. Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.'
     : 'Docker is not running. Start Docker and try again.'
@@ -159,7 +180,7 @@ export function dockerProvider(
       })
     },
     key: dockerKey,
-    async prepare(sandbox, harness, ctx) {
+    async prepare(sandbox, harness, ctx, plugins = []) {
       const { createBuilds, imageHarness, prepareImage } = await import('./prepare.ts')
       builds ??= createBuilds({
         retry: ctx.retry,
@@ -167,7 +188,14 @@ export function dockerProvider(
         refresh: options.refresh ?? 'none',
         engine,
       })
-      return await prepareImage(sandbox, imageHarness(harness), ctx.root, ctx.signal, builds)
+      return await prepareImage(
+        sandbox,
+        imageHarness(harness),
+        ctx.root,
+        ctx.signal,
+        builds,
+        plugins,
+      )
     },
     classify: classifyDocker,
   }
@@ -177,7 +205,13 @@ export function dockerProvider(
  * The image a Docker sandbox's `prepare` returned. Handles are opaque to preflight and round-trip
  * through `prepared.json`, so only the Docker provider's own type says what this one holds.
  */
-export const attemptImage = (handle: PreparedHandle): AttemptImage => handle as AttemptImage
+export const preparedImage = (handle: PreparedHandle): PreparedImage => handle as PreparedImage
+
+/** {@link preparedImage} as the record has it: the image, without the plugins built into it. */
+export const attemptImage = (handle: PreparedHandle): AttemptImage => {
+  const { plugins: _, ...image } = preparedImage(handle)
+  return image
+}
 
 /** The fake sandbox is a temp directory on the host: nothing to check or prepare. */
 export const fakeProvider = (): SandboxProvider<FakeSandboxDescriptor> => ({

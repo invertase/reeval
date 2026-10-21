@@ -11,7 +11,7 @@ import { author } from '../history/provenance.ts'
 import type { HistoryEntry } from '../history/types.ts'
 import { pickBaseline, RefError, resolveRun } from '../history/views.ts'
 import { fromCwd, sha256 } from '../ids.ts'
-import { clip } from '../text.ts'
+import { clip, fenced } from '../text.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { ANALYSIS_PROMPT_VERSION, type AnalysisDoc, type AnalysisScope } from '../view/analysis.ts'
 import {
@@ -43,6 +43,8 @@ export type AnalyzeFlags = {
   context?: boolean
   'dry-run'?: boolean
   'no-cache'?: boolean
+  insights?: boolean
+  verbose?: boolean[]
 }
 
 type Ctx = {
@@ -98,9 +100,7 @@ export function contextMarkdown(d: Digest, head: string, base: string | null): s
     '',
     '## Digest',
     '',
-    '```json',
-    JSON.stringify(d, null, 1),
-    '```',
+    ...fenced([JSON.stringify(d, null, 1)], 'json'),
     '',
   ].join('\n')
 }
@@ -127,7 +127,7 @@ function citedSummary(d: Digest, cites: string[]): Record<string, string> {
   return out
 }
 
-/** A run's digest, ready for the model: what `reeval analyze` and `analysis.agent`'s summary share. */
+/** A run's digest, ready for the model. */
 export type PreparedAnalysis = {
   head: HistoryEntry
   base: HistoryEntry | null
@@ -281,47 +281,16 @@ export async function analyseDigest(
   }
 }
 
-/** A failed analysis as the cache keeps it: an empty body and the `error`. */
-export async function failedAnalysis(
-  config: ResolvedConfig,
-  p: PreparedAnalysis,
-  model: ResolvedAnalysisModel,
-  error: string,
-  latencyMs: number,
-): Promise<AnalysisDoc> {
-  return {
-    ...(await docBase(config, p)),
-    model: model.name,
-    resolvedModel: null,
-    route: model.route,
-    usage: { inputTokens: null, outputTokens: null },
-    latencyMs,
-    createdAt: new Date().toISOString(),
-    validation: {
-      citations: 0,
-      invalid: [],
-      dropped: 0,
-      commands: 0,
-      invalidCommands: [],
-      unverifiedNumbers: 0,
-    },
-    analysis: {
-      tldr: '',
-      whatHappened: [],
-      results: [],
-      why: [],
-      anomalies: [],
-      actions: [],
-      confidence: { overall: 'low', why: '' },
-    },
-    attempts: {},
-    cited: {},
-    error,
-  }
-}
-
 export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { config, flags } = ctx
+  if (flags.insights) {
+    const { checkInsightsFlags, insightsCommand } = await import('../insights/command.ts')
+    checkInsightsFlags(flags)
+    return insightsCommand(ctx, args[0])
+  }
+  if (flags.verbose?.length) {
+    throw new UsageError('reeval analyze takes -v only with --insights')
+  }
   if (flags.json && flags.md) throw new UsageError('reeval analyze takes --json or --md, not both')
   if (flags.context && flags.save) {
     throw new UsageError('reeval analyze --context makes no analysis to save; drop --save')

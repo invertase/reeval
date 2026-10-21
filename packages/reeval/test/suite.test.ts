@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { biome } from '../scripts/schema/check.ts'
 import type { CheckTally, RunRecord } from '../src/history/types.ts'
+import { render } from '../src/ui/layout.ts'
 import { readableRecord } from '../src/view/record.ts'
 import {
   checkEffect,
@@ -64,7 +65,11 @@ describe('suiteResult over the record corpus', () => {
         const gates = (record.families ?? []).filter((f) =>
           f.lifts.some((l) => l.outcome === 'fail'),
         ).length
-        assert.equal(t.pass + t.fail + t.infraError + t.skipped, record.evals.length + gates)
+        assert.equal(
+          t.pass + t.fail + t.infraError + t.cancelled + t.skipped,
+          record.evals.length + gates,
+        )
+        assert.equal(t.errors, record.errors?.length ?? 0)
         assert.deepEqual(
           s.files.map((f) => f.path),
           [...s.files.map((f) => f.path)].sort(),
@@ -215,7 +220,11 @@ describe('a record with checks that never ran', () => {
     assert.equal(variant.vs, control.key)
     for (const k of variant.checks) assert.equal(k.effect, 'unclear', k.label)
     const baseline = cellsOf(s).find((c) => c.key === control.key)
-    assert.deepEqual(baseline?.checks, [])
+    assert.deepEqual(
+      baseline?.checks.map((k) => [k.label, k.outcome.status]),
+      variant.checks.map((k) => [k.label, 'not run']),
+      'a cell with no counted attempt lists every declared check as not run',
+    )
   })
 
   test("a check's assertion is a failure's message before an error's", () => {
@@ -265,6 +274,145 @@ describe('a record with checks that never ran', () => {
   })
 })
 
+describe('outcomes the record alone has', () => {
+  const layouts = entries.find((e) => e.name === 'with-layouts')
+  const raw = layouts?.runs.at(-1)?.raw as Record<string, unknown>
+  const evalOf = (s: SuiteResult, name: string) =>
+    s.files.flatMap((f) => f.evals).find((e) => e.name === name || e.template === name)
+  const text = (s: SuiteResult) =>
+    render(s, null, { color: false, verbose: false, hint: false }).join('\n')
+
+  /** An interrupted run, its `writes greet.js` attempt cancelled mid-turn. */
+  function interrupted(): RunRecord {
+    const record = read(raw)
+    record.status = 'interrupted'
+    const e = record.evals.find((x) => x.name === 'writes greet.js')
+    const [cell] = e?.cells ?? []
+    const [attempt] = e?.attempts ?? []
+    assert.ok(e && cell && attempt)
+    e.outcome = 'fail'
+    Object.assign(cell, { outcome: 'fail', pass: 0, fail: 1 })
+    Object.assign(attempt, {
+      outcome: 'fail',
+      error: { kind: 'aborted', message: 'The run was cancelled' },
+      assertions: [],
+    })
+    return record
+  }
+
+  test('an eval whose only failed attempts were cancelled is cancelled, not a fail', () => {
+    const before = suiteResult(read(raw)).tally
+    const s = suiteResult(interrupted())
+    assert.equal(evalOf(s, 'writes greet.js')?.outcome, 'cancelled')
+    assert.equal(s.tally.cancelled, 1)
+    assert.equal(s.tally.fail, before.fail, 'canary: the real fails still count as fails')
+    assert.equal(s.tally.pass, before.pass - 1)
+    assert.equal(s.outcome, 'skipped', 'an interrupted run, as its exit code 130 has it')
+    assert.match(text(s), /^cancelled {8}writes greet\.js$/m)
+    assert.match(
+      text(s),
+      new RegExp(`^${before.fail} fail · .* · 1 cancelled · \\d+ skipped$`, 'm'),
+    )
+  })
+
+  test('a real failure beside a cancelled attempt is still a fail', () => {
+    const record = interrupted()
+    const e = record.evals.find((x) => x.name === 'writes greet.js')
+    const [attempt] = e?.attempts ?? []
+    assert.ok(e && attempt)
+    e.attempts.push({
+      ...attempt,
+      id: `${attempt.id}-2`,
+      n: 2,
+      error: { kind: 'assertion', message: 'writes greet.js: expected it to exist' },
+    })
+    assert.equal(evalOf(suiteResult(record), 'writes greet.js')?.outcome, 'fail')
+  })
+
+  test('an error outside any attempt fails the outcome, is listed and leads the tally', () => {
+    const record = read(raw)
+    assert.equal(suiteResult(record).errors.length, 0)
+    record.errors = ['evals/a.eval.ts: Cannot find module ./missing.ts']
+    const s = suiteResult(record)
+    assert.equal(s.outcome, 'fail')
+    assert.deepEqual(s.errors, record.errors)
+    assert.equal(s.tally.errors, 1)
+    const lines = render(s, null, { color: false, verbose: false, hint: false })
+    assert.equal(lines[0], 'error: evals/a.eval.ts: Cannot find module ./missing.ts')
+    assert.match(lines.at(-1) ?? '', /^1 run error · \d+ fail · /)
+  })
+
+  const family = 'greets %s in the house style'
+
+  test("a family's first case with no counted attempt lists the checks its other cases ran", () => {
+    const record = read(raw)
+    const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)
+    assert.ok(first)
+    for (const a of first.attempts) {
+      Object.assign(a, { outcome: 'infra_error', assertions: [] })
+      a.error = { kind: 'infra', message: 'Docker is not running' }
+    }
+    for (const c of first.cells) {
+      delete c.checks
+      Object.assign(c, { pass: 0, fail: 0, infraError: c.runs, outcome: 'infra_error' })
+    }
+    const k = evalOf(suiteResult(record), family)?.cases?.[0]
+    assert.equal(k?.label, 'Ada')
+    for (const cell of k?.cells ?? []) {
+      assert.deepEqual(
+        cell.checks.map((x) => [x.label, x.outcome.status]),
+        [['house greeting', 'not run']],
+        cell.key,
+      )
+    }
+  })
+
+  test("a family's pooled arm and columns come from any case, not only the first", () => {
+    const record = read(raw)
+    const [first] = record.evals.filter((e) => e.family?.id.endsWith(family) && e.family.case === 0)
+    assert.ok(first)
+    const variant = 'fake/with-skill/fake'
+    first.cells = first.cells.filter((c) => c.key !== variant)
+    first.attempts = first.attempts.filter((a) => a.cell !== variant)
+    const s = suiteResult(record)
+    const e = evalOf(s, family)
+    assert.deepEqual(
+      e?.pooled?.map((p) => p.path.split('/').at(-1)),
+      ['fake+with-skill+fake'],
+      'the pooled path names the cell, read from a later case',
+    )
+    const block =
+      text(s)
+        .split('\n\n')
+        .find((b) => b.includes(family)) ?? ''
+    assert.match(
+      block,
+      /^ {4}with-skill +3 of 3 {2}can't tell yet$/m,
+      'the pooled row has the variant',
+    )
+  })
+
+  test("a family's questions are every case's, summed over the cases that answered them", () => {
+    const answers = entries.find((x) => x.name === 'with-answers')
+    const asked = read(answers?.runs[0]?.raw as Record<string, unknown>).evals.find(
+      (x) => x.name === 'writes a greeting',
+    )?.answers
+    assert.ok(asked?.length)
+    const record = read(raw)
+    const cases = record.evals.filter((e) => e.family?.id.endsWith(family))
+    for (const c of cases.filter((x) => (x.family?.case ?? 0) >= 2)) c.answers = asked
+    const [question] = evalOf(suiteResult(record), family)?.questions ?? []
+    const [one] = asked
+    assert.ok(question && one)
+    assert.equal(question.question, one.question, 'the first case asked nothing')
+    assert.equal(question.votes, one.votes.length * 2)
+    assert.deepEqual(
+      question.rates,
+      one.rates.map((r) => ({ cut: r.cut, name: r.name, wins: r.wins * 2, n: r.n * 2 })),
+    )
+  })
+})
+
 describe('messageLine', () => {
   test('keeps a one-line message', () => {
     assert.equal(messageLine('sandbox died'), 'sandbox died')
@@ -305,7 +453,14 @@ evaluate('writes hello.txt', { compare: { baseline: plain, variants: [bye] } }, 
     const s = JSON.parse(r.stdout) as SuiteResult
     assert.match(r.stderr, /writes hello\.txt/)
     assert.equal(s.outcome, 'fail')
-    assert.deepEqual(s.tally, { pass: 0, fail: 1, infraError: 0, skipped: 0 })
+    assert.deepEqual(s.tally, {
+      errors: 0,
+      pass: 0,
+      fail: 1,
+      infraError: 0,
+      cancelled: 0,
+      skipped: 0,
+    })
     const e = s.files[0]?.evals[0]
     assert.equal(e?.across, 'change')
     const status = (environment: string) =>

@@ -1,7 +1,8 @@
-import { clip, formatDuration } from '../text.ts'
+import { clip, fenced, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { colors } from '../ui/colors.ts'
 import { render, tallyLine } from '../ui/layout.ts'
+import type { RunInsights } from '../view/insights.ts'
 import { checkLabels, commandLine, labelledJudgements } from '../view/judgements.ts'
 import {
   evalMarkOutcome,
@@ -110,7 +111,10 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
 }
 
 /** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
-export function renderSummary(run: RunRecord, opts: { hint: boolean }): string {
+export function renderSummary(
+  run: RunRecord,
+  opts: { hint: boolean; insights?: RunInsights | null },
+): string {
   const lines = [
     `# reeval run ${run.runId}`,
     '',
@@ -121,9 +125,14 @@ export function renderSummary(run: RunRecord, opts: { hint: boolean }): string {
     ...run.plan.sandboxWarnings.map((w) => `> **Warning:** ${w.message}\n`),
     '## Results',
     '',
-    '```text',
-    ...render(suiteResult(run), null, { color: false, verbose: false, hint: opts.hint }),
-    '```',
+    ...fenced(
+      render(suiteResult(run), opts.insights ?? null, {
+        color: false,
+        verbose: false,
+        hint: opts.hint,
+      }),
+      'text',
+    ),
     '',
     '## State',
     '',
@@ -174,14 +183,7 @@ export const repeatsVerdict = (a: Pick<AttemptRecord, 'error' | 'judgements'>) =
 
 function attemptDetail(lines: string[], a: AttemptRecord): void {
   if (a.error && !repeatsVerdict(a)) {
-    lines.push(
-      `**${a.error.kind}**`,
-      '',
-      '```',
-      a.error.message.split('\n').slice(0, 20).join('\n'),
-      '```',
-      '',
-    )
+    lines.push(`**${a.error.kind}**`, '', ...fenced(a.error.message.split('\n').slice(0, 20)), '')
   }
   for (const turn of a.turns) {
     lines.push(

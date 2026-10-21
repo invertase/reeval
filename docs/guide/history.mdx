@@ -87,24 +87,57 @@ npx reeval compare
 ```
 
 ```text
-base 20260926T174239Z_b010670_ada-lovelace_yzmg (b010670) → head 20260926T174444Z_b010670_ada-lovelace_7gmj (b010670)
-0 regressed · 0 fixed · 0 not comparable · 2 same
+can't compare    bills in minor units with the billing doc
+  changed          environment
+  base             20261020T231407Z_ea2a649_ada-lovelace_8h1n  pass
+  head             20261020T231408Z_b2c98b4_ada-lovelace_fypq  fail
+  amount in minor units  failed
+    expected command to succeed, exit code 1
 
-  · → ✓  new                       evals/skill.eval.ts › house greeting › greets in the house style
-  ✓ → ✓  same                      evals/hello.eval.ts › greet module › creates a tested greet module · cells added: cursor:composer-2.5/-/docker
-      antigravity:gemini-3.8-flash-medium/-/docker  tools 15 → 12.5 (×0.83) · agent 36s → 40s (×1.11)
-  ✓ → ✓  same                      evals/hello.eval.ts › greet module › adds a default name in a follow-up turn · cells added: cursor:composer-2.5/-/docker
-      antigravity:gemini-3.8-flash-medium/-/docker  tools 49 → 25 (×0.51) · agent 2m 00s → 1m 05s (×0.54)
++1 same
+
+fixed            adds a double button that builds
+  build            fail → pass
+  types            not run → pass
+
++1 same
+
+regressed        greets in the house style
+  base             20261020T231407Z_ea2a649_ada-lovelace_8h1n
+  head             20261020T231408Z_b2c98b4_ada-lovelace_fypq
+  house greeting   pass → fail
+    expected command to succeed, exit code 1
+  sign-off         not run
+  +1 more passed
+
++2 same
+
+removed          greets in German
+  base             20261020T231407Z_ea2a649_ada-lovelace_8h1n  fail
+
+new              greets in Spanish
+  head             20261020T231408Z_b2c98b4_ada-lovelace_fypq  fail
+  spanish greeting  failed
+    expected command to succeed, exit code 1
+
+1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same
 ```
 
-`reeval compare` takes a base and a head run. With none, it diffs the latest run against its nearest recorded ancestor in git. Each eval is `regressed`, `fixed`, `same`, `new`, `removed` or `not comparable`.
+`reeval compare` takes a base and a head run. With none, it diffs the latest run against its nearest recorded ancestor in git. It prints a block for each eval that changed, in file order, and collapses the rest to `+N same`.
 
-Not comparable means something the eval depends on changed, such as its file, a helper it imports, the image or the judge, and the line says which. Under a cell in both runs, a line shows how its effort changed: here Antigravity needed half the tool calls in the second run.
+| Block | What it shows |
+|---|---|
+| `regressed` | Both run ids, each check that flipped (`pass → fail`) with its message, and checks that no longer ran (`not run`) |
+| `fixed` | The checks that pass now |
+| `can't compare` | What changed, such as the environment, the eval's file or a helper it imports, and each side's result. An eval Ctrl-C cancelled on one side reads `cancelled` there |
+| `new`, `removed` | An eval only one run has, with its result |
+
+A check that didn't run on one side reads `not run`, never `fail`. `-v` adds each cell's lift and effort, base → head.
 
 <Image src="/assets/studio/compare.png" alt="The studio's compare page, listing evals as regressed, fixed or not comparable between two runs" width={800} />
 
 ```bash
-npx reeval compare --md                   # a Markdown table for a PR comment
+npx reeval compare --md                   # the same blocks in a text block, for a PR comment
 npx reeval compare --fail-on-regression   # exit 1 if anything regressed
 ```
 

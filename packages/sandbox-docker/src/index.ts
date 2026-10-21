@@ -17,6 +17,7 @@ export {
   buildDockerfile,
   buildImage,
   buildInstallLayer,
+  buildPluginLayer,
   contextFiles,
   contextHash,
   DOCKER_CONTEXT,
@@ -26,9 +27,15 @@ export {
   type InstallStep,
   installLayerTag,
   installScript,
+  PLUGIN_BUILDS_DIR,
+  type PluginBuildSpec,
+  pluginBuildDir,
+  pluginBuildKey,
+  pluginLayerTag,
   pruneImages,
   REEVAL_BASE_ARG,
   resolveFrom,
+  sourceTreeHash,
   usesReevalBase,
 } from './build-image.ts'
 export {

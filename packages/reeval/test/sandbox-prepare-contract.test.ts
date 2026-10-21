@@ -41,7 +41,7 @@ function scriptedProvider(state: { token: string; calls: Map<string, number> }):
     async check() {
       if (state.token !== 'good-token') throw new Error('401 Unauthorized: invalid API token')
     },
-    key: (sandbox) => JSON.stringify(sandbox),
+    key: (sandbox, _harness, plugins = []) => JSON.stringify([sandbox, plugins]),
     async prepare(sandbox, _harness, ctx) {
       const { script, n } = sandbox as unknown as { script: Case; n: number }
       const key = `${script}:${n}`
@@ -251,5 +251,31 @@ describe('sandbox prepare contract: the generic layer', () => {
     })
     assert.equal(outcome?.ok, true)
     assert.equal(scripted.state.calls.get('flaky:9'), 2)
+  })
+
+  test("a plugin build is set by its environment, and never stops the run: the config's sandbox isn't what failed", () => {
+    const provider = scriptedProvider(scripted.state)
+    const sandbox = { kind: 'scripted', script: 'ok', n: 10 } as unknown as SandboxDescriptor
+    const built = {
+      ...use(sandbox, 'reeval.config.ts'),
+      plugins: [{ source: 'local', path: 'plugins/review', build: 'npm ci' }],
+      setBy: {
+        sandbox: 'reeval.config.ts',
+        harness: 'reeval.config.ts',
+        pluginBuilds: 'environment reviewed in evals/review.eval.ts',
+      },
+    } as PrepareUse
+    const targets = prepareTargets(
+      [use(sandbox, 'reeval.config.ts'), built],
+      { [provider.kind]: provider },
+      () => 'scripted',
+    )
+    assert.deepEqual(
+      targets.map((t) => [t.setBy, t.runWide]),
+      [
+        [['reeval.config.ts'], true],
+        [['environment reviewed in evals/review.eval.ts'], false],
+      ],
+    )
   })
 })

@@ -539,6 +539,11 @@ export type RunRecord = {
   evals: EvalEntry[]
   /** Each pooled `evaluate.each` that ran; unset when none did. */
   families?: FamilyRecord[]
+  /**
+   * Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no
+   * attempt awaited, a worker that died. Any one fails the run. Unset when there were none.
+   */
+  errors?: string[]
 }
 
 /** What ran and graded the agents: the machine, images, harnesses and judge. */
@@ -650,6 +655,8 @@ export type HistoryCell = Pick<
   lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean }
   /** Median tool calls, agent time and tokens over the counted attempts; null when none counted. */
   effort: CellEffort | null
+  /** Of `fail`, the attempts the run's interrupt cancelled (`error.kind: 'aborted'`); unset when none. */
+  cancelled?: number
 }
 
 /**
@@ -688,4 +695,6 @@ export type HistoryEntry = {
   }>
   /** The run's pooled families; unset when none ran. */
   families?: Array<Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'>>
+  /** The run's errors outside any attempt; unset when there were none. */
+  errors?: string[]
 }

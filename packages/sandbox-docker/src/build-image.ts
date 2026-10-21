@@ -46,11 +46,18 @@ const slugify = (text: string, max: number) =>
 export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
 
 /**
+ * How reeval bakes a harness into an image, beyond the build context and the adapter: bump it when
+ * that changes what a baked image holds, so every image baked before rebuilds on its next use.
+ */
+const BAKE_REVISION = 2
+
+/**
  * The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. The hash
- * covers the toolchain layer too, so a change to the sandbox user or paths builds anew.
+ * covers the toolchain layer and {@link BAKE_REVISION} too, so a change to the sandbox user, paths
+ * or how the harness is baked builds anew.
  */
 export const harnessImageFor = (harness: BakedHarness, from: string) =>
-  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(toolchainDockerfile(from)).slice(0, 8)}`
+  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(`${BAKE_REVISION}\0${toolchainDockerfile(from)}`).slice(0, 8)}`
 
 /**
  * How each harness's CLI gets into an image: its adapter's bootstrap, and the binary it leaves
@@ -334,9 +341,13 @@ const removeQuietly = async (ref: string, engine?: Engine) => {
   await docker(['image', 'rm', ref], { engine }).catch(() => {})
 }
 
-/** The hash of reeval's base image build context, which its images carry as a label. */
+/**
+ * The hash of reeval's base image build context and {@link BAKE_REVISION}, which its images carry
+ * as a label.
+ */
 export function contextHash(): string {
   const hash = createHash('sha256')
+  hash.update(`bake ${BAKE_REVISION}\0`)
   for (const path of contextFiles(DOCKER_CONTEXT, join(DOCKER_CONTEXT, 'Dockerfile'))) {
     hash.update(`${path}\0`)
     hash.update(readFileSync(join(DOCKER_CONTEXT, path)))
@@ -602,6 +613,130 @@ export async function buildInstallLayer(
   return tag
 }
 
+/** Where a plugin layer leaves each built plugin, by its build's hash. */
+export const PLUGIN_BUILDS_DIR = `${SANDBOX_ROOT}/plugin-builds`
+
+/**
+ * The sha256 of a plugin build's source as the layer gets it: every file `docker build` sends from
+ * `context` (less `.dockerignore` and `.git`), with its executable bit or symlink target.
+ */
+export function sourceTreeHash(context: string): string {
+  const hash = createHash('sha256')
+  for (const path of contextFiles(context, null)) {
+    if (path === '.git' || path.startsWith('.git/')) continue
+    const full = join(context, path)
+    const stat = lstatSync(full)
+    hash.update(`${path}\0${stat.mode & 0o111 ? 'x' : '-'}\0`)
+    hash.update(stat.isSymbolicLink() ? readlinkSync(full) : readFileSync(full))
+    hash.update('\0')
+  }
+  return hash.digest('hex')
+}
+
+/** One plugin's build: its source, where it runs and what of it is kept, hashed by {@link pluginBuildKey}. */
+export type PluginBuildSpec = {
+  /** The whole source on the host: the repository, the package or the local directory. */
+  context: string
+  /** The source's commit, or null for an npm package or a local directory. */
+  commit: string | null
+  /** {@link sourceTreeHash} of `context`. */
+  tree: string
+  /** The plugin's directory in the source, kept after the build; `.` for the root. */
+  path: string
+  /** Where the commands run, relative to the source's root. */
+  cwd: string
+  steps: InstallStep[]
+}
+
+/** The hash a plugin layer's tag and directory carry: commit, tree and build. */
+export const pluginBuildKey = (b: PluginBuildSpec) =>
+  sha256(JSON.stringify({ commit: b.commit, tree: b.tree, path: b.path, cwd: b.cwd, run: b.steps }))
+
+/** The image a plugin build makes on `parent`: the parent's id, then the build's hash. */
+export const pluginLayerTag = (parent: { id: string }, b: PluginBuildSpec) =>
+  `reeval-plugin:${parent.id.replace(/^sha256:/, '').slice(0, 12)}-${pluginBuildKey(b).slice(0, 16)}`
+
+/** Where a plugin layer leaves the plugin's directory. */
+export const pluginBuildDir = (b: PluginBuildSpec) =>
+  `${PLUGIN_BUILDS_DIR}/${pluginBuildKey(b).slice(0, 16)}`
+
+/** The line a plugin build's script fails with when its `cwd` isn't in the source. */
+const noCwd = (cwd: string) => `reeval: build cwd ${cwd} isn't a directory in the source`
+
+/**
+ * A plugin build's commands as one script, run from `cwd` under `src` (the source's root), stopping
+ * at the first failure as an install script does, or before any when `cwd` isn't there.
+ */
+export const pluginBuildScript = (b: Pick<PluginBuildSpec, 'cwd' | 'steps'>, src: string) =>
+  installScript(b.steps)
+    .replaceAll('reeval: install ', 'reeval: build ')
+    .replace(/^cd \/\n/, `cd ${q(`${src}/${b.cwd}`)} || { echo ${q(noCwd(b.cwd))} >&2; exit 1; }\n`)
+
+/**
+ * Builds a plugin's layer on `parent` if it's missing: the whole source, then its commands from
+ * `cwd` as root with the sandbox user's home as HOME (as an install layer runs), keeping only the
+ * plugin's directory at {@link pluginBuildDir}. Secrets and the workspace never exist here.
+ */
+export async function buildPluginLayer(
+  parent: { ref: string; id: string },
+  b: PluginBuildSpec,
+  options: { name: string; signal?: AbortSignal; output?: BuildOutput; engine?: Engine },
+): Promise<string> {
+  const { signal, engine } = options
+  const tag = pluginLayerTag(parent, b)
+  const exists = await docker(['image', 'inspect', '--format', '{{.Created}}', tag], {
+    signal,
+    engine,
+  })
+  if (exists.exitCode === 0) return tag
+  const src = '/tmp/reeval-plugin-src'
+  const script = pluginBuildScript(b, src)
+  const encoded = Buffer.from(script).toString('base64')
+  const home = `$(getent passwd ${SANDBOX_USER} | cut -d: -f6)`
+  const dir = pluginBuildDir(b)
+  const dockerfile = [
+    `FROM ${parent.ref}`,
+    'USER root',
+    `COPY . ${src}`,
+    // The tag's tree hash leaves `.git` out, so the commands mustn't see it either.
+    `RUN rm -rf ${src}/.git && echo ${encoded} | base64 -d > /tmp/reeval-plugin-build.sh \\`,
+    `  && if id -u ${SANDBOX_USER} >/dev/null 2>&1; then export HOME="${home}"; fi \\`,
+    '  && bash /tmp/reeval-plugin-build.sh && rm /tmp/reeval-plugin-build.sh \\',
+    `  && mkdir -p ${dir} && cp -a ${q(`${src}/${b.path}`)}/. ${dir}/ && rm -rf ${src} ${dir}/.git \\`,
+    `  && chmod -R a+rX ${dir} \\`,
+    `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
+    `WORKDIR ${SANDBOX_ROOT}`,
+  ].join('\n')
+  const build = await docker(
+    ['build', '--progress', 'plain', ...BUILT_BY, '--tag', tag, '-f', '-', b.context],
+    { input: dockerfile, signal, engine },
+  )
+  const output = `${build.stdout.toString('utf8')}${build.stderr}`
+  options.output?.write(`${script}\n${dockerfile}\n\n${output}`)
+  if (build.exitCode !== 0) {
+    const failed = /reeval: build (\d+\/\d+) exited (\d+): (.*)/.exec(output)
+    const missing = output.includes(noCwd(b.cwd))
+    throw buildError(
+      output,
+      {
+        stage: 'plugin',
+        ref: tag,
+        headline: `Building ${options.name}`,
+        log: options.output?.path ?? null,
+        engine,
+      },
+      () =>
+        missing
+          ? noCwd(b.cwd).slice('reeval: '.length)
+          : failed
+            ? `build ${failed[1]} exited ${failed[2]}: ${clipLine(failed[3] ?? '')}`
+            : null,
+      (line) => !line.startsWith('reeval: build '),
+    )
+  }
+  return tag
+}
+
 /** The build arg a Dockerfile can start `FROM` to layer on reeval's sandbox image. */
 export const REEVAL_BASE_ARG = 'REEVAL_BASE'
 
@@ -647,11 +782,17 @@ export function dockerignoreMatcher(text: string): (path: string) => boolean {
   }
 }
 
-/** Files in the build context that `docker build` would send, sorted, relative to `context`. */
-export function contextFiles(context: string, dockerfile: string): string[] {
-  const own = [`${dockerfile}.dockerignore`, join(context, '.dockerignore')].find(existsSync)
+/**
+ * Files in the build context that `docker build` would send, sorted, relative to `context`. A
+ * Dockerfile read from stdin (`dockerfile` null) has no `<Dockerfile>.dockerignore` of its own.
+ */
+export function contextFiles(context: string, dockerfile: string | null): string[] {
+  const own = [
+    ...(dockerfile ? [`${dockerfile}.dockerignore`] : []),
+    join(context, '.dockerignore'),
+  ].find(existsSync)
   const ignored = dockerignoreMatcher(own ? readFileSync(own, 'utf8') : '')
-  const always = new Set([relative(context, dockerfile), '.dockerignore'])
+  const always = new Set([...(dockerfile ? [relative(context, dockerfile)] : []), '.dockerignore'])
   const files: string[] = []
   const walk = (rel: string) => {
     for (const entry of readdirSync(join(context, rel), { withFileTypes: true })) {

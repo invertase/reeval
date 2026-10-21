@@ -119,6 +119,7 @@ export function traceEnvironment(
       setup: env.setup,
       skills: env.skills.map((s) => s.name),
       workspaceSkills: env.workspaceSkills.map((s) => s.name),
+      plugins: env.plugins.map((p) => ({ name: p.name, parts: p.parts, files: p.files.length })),
       mcp: Object.fromEntries(
         Object.entries(env.mcp).map(([name, m]) => [
           name,

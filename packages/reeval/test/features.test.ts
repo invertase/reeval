@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { createSocket } from 'node:dgram'
 import {
   chmodSync,
   cpSync,
@@ -20,7 +21,7 @@ import {
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
@@ -34,6 +35,7 @@ import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandb
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { NO_MODEL_HINT } from '../src/ui/layout.ts'
+import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
@@ -153,6 +155,25 @@ const listener = createServer((_, res) => {
   egressTarget.requests++
   res.end('reeval-egress-ok')
 })
+
+/**
+ * A DNS server beside the listener that answers every A query with {@link DNS_ANSWER}, so a
+ * fixture can tell whether a name resolves for the sandbox without depending on the machine's own
+ * resolver (rootless Podman reaches its upstream through slirp4netns, which sometimes gets no
+ * answer for a whole lookup). `REEVAL_EGRESS_DNS` is its address and port,
+ * `REEVAL_EGRESS_DNS_ANSWER` the address it answers with.
+ */
+const DNS_ANSWER = [192, 0, 2, 1]
+const dnsResponder = createSocket('udp4').on('message', (query, from) => {
+  if (query.length < 12) return
+  let end = 12
+  while (end < query.length && query[end] !== 0) end += (query[end] ?? 0) + 1
+  const question = query.subarray(12, end + 5)
+  const header = Buffer.from([0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0])
+  query.copy(header, 0, 0, 2)
+  const answer = Buffer.from([0xc0, 12, 0, 1, 0, 1, 0, 0, 0, 0, 0, 4, ...DNS_ANSWER])
+  dnsResponder.send(Buffer.concat([header, question, answer]), from.port, from.address)
+})
 before(async () => {
   const addresses = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
     (list ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => ({ name, ...a })),
@@ -162,8 +183,12 @@ before(async () => {
     (addresses.find((a) => !bridge.test(a.name)) ?? addresses[0])?.address ?? '127.0.0.1'
   await new Promise<void>((resolve) => listener.listen(0, '0.0.0.0', resolve))
   egressTarget.port = (listener.address() as AddressInfo).port
+  await new Promise<void>((resolve) => dnsResponder.bind(0, '0.0.0.0', resolve))
 })
-after(() => listener.close())
+after(() => {
+  listener.close()
+  dnsResponder.close()
+})
 
 /** The token `workspace/token` fetches with, and the git HTTP server that insists on it. */
 const GIT_TOKEN = 'reeval-fixture-git-token-5e0b77c2d9a1'
@@ -259,12 +284,15 @@ function publish(dir: string) {
 const egressEnv = () => ({
   REEVAL_EGRESS_HOST: egressTarget.host,
   REEVAL_EGRESS_TARGET: `${egressTarget.host}:${egressTarget.port}`,
+  REEVAL_EGRESS_DNS: `${egressTarget.host}:${dnsResponder.address().port}`,
+  REEVAL_EGRESS_DNS_ANSWER: DNS_ANSWER.join('.'),
 })
 
 /** The `lands` eval's first attempt. */
 const landed = (run: RunRecord) => run.evals.find((e) => e.name === 'lands')?.attempts[0]
 
 const skills = (run: RunRecord) => run.environments.flatMap((e) => e.skills)
+const plugins = (run: RunRecord) => run.environments.flatMap((e) => e.plugins ?? [])
 const envFiles = (run: RunRecord) => run.environments.flatMap((e) => e.files.map((f) => f.path))
 
 const git = (cwd: string, ...args: string[]) =>
@@ -601,6 +629,108 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'plugins/local-lands',
+    tiers: ['fake', 'docker'],
+    env: 'review',
+    canary: /expected '' to contain 'Review the working tree\.'/,
+    record: ({ run }) => {
+      const [p] = plugins(run)
+      assert.deepEqual(
+        { name: p?.name, source: p?.source, commit: p?.commit, build: p?.build },
+        { name: 'review', source: 'local:plugin', commit: null, build: null },
+      )
+      assert.deepEqual(p?.parts, {
+        skills: ['review-lint'],
+        agents: ['reviewer'],
+        commands: [],
+        hooks: [],
+        mcp: ['docs'],
+        rules: false,
+      })
+      assert.match(p?.sha256 ?? '', /^[0-9a-f]{64}$/)
+      assert.deepEqual(
+        run.environments.map((e) => e.mcp),
+        [['review:docs']],
+      )
+    },
+  },
+  {
+    dir: 'plugins/only-skills',
+    tiers: ['fake', 'docker'],
+    env: 'review',
+    canary: /expected '' to contain 'Review the diff for the house style\.'/,
+    record: ({ run }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement, s.plugin]),
+        [['review-lint', 'harness', 'review']],
+      )
+      assert.deepEqual(plugins(run)[0]?.parts.agents, [])
+      assert.deepEqual(
+        run.environments.map((e) => e.mcp),
+        [[]],
+      )
+    },
+  },
+  {
+    dir: 'plugins/build-layer',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '' to contain 'built on linux as uid 0'/,
+    record: ({ run }) => {
+      const [p] = plugins(run)
+      assert.equal(p?.name, 'built')
+      assert.match(p?.build ?? '', /^reeval-plugin:[0-9a-f]{12}-[0-9a-f]{16}$/)
+      assert.ok(run.stack.images.some((i) => i.ref === p?.build))
+    },
+  },
+  {
+    dir: 'plugins/git-ref',
+    tiers: ['fake', 'docker'],
+    env: 'review-v1',
+    canary: /expected '' to contain 'Review the diff for the house style\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      const commit = (version: string) => {
+        rmSync(join(repo, 'plugins'), { recursive: true, force: true })
+        cpSync(join(dir, 'plugin-repo', version), repo, { recursive: true })
+        git(repo, 'add', '-A')
+        git(repo, 'commit', '-q', '-m', version)
+      }
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      commit('v1')
+      git(repo, 'tag', 'v1')
+      commit('v2')
+    },
+    record: ({ run, project }) => {
+      const [p] = plugins(run)
+      assert.equal(p?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
+      assert.match(p?.source ?? '', /#v1:plugins\/review$/)
+      assert.deepEqual(p?.parts.commands, ['review'])
+    },
+  },
+  {
+    dir: 'plugins/npm-package',
+    tiers: ['fake', 'docker'],
+    env: 'review-1.2.3',
+    canary: /expected '' to contain 'SessionStart'/,
+    prepare: (dir) => publish(join(dir, 'packages')),
+    hostEnv: (dir) => ({
+      npm_config_registry: npmRegistry.url,
+      npm_config_cache: join(dir, '.npm-cache'),
+    }),
+    record: ({ run }) => {
+      assert.deepEqual(
+        plugins(run).map((p) => [p.name, p.source, p.parts.mcp, p.parts.hooks]),
+        [['review', 'npm:@acme/review-plugin@1.2.3', ['docs'], []]],
+      )
+      assert.ok(
+        npmRegistry.fetched.includes('@acme/review-plugin@1.2.3'),
+        'fetched from the registry',
+      )
+      assert.ok(!npmRegistry.fetched.includes('@acme/review-plugin@1.2.4'), 'never the latest')
+    },
+  },
+  {
     dir: 'skills/only-missing',
     tiers: ['fake', 'docker'],
     env: 'typo',
@@ -907,6 +1037,23 @@ export const features: Feature[] = [
     env: 'plain',
     canaryEnv: 'rooted',
     canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+  },
+  {
+    // Docker and Podman only: every exec goes through engine/umask-0000, which starts it at
+    // umask 0000 as Docker 29.6+ does under Docker-in-Docker and rootless; CI's engines don't.
+    dir: 'sandbox/exec-umask',
+    tiers: ['docker', 'podman'],
+    env: 'placed',
+    canaryEnv: 'unmasked',
+    canary: /expected \[ '777 out', '666 out\/log' \] to deeply equal \[\]/,
+    prepare: (dir) => {
+      mkdirSync(join(dir, 'bin'))
+      for (const engine of ['docker', 'podman']) {
+        cpSync(join(dir, 'engine/umask-0000'), join(dir, 'bin', engine))
+        chmodSync(join(dir, 'bin', engine), 0o755)
+      }
+    },
+    hostEnv: (dir) => ({ PATH: `${join(dir, 'bin')}${delimiter}${process.env.PATH}` }),
   },
   {
     dir: 'sandbox/podman-bridge',
@@ -1450,6 +1597,44 @@ export const features: Feature[] = [
         seen.some((c) => c.path === '~/.claude/skills/house-greeting/SKILL.md'),
         JSON.stringify(seen),
       )
+    },
+  },
+  {
+    dir: 'harness/claude-code-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'claude-code',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '~/.claude/settings.json',
+        '~/.reeval/plugins/.claude-plugin/marketplace.json',
+        '~/.reeval/plugins/house/skills/house-style/SKILL.md',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/grok-build-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'grok-build',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.some((p) => p.includes('/.grok/skills/house-style/')), JSON.stringify(seen))
     },
   },
   {
@@ -2407,6 +2592,63 @@ export const features: Feature[] = [
         /^infra error {6}lands\n {2}infra error {6}setup step 1\/1 "touch ran"/,
       )
       assert.match(stdout, /\n1 fail · 1 infra error\n/)
+    },
+  },
+  {
+    dir: 'output/run-error',
+    tiers: ['fake'],
+    env: '-',
+    canary: /second try: expected 1 to be 2/,
+    args: ['--json'],
+    record: ({ run, runDir, stdout }) => {
+      const message = 'stray rejection outside the evals'
+      assert.deepEqual(run.errors, [message])
+      const suite = JSON.parse(stdout) as SuiteResult
+      assert.equal(suite.outcome, 'fail', 'the outcome the exit code is read from')
+      assert.deepEqual(suite.errors, [message])
+      assert.equal(suite.tally.errors, 1)
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(summary, new RegExp(`^error: ${message}$`, 'm'))
+      assert.match(summary, /^1 run error · 1 fail · 1 pass$/m)
+    },
+  },
+  {
+    dir: 'output/zero-counted',
+    tiers: ['fake'],
+    env: 'broken',
+    cells: ['plain', 'broken'],
+    lands: {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: /^setup step 1\/1 "touch ran" in environment broken/ },
+    },
+    landsPass: ['plain'],
+    canaryCells: ['plain', 'working'],
+    canary: /is a variant: expected 'control' to be 'variant'/,
+    canaryPass: ['working'],
+    args: ['--json'],
+    record: ({ runDir, stdout }) => {
+      const suite = JSON.parse(stdout) as SuiteResult
+      const checks = (name: string, environment: string) =>
+        suite.files
+          .flatMap((f) => f.evals)
+          .find((e) => e.name === name)
+          ?.cells?.find((c) => c.environment === environment)
+          ?.checks.map((k) => [k.label, k.outcome.status])
+      assert.deepEqual(checks('lands', 'broken'), [
+        ['runs true', 'not run'],
+        ['is the control', 'not run'],
+      ])
+      // The canary: a variant whose attempt counted reads its checks' counts.
+      assert.deepEqual(checks('canary', 'working'), [
+        ['runs true', 'ran'],
+        ['is a variant', 'ran'],
+      ])
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(
+        blockOf(summary, 'lands'),
+        /\n {2}check {12}plain {3}broken\n {2}runs true {8}1 of 1 {2}not run\n {2}is the control {3}1 of 1 {2}not run$/,
+      )
+      assert.doesNotMatch(blockOf(summary, 'canary'), /not run/)
     },
   },
   {

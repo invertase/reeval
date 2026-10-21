@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "docs": { "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/stamp.mjs"] }
+  }
+}
