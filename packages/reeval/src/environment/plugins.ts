@@ -138,6 +138,20 @@ const hasCredentials = (url: string) => {
 const NPM_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
 const NPM_VERSION = /^[\w.^~<>=|*+][\w.^~<>=|*+ -]*$/
 
+/** A source name Claude Code resolves under `metadata.pluginRoot`. */
+const BARE_SOURCE = /^[A-Za-z0-9][-A-Za-z0-9._]*$/
+
+/** `metadata.pluginRoot` as Claude Code normalises it (`.` for the root), or undefined when it ignores it. */
+function pluginRootOf(metadata: unknown): string | undefined {
+  const root = isRecord(metadata) ? metadata.pluginRoot : undefined
+  if (typeof root !== 'string' || !root || root.startsWith('/') || /[\\:]/.test(root)) {
+    return undefined
+  }
+  const clean = root.replace(/^\.\//, '').replace(/\/+$/, '')
+  if (clean === '' || clean === '.') return '.'
+  return clean.split('/').some((s) => s === '' || s === '.' || s === '..') ? undefined : clean
+}
+
 /** A path in the marketplace's source, normalised, or undefined when it leaves it. */
 function insideRoot(path: string): string | undefined {
   const clean = posix.normalize(path).replace(/\/+$/, '')
@@ -200,9 +214,13 @@ export function readMarketplace(
       `${what} has source ${shown}, which reeval doesn't fetch: it takes a ./path in the marketplace, or a github, url, git-subdir or npm source`,
     )
   if (typeof source === 'string') {
-    const root = isRecord(raw.metadata) ? raw.metadata.pluginRoot : undefined
+    const root = pluginRootOf(raw.metadata)
     const written =
-      source.startsWith('./') || typeof root !== 'string' ? source : `${root}/${source}`
+      source === '.'
+        ? './'
+        : root !== undefined && BARE_SOURCE.test(source) && !source.includes('..')
+          ? `./${root}/${source}`
+          : source
     const path = written.startsWith('./') ? insideRoot(written) : undefined
     if (path === undefined) throw unfetchable()
     if (leavesSource(dir, path)) {

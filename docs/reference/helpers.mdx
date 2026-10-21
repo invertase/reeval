@@ -200,7 +200,7 @@ An entry's `source` is one of the forms Claude Code's marketplaces use:
 
 | Entry `source` | Fetched as |
 |---|---|
-| `"./plugins/lint"`, or a bare name under `metadata.pluginRoot` | A directory in the marketplace's own repository or package, which may not leave it |
+| `"./plugins/lint"`, `"."`, or a bare name such as `"lint"` under `metadata.pluginRoot` | A directory in the marketplace's own repository or package, which may not leave it |
 | `{ "source": "github", "repo": "owner/repo", "ref"?, "sha"? }` | `plugin.git('github:owner/repo')`, at `sha` (a full 40-character commit SHA) or else `ref` |
 | `{ "source": "url", "url", "ref"?, "sha"? }` | `plugin.git(url)`, for an `https://`, `ssh://`, `git://`, `file://` or `git@host:path` URL without a token |
 | `{ "source": "git-subdir", "url", "path", "ref"?, "sha"? }` | `plugin.git(url, { path })`; `url` may be `owner/repo` |

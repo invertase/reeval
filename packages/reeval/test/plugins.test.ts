@@ -598,6 +598,31 @@ test('a marketplace reeval can’t read, or an entry it doesn’t list or can’
   assert.match(problem(listed, 'private'), /names its own npm registry/)
 })
 
+test('a bare entry source resolves under pluginRoot as Claude Code normalises it, and nowhere else', () => {
+  const entries = [
+    { name: 'bare', source: 'format' },
+    { name: 'nested', source: 'tools/format' },
+    { name: 'root', source: '.' },
+  ]
+  const at = (pluginRoot: unknown, name: string) => {
+    const dir = marketplace(tmp(), { name: 'm', metadata: { pluginRoot }, plugins: entries })
+    try {
+      return readMarketplace(dir, 'call', 'label', name).entry
+    } catch (error) {
+      assert.ok(error instanceof PluginProblem)
+      return 'refused'
+    }
+  }
+  assert.deepEqual(at('plugins', 'bare'), { source: 'path', path: 'plugins/format' })
+  assert.deepEqual(at('./plugins/', 'bare'), { source: 'path', path: 'plugins/format' })
+  assert.deepEqual(at('.', 'bare'), { source: 'path', path: 'format' })
+  assert.equal(at('plugins', 'nested'), 'refused')
+  assert.equal(at('../outside', 'bare'), 'refused')
+  assert.equal(at('/etc', 'bare'), 'refused')
+  assert.equal(at(undefined, 'bare'), 'refused')
+  assert.deepEqual(at(undefined, 'root'), { source: 'path', path: '' })
+})
+
 test('a marketplace entry can’t reach the host: refs and urls that git would take as options, local paths, tokens, symlinks and npm specs that aren’t registry packages', () => {
   const token = 'ghp_0123456789abcdefghij'
   const root = tmp()
