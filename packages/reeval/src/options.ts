@@ -79,9 +79,8 @@ export const EVAL_OPTION_KEYS = [
   'tags',
   'pin',
 ] as const
-export type EvalOptionKey = (typeof EVAL_OPTION_KEYS)[number]
 
-const KNOWN: EvalOptionKey[] = [...EVAL_OPTION_KEYS]
+const KNOWN: string[] = [...EVAL_OPTION_KEYS]
 const SUGGEST: Record<string, string> = {
   harnesses: 'harness',
   sandboxes: 'sandbox',

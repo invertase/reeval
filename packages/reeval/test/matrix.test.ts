@@ -114,6 +114,7 @@ describe('the matrix check (twins: it can fail)', () => {
     assert.deepEqual(m.problems, [
       'fixture skills/b covers no feature: add it to an entry in inventory.ts',
       'plan case matrix/default covers no feature: add it to an entry in inventory.ts',
+      'eval option "harness": changes reeval run --dry-run output, so inventory x needs a plan case under test/plan/, not a feature fixture (see test/features/README.md#which-tier)',
     ])
   })
 
@@ -188,9 +189,9 @@ describe('the matrix check (twins: it can fail)', () => {
         refusalText: '',
       }),
       [
-        'eval option "harness" is listed twice in eval-options.ts',
         'eval option "harness": changes reeval run --dry-run output, so inventory x needs a plan case under test/plan/, not a feature fixture (see test/features/README.md#which-tier)',
         'eval option "harness": add refusal rows in test/refusals/ for inventory x (REEVAL_UPDATE_SNAPSHOTS=1 pnpm --filter reeval test test/refusals.test.ts)',
+        'eval option "harness" is listed twice in eval-options.ts',
       ],
     )
   })
