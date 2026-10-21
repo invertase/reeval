@@ -19,6 +19,7 @@ const SECONDS = {
   'history.test.ts': 246,
   'compare-questions.test.ts': 238,
   'plan.test.ts': 208,
+  'dogfood-oracle.test.ts': 180,
   'query.test.ts': 171,
   'concurrency.test.ts': 70,
   'init.test.ts': 60,

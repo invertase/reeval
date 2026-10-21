@@ -1,8 +1,7 @@
 // Full dogfood eval oracle runs (fake harness): the monorepo's mcp-debugging eval file, synced into
 // a temp project. Key-free; complements the minimal feature fixtures under test/features/dogfood/.
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { cpSync, mkdirSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { pkgRoot, runCli, tempDir } from './helpers.ts'
@@ -36,7 +35,7 @@ function syncDogfoodMcp(dir: string) {
   })
   writeFileSync(join(dir, 'reeval.config.ts'), oracleConfig)
   mkdirSync(join(dir, 'node_modules'), { recursive: true })
-  execFileSync('ln', ['-sf', pkgRoot, join(dir, 'node_modules/reeval')], { stdio: 'ignore' })
+  symlinkSync(pkgRoot, join(dir, 'node_modules/reeval'), 'junction')
 }
 
 test('dogfood mcp-debugging eval: oracle passes every task', async () => {
