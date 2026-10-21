@@ -54,6 +54,7 @@ export const prompts = {
   pluginMcp:
     "Call the house_stamp tool of the probe plugin's stamp MCP server once, then reply with what it returned.",
   pluginHook: 'Reply with the single word OK. Do not run any tools.',
+  pluginRules: "What is the probe plugin's codeword? Follow your rules for it, then stop.",
   pluginAgent: `Run the ${PLUGIN_AGENT} subagent, from the probe plugin, once with your subagent tool, giving it the task "Say PONG." Then reply with what it said. Do not answer for it.`,
 }
 
@@ -86,7 +87,7 @@ export const withFakeMcp: HarnessOption = (inherited) =>
  * For the plugin evals: the fake agent without a layout, which takes every plugin part and
  * places plugin skills with its own, does each plugin probe's action from the files reeval
  * placed: it reads the skill, calls the plugin's MCP server, runs the hook's command from the
- * placed hooks.json and reads the subagent. Real harnesses are left as they are.
+ * placed hooks.json, reads the subagent and follows the rule. Real harnesses are left as they are.
  */
 export const withFakePlugin: HarnessOption = (inherited) =>
   inherited.map((h) =>
@@ -103,6 +104,9 @@ export const withFakePlugin: HarnessOption = (inherited) =>
                 exec: `sh -c "$(node -p 'require(process.env.HOME + "/.reeval/plugins/probe/hooks/hooks.json").hooks.SessionStart[0].hooks[0].command')"`,
               },
               { exec: `cat ~/.reeval/plugins/probe/agents/${PLUGIN_AGENT}.md` },
+              {
+                exec: `grep -o 'MARIGOLD-[0-9]*' ~/.reeval/plugins/probe/rules/probe.md > plugin-codeword.txt`,
+              },
               { reply: 'OK' },
             ],
           ],
