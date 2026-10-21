@@ -1870,6 +1870,29 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'remarks.model',
+    area: 'CLI and runner',
+    name: 'Model remarks from the per-eval insights call, by the eval rubric (`skills/eval-rubric`): kinds `name-contradicts`, `name-no-intent`, `judge-too-loose`, `judge-leaks-answer`, `prompt-names-tool` and `compound-judge`, each kept only with a verbatim quote on its cited line of the file as the run saw it; printed once, with its fix when it has one; the exit code never changes',
+    tests: [
+      'reeval/test/remarks.test.ts › each kind passes its gates, prints once with its fix, and never changes the exit code',
+      'reeval/test/remarks.test.ts › without -v, concerns print up to the cap and suggestions wait',
+      'reeval/test/remarks.test.ts › canary: an unknown kind and a quote not on its line are dropped',
+      'reeval/test/remarks.test.ts › canary: a remark whose quoted file changed since the run is dropped',
+      'reeval/test/remarks.test.ts › an edit elsewhere in the file prints no model remark again',
+      'reeval/test/remarks.test.ts › has one section per remark kind, and none for anything else',
+      'reeval/test/remarks.test.ts › ships beside dist as the repository has it, and its hash is in the prompt version',
+    ],
+  },
+  {
+    id: 'remarks.no-baseline',
+    area: 'CLI and runner',
+    name: "Remark `no-baseline`: the classification names a change (`subject.change`) the eval doesn't compare; never under a profile's `limit.compare: false`",
+    tests: [
+      'reeval/test/remarks.test.ts › raised when the classification names a change and nothing compares it',
+      'reeval/test/remarks.test.ts › canary: a compare, a profile with limit.compare: false, or no change raises none',
+    ],
+  },
+  {
     id: 'summary.judge-keys',
     area: 'Records and studio',
     name: 'Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts',

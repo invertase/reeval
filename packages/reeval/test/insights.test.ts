@@ -24,6 +24,7 @@ import {
   type InsightInput,
 } from '../src/insights/input.ts'
 import { byPriority, insightTier } from '../src/insights/priority.ts'
+import { insightsPromptVersion } from '../src/insights/schema.ts'
 import { trimInput } from '../src/insights/trim.ts'
 import { type Citable, checkSentence } from '../src/insights/validate.ts'
 import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
@@ -119,7 +120,7 @@ describe('the insights validator', () => {
   test('the recipe insights pass every check, as the with-insights entry holds them', async () => {
     const doc = await generate(recipeInsights)
     assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
-    assert.equal(doc.promptVersion, 'insights-v5')
+    assert.equal(doc.promptVersion, insightsPromptVersion())
     const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
     assert.deepEqual(
       sentencesOf(doc),
@@ -893,7 +894,7 @@ describe('the order analysis.maxTokens is spent in', () => {
   const at = (over: Partial<EvalResult>) =>
     ({ outcome: 'pass', questions: [], across: 'none', ...over }) as EvalResult
 
-  test('a failure, then made worse, then a compare, then an infra error, then the rest', () => {
+  test('a failure, then made worse, then a compare, then an infra error, then a flaky pass, then the rest', () => {
     const rest = at({ name: 'rest' })
     const infra = at({ name: 'infra', outcome: 'infra_error' })
     const compare = at({ name: 'compare', across: 'harness' as EvalResult['across'] })
@@ -903,13 +904,36 @@ describe('the order analysis.maxTokens is spent in', () => {
       cells: [{ effect: 'worse', checks: [] }] as unknown as EvalResult['cells'],
     })
     const fail = at({ name: 'fail', outcome: 'fail' })
+    const flaky = at({
+      name: 'flaky',
+      cases: [
+        { cells: [{ passed: 3, failed: 0, checks: [] }] },
+        { cells: [{ passed: 2, failed: 1, checks: [] }] },
+      ] as unknown as EvalResult['cases'],
+    })
     assert.deepEqual(
-      [rest, infra, compare, question, worse, fail].map(insightTier),
-      [4, 3, 2, 2, 1, 0],
+      [rest, flaky, infra, compare, question, worse, fail].map(insightTier),
+      [5, 4, 3, 2, 2, 1, 0],
     )
     assert.deepEqual(
-      byPriority([rest, infra, compare, question, worse, fail]).map((e) => e.name),
-      ['fail', 'worse', 'compare', 'question', 'infra', 'rest'],
+      byPriority([rest, flaky, infra, compare, question, worse, fail]).map((e) => e.name),
+      ['fail', 'worse', 'compare', 'question', 'infra', 'flaky', 'rest'],
+    )
+  })
+
+  test('canary: a clean pass stays below a flaky one, whichever prints first', () => {
+    const clean = at({
+      name: 'clean',
+      cells: [{ passed: 3, failed: 0, checks: [] }] as unknown as EvalResult['cells'],
+    })
+    const flaky = at({
+      name: 'flaky',
+      cells: [{ passed: 2, failed: 1, checks: [] }] as unknown as EvalResult['cells'],
+    })
+    assert.equal(insightTier(clean), 5)
+    assert.deepEqual(
+      byPriority([clean, flaky]).map((e) => e.name),
+      ['flaky', 'clean'],
     )
   })
 
@@ -1472,14 +1496,14 @@ describe('reeval run writes insights at its end', () => {
 
   test('a small analysis.maxTokens skips the lowest-priority evals; the failing one keeps its insight', async () => {
     const p = await project('run-insights-budget', {
-      'reeval.config.ts': runConfig({ analysis: 'maxTokens: 6000,' }),
+      'reeval.config.ts': runConfig({ analysis: 'maxTokens: 9000,' }),
       ...RUN_EVALS,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const doc = scratchInsights(p.dir)
     assert.ok(doc)
-    assert.equal(doc.budget?.maxTokens, 6000)
+    assert.equal(doc.budget?.maxTokens, 9000)
     assert.deepEqual(
       doc.evals.map((e) => e.evalId.replace('evals%2Ffiles.eval.ts › ', '')),
       ['writes ok.txt 1', 'writes ok.txt 2', 'writes missing.txt'],
@@ -1490,7 +1514,7 @@ describe('reeval run writes insights at its end', () => {
       [3, 4, 5, 6, 7, 8, 9].map((n) => `evals%2Ffiles.eval.ts › writes ok.txt ${n}`),
     )
     const used = doc.usage.inputTokens + doc.usage.outputTokens
-    assert.ok(used <= 6000, `the run stays within its budget: ${used}`)
+    assert.ok(used <= 9000, `the run stays within its budget: ${used}`)
     assert.ok(
       doc.evals.some((e) => e.evalId === 'evals%2Ffiles.eval.ts › writes missing.txt' && e.answer),
       'the failing eval is explained first',
@@ -1498,7 +1522,7 @@ describe('reeval run writes insights at its end', () => {
     assert.ok(!calls(p.dir).some((c) => c.startsWith('headline')), 'no headline past the budget')
     assert.match(
       r.stdout,
-      /insights skipped for 7 evals: analysis\.maxTokens \(6,000\) reached — raise it in reeval\.config\.ts, or reeval analyze \S+ --insights to finish/,
+      /insights skipped for 7 evals: analysis\.maxTokens \(9,000\) reached — raise it in reeval\.config\.ts, or reeval analyze \S+ --insights to finish/,
     )
     assert.match(r.stdout, /No: the file is missing\./)
   })

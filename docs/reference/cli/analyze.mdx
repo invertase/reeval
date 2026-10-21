@@ -104,7 +104,7 @@ wrote evals/.history/20261020T231903Z_2e69951_cursor-agent_8s1m/insights.json: 1
 …
 ```
 
-`reeval run` writes a run's insights at its end when `analysis.model` is set (see [During a run](#during-a-run)); `--insights` writes them for a run that has none. Both use `analysis.model`, never the judge's model: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` (in the history folder for a recorded run, `.reeval/runs/<run>/` otherwise), and `reeval show` prints them with the run from then on. A run's [remarks](/reference/cli/run#remarks) already there are kept in the new file. `--insights` takes a run, `--json` (the document instead of the blocks) and `-v`, and no other flag.
+`reeval run` writes a run's insights at its end when `analysis.model` is set (see [During a run](#during-a-run)); `--insights` writes them for a run that has none. Both use `analysis.model`, never the judge's model: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` (in the history folder for a recorded run, `.reeval/runs/<run>/` otherwise), and `reeval show` prints them with the run from then on. A run's [remarks](/reference/cli/run#remarks) already there are kept in the new file, and the model's [remarks](/reference/cli/run#model-remarks) and `no-baseline` are added. `--insights` takes a run, `--json` (the document instead of the blocks) and `-v`, and no other flag.
 
 Per eval, one call classifies it from its name first, then its prompts, judge questions and check labels: its job (`choose` a tool, `finish` a task, or `other`), the question it asks and its subject. A low-confidence classification is `other`. A second call writes the answer and a sentence on each row the [layout](/concepts/output#insights) opens, from that eval's facts with each effect as a word. Then one call writes the run's headline.
 
@@ -159,7 +159,7 @@ insights stopped: 7 evals skipped (Ctrl-C): reeval analyze 20261021T150812Z_bb8d
 
 Ctrl-C (or SIGTERM) while insights run stops the calls in flight and starts no more. The sentences already written stay, `insights.json` keeps them and lists the rest in `stopped`, and the exit code is the run's own, not 130. A second Ctrl-C leaves at once, with the same code. Ctrl-C after the last attempt but before insights start (while compare questions settle) skips them, also with the run's own code. Ctrl-C during the attempts cancels the run as before, and asks for no insights.
 
-`analysis.maxTokens` (default 250000) caps the tokens of one run's insight calls. It goes to failing evals first, then to changes that made something worse, then to compares, then to infrastructure errors, then to the rest. Each eval reserves an estimate before it starts (6,000 tokens, then the mean of the evals that finished having used tokens), and starts only when that fits what's left. Once the next one can't fit, no eval's calls start (those in flight finish), the evals it didn't reach print their facts, and the summary names how many. A budget under 6,000 tokens starts none. The run can still pass the budget by what the evals in flight spend over their estimates. The default covers about 45 evals on `google/gemini-3.8-flash`, whose thinking is most of each answer.
+`analysis.maxTokens` (default 250000) caps the tokens of one run's insight calls. It goes to failing evals first, then to changes that made something worse, then to compares, then to infrastructure errors, then to passing evals with a failed try in any cell, then to the rest. Each eval reserves an estimate before it starts (6,000 tokens, then the mean of the evals that finished having used tokens), and starts only when that fits what's left. Once the next one can't fit, no eval's calls start (those in flight finish), the evals it didn't reach print their facts, and the summary names how many. A budget under 6,000 tokens starts none. The run can still pass the budget by what the evals in flight spend over their estimates. The default covers about 35 evals on `google/gemini-3.8-flash`, whose thinking is most of each answer; the rubric and source lines that [model remarks](/reference/cli/run#model-remarks) need are part of each eval's call.
 
 | Outcome | What prints |
 |---|---|
@@ -168,7 +168,8 @@ Ctrl-C (or SIGTERM) while insights run stops the calls in flight and starts no m
 | The budget runs out | `insights skipped for N evals: analysis.maxTokens (250k) reached — raise it in reeval.config.ts, or reeval analyze <run> --insights to finish` |
 | Some evals' calls fail twice | `insights failed for N evals (<reason>), so they print their facts: reeval analyze <run> --insights to finish` |
 | Every eval's calls fail twice | `insights failed (<reason>): reeval analyze <run> --insights to retry` |
-| The model's key isn't set | `insights skipped: <why>` |
+| The model's key isn't set | `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }`, naming the model's provider key (else `AI_GATEWAY_API_KEY`); `reeval analyze --insights` prints every way to set it |
+| `analysis.model` can't write them (an evaluation model) | `insights skipped: <why>` |
 
 ### The caps
 

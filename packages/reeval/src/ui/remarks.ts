@@ -23,6 +23,12 @@ export function shownRemarks(remarks: Remark[], runId: string, verbose: boolean)
   return { shown, hidden: verbose ? 0 : concerns.length - shown.length }
 }
 
+/** Each remark marked with whether the section prints it in this run (`printed`). */
+export function markPrinted(remarks: Remark[], runId: string, verbose: boolean): Remark[] {
+  const shown = new Set(shownRemarks(remarks, runId, verbose).shown)
+  return remarks.map((r) => ({ ...r, printed: shown.has(r) }))
+}
+
 /** `evals/a.eval.ts:12` from `source:evals/a.eval.ts#L12`. */
 const location = (at: string) => at.replace(/^source:/, '').replace(/#L(\d+)$/, ':$1')
 
@@ -44,7 +50,9 @@ export function remarkLines(
     'Remarks:',
     ...shown.flatMap((r) => [
       `  ${names.get(r.evalId) ?? r.evalId}: ${r.text}`,
-      `    ${c.dim('fix')}  ${location(r.fix.at)}  ${clip(r.fix.edit, 160)}`,
+      r.fix.edit
+        ? `    ${c.dim('fix')}  ${location(r.fix.at)}  ${clip(r.fix.edit, 160)}`
+        : `    ${c.dim('at')}   ${location(r.fix.at)}`,
     ]),
     ...(hidden > 0 ? [c.dim(`  +${hidden} more (-v)`)] : []),
   ]

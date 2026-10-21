@@ -1595,7 +1595,7 @@ export type FakeInsightsInput = ModelInsightInput | ModelHeadlineInput
 
 /**
  * A fake insight answer. Each call takes its part: `intent` the classification, `answer`,
- * `findings`, `rows` and `namedTools` the eval's sentences, `headline` the run's. Whatever's
+ * `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's
  * left out is empty, and the intent defaults to `job: 'other'`.
  */
 export type FakeInsights = {
@@ -1611,6 +1611,18 @@ export type FakeInsights = {
   findings?: Array<{ text: string; cites: string[] }>
   rows?: Array<{ row: string; text: string; cites: string[] }>
   namedTools?: Array<{ attempt: string; tools: string[] }>
+  /**
+   * The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are
+   * `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`).
+   * They go through the same gates as a model's, so one missing a part is dropped.
+   */
+  remarks?: Array<{
+    kind: string
+    text: string
+    source?: { at: string; quote: string } | null
+    evidence?: string[]
+    fix?: { at: string; edit: string } | null
+  }>
   headline?: { text: string; cites: string[] } | null
 }
 

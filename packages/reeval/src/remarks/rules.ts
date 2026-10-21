@@ -1,10 +1,11 @@
 // The deterministic remarks: hard thresholds over one run's facts and, for the kinds that need
-// it, the history's derived views. No model is involved, so they print without one. Pure: what
-// the history and the eval's source say comes in through `RemarkContext`.
+// it, the history's derived views. No model is involved, so they print without one, except
+// `no-baseline`, a rule on the model's classification. Pure: what the history and the eval's
+// source say comes in through `RemarkContext`.
 import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
-import type { Remark } from '../view/insights.ts'
+import type { EvalInsight, Remark } from '../view/insights.ts'
 import {
   type CellResult,
   EFFECT_MIN_COUNTED,
@@ -48,16 +49,39 @@ export type RemarkContext = {
 /** `KIND_ORDER` ranks remarks of one severity: the ones most worth acting on first. */
 const KIND_ORDER: Remark['kind'][] = [
   'flaky-check',
+  'judge-too-loose',
+  'judge-leaks-answer',
+  'name-contradicts',
+  'prompt-names-tool',
+  'no-baseline',
   'slow-mcp-start',
   'too-few-tries',
+  'compound-judge',
   'check-never-fails',
+  'name-no-intent',
 ]
+
+/** Remarks ranked: concerns first, then by kind, then in the order they came. */
+export function rankRemarks<T extends Pick<Remark, 'severity' | 'kind'>>(remarks: T[]): T[] {
+  const order = (r: T) => (r.severity === 'concern' ? 0 : 1) * 100 + KIND_ORDER.indexOf(r.kind)
+  return remarks
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => order(a.r) - order(b.r) || a.i - b.i)
+    .map(({ r }) => r)
+}
 
 /** sha256(kind, eval, the eval's sources[, what it's about]): one remark per kind per eval version. */
 export function remarkId(kind: Remark['kind'], evalId: string, entry: EvalEntry, extra = '') {
   const sources = sha256(JSON.stringify(entry.sources.map((s) => [s.path, s.sha256])))
   return sha256(JSON.stringify([kind, evalId, sources, ...(extra ? [extra] : [])]))
 }
+
+/**
+ * sha256(kind, eval, the quoted source text): a model remark's id. It holds while the quote is in
+ * the file, so an edit elsewhere doesn't raise it again, and an edit to the quote acts on it.
+ */
+export const quotedRemarkId = (kind: Remark['kind'], evalId: string, quote: string) =>
+  sha256(JSON.stringify([kind, evalId, 'quote', quote]))
 
 const tries = (n: number) => `${n} ${n === 1 ? 'try' : 'tries'}`
 const capital = (s: string) => `${s.slice(0, 1).toUpperCase()}${s.slice(1)}`
@@ -331,6 +355,47 @@ function slowMcpStart(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): 
   return out
 }
 
+/**
+ * no-baseline (concern): the classification says the eval is about a change (`subject.change`),
+ * but it declares no compare, so nothing shows what the change does. A profile's
+ * `limit.compare: false` stripped the compare on purpose, so it never raises it.
+ */
+export function noBaseline(
+  suite: SuiteResult,
+  record: RunRecord,
+  insights: EvalInsight[],
+  ctx: RemarkContext,
+): Candidate[] {
+  if (record.profile?.limit.compare === false) return []
+  const intents = new Map(insights.map((i) => [i.evalId, i.intent]))
+  const byId = new Map(record.evals.map((e) => [e.id, e]))
+  const out: Candidate[] = []
+  for (const file of suite.files) {
+    for (const e of [...file.evals].sort((a, b) => a.order - b.order)) {
+      const change = intents.get(e.path)?.subject.change?.trim()
+      if (!change || e.todo || e.outcome === 'skipped') continue
+      const own = units(e).flatMap((u) => byId.get(u.id) ?? [])
+      const first = own[0]
+      if (!first || own.some((x) => x.compare)) continue
+      if (units(e).some((u) => u.cells.some((c) => c.vs))) continue
+      out.push({
+        id: remarkId('no-baseline', e.path, first),
+        evalId: e.path,
+        kind: 'no-baseline',
+        severity: 'concern',
+        text: `It's about ${change}, but nothing runs it without ${change}, so the result can't show what ${change} changes.`,
+        evidence: [e.path],
+        fix: {
+          at: ctx.locate(first, null),
+          edit: `add compare: { baseline: <an environment without ${change}>, variants: [<one with it>] }`,
+        },
+        origin: 'deterministic',
+      })
+    }
+  }
+  return out
+}
+
 /** Every deterministic remark the run raises, ranked: concerns first, then by kind and eval. */
 export function deterministicRemarks(
   suite: SuiteResult,
@@ -354,10 +419,5 @@ export function deterministicRemarks(
       )
     }
   }
-  const order = (r: Candidate) =>
-    (r.severity === 'concern' ? 0 : 1) * 10 + KIND_ORDER.indexOf(r.kind)
-  return out
-    .map((r, i) => ({ r, i }))
-    .sort((a, b) => order(a.r) - order(b.r) || a.i - b.i)
-    .map(({ r }) => r)
+  return rankRemarks(out)
 }

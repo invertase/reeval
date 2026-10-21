@@ -109,7 +109,7 @@ With `analysis.model` set, `reeval run` asks the model what each eval checks and
 | Setting | Default | What it does |
 |---|---|---|
 | `analysis.model` | none | The model; unset, a run prints no insights |
-| `analysis.maxTokens` | `250000` | Caps one run's insight tokens; failing evals, regressions and compares go first |
+| `analysis.maxTokens` | `250000` | Caps one run's insight tokens; failing evals, regressions and compares go first, then passes with a failed try |
 | `analysis.insights`, `--no-insights` | on | Turns them off, for every run or for one |
 
 Insights run to the end, with a progress line on a terminal (`insights 3/11…`). They never change an outcome or the exit code. Past the budget, when an eval's calls fail twice, or after Ctrl-C, those blocks print their facts and one line says why, here from `examples/hello`'s fake config with `analysis.maxTokens: 12000`:
@@ -129,7 +129,7 @@ wrote .reeval/runs/20261021T182958Z_a343e84_cursor-agent_bfvz/insights.json: 11 
 …
 ```
 
-That command asks about only the evals left, with a fresh budget, and keeps every sentence already written. Without the model's key, a run prints `insights skipped: No credentials for analysis model …` and its facts. [Insights and remarks](/concepts/insights) covers the headline and the remarks that end a run.
+That command asks about only the evals left, with a fresh budget, and keeps every sentence already written. Without the model's key, a run prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }` and its facts; `reeval analyze --insights` and `reeval doctor` say every way to set it. [Insights and remarks](/concepts/insights) covers the headline and the remarks that end a run.
 
 ## Next
 

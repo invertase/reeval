@@ -115,6 +115,26 @@ describe('reeval init', () => {
     assert.match(run.stdout, /^pass {13}creates greet\.js$/m)
   })
 
+  test('without the analysis key, a run prints one short line naming it, and keeps its exit code', async () => {
+    const p = await empty('init-no-key')
+    await runCli(p.dir, ['init', '--yes'])
+    const model = /^ {2}analysis: .*$/m.exec(p.read('reeval.config.ts'))?.[0] ?? ''
+    assert.ok(model, 'reeval init sets analysis.model')
+    await writeFile(
+      join(p.dir, 'fake.config.ts'),
+      fakeConfig.replace('  sandbox: fakeSandbox(),', `  sandbox: fakeSandbox(),\n${model}`),
+    )
+    const run = await runCli(p.dir, ['run', '--config', 'fake.config.ts'])
+    const skipped = (run.stdout + run.stderr).split('\n').filter((l) => /insights/.test(l))
+    assert.deepEqual(skipped, [
+      'insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }',
+    ])
+    assert.ok((skipped[0] ?? '').length <= 100, 'fits 100 columns, whole')
+    const off = await runCli(p.dir, ['run', '--config', 'fake.config.ts', '--no-insights'])
+    assert.equal(run.code, off.code)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+  })
+
   test('--bare writes only the config and its essentials', async () => {
     const p = await empty('init-bare')
     const init = await runCli(p.dir, ['init', '--harness', 'codex', '--bare'])

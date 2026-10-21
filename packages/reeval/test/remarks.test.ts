@@ -4,7 +4,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { RunRecord } from '../src/history/types.ts'
+import type { EvalEntry, RunRecord } from '../src/history/types.ts'
+import { sha256 } from '../src/ids.ts'
+import type { InsightInput } from '../src/insights/input.ts'
+import { gateRemarks } from '../src/insights/remarks.ts'
+import { modelRubric, rubric, rubricHash, rubricKinds } from '../src/insights/rubric.ts'
+import { insightsPromptVersion } from '../src/insights/schema.ts'
 import { defaultBranch } from '../src/remarks/index.ts'
 import {
   type CheckWindow,
@@ -12,7 +17,7 @@ import {
   type RemarkContext,
   type Streak,
 } from '../src/remarks/rules.ts'
-import type { RunInsights } from '../src/view/insights.ts'
+import { MODEL_REMARK_KINDS, REMARK_KINDS, type RunInsights } from '../src/view/insights.ts'
 import { suiteResult } from '../src/view/suite.ts'
 import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 
@@ -582,5 +587,352 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
       remarksBlock(r.stdout) ?? '',
       /^Remarks:\n {2}fixes \$id: Marked passed .*\n {4}fix {2}evals\/fam\.eval\.ts:5 /,
     )
+  })
+})
+
+const REMARKS_DIR = new URL('./fixtures/remarks/', import.meta.url)
+const KINDS_EVAL = readFileSync(new URL('kinds.eval.ts', REMARKS_DIR), 'utf8')
+
+/** A fake project whose analysis model raises one remark per eval it knows (`fixtures/remarks`). */
+const modelProject = (name: string, evals: string, extra = '') =>
+  project(name, {
+    'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+import { insights } from './insights.ts'
+export default defineConfig({
+  harness: fakeHarness(),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', {}),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  analysis: { model: fakeAnalysis({ insights }) },
+  ${extra}
+})
+`,
+    'insights.ts': readFileSync(new URL('insights.ts', REMARKS_DIR), 'utf8'),
+    'evals/kinds.eval.ts': evals,
+  })
+
+const MODEL_KINDS = [
+  'name-contradicts',
+  'name-no-intent',
+  'judge-too-loose',
+  'judge-leaks-answer',
+  'compound-judge',
+  'prompt-names-tool',
+]
+
+/** The evals a remarks block names, in order. */
+const namedIn = (block: string | null) =>
+  [...(block ?? '').matchAll(/^ {2}(\S[^:]*):/gm)].map((m) => m[1])
+
+describe('model remarks', () => {
+  test('each kind passes its gates, prints once with its fix, and never changes the exit code', async () => {
+    const p = await modelProject('remarks-model-kinds', KINDS_EVAL)
+    const first = await runCli(p.dir, ['run', '-v'])
+    assert.equal(first.code, 1, 'ships the release fails its judge')
+    const doc = insightsOf(p.dir)
+    assert.deepEqual(doc?.validation.drops ?? [], [])
+    assert.deepEqual(
+      doc?.remarks.map((r) => [r.kind, r.origin, r.severity]).sort(),
+      [
+        ...MODEL_KINDS.map((k) => [
+          k,
+          'model',
+          k === 'name-no-intent' || k === 'compound-judge' ? 'suggestion' : 'concern',
+        ]),
+        ['no-baseline', 'deterministic', 'concern'],
+      ].sort(),
+    )
+    const block = remarksBlock(first.stdout) ?? ''
+    assert.deepEqual(namedIn(block), [
+      'answers kindly',
+      'finds the bug',
+      'adds a cache',
+      'picks Genkit',
+      'adds dark mode',
+      'ships the release',
+      'test 1',
+    ])
+    assert.match(
+      block,
+      /^ {2}answers kindly: The judge asks whether the answer is okay, which any reply passes\.\n {4}fix {2}evals\/kinds\.eval\.ts:16 {2}ask 'Does the reply thank the user by name and offer one next step\?'$/m,
+    )
+    const loose = doc?.remarks.find((r) => r.kind === 'judge-too-loose')
+    assert.deepEqual(loose?.source, {
+      at: 'source:evals/kinds.eval.ts#L16',
+      quote: 'Is the answer okay?',
+    })
+    assert.match(
+      loose?.evidence[0] ?? '',
+      /answers kindly\/.*\/checks\/toPass Is the answer okay\?$/,
+    )
+
+    const off = await runCli(p.dir, ['run', '--no-insights'])
+    assert.equal(off.code, first.code, 'the same exit code without the model')
+    const second = await runCli(p.dir, ['run', '-v'])
+    assert.equal(second.code, first.code)
+    assert.equal(remarksBlock(second.stdout), null, 'every remark has printed')
+  })
+
+  test('without -v, concerns print up to the cap and suggestions wait', async () => {
+    const p = await modelProject('remarks-model-cap', KINDS_EVAL)
+    const r = await runCli(p.dir, ['run'])
+    const block = remarksBlock(r.stdout)
+    assert.deepEqual(namedIn(block), ['answers kindly', 'finds the bug', 'adds a cache'])
+    assert.match(block ?? '', /\+2 more \(-v\)/)
+  })
+
+  test('canary: an unknown kind and a quote not on its line are dropped; evidence and a fix are not gated', async () => {
+    const p = await modelProject('remarks-model-gates', KINDS_EVAL)
+    const broken = [
+      'name-contradicts:kind',
+      'judge-leaks-answer:line',
+      'judge-too-loose:evidence',
+      'prompt-names-tool:fix',
+    ]
+    const r = await runCli(p.dir, ['run', '-v'], { env: { REMARKS: broken.join(',') } })
+    assert.equal(r.code, 1)
+    const doc = insightsOf(p.dir)
+    assert.deepEqual(doc?.remarks.map((x) => x.kind).sort(), [
+      'compound-judge',
+      'judge-too-loose',
+      'name-no-intent',
+      'no-baseline',
+      'prompt-names-tool',
+    ])
+    assert.deepEqual((doc?.validation.drops ?? []).map((d) => [d.slot, d.reason]).sort(), [
+      ['adds a cache › remark vague-name', 'is kind "vague-name", which the model can\'t raise'],
+      [
+        'finds the bug › remark judge-leaks-answer',
+        'quotes "off-by-one in parse()", which isn\'t on line 22 of evals/kinds.eval.ts',
+      ],
+    ])
+    const block = remarksBlock(r.stdout) ?? ''
+    assert.doesNotMatch(block, /adds a cache:|finds the bug:/)
+    assert.match(block, /^ {2}answers kindly: .*\n {4}fix {2}evals\/kinds\.eval\.ts:16 /m)
+    assert.match(
+      block,
+      /^ {2}picks Genkit: .*\n {4}at {3}evals\/kinds\.eval\.ts:30$/m,
+      'without a fix, the remark points at its quoted line',
+    )
+  })
+
+  test('canary: a remark whose quoted file changed since the run is dropped', async () => {
+    const p = await modelProject('remarks-model-stale', KINDS_EVAL)
+    await runCli(p.dir, ['run', '--no-insights'])
+    await writeFile(join(p.dir, 'evals/kinds.eval.ts'), `${KINDS_EVAL}\n// edited\n`)
+    const r = await runCli(p.dir, ['analyze', readRun(p.dir).run.runId, '--insights', '-v'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const drops = insightsOf(p.dir)?.validation.drops ?? []
+    assert.equal(drops.length, 6, JSON.stringify(drops))
+    for (const d of drops) assert.match(d.reason, /evals\/kinds\.eval\.ts changed since the run/)
+  })
+
+  test('an edit elsewhere in the file prints no model remark again', async () => {
+    const p = await modelProject('remarks-model-edit', KINDS_EVAL)
+    const raised = await runCli(p.dir, ['run', '-v'])
+    assert.match(remarksBlock(raised.stdout) ?? '', /answers kindly:/)
+    await writeFile(join(p.dir, 'evals/kinds.eval.ts'), `${KINDS_EVAL}// a comment\n`)
+    const elsewhere = await runCli(p.dir, ['run', '-v'])
+    assert.deepEqual(
+      namedIn(remarksBlock(elsewhere.stdout)),
+      ['adds dark mode'],
+      "a model remark's id is its quote; no-baseline's is the eval's sources, which changed",
+    )
+  })
+})
+
+describe('no-baseline', () => {
+  const darkMode = (
+    options: string,
+  ) => `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const dark = defineEnvironment('dark', { files: { 'dark.css': 'body {}\\n' } })
+void plain
+void dark
+evaluate('adds dark mode', ${options}, async (c) => {
+  await c.send('Add a dark mode toggle to the settings page.')
+  expect(true, 'toggle added').toBe(true)
+})
+`
+
+  test('raised when the classification names a change and nothing compares it', async () => {
+    const p = await modelProject('remarks-nb-at', darkMode('{}'))
+    const r = await runCli(p.dir, ['run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(
+      remarksBlock(r.stdout)?.split('\n').slice(0, 3).join('\n'),
+      [
+        'Remarks:',
+        "  adds dark mode: It's about dark mode, but nothing runs it without dark mode, so the result can't show what dark mode changes.",
+        '    fix  evals/kinds.eval.ts:6  add compare: { baseline: <an environment without dark mode>, variants: [<one with it>] }',
+      ].join('\n'),
+    )
+  })
+
+  test('canary: a compare, a profile with limit.compare: false, or no change raises none', async () => {
+    const compared = await modelProject(
+      'remarks-nb-compare',
+      darkMode('{ compare: { baseline: plain, variants: [dark] } }'),
+    )
+    const c = await runCli(compared.dir, ['run'])
+    assert.equal(c.code, 0, c.stdout + c.stderr)
+    assert.ok(!insightsOf(compared.dir)?.remarks.some((r) => r.kind === 'no-baseline'))
+
+    const limited = await modelProject(
+      'remarks-nb-profile',
+      darkMode('{ compare: { baseline: plain, variants: [dark] } }'),
+      `profiles: { quick: { limit: { compare: false } } },`,
+    )
+    const l = await runCli(limited.dir, ['run', '--profile', 'quick'])
+    assert.equal(l.code, 0, l.stdout + l.stderr)
+    assert.ok(!insightsOf(limited.dir)?.remarks.some((r) => r.kind === 'no-baseline'))
+
+    const unnamed = await modelProject(
+      'remarks-nb-nochange',
+      darkMode('{}').replace("'adds dark mode'", "'adds a dark toggle'"),
+    )
+    const u = await runCli(unnamed.dir, ['run'])
+    assert.equal(u.code, 0, u.stdout + u.stderr)
+    assert.doesNotMatch(u.stdout, /Remarks:/)
+  })
+})
+
+describe('the eval rubric', () => {
+  const source = readFileSync(
+    new URL('../../../skills/eval-rubric/SKILL.md', import.meta.url),
+    'utf8',
+  )
+
+  test('has one section per remark kind, and none for anything else', () => {
+    const sections = rubricKinds(source)
+    assert.deepEqual([...sections].sort(), Object.keys(REMARK_KINDS).sort())
+    assert.equal(new Set(sections).size, sections.length, 'one section each')
+  })
+
+  test('ships beside dist as the repository has it, and its hash is in the prompt version', () => {
+    assert.equal(rubric(), source, 'pnpm build copies skills/eval-rubric')
+    assert.match(insightsPromptVersion(), new RegExp(`-${rubricHash()}$`))
+    assert.deepEqual(rubricKinds(modelRubric(MODEL_REMARK_KINDS)), [...MODEL_REMARK_KINDS])
+    assert.deepEqual([...MODEL_REMARK_KINDS].sort(), [...MODEL_KINDS].sort())
+  })
+})
+
+describe('the model remark gates', () => {
+  const FILE = 'evals/a.eval.ts'
+  const BODY = [
+    "import { evaluate, expect } from 'reeval'",
+    '',
+    "evaluate('other', async (c) => {",
+    "  await c.send('Write it.')",
+    '})',
+    '',
+    "evaluate('answers kindly', async (c) => {",
+    "  await c.send('Thank the user.')",
+    "  expect(await c.judge('Is the answer okay?')).toPass()",
+    '})',
+    '',
+  ].join('\n')
+  const shown = (body: string) =>
+    body
+      .split('\n')
+      .slice(6, 10)
+      .map((l, i) => `L${i + 7} ${l}`)
+  const gate = (
+    remarks: Array<Partial<Parameters<typeof gateRemarks>[0][number]>>,
+    { body = BODY, now = body as string | null, entries = 1 } = {},
+  ) =>
+    gateRemarks(
+      remarks.map((r) => ({
+        kind: 'judge-too-loose',
+        text: 'The judge asks whether the answer is okay, which any reply passes.',
+        source: { at: 'L9', quote: 'Is the answer okay?' },
+        evidence: [],
+        fix: null,
+        ...r,
+      })),
+      {
+        input: {
+          call: 'insights',
+          eval: { path: `${FILE} › answers kindly`, name: 'answers kindly', file: FILE },
+          source: { file: FILE, lines: shown(body) },
+        } as InsightInput,
+        entries: Array.from(
+          { length: entries },
+          () => ({ sources: [{ path: FILE, sha256: sha256(body) }] }) as EvalEntry,
+        ),
+        files: new Map([[FILE, now]]),
+      },
+    )
+  const kept = (...args: Parameters<typeof gate>) => gate(...args).kept.length
+  const at = (a: string, quote = 'Is the answer okay?') => ({ source: { at: a, quote } })
+
+  test('keeps a quote verbatim on its line, by L<n>, #L<n> or source:<file>#L<n>', () => {
+    for (const a of ['L9', '#L9', `source:${FILE}#L9`]) {
+      const out = gate([at(a)])
+      assert.deepEqual(out.dropped, [], a)
+      assert.deepEqual(out.kept[0]?.source, {
+        at: `source:${FILE}#L9`,
+        quote: 'Is the answer okay?',
+      })
+    }
+    assert.equal(kept([at('L9', '  Is the answer okay?  ')]), 1, 'trailing whitespace is trimmed')
+    const crlf = BODY.replace(/\n/g, '\r\n')
+    assert.equal(kept([at('L9')], { body: crlf }), 1, 'a CRLF file')
+  })
+
+  test('canary: a kind the model may not raise is dropped', () => {
+    for (const kind of [
+      'flaky-check',
+      'no-baseline',
+      'too-few-tries',
+      'Judge-Too-Loose',
+      ' judge-too-loose',
+      '',
+    ]) {
+      assert.equal(kept([{ kind }]), 0, JSON.stringify(kind))
+    }
+  })
+
+  test('canary: a line that is not the quote’s, or not one the eval was shown, is dropped', () => {
+    for (const a of [
+      'L8',
+      'L10',
+      'L0',
+      'L-9',
+      'L9.0',
+      'L99',
+      'L',
+      'source:L9',
+      `source:${FILE}L9`,
+    ]) {
+      assert.equal(kept([at(a)]), 0, a)
+    }
+    assert.equal(kept([at('L4', "c.send('Write it.')")]), 0, "another eval's line")
+    assert.equal(kept([at('L4', 'await c.send(')]), 0, "a quote another eval's line has too")
+    for (const quote of ['', '   ', 'Is the answer okay?\n  })']) {
+      assert.equal(kept([at('L9', quote)]), 0, JSON.stringify(quote))
+    }
+    assert.equal(kept([at('L9', '})')]), 0, 'a quote shorter than three characters')
+  })
+
+  test('canary: a file that changed, is missing or isn’t the eval’s is dropped', () => {
+    assert.equal(kept([at('L9')], { now: `${BODY}// edited\n` }), 0)
+    assert.equal(kept([at('L9')], { now: null }), 0)
+    for (const path of ['evals/../evals/a.eval.ts', `/abs/${FILE}`, '../a.eval.ts', 'other.ts']) {
+      assert.equal(kept([at(`source:${path}#L9`)]), 0, path)
+    }
+  })
+
+  test('canary: one per kind, an eval the run recorded, and the sentence rules', () => {
+    const two = gate([{}, at('L9', 'answer okay')])
+    assert.equal(two.kept.length, 1)
+    assert.match(two.dropped[0]?.reason ?? '', /second judge-too-loose/)
+    assert.equal(kept([{}], { entries: 0 }), 0)
+    assert.equal(kept([{ text: Array(26).fill('word').join(' ') }]), 0)
+    assert.equal(kept([{ text: 'The judge passes any reply (F2).' }]), 0)
+    assert.equal(kept([{ text: '   ' }]), 0)
   })
 })

@@ -38,10 +38,8 @@ async function runRemarks(
 ): Promise<RunInsights | null> {
   try {
     const { remarksOf, remarksOnly } = await import('./remarks/index.ts')
-    const { shownRemarks } = await import('./ui/remarks.ts')
-    const remarks = await remarksOf(config, record)
-    const shown = new Set(shownRemarks(remarks, record.runId, verbose).shown)
-    const marked = remarks.map((r) => ({ ...r, printed: shown.has(r) }))
+    const { markPrinted } = await import('./ui/remarks.ts')
+    const marked = markPrinted(await remarksOf(config, record), record.runId, verbose)
     return marked.length ? remarksOnly(record, marked) : null
   } catch (error) {
     process.stderr.write(`warning: no remarks for this run: ${(error as Error).message}\n`)

@@ -423,6 +423,7 @@ async function runCommand(
         record,
         runDir: run.artifactDir ?? join(scratchDir(ctx.config.root), record.runId),
         remarks: run.insights,
+        verbose: (ctx.verbosity ?? 0) > 0,
         signal: stop.signal,
         stopSignal: () => stopSignal,
         onStart: (text) => {

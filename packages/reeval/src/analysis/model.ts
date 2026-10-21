@@ -3,7 +3,7 @@
 import { generateText, type LanguageModel, Output } from 'ai'
 import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
-import { isFakeJudge, judgeRoute } from '../judge/index.ts'
+import { checkModelString, isFakeJudge, judgeCredentials, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
@@ -73,6 +73,20 @@ export function questionModel(
     )
   }
   return model
+}
+
+/**
+ * The variable `analysis.model` is missing when it's a provider model with no credential set: its
+ * provider's own key, else the AI Gateway's. Null when one is set, or for any other model.
+ */
+export function missingAnalysisKey(
+  config: ResolvedConfig,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const model = analysisModelOf(config)
+  if (typeof model !== 'string' || isEvaluationModel(model) || checkModelString(model)) return null
+  const keys = judgeCredentials(model)
+  return keys.some((k) => env[k]) ? null : (keys[0] ?? null)
 }
 
 /** Checks the model and its credentials before any work; throws a UsageError (exit 2). */

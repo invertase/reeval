@@ -1,7 +1,8 @@
-// A run's deterministic remarks, at the end of `reeval run`: the rules over its record and the
-// history, the first run that printed each from earlier runs' insights, and the remarks-only
-// insights.json they're kept in beside the scratch run, which `reeval record` carries into the
-// history.
+// A run's remarks, at the end of `reeval run`: the rules over its record and the history, then,
+// with model insights, the model's gated remarks and `no-baseline` on its classification. Each is
+// settled against earlier runs' insights, which give the first run that printed it. Without a
+// model they go in a remarks-only insights.json beside the scratch run, which `reeval record`
+// carries into the history.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { inCI } from '../env.ts'
@@ -13,13 +14,16 @@ import { RUN_ID } from '../ids.ts'
 import { insightsFile, readInsights } from '../insights/files.ts'
 import { factsHash } from '../insights/hash.ts'
 import type { ResolvedConfig } from '../types.ts'
-import { NO_MODEL, type Remark, type RunInsights } from '../view/insights.ts'
+import { NO_MODEL, REMARK_KINDS, type Remark, type RunInsights } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
 import {
+  type Candidate,
   type CheckWindow,
   deterministicRemarks,
   FLAKY_WINDOW,
+  noBaseline,
   type RemarkContext,
+  rankRemarks,
 } from './rules.ts'
 
 /**
@@ -58,22 +62,62 @@ async function otherRuns(config: ResolvedConfig, runId: string) {
   return out
 }
 
+type RunRemarks = { runId: string; remarks: Remark[] }
+
+/** Each run's remarks, from its insights.json; a run without one has none. */
+async function remarksIn(runs: Array<{ dir: string; runId: string }>): Promise<RunRemarks[]> {
+  const out: RunRemarks[] = []
+  for (const run of runs) {
+    const doc = await readInsights(insightsFile(run.dir, run.runId)).catch(() => null)
+    if (doc?.remarks.length) out.push({ runId: run.runId, remarks: doc.remarks })
+  }
+  return out
+}
+
 /**
  * Each remark id an earlier run printed, with the first run that did. A run's `firstSeenRun` is a
  * run that printed it, unless that run is itself and `printed` is false: the cap or a run without
  * `-v` hid it.
  */
-async function printedBefore(runs: Array<{ dir: string; runId: string }>) {
+function printedBefore(runs: RunRemarks[]) {
   const first = new Map<string, string>()
   for (const run of runs) {
-    const doc = await readInsights(insightsFile(run.dir, run.runId)).catch(() => null)
-    for (const r of doc?.remarks ?? []) {
+    for (const r of run.remarks) {
       if (r.printed === false && r.firstSeenRun === run.runId) continue
       const was = first.get(r.id)
       if (!was || r.firstSeenRun < was) first.set(r.id, r.firstSeenRun)
     }
   }
   return first
+}
+
+/** A remark as raised, before it's settled: its kind's severity, and no run-specific marks. */
+function candidateOf(r: Remark): Candidate {
+  const { firstSeenRun: _, printed: __, actedOn: ___, ...rest } = r
+  return { ...rest, severity: REMARK_KINDS[r.kind].severity }
+}
+
+/** The run's remarks from what it raised, once each: with the first run that printed it, ranked. */
+async function settleRemarks(
+  config: ResolvedConfig,
+  record: RunRecord,
+  candidates: Candidate[],
+): Promise<Remark[]> {
+  const first = printedBefore(await remarksIn(await otherRuns(config, record.runId)))
+  const seen = new Set<string>()
+  return rankRemarks(
+    candidates.flatMap((c): Remark[] => {
+      if (seen.has(c.id)) return []
+      seen.add(c.id)
+      const was = first.get(c.id)
+      return [
+        {
+          ...candidateOf({ ...c, firstSeenRun: '' }),
+          firstSeenRun: was && was < record.runId ? was : record.runId,
+        },
+      ]
+    }),
+  )
 }
 
 const one = <T>(db: HistoryDb, sql: string, params: Array<string>) =>
@@ -203,15 +247,33 @@ export async function remarksOf(config: ResolvedConfig, record: RunRecord): Prom
       locate: loc.locate,
     }
     const candidates = deterministicRemarks(suiteResult(record), record, ctx)
-    if (!candidates.length) return []
-    const before = await printedBefore(runs)
-    return candidates.map((r) => {
-      const was = before.get(r.id)
-      return { ...r, firstSeenRun: was && was < record.runId ? was : record.runId }
-    })
+    return candidates.length ? await settleRemarks(config, record, candidates) : []
   } finally {
     db?.close()
   }
+}
+
+/**
+ * The run's remarks once model insights are written: the deterministic ones it already raised
+ * (`earlier`), the model's gated remarks and `no-baseline` on the classification, settled together,
+ * so the cap and the ranking cover them all.
+ */
+export async function withModelRemarks(
+  config: ResolvedConfig,
+  record: RunRecord,
+  insights: RunInsights,
+  earlier: Remark[],
+): Promise<Remark[]> {
+  const loc = locator(config.root)
+  for (const entry of record.evals) await loc.prepare(entry, [null])
+  const ctx: RemarkContext = { history: null, comparable: () => '', locate: loc.locate }
+  const classified = noBaseline(suiteResult(record), record, insights.evals, ctx)
+  const keep = (r: Remark) => r.kind !== 'no-baseline'
+  return settleRemarks(config, record, [
+    ...earlier.filter((r) => keep(r) && r.origin === 'deterministic').map(candidateOf),
+    ...insights.remarks.filter((r) => keep(r) && r.origin === 'model').map(candidateOf),
+    ...classified,
+  ])
 }
 
 /** Insights written without an analysis model, for the run's remarks. */

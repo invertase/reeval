@@ -126,6 +126,33 @@ export type EvalInsight = {
  */
 export type Sentence = { text: string; cites: string[] }
 
+/**
+ * Each remark kind's origin and severity: an analysis model raises the `model` kinds, through the
+ * gates (a known kind, a quote verbatim on the cited line); reeval's rules raise the others. The
+ * severity is the kind's, never the model's.
+ */
+export const REMARK_KINDS: Record<
+  Remark['kind'],
+  { origin: Remark['origin']; severity: 'concern' | 'suggestion' }
+> = {
+  'name-contradicts': { origin: 'model', severity: 'concern' },
+  'name-no-intent': { origin: 'model', severity: 'suggestion' },
+  'judge-too-loose': { origin: 'model', severity: 'concern' },
+  'judge-leaks-answer': { origin: 'model', severity: 'concern' },
+  'prompt-names-tool': { origin: 'model', severity: 'concern' },
+  'compound-judge': { origin: 'model', severity: 'suggestion' },
+  'too-few-tries': { origin: 'deterministic', severity: 'suggestion' },
+  'check-never-fails': { origin: 'deterministic', severity: 'suggestion' },
+  'flaky-check': { origin: 'deterministic', severity: 'concern' },
+  'no-baseline': { origin: 'deterministic', severity: 'concern' },
+  'slow-mcp-start': { origin: 'deterministic', severity: 'concern' },
+}
+
+/** The kinds an analysis model may raise; a remark of any other kind from it is dropped. */
+export const MODEL_REMARK_KINDS = Object.entries(REMARK_KINDS).flatMap(([kind, k]) =>
+  k.origin === 'model' ? [kind as Remark['kind']] : [],
+)
+
 /** A remark about the eval's quality, not about the agent. Anything that fails a gate is dropped. */
 export type Remark = {
   /**
@@ -147,15 +174,21 @@ export type Remark = {
     | 'flaky-check'
     | 'no-baseline'
     | 'slow-mcp-start'
-  /** Fixed by kind, never chosen by the model. */
+  /** Fixed by kind (`REMARK_KINDS`), never chosen by the model. */
   severity: 'concern' | 'suggestion'
   /** One plain sentence: what's wrong. */
   text: string
-  /** Where the problem is: `source:<file>#L<n>` with `quote`, checked against the file. */
+  /**
+   * Where the problem is: `source:<file>#L<n>` with `quote`, found verbatim on that line of the
+   * file at the run's source hash. Every model remark has one.
+   */
   source?: { at: string; quote: string }
-  /** Facts from this run (or history facts) showing it mattered now. */
+  /** Facts from this run (or history facts) showing it mattered now; a model's, as it cited them. */
   evidence: string[]
-  /** A concrete edit at a location. */
+  /**
+   * An edit at a source location (`source:<file>#L<n>`) in the eval. A model remark's `edit` is
+   * empty when the model gave none, and its `at` is the quoted line when it named no line.
+   */
   fix: { at: string; edit: string }
   origin: 'model' | 'deterministic'
   /**

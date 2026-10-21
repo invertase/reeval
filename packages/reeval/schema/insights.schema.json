@@ -138,7 +138,7 @@
           "type": "string"
         },
         "evidence": {
-          "description": "Facts from this run (or history facts) showing it mattered now.",
+          "description": "Facts from this run (or history facts) showing it mattered now; a model's, as it cited them.",
           "type": "array",
           "items": {
             "type": "string"
@@ -149,7 +149,7 @@
           "type": "string"
         },
         "fix": {
-          "description": "A concrete edit at a location.",
+          "description": "An edit at a source location (`source:<file>#L<n>`) in the eval. A model remark's `edit` is empty when the model gave none, and its `at` is the quoted line when it named no line.",
           "type": "object",
           "properties": {
             "at": {
@@ -189,11 +189,11 @@
           "type": "boolean"
         },
         "severity": {
-          "description": "Fixed by kind, never chosen by the model.",
+          "description": "Fixed by kind (`REMARK_KINDS`), never chosen by the model.",
           "enum": ["concern", "suggestion"]
         },
         "source": {
-          "description": "Where the problem is: `source:<file>#L<n>` with `quote`, checked against the file.",
+          "description": "Where the problem is: `source:<file>#L<n>` with `quote`, found verbatim on that line of the file at the run's source hash. Every model remark has one.",
           "type": "object",
           "properties": {
             "at": {
