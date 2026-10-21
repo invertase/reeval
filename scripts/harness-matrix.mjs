@@ -56,17 +56,52 @@ async function webEvents(kind, agent, model) {
   }
 }
 
+/** What the agent names a plugin's server, `<plugin>:<server>` unless it renames it (pi). */
+function pluginServerName(h) {
+  const servers = h.agent.mcpServers({ 'plugin:server': PROBE.stdio })
+  const name = Array.isArray(servers) ? servers[0]?.name : Object.keys(servers ?? {})[0]
+  return (typeof name === 'string' ? name : 'plugin:server')
+    .replace('plugin', '<plugin>')
+    .replace('server', '<server>')
+}
+
 const list = (items) =>
   items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 
 const code = (s) => `\`${s}\``
+
+const PART_NAMES = { skills: 'skills', mcp: 'MCP servers', hooks: 'hooks', agents: 'subagents' }
 
 /** Each note is said only while its fact holds. */
 const NOTES = [
   (h) =>
     h.agent.pluginParts.length &&
     LAYOUTS[h.kind]?.pluginPlacement === 'namespaced' &&
-    `It loads each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')}), and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+    h.kind !== 'antigravity' &&
+    `It loads ${
+      h.agent.pluginParts.includes('agents')
+        ? `each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')})`
+        : `each plugin's ${list(h.agent.pluginParts.map((p) => PART_NAMES[p] ?? p))} from where reeval copies it, namespaced`
+    }, and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) =>
+    h.agent.pluginParts.length &&
+    LAYOUTS[h.kind]?.pluginPlacement === 'flat' &&
+    `A plugin's skills sit beside the eval's and its MCP servers go in as ${code(pluginServerName(h))}, so a skill or server whose name another already has is refused at plan time.`,
+  (h) =>
+    h.agent.pluginParts.length &&
+    h.kind === 'antigravity' &&
+    `Each plugin is installed with ${code('agy plugin install')} from where reeval copies it as the session starts; the CLI starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) => {
+    const unpack = LAYOUTS[h.kind]?.pluginUnpack
+    if (!h.agent.pluginParts.length || !unpack) return false
+    const parts = [
+      ['rules', 'rules'],
+      ['agents', 'subagents'],
+      ['commands', 'commands'],
+      ['hooks', 'hooks'],
+    ].flatMap(([part, what]) => (unpack[part] ? [what] : []))
+    return `Plugin ${list(parts)} are unpacked into the workspace before the snapshot, flat, so two with one name clash; its own plugin loading is never used.`
+  },
   (h) =>
     h.agent.forModel &&
     h.kind === 'opencode' &&
@@ -138,7 +173,7 @@ const NOTES = [
     `Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.`,
   (h) =>
     h.agent.expectedBlocked &&
-    `Its CLI always tries ${list(h.agent.expectedBlocked.hosts.map(code))}; a restricted egress policy refuses them and records them under the record's ${code('egress.expectedBlocked')}.`,
+    `${h.agent.expectedBlocked.withPlugins ? 'In a session with plugins it' : 'It'} tries ${list(h.agent.expectedBlocked.hosts.map(code))} (${h.agent.expectedBlocked.why}); a restricted egress policy refuses ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} and records ${h.agent.expectedBlocked.hosts.length > 1 ? 'them' : 'it'} under the record's ${code('egress.expectedBlocked')}.`,
 ]
 
 /** The facts for each real harness, in the catalog's order, and whatever doesn't add up. */
@@ -203,11 +238,12 @@ export async function harnessFacts() {
 
 const yes = (ok) => (ok ? '✓' : '✗')
 
-/** The plugin parts the agent loads: ✓ for every part, ✗ for none, else the parts it leaves out. */
+/** The plugin parts the agent loads: ✓ for every part, ✗ for none, else the shorter of the parts it loads and the parts it leaves out. */
 const pluginCell = (parts) => {
   if (!parts.length) return '✗'
   const missing = PLUGIN_PARTS.filter((p) => !parts.includes(p))
-  return missing.length ? `all but ${missing.join(', ')}` : '✓'
+  if (!missing.length) return '✓'
+  return missing.length > parts.length ? parts.join(', ') : `all but ${missing.join(', ')}`
 }
 
 /**

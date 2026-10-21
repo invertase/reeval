@@ -10,6 +10,10 @@ const built = defineEnvironment('built', ({ plugin }) => ({
       path: 'plugins/review',
       build: { run: 'pnpm install --frozen-lockfile', cwd: '.' },
     }),
+    plugin.marketplace('lint@github:acme/agent-plugins', {
+      ref: 'v3',
+      build: { run: 'npm ci', cwd: '.' },
+    }),
   ],
 }))
 

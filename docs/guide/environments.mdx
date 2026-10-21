@@ -98,9 +98,9 @@ export const withReview = base.extendEnvironment(
 )
 ```
 
-A plugin bundles skills, subagents, commands, hooks, MCP servers and rules in Claude Code's layout. `only` picks the parts to place, and `plugin.git` and `plugin.npm` fetch one pinned. Its servers join `mcp` as `review:docs`, and the record lists the plugin with what it placed.
+A plugin bundles skills, subagents, commands, hooks, MCP servers and rules in Claude Code's layout. `only` picks the parts to place. `plugin.git` and `plugin.npm` fetch one pinned, and `plugin.marketplace` takes an entry from a Claude Code marketplace. Its servers join `mcp` as `review:docs`, and the record lists the plugin with what it placed.
 
-Claude Code and Grok Build load every part but `rules`; the plan refuses a plugin on the other real harnesses, and the fake harness takes them. See [Helpers](/reference/helpers#plugin).
+Cursor and Antigravity load every part, Claude Code and Grok Build every part but `rules`, OpenCode every part but `hooks` and `rules`, pi its `skills`, `commands` and `mcp`, and Codex, Goose and fx their `skills` and `mcp`; the plan refuses a part the harness doesn't load, and the fake harness takes every part. See [Helpers](/reference/helpers#plugin).
 
 ## Start from a repository
 

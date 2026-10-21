@@ -1,6 +1,6 @@
 ---
 title: cursor()
-description: The Cursor harness, its options and id, the key it needs, how reeval brokers that key, and the tokens it reports.
+description: The Cursor harness, its options and id, the key it needs, how reeval brokers that key, the tokens it reports and where plugins go.
 ---
 
 `cursor({ model })` runs Cursor's agent in the Docker sandbox, through the Cursor TypeScript SDK. `model` is required.
@@ -110,6 +110,36 @@ When it can't (the store is unreadable, or the turn ended before the result), th
 | Rules | `AGENTS.md` in the workspace |
 | Skills | `~/.agents/skills`, or `.cursor/skills` in the workspace with `placement: 'workspace'`. The SDK loads both, as the Cursor CLI does |
 | MCP servers | Passed to the agent on every turn |
+| Plugins | Every part, unpacked into the workspace's `.cursor/` and Cursor's own skill and MCP config (below) |
+
+## Plugins
+
+```text
+env       plugin house → ~/.reeval/plugins/house/ (7 files; skills, agents, commands, hooks, rules)
+env       plugin part → .cursor/agents/reviewer.md (unpacked for the agent)
+env       plugin part → .cursor/commands/ship.md (unpacked for the agent)
+env       plugin part → .cursor/rules/house-codeword.mdc (unpacked for the agent)
+env       plugin part → .cursor/hooks.json (unpacked for the agent)
+```
+
+reeval copies each plugin to `~/.reeval/plugins/<name>/`, then unpacks it where the SDK reads project settings, before the workspace snapshot, so the diff leaves those files out and `context` lists them. Cursor's own plugin loading (`settingSources: 'plugins'`) is never used: it would load the account's plugins too.
+
+| Part | Where it goes |
+|---|---|
+| `skills/` | `~/.agents/skills`, with the environment's own skills |
+| `agents/<name>.md` | `.cursor/agents/<name>.md` |
+| `commands/<name>.md` | `.cursor/commands/<name>.md` |
+| `rules/<name>.md` | `.cursor/rules/<plugin>-<name>.mdc`, with `alwaysApply: true` when it has no frontmatter |
+| `hooks/hooks.json` | Merged into `.cursor/hooks.json`, after the workspace's own hooks |
+| `.mcp.json` | Cursor's MCP config, as `<plugin>:<server>` |
+
+Items are flat, not namespaced, so two with the same name clash, and `${CLAUDE_PLUGIN_ROOT}` in a hook command or part is filled in with the plugin's copy. Hooks get Cursor's event names (`PreToolUse` as `preToolUse`, `UserPromptSubmit` as `beforeSubmitPrompt`) and tool matchers (`Bash` as `Shell`, `mcp__docs__search` as `MCP:search`); a group matching only tools Cursor lacks (`Glob`) is dropped. A built plugin's parts are unpacked from its build's output. The plan refuses a hook event Cursor doesn't run, and a hook that isn't a `command` (such as a `prompt` hook):
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.5: Cursor can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: ['skills', 'mcp'], or leave the plugin out of this cell
+```
+
+A workspace file a plugin part would replace fails the attempt as an infra error, naming it.
 
 ## Errors
 

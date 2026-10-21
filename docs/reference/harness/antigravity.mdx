@@ -1,6 +1,6 @@
 ---
 title: antigravity()
-description: The Antigravity harness, its options and id, its Gemini API key, prompt size limit and telemetry.
+description: The Antigravity harness, its options and id, its Gemini API key, plugins, prompt size limit and telemetry.
 ---
 
 `antigravity()` runs Google's Antigravity CLI (`agy`) in the Docker sandbox, with a Gemini API key. `model` is required.
@@ -73,6 +73,31 @@ The adapter refuses to run in a sandbox that can't broker the key, so it can't l
 | MCP servers in `~/.gemini/config/mcp_config.json` | Where the CLI reads them; remote servers take `serverUrl` |
 | The adapter's instructions appended to `~/.gemini/GEMINI.md` | How the adapter talks to the agent |
 | Home skills in `~/.gemini/config/skills` | Where the CLI reads them, not the `~/.gemini/antigravity-cli/skills` its docs give |
+| Plugins installed with `agy plugin install` | Every part (below) |
+
+## Plugins
+
+```text
+agy plugin install /home/reeval/.reeval/plugins/review
+```
+
+reeval copies each plugin to `~/.reeval/plugins/<name>/`, and the adapter installs that copy as the session starts. The CLI copies it to `~/.gemini/config/plugins/<name>/`, which `context` lists, and loads every part: its commands become skills named `<plugin>-cmd-<command>`, and its MCP tools are named `mcp__<plugin>_<server>__<tool>`.
+
+The adapter then fixes what CLI 1.4.2 would get wrong in the installed copy:
+
+| What | Why |
+|---|---|
+| `hooks.json` rewritten in the CLI's shape, `${CLAUDE_PLUGIN_ROOT}` filled in | It copies Claude Code's file unchanged, where a `SessionStart` hook never runs, and doesn't set the variable |
+| `trigger: always_on` on a rule with no frontmatter, or `alwaysApply: true` | It leaves out a rule without a trigger |
+| `name:` on a skill without one | It lists a command it converted as `SKILL` |
+
+The CLI starts a plugin's MCP servers itself, from the plugin's `.mcp.json`. As for [Claude Code](/reference/harness/claude-code#plugins), reeval rewrites that file to run each through its MCP timer before the install, and a host variable can't go in it:
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on antigravity:gemini-3.8-flash-medium: Antigravity loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in
+```
+
+The CLI runs `SessionStart`, `PreToolUse`, `PostToolUse` and `Stop` hooks, so the plan refuses a plugin with any other event, or with a hook that isn't a `command`. agy installs a plugin that also has its own manifest (a root `plugin.json`, `.antigravity-plugin/plugin.json`, `.gemini-plugin/plugin.json` or `gemini-extension.json`) from that manifest instead, so the plan refuses it. Each turn is a new process, so a `SessionStart` hook runs on every turn. An install the CLI refuses fails the attempt with `agy plugin install <dir> exited <code>: …`.
 
 ## Telemetry it sends anyway
 

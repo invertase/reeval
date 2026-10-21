@@ -1038,7 +1038,29 @@ export type PluginSource = {
       /** The plugin's directory in the package; default its root. */
       path?: string
     }
+  | {
+      source: 'marketplace'
+      /** The plugin's entry in the marketplace's `.claude-plugin/marketplace.json`. */
+      name: string
+      /** Where the marketplace is: a git repository (at `ref`) or an npm package. */
+      marketplace: PluginMarketplace
+    }
 )
+
+/** A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`. */
+export type PluginMarketplace =
+  | {
+      source: 'git'
+      /** As written: a URL or `github:owner/repo`. */
+      repo: string
+      /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+      ref?: string
+    }
+  | {
+      source: 'npm'
+      /** An npm package spec. */
+      spec: string
+    }
 
 /**
  * Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root
@@ -1072,6 +1094,11 @@ export type PluginHelper = {
   git(repo: string, options?: PluginOptions & { ref?: string; path?: string }): PluginSource
   /** A pinned npm package spec; the plugin is at `path` inside it (default its root). */
   npm(spec: string, options?: PluginOptions & { path?: string }): PluginSource
+  /**
+   * `'name@source'`: the entry `name` in a Claude Code marketplace, at a git repository (a URL or
+   * `github:owner/repo`, at `ref`) or an npm package (`npm:<spec>`).
+   */
+  marketplace(entry: string, options?: PluginOptions & { ref?: string }): PluginSource
 }
 
 /** One environment in an `extend` chain. */
@@ -1977,11 +2004,15 @@ export type Cell = {
 export type PluginRecord = {
   /** The manifest's `name`. */
   name: string
-  /** Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`. */
+  /** Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source. */
   source: string
-  /** The marketplace it was listed in; null when it was named directly. */
-  marketplace: { name: string; source: string; commit: string } | null
-  /** The commit a git source resolved to; null for a local or npm one. */
+  /**
+   * The marketplace it was listed in, with its `marketplace.json` name, its source as written
+   * (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved
+   * to (null for npm); null when the plugin was named directly.
+   */
+  marketplace: { name: string; source: string; commit: string | null } | null
+  /** The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one. */
   commit: string | null
   /** The hash of the files placed. */
   sha256: string

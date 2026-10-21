@@ -70,6 +70,8 @@ const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}
 const grokAdapter = (file: string, name: string) =>
   `harness-grok-build/test/${file}.test.ts › ${name}`
 const piAdapter = (file: string, name: string) => `harness-pi/test/${file}.test.ts › ${name}`
+const antigravityAdapter = (file: string, name: string) =>
+  `harness-antigravity/test/${file}.test.ts › ${name}`
 const codexAdapter = (file: string, name: string) => `harness-codex/test/${file}.test.ts › ${name}`
 const fxAdapter = (file: string, name: string) => `harness-fx/test/${file}.test.ts › ${name}`
 
@@ -506,10 +508,23 @@ export const inventory: InventoryFeature[] = [
     plan: ['plugins/parts', 'plugins/remote', 'plugins/fetches-at-start'],
     tests: [
       plugin('a plugin is read in Claude Code’s layout'),
-      plugin('a real harness without plugin parts refuses every plugin'),
+      plugin(
+        'every real harness loads some plugin parts, so a plugin it can’t read yet isn’t refused whole',
+      ),
       plugin('a child’s plugin replaces a same-named parent plugin'),
-      planTest('a real harness without plugins refuses one at plan time'),
       planTest('a plugin the plan reads and refuses exits 2'),
+    ],
+  },
+  {
+    id: 'plugin.marketplace',
+    area: 'Environments',
+    name: '`plugin.marketplace`: an entry in a Claude Code marketplace on git or npm, its own source resolved, and the marketplace in the record',
+    fixtures: ['plugins/marketplace-entry', 'plugins/marketplace-build'],
+    plan: ['plugins/marketplace', 'images/plugin-builds'],
+    tests: [
+      plugin('a marketplace entry’s source is a ./path, a git repository or an npm package'),
+      plugin('a marketplace reeval can’t read'),
+      plugin('resolving a marketplace entry places that plugin alone'),
     ],
   },
   {
@@ -523,7 +538,9 @@ export const inventory: InventoryFeature[] = [
       plugin('Claude Code enables the placed plugins from a directory marketplace'),
       plugin('Claude Code’s plugin settings merge into a ~/.claude/settings.json'),
       plugin('Grok Build refuses a plugin MCP server named like another'),
-      planTest('Grok Build refuses a plugin MCP server named like one in mcp'),
+      planTest(
+        "Grok Build and Codex refuse a plugin MCP server named like one in mcp; Claude Code's namespaced name plans",
+      ),
       planTest("Claude Code and Grok Build refuse a plugin's rules"),
       grokAdapter('unit', 'grok-acp starts grok agent --no-leader stdio'),
     ],
@@ -532,6 +549,108 @@ export const inventory: InventoryFeature[] = [
       'contract › plugin MCP server called',
       'contract › plugin hook ran',
       'contract › plugin subagent available',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'harness.plugins.antigravity-cursor',
+    area: 'Environments',
+    name: 'Plugins on Antigravity (`agy plugin install` as the session starts, hooks translated, rules always on) and Cursor (rules, subagents, commands and hooks unpacked into the workspace’s `.cursor/` before the snapshot, MCP servers in its own config): every part, the hook events each runs, clashes refused',
+    fixtures: [
+      'harness/antigravity-plugin',
+      'harness/cursor-plugin',
+      'harness/cursor-plugin-build',
+    ],
+    plan: ['plugins/antigravity-and-cursor'],
+    tests: [
+      plugin('Cursor and Antigravity load every part'),
+      plugin(
+        'Antigravity refuses a plugin with a manifest agy reads in place of the Claude Code one',
+      ),
+      plugin('on Cursor, two plugins’ subagents or commands unpacked to one file clash'),
+      plugin(
+        'on Cursor, two rules unpacked to one file clash, and a hook that isn’t a command is refused',
+      ),
+      plugin('unpackPlugins writes a flat agent’s rules, subagents, commands and hooks'),
+      plugin('cursorHookMatcher maps Claude Code tool names on the tool events only'),
+      planTest('Cursor refuses a plugin item that clashes where it unpacks or places it'),
+      antigravityAdapter('harness', 'plugins are installed with agy plugin install'),
+      antigravityAdapter('harness', 'a plugin agy refuses to install fails the session start'),
+      antigravityAdapter('unit', 'hooks: a flat event takes its handlers'),
+      antigravityAdapter('unit', 'install: agy plugin install, then names on skills'),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin hook ran',
+      'contract › plugin subagent available',
+      'contract › plugin rules read',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'harness.plugins.opencode-pi-fx',
+    area: 'Environments',
+    name: 'Plugins on OpenCode (skills, MCP servers, and subagents and commands unpacked into the workspace’s `.opencode/` with only the frontmatter it takes), pi (skills, MCP servers as `<plugin>_<server>`, commands as prompt templates in `.pi/prompts/`) and fx (skills and MCP servers): the parts each has no place for refused',
+    fixtures: [
+      'harness/opencode-plugin',
+      'harness/opencode-plugin-build',
+      'harness/pi-plugin',
+      'harness/fx-plugin',
+    ],
+    plan: ['plugins/opencode-pi-and-fx'],
+    tests: [
+      plugin('OpenCode, pi and fx load the parts they have a place for, and refuse the rest'),
+      plugin(
+        'unpackPlugins gives OpenCode subagents and commands only the frontmatter it takes; pi takes commands as they are',
+      ),
+      plugin('pi names a plugin MCP server <plugin>_<server>, and refuses one named like another'),
+      plugin(
+        'the frontmatter OpenCode takes survives a byte-order mark, an empty block and a non-string description',
+      ),
+      planTest(
+        'OpenCode, pi and fx refuse the plugin parts they have no place for, and pi a plugin server named like one in mcp',
+      ),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin subagent available',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'harness.plugins.codex-goose',
+    area: 'Environments',
+    name: 'Plugins on Codex (a home marketplace and `codex plugin add`, plugins on only for that session) and Goose (skills with its own, MCP servers as extensions): skills and MCP, a plugin with ChatGPT apps refused on Codex',
+    fixtures: ['harness/codex-plugin', 'harness/goose-plugin'],
+    plan: ['plugins/codex-and-goose'],
+    tests: [
+      plugin(
+        'Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugin server’s host secret',
+      ),
+      plugin(
+        'Codex refuses a plugin with a manifest it reads first; a root plugin.json counts only with its schema, though Antigravity reads any',
+      ),
+      plugin("Codex's plugin sync hosts are expected blocks only in a session with plugins"),
+      planTest("Codex refuses a plugin's hooks and its apps; Goose a plugin's hooks"),
+      planTest(
+        "Goose refuses a plugin MCP server it keys like one in mcp; Claude Code's namespaced name plans",
+      ),
+      codexAdapter(
+        'unit',
+        'plugins are listed in the home marketplace by their path from home, then added from it',
+      ),
+      codexAdapter(
+        'unit',
+        'a session with plugins writes the marketplace and adds each before its first turn',
+      ),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
       'contract › plugin part it can’t load refused',
       'contract › plugin hermetic: nothing undeclared loaded or contacted',
     ],

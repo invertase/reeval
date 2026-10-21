@@ -10,6 +10,8 @@ import {
 import {
   buildCodexCommand,
   buildCodexConfig,
+  buildCodexMarketplace,
+  buildCodexPluginAdd,
   CODEX_CREDENTIAL_ENV,
   createCodex,
 } from '../src/codex-harness.ts'
@@ -70,6 +72,66 @@ test("the config turns off analytics and plugins, and uses reeval's HTTP provide
       '"model_providers" = { "openai-http" = { "name" = "OpenAI", "base_url" = "https://api.openai.com/v1", "env_key" = "OPENAI_API_KEY", "wire_api" = "responses", "supports_websockets" = false } }',
       '',
     ].join('\n'),
+  )
+})
+
+test('a session with plugins turns plugins on, and nothing else', () => {
+  assert.equal(
+    buildCodexConfig({ plugins: true }),
+    buildCodexConfig({}).replace('"plugins" = false', '"plugins" = true'),
+  )
+})
+
+test('plugins are listed in the home marketplace by their path from home, then added from it', () => {
+  const plugins = [{ name: 'probe', dir: '/home/reeval/.reeval/plugins/probe' }]
+  assert.deepEqual(JSON.parse(buildCodexMarketplace(plugins, '/home/reeval')), {
+    name: 'reeval',
+    plugins: [{ name: 'probe', source: { source: 'local', path: './.reeval/plugins/probe' } }],
+  })
+  assert.throws(
+    () => buildCodexMarketplace([{ name: 'x', dir: '/opt/x' }], '/home/reeval'),
+    /the x plugin must be under \/home\/reeval \(it's at \/opt\/x\)/,
+  )
+  assert.equal(
+    buildCodexPluginAdd('/h/bin', [...plugins, { name: 'review', dir: '/home/reeval/r' }]),
+    `PATH='/h/bin':"$PATH" codex plugin add 'probe@reeval' < /dev/null && PATH='/h/bin':"$PATH" codex plugin add 'review@reeval' < /dev/null`,
+  )
+})
+
+test('a session with plugins writes the marketplace and adds each before its first turn', async () => {
+  const writes: Array<{ path: string; content: string }> = []
+  const runs: string[] = []
+  const harness = createCodex({
+    auth: { [CODEX_CREDENTIAL_ENV]: 'sk-k' },
+    plugins: [{ name: 'probe', dir: '/home/reeval/.reeval/plugins/probe' }],
+  })
+  const sandboxSession = (exitCode: number) => ({
+    run: async ({ command }: { command: string }) => {
+      runs.push(command)
+      return command.includes('plugin add')
+        ? { exitCode, stdout: '', stderr: exitCode ? 'no marketplace named reeval' : '' }
+        : { exitCode: 0, stdout: '/home/reeval', stderr: '' }
+    },
+    writeTextFile: async (w: { path: string; content: string }) => void writes.push(w),
+  })
+  await harness.doStart({
+    sessionId: 's1',
+    sessionWorkDir: '/w',
+    sandboxSession: sandboxSession(0),
+  } as never)
+  assert.deepEqual(
+    writes.map((w) => w.path),
+    ['/home/reeval/.codex/config.toml', '/home/reeval/.agents/plugins/marketplace.json'],
+  )
+  assert.match(writes[0]?.content ?? '', /"features" = \{ "plugins" = true \}/)
+  assert.match(runs.at(-1) ?? '', /codex plugin add 'probe@reeval'/)
+  await assert.rejects(
+    harness.doStart({
+      sessionId: 's2',
+      sessionWorkDir: '/w',
+      sandboxSession: sandboxSession(1),
+    } as never),
+    /codex plugin add failed \(exit 1\): no marketplace named reeval/,
   )
 })
 

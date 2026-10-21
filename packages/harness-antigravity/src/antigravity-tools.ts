@@ -176,6 +176,23 @@ export function projectToolCall(
       return common('webSearch', { query: str(p.query) ?? str(p.Query) ?? '' })
     case 'read_url_content':
       return common('webFetch', { url: str(p.Url) ?? str(p.url) ?? '' })
+    // A `tool` step's call, in the shape the translator gives a `subagent` step's: the CLI reports
+    // the same call either way.
+    case 'invoke_subagent':
+      if (!Array.isArray(p.Subagents)) break
+      return {
+        toolName: 'invoke_subagent',
+        nativeName,
+        input: {
+          ...p,
+          subagents: p.Subagents.map((a: Record<string, unknown> | null) => ({
+            agent: str(a?.TypeName),
+            role: str(a?.Role),
+            prompt: str(a?.Prompt),
+          })),
+        },
+        dynamic: false,
+      }
   }
   const key = BY_NATIVE_NAME.get(nativeName)
   return key

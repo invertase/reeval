@@ -684,6 +684,33 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'plugins/marketplace-build',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '' to contain 'built from the acme-tools marketplace'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'market-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'v1')
+      git(repo, 'tag', 'v1')
+    },
+    record: ({ run, project }) => {
+      const commit = git(join(project, 'repo'), 'rev-parse', 'v1')
+      const [p] = plugins(run)
+      assert.equal(p?.name, 'built')
+      assert.equal(p?.commit, commit)
+      assert.deepEqual(p?.marketplace && { ...p.marketplace, source: undefined }, {
+        name: 'acme-tools',
+        source: undefined,
+        commit,
+      })
+      assert.match(p?.build ?? '', /^reeval-plugin:[0-9a-f]{12}-[0-9a-f]{16}$/)
+      assert.ok(run.stack.images.some((i) => i.ref === p?.build))
+    },
+  },
+  {
     dir: 'plugins/git-ref',
     tiers: ['fake', 'docker'],
     env: 'review-v1',
@@ -706,6 +733,35 @@ export const features: Feature[] = [
       assert.equal(p?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
       assert.match(p?.source ?? '', /#v1:plugins\/review$/)
       assert.deepEqual(p?.parts.commands, ['review'])
+    },
+  },
+  {
+    dir: 'plugins/marketplace-entry',
+    tiers: ['fake', 'docker'],
+    env: 'review-entry',
+    canary: /expected '' to contain 'Lint the tree for the house style\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'market-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'v1')
+      git(repo, 'tag', 'v1')
+    },
+    record: ({ run, project }) => {
+      const commit = git(join(project, 'repo'), 'rev-parse', 'v1')
+      assert.deepEqual(
+        plugins(run).map((p) => ({
+          name: p.name,
+          commit: p.commit,
+          marketplace: p.marketplace && { ...p.marketplace, source: typeof p.marketplace.source },
+        })),
+        [{ name: 'review', commit, marketplace: { name: 'acme-tools', source: 'string', commit } }],
+      )
+      const [p] = plugins(run)
+      assert.match(p?.marketplace?.source ?? '', /^file:\/\/.*\/repo#v1$/)
+      assert.match(p?.source ?? '', /^file:\/\/.*\/repo#v1:plugins\/review$/)
+      assert.deepEqual(p?.parts.agents, ['reviewer'])
     },
   },
   {
@@ -1635,6 +1691,177 @@ export const features: Feature[] = [
         JSON.stringify(seen),
       )
       assert.ok(!seen.some((p) => p.includes('/.grok/skills/house-style/')), JSON.stringify(seen))
+    },
+  },
+  {
+    dir: 'harness/antigravity-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'antigravity',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp, r…' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.some((p) => p.includes('/.gemini/config/skills/')), JSON.stringify(seen))
+      // What the fake agent's own agy plugin install wrote, which the attempt's context lists.
+      assert.ok(
+        seen.includes('~/.gemini/config/plugins/house/mcp_config.json'),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/cursor-plugin',
+    tiers: ['fake', 'docker', 'real'],
+    env: 'house',
+    canary: /expected null to be 'SAFFRON-73'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      // Unpacked before the snapshot: the diff has only what the agent wrote.
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['codeword.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '.cursor/rules/house-codeword.mdc',
+        '.cursor/agents/reviewer.md',
+        '.cursor/commands/ship.md',
+        '.cursor/hooks.json',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+      assert.ok(
+        seen.some((p) => /^~\/(.+\/)?\.agents\/skills\/house-style\/SKILL\.md$/.test(p)),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/opencode-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'opencode',
+    env: 'house',
+    canary: /expected null to be 'HERON-62'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['review.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '~/.config/opencode/skills/house-style/SKILL.md',
+        '.opencode/agents/reviewer.md',
+        '.opencode/commands/ship.md',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/pi-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'pi',
+    env: 'house',
+    canary: /expected null to be 'KESTREL-19'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['release.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of ['~/.pi/agent/skills/house-style/SKILL.md', '.pi/prompts/ship.md']) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/fx-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'house',
+    canary: /expected null to be 'PLOVER-27'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes(
+          '~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills/house-style/SKILL.md',
+        ),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/cursor-plugin-build',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '---\\nname: reviewer\\ndescription: Rev…' to contain 'BUILT-41'/,
+  },
+  {
+    dir: 'harness/opencode-plugin-build',
+    tiers: ['docker'],
+    image: 'opencode',
+    env: 'built',
+    canary: /expected '---\\ndescription: Reviews a change\. T…' to contain 'BUILT-58'/,
+  },
+  {
+    dir: 'harness/codex-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'codex',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.includes('~/.agents/skills/house-style/SKILL.md'), JSON.stringify(seen))
+    },
+  },
+  {
+    dir: 'harness/goose-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'goose',
+    env: 'house',
+    canary: /expected 'Loaded skills: house-style; plugins: …' not to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes(
+          '~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills/house-style/SKILL.md',
+        ),
+        JSON.stringify(seen),
+      )
     },
   },
   {

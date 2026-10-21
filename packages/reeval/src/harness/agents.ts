@@ -12,6 +12,7 @@ import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox
 import {
   PART_PATHS,
   PLUGIN_DIR,
+  PLUGIN_MANIFEST,
   PLUGIN_PARTS,
   type PluginContents,
   pluginServerName,
@@ -27,6 +28,7 @@ import type {
   WebEventType,
 } from '../types.ts'
 import type { PlacedPlugin } from './types.ts'
+import type { PluginUnpack } from './unpack.ts'
 
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
@@ -52,6 +54,13 @@ export type Layout = {
    * may already have put there, rather than replacing it.
    */
   pluginFiles?: (plugins: readonly PlacedPlugin[]) => PluginFile[]
+  /**
+   * Where a flat agent reads the plugin parts reeval unpacks into the workspace before the
+   * snapshot (rules, subagents, commands, hooks); unset for an agent that takes none.
+   */
+  pluginUnpack?: PluginUnpack
+  /** The Claude Code hook events the agent runs from a plugin; unset, every event. */
+  pluginHookEvents?: readonly string[]
 }
 
 /** A file a layout writes for the session's plugins. */
@@ -82,6 +91,18 @@ export type Agent = Layout & {
    */
   expectedBlocked?: ExpectedBlocked
   /**
+   * Why it can't take a plugin that bundles ChatGPT apps, which it would otherwise load with the
+   * plugin; unset for an agent that ignores them.
+   */
+  pluginApps?: string
+  /**
+   * Plugin manifests it reads in place of `.claude-plugin/plugin.json` when a plugin has one, so it
+   * would load what reeval didn't place or rewrite; unset for an agent that reads only that one.
+   */
+  pluginManifestsFirst?: readonly string[]
+  /** It reads a root `plugin.json` only when it names an Agent Plugins `$schema`. */
+  pluginRootManifestNeedsSchema?: true
+  /**
    * Transcript events a turn may have had that its harness didn't report, from the turn's
    * `finish` part's `harnessMetadata`. Each turn carries these as `unreported`, so web matchers
    * refuse instead of passing silently.
@@ -110,7 +131,7 @@ export type Agent = Layout & {
   pluginParts: readonly PluginPart[]
   /**
    * Set for an agent that takes plugins namespaced but names a plugin's MCP servers by their own
-   * keys, in one list with the environment's (Grok Build): it keeps one of two servers of a name.
+   * keys, in one list with the environment's (Grok Build, Codex): it keeps one of two servers of a name.
    */
   pluginServersByName?: true
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
@@ -134,7 +155,12 @@ export type ModelSpecific = Pick<Agent, 'credential' | 'endpoints' | 'servedMode
 }
 
 /** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
-export type ExpectedBlocked = { hosts: readonly string[]; why: string }
+export type ExpectedBlocked = {
+  hosts: readonly string[]
+  why: string
+  /** Tried only in a session given plugins; another session's attempt on these hosts is a real block. */
+  withPlugins?: true
+}
 
 const WEB_EVENTS: Record<string, WebEventType> = { webSearch: 'web-search', webFetch: 'web-fetch' }
 
@@ -319,10 +345,31 @@ export function opencodeMcpServers(
   )
 }
 
+/**
+ * The key Goose keeps an extension by (its `name_to_key`): whitespace dropped, anything but ASCII
+ * letters, digits, `_` and `-` made `_`, lower-cased. Of two extensions with one key it keeps one.
+ */
+const gooseKey = (name: string) =>
+  name
+    .replace(/\s/g, '')
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .toLowerCase()
+
 /** Goose's extension shape (its `config.yaml`); it has no SSE transport. */
 export function gooseMcpServers(
   servers: Record<string, ResolvedMcpServer>,
 ): Record<string, Record<string, unknown>> {
+  const byKey = new Map<string, string>()
+  for (const name of Object.keys(servers)) {
+    const key = gooseKey(name)
+    const other = byKey.get(key)
+    if (other !== undefined) {
+      throw new InfraError(
+        `Goose keys the ${other} and ${name} MCP servers both as ${key}, and keeps only one: rename one`,
+      )
+    }
+    byKey.set(key, name)
+  }
   return Object.fromEntries(
     Object.entries(servers).map(([name, s]) => {
       if (s.transport === 'sse') {
@@ -340,20 +387,31 @@ export function gooseMcpServers(
 /**
  * pi's `mcp.json` shape, which the adapter escapes and sets `"exposure": "direct"` on. pi
  * skips a server whose name isn't letters, digits, `_` and `-`, so the plan refuses it instead.
+ * A plugin's server, `<plugin>:<server>`, is named `<plugin>_<server>`, so its tools are
+ * `mcp__<plugin>_<server>__<tool>`.
  */
 export function piMcpServers(
   servers: Record<string, ResolvedMcpServer>,
 ): Record<string, PiMcpServer> {
+  const named = new Map<string, string>()
   return Object.fromEntries(
-    Object.entries(servers).map(([name, s]): [string, PiMcpServer] => {
+    Object.entries(servers).map(([key, s]): [string, PiMcpServer] => {
+      const name = /^[a-z0-9-]+:[^:]+$/.test(key) ? key.replace(':', '_') : key
       if (!/^[A-Za-z0-9_-]+$/.test(name)) {
         throw new InfraError(
-          `pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the ${name} server: rename it`,
+          `pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the ${key} server: rename it`,
         )
       }
+      const other = named.get(name)
+      if (other) {
+        throw new InfraError(
+          `pi names the ${key} MCP server ${name}, as it does the ${other} server, and keeps only one: rename one`,
+        )
+      }
+      named.set(name, key)
       if (s.transport === 'sse') {
         throw new InfraError(
-          `pi has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+          `pi has no SSE MCP transport, so it can't use the ${key} server (mcp.sse): use mcp.http or mcp.stdio`,
         )
       }
       return s.transport === 'stdio'
@@ -437,6 +495,96 @@ export function cursorMcpServers(
     ),
   )
 }
+
+/** Claude Code's hook events as Cursor names them, as the Cursor SDK converts Claude Code's own. */
+const CURSOR_HOOK_EVENTS: Readonly<Record<string, string>> = {
+  SessionStart: 'sessionStart',
+  SessionEnd: 'sessionEnd',
+  UserPromptSubmit: 'beforeSubmitPrompt',
+  PreToolUse: 'preToolUse',
+  PostToolUse: 'postToolUse',
+  SubagentStop: 'subagentStop',
+  PreCompact: 'preCompact',
+  Stop: 'stop',
+}
+
+/** Claude Code's tool names as Cursor's hooks match them; null for one Cursor has no tool for. */
+const CURSOR_HOOK_TOOLS: Readonly<Record<string, string | null>> = {
+  Bash: 'Shell',
+  Read: 'Read',
+  Write: 'Write',
+  Edit: 'Write',
+  Glob: null,
+  Grep: 'Grep',
+  WebFetch: 'WebFetch',
+  WebSearch: 'WebSearch',
+  Task: 'Task',
+}
+
+/**
+ * A Claude Code hook group's tool matcher as Cursor's, on the tool events only: each name mapped,
+ * `mcp__<server>__<tool>` as `MCP:<tool>`; null when it names only tools Cursor lacks.
+ */
+export function cursorHookMatcher(
+  event: string,
+  matcher: string | undefined,
+): string | null | undefined {
+  if (event !== 'PreToolUse' && event !== 'PostToolUse') return undefined
+  if (!matcher || matcher === '*') return undefined
+  const out: string[] = []
+  for (const raw of matcher.split('|')) {
+    const name = raw.trim()
+    const parts = name.split('__')
+    const tool =
+      name.startsWith('mcp__') && parts.length >= 3
+        ? `MCP:${parts.slice(2).join('__')}`
+        : CURSOR_HOOK_TOOLS[name] === undefined
+          ? name
+          : CURSOR_HOOK_TOOLS[name]
+    if (tool && !out.includes(tool)) out.push(tool)
+  }
+  return out.length ? out.join('|') : null
+}
+
+/** Where Cursor reads what reeval unpacks from a plugin, in the workspace (settingSources `project`). */
+const CURSOR_PLUGIN_UNPACK: PluginUnpack = {
+  rules: '.cursor/rules',
+  agents: '.cursor/agents',
+  commands: '.cursor/commands',
+  hooks: { file: '.cursor/hooks.json', events: CURSOR_HOOK_EVENTS, matcher: cursorHookMatcher },
+}
+
+/**
+ * A plugin subagent's or command's frontmatter as OpenCode 2 takes it: the description, and a
+ * subagent's `mode`. OpenCode skips a file whose frontmatter its schema refuses, without saying,
+ * and Claude Code's `tools: Read, Grep`, `model: sonnet` and `allowed-tools` are such keys.
+ */
+export function opencodeFrontmatter(
+  part: 'agents' | 'commands',
+  front: Record<string, unknown>,
+): Record<string, string> {
+  const d = front.description
+  const description =
+    typeof d === 'string' || typeof d === 'number' || typeof d === 'boolean' ? String(d) : undefined
+  return {
+    ...(description ? { description } : {}),
+    ...(part === 'agents' ? { mode: 'subagent' } : {}),
+  }
+}
+
+/** Where OpenCode reads plugin subagents and commands, in the workspace's config directory. */
+const OPENCODE_PLUGIN_UNPACK: PluginUnpack = {
+  agents: '.opencode/agents',
+  commands: '.opencode/commands',
+  frontmatter: opencodeFrontmatter,
+}
+
+/**
+ * Where pi reads plugin commands, as prompt templates (`/<name>`), in the workspace, which its
+ * `--approve` trusts. Its frontmatter takes `description` and `argument-hint`, and ignores the
+ * rest of Claude Code's.
+ */
+const PI_PLUGIN_UNPACK: PluginUnpack = { commands: '.pi/prompts' }
 
 /**
  * What Claude Code's plugin format bundles, which Grok Build reads too: every part but rules,
@@ -535,12 +683,16 @@ export function agentMcp(
 /** Where each agent with an image reads rules and skills. */
 export const LAYOUTS: Record<BakedHarness, Layout> = {
   // The SDK loads AGENTS.md and .cursor/skills from the workspace (settingSources `project`) and
-  // ~/.agents/skills from home (`user`).
+  // ~/.agents/skills from home (`user`). Plugin skills join the home ones; the rest of a plugin is
+  // unpacked into the workspace's .cursor/, never loaded with settingSources `plugins`, which also
+  // fetches the key owner's account plugins.
   cursor: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.cursor/skills',
     harnessSkillDir: '.agents/skills',
     pluginPlacement: 'flat',
+    pluginUnpack: CURSOR_PLUGIN_UNPACK,
+    pluginHookEvents: Object.keys(CURSOR_HOOK_EVENTS),
   },
   'claude-code': {
     rulesFile: 'CLAUDE.md',
@@ -550,19 +702,25 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     pluginFiles: claudePluginFiles,
   },
   // Home skills are ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli path its docs give.
+  // Plugins are installed whole with `agy plugin install`, which the adapter runs as it starts.
   antigravity: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
     pluginPlacement: 'namespaced',
+    // The adapter's ANTIGRAVITY_HOOK_EVENTS, which a test holds this to.
+    pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
   },
   // OpenCode reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
-  // the workspace and the home directory; nothing turns that off.
+  // the workspace and the home directory; nothing turns that off. Plugin skills join the home ones;
+  // plugin subagents and commands are unpacked into the workspace's .opencode/. Its own plugins
+  // are code modules, never loaded from an environment's plugins.
   opencode: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
     harnessSkillDir: '.config/opencode/skills',
     pluginPlacement: 'flat',
+    pluginUnpack: OPENCODE_PLUGIN_UNPACK,
   },
   // Goose's bootstrap gives it a private home, so its home skills are under that. It also
   // reads .agents/skills and .claude/skills; nothing turns that off.
@@ -574,12 +732,15 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     pluginPlacement: 'flat',
   },
   // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
-  // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md).
+  // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md). Plugin skills join the home
+  // ones and plugin commands are unpacked as the workspace's prompt templates; pi packages (its own
+  // plugins, with extension code) are never loaded from an environment's plugins.
   pi: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.pi/skills',
     harnessSkillDir: '.pi/agent/skills',
     pluginPlacement: 'flat',
+    pluginUnpack: PI_PLUGIN_UNPACK,
   },
   // Codex reads skills from ~/.agents/skills and the repo's .agents/skills, AGENTS.md from
   // ~/.codex and the workspace.
@@ -590,7 +751,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     pluginPlacement: 'namespaced',
   },
   // fx reads AGENTS.md and .fx/skills from the workspace, and ~/.fx/skills from the private home
-  // the ACP bootstrap gives it.
+  // the ACP bootstrap gives it. It has no plugins of its own: plugin skills join its home skills.
   fx: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.fx/skills',
@@ -613,7 +774,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
 export const AGENTS: Record<AgentKind, Agent> = {
   cursor: {
     ...LAYOUTS.cursor,
-    pluginParts: [],
+    pluginParts: PLUGIN_PARTS,
     name: 'Cursor',
     factory: 'cursor',
     credential: 'CURSOR_API_KEY',
@@ -677,7 +838,15 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   antigravity: {
     ...LAYOUTS.antigravity,
-    pluginParts: [],
+    pluginParts: PLUGIN_PARTS,
+    // agy 1.4.2 installs a plugin as a native one when it has any of these, under that manifest's
+    // name and paths.
+    pluginManifestsFirst: [
+      'plugin.json',
+      '.antigravity-plugin/plugin.json',
+      '.gemini-plugin/plugin.json',
+      'gemini-extension.json',
+    ],
     name: 'Antigravity',
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
@@ -693,10 +862,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
     servedModel: geminiServedModel,
     mcpServers: antigravityMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
       (await import('@reeval/harness-antigravity')).createAntigravity({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
+        ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         ...(descriptor.kind === 'antigravity' && descriptor.effort
           ? { effort: descriptor.effort }
           : {}),
@@ -706,7 +876,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   opencode: {
     ...LAYOUTS.opencode,
-    pluginParts: [],
+    // Plugin MCP servers go in its config with the environment's.
+    pluginParts: ['skills', 'agents', 'commands', 'mcp'],
     name: 'OpenCode',
     factory: 'opencode',
     // Google's, for what names no model; forModel gives the model's provider's.
@@ -731,12 +902,19 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   goose: {
     ...LAYOUTS.goose,
-    pluginParts: [],
+    // Plugin skills join its home skills; plugin MCP servers are extensions in its config.yaml.
+    pluginParts: ['skills', 'mcp'],
     name: 'Goose',
     factory: 'goose',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
+    // Goose 1.55.0 refreshes its model catalogue from models.dev/api.json in every session, and
+    // falls back to the one it bundles when that's refused.
+    expectedBlocked: {
+      hosts: ['models.dev'],
+      why: "Goose's model catalogue refresh, which no setting turns off",
+    },
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
@@ -753,7 +931,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   pi: {
     ...LAYOUTS.pi,
-    pluginParts: [],
+    // Plugin MCP servers go in its mcp.json with the environment's. It has no subagents.
+    pluginParts: ['skills', 'commands', 'mcp'],
     name: 'pi',
     factory: 'pi',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -772,7 +951,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   codex: {
     ...LAYOUTS.codex,
-    pluginParts: [],
+    // What Codex's plugin format has besides apps; it installs a plugin whole, from a marketplace.
+    pluginParts: ['skills', 'mcp'],
+    pluginApps: 'they need a ChatGPT login',
+    // Codex 0.163.0 reads a root plugin.json (with an Agent Plugins $schema), then
+    // .codex-plugin/plugin.json, then .claude-plugin/plugin.json.
+    pluginManifestsFirst: ['plugin.json', '.codex-plugin/plugin.json'],
+    pluginRootManifestNeedsSchema: true,
+    pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
@@ -780,21 +966,31 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,
+    // Only with plugins on, which a session with plugins needs; it loads them all the same. In a
+    // session without plugins these hosts are a real block.
+    expectedBlocked: {
+      hosts: ['github.com', 'api.github.com', 'chatgpt.com'],
+      why: "Codex's plugin sync, which it runs on every turn once plugins are on",
+      withPlugins: true,
+    },
     servedModel: openaiServedModel,
     mcpServers: codexMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
       (await import('@reeval/harness-codex')).createCodex({
         auth,
         ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
+        ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         requireCredentialBrokering: true,
       }),
   },
   fx: {
     ...LAYOUTS.fx,
-    pluginParts: [],
+    // Plugin MCP servers go over ACP with the environment's. It reads no subagents or commands
+    // from files.
+    pluginParts: ['skills', 'mcp'],
     name: 'fx',
     factory: 'fx',
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
@@ -901,9 +1097,10 @@ const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join
 
 /**
  * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
- * load, a plugin MCP server it refuses (named `<plugin>:<server>`) or whose `<plugin>:<server>`
- * key `mcp` already has, or, where it takes plugin items flat, a skill or MCP server whose name
- * another already has. `own` names the
+ * load, apps it can't take (`pluginApps`), a hook event or type it doesn't run, a plugin MCP
+ * server it refuses (named `<plugin>:<server>`) or whose `<plugin>:<server>` key `mcp` already has,
+ * or, where it takes plugin items flat, a skill or MCP server whose name another already has, or a
+ * subagent, command or rule another unpacks to the same file. `own` names the
  * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
  * npm ones, at plan time) by their call. Undefined when it can take them.
  */
@@ -931,6 +1128,33 @@ export function refusedPlugins(
     const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
     return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
   }
+  const reads = agent ?? mimics
+  const first = reads?.pluginManifestsFirst ?? []
+  for (const p of plugins) {
+    const other = p.manifests.find(
+      (m) =>
+        first.includes(m) &&
+        (m !== 'plugin.json' || !reads?.pluginRootManifestNeedsSchema || p.rootSchema),
+    )
+    if (other) {
+      return `${name} reads the ${p.name} plugin's ${other} in place of its ${PLUGIN_MANIFEST}, so reeval can't hold it to the parts it places: remove ${other} from the plugin, or leave the plugin out of this cell`
+    }
+  }
+  const apps = (agent ?? mimics)?.pluginApps
+  const withApps = apps ? plugins.find((p) => p.apps) : undefined
+  if (withApps) return `${name} can't load the ${withApps.name} plugin's apps: ${apps}`
+  const layout = layoutOf(harness)
+  const runs = layout.pluginHookEvents
+  for (const p of runs ? plugins : []) {
+    const event = p.hooks.events.find((e) => !runs?.includes(e))
+    const type = p.hooks.otherTypes[0]
+    if (!event && !type) continue
+    const rest = p.kept.filter((part) => part !== 'hooks')
+    const fix = rest.length ? `use only: [${quoted(rest)}], or leave` : 'leave'
+    return event
+      ? `${name} can't run the ${p.name} plugin's ${event} hooks (hooks/hooks.json): it runs ${runs?.join(', ')} hooks; ${fix} the plugin out of this cell`
+      : `${name} can't run the ${p.name} plugin's ${type} hooks (hooks/hooks.json): it runs only command hooks; ${fix} the plugin out of this cell`
+  }
   const servers = Object.fromEntries(
     plugins.flatMap((p) =>
       Object.entries(p.mcp).map(([server, s]): [string, ResolvedMcpServer] => [
@@ -940,8 +1164,19 @@ export function refusedPlugins(
     ),
   )
   if (agent && Object.keys(servers).length) {
+    // A flat agent gets the environment's servers in one list with the plugins', so its own name
+    // rules see both; refusedMcp has already checked the environment's servers themselves.
+    const alongside =
+      agent.pluginPlacement === 'flat'
+        ? Object.fromEntries(
+            own.mcp.map((n): [string, ResolvedMcpServer] => [
+              n,
+              { transport: 'stdio', command: 'true', args: [], env: {} },
+            ]),
+          )
+        : {}
     try {
-      agent.mcpServers(servers)
+      agent.mcpServers({ ...alongside, ...servers })
     } catch (error) {
       if (error instanceof InfraError) return error.message
       throw error
@@ -955,7 +1190,6 @@ export function refusedPlugins(
       }
     }
   }
-  const layout = layoutOf(harness)
   if (layout.pluginPlacement === 'namespaced') {
     for (const p of plugins) {
       if (!p.kept.includes('mcp')) continue
@@ -997,6 +1231,34 @@ export function refusedPlugins(
       skillOwner.set(skill, `the ${p.name} plugin's skill "${skill}"`)
     }
   }
+  for (const part of ['agents', 'commands'] as const) {
+    const dir = layout.pluginUnpack?.[part]
+    if (!dir) continue
+    const owner = new Map<string, string>()
+    for (const p of plugins) {
+      for (const item of p[part]) {
+        const other = owner.get(item)
+        const what = part === 'agents' ? 'subagent' : 'command'
+        if (other) {
+          return `the ${p.name} plugin's ${what} "${item}" and the ${other} plugin's would both be placed at ${dir}/${item}.md: rename one, or narrow one with only`
+        }
+        owner.set(item, p.name)
+      }
+    }
+  }
+  const rules = layout.pluginUnpack?.rules
+  const ruleOwner = new Map<string, string>()
+  for (const p of rules ? plugins : []) {
+    for (const rule of p.rules) {
+      const file = `${p.name}-${rule.replace(/\.mdc?$/, '')}.mdc`
+      const what = `the ${p.name} plugin's rule "${rule}"`
+      const other = ruleOwner.get(file)
+      if (other) {
+        return `${what} and ${other} would both be placed at ${rules}/${file}: rename one, or narrow one with only`
+      }
+      ruleOwner.set(file, what)
+    }
+  }
   return undefined
 }
 
@@ -1027,10 +1289,17 @@ export function layoutOf(descriptor: HarnessDescriptor): Layout {
   return descriptor.layout ? LAYOUTS[descriptor.layout] : FAKE_LAYOUT
 }
 
-/** The hosts a harness's agent is known to try; a fake agent with `layout` expects that agent's. */
-export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlocked | undefined {
+/**
+ * The hosts a harness's agent is known to try in a session with or without plugins; a fake agent
+ * with `layout` expects that agent's.
+ */
+export function expectedBlockedFor(
+  descriptor: HarnessDescriptor,
+  plugins: boolean,
+): ExpectedBlocked | undefined {
   const kind = descriptor.kind === 'fake' ? descriptor.layout : descriptor.kind
-  return kind ? AGENTS[kind].expectedBlocked : undefined
+  const expected = kind ? AGENTS[kind].expectedBlocked : undefined
+  return expected?.withPlugins && !plugins ? undefined : expected
 }
 
 /**
