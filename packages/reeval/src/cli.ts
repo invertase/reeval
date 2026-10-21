@@ -450,7 +450,8 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
       verbose: verbosityOf(flags) > 0,
     },
     env: process.env,
-    isTTY: !!process.stdout.isTTY,
+    // A run's `--json` progress goes to stderr, so that's the stream whose terminal it draws on.
+    isTTY: !!(flags.json && !flags['dry-run'] ? process.stderr : process.stdout).isTTY,
     agent: detectAgent().name,
   })
   const path = requireConfig(configPath)
