@@ -115,7 +115,7 @@ export type Agent = Layout & {
   pluginParts: readonly PluginPart[]
   /**
    * Set for an agent that takes plugins namespaced but names a plugin's MCP servers by their own
-   * keys, in one list with the environment's (Grok Build): it keeps one of two servers of a name.
+   * keys, in one list with the environment's (Grok Build, Codex): it keeps one of two servers of a name.
    */
   pluginServersByName?: true
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
@@ -787,6 +787,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // What Codex's plugin format has besides apps; it installs a plugin whole, from a marketplace.
     pluginParts: ['skills', 'mcp'],
     pluginApps: 'they need a ChatGPT login',
+    pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',

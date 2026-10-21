@@ -475,10 +475,11 @@ evaluate('reviews', { environment: review }, async () => {})
     }
   })
 
-  test("Grok Build refuses a plugin MCP server named like one in mcp; Claude Code's namespaced name plans", async () => {
+  test("Grok Build and Codex refuse a plugin MCP server named like one in mcp; Claude Code's namespaced name plans", async () => {
     for (const [factory, model, refused] of [
-      ['grokBuild', 'grok-4.6', true],
-      ['claudeCode', 'claude-sonnet-5', false],
+      ['grokBuild', 'grok-4.6', 'grok-build:[^:]+: Grok Build'],
+      ['codex', 'gpt-5.4-mini', 'codex:[^:]+: Codex'],
+      ['claudeCode', 'claude-sonnet-5', undefined],
     ] as const) {
       const p = await project(`plugin-server-name-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
@@ -505,7 +506,9 @@ evaluate('reviews', { environment: review }, async () => {})
       assert.equal(r.code, 2, `${factory}: ${r.stdout}${r.stderr}`)
       assert.match(
         r.stderr,
-        /evaluate\("reviews"\) on grok-build:[^:]+: Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp\.docs, and keeps only one: rename one, or leave mcp out of the plugin with only/,
+        new RegExp(
+          `evaluate\\("reviews"\\) on ${refused} names the review plugin's MCP server "docs" by its own name, as it does mcp\\.docs, and keeps only one: rename one, or leave mcp out of the plugin with only`,
+        ),
       )
     }
   })
