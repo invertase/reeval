@@ -9,6 +9,7 @@ import { factsHash } from '../src/insights/hash.ts'
 import { queryCommand } from '../src/query.ts'
 import { countSecrets } from '../src/redact.ts'
 import type { ResolvedConfig } from '../src/types.ts'
+import { fromModel, type RunInsights } from '../src/view/insights.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { suiteResult } from '../src/view/suite.ts'
 import { runCli } from './helpers.ts'
@@ -172,13 +173,17 @@ describe('the record corpus', { concurrency: 4 }, () => {
         for (const row of STATE_ROWS)
           assert.match(text, new RegExp(`\\n {2}${row} +\\S`), `${entry.name} ${run.runId}: ${row}`)
         if (run.insights) {
-          const { headline, factsHash: written } = JSON.parse(
+          const written = JSON.parse(
             readFileSync(join(p.dir, HISTORY_DIR, run.runId, 'insights.json'), 'utf8'),
-          ) as { headline: { text: string } | null; factsHash: string }
+          ) as RunInsights
+          const { headline } = written
           assert.doesNotMatch(text, /insights failed/)
           // A later change to `SuiteResult` moves the facts' hash, so an older file is left out.
+          // Remarks-only insights have no model text to leave out, so they never get the note.
           const suite = suiteResult(readableRecord(structuredClone(run.raw) as never))
-          if (written !== factsHash(suite)) {
+          if (!fromModel(written)) {
+            assert.doesNotMatch(text, /insights left out/)
+          } else if (written.factsHash !== factsHash(suite)) {
             assert.match(text, /insights left out: insights\.json was written for other facts/)
           } else if (headline) {
             assert.ok(text.includes(headline.text), `${run.runId}: the headline`)
