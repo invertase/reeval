@@ -36,11 +36,11 @@ jobs:
       # Every real row; one without its key fails, naming the variable.
       REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build
       # The hard cap for this job: the contract on all eleven rows (20 attempts on a row with a
-      # plugin field, Claude Code and Grok Build; 12 on the nine without), the e2e (2) on the nine
-      # harnesses' own rows, and the real-tier fixtures (2 each, 11 of them): 40 + 108 + 18 + 22,
-      # plus 8 of headroom. Each reserves its attempts in the ledger first, and fails rather than go
-      # over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '196'
+      # plugin field, Claude Code and Grok Build; 16 on Codex and Goose, whose plugins have no
+      # hooks or subagents; 12 on the seven without), the e2e (2) on the nine harnesses' own rows,
+      # and the real-tier fixtures (2 each, 11 of them): 40 + 32 + 84 + 18 + 22, plus 8 of
+      # headroom. Each reserves its attempts in the ledger first, and fails rather than go over.
+      REEVAL_REAL_ATTEMPT_BUDGET: '204'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
