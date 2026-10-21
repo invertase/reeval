@@ -95,7 +95,11 @@ Plugins: `plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] 
 fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`.
 Claude Code and Grok Build load every part but `rules` (narrow with `only`), namespaced
 (`review:reviewer`), and start the plugin's MCP servers themselves, so a plugin server reading a
-host variable is refused there: declare it in `mcp`. Other real harnesses refuse plugins
+host variable is refused there: declare it in `mcp`. Antigravity loads every part with
+`agy plugin install`, and refuses such a server too. Cursor loads every part flat: rules,
+subagents, commands and hooks unpacked into the workspace's `.cursor/` (left out of the diff),
+skills into `~/.agents/skills`, so two items with one name clash. A hook event the harness doesn't
+run is refused at plan time. Other real harnesses refuse plugins
 (`--dry-run` exits 2 naming the harness), so keep plugins off their cells. `build` is refused for now; a server run with `npx`/`uvx` needs
 its registry in `egress`, or install it in the image.
 

@@ -66,7 +66,16 @@ const NOTES = [
   (h) =>
     h.agent.pluginParts.length &&
     LAYOUTS[h.kind]?.pluginPlacement === 'namespaced' &&
+    h.kind !== 'antigravity' &&
     `It loads each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')}), and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) =>
+    h.agent.pluginParts.length &&
+    h.kind === 'antigravity' &&
+    `Each plugin is installed with ${code('agy plugin install')} from where reeval copies it as the session starts; the CLI starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) =>
+    h.agent.pluginParts.length &&
+    LAYOUTS[h.kind]?.pluginUnpack &&
+    `Plugin rules, subagents, commands and hooks are unpacked into the workspace before the snapshot, flat, so two with one name clash; its own plugin loading is never used.`,
   (h) =>
     h.agent.forModel &&
     h.kind === 'opencode' &&

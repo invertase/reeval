@@ -204,15 +204,17 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 The plan reads every local plugin and checks each cell's harness can take it, so a plugin reeval can't place exits 2 before any attempt starts, naming the eval and the harness:
 
 ```text
-reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.5: Cursor can't load plugins yet: leave the review plugin out of this cell
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on goose:gemini-3.8-flash: Goose can't load plugins yet: leave the review plugin out of this cell
 ```
 
 | Message after the prefix | Fix |
 |---|---|
-| `Cursor can't load plugins yet: leave the review plugin out of this cell` | Only Claude Code, Grok Build and the fake harness load plugins. Scope the plugin to cells that can take it. |
+| `Goose can't load plugins yet: leave the review plugin out of this cell` | Only Cursor, Claude Code, Antigravity, Grok Build and the fake harness load plugins. Scope the plugin to cells that can take it. |
 | `Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell` | The harness doesn't load that part. Leave it out with `only`. |
-| `Claude Code loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in` | Claude Code and Grok Build start a plugin's servers themselves. Leave `mcp` out of `only` and declare the server in the environment's `mcp`. |
+| `Claude Code loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in` | Claude Code, Antigravity and Grok Build start a plugin's servers themselves. Leave `mcp` out of `only` and declare the server in the environment's `mcp`. |
 | `Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp.docs, and keeps only one: rename one, or leave mcp out of the plugin with only` | Grok Build doesn't namespace a plugin's MCP servers. Rename one server, or leave `mcp` out of the plugin's `only`. |
+| `Cursor can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: ['skills', 'mcp'], or leave the plugin out of this cell` | The harness has no such event. Leave `hooks` out with `only`, or drop the event from the plugin. |
+| `the audit plugin's subagent "reviewer" and the review plugin's would both be placed at .cursor/agents/reviewer.md: rename one, or narrow one with only` | Cursor takes plugin subagents and commands flat. Rename one, or leave `agents` (or `commands`) out of one plugin's `only`. |
 | `plugin.local('plugins/bare') has no .claude-plugin/plugin.json` | Point at the plugin's root, the directory with `.claude-plugin/plugin.json`. |
 | `the review plugin has no hooks, so only: ['hooks'] matches nothing (it has skills, mcp)` | Name parts the plugin has in `only`. |
 | `plugin.local('plugins/review') has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker({ install })` | Leave `build` out. |
@@ -222,7 +224,7 @@ reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.
 | `the review plugin's MCP server "docs" would join mcp as review:docs, which mcp already names: rename mcp["review:docs"]` | Rename the environment's own server. |
 | `the review plugin's MCP server "docs": "${HOME}" in .mcp.json names a variable; reeval fills in only ${CLAUDE_PLUGIN_ROOT} in a command and its args, …` | Pass the host variable through the server's `env` as a whole value, such as `"TOKEN": "${TOKEN}"`. |
 
-A `plugin.git` or `plugin.npm` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way.
+A `plugin.git` or `plugin.npm` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way, as do a Cursor workspace file a plugin part would replace (`The workspace already has .cursor/agents/reviewer.md, which a plugin would replace: …`) and a plugin Antigravity's CLI refuses to install (`agy plugin install <dir> exited 1: …`).
 
 ## During an attempt
 
