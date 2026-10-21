@@ -670,6 +670,35 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'plugins/marketplace-entry',
+    tiers: ['fake', 'docker'],
+    env: 'review-entry',
+    canary: /expected '' to contain 'Lint the tree for the house style\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      cpSync(join(dir, 'market-repo'), repo, { recursive: true })
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      git(repo, 'add', '-A')
+      git(repo, 'commit', '-q', '-m', 'v1')
+      git(repo, 'tag', 'v1')
+    },
+    record: ({ run, project }) => {
+      const commit = git(join(project, 'repo'), 'rev-parse', 'v1')
+      assert.deepEqual(
+        plugins(run).map((p) => ({
+          name: p.name,
+          commit: p.commit,
+          marketplace: p.marketplace && { ...p.marketplace, source: typeof p.marketplace.source },
+        })),
+        [{ name: 'review', commit, marketplace: { name: 'acme-tools', source: 'string', commit } }],
+      )
+      const [p] = plugins(run)
+      assert.match(p?.marketplace?.source ?? '', /^file:\/\/.*\/repo#v1$/)
+      assert.match(p?.source ?? '', /^file:\/\/.*\/repo#v1:plugins\/review$/)
+      assert.deepEqual(p?.parts.agents, ['reviewer'])
+    },
+  },
+  {
     dir: 'plugins/npm-package',
     tiers: ['fake', 'docker'],
     env: 'review-1.2.3',

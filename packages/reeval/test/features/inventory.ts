@@ -512,6 +512,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'plugin.marketplace',
+    area: 'Environments',
+    name: '`plugin.marketplace`: an entry in a Claude Code marketplace on git or npm, its own source resolved, and the marketplace in the record',
+    fixtures: ['plugins/marketplace-entry'],
+    plan: ['plugins/marketplace'],
+    tests: [
+      plugin('a marketplace entry’s source is a ./path, a git repository or an npm package'),
+      plugin('a marketplace reeval can’t read'),
+      plugin('resolving a marketplace entry places that plugin alone'),
+    ],
+  },
+  {
     id: 'skill.exclude',
     area: 'Environments',
     name: 'Skill `exclude`: the defaults and a custom list',
