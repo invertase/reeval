@@ -126,14 +126,20 @@ function locator(root: string) {
         const key = `${entry.id}\0${needle ?? ''}`
         if (found.has(key)) continue
         const quoted = (s: string) => [`'${s}'`, `"${s}"`, `\`${s}\``]
-        const wanted = needle === null ? quoted(entry.name) : [...quoted(needle), needle]
+        // Best first: an object key (`docs: mcp.stdio(…)`), then a string, then the bare word.
+        const tiers =
+          needle === null
+            ? [quoted(entry.name)]
+            : [[`${needle}:`, ...quoted(needle).map((q) => `${q}:`)], quoted(needle), [needle]]
         let at = `source:${entry.file}`
-        search: for (const path of needle === null ? [entry.file] : paths) {
-          const lines = (await text(path))?.split('\n') ?? []
-          for (const [i, line] of lines.entries()) {
-            if (wanted.some((w) => line.includes(w))) {
-              at = `source:${path}#L${i + 1}`
-              break search
+        search: for (const wanted of tiers) {
+          for (const path of needle === null ? [entry.file] : paths) {
+            const lines = (await text(path))?.split('\n') ?? []
+            for (const [i, line] of lines.entries()) {
+              if (wanted.some((w) => line.includes(w))) {
+                at = `source:${path}#L${i + 1}`
+                break search
+              }
             }
           }
         }

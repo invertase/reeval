@@ -296,7 +296,7 @@ describe('remarks in reeval run', () => {
       assert.equal(r.code, 0, r.stdout + r.stderr)
       assert.match(
         remarksBlock(r.stdout) ?? '',
-        /^Remarks:\n {2}looks it up: MCP server docs took 2(\.\d)?s to start on each of 2 turns\.\n {4}fix {2}evals\/docs\.eval\.ts:3 {2}install what docs needs in the image/,
+        /^Remarks:\n {2}looks it up: MCP server docs took 2(\.\d)?s to start on each of 2 turns\.\n {4}fix {2}evals\/docs\.eval\.ts:5 {2}install what docs needs in the image/,
       )
     }
     const shown = await runCli(p.dir, ['show'])

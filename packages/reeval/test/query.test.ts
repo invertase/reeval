@@ -147,6 +147,57 @@ evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }
     ])
   })
 
+  test('check_streaks counts each check’s clean recorded runs on a branch, newest first', async () => {
+    const p = await project('query-check-streaks', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig(),
+      'evals/s.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('steady', { runs: 2 }, async (c) => {
+  await c.send('go')
+  expect.soft(1, 'always one').toBe(1)
+  expect.soft(process.env.FLIP, 'flips').toBeUndefined()
+})
+`,
+    })
+    const env = { ...baseEnv, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com' }
+    const git = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: p.dir,
+        env: { ...env, GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' },
+      })
+    git('init', '-q', '-b', 'main')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'init')
+    assert.equal((await runCli(p.dir, ['run', '--record'], { env: { FLIP: '1' } })).code, 1)
+    const broke = readRun(p.dir).run.runId
+    for (let i = 0; i < 2; i++) assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const newest = readRun(p.dir).run.runId
+    assert.equal((await runCli(p.dir, ['run'])).code, 0, 'a scratch run is not counted')
+    const rows = await query(
+      p.dir,
+      'SELECT label, branch, runs, fails, streak_runs, streak_tries, last_run, ended_by FROM check_streaks ORDER BY label',
+    )
+    assert.deepEqual(rows, [
+      {
+        label: 'always one',
+        branch: 'main',
+        ...{ runs: 3, fails: 0, streak_runs: 3, streak_tries: 6, last_run: newest, ended_by: null },
+      },
+      {
+        label: 'flips',
+        branch: 'main',
+        ...{
+          runs: 3,
+          fails: 2,
+          streak_runs: 2,
+          streak_tries: 4,
+          last_run: newest,
+          ended_by: broke,
+        },
+      },
+    ])
+  })
+
   test('reasoning effort, requested and served, is its own column; the effort view is the metric', async () => {
     const p = await project('query-reasoning-effort', {
       'reeval.config.ts': fakeConfig({
@@ -338,7 +389,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: check_discrimination, check_rates, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_context, attempts, cell_checks, cells,/,
+        /no view or table named "nope"\. Views: check_discrimination, check_rates, check_streaks, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_context, attempts, cell_checks, cells,/,
       ],
     ]
     for (const [sql, message] of cases) {
