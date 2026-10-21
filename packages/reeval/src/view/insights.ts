@@ -66,7 +66,7 @@ export type RunInsights = {
   evals: EvalInsight[]
   /**
    * Remarks about the evals' own quality, ranked: every one this run raised, including those an
-   * earlier run raised first (`firstSeenRun`), which don't print again.
+   * earlier run printed first (`firstSeenRun`), which don't print again.
    */
   remarks: Remark[]
   /**
@@ -159,10 +159,16 @@ export type Remark = {
   fix: { at: string; edit: string }
   origin: 'model' | 'deterministic'
   /**
-   * The run that first raised this `id`; it prints only in that run, except `slow-mcp-start`,
-   * which is about the environment, not the eval's source, and prints in every run it happens.
+   * The first run that printed this `id`, or this run when none has: it prints only in that run,
+   * except `slow-mcp-start`, which is about the environment, not the eval's source, and prints in
+   * every run it happens.
    */
   firstSeenRun: string
+  /**
+   * Whether this run's `reeval run` output printed it: false when the cap or a run without `-v`
+   * left it out, so a later run prints it. Missing: printed in `firstSeenRun` only.
+   */
+  printed?: boolean
   /** Set on later runs once the cited span changed: the remark was acted on. */
   actedOn?: { run: string }
 }

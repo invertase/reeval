@@ -73,6 +73,7 @@ and `slow-mcp-start` (concerns, at most three), and with `-v` `too-few-tries` an
 `check-never-fails` (suggestions). Each names the source line to change (`fix  <file:line>`).
 Act on them: raise `runs`, tighten or remove the check, or bake the MCP server's dependencies into
 the image. Each prints once per eval version (`slow-mcp-start` every run); an edit re-arms it.
+One the cap or a run without `-v` hid isn't spent: the next `reeval run -v` prints it.
 
 ## Config discovery, filters and exit codes
 

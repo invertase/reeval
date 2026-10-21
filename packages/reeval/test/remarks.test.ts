@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
+import { defaultBranch } from '../src/remarks/index.ts'
 import {
   type CheckWindow,
   deterministicRemarks,
@@ -244,6 +245,20 @@ describe('remarks in reeval run', () => {
     )
     const summary = readRun(p.dir).read('summary.md')
     assert.doesNotMatch(summary, /Remarks:/)
+    const later = await runCli(p.dir, ['run', '-v'])
+    assert.match(
+      remarksBlock(later.stdout) ?? '',
+      /too few tries/,
+      'a suggestion a run without -v hid prints in the next -v run',
+    )
+    const shown = insightsOf(p.dir)?.remarks[0]
+    const again = await runCli(p.dir, ['run', '-v'])
+    assert.equal(remarksBlock(again.stdout), null, 'once printed, it does not print again')
+    assert.deepEqual(
+      [insights?.remarks[0]?.printed, shown?.printed, insightsOf(p.dir)?.remarks[0]?.printed],
+      [false, true, false],
+    )
+    assert.equal(shown?.firstSeenRun, insightsOf(p.dir)?.remarks[0]?.firstSeenRun)
 
     const p2 = await project('remarks-run-v', {
       'reeval.config.ts': fakeConfig(),
@@ -270,6 +285,53 @@ describe('remarks in reeval run', () => {
     )
     const edited = await runCli(p2.dir, ['run', '-v'])
     assert.match(remarksBlock(edited.stdout) ?? '', /too few tries/, 'an edited eval re-arms it')
+  })
+
+  test('a concern the cap hid prints in the next -v run, then never again', async () => {
+    const coins = ['one', 'two', 'three', 'four']
+    const p = await project('remarks-cap', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/coin.eval.ts': `import { evaluate, expect } from 'reeval'
+${coins
+  .map(
+    (name) => `evaluate('coin ${name}', { runs: 3 }, async (c) => {
+  await c.send('go')
+  expect.soft(c.attempt.n, 'lands heads').toBe(1)
+})`,
+  )
+  .join('\n')}
+`,
+    })
+    for (let i = 0; i < 2; i++) await runCli(p.dir, ['run'])
+    const capped = remarksBlock((await runCli(p.dir, ['run'])).stdout) ?? ''
+    assert.match(capped, /\+1 more \(-v\)/)
+    const named = (block: string) => [...block.matchAll(/^ {2}(coin \w+):/gm)].map((m) => m[1])
+    assert.equal(named(capped).length, 3)
+    const marks = insightsOf(p.dir)?.remarks.map((r) => r.printed)
+    const verbose = remarksBlock((await runCli(p.dir, ['run', '-v'])).stdout) ?? ''
+    assert.deepEqual(
+      named(verbose),
+      coins.map((c) => `coin ${c}`).filter((c) => !named(capped).includes(c)),
+      'only the concern the cap hid',
+    )
+    const after = await runCli(p.dir, ['run', '-v'])
+    assert.equal(remarksBlock(after.stdout), null, 'every concern has printed')
+    assert.deepEqual(marks, [true, true, true, false])
+  })
+
+  test("an older reeval's remark, with no printed, counts as printed in the run that raised it", async () => {
+    const p = await project('remarks-unmarked', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/skill.eval.ts': compareEval(2, 2, 0),
+    })
+    await runCli(p.dir, ['run'])
+    const file = join(readRun(p.dir).dir, 'insights.json')
+    const doc = JSON.parse(readFileSync(file, 'utf8')) as RunInsights
+    for (const r of doc.remarks) delete r.printed
+    await writeFile(file, `${JSON.stringify(doc, null, 2)}\n`)
+    const later = await runCli(p.dir, ['run', '-v'])
+    assert.equal(later.code, 0, later.stderr)
+    assert.equal(remarksBlock(later.stdout), null)
   })
 
   test('a well-written eval prints no Remarks heading and writes no insights', async () => {
@@ -363,6 +425,25 @@ evaluate('clean', { runs: 4 }, async (c) => {
     assert.doesNotMatch(summary, /Remarks:/, 'summary.md prints concerns only')
     const seventh = await runCli(p.dir, ['run', '-v'])
     assert.equal(remarksBlock(seventh.stdout), null)
+  })
+
+  test("the default branch: origin's HEAD, a local main, then in CI a pull request's base", async () => {
+    const p = await project('remarks-default-branch', { 'README.md': 'hi\n' })
+    sh(p.dir, 'init', '-q', '-b', 'feature')
+    sh(p.dir, 'add', '-A')
+    sh(p.dir, 'commit', '-q', '-m', 'init')
+    sh(p.dir, 'checkout', '-q', '--detach')
+    sh(p.dir, 'branch', '-q', '-D', 'feature')
+    const pr = { CI: 'true', GITHUB_BASE_REF: 'trunk' }
+    assert.equal(await defaultBranch(p.dir, pr), 'trunk')
+    assert.equal(await defaultBranch(p.dir, { GITHUB_BASE_REF: 'trunk' }), null, 'not outside CI')
+    assert.equal(await defaultBranch(p.dir, { ...pr, CI: 'false' }), null)
+    assert.equal(await defaultBranch(p.dir, { ...pr, GITHUB_BASE_REF: '' }), null, 'a push build')
+    sh(p.dir, 'branch', '-q', 'master')
+    assert.equal(await defaultBranch(p.dir, pr), 'master', 'a local branch comes first')
+    sh(p.dir, 'update-ref', 'refs/remotes/origin/develop', 'HEAD')
+    sh(p.dir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/develop')
+    assert.equal(await defaultBranch(p.dir, pr), 'develop')
   })
 
   test('flaky-check prints once the cell has 2 mixed runs and 6 tries behind it', async () => {

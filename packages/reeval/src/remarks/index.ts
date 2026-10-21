@@ -1,8 +1,10 @@
 // A run's deterministic remarks, at the end of `reeval run`: the rules over its record and the
-// history, each remark's first run from earlier runs' insights, and the remarks-only insights.json
-// they're kept in beside the scratch run, which `reeval record` carries into the history.
+// history, the first run that printed each from earlier runs' insights, and the remarks-only
+// insights.json they're kept in beside the scratch run, which `reeval record` carries into the
+// history.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { inCI } from '../env.ts'
 import { git } from '../git.ts'
 import { comparableFingerprint, type HistoryDb, openHistoryDb } from '../history/db.ts'
 import { recordNames, scratchDir } from '../history/files.ts'
@@ -20,8 +22,15 @@ import {
   type RemarkContext,
 } from './rules.ts'
 
-/** The branch the default-branch views count: `origin`'s HEAD, else a local `main` or `master`. */
-export async function defaultBranch(root: string): Promise<string | null> {
+/**
+ * The branch the default-branch views count: `origin`'s HEAD, else a local `main` or `master`,
+ * else in CI a pull request's base, `GITHUB_BASE_REF`. A GitHub Actions pull request build checks
+ * out the merge commit with neither ref; a push build checks out its branch locally.
+ */
+export async function defaultBranch(
+  root: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
   const head = await git(root, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])
   if (head.code === 0) {
     const ref = head.stdout.toString('utf8').trim()
@@ -31,7 +40,7 @@ export async function defaultBranch(root: string): Promise<string | null> {
     const r = await git(root, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`])
     if (r.code === 0) return name
   }
-  return null
+  return (inCI(env) && env.GITHUB_BASE_REF) || null
 }
 
 /** The ids of every run but `runId`, recorded and scratch, with the folder each is in. */
@@ -49,12 +58,17 @@ async function otherRuns(config: ResolvedConfig, runId: string) {
   return out
 }
 
-/** Each remark id an earlier run raised, with the first run that did. */
-async function raisedBefore(runs: Array<{ dir: string; runId: string }>) {
+/**
+ * Each remark id an earlier run printed, with the first run that did. A run's `firstSeenRun` is a
+ * run that printed it, unless that run is itself and `printed` is false: the cap or a run without
+ * `-v` hid it.
+ */
+async function printedBefore(runs: Array<{ dir: string; runId: string }>) {
   const first = new Map<string, string>()
   for (const run of runs) {
     const doc = await readInsights(insightsFile(run.dir, run.runId)).catch(() => null)
     for (const r of doc?.remarks ?? []) {
+      if (r.printed === false && r.firstSeenRun === run.runId) continue
       const was = first.get(r.id)
       if (!was || r.firstSeenRun < was) first.set(r.id, r.firstSeenRun)
     }
@@ -173,7 +187,7 @@ function needlesOf(entry: EvalEntry): Array<string | null> {
   return [null, ...new Set([...labels, ...servers])]
 }
 
-/** The run's remarks, each with the run that first raised it. History-based kinds need an earlier run. */
+/** The run's remarks, each with the run that first printed it. History-based kinds need an earlier run. */
 export async function remarksOf(config: ResolvedConfig, record: RunRecord): Promise<Remark[]> {
   const runs = await otherRuns(config, record.runId)
   const db = runs.length ? await openHistoryDb(config.root, config.history.dir) : null
@@ -190,7 +204,7 @@ export async function remarksOf(config: ResolvedConfig, record: RunRecord): Prom
     }
     const candidates = deterministicRemarks(suiteResult(record), record, ctx)
     if (!candidates.length) return []
-    const before = await raisedBefore(runs)
+    const before = await printedBefore(runs)
     return candidates.map((r) => {
       const was = before.get(r.id)
       return { ...r, firstSeenRun: was && was < record.runId ? was : record.runId }
