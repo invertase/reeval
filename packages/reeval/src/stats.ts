@@ -200,7 +200,8 @@ export function meanInterval(values: readonly number[]): Interval & { mean: numb
 /**
  * Two-sided Wilcoxon signed-rank p for paired differences: zeros dropped, mid-ranks for ties,
  * exact over every sign assignment up to 20 non-zero differences, else the normal approximation.
- * Null when every difference is zero.
+ * Null when every difference is zero. Ties are exact equality, so form each difference of two
+ * rates with one division (`(a·d − c·b) / (b·d)`), never as `a/b − c/d`.
  */
 export function signedRank(differences: readonly number[]): number | null {
   const d = differences.filter((x) => x !== 0)

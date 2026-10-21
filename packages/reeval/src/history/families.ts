@@ -149,7 +149,9 @@ function liftOf(
     discordant = { variantOnly: counts.variantOnly, controlOnly: counts.controlOnly }
     decided = counts.variantOnly + counts.controlOnly >= PAIRED_MIN
   } else {
-    const differences = vRates.map((r, i) => r - (cRates[i] as number))
+    const differences = pairs.map(
+      ([v, c]) => (v.pass * c.counted - c.pass * v.counted) / (v.counted * c.counted),
+    )
     const t = meanInterval(differences)
     points = t.mean
     range = interval(t.low, t.high, 't-cases', [-1, 1])

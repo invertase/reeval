@@ -215,6 +215,30 @@ describe("paired lift over a pooled family's cases", () => {
     assert.equal(family.withinNoise, true)
   })
 
+  test('equal family differences tie in the signed-rank p, whichever counts made them', () => {
+    // −1/3 and +1/3 share the smallest rank; as 0/3 − 1/3 and 3/3 − 2/3 they'd differ by an ulp.
+    const thirds = familyLift([
+      [0, 3, 0, 3],
+      [0, 3, 0, 3],
+      [0, 3, 0, 3],
+      [0, 3, 1, 3],
+      [2, 3, 0, 3],
+      [3, 3, 2, 3],
+    ])
+    assert.equal(thirds.p, 0.75)
+    const mixed = familyLift([
+      [1, 2, 1, 3],
+      [2, 3, 1, 2],
+      [0, 2, 1, 3],
+      [3, 3, 2, 3],
+      [1, 3, 1, 3],
+      [2, 2, 1, 2],
+    ])
+    assert.equal(mixed.p, 0.375, 'unequal counted: the sixths tie, and so do the thirds')
+    const same = familyLift(Array.from({ length: 6 }, (): FamilyCase => [1, 3, 1, 3]))
+    assert.equal(same.p, null, 'every difference zero')
+  })
+
   test('the t interval over per-case differences', () => {
     const i = meanInterval([1, 0, 1, 1, 0.5])
     near(i.mean, 0.7, 'mean')
