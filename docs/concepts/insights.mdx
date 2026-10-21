@@ -75,14 +75,21 @@ Remarks:
     fix  evals/skill.eval.ts:28  set runs: 4 or more, so each side counts at least 4 tries
 ```
 
-A remark is something reeval noticed about an eval itself, with the source line to change. Remarks come from fixed thresholds over the record and the history, never from a model, so they print without `analysis.model`:
+A remark is something reeval noticed about an eval itself, with the source line to change. Most come from fixed thresholds over the record and the history, so they print without `analysis.model`. With it, each eval's insights call may also raise a model remark by the eval rubric (`skills/eval-rubric`), kept only when it quotes its cited line of the eval exactly:
 
 | Kind | Severity | Raised when |
 |---|---|---|
 | `flaky-check` | concern | A check both passed and failed across recent comparable runs with nothing changed |
 | `slow-mcp-start` | concern | A stdio MCP server took 2s or more to answer `initialize` |
+| `no-baseline` | concern | With a model: the eval is about a change, such as a skill, and has no `compare` |
+| `name-contradicts` | concern | Model: the name asks one thing and the checks look at another |
+| `judge-too-loose` | concern | Model: a judge question passed a reply that doesn't do what the eval asks |
+| `judge-leaks-answer` | concern | Model: a judge question gives the answer away |
+| `prompt-names-tool` | concern | Model: a choose eval's prompt names the tool it asks about |
 | `too-few-tries` | suggestion | A variant and its baseline differ by half or more, with under 4 tries a side |
 | `check-never-fails` | suggestion | A check passed every try over the last 5 recorded runs on the default branch |
+| `name-no-intent` | suggestion | Model: the name is a topic, a ticket id or "test 3" |
+| `compound-judge` | suggestion | Model: one judge question asks two things, and failed |
 
 Only concerns print, at most three, with `+N more (-v)` for the rest; `-v` adds the suggestions, as in this capture. Remarks never change the exit code.
 
@@ -99,7 +106,7 @@ Each eval costs a call for its sentences, plus one to read what it asks unless t
 | Knob | What it does |
 |---|---|
 | `analysis.model` | The model; unset, there are no insights |
-| `analysis.maxTokens` | Caps one run's insight tokens, default `250000`. Failing evals go first, then changes that made something worse, then compares |
+| `analysis.maxTokens` | Caps one run's insight tokens, default `250000`. Failing evals go first, then changes that made something worse, then compares; a pass with failed tries goes before a clean one |
 | `--no-insights` | Skips them for one run |
 | `analysis.insights: false` | Skips them for every run |
 | `reeval analyze <run> --insights` | Writes them for a run without, or finishes one the budget, a failure or Ctrl-C stopped |

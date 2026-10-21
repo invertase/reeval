@@ -292,23 +292,11 @@ With `analysis.model`, each eval's [insights](/reference/cli/analyze#during-a-ru
 | `name-no-intent` | suggestion | The name is a topic, a ticket id or "test 3" |
 | `compound-judge` | suggestion | One judge question asks two things, and failed |
 
-reeval checks every model remark in code and drops, without asking again, one whose kind isn't in this table, or that has no quote copied exactly from its cited line of the eval's file, unchanged since the run. It also drops one with no evidence from this run's facts or transcripts, no concrete fix, or a kind the run contradicts (a judge remark citing no judge check with the right result). Each dropped remark is in `insights.json`'s `validation.drops` with the reason, and `reeval analyze --insights -v` lists them.
+reeval checks every model remark in code and drops, without asking again, one whose kind isn't in this table, or that has no quote copied exactly from its cited line of the eval's file, unchanged since the run. Its evidence and fix are the model's as written; one with no fix prints `at` and its quoted line. Each dropped remark is in `insights.json`'s `validation.drops` with the reason, and `reeval analyze --insights -v` lists them.
 
-### Once per eval, and acted on
+### Once per eval
 
-Each remark prints until a run prints it: one of reeval's for that version of the eval (its sources' hashes), so an edit prints it again; a model remark while its quote is in the eval. `slow-mcp-start` prints in every run that has it. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it.
-
-A later run that finds a printed remark's quote gone from the eval (or, for one without a quote, the eval edited and the remark not raised again) marks it acted on (`actedOn` in `insights.json`). A rename acts on a name remark. Only the terminal output counts as printed; `summary.md` holds the concerns a run without `-v` prints.
-
-### Demotion
-
-| Acted on, over at least 10 printed of a kind | The kind |
-|---|---|
-| 20% or more | prints as its severity |
-| under 20% | a concern prints as a suggestion (`demoted: "suggestion"`) |
-| under 5% | never prints (`demoted: "hidden"`) |
-
-Each project's own runs decide, over every recorded and scratch run before this one; [`reeval query remark_outcomes`](/reference/cli/query#views) shows each kind's counts and status. `slow-mcp-start` isn't counted. A hidden kind prints nothing more, so it stays hidden until older runs leave the history.
+Each remark prints until a run prints it: one of reeval's for that version of the eval (its sources' hashes), so an edit prints it again; a model remark while its quote is in the eval. `slow-mcp-start` prints in every run that has it. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it. Only the terminal output counts as printed; `summary.md` holds the concerns a run without `-v` prints.
 
 The default branch is `origin`'s HEAD, else a local `main` or `master`, else, when `CI` is set, `GITHUB_BASE_REF` (a GitHub Actions pull request build has neither ref; a push build of `main` or `master` checks it out locally). Without one, `check-never-fails` isn't raised. The history kinds need an earlier run.
 
