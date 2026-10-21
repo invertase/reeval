@@ -995,6 +995,64 @@ export type EnvironmentSpec = {
   skills?: SkillSource[]
   /** MCP servers the agent gets, by name. */
   mcp?: Record<string, McpServer>
+  /**
+   * Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its
+   * parent's plugin of the same name.
+   */
+  plugins?: PluginSource[]
+}
+
+/**
+ * A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`,
+ * `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.
+ */
+export type PluginPart = 'skills' | 'agents' | 'commands' | 'hooks' | 'mcp' | 'rules'
+
+/** A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper. */
+export type PluginSource = {
+  kind: 'plugin'
+  /** The parts to place; default every part the plugin has. */
+  only?: PluginPart[]
+  /** Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one. */
+  build?: string | string[]
+} & (
+  | {
+      source: 'local'
+      /** A host directory with a `.claude-plugin/plugin.json`. */
+      path: string
+    }
+  | {
+      source: 'git'
+      /** As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. */
+      repo: string
+      /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+      ref?: string
+      /** The plugin's directory in the repository; default its root. */
+      path?: string
+    }
+  | {
+      source: 'npm'
+      /** A pinned npm package spec. */
+      spec: string
+      /** The plugin's directory in the package; default its root. */
+      path?: string
+    }
+)
+
+type PluginOptions = {
+  /** The parts to place, e.g. `['skills', 'mcp']`; default every part the plugin has. */
+  only?: readonly PluginPart[]
+  /** Commands that build the plugin in an image layer. Not run yet: the plan refuses a build. */
+  build?: string | readonly string[]
+}
+
+export type PluginHelper = {
+  /** A directory with a `.claude-plugin/plugin.json`, relative to the calling file. */
+  local(path: string | URL, options?: PluginOptions): PluginSource
+  /** `https://…`, `git@…`, `github:owner/repo` or a GitHub `/tree/<ref>/<path>` URL. */
+  git(repo: string, options?: PluginOptions & { ref?: string; path?: string }): PluginSource
+  /** A pinned npm package spec; the plugin is at `path` inside it (default its root). */
+  npm(spec: string, options?: PluginOptions & { path?: string }): PluginSource
 }
 
 /** One environment in an `extend` chain. */
@@ -1031,6 +1089,7 @@ export type EnvironmentHelpers = {
   secret: SecretHelper
   skill: SkillHelper
   mcp: McpHelper
+  plugin: PluginHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
   /**
@@ -1845,6 +1904,31 @@ export type Cell = {
   variant?: string
 }
 
+/** A plugin as an attempt placed it. */
+export type PluginRecord = {
+  /** The manifest's `name`. */
+  name: string
+  /** Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`. */
+  source: string
+  /** The marketplace it was listed in; null when it was named directly. */
+  marketplace: { name: string; source: string; commit: string } | null
+  /** The commit a git source resolved to; null for a local or npm one. */
+  commit: string | null
+  /** The hash of the files placed. */
+  sha256: string
+  /** The image layer its build ran in; null without a build. */
+  build: string | null
+  /** What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules. */
+  parts: {
+    skills: string[]
+    agents: string[]
+    commands: string[]
+    hooks: string[]
+    mcp: string[]
+    rules: boolean
+  }
+}
+
 /** An environment as it was applied, without secret values. */
 export type EnvironmentRecord = {
   name: string
@@ -1863,8 +1947,13 @@ export type EnvironmentRecord = {
     placement: SkillPlacement
     /** Paths left out of the sandbox by `exclude` (directories end in `/`); `.git` isn't listed. */
     excluded: string[]
+    /** The plugin the skill came with; unset for a skill from `skills`. */
+    plugin?: string
   }>
+  /** Every MCP server, a plugin's as `<plugin>:<server>`. */
   mcp: string[]
+  /** The plugins placed, each with what it placed; in the digest. Unset when there are none. */
+  plugins?: PluginRecord[]
   files: Array<{ path: string; sha256: string }>
   vars: string[]
   secrets: string[]
@@ -2131,6 +2220,8 @@ export type AttemptMeta = {
   workspace?: GitWorkspace
   /** The paths its environment's `files` write, layered and sorted; unset when there are none. */
   files?: string[]
+  /** Its environment's plugins, layered: a local one's name and parts, else its source. */
+  plugins?: string[]
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string

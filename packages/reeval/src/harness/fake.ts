@@ -13,12 +13,13 @@ const lineCount = (text: string) =>
 /**
  * Writes canned files and returns a canned message on every turn, after running its `script`'s
  * real sandbox actions. Harness-placed skills are written under `~/` where its layout's adapter
- * puts them (`~/.agents/skills` by default, as Cursor's does).
+ * puts them (`~/.agents/skills` by default, as Cursor's does). Plugins are already copied under
+ * `~/.reeval/plugins/`; where its layout takes plugin items flat, their skills arrive in `skills`.
  */
 export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness => {
   let starts = 0
   return {
-    async start(sandbox, _signal, { skills, workspaceSkills, mcp }) {
+    async start(sandbox, _signal, { skills, workspaceSkills, mcp, plugins }) {
       if (descriptor.failWith) throw new InfraError(descriptor.failWith)
       const hangs = descriptor.startHangs
       // A start that never settles, abort or not, like an agent stuck in its bootstrap.
@@ -33,6 +34,9 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       const names = [...skills.map((s) => s.name), ...workspaceSkills]
       const loaded = [
         names.length ? `skills: ${names.join(', ')}` : '',
+        plugins.length
+          ? `plugins: ${plugins.map((p) => `${p.name} (${p.parts.join(', ')})`).join(', ')}`
+          : '',
         Object.keys(mcp).length ? `mcp: ${Object.keys(mcp).join(', ')}` : '',
       ].filter(Boolean)
       let calls = 0

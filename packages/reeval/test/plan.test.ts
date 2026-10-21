@@ -103,6 +103,9 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
   { dir: 'files', name: 'directory', args: [] },
+  { dir: 'plugins', name: 'parts', args: ['evals/parts.eval.ts'] },
+  { dir: 'plugins', name: 'remote', args: ['evals/remote.eval.ts'] },
+  { dir: 'plugins', name: 'fetches-at-start', args: ['evals/fetches.eval.ts'] },
   { dir: 'capture', name: 'options', args: [] },
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
@@ -326,6 +329,103 @@ evaluate('uses tools', { environment: tools }, async () => {})
       refused.stderr,
       /evaluate\("uses tools"\) on pi:gemini-3\.8-flash: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the my\.local server: rename it/,
     )
+  })
+
+  test('every real harness refuses a plugin at plan time, naming the eval, the harness and the plugin', async () => {
+    const plugin = {
+      'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
+      'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
+    }
+    for (const [factory, model, name] of [
+      ['cursor', 'composer-2.5', 'Cursor'],
+      ['claudeCode', 'claude-sonnet-5', 'Claude Code'],
+      ['antigravity', 'gemini-3.8-flash-low', 'Antigravity'],
+      ['opencode', 'google/gemini-3.8-flash', 'OpenCode'],
+      ['goose', 'gemini-3.8-flash', 'Goose'],
+      ['pi', 'gemini-3.8-flash', 'pi'],
+      ['codex', 'gpt-5.4-mini', 'Codex'],
+      ['fx', 'gpt-4.1-mini', 'fx'],
+      ['grokBuild', 'grok-4.6', 'Grok Build'],
+    ] as const) {
+      const p = await project(`plugin-refused-${factory}`, {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+`,
+        'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const review = defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('../plugins/review')] }))
+evaluate('reviews', { environment: review }, async () => {})
+`,
+        ...plugin,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, `${factory}: ${r.stdout}${r.stderr}`)
+      assert.equal(r.stdout, '', factory)
+      assert.match(
+        r.stderr,
+        new RegExp(
+          `evaluate\\("reviews"\\) on ${factory === 'claudeCode' ? 'claude-code' : factory === 'grokBuild' ? 'grok-build' : factory}:[^:]+: ${name} can't load plugins yet: leave the review plugin out of this cell`,
+        ),
+      )
+      assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
+    }
+  })
+
+  test('a plugin the plan reads and refuses exits 2: no manifest, a build, npx under deny-all', async () => {
+    const config = `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+export default defineConfig({ harness: fakeHarness(), sandbox: docker({ from: 'node:22-bookworm' }) })
+`
+    for (const [label, call, files, egress, refusal] of [
+      [
+        'no-manifest',
+        "plugin.local('../plugins/bare')",
+        { 'plugins/bare/skills/a/SKILL.md': '---\nname: a\ndescription: A.\n---\n' },
+        undefined,
+        /evaluate\("uses it"\) on fake: plugin\.local\('plugins\/bare'\) has no \.claude-plugin\/plugin\.json/,
+      ],
+      [
+        'build',
+        "plugin.local('../plugins/fetcher', { build: 'npm ci' })",
+        {},
+        undefined,
+        /plugin\.local\('plugins\/fetcher'\) has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker\(\{ install \}\)/,
+      ],
+      [
+        'same-name',
+        "plugin.local('../plugins/fetcher'), plugin.local('../plugins/fetcher-copy')",
+        {
+          'plugins/fetcher-copy/.claude-plugin/plugin.json': '{ "name": "fetcher" }',
+          'plugins/fetcher-copy/agents/a.md': 'A.\n',
+        },
+        undefined,
+        /evaluate\("uses it"\) on fake: environment env lists two plugins named "fetcher", plugin\.local\('plugins\/fetcher'\) and plugin\.local\('plugins\/fetcher-copy'\): rename one, or leave one out/,
+      ],
+      [
+        'npx',
+        "plugin.local('../plugins/fetcher')",
+        {},
+        'deny-all',
+        /the fetcher plugin's MCP server "search" runs npx, which fetches from registry\.npmjs\.org at start: install it in the image \(docker\(\{ install \}\)\), or allow the host in egress/,
+      ],
+    ] as const) {
+      const p = await project(`plugin-plan-${label}`, {
+        'reeval.config.ts': config,
+        'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const env = defineEnvironment('env', ({ plugin }) => ({ plugins: [${call}] }))
+evaluate('uses it', { environment: env${egress ? `, egress: '${egress}'` : ''} }, async () => {})
+`,
+        'plugins/fetcher/.claude-plugin/plugin.json': JSON.stringify({
+          name: 'fetcher',
+          mcpServers: { search: { command: 'npx', args: ['-y', '@acme/search-mcp@1.0.0'] } },
+        }),
+        ...files,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, `${label}: ${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, refusal, label)
+    }
   })
 
   test('the text plan names each restricted policy and its automatic hosts', async () => {

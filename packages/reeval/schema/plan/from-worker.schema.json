@@ -97,6 +97,13 @@
         "plan": {
           "$ref": "#/$defs/EvalPlan"
         },
+        "plugins": {
+          "description": "Its environment's plugins, layered: a local one's name and parts, else its source.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "sandbox": {
           "$ref": "#/$defs/SandboxDescriptor"
         },

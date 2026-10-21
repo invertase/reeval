@@ -2,10 +2,11 @@ import { readFile } from 'node:fs/promises'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
+import { PLUGIN_DIR, PLUGIN_ROOT, PLUGIN_ROOT_VAR } from '../environment/plugins.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
 import { brokeringFor, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
-import type { Harness, HarnessSession } from '../harness/types.ts'
+import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { harnessId } from '../options.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
@@ -117,6 +118,50 @@ async function copyWorkspace(
 }
 
 /**
+ * Copies each plugin to `PLUGIN_DIR/<name>/` before the workspace snapshot, and points its MCP
+ * servers' `${CLAUDE_PLUGIN_ROOT}` at that directory, for the adapter to load from there.
+ */
+async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
+  const out: Treatments['plugins'] = []
+  for (const plugin of env.plugins) {
+    const at = `${PLUGIN_DIR}/${plugin.name}`
+    const dir = `${box.home}/${at.slice(2)}`
+    for (const f of plugin.files) await box.writeFile(`${at}/${f.path}`, f.content)
+    const executable = plugin.files.flatMap((f) => (f.executable ? [`${dir}/${f.path}`] : []))
+    if (executable.length) {
+      const r = await box.exec(`chmod +x ${executable.map(shellQuote).join(' ')}`, {
+        signal: a.signal,
+      })
+      if (r.exitCode !== 0) {
+        throw new InfraError(
+          `Couldn't make the ${plugin.name} plugin's ${executable.length} executable files executable: ${tailOf(r.stderr || r.stdout)}`,
+        )
+      }
+    }
+    const root = (v: string) => v.replaceAll(PLUGIN_ROOT, dir)
+    for (const key of plugin.servers) {
+      const server = env.mcp[key]
+      if (server?.transport !== 'stdio') continue
+      env.mcp[key] = {
+        ...server,
+        command: root(server.command),
+        args: server.args.map(root),
+        env: {
+          ...Object.fromEntries(Object.entries(server.env).map(([k, v]) => [k, root(v)])),
+          [PLUGIN_ROOT_VAR]: dir,
+        },
+      }
+    }
+    out.push({ name: plugin.name, dir, parts: plugin.parts, servers: plugin.servers })
+    debugLog(
+      'env',
+      `plugin ${plugin.name} → ${at}/ (${plugin.files.length} files; ${plugin.parts.join(', ')})`,
+    )
+  }
+  return out
+}
+
+/**
  * Starts the harness session within its `startTimeout`. A start that doesn't become ready in time
  * is aborted (and closed, should it finish later) and started once more: a stuck bootstrap is
  * usually transient, and nothing has run yet, so the retry can't change what the attempt
@@ -154,7 +199,7 @@ async function startHarness(
 
 /**
  * Starts the sandbox (with the brokered secrets its gateway swaps in), writes the
- * environment's files and workspace skills, runs its setup steps, snapshots the workspace for
+ * environment's files, workspace skills and plugins, runs its setup steps, snapshots the workspace for
  * the diff, and starts the harness session with the harness-placed skills and MCP servers.
  */
 export async function startSession(a: Attempt, runId: string): Promise<[Sandbox, HarnessSession]> {
@@ -215,6 +260,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
       `skill ${skill.name} → ${skillDir}/${skill.name}/ (${files.length} files, workspace)`,
     )
   }
+  const plugins = await copyPlugins(a, box, env)
   const layout = layoutOf(spec.harness)
   for (const skill of env.skills) {
     debugLog(
@@ -245,6 +291,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     skills: env.skills,
     workspaceSkills: env.workspaceSkills.map((s) => s.name),
     mcp: timed.servers,
+    plugins,
   })
   debugLog(
     'harness',

@@ -107,6 +107,7 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
         files: [],
         skills: [],
         workspaceSkills: [],
+        plugins: [],
         mcp: {},
       } as unknown as ResolvedEnvironment,
     )
@@ -290,6 +291,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     const session = await harness.start(box, AbortSignal.timeout(60_000), {
       skills: [],
       workspaceSkills: [],
+      plugins: [],
       mcp: { stamp: { transport: 'stdio', command: 'sh', args, env: {} } },
     })
     const turn = await session.send('stamp', AbortSignal.timeout(60_000))

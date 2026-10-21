@@ -1,6 +1,6 @@
 import type { HarnessSkill, ResolvedMcpServer } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
-import type { TokenUsage, TranscriptEvent, TurnStatus, WebEventType } from '../types.ts'
+import type { PluginPart, TokenUsage, TranscriptEvent, TurnStatus, WebEventType } from '../types.ts'
 
 export type HarnessResult = {
   /** The agent's final message for the turn. */
@@ -32,6 +32,13 @@ export type Treatments = {
   workspaceSkills: string[]
   /** Secret values are already resolved. */
   mcp: Record<string, ResolvedMcpServer>
+  /**
+   * Plugins the session copied into the sandbox, each at `dir` (absolute) with the parts `only`
+   * kept; the adapter makes its agent load them. `servers` are the keys of its MCP servers in
+   * `mcp` (`<plugin>:<server>`, `${CLAUDE_PLUGIN_ROOT}` and secrets filled in), so an adapter whose
+   * agent loads the plugin's own MCP config can leave them out of `mcp` rather than start them twice.
+   */
+  plugins: Array<{ name: string; dir: string; parts: PluginPart[]; servers: string[] }>
 }
 
 export interface Harness {

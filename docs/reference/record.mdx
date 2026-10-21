@@ -866,9 +866,15 @@ An environment as it was applied, without secret values.
 
 <Property name="setup" type="string[]"></Property>
 
-<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]}>"></Property>
+<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]; plugin?: string}>"></Property>
 
-<Property name="mcp" type="string[]"></Property>
+<Property name="mcp" type="string[]">
+  Every MCP server, a plugin's as `<plugin>:<server>`.
+</Property>
+
+<Property name="plugins" type="PluginRecord[]" optional>
+  The plugins placed, each with what it placed; in the digest. Unset when there are none.
+</Property>
 
 <Property name="files" type="Array<{path: string; sha256: string}>"></Property>
 
@@ -890,6 +896,38 @@ An environment as it was applied, without secret values.
 
 <Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
   The git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to and the hash of the tree that was copied in, which is in the digest.
+</Property>
+
+### PluginRecord
+
+A plugin as an attempt placed it.
+
+<Property name="name" type="string">
+  The manifest's `name`.
+</Property>
+
+<Property name="source" type="string">
+  Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`.
+</Property>
+
+<Property name="marketplace" type="{name: string; source: string; commit: string} | null">
+  The marketplace it was listed in; null when it was named directly.
+</Property>
+
+<Property name="commit" type="string | null">
+  The commit a git source resolved to; null for a local or npm one.
+</Property>
+
+<Property name="sha256" type="string">
+  The hash of the files placed.
+</Property>
+
+<Property name="build" type="string | null">
+  The image layer its build ran in; null without a build.
+</Property>
+
+<Property name="parts" type="{skills: string[]; agents: string[]; commands: string[]; hooks: string[]; mcp: string[]; rules: boolean}">
+  What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.
 </Property>
 
 ### EgressRecord
