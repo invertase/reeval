@@ -14,7 +14,7 @@ evaluate('lands', { environment: house }, async (c) => {
   expect(hooks.hooks.sessionStart).toHaveLength(1)
   expect(hooks.hooks.sessionStart[0].type).toBe('command')
   expect(hooks.hooks.sessionStart[0].command).toMatch(
-    /^cp (\/\S+\/\.reeval\/plugins\/house)\/marker\.txt \1\/hook-ran\.txt$/,
+    /^cp "([^"]+\/\.reeval\/plugins\/house)\/marker\.txt" "\1\/hook-ran\.txt"$/,
   )
   expect(await c.readFile('.cursor/rules/house-codeword.mdc')).toMatch(
     /^---\nalwaysApply: true\n---\n\n# House codeword\n/,
