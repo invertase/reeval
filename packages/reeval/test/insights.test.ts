@@ -10,7 +10,12 @@ import { insights as recipeInsights } from '../scripts/output/project/insights.t
 import type { ResolvedAnalysisModel } from '../src/analysis/model.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { admit, estimate, FIRST_ESTIMATE, ledger, reserve, settle } from '../src/insights/budget.ts'
-import { generateInsights, INSIGHT_OUTPUT_TOKENS, insightEvals } from '../src/insights/generate.ts'
+import {
+  generateInsights,
+  INSIGHT_OUTPUT_TOKENS,
+  type InsightOptions,
+  insightEvals,
+} from '../src/insights/generate.ts'
 import { canonicalJson, factsHash } from '../src/insights/hash.ts'
 import {
   attemptTexts,
@@ -69,7 +74,10 @@ const recipeWith =
 
 const generate = (
   fake: (input: FakeInsightsInput) => FakeInsights | Promise<FakeInsights>,
-  options: { callTimeoutMs?: number; maxInputChars?: number } = {},
+  options: Pick<
+    InsightOptions,
+    'callTimeoutMs' | 'maxInputChars' | 'maxTokens' | 'concurrency' | 'signal'
+  > = {},
 ) => {
   const model: ResolvedAnalysisModel = {
     name: 'fake',
@@ -991,6 +999,37 @@ describe('the analysis.maxTokens gate', () => {
     const { started, used } = simulate(30_000, Array(20).fill(2000))
     assert.equal(started, 15)
     assert.ok(used <= 30_000, `${used}`)
+  })
+
+  test('canary: an eval that used no tokens leaves the estimate as it was', () => {
+    const l = ledger(12_000)
+    settle(l, reserve(l), 0)
+    assert.equal(estimate(l), FIRST_ESTIMATE, 'a failure before any usage is no measurement')
+    assert.equal(admit(l), 'start')
+    settle(l, reserve(l), 2000)
+    settle(l, reserve(l), 0)
+    assert.equal(estimate(l), 2000)
+  })
+
+  test('canary: an eval whose calls fail before any usage lets no more evals start at once', async () => {
+    let first: string | undefined
+    const doc = await generate(
+      (input) => {
+        if (input.call === 'headline') return recipeInsights(input)
+        first ??= input.eval.path
+        if (input.eval.path === first) throw new Error('the model is down')
+        return recipeInsights(input)
+      },
+      { maxTokens: FIRST_ESTIMATE, concurrency: 8 },
+    )
+    assert.deepEqual(
+      doc.failed?.map((f) => f.evalId),
+      [first],
+    )
+    const used = doc.usage.inputTokens + doc.usage.outputTokens
+    assert.ok(used <= FIRST_ESTIMATE, `the failure doesn't open the gate to every eval: ${used}`)
+    assert.equal(doc.evals.length, 1)
+    assert.equal(doc.budget?.skipped.length, insightEvals(suite).length - 2)
   })
 })
 

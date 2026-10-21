@@ -1,6 +1,6 @@
 // `analysis.maxTokens` as a gate on each eval's insight calls. Before an eval starts it reserves
-// an estimate of what it will use: the mean of the evals that finished, or `FIRST_ESTIMATE` before
-// any has. It starts only when the tokens used, the reservations in flight and its estimate fit
+// an estimate of what it will use: the mean of the evals that finished having used tokens, or
+// `FIRST_ESTIMATE` before any has. It starts only when the tokens used, the reservations in flight and its estimate fit
 // the budget; when they don't but an eval is in flight, it waits for that eval to settle its
 // reservation; when nothing is in flight it never will fit, so it's skipped. A run can go over
 // `maxTokens` only by what the evals in flight use beyond their estimates. A budget below
@@ -15,6 +15,7 @@ export type Ledger = {
   used: number
   /** The estimates the evals in flight hold. */
   reserved: number
+  /** The finished evals that used tokens, which the mean is over. */
   finished: number
 }
 
@@ -42,9 +43,12 @@ export function reserve(l: Ledger): number {
   return tokens
 }
 
-/** Swaps an eval's reservation for what it used. */
+/**
+ * Swaps an eval's reservation for what it used. One that used nothing (its calls failed or timed
+ * out before any usage came back) says nothing of what the next will use, so it leaves the mean.
+ */
 export function settle(l: Ledger, reserved: number, used: number): void {
   l.reserved -= reserved
   l.used += used
-  l.finished++
+  if (used > 0) l.finished++
 }
