@@ -171,20 +171,6 @@ The same idea for `reeval analyze`: it answers with `output`, or `output(digest)
 
 ```ts
 analysis: {
-  agent: true,
-  model: fakeAnalysis({
-    note: ({ harness, attempts }) =>
-      `${attempts.length} attempts on ${harness}`,
-  }),
-}
-```
-
-With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note.
-
-Its summary of the run reads up to three dropped evidence items and three failing attempts with the tools, then answers with `output`; an `output` function gets the digest with the evidence it read, and one that throws tests a failed summary.
-
-```ts
-analysis: {
   model: fakeAnalysis({
     vote: (pair) => (pair.a.diff?.includes('Ahoy') ? 'A' : 'tie'),
   }),
@@ -206,9 +192,9 @@ analysis: {
 }
 ```
 
-`insights` answers [`reeval analyze --insights`](/reference/cli/analyze#insights): fixed insights, or a function of each call's input. `input.call` is `classify` (the eval's name, prompts, judge questions, check labels and facts; answer `intent`), `insights` (the same, with `intent` and `slots`, the rows that take a sentence; answer `answer`, `findings`, `rows` and `namedTools`), or `headline`, once a run (answer `headline`). Each fact, attempt and eval carries the short `id` the model cites (`F1`, `A1`, `A1#L12` for a transcript line), and `slots.rows` lists fact ids. Every sentence goes through the validator, so a fake sentence that cites nothing is dropped as a model's would be; `{ error: '…' }` fails every call.
+`insights` answers the run's [insights](/reference/cli/analyze#insights), at the end of `reeval run` and for `reeval analyze --insights`: fixed insights, or a function (or an async one) of each call's input. `input.call` is `classify` (the eval's name, prompts, judge questions, check labels and facts; answer `intent`), `insights` (the same, with `intent` and `slots`, the rows that take a sentence; answer `answer`, `findings`, `rows` and `namedTools`), or `headline`, once a run (answer `headline`). Each fact, attempt and eval carries the short `id` the model cites (`F1`, `A1`, `A1#L12` for a transcript line), and `slots.rows` lists fact ids. Every sentence goes through the validator, so a fake sentence that cites nothing is dropped as a model's would be; `{ error: '…' }` fails every call.
 
-Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails; without `insights`, `reeval analyze --insights` fails.
+Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake; without `insights`, insight calls fail, and `reeval run` prints `insights failed` with its facts.
 
 ## Errors
 

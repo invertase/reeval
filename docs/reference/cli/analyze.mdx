@@ -29,9 +29,9 @@ reeval analyze [run]          Explain a run with one LLM call over a digest of i
   --context                   Print the digest and rules for your own coding agent (no key, no call)
   --dry-run                   Print the digest's size and the cache key, without calling the model
   --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
-  --insights                  Write a recorded run's insights instead: what each eval asks and
-                              its answer, citing the facts, into <run>/insights.json (never
-                              rewritten); reeval show prints them. Takes --json and -v
+  --insights                  Write a run's insights instead: what each eval asks and its answer,
+                              citing the facts, into <run>/insights.json (never rewritten), as
+                              reeval run does at its end; reeval show prints them. Takes --json and -v
   -v, --verbose               With --insights, print each sentence the checks removed and why
 ```
 
@@ -82,7 +82,7 @@ flowchart LR
 1. **Digest.** The runs, an attempts table with short ids (`r2/skill/control#1`), each eval's id and tags, facts with ids (`F1…`: pass rate and lift, effort, factor effects by tier, skill reads, a `context-use` fact (each attempt's tool calls by class, from `context_use`, and which declared files each arm opened, from `skill_files`), the judge's scores, a `criteria` table of each check per cell, a `contrast` for each pair of arms when an eval has two variants or more (in place of the per-variant `checks` facts), failures, flaky cells, drift, the compare, and each `compare.questions` answer: rates by cut, votes, ties, the pairs whose two orders split, each pair head to head when more than two sides met, a failed call's error, and a sample of vote reasons), and evidence chosen by rule (`E1…`: failing attempts' final messages, judge questions and scores, failed checks and exec log tails, and the first tool calls of contrasting attempts), with transcript lines as `L<n>` and an attempt's n-th `c.exec` as `<attempt>:exec<n>`. Each attempt row lists its checks passed (`2/5`), the labels it failed and every judge's score by its `expect` label. The `criteria` fact gives each check (an assertion's label, or a judge's question) per cell as `passed/counted · mean score`, and names the checks no cell met (`neverMet`) and every cell met (`alwaysMet`): those can't tell the arms apart. Failures and evidence take one attempt from each cell in turn, so every arm is seen. When every cell in scope is ungated (`gate: 'none'`), the digest's `frame` is `study`: the run is a comparison of arms, not a pass/fail gate, and the TL;DR says how the arms differ. It's capped at `analysis.maxInputTokens` by dropping the lowest-priority evidence first. The model is told the verdicts, not asked for them, including `insufficient` (not measured) when lift has fewer than two counted attempts a side: `not enough attempts for lift (1 vs 1)`, never a results line. When sources or the eval fingerprint differ across the compared runs, the digest says `not comparable: the eval changed` and drops the mixed pass-rate (`6/10 vs 8/9` is not a results line); that difference is not an effect, and no pooled factor row straddles the pair. `--vs none` drops the ancestor: no drift, eval-changed or cross-run factor rows. Compare-question win rates annotate the run: they never change pass, fail or the exit code.
 2. **Call.** One `generateText` call with a schema: a one-sentence TL;DR (what happened, how sure, why, next; no fact ids or intervals), what happened, results, why, anomalies, at most five actions (target, change, expected effect, verify command, impact, effort) and a confidence. Do not ask the model to self-rate the checks.
 3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged, including on anomalies. An anomaly (or claim) that quotes a judge score which is not the cited attempt's recorded score is dropped, so a wrong score cannot stay in the written explanation. Each verify command must parse as reeval's own CLI, with only that command's flags, and an `reeval run` or `reeval image build` must select an eval of the run (`reeval run` with filters or `--tag`; `reeval image build` with filters only). The digest lists each eval's tags. A `--tag` no eval has, or any other command the CLI rejects, drops the action. A rejected verify is not printed. After those checks, reeval caps `confidence.overall`: not `high` when `invalid`, `dropped` or `rejected` is above zero; `low` when a claim was dropped or a command was rejected. The capped value sits with the TL;DR; the counts stay in the footer.
-4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into. With `analysis.agent`, `reeval run` also caches a note on each eval and harness in `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`, and, once the run is written, the run's summary under the key `reeval analyze <run>` computes, so `reeval analyze` prints it from the cache (`--save` keeps it). Before that summary's call, the model may read evidence the cap dropped and open attempts (steps, checks and diff) with tools, and it can cite what it read. A summary whose call failed is cached with `error`: the studio shows it, and `reeval analyze` treats it as a miss.
+4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into. Insights keep each eval's classification in `.reeval/analysis/classify/`.
 
 ## Insights
 
@@ -103,7 +103,7 @@ wrote evals/.history/20261020T231903Z_2e69951_cursor-agent_8s1m/insights.json: 1
 …
 ```
 
-`--insights` writes a recorded run's insights with `analysis.model`, never the judge's model: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` in the history folder, and `reeval show` prints them with the run from then on. A run's [remarks](/reference/cli/run#remarks) already there are kept in the new file. It takes a run, `--json` (the document instead of the blocks) and `-v`, and no other flag.
+`reeval run` writes a run's insights at its end when `analysis.model` is set (see [During a run](#during-a-run)); `--insights` writes them for a run that has none. Both use `analysis.model`, never the judge's model: what each eval asks and its answer, in sentences that cite the run's facts. They go into `<run>/insights.json` (in the history folder for a recorded run, `.reeval/runs/<run>/` otherwise), and `reeval show` prints them with the run from then on. A run's [remarks](/reference/cli/run#remarks) already there are kept in the new file. `--insights` takes a run, `--json` (the document instead of the blocks) and `-v`, and no other flag.
 
 Per eval, one call classifies it from its name first, then its prompts, judge questions and check labels: its job (`choose` a tool, `finish` a task, or `other`), the question it asks and its subject. A low-confidence classification is `other`. A second call writes the answer and a sentence on each row the [layout](/concepts/output#insights) opens, from that eval's facts with each effect as a word. Then one call writes the run's headline.
 
@@ -130,9 +130,33 @@ removed  greets in French › answer: "It never greets in French."
 | Named tools | On a choose eval, a tool that isn't verbatim in that attempt's final message, as a whole word (`Gen` isn't in `Genkit`) |
 | Headline counts | A headline that calls a tally number a count of evals (`22 evals` on a run of 13): the tally counts results, each case of a family one |
 
-What the model writes never changes a verdict or the exit code. A reply that isn't the schema's JSON is asked for once more; a model call that still fails writes nothing, so the command can run again. Only recorded runs take insights.
+What the model writes never changes a verdict or the exit code. A reply that isn't the schema's JSON is asked for once more; a model call that still fails writes nothing, so the command can run again.
 
 The file is never rewritten: delete it to write new insights. When the run's facts no longer hash to its `factsHash`, `reeval show` leaves the insights out with a note. See [the insights file](/reference/record#insights) for its fields.
+
+### During a run
+
+```text
+insights: 11 evals with google/gemini-3.8-flash (up to 60s; --no-insights skips them)
+
+pass             greet module › creates a tested greet module
+  Yes, the agent created a tested greet module in 1 of 1 tries.
+…
+insights skipped for 1 eval: analysis.maxTokens (4,000) reached — raise it in reeval.config.ts
+16 pass
+```
+
+With `analysis.model` set, `reeval run` asks for insights once its last attempt finishes and its exit code is fixed, eight evals at a time, and prints each block with its sentences. `--no-insights`, or `analysis.insights: false`, skips them.
+
+`analysis.maxTokens` (default 250000) caps the tokens of one run's insight calls. It goes to failing evals first, then to changes that made something worse, then to compares, then to infrastructure errors, then to the rest. Once it's spent no eval's calls start (those in flight finish), the evals it didn't reach print their facts, and the summary names how many. The default covers about 45 evals on `google/gemini-3.8-flash`, whose thinking is most of each answer.
+
+| Outcome | What prints |
+|---|---|
+| Past `analysis.insightsTimeout` (default `60s`) | `insights still running after 60s, so they're left out: reeval analyze <run> --insights` |
+| A call fails twice | `insights failed (<reason>): reeval analyze <run> --insights to retry` |
+| The model's key isn't set | `insights skipped: <why>` |
+
+Each eval's classification is cached in `.reeval/analysis/classify/<key>.json`, keyed by what it's read from, so an unchanged eval isn't classified again. Without the cache, reeval reads it from the last recorded run's `insights.json`.
 
 ## Configuration
 
@@ -142,6 +166,8 @@ export default defineConfig({
   analysis: {
     // default: the judge's, when it's a language model
     model: 'google/gemini-3.8-flash',
+    maxTokens: 250_000, // one run's insights, in and out
+    insightsTimeout: '60s', // the wait after the last attempt
     instructions: 'Fewer tool calls count as a win.',
     maxInputTokens: 20_000, // the digest's cap (characters ÷ 4)
     maxOutputTokens: 8_000, // the answer's cap
@@ -153,8 +179,16 @@ export default defineConfig({
   A `provider/model` language model. `google/*` goes direct with `GOOGLE_GENERATIVE_AI_API_KEY`; anything else through the Vercel AI Gateway (`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`). Defaults to the judge's model when that's a language model, except for `--insights`, which takes `analysis.model` only. Evaluation models such as `typesafe-ai/*` only score yes/no questions, so they exit 2 and point at `--context`.
 </Property>
 
-<Property name="analysis.agent" type="boolean" optional>
-  Also write a note on each eval and harness during `reeval run`, and a summary of the run once it's written, with this model and these caps. Default false. See [Notes during a run](/guide/analyze#notes-during-a-run).
+<Property name="analysis.insights" type="boolean" optional>
+  Whether `reeval run` writes insights when `analysis.model` is set. Default true; `--no-insights` turns them off for one run.
+</Property>
+
+<Property name="analysis.maxTokens" type="number" optional>
+  The tokens, in and out, one run's insight calls may use, at least 1. Default 250000. Going over it never fails the run.
+</Property>
+
+<Property name="analysis.insightsTimeout" type="duration" optional>
+  How long `reeval run` waits for insights after its last attempt. Default `'60s'`.
 </Property>
 
 <Property name="analysis.instructions" type="string" optional>
@@ -171,7 +205,7 @@ export default defineConfig({
 
 For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. A function that throws is a failed call. `fakeAnalysis({ insights })` answers `--insights` the same way; see [fakeAnalysis](/reference/judges#fakeanalysis).
 
-In `analysis.agent`'s summary, the fake first reads up to three dropped evidence items and three failing attempts with the tools, and the function gets the digest with the evidence it read. reeval has no prices, so the footer shows tokens used and no cost.
+reeval has no prices, so the footer shows tokens used and no cost.
 
 ## Errors
 
@@ -184,7 +218,6 @@ In `analysis.agent`'s summary, the fake first reads up to three dropped evidence
 | `reeval analyze --insights needs analysis.model, and never uses the judge's model` | Set `analysis: { model: 'google/gemini-3.8-flash' }` in `reeval.config.ts` |
 | `reeval analyze takes -v only with --insights` | Add `--insights`, or drop `-v` |
 | `<run>/insights.json already exists, and insights are never rewritten` | Delete the file to write new ones |
-| `<run> isn't recorded, so there's no history folder for its insights` | `reeval record <run>` first |
 | `No eval in <run> matches "<filter>"` | Check `--eval` against `reeval show <run>` |
 | A missing key, or an evaluation model | Set the key, set `analysis.model`, or use `--context` with your own agent |
 

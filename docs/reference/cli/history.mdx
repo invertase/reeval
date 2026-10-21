@@ -46,7 +46,7 @@ reeval show [run]             One run: result blocks, --md (summary.md) or --jso
 
 [//]: # (/generated:cli-help:show)
 
-The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then the result blocks and tally `reeval run` ended with. `--md` prints the run's `summary.md`; `--json` prints the record. A recorded run with an `insights.json` from [`reeval analyze --insights`](/reference/cli/analyze#insights) prints its sentences in the blocks, as text and `--md`. A run that raised [remarks](/reference/cli/run#remarks), recorded or not, ends with the concerns it printed.
+The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then the result blocks and tally `reeval run` ended with. `--md` prints the run's `summary.md`; `--json` prints the record. A run with an `insights.json` (from `reeval run` or [`reeval analyze --insights`](/reference/cli/analyze#insights)) prints its sentences in the blocks, as text and `--md`. A run that raised [remarks](/reference/cli/run#remarks), recorded or not, ends with the concerns it printed.
 
 ## reeval compare
 

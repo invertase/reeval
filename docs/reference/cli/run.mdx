@@ -46,6 +46,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               skip completed attempts, restart in-flight ones. Without a ref, the
                               newest resumable (Stopped staging, or an interrupted/budget scratch),
                               not assembled latest. Ref is a run id or unique prefix
+  --no-insights               Skip insights for this run: no analysis.model calls, the blocks
+                              print their facts only (also analysis.insights: false)
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -238,6 +240,8 @@ Under the name, a pass prints nothing more. A fail prints each failed check with
 
 An error outside any attempt, such as an eval file's stray rejection, prints first as `error: …`; it fails the run (exit 1) even when every eval passed. An interrupted run still exits 130.
 
+With `analysis.model` set, the blocks also carry the run's [insights](/reference/cli/analyze#during-a-run): written once the attempts finish and the exit code is fixed, within `analysis.maxTokens` and `analysis.insightsTimeout`. `--no-insights` prints the facts only.
+
 The tally counts each eval, and each case of a family, once: `1 run error · 3 fail · 1 pass · 1 infra error · 2 cancelled · 2 skipped`, run errors and fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
 
 ## Remarks
@@ -272,7 +276,9 @@ A run writes its remarks to `.reeval/runs/<runId>/insights.json` (`model: "none"
 | Path | What | When |
 |---|---|---|
 | `.reeval/runs/<runId>.json` | The scratch run's record | Every run, including one where nothing passed |
-| `.reeval/runs/<runId>/` | Its artifacts, and `insights.json` when the run raised [remarks](#remarks) | Every run |
+| `.reeval/runs/<runId>/` | Its artifacts | Every run |
+| `.reeval/runs/<runId>/insights.json` | The run's insights and [remarks](#remarks) | `analysis.model` set, without `--no-insights`, or the run raised remarks |
+| `.reeval/analysis/classify/` | Each eval's cached classification | With insights |
 | The history folder | A copy of both | `--record`, `record: 'ci'` with `CI` set, or `record: 'always'` |
 | `.reeval/debug/` | Each attempt's local debug data | Every run |
 
