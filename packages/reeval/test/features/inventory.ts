@@ -851,7 +851,7 @@ export const inventory: InventoryFeature[] = [
     id: 'docker.confinement',
     area: 'Sandbox',
     name: 'Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })`',
-    fixtures: ['sandbox/unprivileged', 'sandbox/no-unshare'],
+    fixtures: ['sandbox/unprivileged', 'sandbox/no-unshare', 'sandbox/exec-umask'],
     tests: [
       sandboxDocker(
         'confinement',

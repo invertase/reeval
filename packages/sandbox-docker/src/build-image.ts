@@ -46,11 +46,18 @@ const slugify = (text: string, max: number) =>
 export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
 
 /**
+ * How reeval bakes a harness into an image, beyond the build context and the adapter: bump it when
+ * that changes what a baked image holds, so every image baked before rebuilds on its next use.
+ */
+const BAKE_REVISION = 2
+
+/**
  * The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. The hash
- * covers the toolchain layer too, so a change to the sandbox user or paths builds anew.
+ * covers the toolchain layer and {@link BAKE_REVISION} too, so a change to the sandbox user, paths
+ * or how the harness is baked builds anew.
  */
 export const harnessImageFor = (harness: BakedHarness, from: string) =>
-  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(toolchainDockerfile(from)).slice(0, 8)}`
+  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(`${BAKE_REVISION}\0${toolchainDockerfile(from)}`).slice(0, 8)}`
 
 /**
  * How each harness's CLI gets into an image: its adapter's bootstrap, and the binary it leaves
@@ -334,9 +341,13 @@ const removeQuietly = async (ref: string, engine?: Engine) => {
   await docker(['image', 'rm', ref], { engine }).catch(() => {})
 }
 
-/** The hash of reeval's base image build context, which its images carry as a label. */
+/**
+ * The hash of reeval's base image build context and {@link BAKE_REVISION}, which its images carry
+ * as a label.
+ */
 export function contextHash(): string {
   const hash = createHash('sha256')
+  hash.update(`bake ${BAKE_REVISION}\0`)
   for (const path of contextFiles(DOCKER_CONTEXT, join(DOCKER_CONTEXT, 'Dockerfile'))) {
     hash.update(`${path}\0`)
     hash.update(readFileSync(join(DOCKER_CONTEXT, path)))
