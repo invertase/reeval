@@ -77,7 +77,9 @@ export async function runInsights(options: {
     if (abort.signal.aborted) {
       return {
         insights: null,
-        lines: [`insights still running after ${timeout}, so they're left out: ${retry}`],
+        lines: [
+          `insights still running after ${timeout}, so they're left out: raise analysis.insightsTimeout in reeval.config.ts, or run ${retry}`,
+        ],
       }
     }
     return {
