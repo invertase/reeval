@@ -10,6 +10,9 @@ import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
 
+/** The plan as on a host without Docker, whose image stages name the tags they'd build. */
+const NO_DOCKER = { DOCKER_HOST: 'unix:///nonexistent/reeval-plan.sock' }
+
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
@@ -79,8 +82,8 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
-  { dir: 'images', name: 'install-from-dockerfile', args: ['evals/i.eval.ts'] },
-  { dir: 'images', name: 'plugin-builds', args: ['evals/plugins.eval.ts'] },
+  { dir: 'images', name: 'install-from-dockerfile', args: ['evals/i.eval.ts'], env: NO_DOCKER },
+  { dir: 'images', name: 'plugin-builds', args: ['evals/plugins.eval.ts'], env: NO_DOCKER },
   { dir: 'harnesses', name: 'claude-code', args: [] },
   { dir: 'harness-edits', name: 'data-and-functions', args: [] },
   { dir: 'antigravity', name: 'antigravity', args: [] },
@@ -107,6 +110,7 @@ export const cases: PlanCase[] = [
   { dir: 'plugins', name: 'parts', args: ['evals/parts.eval.ts'] },
   { dir: 'plugins', name: 'remote', args: ['evals/remote.eval.ts'] },
   { dir: 'plugins', name: 'fetches-at-start', args: ['evals/fetches.eval.ts'] },
+  { dir: 'plugins', name: 'marketplace', args: ['evals/marketplace.eval.ts'] },
   {
     dir: 'plugins',
     name: 'claude-code-and-grok-build',

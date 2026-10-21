@@ -1,16 +1,19 @@
 // A plugin directory as reeval reads it, in Claude Code's layout: `.claude-plugin/plugin.json` and
 // the parts beside it. Synchronous and host-only, so the plan reads a local plugin and the worker
 // reads every plugin (git and npm ones once fetched) the same way.
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { basename, isAbsolute, join, relative, sep } from 'node:path'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { basename, isAbsolute, join, posix, relative, sep, win32 } from 'node:path'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
+import { closest } from '../contract/shared.ts'
 import { sha256 } from '../ids.ts'
+import { stripCredentials } from '../redact.ts'
 import type {
   EnvironmentLayer,
   EnvVars,
   McpServer,
   PluginBuild,
+  PluginMarketplace,
   PluginPart,
   PluginRecord,
   PluginSource,
@@ -59,7 +62,9 @@ function readsAsManifest(dir: string, path: string): boolean {
     return false
   }
 }
-const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const MARKETPLACE = '.claude-plugin/marketplace.json'
+/** A plugin's name, in its manifest or a marketplace's entry. */
+export const PLUGIN_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /** Manifest keys that move a part from its default place, which reeval doesn't follow. */
 const CUSTOM_PATHS = ['skills', 'agents', 'commands', 'hooks', 'outputStyles', 'lspServers']
 /** Where the session copies each plugin, under the sandbox's home. */
@@ -74,32 +79,272 @@ export class PluginProblem extends Error {
   override name = 'PluginProblem'
 }
 
+const relativeTo = (root: string | undefined, path: string) =>
+  root ? relative(root, path).split(sep).join('/') || '.' : path
+
 /** `plugin.local('plugins/review')`, as messages name a plugin before its manifest is read. */
 export function pluginCall(p: PluginSource, root?: string): string {
   const arg =
     p.source === 'local'
-      ? root
-        ? relative(root, p.path).split(sep).join('/') || '.'
-        : p.path
+      ? relativeTo(root, p.path)
       : p.source === 'git'
         ? p.repo
-        : p.spec
+        : p.source === 'npm'
+          ? p.spec
+          : `${p.name}@${p.marketplace.source === 'git' ? npmLabel(p.marketplace.repo, root) : `npm:${npmLabel(p.marketplace.spec, root)}`}`
   return `plugin.${p.source}('${arg}')`
+}
+
+const npmLabel = (spec: string, root?: string) => (isAbsolute(spec) ? relativeTo(root, spec) : spec)
+
+/**
+ * Whether a marketplace is on this machine (a local directory, `file:` URL, tarball or folder),
+ * so its entries may name other paths on it.
+ */
+export function localMarketplace(m: PluginMarketplace): boolean {
+  const at = m.source === 'git' ? m.repo : m.spec
+  return isAbsolute(at) || /^file:/i.test(at)
+}
+
+/** A url an entry writes that names this machine: a `file:` URL, or an absolute or relative path. */
+const onHost = (url: string) =>
+  /^file:/i.test(url) ||
+  posix.isAbsolute(url) ||
+  win32.isAbsolute(url) ||
+  /^\.\.?(?:[\\/]|$)/.test(url)
+
+/** A marketplace as the record writes it: `github:acme/agent-plugins#v3` or `npm:@acme/plugins@2.0.0`. */
+export function marketplaceLabel(m: PluginMarketplace, root?: string): string {
+  return m.source === 'git'
+    ? `${npmLabel(m.repo, root)}${m.ref ? `#${m.ref}` : ''}`
+    : `npm:${npmLabel(m.spec, root)}`
 }
 
 /**
  * A plugin's source as the record writes it: `local:plugins/review`,
- * `github:acme/agent-plugins#v1.2.0:plugins/review` or `npm:@acme/review-plugin@1.2.0`.
+ * `github:acme/agent-plugins#v1.2.0:plugins/review` or `npm:@acme/review-plugin@1.2.0`; before
+ * it's read, a marketplace entry is `lint@github:acme/agent-plugins#v3`.
  */
 export function pluginSourceLabel(p: PluginSource, root: string): string {
-  const rel = (path: string) => relative(root, path).split(sep).join('/') || '.'
   switch (p.source) {
     case 'local':
-      return `local:${rel(p.path)}`
+      return `local:${relativeTo(root, p.path)}`
     case 'git':
       return `${p.repo}${p.ref ? `#${p.ref}` : ''}${p.path ? `:${p.path}` : ''}`
     case 'npm':
-      return `npm:${isAbsolute(p.spec) ? rel(p.spec) : p.spec}${p.path ? `:${p.path}` : ''}`
+      return `npm:${npmLabel(p.spec, root)}${p.path ? `:${p.path}` : ''}`
+    case 'marketplace':
+      return `${p.name}@${marketplaceLabel(p.marketplace, root)}`
+  }
+}
+
+/** Where a marketplace entry's plugin is, from its `source`. */
+export type MarketplaceEntry =
+  /** A directory in the marketplace's own source, relative to its root. */
+  | { source: 'path'; path: string }
+  /** A git repository: its clone URL, the label the record gives it, a commit or ref, and a directory in it. */
+  | { source: 'git'; url: string; repo: string; ref?: string; path?: string }
+  | { source: 'npm'; spec: string }
+
+/** Entry keys that give a plugin's parts from the marketplace, which reeval doesn't follow. */
+const ENTRY_PARTS = [
+  'skills',
+  'agents',
+  'commands',
+  'hooks',
+  'mcpServers',
+  'lspServers',
+  'outputStyles',
+]
+
+const githubRepo = (s: string) => /^\w[\w.-]*\/[\w.-]+$/.test(s)
+
+/**
+ * A git URL an entry may name. A marketplace is someone else's file and its URL and ref reach
+ * `git fetch` on the host, so a local path, a transport such as `ext::`, or anything that could
+ * read as an option is refused.
+ */
+const gitUrl = (s: string) =>
+  /^(?:https?|ssh|git|file):\/\/\S+$/i.test(s) || /^\w[\w.-]*@[\w.-]+:[^\s-]\S*$/.test(s)
+
+const hasCredentials = (url: string) => {
+  if (!URL.canParse(url)) return false
+  const u = new URL(url)
+  return u.password !== '' || (u.username !== '' && /^https?:$/.test(u.protocol))
+}
+
+/** A registry package name: an entry's `package` may not be a path, URL or git spec. */
+const NPM_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
+const NPM_VERSION = /^[\w.^~<>=|*+][\w.^~<>=|*+ -]*$/
+
+/** A source name Claude Code resolves under `metadata.pluginRoot`. */
+const BARE_SOURCE = /^[A-Za-z0-9][-A-Za-z0-9._]*$/
+
+/** `metadata.pluginRoot` as Claude Code normalises it (`.` for the root), or undefined when it ignores it. */
+function pluginRootOf(metadata: unknown): string | undefined {
+  const root = isRecord(metadata) ? metadata.pluginRoot : undefined
+  if (typeof root !== 'string' || !root || root.startsWith('/') || /[\\:]/.test(root)) {
+    return undefined
+  }
+  const clean = root.replace(/^\.\//, '').replace(/\/+$/, '')
+  if (clean === '' || clean === '.') return '.'
+  return clean.split('/').some((s) => s === '' || s === '.' || s === '..') ? undefined : clean
+}
+
+/** A path in the marketplace's source, normalised, or undefined when it leaves it. */
+function insideRoot(path: string): string | undefined {
+  const clean = posix.normalize(path).replace(/\/+$/, '')
+  if (posix.isAbsolute(clean) || clean === '..' || clean.startsWith('../')) return undefined
+  return clean === '.' ? '' : clean
+}
+
+/** Whether `path` in `base`, once its symlinks are followed, is outside `base`. */
+export function leavesSource(base: string, path: string): boolean {
+  const dir = join(base, path)
+  if (!existsSync(dir)) return false
+  const rel = relative(realpathSync(base), realpathSync(dir))
+  return isAbsolute(rel) || rel.split(sep)[0] === '..'
+}
+
+/**
+ * Reads the marketplace at `dir` (its `.claude-plugin/marketplace.json`, in Claude Code's format)
+ * and finds the entry `name`: the marketplace's own name and where the entry's plugin is. Throws a
+ * `PluginProblem` for a source without one, an entry it doesn't list, or an entry reeval can't fetch.
+ * Only a `local` marketplace's entries may name a path on this machine.
+ */
+export function readMarketplace(
+  dir: string,
+  call: string,
+  label: string,
+  name: string,
+  local = false,
+): { marketplace: string; entry: MarketplaceEntry } {
+  const file = join(dir, MARKETPLACE)
+  if (!existsSync(file)) {
+    throw new PluginProblem(
+      `${call}: ${label} has no ${MARKETPLACE}, so it isn't a Claude Code marketplace; name a plugin's own repository or package with plugin.git or plugin.npm`,
+    )
+  }
+  const raw = readJson(file, `${label}'s ${MARKETPLACE}`)
+  if (!isRecord(raw) || typeof raw.name !== 'string' || !Array.isArray(raw.plugins)) {
+    throw new PluginProblem(
+      `${call}: ${label}'s ${MARKETPLACE} needs a name and a plugins list, as Claude Code's marketplaces have`,
+    )
+  }
+  const market = raw.name
+  const entries = raw.plugins.filter(isRecord)
+  const entry = entries.find((e) => e.name === name)
+  if (!entry) {
+    const names = entries.flatMap((e) => (typeof e.name === 'string' ? [e.name] : []))
+    const near = closest(name, names)
+    throw new PluginProblem(
+      `${call}: the ${market} marketplace (${label}) has no plugin "${name}"${near ? ` (did you mean "${near}"?)` : ''}; it lists ${names.length ? names.join(', ') : 'none'}`,
+    )
+  }
+  const what = `the ${market} marketplace's entry "${name}"`
+  const custom = ENTRY_PARTS.filter((k) => entry[k] !== undefined)
+  if (custom.length) {
+    throw new PluginProblem(
+      `${what} sets ${custom.map((k) => `"${k}"`).join(', ')}, which reeval doesn't read: keep each part in the plugin's own directory`,
+    )
+  }
+  const source = entry.source
+  const shown = JSON.stringify(source, (_, v) => (typeof v === 'string' ? stripCredentials(v) : v))
+  const unfetchable = () =>
+    new PluginProblem(
+      `${what} has source ${shown}, which reeval doesn't fetch: it takes a ./path in the marketplace, or a github, url, git-subdir or npm source`,
+    )
+  if (typeof source === 'string') {
+    const root = pluginRootOf(raw.metadata)
+    const written =
+      source === '.'
+        ? './'
+        : root !== undefined && BARE_SOURCE.test(source) && !source.includes('..')
+          ? `./${root}/${source}`
+          : source
+    const path = written.startsWith('./') ? insideRoot(written) : undefined
+    if (path === undefined) throw unfetchable()
+    if (leavesSource(dir, path)) {
+      throw new PluginProblem(
+        `${what} has source ${shown}, which leaves the marketplace through a symlink`,
+      )
+    }
+    return { marketplace: market, entry: { source: 'path', path } }
+  }
+  if (!isRecord(source)) throw unfetchable()
+  const str = (k: string) => (typeof source[k] === 'string' && source[k] ? source[k] : undefined)
+  if (source.sha !== undefined && !/^[0-9a-f]{40}$/.test(String(source.sha))) {
+    throw new PluginProblem(
+      `${what} has sha ${JSON.stringify(source.sha)}, which isn't a full 40-character lowercase commit SHA, as Claude Code requires`,
+    )
+  }
+  if (source.ref !== undefined && (typeof source.ref !== 'string' || source.ref.startsWith('-'))) {
+    throw new PluginProblem(
+      `${what} has ref ${JSON.stringify(source.ref)}, which isn't a branch or tag`,
+    )
+  }
+  const ref = str('sha') ?? str('ref')
+  const at = ref ? { ref } : {}
+  switch (source.source) {
+    case 'github': {
+      const repo = str('repo')
+      if (!repo || !githubRepo(repo)) throw unfetchable()
+      const url = `https://github.com/${repo}.git`
+      return { marketplace: market, entry: { source: 'git', url, repo: `github:${repo}`, ...at } }
+    }
+    case 'url':
+    case 'git-subdir': {
+      const written = str('url')
+      if (!written) throw unfetchable()
+      if (hasCredentials(written)) {
+        throw new PluginProblem(
+          `${what} has a password or token in its url, which reeval would record: reeval fetches git sources with your own git credentials (a credential helper, gh auth setup-git or an SSH key), so the marketplace mustn't carry one`,
+        )
+      }
+      if (onHost(written) && !local) {
+        throw new PluginProblem(
+          `the ${market} marketplace (${label}) names its ${name} plugin at ${stripCredentials(written)}, a path on this machine: a remote marketplace may only name remote repositories or paths inside itself`,
+        )
+      }
+      if (!githubRepo(written) && !gitUrl(written)) throw unfetchable()
+      const url = githubRepo(written) ? `https://github.com/${written}.git` : written
+      const repo = githubRepo(written) ? `github:${written}` : written
+      let path: string | undefined
+      if (source.source === 'git-subdir') {
+        path = insideRoot(str('path') ?? '')
+        if (!path) throw unfetchable()
+      }
+      return {
+        marketplace: market,
+        entry: { source: 'git', url, repo, ...at, ...(path ? { path } : {}) },
+      }
+    }
+    case 'npm': {
+      const pkg = str('package')
+      if (!pkg) throw unfetchable()
+      if (source.registry !== undefined) {
+        throw new PluginProblem(
+          `${what} names its own npm registry, which reeval doesn't follow: set npm_config_registry on the host instead`,
+        )
+      }
+      if (!NPM_NAME.test(pkg)) {
+        throw new PluginProblem(
+          `${what} names npm package ${JSON.stringify(stripCredentials(pkg))}, which isn't a registry package name: reeval packs only registry packages from a marketplace`,
+        )
+      }
+      const version = str('version')
+      if (version !== undefined && !NPM_VERSION.test(version)) {
+        throw new PluginProblem(
+          `${what} has npm version ${JSON.stringify(version)}, which isn't a version, range or tag such as "^2.0.0"`,
+        )
+      }
+      return {
+        marketplace: market,
+        entry: { source: 'npm', spec: version ? `${pkg}@${version}` : pkg },
+      }
+    }
+    default:
+      throw unfetchable()
   }
 }
 
@@ -266,7 +511,11 @@ export function readPlugin(
   const manifestPath = join(dir, PLUGIN_MANIFEST)
   if (!existsSync(manifestPath)) throw new PluginProblem(`${call} has no ${PLUGIN_MANIFEST}`)
   const manifest = readJson(manifestPath, `${call}'s ${PLUGIN_MANIFEST}`)
-  if (!isRecord(manifest) || typeof manifest.name !== 'string' || !NAME.test(manifest.name)) {
+  if (
+    !isRecord(manifest) ||
+    typeof manifest.name !== 'string' ||
+    !PLUGIN_NAME.test(manifest.name)
+  ) {
     throw new PluginProblem(
       `${call}'s ${PLUGIN_MANIFEST} needs a name in kebab-case, e.g. "name": "review" (got ${JSON.stringify(isRecord(manifest) ? manifest.name : manifest)})`,
     )
