@@ -51,7 +51,8 @@ export type DoctorDeps = {
   /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
   nodeVersion: string
   platform: NodeJS.Platform
-  dockerState: (engine?: Engine) => Promise<DockerState>
+  /** Aborting `signal` kills `docker info` and rejects with its reason. */
+  dockerState: (engine?: Engine, signal?: AbortSignal) => Promise<DockerState>
   dockerCapacity: (engine?: Engine) => Promise<{ cpus: number; memoryBytes: number } | null>
   /** Why Podman can't confine a sandbox (too old, cgroup controllers missing), or null. */
   podmanConfinement: () => Promise<{ problem: string; fix: string } | null>
@@ -85,7 +86,7 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     runtime: runtimeInfo(),
     nodeVersion: process.versions.node,
     platform: process.platform,
-    dockerState: async (engine) => (await sandbox()).dockerState(engine),
+    dockerState: async (engine, signal) => (await sandbox()).dockerState(engine, signal),
     dockerCapacity: async (engine) => (await sandbox()).dockerCapacity(engine),
     podmanConfinement: async () =>
       (await import('./sandbox/providers.ts')).podmanConfinementProblem(),
@@ -379,8 +380,9 @@ async function checkDockerEngine(
 export async function dockerReadiness(
   deps: Pick<DoctorDeps, 'dockerState' | 'platform'>,
   next: string,
+  signal?: AbortSignal,
 ): Promise<string> {
-  const state = await deps.dockerState()
+  const state = await deps.dockerState(undefined, signal)
   if (state === 'running') return `Docker is running: ready for ${next}`
   const { DOCKER_INSTALL } = await import('./sandbox/providers.ts')
   const [what, fix] =

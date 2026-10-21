@@ -174,14 +174,16 @@ for (let i = 0; i < Number(seconds); i++) {
 /**
  * Whether the daemon (or Podman) answers, and runs Linux containers. Docker Desktop on Windows can be switched
  * to Windows containers (GitHub's Windows runners only have those), where no sandbox image runs.
- * `missing` is no CLI on the PATH at all.
+ * `missing` is no CLI on the PATH at all. Aborting `signal` kills `docker info` and rejects with its reason.
  */
 export type DockerState = 'running' | 'down' | 'windows-containers' | 'missing'
 
-export async function dockerState(engine?: Engine): Promise<DockerState> {
+export async function dockerState(engine?: Engine, signal?: AbortSignal): Promise<DockerState> {
   let missing = false
-  const r = await docker(['info', '--format', engineSpec(engine).stateFormat], { engine }).catch(
+  const format = engineSpec(engine).stateFormat
+  const r = await docker(['info', '--format', format], { engine, signal }).catch(
     (error: NodeJS.ErrnoException) => {
+      if (signal?.aborted) throw signal.reason
       missing = error?.code === 'ENOENT'
       return null
     },
