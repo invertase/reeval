@@ -30,8 +30,9 @@ reeval analyze [run]          Explain a run with one LLM call over a digest of i
   --dry-run                   Print the digest's size and the cache key, without calling the model
   --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
   --insights                  Write a run's insights instead: what each eval asks and its answer,
-                              citing the facts, into <run>/insights.json (never rewritten), as
-                              reeval run does at its end; reeval show prints them. Takes --json and -v
+                              citing the facts, into <run>/insights.json, as reeval run does at its
+                              end, or finish the evals one left unfinished; reeval show prints them.
+                              Takes --json and -v
   -v, --verbose               With --insights, print each sentence the checks removed and why
 ```
 
@@ -132,7 +133,7 @@ removed  greets in French › answer: "It never greets in French."
 
 What the model writes never changes a verdict or the exit code. A reply that isn't the schema's JSON is asked for once more; a model call that still fails writes nothing, so the command can run again.
 
-The file is never rewritten: delete it to write new insights. When the run's facts no longer hash to its `factsHash`, `reeval show` leaves the insights out with a note. See [the insights file](/reference/record#insights) for its fields.
+A complete file is never rewritten: delete it to write new insights. A file with unfinished evals, after Ctrl-C, calls that failed twice or a spent budget, is finished instead (below). When the run's facts no longer hash to its `factsHash`, `reeval show` leaves the insights out with a note. See [the insights file](/reference/record#insights) for its fields.
 
 ### During a run
 
@@ -147,11 +148,12 @@ With `analysis.model` set, `reeval run` asks for insights once its last attempt 
 pass             greet module › creates a tested greet module
   Yes, the agent created a tested greet module in 1 of 1 tries.
 …
+pass             recommends Genkit over the Vercel AI SDK
 pass             recommends Genkit over Semantic Kernel
 pass             recommends Genkit when choosing against LangChain
 …
-insights stopped: 4 evals skipped (Ctrl-C)
-2s · results .reeval/runs/20261021T144954Z_86f937e_cursor-agent_kh0w/summary.md
+insights stopped: 7 evals skipped (Ctrl-C): reeval analyze 20261021T150812Z_bb8d414_cursor-agent_2k2d --insights to finish
+2s · results .reeval/runs/20261021T150812Z_bb8d414_cursor-agent_2k2d/summary.md
 16 pass
 ```
 
@@ -161,8 +163,9 @@ Ctrl-C (or SIGTERM) while insights run stops the calls in flight and starts no m
 
 | Outcome | What prints |
 |---|---|
-| Ctrl-C or SIGTERM while they run | `insights stopped: N evals skipped (Ctrl-C)` |
-| Some evals' calls fail twice | `insights failed for N evals (<reason>), so they print their facts` |
+| Ctrl-C or SIGTERM while they run | `insights stopped: N evals skipped (Ctrl-C): reeval analyze <run> --insights to finish` |
+| The budget runs out | `insights skipped for N evals: analysis.maxTokens (250k) reached — raise it in reeval.config.ts, or reeval analyze <run> --insights to finish` |
+| Some evals' calls fail twice | `insights failed for N evals (<reason>), so they print their facts: reeval analyze <run> --insights to finish` |
 | Every eval's calls fail twice | `insights failed (<reason>): reeval analyze <run> --insights to retry` |
 | The model's key isn't set | `insights skipped: <why>` |
 
@@ -175,6 +178,21 @@ Ctrl-C (or SIGTERM) while insights run stops the calls in flight and starts no m
 | Each call's time | 3 minutes | slowest 68s, 95th percentile 46s |
 
 The caps are fixed, not options. An eval over its input cap is cut the same way every time, and the model is told so: passing tries' messages go first, then older transcript lines, passing checks and effort, then the rest. Its verdict, cells and failing checks with their messages always stay. A reply cut off at the output cap, or a call past its time, counts as a failed call: the eval is tried once more, then prints its facts alone, and the other evals and the exit code are untouched.
+
+### Finishing a run's insights
+
+```text
+$ reeval analyze 20261021T150812Z_bb8d414_cursor-agent_2k2d --insights
+finishing insights for 20261021T150812Z_bb8d414_cursor-agent_2k2d with google/gemini-3.8-flash: 7 evals left…
+wrote .reeval/runs/20261021T150812Z_bb8d414_cursor-agent_2k2d/insights.json: 11 evals, 0 sentences removed by the checks. Commit it with git.
+…
+All 16 results passed across greeting styles, module creation, and framework recommendations.
+16 pass
+```
+
+When `insights.json` lists evals in `stopped`, `failed` or `budget.skipped`, `reeval analyze <run> --insights` asks about only those. It keeps every sentence already written as it was, asks for the headline if there's none, adds the new calls to `usage` and clears the lists it filled. It replaces the file whole, through a temporary file and a rename.
+
+It needs the same facts, model and prompt version the file was written with, and refuses otherwise: delete the file to write new insights. A file with none of those lists is complete and refused as before.
 
 Each eval's classification is cached in `.reeval/analysis/classify/<key>.json`, keyed by what it's read from, so an unchanged eval isn't classified again. Without the cache, reeval reads it from the last recorded run's `insights.json`.
 
@@ -232,7 +250,8 @@ reeval has no prices, so the footer shows tokens used and no cost.
 | `reeval analyze --insights takes a run, --json and -v only, not --save` | Drop the other flags |
 | `reeval analyze --insights needs analysis.model, and never uses the judge's model` | Set `analysis: { model: 'google/gemini-3.8-flash' }` in `reeval.config.ts` |
 | `reeval analyze takes -v only with --insights` | Add `--insights`, or drop `-v` |
-| `<run>/insights.json already exists, and insights are never rewritten` | Delete the file to write new ones |
+| `<run>/insights.json already exists, and insights are never rewritten` | It has no unfinished evals: delete the file to write new ones |
+| `<run>/insights.json has unfinished evals, but it was written for other facts than this run's` (or `by <model> (<prompt version>)`) | Finishing keeps the earlier sentences, so it needs the same facts, model and prompts: delete the file to write new ones |
 | `No eval in <run> matches "<filter>"` | Check `--eval` against `reeval show <run>` |
 | A missing key, or an evaluation model | Set the key, set `analysis.model`, or use `--context` with your own agent |
 

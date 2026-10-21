@@ -822,25 +822,26 @@ function insightNotes(
   const skipped = insights.budget?.skipped.length ?? 0
   const failed = insights.failed ?? []
   const stopped = insights.stopped
+  const finish = `reeval analyze ${suite.runId} --insights to finish`
   const budget = [
     ...(skipped
       ? [
           c.yellow(
-            `insights skipped for ${plural(skipped, 'eval')}: analysis.maxTokens (${formatTokens(insights.budget?.maxTokens ?? 0)}) reached — raise it in reeval.config.ts`,
+            `insights skipped for ${plural(skipped, 'eval')}: analysis.maxTokens (${formatTokens(insights.budget?.maxTokens ?? 0)}) reached — raise it in reeval.config.ts, or ${finish}`,
           ),
         ]
       : []),
     ...(failed[0]
       ? [
           c.yellow(
-            `insights failed for ${plural(failed.length, 'eval')} (${clip(failed[0].error, 160)}), so they print their facts`,
+            `insights failed for ${plural(failed.length, 'eval')} (${clip(failed[0].error, 160)}), so they print their facts: ${finish}`,
           ),
         ]
       : []),
     ...(stopped
       ? [
           c.yellow(
-            `insights stopped: ${plural(stopped.skipped.length, 'eval')} skipped (${stopped.signal === 'SIGTERM' ? 'SIGTERM' : 'Ctrl-C'})`,
+            `insights stopped: ${plural(stopped.skipped.length, 'eval')} skipped (${stopped.signal === 'SIGTERM' ? 'SIGTERM' : 'Ctrl-C'}): ${finish}`,
           ),
         ]
       : []),

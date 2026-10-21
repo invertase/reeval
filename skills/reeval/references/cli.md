@@ -64,7 +64,8 @@ from its name first, so name evals for what they ask), its answer, and a sentenc
 failing row, every one citing the facts. They never change a verdict or exit code.
 `analysis.maxTokens` (default 250000) caps their tokens, failing evals first;
 they run to the end (Ctrl-C skips the rest, keeping the exit code); `--no-insights` skips them.
-`reeval analyze <run> --insights` writes them for a run that has none. Insights use
+`reeval analyze <run> --insights` writes them for a run that has none, or finishes
+the evals a stopped, failed or over-budget run left out. Insights use
 `analysis.model` only, never the judge's model.
 
 `reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`

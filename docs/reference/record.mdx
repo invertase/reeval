@@ -1015,7 +1015,7 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
 
 ## Insights
 
-`reeval run` writes `<runId>/insights.json` beside the record once its attempts finish, when `analysis.model` is set, and `reeval record` copies it; `reeval analyze <run> --insights` writes it for a run without one. It's written once: delete it to write new ones. `reeval show` prints it with the run, on one line a sentence. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record. One from a newer reeval, or one that isn't valid JSON (a merge conflict), is skipped with a warning and the run prints without it.
+`reeval run` writes `<runId>/insights.json` beside the record once its attempts finish, when `analysis.model` is set, and `reeval record` copies it; `reeval analyze <run> --insights` writes it for a run without one, and finishes one with `stopped`, `failed` or `budget.skipped` evals, replacing it whole. A complete one is written once: delete it to write new ones. `reeval show` prints it with the run, on one line a sentence. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record. One from a newer reeval, or one that isn't valid JSON (a merge conflict), is skipped with a warning and the run prints without it.
 
 A run that raises [remarks](/reference/cli/run#remarks) writes one with no model's words (`model` and `promptVersion` `"none"`, `headline` `null`, `evals` empty) beside its scratch record, and `reeval record` copies it. `reeval analyze --insights` replaces that one, keeping its remarks.
 

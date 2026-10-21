@@ -1969,7 +1969,7 @@ export const inventory: InventoryFeature[] = [
     id: 'run.insights',
     area: 'Records and studio',
     plan: ['insights/insights', 'insights/no-insights'],
-    name: "`reeval run`'s insights: once the exit code is fixed, `analysis.model` classifies and explains each eval into `.reeval/runs/<run>/insights.json` (copied by `reeval record`); `analysis.maxTokens` spends on failures, regressions and compares first and prints the evals it skipped; each eval's input trimmed to its cap and each call's output cap, timeout and one retry, an eval that still fails printing its facts alone; Ctrl-C keeping what finished; the progress line; `--no-insights` and `analysis.insights: false`; classifications cached in `.reeval/analysis/classify/` and read back from the last recorded run",
+    name: "`reeval run`'s insights: once the exit code is fixed, `analysis.model` classifies and explains each eval into `.reeval/runs/<run>/insights.json` (copied by `reeval record`); `analysis.maxTokens` spends on failures, regressions and compares first and prints the evals it skipped; each eval's input trimmed to its cap and each call's output cap, timeout and one retry, an eval that still fails printing its facts alone; Ctrl-C keeping what finished, and `reeval analyze --insights` finishing what it, a failure or the budget left; the progress line; `--no-insights` and `analysis.insights: false`; classifications cached in `.reeval/analysis/classify/` and read back from the last recorded run",
     tests: [
       'reeval/test/insights.test.ts › a failure, then made worse, then a compare',
       'reeval/test/insights.test.ts › a budget that fits exactly N evals starts N',
@@ -1983,6 +1983,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/insights.test.ts › canary: a reply just under the output cap is kept',
       'reeval/test/insights.test.ts › Ctrl-C during insights keeps those written',
       'reeval/test/insights.test.ts › canary: with no Ctrl-C, every eval waits its turn',
+      'reeval/test/insights.test.ts › reeval analyze --insights finishes a stopped document',
       'reeval/test/insights.test.ts › a hung call is given up after its timeout',
       'reeval/test/insights.test.ts › canary: a slow call inside its timeout is kept',
       'reeval/test/insights.test.ts › over it, the trim is the same every time',

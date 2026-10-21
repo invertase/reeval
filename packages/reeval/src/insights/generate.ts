@@ -79,6 +79,11 @@ export type InsightOptions = {
   maxTokens?: number
   /** Classifications already made, by key; none to classify every eval. */
   cache?: ClassifyCache
+  /**
+   * A document to finish: only its stopped, failed and budget-skipped evals are asked about, and
+   * its sentences, headline, usage and validation are kept.
+   */
+  prior?: RunInsights
   /** Ctrl-C: stops every call, starts no more and returns what finished, in `stopped`. */
   signal?: AbortSignal
   /** Which signal `signal` stands for, for `stopped`. */
@@ -392,10 +397,22 @@ const aborted = (signal: AbortSignal | undefined) =>
  */
 export async function generateInsights(o: InsightOptions): Promise<RunInsights> {
   const suite = suiteResult(o.record)
-  const usage: Usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }
-  const validation: Counts = { dropped: 0, regenerated: 0, drops: [] }
+  const prior = o.prior
+  const usage: Usage = {
+    inputTokens: prior?.usage.inputTokens ?? 0,
+    outputTokens: prior?.usage.outputTokens ?? 0,
+    reasoningTokens: prior?.usage.reasoningTokens ?? 0,
+  }
+  const validation: Counts = {
+    dropped: prior?.validation.dropped ?? 0,
+    regenerated: prior?.validation.regenerated ?? 0,
+    drops: [...(prior?.validation.drops ?? [])],
+  }
   const budget = o.maxTokens === undefined ? null : ledger(o.maxTokens)
-  const ordered = insightEvals(suite)
+  const all = insightEvals(suite)
+  const kept = new Map((prior?.evals ?? []).map((e) => [e.evalId, e]))
+  const pending = prior && unfinishedEvals(prior)
+  const ordered = pending ? all.filter((e) => pending.has(e.path)) : all
   const skipped = new Set<string>()
   const done = new Map<string, EvalInsight>()
   const failed = new Map<string, unknown>()
@@ -443,7 +460,8 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
   }
   await Promise.all(running)
   if (!stopped() && !done.size && failed.size) throw failed.values().next().value
-  const evals = ordered.flatMap((e) => done.get(e.path) ?? [])
+  const insightOf = (path: string) => done.get(path) ?? kept.get(path)
+  const evals = all.flatMap((e) => insightOf(e.path) ?? [])
   const headlineInput: HeadlineInput = {
     call: 'headline',
     tally: {
@@ -451,11 +469,11 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
       total: Object.values(suite.tally).reduce((a, b) => a + b, 0) - suite.tally.errors,
       unit: 'results',
     },
-    evals: ordered.map((e) => ({
+    evals: all.map((e) => ({
       path: e.path,
       name: e.template ?? e.name,
       verdict: e.outcome === 'infra_error' ? 'infra error' : e.outcome,
-      answer: done.get(e.path)?.answer?.text ?? null,
+      answer: insightOf(e.path)?.answer?.text ?? null,
     })),
   }
   const headlineModel = modelHeadlineInput(headlineInput)
@@ -470,8 +488,8 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     )) as HeadlineOutput
     return { headline: out.headline && sentenceFrom(out.headline, headlineModel.ids) }
   }
-  let headline: Sentence | null = null
-  const wantsHeadline = evals.length && (budget === null || admit(budget) === 'start')
+  let headline: Sentence | null = prior?.headline ?? null
+  const wantsHeadline = !headline && evals.length && (budget === null || admit(budget) === 'start')
   for (let tries = 1; wantsHeadline && !stopped() && tries <= 2; tries++) {
     try {
       headline = await checked(
@@ -520,7 +538,16 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
       : {}),
     headline,
     evals,
-    remarks: [],
+    remarks: prior?.remarks ?? [],
     validation,
   }
+}
+
+/** The evals a document lists as unfinished: stopped, failed or skipped by the budget. */
+export function unfinishedEvals(doc: RunInsights): Set<string> {
+  return new Set([
+    ...(doc.stopped?.skipped ?? []),
+    ...(doc.failed ?? []).map((f) => f.evalId),
+    ...(doc.budget?.skipped ?? []),
+  ])
 }

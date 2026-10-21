@@ -154,5 +154,5 @@ infra error      starts its sandbox
 skipped          greets in Welsh
 todo             greets in Klingon
 
-insights skipped for 2 evals: analysis.maxTokens (20k) reached — raise it in reeval.config.ts
+insights skipped for 2 evals: analysis.maxTokens (20k) reached — raise it in reeval.config.ts, or reeval analyze 20261020T231903Z_2e69951_cursor-agent_8s1m --insights to finish
 9 fail · 10 pass · 1 infra error · 2 skipped

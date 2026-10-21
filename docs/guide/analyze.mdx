@@ -111,7 +111,7 @@ With `analysis.model` set, `reeval run` asks the model what each eval checks and
 | `analysis.maxTokens` | `250000` | Caps one run's insight tokens; failing evals, regressions and compares go first |
 | `analysis.insights`, `--no-insights` | on | Turns them off, for every run or for one |
 
-Insights run to the end, with a progress line on a terminal (`insights 3/11…`). They never change an outcome or the exit code. Past the budget, when an eval's calls fail twice, or after Ctrl-C, those blocks print their facts and one line says why: `insights stopped: 4 evals skipped (Ctrl-C)`.
+Insights run to the end, with a progress line on a terminal (`insights 3/11…`). They never change an outcome or the exit code. Past the budget, when an eval's calls fail twice, or after Ctrl-C, those blocks print their facts and one line says why: `insights stopped: 4 evals skipped (Ctrl-C): reeval analyze <run> --insights to finish`. That command asks about only those evals and keeps every sentence already written.
 
 ## Next
 

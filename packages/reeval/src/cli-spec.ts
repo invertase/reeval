@@ -257,8 +257,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --dry-run                   Print the digest's size and the cache key, without calling the model
     --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
     --insights                  Write a run's insights instead: what each eval asks and its answer,
-                                citing the facts, into <run>/insights.json (never rewritten), as
-                                reeval run does at its end; reeval show prints them. Takes --json and -v
+                                citing the facts, into <run>/insights.json, as reeval run does at its
+                                end, or finish the evals one left unfinished; reeval show prints them.
+                                Takes --json and -v
     -v, --verbose               With --insights, print each sentence the checks removed and why`,
   },
   mcp: {

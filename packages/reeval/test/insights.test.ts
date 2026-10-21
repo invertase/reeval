@@ -1290,7 +1290,7 @@ describe('reeval run writes insights at its end', () => {
     assert.ok(!calls(p.dir).some((c) => c.startsWith('headline')), 'no headline past the budget')
     assert.match(
       r.stdout,
-      /insights skipped for 7 evals: analysis\.maxTokens \(6,000\) reached — raise it in reeval\.config\.ts/,
+      /insights skipped for 7 evals: analysis\.maxTokens \(6,000\) reached — raise it in reeval\.config\.ts, or reeval analyze \S+ --insights to finish/,
     )
     assert.match(r.stdout, /No: the file is missing\./)
   })
@@ -1441,6 +1441,79 @@ evaluate('writes ok.txt', async (c) => {
     assert.doesNotMatch(r.stdout + r.stderr, /Cancelling/)
     const { run } = readRun(p.dir)
     assert.equal(run.status, 'complete')
+    assert.match(
+      r.stdout,
+      new RegExp(`insights stopped: .*: reeval analyze ${run.runId} --insights to finish`),
+    )
+  })
+
+  test('reeval analyze --insights finishes a stopped document, keeping its sentences byte for byte', async () => {
+    const p = await project('run-insights-finish', {
+      'reeval.config.ts': runConfig(),
+      ...RUN_EVALS,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--no-insights'])).code, 1)
+    const { run } = readRun(p.dir)
+    const file = join(p.dir, '.reeval/runs', run.runId, 'insights.json')
+    assert.equal(scratchInsights(p.dir), null)
+    assert.equal((await runCli(p.dir, ['analyze', run.runId, '--insights'])).code, 0)
+    const full = JSON.parse(readFileSync(file, 'utf8')) as RunInsights
+    const stoppedAt = 3
+    const kept = full.evals.slice(0, stoppedAt).map((e) => ({
+      ...e,
+      answer: e.answer && { ...e.answer, text: `Written before Ctrl-C: ${e.answer.text}` },
+    }))
+    const left = full.evals.slice(stoppedAt).map((e) => e.evalId)
+    const stopped: RunInsights = {
+      ...full,
+      headline: null,
+      evals: kept,
+      stopped: { signal: 'SIGINT', skipped: left },
+    }
+    writeFileSync(file, `${JSON.stringify(stopped, null, 2)}\n`)
+    writeFileSync(join(p.dir, 'calls.log'), '')
+
+    const other = { ...stopped, promptVersion: 'insights-v0' }
+    writeFileSync(file, `${JSON.stringify(other, null, 2)}\n`)
+    const mixed = await runCli(p.dir, ['analyze', run.runId, '--insights'])
+    assert.equal(mixed.code, 2, mixed.stdout + mixed.stderr)
+    assert.match(mixed.stderr, /has unfinished evals, but it was written by fake \(insights-v0\)/)
+    assert.deepEqual(calls(p.dir), [], 'a document asked with other prompts is never mixed')
+    writeFileSync(file, `${JSON.stringify(stopped, null, 2)}\n`)
+
+    const r = await runCli(p.dir, ['analyze', run.runId, '--insights'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stderr, /finishing insights for \S+ with fake: 7 evals left/)
+    const asked = calls(p.dir).filter((c) => c.startsWith('insights '))
+    assert.deepEqual(
+      asked.sort(),
+      left.map((id) => `insights ${id.replace('evals%2Ffiles.eval.ts › ', '')}`).sort(),
+      'only the stopped evals are asked about',
+    )
+    assert.ok(
+      calls(p.dir).some((c) => c.startsWith('headline')),
+      'the missing headline is asked for',
+    )
+    const done = JSON.parse(readFileSync(file, 'utf8')) as RunInsights
+    assert.equal(done.stopped, undefined, 'the list it filled is cleared')
+    assert.equal(done.evals.length, 10)
+    const before = new Map(kept.map((e) => [e.evalId, JSON.stringify(e)]))
+    for (const e of done.evals.filter((e) => before.has(e.evalId))) {
+      assert.equal(JSON.stringify(e), before.get(e.evalId), `${e.evalId} is kept byte for byte`)
+    }
+    assert.ok(done.usage.inputTokens > stopped.usage.inputTokens, 'usage adds the new calls')
+    assert.deepEqual(
+      readdirSync(join(file, '..')).filter((f) => f.includes('.partial')),
+      [],
+    )
+
+    writeFileSync(join(p.dir, 'calls.log'), '')
+    const text = readFileSync(file, 'utf8')
+    const again = await runCli(p.dir, ['analyze', run.runId, '--insights'])
+    assert.equal(again.code, 2, again.stdout + again.stderr)
+    assert.match(again.stderr, /already exists, and insights are never rewritten/)
+    assert.deepEqual(calls(p.dir), [], 'canary: a complete document is refused, and nothing asked')
+    assert.equal(readFileSync(file, 'utf8'), text)
   })
 
   test('canary: with no Ctrl-C, every eval waits its turn and gets its insight', async () => {
