@@ -27,24 +27,30 @@ reeval doctor                 Check Node and npm, the config, Docker and its mem
 
 ## Output
 
-A real run in a project from `reeval init --yes`, before Docker was started or a key was set:
+A real run in a project from `reeval init --yes`, with its image built but no key set:
 
 ```text
 reeval doctor · reeval.config.ts
-✓ runtime    node 22.14.0 (reeval needs Node >=22.13)
+✓ runtime    node 22.23.3 (reeval needs Node >=22.13)
 ✓ config     reeval.config.ts: harness cursor:composer-2.5, sandbox docker, profiles pr, nightly
-✗ docker     isn't running, and the config's sandboxes need it
-             fix: start Docker Desktop, or the Docker service (sudo systemctl start docker)
-- image      Docker isn't running
+✓ docker     running · 4 CPUs, 15.6 GB memory (default concurrency 4)
+✓ image      reeval-sandbox:cursor-0.1.5 (cursor)
 ✗ key        CURSOR_API_KEY for cursor:composer-2.5: not set
              fix: add CURSOR_API_KEY=... to .env.local
+! analysis   GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN for google/gemini-3.8-flash (analysis.model): not set
+             fix: add GOOGLE_GENERATIVE_AI_API_KEY=... to .env.local
 ✓ egress     allow-all: the agents reach any host (the default); evals and environments may set their own
 ✓ gitignore  .env* and .reeval/ are ignored
 
-2 problems, 0 warnings. Fix them and run reeval doctor again.
+1 problem, 1 warning. Fix it and run reeval doctor again.
 ```
 
-`✓` passed, `!` is a warning (exit 0), `✗` is a problem (exit 1), and `-` was skipped. A config with no judge model shows no `judge` line unless an eval file, or a module it imports by a relative path, calls `c.judge`. The `analysis` line shows only when `analysis.model` is set.
+`✓` passed, `!` is a warning (exit 0), `✗` is a problem (exit 1), and `-` was skipped. A config with no judge model shows no `judge` line unless an eval file, or a module it imports by a relative path, calls `c.judge`. A config without `analysis.model` gets a warning instead of a key check, unless `analysis.insights` is `false`:
+
+```text
+! analysis   no analysis.model, so runs print no insights
+             fix: set analysis: { model: 'google/gemini-3.8-flash' } in reeval.config.ts for answers to what each eval asks, or analysis: { insights: false } to go without
+```
 
 ## Checks
 
@@ -57,7 +63,7 @@ reeval doctor · reeval.config.ts
 | `image` | reeval's sandbox image for a planned harness isn't built, a `docker({ image })` isn't in Docker, or Docker couldn't say whether an image is there (`couldn't be checked: …`, with Docker's error) | Images for this harness from another reeval version |
 | `key` | A planned harness's key isn't set, has whitespace in it, or (`--online`) its API rejects it | A key only another profile's harness needs isn't set; `--online` couldn't reach the API |
 | `judge` | The judge model's key isn't set | The same, for a profile's judge; or no judge model is set and an eval file calls `c.judge` |
-| `analysis` | | `analysis.model`'s key isn't set: `reeval analyze` and the run's insights need it |
+| `analysis` | | `analysis.model` isn't set (and `analysis.insights` isn't `false`), or its key isn't set: the run's [insights](/concepts/insights) need both |
 | `egress` | A sandbox can't enforce its policy, such as a restricted policy on `fakeSandbox()` | |
 | `gitignore` | `.env*` isn't ignored | `.reeval/` isn't ignored |
 | `env-files` | | A `.env` or `.env.*` file git doesn't ignore, such as `.env.example`, sets a `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*CREDENTIAL*` variable to a value that isn't empty or a placeholder (`<key>`, `your-key-here`, `${KEY}`, `xxx`). Shown only when git sees such a file |
@@ -90,14 +96,14 @@ With `--online`, each key goes in one request to its API, only in a header: `GET
 ```json
 {
   "healthy": false,
-  "problems": 2,
+  "problems": 1,
   "warnings": 1,
   "config": "reeval.config.ts",
   "checks": [
     {
       "id": "runtime",
       "status": "ok",
-      "summary": "node 22.14.0 (reeval needs Node >=22.13)"
+      "summary": "node 22.23.3 (reeval needs Node >=22.13)"
     },
     …
   ]

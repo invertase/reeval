@@ -54,8 +54,8 @@ npx reeval run
    (or a tarball: `npm i -D /path/to/reeval.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm, pnpm or Yarn.
 2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|grok-build>`
-   (it only asks in a terminal) writes `reeval.config.ts` (the agent, plus `pr` and `nightly`
-   profiles), `evals/environments.ts` (one `defineEnvironment`), `evals/greet.eval.ts` (an eval
+   (it only asks in a terminal) writes `reeval.config.ts` (the agent, `analysis.model:
+   'google/gemini-3.8-flash'` for insights, and `pr` and `nightly` profiles), `evals/environments.ts` (one `defineEnvironment`), `evals/greet.eval.ts` (an eval
    in that environment), the `.gitignore` entries (`.reeval/`, `.env*`), an `eval` script and a
    `tsconfig.json` that allows the evals' `.ts` imports, then says whether Docker is running.
    `--bare` writes only the config, `.gitignore` and `package.json`. Where a config exists it
@@ -66,7 +66,8 @@ npx reeval run
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
 4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in
    `.env.local` next to `reeval.config.ts` (not the directory you run from), `npx reeval doctor`
-   (exit 1 names each problem and its fix; `--json`, `--online` tries the keys), then
+   (exit 1 names each problem and its fix; a missing `analysis.model` or its key,
+   `GOOGLE_GENERATIVE_AI_API_KEY`, is only a warning; `--json`, `--online` tries the keys), then
    `npx reeval run`. Exit 0 means every gated cell passed. `npx reeval run --json` prints the
    results as one JSON document on stdout (each check `ran` or `not run`, each variant's
    `effect`), with the progress on stderr.
@@ -275,8 +276,11 @@ arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, 
 or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
 (`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
 `1 run error` and fails the run), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
-model never stands in). `summary.md` and `reeval show` print the same blocks;
-`reeval analyze <run> --insights` adds each eval's answer to them for `reeval show`.
+model never stands in). With `analysis.model` set, each block gets cited sentences (insights)
+and a headline prints above the tally; they explain the facts and never change a verdict or the
+exit code. `Remarks:` after the tally names evals that need work (a flaky check, too few tries),
+with the line to fix. `summary.md` and `reeval show` print the same blocks;
+`reeval analyze <run> --insights` writes or finishes a run's insights.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP
