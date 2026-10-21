@@ -1232,6 +1232,16 @@ evaluate('writes missing.txt', async (c) => {
 `,
 }
 
+/** A compare whose variant passes both tries and whose baseline neither: a `too-few-tries` remark. */
+const TOO_FEW_TRIES = `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
+evaluate('skill helps', { runs: 2, compare: { baseline: plain, variants: [marked] } }, async (c) => {
+  await c.send('go')
+  expect.soft(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
+})
+`
+
 /**
  * A fake harness and an insight model that logs each call (`<call> <eval>`) to calls.log.
  * `insights` replaces its answer; `analysis` adds keys to `analysis`.
@@ -1338,6 +1348,46 @@ describe('reeval run writes insights at its end', () => {
       readFileSync(join(p.dir, '.reeval/runs', run.runId, 'summary.md'), 'utf8'),
       /No: the file is missing\./,
     )
+  })
+
+  test("the run's remarks go in the insights it writes, and stay remarks-only without them", async () => {
+    const files = { 'evals/skill.eval.ts': TOO_FEW_TRIES }
+    const p = await project('run-insights-remarks', { 'reeval.config.ts': runConfig(), ...files })
+    const r = await runCli(p.dir, ['run', '-v'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const doc = scratchInsights(p.dir)
+    const { run } = readRun(p.dir)
+    assert.equal(doc?.model, 'fake')
+    assert.equal(doc?.evals.length, 1)
+    assert.deepEqual(
+      doc?.remarks.map((x) => [x.kind, x.origin, x.firstSeenRun]),
+      [['too-few-tries', 'deterministic', run.runId]],
+    )
+    const tally = r.stdout.indexOf('1 pass')
+    assert.ok(r.stdout.indexOf('Yes: every try passed.') < tally, r.stdout)
+    assert.ok(r.stdout.indexOf('Remarks:\n  skill helps: Marked passed 2 of 2') > tally, r.stdout)
+    assert.equal((await runCli(p.dir, ['record'])).code, 0)
+    const recorded = readableInsights(
+      JSON.parse(readFileSync(join(p.dir, HISTORY_DIR, run.runId, 'insights.json'), 'utf8')),
+    )
+    assert.equal(recorded.model, 'fake')
+    assert.deepEqual(recorded.remarks, doc?.remarks)
+
+    for (const [name, config, args] of [
+      ['run-insights-remarks-off', runConfig(), ['run', '--no-insights', '-v']],
+      ['run-insights-remarks-fail', runConfig({ insights: `() => { throw new Error('down') }` })],
+    ] as const) {
+      const q = await project(name, { 'reeval.config.ts': config, ...files })
+      const quiet = await runCli(q.dir, [...(args ?? ['run', '-v'])])
+      assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
+      const only = scratchInsights(q.dir)
+      assert.equal(only?.model, 'none', name)
+      assert.deepEqual(
+        only?.remarks.map((x) => x.kind),
+        ['too-few-tries'],
+      )
+      assert.match(quiet.stdout, /Remarks:\n {2}skill helps: Marked passed 2 of 2/)
+    }
   })
 
   test('a small analysis.maxTokens skips the lowest-priority evals; the failing one keeps its insight', async () => {

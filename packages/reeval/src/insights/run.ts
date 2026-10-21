@@ -1,8 +1,8 @@
 // Insights during `reeval run`, once the record has landed and the exit code is fixed: the same
 // calls `reeval analyze --insights` makes, bounded by `analysis.maxTokens`, each eval's input and
 // output caps and each call's timeout, and run to the end unless Ctrl-C stops them. They go beside
-// the scratch run as `.reeval/runs/<run>/insights.json`, and `reeval record` copies them into the
-// history. Whatever happens here (no key, a model that fails, Ctrl-C), the run prints its facts and
+// the scratch run as `.reeval/runs/<run>/insights.json`, with the run's deterministic remarks,
+// and `reeval record` copies them into the history. Whatever happens here (no key, a model that fails, Ctrl-C), the run prints its facts and
 // keeps its exit code; this only ever adds a line saying why some or all have no insights.
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -15,7 +15,7 @@ import type { RunInsights } from '../view/insights.ts'
 import { INSIGHTS_FILE } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
 import { classifyCache } from './classify.ts'
-import { writeInsights } from './files.ts'
+import { replaceInsights, writeInsights } from './files.ts'
 import { type CallUsage, generateInsights, insightEvals } from './generate.ts'
 
 /** Evals asked about at once during a run: the tail after the last attempt is the wait. */
@@ -36,6 +36,11 @@ export async function runInsights(options: {
   record: RunRecord
   /** The scratch run's folder, `.reeval/runs/<run>`: transcripts in, insights out. */
   runDir: string
+  /**
+   * The remarks-only insights the run already wrote there, when it raised remarks: the document
+   * written in their place keeps the remarks.
+   */
+  remarks?: RunInsights | null
   /** Ctrl-C: the calls in flight stop, no more start, and what finished is written. */
   signal?: AbortSignal
   stopSignal?: () => 'SIGINT' | 'SIGTERM'
@@ -59,7 +64,7 @@ export async function runInsights(options: {
   options.onProgress?.(0, evals)
   let insights: RunInsights
   try {
-    insights = await generateInsights({
+    const generated = await generateInsights({
       record,
       runDir,
       model,
@@ -71,6 +76,7 @@ export async function runInsights(options: {
       ...(options.onProgress ? { onProgress: options.onProgress } : {}),
       ...(options.onUsage ? { onUsage: options.onUsage } : {}),
     })
+    insights = { ...generated, remarks: options.remarks?.remarks ?? generated.remarks }
   } catch (error) {
     return {
       insights: null,
@@ -80,7 +86,9 @@ export async function runInsights(options: {
     }
   }
   try {
-    await writeInsights(join(runDir, INSIGHTS_FILE), insights)
+    const file = join(runDir, INSIGHTS_FILE)
+    if (options.remarks) await replaceInsights(file, insights)
+    else await writeInsights(file, insights)
     await writeFile(join(runDir, 'summary.md'), renderSummary(record, { hint: false, insights }))
   } catch (error) {
     return {
