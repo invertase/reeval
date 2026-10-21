@@ -3,7 +3,7 @@
 // record's cells, check tallies and attempts, so it costs no record field. Gating stays a
 // variant against its control.
 import type { CellRecord, CheckTally, CheckVerdict, EvalEntry, Lift } from '../history/types.ts'
-import { liftInterval, round3 } from '../stats.ts'
+import { containsZero, liftInterval, round3 } from '../stats.ts'
 import { cellSamples, contrastEffort, type EffortContrast } from './effort.ts'
 
 /**
@@ -87,7 +87,7 @@ function pairLift(a: CellRecord, b: CellRecord): Lift | null {
     variant,
     points: round3(points),
     interval: { lo: round3(low), hi: round3(high), level: 0.95, method: 'newcombe-wilson' },
-    withinNoise: low < 0 && high > 0,
+    withinNoise: containsZero(low, high),
   }
 }
 
