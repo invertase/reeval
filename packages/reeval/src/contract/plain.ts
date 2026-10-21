@@ -238,11 +238,11 @@ const plugin = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fi
     ...fields,
     only: z
       .array(pluginPartSchema)
-      .min(1)
+      .min(1, 'at least one part')
       .optional()
       .describe('The parts to place; default every part the plugin has.'),
     build: z
-      .union([nonEmpty(), z.array(nonEmpty()).min(1)])
+      .union([nonEmpty(), z.array(nonEmpty()).min(1, 'at least one command')])
       .optional()
       .describe(
         "Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one.",

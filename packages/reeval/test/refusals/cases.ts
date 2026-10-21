@@ -576,6 +576,58 @@ export const CASES: Record<string, Case[]> = {
       'data: skill with an unknown source',
       env({ skills: [{ kind: 'skill', source: 'ftp', placement: 'harness' }] }),
     ],
+    [
+      'plugin only an unknown part',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.local('.', { only: ['apps' as never] })],
+      })),
+    ],
+    [
+      'plugin only empty',
+      helpers(({ plugin }) => ({ plugins: [plugin.local('.', { only: [] })] })),
+    ],
+    [
+      'plugin option with a typo',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('github:o/r', { refs: 'v1' } as never)],
+      })),
+    ],
+    [
+      'plugin build not a command',
+      helpers(({ plugin }) => ({ plugins: [plugin.npm('pkg@1', { build: 3 as never })] })),
+    ],
+    ['plugin.git without a repo', helpers(({ plugin }) => ({ plugins: [plugin.git('')] }))],
+    [
+      'plugin.git with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('https://user:token@github.com/o/r')],
+      })),
+    ],
+    ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    ['plugins not from the helper', env({ plugins: ['./plugins/review'] })],
+    ['plugins not a list', env({ plugins: 'x' })],
+    [
+      'plugin good',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.local('.', { only: ['skills'] }),
+          plugin.git('github:o/r', { ref: 'v1', path: 'plugins/review' }),
+          plugin.npm('pkg@1', { only: ['mcp'], build: ['npm ci', 'npm run build'] }),
+        ],
+      })),
+    ],
+    [
+      'data: plugin with a typo',
+      env({ plugins: [{ kind: 'plugin', source: 'local', path: '/p', onyl: ['skills'] }] }),
+    ],
+    [
+      'data: plugin with an unknown source',
+      env({ plugins: [{ kind: 'plugin', source: 'marketplace', name: 'x' }] }),
+    ],
+    [
+      'data: plugin build empty',
+      env({ plugins: [{ kind: 'plugin', source: 'npm', spec: 'pkg@1', build: [] }] }),
+    ],
     ['mcp.stdio without a command', helpers(({ mcp }) => ({ mcp: { s: mcp.stdio('') } }))],
     ['mcp not from the helper', env({ mcp: { s: { command: 'npx' } } })],
     [
