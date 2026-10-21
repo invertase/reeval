@@ -70,8 +70,9 @@ Some CLIs contact hosts that nothing needs and no setting turns off. reeval list
 | Claude Code | None | reeval runs it with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` |
 | Cursor | None | Its analytics go to `api2.cursor.sh`, an automatic host |
 | OpenCode | None | It calls only its provider's API and, for web search, Exa |
-| Goose, pi | None | They call only the Gemini API |
-| Codex | None | Its analytics and plugin sync are off, so it calls only the OpenAI API |
+| Goose | `models.dev` | Its model catalogue refresh, which no setting turns off |
+| pi | None | It calls only the Gemini API |
+| Codex | `github.com`, `api.github.com`, `chatgpt.com` | Its plugin sync, on in a session with plugins; without them it calls only the OpenAI API |
 | fx | None | Self-upgrade is off; its model calls go through a relay to the gateway, and its own web tools bypass it, so a restricted policy blocks them |
 | Grok Build | None | Its telemetry, summaries and updates are off, so it calls only the xAI API |
 

@@ -209,9 +209,10 @@ reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.
 
 | Message after the prefix | Fix |
 |---|---|
-| `Cursor can't load plugins yet: leave the review plugin out of this cell` | Only Claude Code, Grok Build and the fake harness load plugins. Scope the plugin to cells that can take it. |
+| `Cursor can't load plugins yet: leave the review plugin out of this cell` | Only Claude Code, Grok Build, Codex, Goose and the fake harness load plugins. Scope the plugin to cells that can take it. |
 | `Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell` | The harness doesn't load that part. Leave it out with `only`. |
-| `Claude Code loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in` | Claude Code and Grok Build start a plugin's servers themselves. Leave `mcp` out of `only` and declare the server in the environment's `mcp`. |
+| `Codex can't load the review plugin's apps: they need a ChatGPT login` | The plugin bundles ChatGPT apps (`apps` in its manifest, or an `.app.json`), which Codex can't run on an API key. Leave the plugin out of Codex's cells. |
+| `Claude Code loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in` | Claude Code, Grok Build and Codex start a plugin's servers themselves. Leave `mcp` out of `only` and declare the server in the environment's `mcp`. |
 | `plugin.local('plugins/bare') has no .claude-plugin/plugin.json` | Point at the plugin's root, the directory with `.claude-plugin/plugin.json`. |
 | `the review plugin has no hooks, so only: ['hooks'] matches nothing (it has skills, mcp)` | Name parts the plugin has in `only`. |
 | `plugin.local('plugins/review') has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker({ install })` | Leave `build` out. |
