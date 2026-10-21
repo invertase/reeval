@@ -49,8 +49,10 @@ export type UnpackedPlugin = {
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
-const FRONTMATTER = /^---\r?\n/
-const FRONTMATTER_BLOCK = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
+// Editors on Windows may start a file with a byte-order mark, which hides the frontmatter from a
+// test anchored at its first character.
+const FRONTMATTER = /^\uFEFF?---\r?\n/
+const FRONTMATTER_BLOCK = /^\uFEFF?---\r?\n(?:---|([\s\S]*?)\r?\n---)[ \t]*(?:\r?\n|$)/
 const RULE = /^rules\/([^/]+)\.mdc?$/
 const MARKDOWN = (dir: string) => new RegExp(`^${dir}/([^/]+)\\.md$`)
 
@@ -71,9 +73,11 @@ function reformatted(
     }
     if (!isRecord(front)) throw new InfraError(`${what}'s frontmatter isn't a YAML mapping`)
   }
-  const body = block ? text.slice(block[0].length).replace(/^\r?\n/, '') : text
+  const body = block
+    ? text.slice(block[0].length).replace(/^\r?\n/, '')
+    : text.replace(/^\uFEFF/, '')
   const out = format(part, front as Record<string, unknown>)
-  const yaml = Object.keys(out).length ? stringifyYaml(out) : ''
+  const yaml = Object.keys(out).length ? stringifyYaml(out, { lineWidth: 0 }) : ''
   return yaml ? `---\n${yaml}---\n\n${body}` : body
 }
 

@@ -457,6 +457,51 @@ test('pi names a plugin MCP server <plugin>_<server>, and refuses one named like
   )
 })
 
+test('the frontmatter OpenCode takes survives a byte-order mark, an empty block and a non-string description', () => {
+  const unpacked = (
+    files: Record<string, string>,
+    parts: PluginPart[],
+    kind: 'opencode' | 'cursor',
+  ) => {
+    const p = readPlugin(write(review(), files), 'x', parts)
+    const placed = { name: p.name, dir: '/home/reeval/.reeval/plugins/review', parts: p.kept }
+    return Object.fromEntries(
+      unpackPlugins([{ ...placed, files: pluginFiles(p) }], LAYOUTS[kind].pluginUnpack ?? {}).map(
+        (f) => [f.path, f.content],
+      ),
+    )
+  }
+  const long =
+    'Reviews the change against every house rule, one at a time, and names each broken one.'
+  assert.deepEqual(
+    unpacked(
+      {
+        'agents/bom.md': '\uFEFF---\ndescription: Reviews\ntools: Read\n---\n\nReview.\n',
+        'agents/empty.md': '---\n---\nReview.\n\n---\n\nThen stop.\n',
+        'agents/count.md': '---\ndescription: 42\n---\nCount.\n',
+        'agents/long.md': `---\ndescription: ${long}\n---\nReview.\n`,
+        'agents/plain.md': '\uFEFFReview.\n',
+      },
+      ['agents'],
+      'opencode',
+    ),
+    {
+      '.opencode/agents/bom.md': '---\ndescription: Reviews\nmode: subagent\n---\n\nReview.\n',
+      '.opencode/agents/empty.md': '---\nmode: subagent\n---\n\nReview.\n\n---\n\nThen stop.\n',
+      '.opencode/agents/count.md': '---\ndescription: "42"\nmode: subagent\n---\n\nCount.\n',
+      '.opencode/agents/long.md': `---\ndescription: ${long}\nmode: subagent\n---\n\nReview.\n`,
+      '.opencode/agents/plain.md': '---\nmode: subagent\n---\n\nReview.\n',
+      '.opencode/agents/reviewer.md': '---\nmode: subagent\n---\n\nReview the diff.\n',
+    },
+  )
+  // A rule with its own frontmatter keeps it on Cursor, byte-order mark or not.
+  const rule = '\uFEFF---\nglobs: "*.ts"\n---\nUse tabs.\n'
+  assert.equal(
+    unpacked({ 'rules/tabs.md': rule }, ['rules'], 'cursor')['.cursor/rules/review-tabs.mdc'],
+    rule,
+  )
+})
+
 test('Antigravity refuses a plugin with a manifest agy reads in place of the Claude Code one', () => {
   const none = { skills: [], mcp: [] }
   for (const manifest of [

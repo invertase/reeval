@@ -530,7 +530,9 @@ export function opencodeFrontmatter(
   part: 'agents' | 'commands',
   front: Record<string, unknown>,
 ): Record<string, string> {
-  const description = typeof front.description === 'string' ? front.description : undefined
+  const d = front.description
+  const description =
+    typeof d === 'string' || typeof d === 'number' || typeof d === 'boolean' ? String(d) : undefined
   return {
     ...(description ? { description } : {}),
     ...(part === 'agents' ? { mode: 'subagent' } : {}),
