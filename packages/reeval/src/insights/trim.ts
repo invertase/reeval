@@ -76,6 +76,13 @@ const STEPS: Step[] = [
     },
   },
   {
+    cut: 'source lines after the first 30',
+    apply: (input) =>
+      input.source
+        ? { ...input, source: { ...input.source, lines: input.source.lines.slice(0, 30) } }
+        : input,
+  },
+  {
     cut: 'prompts',
     apply: (input) => ({ ...input, prompts: input.prompts.map((p) => clip(p, 300)) }),
   },

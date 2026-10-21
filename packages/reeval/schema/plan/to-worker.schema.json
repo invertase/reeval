@@ -777,7 +777,7 @@
       "additionalProperties": false
     },
     "FakeInsights": {
-      "description": "A fake insight answer. Each call takes its part: `intent` the classification, `answer`, `findings`, `rows` and `namedTools` the eval's sentences, `headline` the run's. Whatever's left out is empty, and the intent defaults to `job: 'other'`.",
+      "description": "A fake insight answer. Each call takes its part: `intent` the classification, `answer`, `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's left out is empty, and the intent defaults to `job: 'other'`.",
       "type": "object",
       "properties": {
         "answer": {
@@ -889,6 +889,66 @@
               }
             },
             "required": ["attempt", "tools"]
+          }
+        },
+        "remarks": {
+          "description": "The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`). They go through the same gates as a model's, so one missing a part is dropped.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "fix": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "at": {
+                        "type": "string"
+                      },
+                      "edit": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["at", "edit"]
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "at": {
+                        "type": "string"
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["at", "quote"]
+                  }
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["kind", "text"]
           }
         },
         "rows": {

@@ -3,8 +3,9 @@
 // folder's, or the scratch run's before it's recorded), then prints the run's blocks with them.
 // It's what `reeval run` does at its end, for a run that has none. A document with stopped, failed
 // or budget-skipped evals is finished instead: only those are asked about, and it's replaced whole,
-// as are remarks-only insights. Either way the document's remarks are kept. The facts and the exit
-// code don't depend on what the model wrote: a dropped sentence is counted, never an error.
+// as are remarks-only insights. Either way the document's remarks are kept, and the model's gated
+// remarks and `no-baseline` are added. The facts and the exit code don't depend on what the
+// model wrote: a dropped sentence or remark is counted, never an error.
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveAnalysisModel } from '../analysis/model.ts'
@@ -15,13 +16,14 @@ import { resolveRun } from '../history/views.ts'
 import { fromCwd } from '../ids.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { render } from '../ui/layout.ts'
+import { markPrinted } from '../ui/remarks.ts'
 import { fromModel } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
 import { classifyCache } from './classify.ts'
 import { readInsights, replaceInsights, runInsightsFile, writeInsights } from './files.ts'
 import { generateInsights, unfinishedEvals } from './generate.ts'
 import { factsHash } from './hash.ts'
-import { INSIGHTS_PROMPT_VERSION } from './schema.ts'
+import { insightsPromptVersion } from './schema.ts'
 
 type Ctx = {
   config: ResolvedConfig
@@ -56,7 +58,7 @@ export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promis
   const record = await readRecord(join(dir, `${entry.runId}.json`))
   if (prior) {
     const written = `${prior.model} (${prior.promptVersion})`
-    const asking = `${model.name} (${INSIGHTS_PROMPT_VERSION})`
+    const asking = `${model.name} (${insightsPromptVersion()})`
     const reason =
       prior.factsHash !== factsHash(suiteResult(record))
         ? "it was written for other facts than this run's"
@@ -78,11 +80,26 @@ export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promis
     record,
     runDir: join(dir, entry.runId),
     model,
+    root: config.root,
     maxTokens: config.analysis.maxTokens,
     cache: classifyCache(config.root, config.history.dir),
     ...(prior ? { prior } : {}),
   })
-  const insights = prior ? generated : { ...generated, remarks: existing?.remarks ?? [] }
+  const earlier = existing?.remarks ?? []
+  const { withModelRemarks } = await import('../remarks/index.ts')
+  // The run's own remarks stay as its output marked them; acted-on belongs to the run that found
+  // the edit, so only new remarks are added, marked as this prints them.
+  const had = new Set(earlier.map((r) => r.id))
+  const fresh = (await withModelRemarks(config, record, generated, earlier)).filter(
+    (r) => !had.has(r.id) && !r.actedOn,
+  )
+  const marked = new Set(
+    markPrinted([...earlier, ...fresh], entry.runId, false)
+      .filter((r) => r.printed && !had.has(r.id))
+      .map((r) => r.id),
+  )
+  const remarks = [...earlier, ...fresh.map((r) => ({ ...r, printed: marked.has(r.id) }))]
+  const insights = { ...generated, remarks }
   // replaceInsights refuses before its rename, so a refused document leaves the one there.
   if (existing) await replaceInsights(file, insights)
   else await writeInsights(file, insights)

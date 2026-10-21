@@ -6,16 +6,20 @@
 // estimate before it starts (`budget.ts`); once the next one can't fit, no eval's calls start, and
 // those in flight finish. Every call has `CALL_TIMEOUT_MS` and `INSIGHT_OUTPUT_TOKENS`; an eval
 // whose call fails, is cut off or times out is tried once more, then prints its facts alone, and
-// no other eval is touched. Nothing here reads or changes a verdict: the facts are final before
-// any call starts.
+// no other eval is touched. The insights call also returns the eval's remarks, which the gates
+// (`remarks.ts`) hold to the eval's source as the run saw it and to this run's facts. Nothing here
+// reads or changes a verdict: the facts are final before any call starts.
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { generateText, type LanguageModel, NoObjectGeneratedError, Output } from 'ai'
 import type { z } from 'zod'
 import { cannedModel, providerModel, type ResolvedAnalysisModel } from '../analysis/model.ts'
 import type { RunRecord } from '../history/types.ts'
+import type { Candidate } from '../remarks/rules.ts'
 import { formatDuration } from '../text.ts'
 import type { FakeInsights } from '../types.ts'
 import { slotsOf } from '../ui/layout.ts'
-import type { EvalInsight, Job, RunInsights, Sentence } from '../view/insights.ts'
+import type { EvalInsight, Job, Remark, RunInsights, Sentence } from '../view/insights.ts'
 import { type EvalResult, type SuiteResult, suiteResult } from '../view/suite.ts'
 import { admit, ledger, reserve, settle } from './budget.ts'
 import type { Classified, ClassifyCache } from './classify.ts'
@@ -23,7 +27,9 @@ import { factsHash } from './hash.ts'
 import {
   attemptTexts,
   classificationKey,
+  entriesOf,
   evalInput,
+  evalSource,
   type HeadlineInput,
   type Ids,
   type InsightInput,
@@ -34,6 +40,7 @@ import {
   withoutIdLists,
 } from './input.ts'
 import { byPriority } from './priority.ts'
+import { gateRemarks } from './remarks.ts'
 import {
   CLASSIFY_PROMPT,
   type ClassificationOutput,
@@ -41,9 +48,9 @@ import {
   HEADLINE_PROMPT,
   type HeadlineOutput,
   headlineSchema,
-  INSIGHTS_PROMPT,
-  INSIGHTS_PROMPT_VERSION,
   type InsightsOutput,
+  insightsPrompt,
+  insightsPromptVersion,
   insightsSchema,
 } from './schema.ts'
 import { EVAL_INPUT_CHARS, trimInput } from './trim.ts'
@@ -67,6 +74,12 @@ export type InsightOptions = {
   /** The run's folder, for failed attempts' transcripts; null to send none. */
   runDir: string | null
   model: ResolvedAnalysisModel
+  /**
+   * The project's root, where the evals' source files are: the model sees each eval's declaration
+   * and its remarks are checked against it. Without it the model is shown no source, and no remark
+   * is kept.
+   */
+  root?: string
   /** Each call's output cap; default `INSIGHT_OUTPUT_TOKENS`. */
   maxOutputTokens?: number
   /** Each eval's input cap, in characters; default `EVAL_INPUT_CHARS`. */
@@ -120,6 +133,13 @@ function fakePart(call: Call, answer: FakeInsights, input: ModelInput): unknown 
     findings: answer.findings ?? [],
     rows: answer.rows ?? [],
     namedTools: answer.namedTools ?? [],
+    remarks: (answer.remarks ?? []).map((r) => ({
+      kind: r.kind,
+      text: r.text,
+      source: r.source ?? null,
+      evidence: r.evidence ?? [],
+      fix: r.fix ?? null,
+    })),
   }
 }
 
@@ -231,6 +251,7 @@ function fromModel(out: InsightsOutput, ids: Ids): InsightsOutput {
     findings: out.findings.map((s) => sentenceFrom(s, ids)),
     rows: out.rows.map((r) => ({ ...sentenceFrom(r, ids), row: ids.row(r.row) })),
     namedTools: out.namedTools.map((n) => ({ ...n, attempt: ids.attempt(n.attempt) })),
+    remarks: out.remarks.map((r) => ({ ...r, evidence: r.evidence.map(ids.cite) })),
   }
 }
 
@@ -284,20 +305,38 @@ async function classify(
   }
 }
 
+/** An eval's insight and the model's remarks on it that passed the gates. */
+type Explained = { insight: EvalInsight; remarks: Candidate[] }
+
+/** Each of the eval's source files as it is now, for the gates to hold a remark's quote to. */
+async function sourceFiles(root: string | undefined, record: RunRecord, e: EvalResult) {
+  const files = new Map<string, string | null>()
+  if (!root) return files
+  for (const { entry } of entriesOf(record, e)) {
+    for (const s of entry.sources) {
+      if (!files.has(s.path)) {
+        files.set(s.path, await readFile(join(root, s.path), 'utf8').catch(() => null))
+      }
+    }
+  }
+  return files
+}
+
 async function evalInsight(
   o: InsightOptions,
   e: EvalResult,
   usage: Usage,
   counts: Counts,
-): Promise<EvalInsight> {
+): Promise<Explained> {
   const full = await evalInput(o.record, o.runDir, e)
   const cap = o.maxInputChars ?? EVAL_INPUT_CHARS
-  const key = classificationKey(o.record, e, o.model.name, INSIGHTS_PROMPT_VERSION)
+  const key = classificationKey(o.record, e, o.model.name, insightsPromptVersion())
   const classified = (await o.cache?.get(key)) ?? (await classify(o, trimInput(full, cap), usage))
   if (o.cache) await o.cache.set(key, classified).catch(() => {})
   const { job, subject } = classified
   const slots = slotsOf(job, e)
-  const base = trimInput(full, cap, slots.rows)
+  const source = o.root ? await evalSource(o.root, o.record, e) : null
+  const base = trimInput(source ? { ...full, source } : full, cap, slots.rows)
   const input: InsightInput = {
     call: 'insights',
     ...base,
@@ -311,30 +350,45 @@ async function evalInsight(
         o,
         'insights',
         insightsSchema,
-        INSIGHTS_PROMPT,
+        insightsPrompt(),
         retry ? { ...model.input, retry } : model.input,
         usage,
       )) as InsightsOutput,
       model.ids,
     )
   const texts = attemptTexts(o.record, e)
+  let last: InsightsOutput | null = null
   const sentences = await checked(
     await askInsights(),
     askInsights,
-    (out) => validateEvalInsights(out, input, slots, texts),
+    (out) => {
+      last = out
+      return validateEvalInsights(out, input, slots, texts)
+    },
     counts,
   )
+  const gated = gateRemarks((last as InsightsOutput | null)?.remarks ?? [], {
+    input,
+    name: classified.name,
+    entries: entriesOf(o.record, e).map((x) => x.entry),
+    files: await sourceFiles(o.root, o.record, e),
+  })
+  counts.dropped += gated.dropped.length
+  counts.drops.push(...gated.dropped)
   return {
-    evalId: e.path,
-    intent: {
-      job,
-      across: e.across,
-      question: classified.question,
-      subject,
-      name: classified.name,
-      key,
+    insight: {
+      evalId: e.path,
+      intent: {
+        job,
+        across: e.across,
+        question: classified.question,
+        subject,
+        name: classified.name,
+        key,
+      },
+      ...sentences,
     },
-    ...sentences,
+    remarks: gated.kept,
   }
 }
 
@@ -355,7 +409,7 @@ async function evalInsightOnce(
   e: EvalResult,
   usage: Usage,
   validation: Counts,
-): Promise<EvalInsight> {
+): Promise<Explained> {
   for (let tries = 1; ; tries++) {
     const counts: Counts = { dropped: 0, regenerated: 0, drops: [] }
     try {
@@ -414,7 +468,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
   const pending = prior && unfinishedEvals(prior)
   const ordered = pending ? all.filter((e) => pending.has(e.path)) : all
   const skipped = new Set<string>()
-  const done = new Map<string, EvalInsight>()
+  const done = new Map<string, Explained>()
   const failed = new Map<string, unknown>()
   const running = new Set<Promise<void>>()
   const concurrency = o.concurrency ?? 4
@@ -463,7 +517,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
   const left = ordered.flatMap((e) =>
     done.has(e.path) || failed.has(e.path) || skipped.has(e.path) ? [] : [e.path],
   )
-  const insightOf = (path: string) => done.get(path) ?? kept.get(path)
+  const insightOf = (path: string) => done.get(path)?.insight ?? kept.get(path)
   const evals = all.flatMap((e) => insightOf(e.path) ?? [])
   const headlineInput: HeadlineInput = {
     call: 'headline',
@@ -510,7 +564,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     schemaVersion: 1,
     runId: o.record.runId,
     model: o.model.name,
-    promptVersion: INSIGHTS_PROMPT_VERSION,
+    promptVersion: insightsPromptVersion(),
     factsHash: factsHash(suite),
     createdAt: new Date().toISOString(),
     usage: { ...tokens, ...(reasoningTokens ? { reasoningTokens } : {}), costUsd: null },
@@ -532,7 +586,14 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     ...(left.length ? { stopped: { signal: o.stopSignal?.() ?? 'SIGINT', skipped: left } } : {}),
     headline,
     evals,
-    remarks: prior?.remarks ?? [],
+    remarks: [
+      ...(prior?.remarks ?? []),
+      ...all.flatMap((e) =>
+        (done.get(e.path)?.remarks ?? []).map(
+          (r): Remark => ({ ...r, firstSeenRun: o.record.runId }),
+        ),
+      ),
+    ],
     validation,
   }
 }

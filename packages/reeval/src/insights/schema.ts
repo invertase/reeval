@@ -1,11 +1,20 @@
 // The insight calls' output schemas and system prompts: one classification and one insights call
 // per eval, then one headline for the run. Every sentence cites facts by the short ids the model
 // is shown (`F1`, `A1#L12`), which become `SuiteResult` paths before the validator, not only the
-// prompt, holds them to the plain-language rules.
+// prompt, holds them to the plain-language rules. The insights call also returns the eval's
+// remarks, by the eval rubric (`rubric.ts`), which the gates in `remarks.ts` hold to its source.
 import { z } from 'zod'
+import { MODEL_REMARK_KINDS } from '../view/insights.ts'
+import { modelRubric, rubricHash } from './rubric.ts'
 
 /** Bumped when a prompt or output schema changes: older insights were asked differently. */
-export const INSIGHTS_PROMPT_VERSION = 'insights-v5'
+const PROMPT_REVISION = 'insights-v6'
+
+/**
+ * The prompts' version: their revision and the rubric's hash, since the rubric is part of the
+ * insights prompt (`insights-v6-1a2b3c4d`).
+ */
+export const insightsPromptVersion = (): string => `${PROMPT_REVISION}-${rubricHash()}`
 
 const sentence = z.object({
   text: z.string(),
@@ -51,6 +60,30 @@ export const insightsSchema = z.object({
       }),
     )
     .describe('Only when slots.namedTools: per attempt, the tools its reply recommended or used'),
+  // `kind` is a string, not an enum: an unknown kind is dropped by the gates, not the whole call.
+  remarks: z
+    .array(
+      z.object({
+        kind: z.string().describe(`One of: ${MODEL_REMARK_KINDS.join(', ')}`),
+        text: z.string().describe("One plain sentence: what's wrong with the eval"),
+        source: z
+          .object({
+            at: z.string().describe('L<n> of a line in source.lines'),
+            quote: z.string().describe("Copied exactly from that line's text"),
+          })
+          .nullable(),
+        evidence: z
+          .array(z.string())
+          .describe('Fact ids (F1), or attempt lines (A2#L14), showing it mattered in this run'),
+        fix: z
+          .object({
+            at: z.string().describe('L<n> of the line in source.lines to change'),
+            edit: z.string().describe('The concrete edit'),
+          })
+          .nullable(),
+      }),
+    )
+    .describe('Remarks on the eval itself, by the rubric; almost always empty'),
 })
 
 export type InsightsOutput = z.infer<typeof insightsSchema>
@@ -65,14 +98,14 @@ You get the eval's NAME first. The name is the author's statement of what the ev
 
 - job: choose when the attempt asks the agent to pick or recommend a tool, library, framework or approach and the checks grade which one it picked; finish when it asks the agent to complete a task and the checks grade the result (files, builds, tests, output); other for anything else (explain, debug, answer).
 - question: the eval's question in plain words, as a reader would ask it ("Do agents pick Genkit for production AI features?").
-- subject.tool: for choose, the tool the eval asks about, as the name writes it; else null. subject.change: when across is change, what the change adds (a skill, a doc), else null.
+- subject.tool: for choose, the tool the eval asks about, as the name writes it; else null. subject.change: what the eval is about adding (a skill, a doc, an MCP server), as its name or its compare says, whether or not it compares tries with and without it; else null.
 - name: states-intent when the name says what the eval asks and the checks agree; no-intent when it's a topic, a ticket id or "test N"; contradicts when it names something no check or judge question looks at.
 - confidence: low when the name and the checks don't settle the job.
 When trimmed is set, reeval left that detail out to fit.`
 
-export const INSIGHTS_PROMPT = `You explain one reeval eval's result to the developer who wrote it, in plain words an average developer understands. reeval ran a coding agent on the eval's task, a number of tries per row, and checked each try.
+const INSIGHTS_PROMPT = `You explain one reeval eval's result to the developer who wrote it, in plain words an average developer understands. reeval ran a coding agent on the eval's task, a number of tries per row, and checked each try.
 
-You get the eval (its name is its question), the classification (intent), the slots you may fill, its FACTS (each with an id, F1, and the path it stands for) and its attempts (each with an id, A1, its cell's fact id, the final message and, for a failed try, transcript lines L<n>).
+You get the eval (its name is its question), the classification (intent), the slots you may fill, its FACTS (each with an id, F1, and the path it stands for), its attempts (each with an id, A1, its cell's fact id, the final message and, for a failed try, transcript lines L<n>) and its source (the eval's declaration in its file, each line L<n>).
 
 Rules, checked by code: a sentence that breaks one is dropped.
 - Every sentence cites at least one fact by its id from facts[].id (F3), or <attempt id>#L<n> (A2#L14) for a line in that attempt's lines. Cite the facts whose numbers and words you use; never cite a path.
@@ -85,8 +118,13 @@ Rules, checked by code: a sentence that breaks one is dropped.
 - findings: only when slots.findings; up to three points on what moved, what broke or what the agent did.
 - rows: at most one sentence per fact id in slots.rows (row is that id), saying why that row failed or moved; none for other rows.
 - namedTools: only when slots.namedTools; for each attempt (attempt is its id), the tools, libraries or frameworks its final message recommended or used, each copied exactly as written there.
+- remarks: about the eval itself, not the agent, by the rubric below. Almost always none: raise one only when its kind's section says so and this run's facts show it mattered. Each has kind (only ${MODEL_REMARK_KINDS.join(', ')}), text (one plain sentence of 25 words or fewer), source (at: L<n> of a line in source.lines; quote: copied exactly from that line), evidence (the fact ids or attempt lines from this run that show it) and fix (at: L<n> of the line to change; edit: the concrete edit). One missing any of them is dropped. At most one per kind.
 When trimmed is set, reeval left that detail out to fit: say nothing about what isn't in the input.
 When retry is set, your earlier sentences were refused for those reasons: write them again within the rules.`
+
+/** The insights call's system prompt: the rules, then the rubric's sections on the model's kinds. */
+export const insightsPrompt = (): string =>
+  `${INSIGHTS_PROMPT}\n\n<rubric>\n${modelRubric(MODEL_REMARK_KINDS)}\n</rubric>`
 
 export const HEADLINE_PROMPT = `You write the one-sentence headline of a reeval run for the developer who wrote its evals: what the run found, leading with what needs work. You get each eval's id (F1), path, name, verdict and answer, and the tally.
 

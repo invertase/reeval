@@ -74,6 +74,11 @@ export type InsightInput = {
   slots?: InsightSlots
   facts: InsightFact[]
   attempts: InsightAttempt[]
+  /**
+   * Set on the insights call: the eval's declaration in its file, each line `L<n> …` as the file
+   * numbers it, which a remark's `source` and `fix` cite.
+   */
+  source?: { file: string; lines: string[] }
   /** What was left out to fit the eval's size cap (`trim.ts`), when anything was. */
   trimmed?: string[]
   /** On a regeneration: why the earlier sentences were refused. */
@@ -115,6 +120,7 @@ function checkFact(k: CheckResult, measured: boolean): InsightFact {
     ...(o.errored ? { couldNotCheck: o.errored } : {}),
     ...(o.assertion ? { assertion: clip(o.assertion.trim().split('\n')[0] ?? '', 240) } : {}),
     ...(k.effect && measured ? { effect: EFFECT_WORDS[k.effect] } : {}),
+    ...(k.judge ? { judge: true } : {}),
   }
 }
 
@@ -331,6 +337,50 @@ export async function evalInput(
     checks,
     facts: evalFacts(e),
     attempts: await attemptsOf(record, runDir, e),
+  }
+}
+
+/** The most source lines an eval's input shows: its declaration, from its `evaluate` on. */
+const SOURCE_LINES = 80
+/** A line that starts another eval in the same file. */
+const NEXT_EVAL = /\bevaluate(?:\.each|\.todo|\.skip|\.only)?\s*[(<]/
+
+/**
+ * The eval's declaration in its file, numbered as the file is: from the `evaluate` that names it
+ * (or a family's template) up to the next eval's, at most `SOURCE_LINES`. Null when the file
+ * can't be read.
+ */
+export async function evalSource(
+  root: string,
+  record: RunRecord,
+  e: EvalResult,
+): Promise<InsightInput['source'] | null> {
+  const entry = entriesOf(record, e)[0]?.entry
+  if (!entry) return null
+  const text = await readFile(join(root, entry.file), 'utf8').catch(() => null)
+  if (text === null) return null
+  const lines = text.split('\n')
+  const name = entry.family?.name ?? entry.name
+  const named = lines.findIndex((l) =>
+    [`'${name}'`, `"${name}"`, `\`${name}\``].some((q) => l.includes(q)),
+  )
+  let from = Math.max(0, named)
+  for (let i = from; i >= Math.max(0, from - 10); i--) {
+    if (NEXT_EVAL.test(lines[i] ?? '')) {
+      from = i
+      break
+    }
+  }
+  let to = Math.min(lines.length, from + SOURCE_LINES)
+  for (let i = Math.max(from, named) + 1; i < to; i++) {
+    if (NEXT_EVAL.test(lines[i] ?? '')) {
+      to = i
+      break
+    }
+  }
+  return {
+    file: entry.file,
+    lines: lines.slice(from, to).map((l, i) => `L${from + i + 1} ${clip(l, LINE_CHARS)}`.trimEnd()),
   }
 }
 
