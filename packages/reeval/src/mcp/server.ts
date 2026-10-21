@@ -48,6 +48,8 @@ const VIEW_ROWS: Record<string, string> = {
     'check (expect label) per cell per run, control and variant alike: harness, environment, role, passes, failures, errors, not-run and rate = pass / (pass + fail), null when none',
   check_streaks:
     'check (expect label) per cell, comparable fingerprint and branch over recorded runs: how many newest runs in a row it passed with no fail (on a variant, on both sides), their tries, and the run that ended the streak',
+  remark_outcomes:
+    'remark kind over the project’s runs: how many printed, how many a later run found acted on, the rate, and whether that kept, demoted or hid the kind',
 }
 
 const READ_ONLY = {

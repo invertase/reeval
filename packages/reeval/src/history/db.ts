@@ -8,7 +8,9 @@ import { isRuntimeState } from '../attempt/context.ts'
 import { pairTallies } from '../compare/pairs.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
+import { readInsights } from '../insights/files.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
+import { INSIGHTS_FILE } from '../view/insights.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import { rowsOf } from './rows.ts'
@@ -19,7 +21,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 13
+const DB_VERSION = 14
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -172,6 +174,17 @@ CREATE TABLE cell_checks (
   pass INTEGER, fail INTEGER, error INTEGER, not_run INTEGER, control_pass INTEGER,
   control_fail INTEGER, control_error INTEGER, control_not_run INTEGER, verdict TEXT
 );
+-- Each remark a run's insights.json lists: what it raised (printed = 1 where its output printed
+-- it) and, with acted_on_run, an earlier run's remark this run found acted on.
+CREATE TABLE remarks (
+  run_id TEXT NOT NULL, id TEXT NOT NULL, eval_key TEXT, kind TEXT, origin TEXT, severity TEXT,
+  demoted TEXT, text TEXT, source_at TEXT, fix_at TEXT, first_seen_run TEXT, printed INTEGER,
+  acted_on_run TEXT
+);
+-- The insights.json each run's remarks were read from, and its size and mtime when they were.
+CREATE TABLE insight_files (
+  run_id TEXT PRIMARY KEY, path TEXT NOT NULL, size INTEGER NOT NULL, mtime_ms REAL NOT NULL
+);
 ${DERIVED_TABLES}
 CREATE INDEX assertions_by_attempt ON assertions (run_id, attempt_key);
 CREATE INDEX cells_by_eval ON cells (eval_key, key);
@@ -212,6 +225,11 @@ CREATE VIEW drift AS SELECT * FROM drift_m;
 -- in a row it passed with no fail or error (on a variant, passed on both sides), their tries, and
 -- the run that ended the streak (null: it never failed).
 CREATE VIEW check_streaks AS SELECT * FROM check_streaks_m;
+
+-- Each remark kind over the project's runs: how many printed, how many a later run found acted on,
+-- the rate, and the status it gives the kind: demoted (a concern prints as a suggestion) under 20%
+-- over at least 10 printed, hidden (never printed) under 5%.
+CREATE VIEW remark_outcomes AS SELECT * FROM remark_outcomes_m;
 
 -- Tool calls, agent time and tokens per cell, and a variant's against its control in the same run.
 CREATE VIEW effort AS SELECT * FROM effort_m;
@@ -344,6 +362,7 @@ export const VIEW_NAMES = [
   'check_discrimination',
   'check_rates',
   'check_streaks',
+  'remark_outcomes',
 ]
 
 const json = (value: unknown) => JSON.stringify(value)
@@ -826,11 +845,64 @@ const DATA_TABLES = [
   'mcp_startup',
   'assertions',
   'cell_checks',
+  'remarks',
 ]
 
 function removeRun(db: DatabaseSync, runId: string): void {
   for (const table of DATA_TABLES) db.prepare(`DELETE FROM ${table} WHERE run_id = ?`).run(runId)
   db.prepare('DELETE FROM files WHERE run_id = ?').run(runId)
+  db.prepare('DELETE FROM insight_files WHERE run_id = ?').run(runId)
+}
+
+/**
+ * Brings a run's remarks up to date with its insights.json, which is written after the record and
+ * may be replaced; returns whether they changed.
+ */
+async function syncRemarks(
+  db: DatabaseSync,
+  root: string,
+  runId: string,
+  file: string,
+): Promise<boolean> {
+  const info = await stat(file).catch(() => null)
+  const had = rowsOf<{ path: string; size: number; mtime_ms: number }>(
+    db.prepare('SELECT path, size, mtime_ms FROM insight_files WHERE run_id = ?'),
+    runId,
+  )[0]
+  const rel = relativeFile(root, file)
+  if (!info && !had) return false
+  if (info && had && had.path === rel && had.size === info.size && had.mtime_ms === info.mtimeMs) {
+    return false
+  }
+  db.prepare('DELETE FROM remarks WHERE run_id = ?').run(runId)
+  db.prepare('DELETE FROM insight_files WHERE run_id = ?').run(runId)
+  if (!info) return true
+  const doc = await readInsights(file).catch(() => null)
+  const insert = db.prepare('INSERT INTO remarks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+  for (const r of doc?.remarks ?? []) {
+    insert.run(
+      runId,
+      r.id,
+      r.evalId,
+      r.kind,
+      r.origin,
+      r.severity,
+      r.demoted ?? null,
+      r.text,
+      r.source?.at ?? null,
+      r.fix.at,
+      r.firstSeenRun,
+      r.printed === undefined ? null : r.printed ? 1 : 0,
+      r.actedOn?.run ?? null,
+    )
+  }
+  db.prepare('INSERT INTO insight_files VALUES (?, ?, ?, ?)').run(
+    runId,
+    rel,
+    info.size,
+    info.mtimeMs,
+  )
+  return true
 }
 
 function freshSchema(db: DatabaseSync): void {
@@ -946,7 +1018,12 @@ async function sync(
       db.prepare('INSERT INTO files VALUES (?, ?, ?, ?)').run(runId, rel, info.size, info.mtimeMs)
       added++
     }
-    if (added || removed || rebuilt) deriveFacts(db)
+    let remarked = false
+    for (const [runId, { path }] of wanted) {
+      const file = join(dirname(path), runId, INSIGHTS_FILE)
+      if (await syncRemarks(db, root, runId, file)) remarked = true
+    }
+    if (added || removed || rebuilt || remarked) deriveFacts(db)
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')
