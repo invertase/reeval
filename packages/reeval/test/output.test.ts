@@ -212,7 +212,10 @@ describe('catch regressions (reeval compare)', () => {
     for (const g of COMPARE_GOLDENS.filter((x) => !x.verbose)) {
       assert.doesNotMatch(comparedText(g).join('\n'), /\d%|lift|interval|noise|×/, g.name)
     }
-    assert.match(comparedText(compareGolden('compare-verbose')).join('\n'), /agent 0s → 0s \(×/)
+    assert.match(
+      comparedText(compareGolden('compare-verbose')).join('\n'),
+      /tools 0 → 0 \(×–\) · agent <0\.1s → <0\.1s/,
+    )
     const c = colors(false)
     const row = (status: CompareInput['rows'][number]['status']) => ({
       id: status,

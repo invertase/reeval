@@ -2,20 +2,20 @@ can't compare    bills in minor units with the billing doc
   changed          environment
   base             20261020T230147Z_958e309_cursor-agent_aamj  pass
   head             20261020T230148Z_958e309_cursor-agent_qghb  fail
-  fake/with-doc/fake  tools 0 → 0 (×–) · agent 0s → 0s (×0.50)
+  fake/with-doc/fake  tools 0 → 0 (×–) · agent <0.1s → <0.1s
   amount in minor units  failed
     expected command to succeed, exit code 1
 
 same             adds a reset button that builds
-  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×3.00)
+  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
 fixed            adds a double button that builds
   build            fail → pass
   types            not run → pass
-  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×2.50)
+  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
 same             adds a clear button that builds
-  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×1.20)
+  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
 regressed        greets in the house style
   base             20261020T230147Z_958e309_cursor-agent_aamj
@@ -24,13 +24,13 @@ regressed        greets in the house style
     expected command to succeed, exit code 1
   sign-off         not run
   +1 more passed
-  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×2.00)
+  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
 same             writes greet.js
-  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×0.83)
+  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
 same             greets in French
-  fake/-/fake      tools 0 → 0 (×–) · agent 0s → 0s (×1.20)
+  fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
 new              greets in Spanish
   head             20261020T230148Z_958e309_cursor-agent_qghb  fail
