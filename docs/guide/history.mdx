@@ -129,7 +129,7 @@ new              greets in Spanish
 |---|---|
 | `regressed` | Both run ids, each check that flipped (`pass → fail`) with its message, and checks that no longer ran (`not run`) |
 | `fixed` | The checks that pass now |
-| `can't compare` | What changed, such as the environment, the eval's file or a helper it imports, and each side's result |
+| `can't compare` | What changed, such as the environment, the eval's file or a helper it imports, and each side's result. An eval Ctrl-C cancelled on one side reads `cancelled` there |
 | `new`, `removed` | An eval only one run has, with its result |
 
 A check that didn't run on one side reads `not run`, never `fail`. `-v` adds each cell's lift and effort, base → head.

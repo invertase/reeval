@@ -271,7 +271,8 @@ reeval analyze           reeval studio          reeval image build      reeval d
 `reeval run` ends with a result block per eval, laid out by what it varies (a row per eval, per
 arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`
 or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
-(`1 fail · 2 pass`), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
+(`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
+`1 run error` and fails the run), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
 model never stands in). `summary.md` and `reeval show` print the same blocks.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or

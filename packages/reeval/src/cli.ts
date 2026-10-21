@@ -406,7 +406,6 @@ async function runCommand(
     record,
     summaryPath: fromCwd(summary),
     results: engineRun.evals,
-    unhandledErrors: engineRun.unhandledErrors,
     hint: !hasAnalysisModel(ctx.config),
   })
   renderer.close()
@@ -433,8 +432,7 @@ async function runCommand(
   }
 
   if (interrupted || engineRun.cancelled) return stopCode
-  if (engineRun.unhandledErrors.length > 0) return EXIT.failed
-  // The studio shows the same outcome for the run.
+  // `--json`'s outcome, the studio and `reeval show` read the same outcome from the record.
   const outcome = runOutcome(record)
   return outcome === 'fail' ? EXIT.failed : outcome === 'infra_error' ? EXIT.infra : EXIT.ok
 }

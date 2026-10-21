@@ -65,11 +65,12 @@ reeval compare [base] [head]  Diff two runs; base defaults to head's nearest rec
 - **Can't compare** means a fingerprint part or the grader changed, and reeval names it: `changed  evals/helpers.ts`.
 - **Not run:** a check head never reached reads `not run`, never `fail`, and a check neither side reached is never a flip.
 - **Unfinished runs:** when base or head was interrupted or stopped at its duration budget, a note above the tally says so, since some of its evals didn't run to the end.
+- **Cancelled evals:** an eval that failed only because Ctrl-C cancelled its attempts reads `can't compare`, with that side's result `cancelled`, never `regressed` or `fixed`. In `--json` its row is `drift` with `cancelled: ["head"]` (or `"base"`).
 - **Filtered runs:** when base and head ran different cells of an eval, the eval is classified on the cells both ran, and the rest are listed as `cells added` or `cells removed`. With no cell in common, it can't compare them.
 - `-v` adds each cell's lift and effort, base → head, and every stack change. The default output has no statistics.
 - `--md` prints a `### reeval compare: head vs base` heading and the same blocks in a text block, for a PR comment. `--json` returns `{ base, head, changes, rows }`.
 - **No earlier recorded run:** `No earlier recorded run to compare <run> with, so every eval is new.`, then head's result blocks and `N new evals`; `--json` has `base: null`. That's not an error.
-- `--fail-on-regression` exits 1 when any eval regressed, or when a `new` or `can't compare` eval fails, since no comparable earlier run vouches for it. A changed eval that passes doesn't count. Without the flag, `reeval compare` exits 0.
+- `--fail-on-regression` exits 1 when any eval regressed, or when a `new` or `can't compare` eval fails, since no comparable earlier run vouches for it. A changed eval that passes, or one whose head was cancelled, doesn't count. Without the flag, `reeval compare` exits 0.
 
 ```text
 regressed        greets in the house style

@@ -26,6 +26,16 @@ export function capMiddle(text: string, max = FAILURE_CAP): string {
   return `${text.slice(0, head)}\n[… ${text.length - head - tail} characters cut …]\n${text.slice(-tail)}`
 }
 
+/**
+ * A Markdown code block around `lines`. Its fence is one backtick longer than the longest run of
+ * backticks in them (at least three), so no line inside can close it.
+ */
+export function fenced(lines: string[], lang = ''): string[] {
+  const longest = Math.max(0, ...lines.flatMap((l) => (l.match(/`+/g) ?? []).map((m) => m.length)))
+  const fence = '`'.repeat(Math.max(3, longest + 1))
+  return [`${fence}${lang}`, ...lines, fence]
+}
+
 /** How a sandbox warning prints: root in capitals, added capabilities softer. */
 export const sandboxWarningLine = (w: SandboxWarning) =>
   `${w.kind === 'root' ? 'WARNING' : 'warning'}: ${w.message}`

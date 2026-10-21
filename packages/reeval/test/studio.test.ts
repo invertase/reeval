@@ -206,6 +206,12 @@ evaluate('writes ok', { compare }, async (c) => {
       runOutcome({ status: 'complete', evals: [...pass, { outcome: 'infra_error' }] }),
       'infra_error',
     )
+    const errors = ['stray rejection']
+    assert.equal(
+      runOutcome({ status: 'complete', evals: [...pass, { outcome: 'infra_error' }], errors }),
+      'fail',
+    )
+    assert.equal(runOutcome({ status: 'interrupted', evals: pass, errors }), 'skipped')
   })
 
   test('a run lead names pass, fail, infra and failed judges', () => {
