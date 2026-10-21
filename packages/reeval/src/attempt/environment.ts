@@ -1,4 +1,5 @@
 import { attemptDebug, debugLog } from '../debug/attempt.ts'
+import { allowedHosts } from '../egress.ts'
 import { resolveEnvironment } from '../environment/resolve.ts'
 import { layoutOf } from '../harness/index.ts'
 import { InfraError } from '../sandbox/types.ts'
@@ -27,6 +28,7 @@ export async function prepareEnvironment(
     layoutOf(spec.harness).rulesFile,
     spec.egress.policy,
     (w) => preparedWorkspace(root, runId, w),
+    { harness: spec.harness, allowed: allowedHosts(spec.egress) },
   )
   a.env = env
   record.environment = env.record
