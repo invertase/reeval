@@ -519,7 +519,9 @@ export const inventory: InventoryFeature[] = [
     plan: ['images/plugin-builds'],
     tests: [
       plugin('a build is commands and where they run, the same for each way of writing it'),
-      plugin('a built plugin keeps only the parts only names: the rest of its directory is removed'),
+      plugin(
+        'a built plugin keeps only the parts only names: the rest of its directory is removed',
+      ),
       planTest('a plugin the plan reads and refuses exits 2'),
     ],
   },

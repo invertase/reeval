@@ -82,7 +82,9 @@ export function prepareTargets(
       runWide: false,
     }
     if (!target.setBy.includes(use.setBy.sandbox)) target.setBy.push(use.setBy.sandbox)
-    target.runWide ||= runWideLevel(use.setBy.sandbox) && runWideLevel(use.setBy.harness)
+    // Plugin builds come from an environment, not from where the sandbox was set.
+    target.runWide ||=
+      plugins.length === 0 && runWideLevel(use.setBy.sandbox) && runWideLevel(use.setBy.harness)
     targets.set(key, target)
   }
   return [...targets.values()]

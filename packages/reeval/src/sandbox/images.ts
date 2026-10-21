@@ -319,7 +319,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   for (const source of target.plugins) {
     const { run, cwd } = buildSteps(source.build as PluginBuild)
     const action = `build unless cached: ${run.join(' && ')}${cwd === null ? '' : ` (from ${cwd})`}`
-    const what = `plugin ${pluginCall(source, root)}`
+    const what = `build ${pluginCall(source, root)}`
     // A git or npm source is fetched to hash it, which only a build does.
     if (source.source !== 'local') {
       parent = null
