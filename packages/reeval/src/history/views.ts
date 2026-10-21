@@ -2,6 +2,7 @@ import { formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { render } from '../ui/layout.ts'
 import { cellsChanged } from '../view/compare.ts'
+import type { RunInsights } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
 import { OUTCOME_MARK, runTally, stateRows } from './summary.ts'
@@ -158,7 +159,10 @@ export function formatHistory({ runs, rows, orphaned }: ReturnType<typeof histor
 }
 
 /** `reeval show`: the run's header and state, then the result blocks `reeval run` ended with. */
-export function formatShow(run: RunRecord, opts: { hint: boolean }): string {
+export function formatShow(
+  run: RunRecord,
+  opts: { hint: boolean; insights?: RunInsights | null },
+): string {
   const rows = stateRows(run)
   const width = Math.max(...rows.map(([k]) => k.length))
   return [
@@ -168,6 +172,10 @@ export function formatShow(run: RunRecord, opts: { hint: boolean }): string {
     ...rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`),
     ...warnings(run).map((w) => `  ! ${w}`),
     '',
-    ...render(suiteResult(run), null, { color: false, verbose: false, hint: opts.hint }),
+    ...render(suiteResult(run), opts.insights ?? null, {
+      color: false,
+      verbose: false,
+      hint: opts.hint,
+    }),
   ].join('\n')
 }

@@ -65,6 +65,10 @@ export function renderPlan(plan: PlanDocument): string {
   ].filter(Boolean)
   if (caps.length) head.push(`budget ${caps.join(', ')} ${budget.fits ? '✓' : '✗'}`)
   if (plan.resume) head.push(`resume ${plan.resume.completed} skipped`)
+  if (plan.insights) {
+    const { model, maxTokens } = plan.insights
+    head.push(`insights ${model} maxTokens ${maxTokens}`)
+  }
   const rows: string[][] = []
   for (const e of plan.evals) {
     const tags = e.tags.length ? ` [${e.tags.join(', ')}]` : ''

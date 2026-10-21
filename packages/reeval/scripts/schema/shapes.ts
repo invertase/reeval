@@ -37,8 +37,7 @@ export const SHAPES: PersistedShape[] = [
     name: 'analysis',
     file: 'src/view/analysis.ts',
     type: 'AnalysisDoc',
-    where:
-      "A reeval analyze document, or analysis.agent's run summary: <run>/analysis/*.json and .reeval/analysis/<key>.json",
+    where: 'A reeval analyze document: <run>/analysis/*.json and .reeval/analysis/<key>.json',
     versionField: 'schemaVersion',
   },
   {
@@ -46,7 +45,15 @@ export const SHAPES: PersistedShape[] = [
     file: 'src/view/analysis.ts',
     type: 'AnalysisNote',
     where:
-      'An analysis.agent note on one eval and harness: .reeval/analysis/<run>/notes/<eval>__<harness>.json',
+      'A note on one eval and harness of a run: .reeval/analysis/<run>/notes/<eval>__<harness>.json',
+    versionField: 'schemaVersion',
+  },
+  {
+    name: 'insights',
+    file: 'src/view/insights.ts',
+    type: 'RunInsights',
+    where:
+      "A run's insights from reeval analyze --insights, or its deterministic remarks alone (model 'none') from reeval run: <run>/insights.json in the history folder or .reeval/runs",
     versionField: 'schemaVersion',
   },
   {

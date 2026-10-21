@@ -565,8 +565,19 @@ evaluate('a', async () => {})
     noSecret(gateway)
   })
 
-  test("analysis: analysis.model's key, required only with analysis.agent", async () => {
-    const off = await configOf('analysis-off', '{ harness: fakeHarness() }')
+  test("analysis: analysis.model's key, a warning only: a run without it prints no insights", async () => {
+    const none = await configOf('analysis-none', '{ harness: fakeHarness() }')
+    const noModel = await checkAnalysis(none, deps(), false, '.env.local')
+    assert.deepEqual(statuses(noModel), ['warn'])
+    assert.equal(noModel[0]?.summary, 'no analysis.model, so runs print no insights')
+    assert.match(
+      noModel[0]?.fix ?? '',
+      /^set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in \S*reeval\.config\.ts for answers to what each eval asks, or analysis: \{ insights: false \} to go without$/,
+    )
+    const off = await configOf(
+      'analysis-off',
+      '{ harness: fakeHarness(), analysis: { insights: false } }',
+    )
     assert.deepEqual(await checkAnalysis(off, deps(), false, '.env.local'), [])
     const model = await configOf(
       'analysis-model',
@@ -586,11 +597,6 @@ evaluate('a', async () => {})
     )
     assert.deepEqual(statuses(set), ['ok'])
     noSecret(set)
-    const agent = await configOf(
-      'analysis-agent',
-      "{ harness: fakeHarness(), analysis: { model: 'google/gemini-3.8-flash', agent: true } }",
-    )
-    assert.deepEqual(statuses(await checkAnalysis(agent, deps(), false, '.env.local')), ['fail'])
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {
@@ -732,7 +738,7 @@ describe('reeval doctor', () => {
     assert.equal(report.healthy, true)
     assert.deepEqual(
       [...new Set(report.checks.map((c: Check) => c.id))],
-      ['runtime', 'config', 'docker', 'key', 'judge', 'egress', 'gitignore'],
+      ['runtime', 'config', 'docker', 'key', 'judge', 'analysis', 'egress', 'gitignore'],
     )
   })
 

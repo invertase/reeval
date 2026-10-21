@@ -112,6 +112,26 @@ The effect reads `helped`, `made it worse` or `can't tell yet`, from the same [i
 
 `summary.md` and `reeval show` print the same blocks. `reeval compare` lays out two runs as the evals that changed between them: [Compare two runs](/guide/history#compare-two-runs).
 
+## Insights
+
+```text
+                 recommends Genkit for $task
+  Not for a Python agent: 0 of 2 tries passed.
+  case                        pass    Genkit
+  pass  a chat app            2 of 2  2 of 2
+  pass  a RAG pipeline        2 of 2  2 of 2
+  fail  a Python agent        0 of 2  2 of 2
+    It also names LangChain, so "names no other framework" fails.
+    names no other framework  0 of 2
+    named
+      Genkit                  2 of 2
+      LangChain               2 of 2
+```
+
+With `analysis.model` set, `reeval run` writes the run's [insights](/concepts/insights) at its end, and the blocks, `summary.md` and `reeval show` fill the slots each layout opens: the answer under the heading, a sentence under a failing case, a failing harness or an arm that failed or moved, findings under a change, and a headline before the tally. The fact rows stay as they were; every sentence cites them and is checked before it's kept.
+
+An eval the model reads as choosing a tool gets its own layout: the tool it asks about counted on each case, and on a miss the tools the agent named. After the tally, [remarks](/concepts/insights#remarks) list what reeval noticed about the evals themselves, with or without a model.
+
 ## Grouped or stream
 
 By default (`--output-logs errors-only`) only a failing attempt prints its log: its start line (`▶`) and detail lines, as one block once it fails. A passing attempt prints nothing above the result blocks. From `CI=1 reeval run --config reeval.fake.config.ts` in `examples/hello`:
@@ -218,6 +238,9 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ## Next
 
 <CardGroup cols={2}>
+  <Card title="Insights and remarks" icon="message" href="/concepts/insights">
+    The sentences in the blocks, and the remarks after the tally.
+  </Card>
   <Card title="Concurrency" icon="layer-group" href="/concepts/concurrency">
     How many attempts run at once, and in what order.
   </Card>

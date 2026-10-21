@@ -11,6 +11,7 @@ import type { Flags } from './cli-spec.ts'
 import { CONFIG_FILES } from './config.ts'
 import { UsageError } from './errors.ts'
 import { type AgentKind, agentFor } from './harness/agents.ts'
+import { RECOMMENDED_ANALYSIS_MODEL } from './judge/index.ts'
 import { harnessId } from './options.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { AgentHarnessDescriptor } from './types.ts'
@@ -46,6 +47,9 @@ const descriptorOf = (h: { kind: AgentKind; model: string }) =>
 const keyOf = (h: { kind: AgentKind; model: string }) => agentFor(descriptorOf(h)).credential
 /** The cell id an offered agent runs as, e.g. `opencode:gemini-3.8-flash`. */
 const cellOf = (h: { kind: AgentKind; model: string }) => harnessId(descriptorOf(h))
+
+/** The key that calls `analysis.model` directly. */
+const ANALYSIS_KEY = 'GOOGLE_GENERATIVE_AI_API_KEY'
 
 const CHOICES: InitChoice[] = INIT_HARNESSES.map((h) => h.kind)
 const DEFAULT_CHOICE: InitChoice = 'cursor'
@@ -84,8 +88,10 @@ export default defineConfig({
   include: ['evals/**/*.eval.ts'],
   harness: ${h.factory}({ model: '${h.model}' }), // needs ${keyOf(h)}
   timeout: '15m',
-  // For c.judge, add a judge and its key, e.g. { model: 'google/gemini-3.8-flash' }
-  // with GOOGLE_GENERATIVE_AI_API_KEY.
+  // For c.judge, add a judge, e.g. judge: { model: '${RECOMMENDED_ANALYSIS_MODEL}' }.
+  // Insights explain each eval after a run, with ${ANALYSIS_KEY};
+  // insights: false turns them off.
+  analysis: { model: '${RECOMMENDED_ANALYSIS_MODEL}' },
   defaultProfile: { ci: 'pr' },
   profiles: {
     // PR runs in CI: one attempt per cell, no variants.
@@ -426,7 +432,7 @@ export function planInit(options: {
     config(
       dir,
       configSource(pkg, choice),
-      `harness ${cellOf(h)}; profiles pr, nightly`,
+      `harness ${cellOf(h)}; insights ${RECOMMENDED_ANALYSIS_MODEL}; profiles pr, nightly`,
       force,
       conflicts,
     ),
@@ -551,6 +557,9 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
       writeFileSync(path, a.content)
     }
   }
+  io.out(
+    `Insights: ${RECOMMENDED_ANALYSIS_MODEL} explains each eval after a run, with ${ANALYSIS_KEY}; analysis.insights: false or --no-insights turns them off`,
+  )
   const pm = packageManager(dir)
   const h = harnessOf(choice)
   const build = `${pm.exec} image build`

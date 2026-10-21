@@ -1,7 +1,7 @@
 // Runs the evals that need no credentials, Docker or network: a fake agent writes canned files
 // into a temp dir, and the judge returns a canned verdict. The fake agent writes the house-style
 // greeting only when it's given a skill, so skill.eval.ts shows the compare and its lift.
-// analysis.agent writes a canned note on each eval and harness into .reeval/analysis/.
+// The fake analysis model writes each eval's insights: an answer when every try passed.
 // (python.eval.ts needs the real agent and custom.eval.ts needs a Gemini key in the sandbox.)
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -44,10 +44,18 @@ export default defineConfig({
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: 0.95 }) },
   analysis: {
-    agent: true,
     model: fakeAnalysis({
-      note: ({ harness, attempts }) =>
-        `${attempts.filter((a) => a.outcome === 'pass').length} of ${attempts.length} attempts passed on ${harness}.`,
+      // Each eval's classification and answer, citing the eval's own fact (F1).
+      insights: (input) =>
+        input.call === 'headline'
+          ? {}
+          : {
+              intent: { job: 'finish' },
+              answer:
+                input.eval.verdict === 'pass'
+                  ? { text: 'Yes: every try passed.', cites: [input.facts[0]?.id ?? ''] }
+                  : null,
+            },
       // skill.eval.ts's compare question: the attempt whose greet.js says Ahoy wins.
       vote: (p) =>
         p.a.diff?.includes('Ahoy') === p.b.diff?.includes('Ahoy')
@@ -55,7 +63,7 @@ export default defineConfig({
           : p.a.diff?.includes('Ahoy')
             ? 'A'
             : 'B',
-      // The run's summary, cached once the run is written; reeval analyze shows it.
+      // What reeval analyze writes.
       output: {
         tldr: 'The house-style skill changes the greeting: its variant passes where the control misses.',
         whatHappened: [],

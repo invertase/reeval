@@ -21,8 +21,10 @@ import {
   unreachable,
 } from './history/views.ts'
 import { fromCwd, sha256 } from './ids.ts'
+import { readInsights, runInsightsFile } from './insights/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
+import { fromModel } from './view/insights.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -163,11 +165,18 @@ export async function showRecord(config: ResolvedConfig, ref?: string) {
 }
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
-  const run = await showRecord(ctx.config, refs[0])
-  const hint = !hasAnalysisModel(ctx.config)
-  if (ctx.flags.json) ctx.out(JSON.stringify(run, null, 2))
-  else if (ctx.flags.md) ctx.out(renderSummary(run, { hint }).trimEnd())
-  else ctx.out(formatShow(run, { hint }))
+  const { config } = ctx
+  const entry = resolveRun(await allRuns(config), refs[0])
+  const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
+  const run = await readRecord(join(dir, `${entry.runId}.json`))
+  if (ctx.flags.json) {
+    ctx.out(JSON.stringify(run, null, 2))
+    return 0
+  }
+  const insights = await readInsights(runInsightsFile(config, entry))
+  const hint = !(insights && fromModel(insights)) && !hasAnalysisModel(config)
+  if (ctx.flags.md) ctx.out(renderSummary(run, { hint, insights }).trimEnd())
+  else ctx.out(formatShow(run, { hint, insights }))
   return 0
 }
 

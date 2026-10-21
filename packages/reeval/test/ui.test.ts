@@ -468,6 +468,49 @@ test('browser-download names the binary, version, size and cache', () => {
   )
 })
 
+describe('insights progress', () => {
+  const end = interleaved.at(-1) as Extract<ReevalEvent, { type: 'run-end' }>
+  const progress = (done: number, at: number): ReevalEvent => ({
+    type: 'insights-progress',
+    at: s(at),
+    done,
+    total: 10,
+  })
+  const events: ReevalEvent[] = [
+    ...interleaved.slice(0, -1),
+    progress(0, 366),
+    progress(3, 380),
+    progress(7, 560),
+    progress(10, 600),
+    { ...end, at: s(601) },
+  ]
+
+  test('live: the status line counts the evals settled, in place, cleared before the result', () => {
+    const out = render(events, options({ requested: 'live', outputLogs: 'none' }))
+    const clear = '\r\x1b[2K'
+    for (const n of [0, 3, 7, 10]) assert.ok(out.includes(`${clear}insights ${n}/10…`), `${n}`)
+    assert.doesNotMatch(out, /… insights/)
+    assert.ok(out.endsWith(lines(...RESULT)))
+  })
+
+  test('plain: only the heartbeat says so, once a quiet minute, until the last eval settles', () => {
+    const out = render(events, options({ outputLogs: 'none' }))
+    assert.deepEqual(out.match(/^… insights .*$/gm), [
+      '… insights 3/10 after 54s',
+      '… insights 3/10 after 1m 54s',
+      '… insights 3/10 after 2m 54s',
+    ])
+    assert.doesNotMatch(render(events, options({ outputLogs: 'none', heartbeatMs: 0 })), /insights/)
+  })
+
+  test('agent: nothing', () => {
+    let text = ''
+    const renderer = new AgentRenderer({ out: { write: (chunk: string) => (text += chunk) } })
+    for (const e of events) renderer.onEvent(e)
+    assert.doesNotMatch(text, /insights \d/)
+  })
+})
+
 describe('agent renderer', () => {
   test('prints nothing per attempt, then the result without colour', () => {
     let text = ''
