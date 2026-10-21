@@ -92,8 +92,8 @@ Plugins: `plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] 
 `plugin.git(repo, { ref, path })` and `plugin.npm(spec)`). A plugin is Claude Code's layout:
 `.claude-plugin/plugin.json` plus `skills/`, `agents/`, `commands/`, `hooks/hooks.json`,
 `.mcp.json`, `rules/`. Its MCP servers join `mcp` as `<plugin>:<server>` (call them from the
-fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`.
-Claude Code and Grok Build load every part but `rules` (narrow with `only`), namespaced
+fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`. Claude
+Code and Grok Build load every part but `rules` (narrow with `only`), namespaced
 (`review:reviewer`), and start the plugin's MCP servers themselves, so a plugin server reading a
 host variable is refused there: declare it in `mcp`. Antigravity loads every part with
 `agy plugin install`, and refuses such a server too. Cursor loads every part flat: rules,
@@ -101,11 +101,14 @@ subagents, commands and hooks unpacked into the workspace's `.cursor/` (left out
 skills into `~/.agents/skills`, so two items with one name clash. OpenCode loads skills, MCP
 servers, and subagents and commands (unpacked into `.opencode/`, frontmatter cut to
 `description`); pi skills, MCP servers (as `<plugin>_<server>`) and commands (as prompt templates
-in `.pi/prompts/`); fx skills and MCP servers only. A part a harness doesn't load is refused at
-plan time: narrow with `only`. A hook event the harness doesn't
-run is refused at plan time. Other real harnesses refuse plugins
-(`--dry-run` exits 2 naming the harness), so keep plugins off their cells. `build` is refused for now; a server run with `npx`/`uvx` needs
-its registry in `egress`, or install it in the image.
+in `.pi/prompts/`); fx skills and MCP servers only. A part a harness doesn't load, or a hook event
+it doesn't run, is refused at plan time: narrow with `only`. Other real harnesses refuse plugins
+(`--dry-run` exits 2 naming the harness), so keep plugins off their cells. `build: 'npm ci && npm run build'` (or `{ run, cwd: '.' }` to run
+from the source's root) builds the plugin in a cached Docker image layer, as root with no
+secrets, without the source's `.git` (pass a version in its commands instead of `git describe`);
+only `path` is placed, so the output must land inside it. Docker only. Its content is fixed when the
+image is prepared: an npm spec re-resolving or a local plugin edited mid-run waits for the next run. A server run with
+`npx`/`uvx` needs its registry in `egress`, or a build that installs it.
 
 A named env is a total override: no skills, files or sandbox inherit from the config
 environment.

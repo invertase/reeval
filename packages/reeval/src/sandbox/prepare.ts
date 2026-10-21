@@ -5,6 +5,7 @@ import {
   buildDockerfile,
   buildImage,
   buildInstallLayer,
+  buildPluginLayer,
   contextHash,
   dockerfileTag,
   type Engine,
@@ -17,13 +18,24 @@ import {
   imageInfo,
   installLayerTag,
   LABEL,
+  type PluginBuildSpec,
+  pluginBuildDir,
+  pluginLayerTag,
   resolveFrom,
+  sourceTreeHash,
   usesReevalBase,
 } from '@reeval/sandbox-docker'
 import { parseDuration } from '../config.ts'
 import '../debug/docker.ts'
+import { buildSteps, pluginBuildId, pluginCall } from '../environment/plugins.ts'
 import { stepCommand } from '../environment.ts'
-import type { AttemptImage, DockerSandboxDescriptor, HarnessDescriptor } from '../types.ts'
+import type {
+  AttemptImage,
+  DockerSandboxDescriptor,
+  HarnessDescriptor,
+  PluginBuild,
+  PluginSource,
+} from '../types.ts'
 import { PrepareError } from './provider.ts'
 
 /** Whose CLI a harness's image carries. The fake harness runs in its `layout`'s, else Cursor's. */
@@ -215,10 +227,34 @@ async function harnessBase(
   return { ref, info: await reevalImage(harness, root, signal, b), dockerfile: null }
 }
 
+/** A plugin build baked into an attempt's image: which build, its layer, and where it left the plugin. */
+export type BuiltPlugin = { id: string; tag: string; dir: string; commit: string | null }
+
+/** What a Docker sandbox's `prepare` returns: the attempt's image, and the plugins built into it. */
+export type PreparedImage = AttemptImage & { plugins?: BuiltPlugin[] }
+
+/** A plugin build's layer spec, from its source fetched on the host. */
+export async function pluginBuildSpec(
+  root: string,
+  source: PluginSource,
+): Promise<PluginBuildSpec> {
+  const { pluginSourceDir } = await import('../environment/resolve.ts')
+  const src = await pluginSourceDir(root, source)
+  const { run, cwd } = buildSteps(source.build as PluginBuild)
+  return {
+    context: src.context,
+    commit: src.commit,
+    tree: sourceTreeHash(src.context),
+    path: src.path,
+    cwd: cwd ?? src.path,
+    steps: run.map((r) => ({ run: r })),
+  }
+}
+
 /**
  * The image an attempt's container starts from: the sandbox's image for the harness, plus a
- * cached layer with its `install` commands, each built if missing. Each build's log goes to
- * `.reeval/cache/images/` under `root`.
+ * cached layer with its `install` commands, then one cached layer per built plugin, each built if
+ * missing. Each build's log goes to `.reeval/cache/images/` under `root`.
  */
 export async function prepareImage(
   sandbox: DockerSandboxDescriptor,
@@ -226,7 +262,8 @@ export async function prepareImage(
   root: string,
   signal: AbortSignal,
   b: Builds,
-): Promise<AttemptImage> {
+  plugins: readonly PluginSource[] = [],
+): Promise<PreparedImage> {
   const base = await harnessBase(sandbox, harness, root, signal, b)
   const agentCli = base.info.labels[LABEL.agentVersion] ?? null
   const steps = installSteps(sandbox)
@@ -239,18 +276,47 @@ export async function prepareImage(
     dockerfile: base.dockerfile,
     ...(sandbox.from ? { from: { ref: sandbox.from, digest } } : {}),
   }
-  if (steps.length === 0) return { ref: base.ref, id: base.info.id, ...image }
-
-  const parent = { ref: base.ref, id: base.info.id }
-  const ref = installLayerTag(parent, steps)
-  const info = await b.once(ref, async () => {
-    const cached = await imageInfo(ref, b.engine)
-    if (cached) return cached
-    b.log(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
-    const output = buildLogger(root, ref)
-    // The user's own commands: a failure is theirs, never retried.
-    await buildInstallLayer(parent, steps, { signal, output, engine: b.engine })
-    return built(ref, b.engine)
-  })
-  return { ref, id: info.id, ...image }
+  let parent = { ref: base.ref, id: base.info.id }
+  if (steps.length) {
+    const ref = installLayerTag(parent, steps)
+    const info = await b.once(ref, async () => {
+      const cached = await imageInfo(ref, b.engine)
+      if (cached) return cached
+      b.log(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
+      const output = buildLogger(root, ref)
+      // The user's own commands: a failure is theirs, never retried.
+      await buildInstallLayer(parent, steps, { signal, output, engine: b.engine })
+      return built(ref, b.engine)
+    })
+    parent = { ref, id: info.id }
+  }
+  const builtPlugins: BuiltPlugin[] = []
+  for (const source of plugins) {
+    const spec = await b.retry(() => pluginBuildSpec(root, source))
+    const ref = pluginLayerTag(parent, spec)
+    const on = parent
+    const name = `the build of ${pluginCall(source, root)}`
+    const info = await b.once(ref, async () => {
+      const cached = await imageInfo(ref, b.engine)
+      if (cached) return cached
+      b.log(`Building ${name} onto ${on.ref} as ${ref}`)
+      const output = buildLogger(root, ref)
+      // The user's own commands: a failure is theirs, never retried.
+      await buildPluginLayer(on, spec, { name, signal, output, engine: b.engine })
+      return built(ref, b.engine)
+    })
+    builtPlugins.push({
+      id: pluginBuildId(source),
+      tag: ref,
+      dir: pluginBuildDir(spec),
+      commit: spec.commit,
+    })
+    parent = { ref, id: info.id }
+  }
+  return {
+    ref: parent.ref,
+    id: parent.id,
+    ...image,
+    ...(builtPlugins.length ? { plugins: builtPlugins } : {}),
+  }
 }

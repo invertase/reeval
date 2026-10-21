@@ -522,6 +522,9 @@ export const inventory: InventoryFeature[] = [
     tests: [
       plugin('Claude Code and Grok Build load every part but rules'),
       plugin('Claude Code enables the placed plugins from a directory marketplace'),
+      plugin('Claude Code’s plugin settings merge into a ~/.claude/settings.json'),
+      plugin('Grok Build refuses a plugin MCP server named like another'),
+      planTest('Grok Build refuses a plugin MCP server named like one in mcp'),
       planTest("Claude Code and Grok Build refuse a plugin's rules"),
       grokAdapter('unit', 'grok-acp starts grok agent --no-leader stdio'),
     ],
@@ -582,6 +585,20 @@ export const inventory: InventoryFeature[] = [
       'contract › plugin subagent available',
       'contract › plugin part it can’t load refused',
       'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'environment.plugins.build',
+    area: 'Environments',
+    name: 'Plugin `build`: a cached image layer per built plugin, listed by `--dry-run` and `reeval image build`, refused on the fake sandbox',
+    fixtures: ['plugins/build-layer'],
+    plan: ['images/plugin-builds'],
+    tests: [
+      plugin('a build is commands and where they run, the same for each way of writing it'),
+      plugin(
+        'a built plugin keeps only the parts only names: the rest of its directory is removed',
+      ),
+      planTest('a plugin the plan reads and refuses exits 2'),
     ],
   },
   {

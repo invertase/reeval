@@ -21,6 +21,8 @@ import {
   dockerignoreMatcher,
   installLayerTag,
   installScript,
+  pluginBuildScript,
+  sourceTreeHash,
 } from '../src/build-image.ts'
 import {
   docker,
@@ -1008,6 +1010,40 @@ describe('image recipes', () => {
       dockerfileTag(onReeval, 'cursor', 'sha256:a').tag,
       "REEVAL_BASE is the harness's image, so each harness builds its own",
     )
+  })
+
+  test("a plugin source's tree hash is what docker build sends from stdin: .dockerignore only, less .git", () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'make.mjs'), 'console.log(1)\n')
+    writeFileSync(join(dir, '.dockerignore'), 'node_modules\n')
+    mkdirSync(join(dir, '.git'))
+    const first = sourceTreeHash(dir)
+    writeFileSync(join(dir, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    assert.equal(sourceTreeHash(dir), first, '.git is left out')
+    mkdirSync(join(dir, 'node_modules'))
+    writeFileSync(join(dir, 'node_modules', 'x.js'), '')
+    assert.equal(sourceTreeHash(dir), first, '.dockerignore leaves files out')
+    // A Dockerfile from stdin has no <Dockerfile>.dockerignore: Docker reads .dockerignore.
+    writeFileSync(join(dir, 'Dockerfile.dockerignore'), 'make.mjs\n')
+    const own = sourceTreeHash(dir)
+    writeFileSync(join(dir, 'make.mjs'), 'console.log(2)\n')
+    assert.notEqual(sourceTreeHash(dir), own, 'a file Docker sends changes the hash')
+  })
+
+  test("a plugin build runs from its cwd, and runs nothing when the cwd isn't in the source", () => {
+    const src = tmp().replaceAll('\\', '/')
+    mkdirSync(join(src, 'plugins', 'lint'), { recursive: true })
+    const steps = [{ run: 'pwd > ran.txt' }]
+    const ok = spawnSync('bash', ['-c', pluginBuildScript({ cwd: 'plugins/lint', steps }, src)])
+    assert.equal(ok.status, 0)
+    assert.equal(existsSync(join(src, 'plugins', 'lint', 'ran.txt')), true)
+    const r = spawnSync('bash', ['-c', pluginBuildScript({ cwd: 'nope', steps }, src)], {
+      cwd: src,
+      encoding: 'utf8',
+    })
+    assert.equal(r.status, 1)
+    assert.match(r.stderr, /reeval: build cwd nope isn't a directory in the source/)
+    assert.equal(existsSync(join(src, 'ran.txt')), false, 'no command ran from elsewhere')
   })
 
   test('install commands run in order from /, in one script, stopping at the first failure', () => {
