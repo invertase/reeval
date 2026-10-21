@@ -261,10 +261,12 @@ const RECORD_TYPES = [
   'ContextFile',
   'Cell',
   'EnvironmentRecord',
+  'PluginRecord',
   'EgressRecord',
   'AttemptImage',
   'PhaseTimings',
   'FileChange',
+  'McpStartup',
 ]
 
 /** One-line aliases the record uses, shown as a table of values. */

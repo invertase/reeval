@@ -1,0 +1,8 @@
+no profile · 1 evals · 2 cells · 2 attempts
+evals/namespaced.eval.ts › loads the plugin  claude-code:claude-sonnet-5/review/docker  control  gated  ×1  plugins review (skills, agents, commands, hooks, mcp)
+                                             grok-build:grok-4.6/review/docker          control  gated  ×1  plugins review (skills, agents, commands, hooks, mcp)
+excluded: —
+image docker · claude-code · 1 evals
+  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
+image docker · grok-build · 1 evals
+  base  reeval-sandbox:grok-build-0.1.1  (reeval's image: built when missing or when its base changed)

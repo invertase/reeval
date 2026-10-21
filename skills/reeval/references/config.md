@@ -73,7 +73,7 @@ the record stores the requested effort as `effort` and the served one as `served
 
 In `reeval query` those are `reasoning_effort` (`cells`, `attempts`) and
 `served_reasoning_effort` (`attempts`). **effort** on its own (`reeval query effort`, the
-summary's `effort:` line) is always the measured tool-call, time and token metric.
+result block's effort table) is always the measured tool-call, time and token metric.
 
 Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
 harness's own endpoints. Every harness but Goose reports tokens, which reeval records per turn,

@@ -97,6 +97,20 @@
         "plan": {
           "$ref": "#/$defs/EvalPlan"
         },
+        "pluginBuilds": {
+          "description": "Its environment's plugins with a `build`, layered, which preflight builds into its image.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginSource"
+          }
+        },
+        "plugins": {
+          "description": "Its environment's plugins, layered: a local one's name and parts, else its source.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "sandbox": {
           "$ref": "#/$defs/SandboxDescriptor"
         },
@@ -108,10 +122,13 @@
           }
         },
         "setBy": {
-          "description": "The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group(\"net\")` or `evaluate(\"x\")`.",
+          "description": "The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group(\"net\")` or `evaluate(\"x\")`; with `pluginBuilds`, the environment its plugin builds come from (`environment review in evals/review.eval.ts`).",
           "type": "object",
           "properties": {
             "harness": {
+              "type": "string"
+            },
+            "pluginBuilds": {
               "type": "string"
             },
             "sandbox": {
@@ -1525,6 +1542,262 @@
         }
       },
       "required": ["question"]
+    },
+    "PluginPart": {
+      "description": "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
+      "type": "string",
+      "enum": ["skills", "agents", "commands", "hooks", "mcp", "rules"]
+    },
+    "PluginSource": {
+      "description": "A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "A host directory with a `.claude-plugin/plugin.json`.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "local"
+            }
+          },
+          "required": ["kind", "path", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "The plugin's directory in the repository; default its root.",
+              "type": "string"
+            },
+            "ref": {
+              "description": "A branch, tag or commit SHA; unset is the remote's `HEAD`.",
+              "type": "string"
+            },
+            "repo": {
+              "description": "As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "git"
+            }
+          },
+          "required": ["kind", "repo", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "The plugin's directory in the package; default its root.",
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "const": "npm"
+            },
+            "spec": {
+              "description": "A pinned npm package spec.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["kind", "source", "spec"],
+          "additionalProperties": false
+        }
+      ]
     },
     "Progress": {
       "description": "A progress update stamped with the worker's clock (epoch ms).",

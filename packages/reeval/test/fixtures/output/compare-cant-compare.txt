@@ -1,0 +1,8 @@
+can't compare    bills in minor units with the billing doc
+  changed          environment
+  base             20261020T230147Z_958e309_cursor-agent_aamj  pass
+  head             20261020T230148Z_958e309_cursor-agent_qghb  fail
+  amount in minor units  failed
+    expected command to succeed, exit code 1
+
+1 can't compare

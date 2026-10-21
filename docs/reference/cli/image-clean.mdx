@@ -61,7 +61,7 @@ docker+0ab0e263 · cursor + install · 1 eval
   + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · cursor · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
 …
 ```
 
@@ -71,7 +71,7 @@ When Docker can't say whether an image is there (the daemon doesn't answer, or `
 
 ```text
 docker · claude-code · 1 eval
-  ? base  reeval-sandbox:claude-code-1.0.160-patch.907f9184  (unchecked: docker image inspect reeval-sandbox:claude-code-1.0.160-patch.907f9184 couldn't run: spawn docker ENOENT)
+  ? base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (unchecked: docker image inspect reeval-sandbox:claude-code-1.0.160-patch.b17cde50 couldn't run: spawn docker ENOENT)
 ```
 
 It needs a `reeval.config.*`, as `reeval run` does: with none found it exits 2 (`No reeval.config.ts … here or above. Run reeval init.`). Rebuild after upgrading reeval.

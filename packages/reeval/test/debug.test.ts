@@ -95,11 +95,11 @@ describe('verbosity', () => {
       'reeval.config.ts': fakeConfig({ harness: script }),
       'evals/a.eval.ts': passing,
     })
-    const r = await runCli(p.dir, ['run'])
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     for (const phase of PHASES) assert.doesNotMatch(r.stdout, phaseLine(phase), phase)
     // Twin: the attempt's own lines still print, under the same prefix.
-    assert.match(r.stdout, /^\[traces#1 [^\]]+\] ✓ evals\/a\.eval\.ts › traces every phase/m)
+    assert.match(r.stdout, /^\[traces#1 [^\]]+\] ▶ evals\/a\.eval\.ts › traces every phase$/m)
   })
 
   test('grouped logs keep each attempt’s debug lines in its own block', async () => {
@@ -134,8 +134,8 @@ describe('verbosity', () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     for (const phase of PHASES) assert.match(r.stdout, phaseLine(phase), phase)
     // Twin: agent mode's own output is still there, and nothing else of plain mode's.
-    assert.match(r.stdout, /^1 passed$/m)
-    assert.doesNotMatch(r.stdout, /✓ evals\/a\.eval\.ts/)
+    assert.match(r.stdout, /^1 pass$/m)
+    assert.doesNotMatch(r.stdout, /▶ evals\/a\.eval\.ts/)
   })
 
   test('-vv adds raw payloads with millisecond times', async () => {

@@ -55,8 +55,11 @@ export const FLAGS = {
   save: { type: 'boolean' },
   context: { type: 'boolean' },
   'no-cache': { type: 'boolean' },
+  insights: { type: 'boolean' },
+  'no-insights': { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
+  bare: { type: 'boolean' },
   online: { type: 'boolean' },
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
@@ -103,20 +106,24 @@ const RUN_FLAGS: FlagName[] = [
   'verbose',
   'trace',
   'resume',
+  'no-insights',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
   init: {
-    flags: ['harness', 'yes', 'force', 'dry-run'],
+    flags: ['harness', 'yes', 'bare', 'force', 'dry-run'],
     positionals: 1,
     help: `
-  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
-                                eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx,
-                                grok-build or none (fake agent only); the config's harness, with a
-                                fake profile for no keys
+  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, an
+                                environment, an eval that runs in it, .gitignore entries and a
+                                package.json script; asks which agent, then checks Docker
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or
+                                grok-build: the config's harness
     -y, --yes                   Don't ask: take the defaults (--harness cursor)
-    --force                     Overwrite reeval.config.ts and the eval when they differ
+    --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
+                                or eval
+    --force                     Replace a reeval.config.ts init didn't write; no other file is ever
+                                overwritten
     --dry-run                   Print what it would create or change, and write nothing`,
   },
   doctor: {
@@ -140,6 +147,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
                                 with --json, as one JSON document (every cell, and what's excluded)
+    --json                      Print the run's results (suiteResult from reeval/view) as one JSON
+                                document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
@@ -152,7 +161,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 block when it ends); default grouped in CI, else stream
     --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
                                 (default task, none inside GitHub Actions groups)
-    --output-logs <level>       full, errors-only or none: whose detail lines print (default full)
+    --output-logs <level>       full, errors-only or none: whose detail lines print (default
+                                errors-only, failing attempts only; full with -v)
     -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                                 container, environment, brokering, turns and tool calls, checks,
                                 judge calls, gateway requests and teardown
@@ -162,7 +172,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
                                 skip completed attempts, restart in-flight ones. Without a ref, the
                                 newest resumable (Stopped staging, or an interrupted/budget scratch),
-                                not assembled latest. Ref is a run id or unique prefix`,
+                                not assembled latest. Ref is a run id or unique prefix
+    --no-insights               Skip insights for this run: no analysis.model calls, the blocks
+                                print their facts only (also analysis.insights: false)`,
   },
   clean: {
     flags: ['keep', 'images'],
@@ -190,14 +202,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
     flags: ['json', 'md'],
     positionals: 1,
     help: `
-  reeval show [run]             One run: table, --md (summary.md) or --json (the record)`,
+  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)`,
   },
   compare: {
-    flags: ['md', 'json', 'fail-on-regression'],
+    flags: ['md', 'json', 'fail-on-regression', 'verbose'],
     positionals: 2,
     help: `
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
-                                --md --json --fail-on-regression`,
+                                --md --json --fail-on-regression
+    -v, --verbose               Also each cell's lift and effort, base → head, and the stack changes`,
   },
   checkout: {
     flags: [],
@@ -213,14 +226,25 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,
                                 skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                                verdict_flips, check_discrimination, check_rates. No argument lists
-                                them
+                                verdict_flips, check_discrimination, check_rates, check_streaks. No
+                                argument lists them
     --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                                 or table name, only that run's rows
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
-    flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
+    flags: [
+      'vs',
+      'eval',
+      'json',
+      'md',
+      'save',
+      'context',
+      'dry-run',
+      'no-cache',
+      'insights',
+      'verbose',
+    ],
     positionals: 1,
     help: `
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
@@ -231,7 +255,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --save                      Also write it into the run's history folder: <run>/analysis/
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
-    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again`,
+    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+    --insights                  Write a run's insights instead: what each eval asks and its answer,
+                                citing the facts, into <run>/insights.json, as reeval run does at its
+                                end, or finish the evals one left unfinished; reeval show prints them.
+                                Takes --json and -v
+    -v, --verbose               With --insights, print each sentence the checks removed and why`,
   },
   mcp: {
     flags: ['http', 'port', 'host', 'token'],

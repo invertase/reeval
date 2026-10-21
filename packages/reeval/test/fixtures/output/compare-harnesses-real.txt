@@ -1,0 +1,12 @@
+pass             writes hello.txt
+  harness                              pass
+  cursor:composer-2.5                  1 of 1
+  claude-code:claude-sonnet-5          1 of 1
+  antigravity:gemini-3.8-flash-medium  1 of 1
+  opencode:gemini-3.8-flash            1 of 1
+  goose:gemini-3.8-flash               1 of 1
+  pi:gemini-3.8-flash                  1 of 1
+  codex:gpt-5.4-mini                   1 of 1
+
+1 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.

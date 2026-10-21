@@ -816,7 +816,7 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
     .map((l) => JSON.parse(l) as { type: string; subtype?: string; model?: string })
   // What the image bakes and the published package ships: the adapter's patched bridge.
   const shipped = join(testDir, '../dist/bridge/index.mjs')
-  const fix = '!streamStarted && type !== "command_lifecycle"'
+  const fix = '!streamStarted && !beforeInit'
 
   test('the capture starts with command_lifecycle, then system/init names the model', () => {
     assert.equal(sdk[0]?.type, 'command_lifecycle')
@@ -832,6 +832,38 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
     const calls = parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
     assert.deepEqual(calls, ['read', 'edit', 'bash'])
     assert.equal(parts.at(-1)?.type, 'finish')
+  })
+
+  test('a SessionStart hook reporting before system/init leaves the served model on the stream', async () => {
+    // A plugin's SessionStart hook: Claude Code reports it in system hook_started and
+    // hook_response messages, which can come before system/init.
+    const init = sdk.findIndex((m) => m.type === 'system' && m.subtype === 'init')
+    const hook = { type: 'system', hook_id: 'h1', hook_name: 'SessionStart:startup' }
+    const hooked = [
+      ...sdk.slice(0, init),
+      { ...hook, subtype: 'hook_started' },
+      { ...hook, subtype: 'hook_response', output: 'hook-ran', exit_code: 0 },
+      ...sdk.slice(init),
+    ]
+    const replay = (bridge: string) =>
+      replayBridge({ bridge, start, messages: hooked.map((m) => JSON.stringify(m)).join('\n') })
+    assert.deepEqual((await replay(shipped))[0], {
+      type: 'stream-start',
+      modelId: 'claude-haiku-4-5',
+    })
+    // The twin: a bridge that skips only command_lifecycle starts the stream at the hook.
+    const source = readFileSync(shipped, 'utf8')
+    const hookClause =
+      ' || type === "system" && typeof msg.subtype === "string" && msg.subtype.startsWith("hook_")'
+    assert.ok(source.includes(hookClause), 'the shipped bridge skips hook messages')
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-hookless-'))
+    const hookless = join(dir, 'bridge.mjs')
+    writeFileSync(hookless, source.replace(hookClause, ''))
+    try {
+      assert.deepEqual((await replay(hookless))[0], { type: 'stream-start' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('twin: without the patch, command_lifecycle starts the stream and the model is lost', async () => {

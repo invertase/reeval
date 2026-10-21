@@ -1,4 +1,3 @@
-import type { AttemptRecord } from '../history/types.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptMeta } from '../types.ts'
 import { type DebugLine, debugTime } from '../view/debug.ts'
@@ -38,27 +37,10 @@ export function outcomeOf(e: EvalResult): Outcome {
   return e.meta?.outcome ?? (e.state === 'passed' ? 'pass' : 'fail')
 }
 
-export function attemptOutcome(a: AttemptRecord): Outcome {
-  return a.error?.kind === 'aborted' ? 'cancelled' : a.outcome
-}
-
 /** What tells an eval's attempts apart: the axes that vary (`cursor:composer-2.5 · with-skill`), else the harness. */
 export function attemptAxes(a: AttemptMeta | undefined, fallback: string): string {
   return a?.label.replace(/\s*#\d+$/, '') || a?.harness.kind || fallback
 }
-
-export function mark(c: Colors, outcome: Outcome): string {
-  return {
-    pass: c.green('✓'),
-    fail: c.red('✗'),
-    infra_error: c.yellow('!'),
-    skipped: c.dim('↓'),
-    cancelled: c.yellow('✗'),
-  }[outcome]
-}
-
-/** An expected miss's mark: neutral, since it doesn't fail the run. */
-export const MISS_MARK = (c: Colors) => c.dim('○')
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 

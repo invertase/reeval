@@ -8,7 +8,7 @@ pnpmfileChecksum: sha256-tz2V/eHX+Q8WGNFcAFXFn2GNH3+HQJF86vVSLAPPwqA=
 
 patchedDependencies:
   '@ai-sdk/harness-claude-code@1.0.160':
-    hash: 907f91846edf8514dedddd73fc63b0d5d647ec92049beeed5ee051d21ee31166
+    hash: b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514
     path: patches/@ai-sdk__harness-claude-code@1.0.160.patch
 
 importers:
@@ -252,7 +252,7 @@ importers:
     devDependencies:
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.160
-        version: 1.0.160(patch_hash=907f91846edf8514dedddd73fc63b0d5d647ec92049beeed5ee051d21ee31166)(zod@4.6.7)
+        version: 1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)
       '@modelcontextprotocol/client':
         specifier: 2.3.1
         version: 2.3.1
@@ -272,7 +272,7 @@ importers:
         specifier: workspace:0.1.3
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
         specifier: workspace:0.2.8
@@ -302,7 +302,7 @@ importers:
         version: 1.0.156(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.160
-        version: 1.0.160(patch_hash=907f91846edf8514dedddd73fc63b0d5d647ec92049beeed5ee051d21ee31166)(zod@4.6.7)
+        version: 1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)
       '@reeval/harness-antigravity':
         specifier: workspace:0.1.9
         version: link:../harness-antigravity
@@ -319,7 +319,7 @@ importers:
         specifier: workspace:0.1.3
         version: link:../harness-goose
       '@reeval/harness-grok-build':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
         specifier: workspace:0.2.8
@@ -3058,7 +3058,7 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@ai-sdk/harness-claude-code@1.0.160(patch_hash=907f91846edf8514dedddd73fc63b0d5d647ec92049beeed5ee051d21ee31166)(zod@4.6.7)':
+  '@ai-sdk/harness-claude-code@1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)':
     dependencies:
       '@ai-sdk/harness': 1.0.156(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/provider': 4.0.30

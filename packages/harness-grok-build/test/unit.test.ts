@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { test } from 'node:test'
 import {
   createGrokBuild,
@@ -7,6 +10,7 @@ import {
   GROK_CLI_VERSION,
   GROK_CREDENTIAL_ENV,
   GROK_INSTALL_COMMAND,
+  GROK_PLUGIN_DIRS_ENV,
   grokConfig,
 } from '../src/grok-build-harness.ts'
 import { VERSION } from '../src/version.ts'
@@ -68,6 +72,53 @@ test("config.toml puts every call on the run's model and turns off the extra cal
     assert.ok(file.content.includes(`\n${off} = false\n`), off)
   }
   assert.equal(file.content.includes('default_reasoning_effort'), false)
+})
+
+// grok-acp runs in reeval's Linux sandbox; Windows can't run it or the stand-in grok, extensionless
+// scripts with a shebang.
+const posixOnly = process.platform === 'win32' && 'grok-acp and its stand-in are POSIX scripts'
+
+test('grok-acp starts grok agent --no-leader stdio with a --plugin-dir for each plugin directory', {
+  skip: posixOnly,
+}, (t) => {
+  const home = mkdtempSync(join(tmpdir(), 'grok-acp-'))
+  t.after(() => rmSync(home, { recursive: true, force: true }))
+  const bin = join(home, '.local/bin')
+  const launcher =
+    /cat > "\$HOME\/\.local\/bin\/grok-acp" <<'GROK_LAUNCH'\n([\s\S]*?)GROK_LAUNCH\n/.exec(
+      GROK_INSTALL_COMMAND,
+    )?.[1]
+  assert.ok(launcher, 'the install writes grok-acp')
+  mkdirSync(bin, { recursive: true })
+  writeFileSync(join(bin, 'grok-acp'), launcher, { mode: 0o755 })
+  writeFileSync(join(bin, 'grok'), '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o755 })
+  const argv = (dirs: string) =>
+    execFileSync(join(bin, 'grok-acp'), {
+      env: { PATH: process.env.PATH, [GROK_PLUGIN_DIRS_ENV]: dirs },
+      encoding: 'utf8',
+    })
+      .trim()
+      .split('\n')
+  assert.deepEqual(argv(''), ['agent', '--no-leader', 'stdio'])
+  assert.deepEqual(argv('/h/.reeval/plugins/probe:/h/.reeval/plugins/r*'), [
+    'agent',
+    '--no-leader',
+    '--plugin-dir',
+    '/h/.reeval/plugins/probe',
+    '--plugin-dir',
+    '/h/.reeval/plugins/r*',
+    'stdio',
+  ])
+})
+
+test('plugin directories leave the bootstrap an image bakes unchanged', async () => {
+  const bootstrap = (pluginDirs?: string[]) =>
+    createGrokBuild({
+      auth: { [GROK_CREDENTIAL_ENV]: 'xai-k' },
+      model: 'm',
+      ...(pluginDirs ? { pluginDirs } : {}),
+    }).getBootstrap?.({})
+  assert.deepEqual(await bootstrap(['/h/.reeval/plugins/probe']), await bootstrap())
 })
 
 test("effort is the config's default_reasoning_effort", () => {

@@ -1,0 +1,36 @@
+fail             greets in the house style
+  arm              pass
+  plain            0 of 4
+  with-skill       4 of 4  helped
+  with-doc         0 of 4
+  check            plain    with-skill  with-doc
+  house greeting   0 of 4   4 of 4      0 of 4
+    expected command to succeed, exit code 1
+  exclaims         not run  4 of 4      not run
+  +1 more passed
+  effort           tools  time
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-doc         1      <0.1s
+
+fail             keeps the plain greeting
+  arm              pass
+  plain            4 of 4
+  with-skill       0 of 4  made it worse
+  check            plain   with-skill
+  says hello       4 of 4  0 of 4
+    expected command to succeed, exit code 1
+  effort           tools  time
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+
+pass             greets once
+  arm              pass
+  plain            0 of 1
+  with-skill       1 of 1  can't tell yet
+  check            plain   with-skill
+  house greeting   0 of 1  1 of 1
+    expected command to succeed, exit code 1
+
+2 fail · 1 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.

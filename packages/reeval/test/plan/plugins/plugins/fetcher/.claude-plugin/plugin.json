@@ -1,0 +1,4 @@
+{
+  "name": "fetcher",
+  "mcpServers": { "search": { "command": "npx", "args": ["-y", "@acme/search-mcp@1.0.0"] } }
+}

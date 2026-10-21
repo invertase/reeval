@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.11.0](https://github.com/invertase/reeval/compare/v0.10.0...v0.11.0) (2026-10-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* **ui:** print result layouts by what each eval varies ([#424](https://github.com/invertase/reeval/issues/424))
+
+### Features
+
+* **query:** --run &lt;id|last&gt;, tables in the unknown-name error, documented join keys ([#418](https://github.com/invertase/reeval/issues/418)) ([2e20c1b](https://github.com/invertase/reeval/commit/2e20c1bd964c01e192435d8ee4cc11b7927208d8))
+* **query:** add a check_rates view ([#420](https://github.com/invertase/reeval/issues/420)) ([30d0e34](https://github.com/invertase/reeval/commit/30d0e34c4f469672122ae92d896d7f12d6c4e17c))
+* **ui:** print result layouts by what each eval varies ([#424](https://github.com/invertase/reeval/issues/424)) ([02e3770](https://github.com/invertase/reeval/commit/02e3770d27ceef733924bfdc772c9d48d4cce8f5))
+* **view:** add suiteResult facts view-model and reeval run --json ([#416](https://github.com/invertase/reeval/issues/416)) ([eb77e9f](https://github.com/invertase/reeval/commit/eb77e9fdd25518a84879cab09b32a10c35a12e62))
+
+
+### Bug Fixes
+
+* not-run checks, sub-50 ms durations and the --output-logs default ([#421](https://github.com/invertase/reeval/issues/421)) ([5e1c589](https://github.com/invertase/reeval/commit/5e1c5897662ffd8987bd7d132280b3143f946d79))
+* **plan:** estimate sandbox setup for a fake harness on a real sandbox ([#412](https://github.com/invertase/reeval/issues/412)) ([e37d900](https://github.com/invertase/reeval/commit/e37d9008aa4cb98b7a8c8b3dc9363a5bd16415da))
+* **profiles:** gate the lone control when limit turns compare off ([#413](https://github.com/invertase/reeval/issues/413)) ([aed5fb9](https://github.com/invertase/reeval/commit/aed5fb91fbab2f904bc0c5d3b4fcc1be8079a4ba))
+* **query:** accept SQL that starts with a -- comment ([#414](https://github.com/invertase/reeval/issues/414)) ([5acb488](https://github.com/invertase/reeval/commit/5acb488342e4d43d831bd24b1590d7bc8520d8f4))
+* **release:** PyPI publish tag and npm republish skip ([#423](https://github.com/invertase/reeval/issues/423)) ([627534e](https://github.com/invertase/reeval/commit/627534eb2c956cba880f2a85dc9f9d222347e6b7))
+* **release:** use release ref for PyPI publish action ([#422](https://github.com/invertase/reeval/issues/422)) ([62847d6](https://github.com/invertase/reeval/commit/62847d6f649036885ff9ce25656c82a5e35afa6a))
+* **test:** forward-slash path deps for python fixtures on Windows ([#411](https://github.com/invertase/reeval/issues/411)) ([15f0e8c](https://github.com/invertase/reeval/commit/15f0e8cddfe39f8fa7a5910a8b72fbb06b99a90d))
+
 ## [0.10.0](https://github.com/invertase/reeval/compare/v0.9.0...v0.10.0) (2026-10-20)
 
 

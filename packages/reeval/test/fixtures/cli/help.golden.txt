@@ -1,13 +1,16 @@
 reeval VERSION — eval runner for coding agents
 
 Usage:
-  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
-                                eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx,
-                                grok-build or none (fake agent only); the config's harness, with a
-                                fake profile for no keys
+  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, an
+                                environment, an eval that runs in it, .gitignore entries and a
+                                package.json script; asks which agent, then checks Docker
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or
+                                grok-build: the config's harness
     -y, --yes                   Don't ask: take the defaults (--harness cursor)
-    --force                     Overwrite reeval.config.ts and the eval when they differ
+    --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
+                                or eval
+    --force                     Replace a reeval.config.ts init didn't write; no other file is ever
+                                overwritten
     --dry-run                   Print what it would create or change, and write nothing
   reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
                                 images, the keys of each harness, the judge and analysis.model,
@@ -21,6 +24,8 @@ Usage:
                                 default: defaultProfile.ci in CI, else defaultProfile.local)
     --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
                                 with --json, as one JSON document (every cell, and what's excluded)
+    --json                      Print the run's results (suiteResult from reeval/view) as one JSON
+                                document on stdout when it ends; progress goes to stderr
     --force                     Run even when the plan is over budget.attempts
     --runs <n>                  Attempts per cell, overriding the config, groups and evals
     --concurrency <n>           Attempts running at once across evals and cells (default 8, at
@@ -33,7 +38,8 @@ Usage:
                                 block when it ends); default grouped in CI, else stream
     --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
                                 (default task, none inside GitHub Actions groups)
-    --output-logs <level>       full, errors-only or none: whose detail lines print (default full)
+    --output-logs <level>       full, errors-only or none: whose detail lines print (default
+                                errors-only, failing attempts only; full with -v)
     -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                                 container, environment, brokering, turns and tool calls, checks,
                                 judge calls, gateway requests and teardown
@@ -44,6 +50,8 @@ Usage:
                                 skip completed attempts, restart in-flight ones. Without a ref, the
                                 newest resumable (Stopped staging, or an interrupted/budget scratch),
                                 not assembled latest. Ref is a run id or unique prefix
+    --no-insights               Skip insights for this run: no analysis.model calls, the blocks
+                                print their facts only (also analysis.insights: false)
   reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds
@@ -51,16 +59,17 @@ Usage:
                                 --artifacts all|failures|none --allow-incomplete --skip-secret-scan
   reeval history [filter]       Pass/fail per recorded eval over recent runs
                                 --limit <n> --all (include unrecorded runs) --json
-  reeval show [run]             One run: table, --md (summary.md) or --json (the record)
+  reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                                 --md --json --fail-on-regression
+    -v, --verbose               Also each cell's lift and effort, base → head, and the stack changes
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                                 (default dir: .reeval/checkouts/<run>)
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,
                                 skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                                verdict_flips, check_discrimination, check_rates. No argument lists
-                                them
+                                verdict_flips, check_discrimination, check_rates, check_streaks. No
+                                argument lists them
     --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                                 or table name, only that run's rows
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
@@ -73,6 +82,11 @@ Usage:
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
     --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+    --insights                  Write a run's insights instead: what each eval asks and its answer,
+                                citing the facts, into <run>/insights.json, as reeval run does at its
+                                end, or finish the evals one left unfinished; reeval show prints them.
+                                Takes --json and -v
+    -v, --verbose               With --insights, print each sentence the checks removed and why
   reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
                                 tools for why a run failed, reeval query's views and SQL,
                                 history, show, compare, transcripts and saved analyses, and runs

@@ -35,7 +35,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_UI` | `--ui` | `live`, `plain` or `agent` |
 | `REEVAL_LOG_ORDER` | `--log-order` | `stream` or `grouped` |
 | `REEVAL_LOG_PREFIX` | `--log-prefix` | `task` or `none` |
-| `REEVAL_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none` |
+| `REEVAL_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none`. Default `errors-only`: only failing attempts print their detail lines (`full` with `-v`) |
 | `REEVAL_HEARTBEAT` | | Plain mode's "still running" line after silence, e.g. `30s`. Default `60s`; `0` turns it off |
 | `REEVAL_DEBUG` | | `1` streams the hidden engine's output and the Docker sandbox and image-build logs to stderr, and prints stacks for unexpected errors |
 | `REEVAL_MCP_TOKEN` | `--token` | `reeval mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |

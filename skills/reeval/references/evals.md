@@ -17,7 +17,7 @@
   one pass rate over the cases and, with `compare`, one lift paired by case, which `minLift` gates
   (not each case's). Prefer it to separate evals when the cases are one population: six cases at
   `runs: 1` can reach a lift verdict where each case alone is within noise. Fewer than six
-  discordant cases reads `insufficient`. `evaluate.each(cases, { pool: false })` keeps the cases
+  discordant cases reads `can't tell yet` (`insufficient` in `reeval query family_lift`). `evaluate.each(cases, { pool: false })` keeps the cases
   independent; eval options go after the name, never beside the cases.
   A comment on an eval describes the current check (why a canary fails, which path it reads),
   not what used to be true or which product a prompt was ported from.
@@ -112,8 +112,8 @@ npx reeval run --profile canary           # the checks you meant fail, exit 1
 - `fakeSandbox()` isn't the oracle's sandbox: it runs on the host, brokers nothing and enforces no
   egress. It's for trying reeval and testing configs without Docker.
 - An eval or group that sets its own `harness` keeps it (the plan notes `harness set by the
-  eval`), and an ungated cell (`compare: { gate: 'none' }`, a control) reads a failed check as an
-  expected miss that doesn't change the exit code: read the summary's counts there.
+  eval`), and an ungated cell's (`compare: { gate: 'none' }`, a control's) failed checks don't change the
+  exit code: its row in the result block shows its count (`plain  0 of 4`).
 
 Keep grading out of the
 agent's reach: place hidden tests after the turn with `c.writeFile`, so the agent never sees

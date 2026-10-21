@@ -3,7 +3,6 @@ import { appendFile, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
-import type { NoteRun } from './analysis/agent/index.ts'
 import { parseCli } from './cli-parse.ts'
 import { commandHelpText, type Flags, helpText } from './cli-spec.ts'
 import type { EvalQuestions, questionRunner } from './compare/questions.ts'
@@ -11,6 +10,7 @@ import {
   configLabel,
   configPathFor,
   findConfig,
+  hasAnalysisModel,
   hostCapacity,
   loadConfig,
   malformedCredentials,
@@ -27,7 +27,7 @@ import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, workspaceLabel } from './environment.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
-import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
+import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
@@ -48,6 +48,7 @@ import { clip } from './text.ts'
 import type { RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
+import type { RunInsights } from './view/insights.ts'
 import { runOutcome } from './view/model.ts'
 
 const HISTORY_COMMANDS = {
@@ -82,6 +83,11 @@ const invocation: { flags?: Flags; runId: string | null; unhandledErrors: string
 let interrupted = false
 /** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
 let stopCode: number = EXIT.interrupted
+/**
+ * Set while insights run, after the attempts and the exit code: Ctrl-C or SIGTERM then stops the
+ * insights instead of cancelling the run, which has nothing left to cancel.
+ */
+let onInsightsSignal: ((signal: 'SIGINT' | 'SIGTERM') => void) | null = null
 
 async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseCli(argv)
@@ -316,13 +322,12 @@ async function runCommand(
   if (stepStart) await appendFile(stepStart, `run ${ctx.runId}\n`).catch(() => {})
   const { engineVersions } = await import('./engine/node.ts')
   const renderer = createRenderer({
-    // The JSON plan is the only output of `--dry-run --json`.
-    out: setup.json ? { write: () => true } : process.stdout,
+    // The JSON plan is the only output of `--dry-run --json`; a run's JSON is the only stdout of
+    // `--json`, so its progress goes to stderr.
+    out: setup.json ? (setup.dryRun ? { write: () => true } : process.stderr) : process.stdout,
     output: setup.output,
     verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',
-    attemptDir: (id, cell, n) =>
-      fromCwd(join(ctx.scratch, ctx.runId, evalSlug(id), evalSlug(cell), String(n))),
   })
   let executed: Awaited<ReturnType<typeof executeRun>>
   try {
@@ -332,7 +337,7 @@ async function runCommand(
     if (setup.resume === undefined) await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
-  const { engineRun, plan, sandboxVersions, budgetReached, live, notes, questions } = executed
+  const { engineRun, plan, sandboxVersions, budgetReached, live, questions } = executed
   invocation.unhandledErrors = engineRun.unhandledErrors
   const engines = [
     ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
@@ -340,16 +345,6 @@ async function runCommand(
   if ((interrupted || engineRun.cancelled) && engines.length) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
     await removeRunContainers(ctx.runId, engines)
-  }
-  if (notes) {
-    // Before the record is written: the notes read the staged attempts, which it removes.
-    const cancelled = interrupted || engineRun.cancelled
-    const written = await notes.finish(cancelled)
-    if (!cancelled && written.length) {
-      const { notesLine } = await import('./analysis/agent/index.ts')
-      const text = notesLine(ctx.config.root, ctx.runId, written)
-      renderer.onEvent({ type: 'notice', at: Date.now(), level: 'info', text })
-    }
   }
   if (engineRun.stopped || !plan) {
     live?.remove()
@@ -389,13 +384,60 @@ async function runCommand(
     () => live?.stop(),
   )
   const { record } = run
-  // After the record is written: the summary reads it as reeval analyze would.
-  if (notes && !stopped) {
-    const { summarizeRun } = await import('./analysis/agent/index.ts')
-    const { resolveAnalysisModel } = await import('./analysis/model.ts')
-    const model = resolveAnalysisModel(ctx.config, 'agent')
-    const { level, text } = await summarizeRun(ctx.config, record.runId, model)
-    renderer.onEvent({ type: 'notice', at: Date.now(), level, text })
+  // Fixed from the facts before any insight call starts: nothing a model writes changes it.
+  // `--json`'s outcome, the studio and `reeval show` read the same outcome from the record.
+  const outcome = runOutcome(record)
+  const code = stopped
+    ? stopCode
+    : outcome === 'fail'
+      ? EXIT.failed
+      : outcome === 'infra_error'
+        ? EXIT.infra
+        : EXIT.ok
+  let insights: RunInsights | null = run.insights
+  let insightLines: string[] = []
+  const { runInsights, wantsInsights } = await import('./insights/run.ts')
+  // A signal after the last attempt (while compare questions settle or the record is written)
+  // finds nothing left to cancel; it still means stop, so insights don't start.
+  const wanted = !stopped && wantsInsights(ctx.config, !flags['no-insights'])
+  if (wanted && interrupted) {
+    insightLines = [
+      `insights skipped (${stopCode === EXIT.terminated ? 'SIGTERM' : 'Ctrl-C'}): reeval analyze ${record.runId} --insights to write them`,
+    ]
+  } else if (wanted) {
+    const { scratchDir } = await import('./history/files.ts')
+    const stop = new AbortController()
+    let stopSignal: 'SIGINT' | 'SIGTERM' = 'SIGINT'
+    // A second signal while the calls in flight stop leaves at once, with the run's own code.
+    onInsightsSignal = (signal) => {
+      if (stop.signal.aborted) {
+        renderer.close()
+        process.exit(code)
+      }
+      stopSignal = signal
+      stop.abort(new Error(signal === 'SIGTERM' ? 'SIGTERM' : 'Ctrl-C'))
+    }
+    try {
+      const done = await runInsights({
+        config: ctx.config,
+        record,
+        runDir: run.artifactDir ?? join(scratchDir(ctx.config.root), record.runId),
+        remarks: run.insights,
+        verbose: (ctx.verbosity ?? 0) > 0,
+        signal: stop.signal,
+        stopSignal: () => stopSignal,
+        onStart: (text) => {
+          renderer.onEvent({ type: 'notice', at: Date.now(), level: 'info', text })
+        },
+        onProgress: (n, total) => {
+          renderer.onEvent({ type: 'insights-progress', at: Date.now(), done: n, total })
+        },
+      })
+      insights = done.insights ?? insights
+      insightLines = done.lines
+    } finally {
+      onInsightsSignal = null
+    }
   }
   const { pruneDebug } = await import('./debug/files.ts')
   await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
@@ -406,7 +448,9 @@ async function runCommand(
     record,
     summaryPath: fromCwd(summary),
     results: engineRun.evals,
-    unhandledErrors: engineRun.unhandledErrors,
+    hint: !hasAnalysisModel(ctx.config),
+    insights,
+    insightLines,
   })
   renderer.close()
   const stepSummary = process.env.GITHUB_STEP_SUMMARY
@@ -422,14 +466,16 @@ async function runCommand(
   if (autoRecord && record.status !== 'interrupted') {
     const { record: recordCmd } = await import('./commands.ts')
     const allow = record.status === 'budget' ? { 'allow-incomplete': true } : {}
-    console.log(await recordCmd(config, record.runId, { ...flags, ...allow }))
+    const line = await recordCmd(config, record.runId, { ...flags, ...allow })
+    if (setup.json) console.error(line)
+    else console.log(line)
+  }
+  if (setup.json) {
+    const { suiteResult } = await import('./view/suite.ts')
+    process.stdout.write(`${JSON.stringify(suiteResult(record), null, 2)}\n`)
   }
 
-  if (interrupted || engineRun.cancelled) return stopCode
-  if (engineRun.unhandledErrors.length > 0) return EXIT.failed
-  // The studio shows the same outcome for the run.
-  const outcome = runOutcome(record)
-  return outcome === 'fail' ? EXIT.failed : outcome === 'infra_error' ? EXIT.infra : EXIT.ok
+  return code
 }
 
 /** Everything that can fail before the evals are collected: output mode, config, profile, flags. */
@@ -440,16 +486,13 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
       logOrder: flags['log-order'],
       logPrefix: flags['log-prefix'],
       outputLogs: flags['output-logs'],
+      verbose: verbosityOf(flags) > 0,
     },
     env: process.env,
-    isTTY: !!process.stdout.isTTY,
+    // A run's `--json` progress goes to stderr, so that's the stream whose terminal it draws on.
+    isTTY: !!(flags.json && !flags['dry-run'] ? process.stderr : process.stdout).isTTY,
     agent: detectAgent().name,
   })
-  if (flags.json && !flags['dry-run']) {
-    throw new UsageError(
-      'reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.',
-    )
-  }
   const path = requireConfig(configPath)
   loadEnvFiles(path)
   const named = flags.profile ?? (process.env.REEVAL_PROFILE || undefined)
@@ -488,6 +531,8 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
     force: !!flags.force,
+    /** `--no-insights` turns them off for this run. */
+    insights: !flags['no-insights'],
     verbosity: verbosityOf(flags),
     configFile: configLabel(path),
     /** Named in the plan line when the project root isn't the current directory. */
@@ -638,9 +683,8 @@ async function executeRun(
     }),
   ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
-    './plan.ts'
-  )
+  const { buildPlan, checkAttemptBudget, planDocument, planInsights, planLine, planTable } =
+    await import('./plan.ts')
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let preflightStop: Error | undefined
@@ -648,7 +692,6 @@ async function executeRun(
   let budgetTimer: NodeJS.Timeout | undefined
   let toRun: PlannedItem[] = []
   let live: LiveProgressWriter | undefined
-  let notes: NoteRun | undefined
   let questions: QuestionRunner | undefined
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
@@ -679,6 +722,7 @@ async function executeRun(
       root: config.root,
       historyDir: config.history.dir,
       questionModel: models?.questionModelLabel(config) ?? null,
+      insights: await planInsights(config, setup.insights),
     })
     plan.runId = runId
     if (completed.size) plan.resume = { runId, completed: completed.size }
@@ -687,9 +731,14 @@ async function executeRun(
     const targets = imageTargets(
       skipped
         .filter((p) => !p.attempt.plan.skip)
-        .map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox })),
+        .map((p) => ({
+          id: p.id,
+          harness: p.attempt.harness,
+          sandbox: p.attempt.sandbox,
+          plugins: p.attempt.pluginBuilds ?? [],
+        })),
     )
-    if (setup.json) {
+    if (setup.json && setup.dryRun) {
       const images = await Promise.all(
         targets.map(async (t) => ({
           id: t.id,
@@ -718,6 +767,12 @@ async function executeRun(
         lines.push(`images  not checked: ${names} ${down.length === 1 ? 'is' : 'are'} not running`)
       }
     }
+    if (setup.dryRun && plan.insights) {
+      const { formatTokens } = await import('./usage.ts')
+      lines.push(
+        `insights  ${plan.insights.model} · up to ${formatTokens(plan.insights.maxTokens)} tokens`,
+      )
+    }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
     lines.push(...plan.hints.map((h) => `hint: ${h}`))
     renderer.onEvent({
@@ -728,8 +783,6 @@ async function executeRun(
     })
     if (setup.dryRun) return false
     checkAttemptBudget(plan, setup.force, config.file)
-    const analysis = config.analysis.agent ? await import('./analysis/model.ts') : null
-    analysis?.analysisModelName(config, 'agent')
     const questionModels = new Set<string>()
     const asked: EvalQuestions[] = []
     for (const row of plan.rows) {
@@ -763,17 +816,6 @@ async function executeRun(
       throw new UsageError(
         `Credentials with whitespace or a line break in them: ${malformed.join(', ')}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
       )
-    }
-    if (analysis) {
-      const { startNotes } = await import('./analysis/agent/index.ts')
-      notes = startNotes({
-        config,
-        model: analysis.resolveAnalysisModel(config, 'agent'),
-        runId,
-        stagingDir,
-        planned: skipped,
-        warn: (text) => renderer.onEvent({ type: 'notice', at: Date.now(), level: 'warn', text }),
-      })
     }
     if (asked.length) {
       const { questionRunner } = await import('./compare/questions.ts')
@@ -820,6 +862,7 @@ async function executeRun(
         label: `workspace ${o.label}`,
         sandbox: user.attempt.sandbox,
         harness: user.attempt.harness,
+        plugins: [],
         setBy: o.setBy,
         runWide: false,
       }
@@ -837,6 +880,7 @@ async function executeRun(
           .map((p) => ({
             harness: p.attempt.harness,
             sandbox: p.attempt.sandbox,
+            plugins: p.attempt.pluginBuilds ?? [],
             setBy: p.attempt.setBy,
           })),
         {
@@ -907,7 +951,6 @@ async function executeRun(
         }
         if (e.type === 'eval-end') {
           live?.end(e.result)
-          notes?.onResult(e.result)
           questions?.onEvalEnd(e.result)
         }
         // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
@@ -917,6 +960,7 @@ async function executeRun(
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
       onCancellable: (cancel) => {
         const onSignal = (signal: NodeJS.Signals) => {
+          if (onInsightsSignal) return onInsightsSignal(signal === 'SIGTERM' ? 'SIGTERM' : 'SIGINT')
           stopCode = signal === 'SIGTERM' ? EXIT.terminated : EXIT.interrupted
           if (interrupted) {
             renderer.close()
@@ -965,7 +1009,6 @@ async function executeRun(
     sandboxVersions,
     budgetReached: () => reached,
     live,
-    notes,
     questions,
   }
 }

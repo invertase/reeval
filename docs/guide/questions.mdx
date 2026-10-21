@@ -101,19 +101,21 @@ The defaults leave out the final message: side by side, the more confident summa
 ## Read the answers
 
 ```text
-Summary
- evals/questions.eval.ts
-   ✓ greets by name      4/4 · pass@1 100% gated  4 attempts
-       cursor:composer-2.5/plain/docker                control    1/1  pass@1 100%
-       cursor:composer-2.5/with-house-greeting/docker  variant    1/1  pass@1 100%   lift +0 pts (95% −79…+79, 1/1 vs 1/1), within noise
-       …
-       pi:gemini-3.8-flash/plain/docker                control    1/1  pass@1 100%
-       pi:gemini-3.8-flash/with-house-greeting/docker  variant    1/1  pass@1 100%   lift +0 pts (95% −79…+79, 1/1 vs 1/1), within noise
-       …
-       question  "Which greet.js handles a missing or empty name better?" within: plain 0/4 (0%), with-house-greeting 4/4 (100%) · across: cursor:composer-2.5 0/2 (0%), pi:gemini-3.8-flash 2/2 (100%) · 8 votes, 2 ties, 0/4 pairs split by order · gemini-3.8-flash
+pass             greets by name
+  terse
+    arm                  pass
+    plain                1 of 1
+    with-house-greeting  1 of 1  can't tell yet
+  chatty
+    arm                  pass
+    plain                1 of 1
+    with-house-greeting  1 of 1  can't tell yet
+  question  Which greet.js handles a missing or empty name better?
+    plain                won 0 of 4
+    with-house-greeting  won 4 of 4
 ```
 
-This is a real run on Cursor and pi. Lift can't separate the arms, since all four attempts passed, but the question can. With the skill, both agents' `greet.js` answered a missing name with `Ahoy, crew!`, and the model picked that arm in both orders on both harnesses.
+This run is two fake agents, `terse` and `chatty`, and a fake analysis model that prefers the `greet.js` that falls back to `Ahoy, crew!` for a missing name. Lift can't separate the arms, since every attempt passed, but the question can: the skill's arm won all four votes, both orders on both harnesses. `reeval query votes` has every vote, and `question_pairs` each pair's two orders.
 
 <Warning>
   Attempts that failed their checks are left out of the pairs. A question on a compare whose baseline is expected to fail, like the house-greeting eval in [Compare and lift](/guide/compare), has no pairs to judge: ask it where both arms can pass.
@@ -133,13 +135,14 @@ flowchart LR
 
 reeval pairs the attempts by varying one factor and holding the others, unless `across` keeps one. Vary the environment and two environments meet on the same harness and run; vary the harness and two agents meet on the same environment and run. Each pair goes to the model twice, the order swapped and labelled only A and B, so neither position nor a name can win it.
 
-A pair whose two orders pick opposite sides is a split: the position decided it, not the work. The summary counts splits (`0/4 pairs split by order`). With three arms or more it prints each pair head to head, a split apart from a win: `within cursor:composer-2.5: no-skill 2–0 current-skill (1 split) · …`.
+A pair whose two orders pick opposite sides is a split: the position decided it, not the work, and it counts one win for each side. `reeval query question_pairs` counts the splits, and with three arms or more has each pair head to head, a split apart from a win.
 
 ## Where the votes go
 
 | Where | What |
 |---|---|
-| The summary, `reeval show`, the studio | Each side's rate, and a vote's short `reason` when it gave one |
+| The result block, `reeval show`, `summary.md` | Each side's wins over its decided votes (`won 4 of 4`) |
+| The studio | Each side's rate, and a vote's short `reason` when it gave one |
 | `evals[].answers` in the record | Every vote, with the rates per pair kind, and a failed call's `error` |
 | `<eval-slug>/questions/<n>.json` | What the model was sent for each pair and order (below) |
 | `reeval query question_pairs`, `votes` | The pairs' tallies, and every vote as a row |
@@ -175,7 +178,7 @@ A side's rate is its wins over the decided votes it was in. A tie counts for nei
 }
 ```
 
-Each question's answer points at this file (`evals[].answers[].input`), with one call per pair and order. `labels` says which side the model saw as A, and `prompt` is the text it was sent, secrets masked. Screenshots point at the attempts' own PNGs rather than copying them. The summary and the studio link to the file, and `history.artifacts` keeps it or drops it with the eval's other files.
+Each question's answer points at this file (`evals[].answers[].input`), with one call per pair and order. `labels` says which side the model saw as A, and `prompt` is the text it was sent, secrets masked. Screenshots point at the attempts' own PNGs rather than copying them. `summary.md` and the studio link to the file, and `history.artifacts` keeps it or drops it with the eval's other files.
 
 ## Next
 

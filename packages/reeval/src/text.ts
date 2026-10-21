@@ -15,6 +15,12 @@ export function clip(text: string, max: number): string {
   return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters are what it removes
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
+
+/** Text as one printable line: control characters, escapes included, and whitespace runs become a space. */
+export const oneLine = (text: string) => text.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim()
+
 /** A failure's text keeps at most this much: its start (the reason) and its end (the output's tail). */
 export const FAILURE_CAP = 16 * 1024
 
@@ -24,6 +30,16 @@ export function capMiddle(text: string, max = FAILURE_CAP): string {
   const head = Math.floor(max * 0.75)
   const tail = max - head
   return `${text.slice(0, head)}\n[… ${text.length - head - tail} characters cut …]\n${text.slice(-tail)}`
+}
+
+/**
+ * A Markdown code block around `lines`. Its fence is one backtick longer than the longest run of
+ * backticks in them (at least three), so no line inside can close it.
+ */
+export function fenced(lines: string[], lang = ''): string[] {
+  const longest = Math.max(0, ...lines.flatMap((l) => (l.match(/`+/g) ?? []).map((m) => m.length)))
+  const fence = '`'.repeat(Math.max(3, longest + 1))
+  return [`${fence}${lang}`, ...lines, fence]
 }
 
 /** How a sandbox warning prints: root in capitals, added capabilities softer. */

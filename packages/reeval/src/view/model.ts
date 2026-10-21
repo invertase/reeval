@@ -170,15 +170,18 @@ export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'file
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────
 
 /**
- * A run's outcome, as `reeval run`'s exit code has it: a failed gated cell (or a budget stop) fails
- * the run, while failures in ungated cells (controls, by default) don't.
+ * A run's outcome, which `reeval run`'s exit code is read from: an error outside any attempt, a
+ * failed gated cell or a budget stop fails the run, while failures in ungated cells (controls, by
+ * default) don't. An interrupted run is `skipped`, whatever ran.
  */
 export function runOutcome(run: {
   status: RunRecord['status']
   evals: ReadonlyArray<{ outcome: Outcome }>
   families?: ReadonlyArray<{ outcome: 'pass' | 'fail' }>
+  errors?: readonly string[]
 }): Outcome {
   if (run.status === 'interrupted') return 'skipped'
+  if (run.errors?.length) return 'fail'
   const outcomes = [...run.evals, ...(run.families ?? [])].map((e) => e.outcome)
   if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'

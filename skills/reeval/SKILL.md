@@ -32,6 +32,7 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
+| [../eval-rubric/SKILL.md](../eval-rubric/SKILL.md) | A `Remarks:` block after a run, or reviewing an eval's name, prompts and judge questions: one section per remark kind, with its fix |
 
 Use reeval's terms in code and messages: eval (`evaluate`), attempt (one run of a cell;
 `runs: n`), harness (`cursor()`, …), cell (harness × environment × sandbox), control and variant,
@@ -43,7 +44,7 @@ lift (variant pass@1 − control pass@1, 95% interval), gate, checks and judge, 
 
 ```bash
 npm i -D reeval
-npx reeval init --harness cursor   # then: npx reeval run --profile fake
+npx reeval init --harness cursor   # or --bare: the config, no example eval
 npx reeval run --dry-run           # the plan, no keys or Docker
 npx reeval image build             # once, for real agents
 npx reeval doctor                  # Docker, keys and images, with fixes
@@ -53,18 +54,24 @@ npx reeval run
 1. Install: `npm init -y` if there's no `package.json`, then `npm i -D reeval`
    (or a tarball: `npm i -D /path/to/reeval.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm, pnpm or Yarn.
-2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|grok-build|none>` (it only
-   asks in a terminal) writes `reeval.config.ts` (the agent, plus `fake`, `pr` and `nightly`
-   profiles), `evals/greet.eval.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval`
-   script; `npx reeval run --profile fake` passes with no keys. It never overwrites a file that
-   differs without `--force`. Or write `reeval.config.ts` and `evals/**/*.eval.ts` (the default
-   `include`) yourself.
+2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|grok-build>`
+   (it only asks in a terminal) writes `reeval.config.ts` (the agent, `analysis.model:
+   'google/gemini-3.8-flash'` for insights, and `pr` and `nightly` profiles), `evals/environments.ts` (one `defineEnvironment`), `evals/greet.eval.ts` (an eval
+   in that environment), the `.gitignore` entries (`.reeval/`, `.env*`), an `eval` script and a
+   `tsconfig.json` that allows the evals' `.ts` imports, then says whether Docker is running.
+   `--bare` writes only the config, `.gitignore` and `package.json`. Where a config exists it
+   exits 2 before asking; `--force` replaces only `reeval.config.ts`. Otherwise it only adds:
+   it merges into `package.json` and `.gitignore` and skips any other file that exists. Or write
+   `reeval.config.ts` and `evals/**/*.eval.ts` (the default `include`) yourself.
 3. `npx reeval run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
 4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in
    `.env.local` next to `reeval.config.ts` (not the directory you run from), `npx reeval doctor`
-   (exit 1 names each problem and its fix; `--json`, `--online` tries the keys), then
-   `npx reeval run`. Exit 0 means every gated cell passed.
+   (exit 1 names each problem and its fix; a missing `analysis.model` or its key,
+   `GOOGLE_GENERATIVE_AI_API_KEY`, is only a warning; `--json`, `--online` tries the keys), then
+   `npx reeval run`. Exit 0 means every gated cell passed. `npx reeval run --json` prints the
+   results as one JSON document on stdout (each check `ran` or `not run`, each variant's
+   `effect`), with the progress on stderr.
 5. Read failures in the summary, then `.reeval/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
    `npx reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
@@ -132,9 +139,8 @@ a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 's
 steps per turn), `layout` (an agent's id, such as `'claude-code'`), `failWith`, `delayMs`,
 `flakeRate`, `reasoning`, `tools` and `id`.
 
-`fakeSandbox()` is for trying reeval and testing configs without Docker (`reeval init`'s
-`fake` profile). It runs commands on your host with your tools, brokers no secrets and enforces
-no egress, so an eval passing there says nothing about its checks in the eval's real sandbox.
+`fakeSandbox()` is for testing configs and reeval itself without Docker. It runs commands on
+your host with your tools, brokers no secrets and enforces no egress, so an eval passing there says nothing about its checks in the eval's real sandbox.
 Don't use it to validate an eval, and don't put it on an environment that real harnesses use:
 real Cursor runs need Docker.
 
@@ -159,7 +165,9 @@ group('hello', () => {
   (an error in CI), `.todo`, and `evaluate.each(cases)(name, [options,] (c, item) => …)` (`$key`,
   `%s`, `%#` in the name; cases pool into one family, see
   [references/evals.md](references/evals.md)). The eval id is `file › group › name`; renaming an
-  eval restarts its history.
+  eval restarts its history. Name the eval after the question it answers
+  (`recommends Genkit for a production AI feature`, not `genkit test 2`): insights read the name
+  first to tell what it checks.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`. `await c.readFile(path)` the text
@@ -226,8 +234,8 @@ group(
 )
 ```
 
-- A spec, or a synchronous callback that destructures the helpers it needs (`skill`, `file`,
-  `directory`, `git`, `mcp`, `secret`): `files: { 'docs/api.md': file('../docs/api.md') }`,
+- A spec, or a synchronous callback that destructures the helpers it needs (`skill`, `plugin`,
+  `file`, `directory`, `git`, `mcp`, `secret`): `files: { 'docs/api.md': file('../docs/api.md') }`,
   `rules: file('../rules/house.md')` (AGENTS.md; CLAUDE.md for Claude Code),
   `mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }`,
   `setup: [{ run: 'npm ci', timeout: '5m' }]`. More in
@@ -237,9 +245,10 @@ group(
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
   `baseline`, the cascaded `environment` is the control.
-- Only variant cells gate by default; a control's miss prints `(not gated)`. Lift with few runs
-  is usually "within noise"; the `effort:` line under each variant often shows a skill's effect
-  first. In a compare, prefer `expect.soft` with labels for independent requirements.
+- Only variant cells gate by default; a control's misses don't fail the run. Below four tries a
+  side each variant's effect reads `can't tell yet`; from four, the block adds an effort table
+  (median tools, time, tokens per arm), which often shows a skill's effect first. In a compare,
+  prefer `expect.soft` with labels for independent requirements.
 - `compare.questions: ['Which … reads more like our house style?']` asks which side did better,
   pair by pair, after the run; it never gates and needs a language model. Details, gates,
   `minLift` and `reeval query skill_files` (which skill files each attempt opened) are in
@@ -262,6 +271,19 @@ reeval analyze           reeval studio          reeval image build      reeval d
 | 1 | A gated failure |
 | 2 | A usage or config error, including a filter that matches nothing |
 | 3 | An infra error |
+
+`reeval run` ends with a result block per eval, laid out by what it varies (a row per eval, per
+arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`
+or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
+(`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
+`1 run error` and fails the run), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
+model never stands in). With `analysis.model` set, each block gets cited sentences (insights)
+and a headline prints above the tally; they explain the facts and never change a verdict or the
+exit code. `Remarks:` after the tally names evals that need work (a flaky check, too few tries,
+a loose judge, a prompt that names the answer), with the line to fix; the eval rubric
+([../eval-rubric/SKILL.md](../eval-rubric/SKILL.md)) explains each kind. `summary.md` and
+`reeval show` print the same blocks; `reeval analyze <run> --insights` writes or finishes a run's
+insights.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP

@@ -4,7 +4,7 @@
 //   node scripts/bun-compile.mjs
 //
 // It writes packages/reeval/reeval (gitignored) with reeval's own files embedded (package.json,
-// docker/, assets/, dist/studio-app, dist/bridge, jiti's Babel build and the bundled
+// docker/, bin/, assets/, skills/, dist/studio-app, dist/bridge, jiti's Babel build and the bundled
 // dependencies' versions), copies it into an empty directory, and runs examples/hello's fake
 // config with it, in a copy with no node_modules, and with Node, and compares them. With Docker
 // running and the sandbox images built, it also runs one egress fixture in Docker with it.
@@ -44,7 +44,7 @@ if (!existsSync(cli)) fail('no dist/cli.js: run pnpm build first')
 
 // What the binary embeds, laid out as in the package; src/root.ts finds it there when compiled.
 const stage = mkdtempSync(join(tmpdir(), 'reeval-bun-stage-'))
-const own = ['package.json', 'docker', 'assets', 'dist/studio-app', 'dist/bridge']
+const own = ['package.json', 'docker', 'bin', 'assets', 'skills', 'dist/studio-app', 'dist/bridge']
 for (const path of own) cpSync(join(pkg, path), join(stage, path), { recursive: true })
 const require = createRequire(join(pkg, 'package.json'))
 const jiti = dirname(require.resolve('jiti/package.json'))
@@ -61,9 +61,16 @@ writeFileSync(join(stage, 'versions.json'), `${JSON.stringify(versions, null, 2)
 
 // An --asset directory keeps its path from its parent, so dist/ goes in whole (it's staged with
 // only the studio app and the bridge).
-const assets = ['package.json', 'docker', 'assets', 'dist', 'vendor', 'versions.json'].flatMap(
-  (path) => ['--asset', path],
-)
+const assets = [
+  'package.json',
+  'docker',
+  'bin',
+  'assets',
+  'skills',
+  'dist',
+  'vendor',
+  'versions.json',
+].flatMap((path) => ['--asset', path])
 const built = sh(
   'bun',
   [

@@ -60,7 +60,7 @@ import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
-import { compare, formatCompare, stackChanges } from '../src/history/views.ts'
+import { compare, stackChanges } from '../src/history/views.ts'
 import { newRunId, RUN_ID } from '../src/ids.ts'
 import {
   badJudgeArtifacts,
@@ -107,6 +107,7 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
         files: [],
         skills: [],
         workspaceSkills: [],
+        plugins: [],
         mcp: {},
       } as unknown as ResolvedEnvironment,
     )
@@ -290,6 +291,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     const session = await harness.start(box, AbortSignal.timeout(60_000), {
       skills: [],
       workspaceSkills: [],
+      plugins: [],
       mcp: { stamp: { transport: 'stdio', command: 'sh', args, env: {} } },
     })
     const turn = await session.send('stamp', AbortSignal.timeout(60_000))
@@ -1077,10 +1079,6 @@ test('compare classifies an eval on the cells both runs have, and lists the rest
   assert.deepEqual(compare(base, head), [
     { id: 'e', status: 'same', base: 'pass', head: 'pass', cells: { added: [], removed } },
   ])
-  assert.match(
-    formatCompare(base, head, compare(base, head), false),
-    /✓ → ✓ {2}same {22}e · cells removed: cursor\/-, cursor\/reeval-good, agy\/-, agy\/reeval-weak$/m,
-  )
   // The shared cell still decides: a flip in it is a regression, and a change in it is drift.
   const failed = run('fail', [cell('agy/reeval-good', 'fail')])
   assert.deepEqual(
@@ -1411,11 +1409,25 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   assert.equal(skipped.skip, 'no harness left: profile pr allows a')
 })
 
+test('a check a side never ran has no verdict, and not-run attempts are not failures', async () => {
+  const { checkVerdict } = await import('../src/view/contrasts.ts')
+  const t = (pass: number, fail: number, notRun = 0, error = 0) => ({ pass, fail, error, notRun })
+  assert.equal(checkVerdict(t(0, 2), t(0, 0, 2)), undefined, 'failed against never ran')
+  assert.equal(checkVerdict(t(2, 0), t(0, 0, 2)), undefined, 'passed against never ran')
+  assert.equal(checkVerdict(t(2, 0, 1), t(2, 0)), 'both-pass', 'a not-run attempt is no fail')
+  assert.equal(checkVerdict(t(0, 1, 1), t(2, 0)), 'discriminates')
+  assert.equal(checkVerdict(t(1, 1), t(0, 0, 2)), undefined)
+  assert.equal(checkVerdict(t(2, 0), t(0, 2)), 'discriminates')
+  assert.equal(checkVerdict(t(2, 0), t(0, 0, 0, 2)), undefined, 'ran but never answered')
+})
+
 test('effort under 10s reads in tenths, so a ratio matches its times', async () => {
   const { formatSeconds } = await import('../src/view/effort.ts')
-  assert.deepEqual([0, 40, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
-    '0s',
-    '0s',
+  assert.deepEqual([0, 40, 49, 50, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
+    '<0.1s',
+    '<0.1s',
+    '<0.1s',
+    '0.1s',
     '0.2s',
     '0.4s',
     '1.5s',
