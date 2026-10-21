@@ -4,7 +4,7 @@
 // blocks with them. The facts and the exit code don't depend
 // on what the model wrote: a dropped sentence is counted, never an error.
 import { existsSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveAnalysisModel } from '../analysis/model.ts'
 import { allRuns, CommandError } from '../commands.ts'
@@ -60,8 +60,15 @@ export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promis
     maxOutputTokens: config.analysis.maxOutputTokens,
   })
   const insights = { ...generated, remarks: [...generated.remarks, ...(existing?.remarks ?? [])] }
-  if (existing) await rm(file)
-  await writeInsights(file, insights)
+  const kept = `${file}.remarks`
+  if (existing) await rename(file, kept)
+  try {
+    await writeInsights(file, insights)
+  } catch (error) {
+    if (existing) await rename(kept, file)
+    throw error
+  }
+  if (existing) await rm(kept)
   const { dropped, regenerated } = insights.validation
   ctx.err(
     `wrote ${fromCwd(file)}: ${insights.evals.length} evals, ${dropped} ${dropped === 1 ? 'sentence' : 'sentences'} removed by the checks${regenerated ? `, ${regenerated} asked for again` : ''}. Commit it with git.`,
