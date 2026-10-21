@@ -4,6 +4,7 @@
 // that can't be compared names the part that changed. Pure and deterministic, from the two runs'
 // SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
+import { fenced } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import type { CompareCell, CompareRow, CompareStatus, StackChange } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
@@ -461,8 +462,7 @@ export function renderCompareMarkdown(input: CompareInput, opts: CompareOptions)
   const title = input.base
     ? `### reeval compare: ${input.head.runId} vs ${input.base.runId}`
     : `### reeval compare: ${input.head.runId}`
-  const lines = renderCompare(input, { ...opts, color: false })
-  const longest = Math.max(0, ...lines.flatMap((l) => (l.match(/`+/g) ?? []).map((m) => m.length)))
-  const fence = '`'.repeat(Math.max(3, longest + 1))
-  return [title, '', `${fence}text`, ...lines, fence, ''].join('\n')
+  return [title, '', ...fenced(renderCompare(input, { ...opts, color: false }), 'text'), ''].join(
+    '\n',
+  )
 }
