@@ -51,6 +51,7 @@ export default defineConfig({
 | Tokens | Reported for each turn |
 | Served model | From each API response, which the gateway reads |
 | MCP | `mcp.stdio`, `mcp.http` and `mcp.sse`, over ACP |
+| Plugins | Skills and MCP servers ([below](#plugins)) |
 
 Build its image once with `reeval image build` in a project whose config uses `fx()`. `gpt-4.1` passes the harness contract on OpenAI; pin the model you mean to measure.
 
@@ -95,6 +96,16 @@ fx runs with a private home, `~/.ai-sdk-harness/.harness-bootstrap/fx/implementa
 
 fx names its tool calls, so the transcript reads `bash`, `write`, `edit`, `read`, `glob`, `grep`, `webSearch` and `webFetch`. A command's output is rebuilt from what it streamed, since fx's final update carries a clipped summary. MCP calls are renamed from `mcp_<server>_<tool>` to `mcp__<server>__<tool>`, and a `skill` call names the skill it loaded. fx's `subagent` tool runs a task in a subagent whose own tool calls aren't in fx's stream, so they aren't in the transcript.
 
+## Plugins
+
+```ts title="evals/env.ts"
+export const house = defineEnvironment('house', ({ plugin }) => ({
+  plugins: [plugin.local('../plugin', { only: ['skills', 'mcp'] })],
+}))
+```
+
+fx has no plugins, no subagents of your own and no commands, so it loads a plugin's skills and MCP servers only. Its skills go in fx's home `.fx/skills`, with the environment's own, and its servers over ACP as `<plugin>:<server>`. A plugin's `agents/`, `commands/`, `hooks/` or `rules/` exit 2 at plan time; `only` leaves them out.
+
 ## Errors
 
 | Situation | Message |
@@ -102,6 +113,7 @@ fx names its tool calls, so the transcript reads `bash`, `write`, `edit`, `read`
 | No model | `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-4.1' }) (got …)` |
 | No key when the attempt starts | `AI_GATEWAY_API_KEY isn't set, so the fx harness can't authenticate. Set it in the environment or .env.local.` (or `OPENAI_API_KEY`) |
 | The provider refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. …` (or `AI_GATEWAY_API_KEY`) |
+| A plugin with subagents, commands, hooks or rules (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>: fx can't load the <plugin> plugin's agents (agents/): use only: ['skills', 'mcp'], or leave the plugin out of this cell` |
 | A non-Docker sandbox | `The fx harness needs the Docker sandbox: set sandbox: docker() …` |
 | fx doesn't start | `fx harness failed to start: …` |
 

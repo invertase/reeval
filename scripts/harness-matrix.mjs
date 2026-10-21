@@ -56,6 +56,15 @@ async function webEvents(kind, agent, model) {
   }
 }
 
+/** What the agent names a plugin's server, `<plugin>:<server>` unless it renames it (pi). */
+function pluginServerName(h) {
+  const servers = h.agent.mcpServers({ 'plugin:server': PROBE.stdio })
+  const name = Array.isArray(servers) ? servers[0]?.name : Object.keys(servers ?? {})[0]
+  return (typeof name === 'string' ? name : 'plugin:server')
+    .replace('plugin', '<plugin>')
+    .replace('server', '<server>')
+}
+
 const list = (items) =>
   items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
 
@@ -71,7 +80,7 @@ const NOTES = [
   (h) =>
     h.agent.pluginParts.length &&
     LAYOUTS[h.kind]?.pluginPlacement === 'flat' &&
-    `A plugin's skills sit beside the eval's and its MCP servers go in as ${code('<plugin>:<server>')}, so a skill or server whose name another already has is refused at plan time.`,
+    `A plugin's skills sit beside the eval's and its MCP servers go in as ${code(pluginServerName(h))}, so a skill or server whose name another already has is refused at plan time.`,
   (h) =>
     h.agent.pluginParts.length &&
     h.kind === 'antigravity' &&

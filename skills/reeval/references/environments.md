@@ -98,7 +98,11 @@ Claude Code and Grok Build load every part but `rules` (narrow with `only`), nam
 host variable is refused there: declare it in `mcp`. Antigravity loads every part with
 `agy plugin install`, and refuses such a server too. Cursor loads every part flat: rules,
 subagents, commands and hooks unpacked into the workspace's `.cursor/` (left out of the diff),
-skills into `~/.agents/skills`, so two items with one name clash. A hook event the harness doesn't
+skills into `~/.agents/skills`, so two items with one name clash. OpenCode loads skills, MCP
+servers, and subagents and commands (unpacked into `.opencode/`, frontmatter cut to
+`description`); pi skills, MCP servers (as `<plugin>_<server>`) and commands (as prompt templates
+in `.pi/prompts/`); fx skills and MCP servers only. A part a harness doesn't load is refused at
+plan time: narrow with `only`. A hook event the harness doesn't
 run is refused at plan time. Other real harnesses refuse plugins
 (`--dry-run` exits 2 naming the harness), so keep plugins off their cells. `build` is refused for now; a server run with `npx`/`uvx` needs
 its registry in `egress`, or install it in the image.

@@ -53,6 +53,7 @@ export default defineConfig({
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
+| Plugins | Skills, subagents, commands and MCP servers ([below](#plugins)) |
 | Egress hosts added | The provider's API hosts, such as `api.anthropic.com`, and `mcp.exa.ai` (web search) |
 | Tokens | Reported per turn (below) |
 
@@ -194,6 +195,43 @@ An `sse` server is refused at plan time (exit 2).
 
 OpenCode connects config MCP servers in the background once the session exists. reeval runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
 
+## Plugins
+
+```text title="reeval run -v"
+env       plugin house → ~/.reeval/plugins/house/ (6 files; skills, agents, commands, mcp)
+env       plugin part → .opencode/agents/reviewer.md (unpacked for the agent)
+env       plugin part → .opencode/commands/ship.md (unpacked for the agent)
+```
+
+OpenCode loads a plugin's skills, subagents, commands and MCP servers. reeval unpacks the subagents and commands into the workspace's `.opencode/` before the snapshot, so the diff leaves them out and `context` lists them. OpenCode's own plugins (JavaScript modules) aren't Claude Code plugins and aren't used.
+
+| Part | Where it goes |
+|---|---|
+| `skills/` | `~/.config/opencode/skills`, with the environment's own skills |
+| `agents/<name>.md` | `.opencode/agents/<name>.md`, a subagent (`mode: subagent`) |
+| `commands/<name>.md` | `.opencode/commands/<name>.md` |
+| `.mcp.json` | OpenCode's config (`mcp.servers`), as `<plugin>:<server>` |
+
+OpenCode silently skips a subagent or command whose frontmatter it doesn't take, and Claude Code's `tools: Read, Grep`, `model: sonnet` and `color` are among those, so reeval keeps only `description`:
+
+```md title="agents/reviewer.md (in the plugin)"
+---
+name: reviewer
+description: Reviews a change against the house style.
+tools: Read, Grep
+model: sonnet
+---
+```
+
+```md title=".opencode/agents/reviewer.md (unpacked)"
+---
+description: Reviews a change against the house style.
+mode: subagent
+---
+```
+
+Items are flat, not namespaced, so two plugins' subagents or commands with the same name clash. A plugin's `hooks/` or `rules/` exit 2 at plan time; `only` leaves them out (see [Errors](#errors)).
+
 ## Errors
 
 | Situation | Message |
@@ -206,6 +244,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 | No key for the run's providers | `Missing credentials: ANTHROPIC_API_KEY. Set them in the environment or .env.local.` |
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox: set sandbox: docker() …` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| A plugin with hooks or rules (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode can't load the <plugin> plugin's rules (rules/): use only: ['skills', 'agents', 'commands', 'mcp'], or leave the plugin out of this cell` |
 | OpenCode doesn't start | `OpenCode harness failed to start: …` |
 | A model OpenCode's catalogue doesn't have | The turn fails with `Invalid params: model not found: <provider>/<model>` |
 | A key the API rejects | The turn fails with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local. ACP prompt update stream failed: Internal error: API key not valid. …`, naming the provider's variable |
