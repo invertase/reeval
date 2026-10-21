@@ -156,7 +156,7 @@ fail             greets in the house style
   with-doc         1      <0.1s
 ```
 
-The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure; agent time and tokens get their own verdicts in `reeval query effort`. Effort never fails a run.
+The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure, so `fewer` and `more` say which arm's attempts rank lower: equal medians can still be `fewer`. Agent time and tokens get their own verdicts in `reeval query effort`, and effort never fails a run.
 
 Tokens join the table when both sides reported usage. An attempt with no usage (Goose's, say) drops out of the token sample only, and when either side has none left the token metric is omitted, not `insufficient`.
 

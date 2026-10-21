@@ -49,6 +49,7 @@ import {
   wilson,
 } from '../src/stats.ts'
 import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
+import { effortVerdict } from '../src/view/effort.ts'
 import { tempDir } from './helpers.ts'
 import {
   E2E_ARMS,
@@ -256,6 +257,18 @@ describe("paired lift over a pooled family's cases", () => {
     assert.equal(signedRank([1, -1]), 1)
     const many = signedRank(Array.from({ length: 25 }, (_, i) => i + 1)) as number
     assert.ok(many < 0.001, `25 positive differences: ${many}`)
+  })
+})
+
+describe('the effort verdict', () => {
+  test('its direction is the rank test’s, even when the medians are equal', () => {
+    const variant = [0, 0, 0, 0, 1, 1, 1, 1, 1, 1]
+    const control = [1, 1, 1, 1, 1, 1, 100, 100, 100, 100]
+    const fewer = effortVerdict(variant, control)
+    assert.equal(fewer.verdict, 'fewer')
+    assert.ok((fewer.p ?? 1) < 0.05, `p ${fewer.p}`)
+    assert.equal(effortVerdict(control, variant).verdict, 'more')
+    assert.equal(effortVerdict([1, 1, 1, 2, 2], [1, 1, 2, 2, 2]).verdict, 'noise')
   })
 })
 

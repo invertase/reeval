@@ -72,9 +72,13 @@ const choose = (n: number, k: number) => {
 /**
  * Two-sided Mann–Whitney (Wilcoxon rank-sum) p-value for `xs` against `ys`: exact, by every split
  * of the pooled values, with mid-ranks for ties; the normal approximation with a tie correction
- * above `EXACT_LIMIT` splits. Null when either side is empty.
+ * above `EXACT_LIMIT` splits. `sign` is the sign of `xs`'s rank sum minus its expectation: below 0,
+ * `xs` ranks lower. Null when either side is empty.
  */
-export function mannWhitney(xs: readonly number[], ys: readonly number[]): number | null {
+export function mannWhitney(
+  xs: readonly number[],
+  ys: readonly number[],
+): { p: number; sign: number } | null {
   const n1 = xs.length
   const n2 = ys.length
   if (n1 === 0 || n2 === 0) return null
@@ -88,15 +92,17 @@ export function mannWhitney(xs: readonly number[], ys: readonly number[]): numbe
   }
   const n = n1 + n2
   const expected = (n1 * (n + 1)) / 2
-  const observed = Math.abs(ranks.slice(0, n1).reduce((a, b) => a + b, 0) - expected)
+  const deviation = ranks.slice(0, n1).reduce((a, b) => a + b, 0) - expected
+  const sign = Math.sign(deviation)
+  const observed = Math.abs(deviation)
   if (choose(n, n1) > EXACT_LIMIT) {
     const counts = new Map<number, number>()
     for (const { v } of pooled) counts.set(v, (counts.get(v) ?? 0) + 1)
     const ties = [...counts.values()].reduce((a, t) => a + t ** 3 - t, 0)
     const variance = ((n1 * n2) / 12) * (n + 1 - ties / (n * (n - 1)))
-    if (variance <= 0) return 1
+    if (variance <= 0) return { p: 1, sign }
     const z = Math.max(0, observed - 0.5) / Math.sqrt(variance)
-    return Math.min(1, 2 * (1 - normalCdf(z)))
+    return { p: Math.min(1, 2 * (1 - normalCdf(z))), sign }
   }
   let extreme = 0
   let total = 0
@@ -109,7 +115,7 @@ export function mannWhitney(xs: readonly number[], ys: readonly number[]): numbe
     for (let i = start; i <= n - left; i++) pick(i + 1, left - 1, sum + (ranks[i] as number))
   }
   pick(0, n1, 0)
-  return extreme / total
+  return { p: extreme / total, sign }
 }
 
 /** The smallest two-sided p an exact rank test can reach with these group sizes. */

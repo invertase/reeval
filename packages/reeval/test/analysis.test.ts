@@ -348,8 +348,8 @@ describe('effort next to lift', () => {
   })
 
   test('the rank test is exact: 4 against 4, fully separated, is 2/70', () => {
-    assert.equal(mannWhitney([4, 5, 5, 6], [30, 40, 50, 60]), 2 / 70)
-    assert.equal(mannWhitney([1, 2], [3, 4]), 1 / 3)
+    assert.deepEqual(mannWhitney([4, 5, 5, 6], [30, 40, 50, 60]), { p: 2 / 70, sign: -1 })
+    assert.deepEqual(mannWhitney([3, 4], [1, 2]), { p: 1 / 3, sign: 1 })
     assert.equal(minimumP(2, 2), 1 / 3)
     const c = contrastEffort(
       [4, 5, 5, 6].map((tools) => sample(tools)),

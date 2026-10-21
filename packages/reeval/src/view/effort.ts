@@ -103,15 +103,19 @@ export function effortOf(samples: EffortSample[]): CellEffort | null {
   }
 }
 
-/** The verdict of an exact rank test of `xs` (variant) against `ys` (control). */
+/**
+ * The verdict of an exact rank test of `xs` (variant) against `ys` (control). Its direction is
+ * the test's (which side ranks lower), not the medians', which can be equal or disagree.
+ */
 export function effortVerdict(
   xs: number[],
   ys: number[],
 ): { p: number | null; verdict: EffortVerdict } {
-  const p = mannWhitney(xs, ys)
+  const test = mannWhitney(xs, ys)
+  const p = test?.p ?? null
   if (minimumP(xs.length, ys.length) >= EFFORT_ALPHA) return { p, verdict: 'insufficient' }
-  if (p === null || p >= EFFORT_ALPHA) return { p, verdict: 'noise' }
-  return { p, verdict: (median(xs) ?? 0) < (median(ys) ?? 0) ? 'fewer' : 'more' }
+  if (test === null || test.p >= EFFORT_ALPHA) return { p, verdict: 'noise' }
+  return { p, verdict: test.sign < 0 ? 'fewer' : 'more' }
 }
 
 const ratio = (a: number, b: number) => (b === 0 ? null : a / b)
