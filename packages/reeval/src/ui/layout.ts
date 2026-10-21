@@ -139,14 +139,22 @@ function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): 
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
-/** `3 of 4`, with the attempts that didn't count named: `2 of 3 · 1 infra error`. */
+/**
+ * `3 of 4`, with the attempts that didn't count named: `2 of 3 · 1 infra error · 1 skipped`. A
+ * cancelled attempt is recorded as a fail, but the agent didn't fail it, so it's named apart.
+ */
 function cellCount(cell: CellResult): string {
-  const counted = cell.passed + cell.failed
+  const cancelled = cell.errors
+    .filter((err) => err.kind === 'aborted')
+    .reduce((n, err) => n + err.attempts, 0)
+  const counted = Math.max(0, cell.passed + cell.failed - cancelled)
   const parts = [
     counted > 0 ? `${cell.passed} of ${counted}` : '',
     cell.infraError ? plural(cell.infraError, 'infra error') : '',
+    cancelled ? `${cancelled} cancelled` : '',
+    cell.skipped ? `${cell.skipped} skipped` : '',
   ].filter(Boolean)
-  if (!parts.length) return cell.skipped ? 'skipped' : 'not run'
+  if (!parts.length) return 'not run'
   return parts.join(' · ')
 }
 

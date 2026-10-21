@@ -134,6 +134,24 @@ describe('every layout', () => {
     assert.doesNotMatch(text, /^ {2}pass {2}\S.* +0 of 1$/m)
   })
 
+  test('cancelled and skipped tries are named beside the count, never counted as fails', () => {
+    const g = GOLDENS.find((x) => x.name === 'results')
+    assert.ok(g)
+    const suite = goldenSuite(g)
+    const e = suite.files
+      .flatMap((f) => f.evals)
+      .find((x) => x.name === 'explains why greet.js fails')
+    const cell = e?.cells?.[0]
+    assert.ok(cell)
+    cell.attempts = 4
+    cell.failed = 2
+    cell.skipped = 1
+    cell.errors.push({ kind: 'aborted', message: 'The run was cancelled', attempts: 1 })
+    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
+    assert.match(text, /^ {2}4 tries +1 of 2 · 1 cancelled · 1 skipped$/m)
+    assert.doesNotMatch(text, /^ {2}4 tries +1 of 3/m, 'canary: a cancelled try is not a fail')
+  })
+
   test('the tally puts fail first, leaves zeros out and counts infra errors and skips apart', () => {
     const c = colors(false)
     assert.equal(tallyLine(c, { pass: 2, fail: 5, infraError: 0, skipped: 0 }), '5 fail · 2 pass')
