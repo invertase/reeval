@@ -12,6 +12,7 @@ import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox
 import {
   PART_PATHS,
   PLUGIN_DIR,
+  PLUGIN_MANIFEST,
   PLUGIN_PARTS,
   type PluginContents,
   pluginServerName,
@@ -121,6 +122,11 @@ export type Agent = Layout & {
    * keys, in one list with the environment's (Grok Build): it keeps one of two servers of a name.
    */
   pluginServersByName?: true
+  /**
+   * Plugin manifests it reads in place of `.claude-plugin/plugin.json` when a plugin has one, so it
+   * would load what reeval didn't place or rewrite; unset for an agent that reads only that one.
+   */
+  pluginManifestsFirst?: readonly string[]
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -751,6 +757,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
   antigravity: {
     ...LAYOUTS.antigravity,
     pluginParts: PLUGIN_PARTS,
+    // agy 1.4.2 installs a plugin as a native one when it has any of these, under that manifest's
+    // name and paths.
+    pluginManifestsFirst: [
+      'plugin.json',
+      '.antigravity-plugin/plugin.json',
+      '.gemini-plugin/plugin.json',
+      'gemini-extension.json',
+    ],
     name: 'Antigravity',
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
@@ -1005,6 +1019,13 @@ export function refusedPlugins(
     const what = refused.map((part) => `${part} (${PART_PATHS[part]})`).join(' and ')
     const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
     return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
+  }
+  const first = (agent ?? mimics)?.pluginManifestsFirst ?? []
+  for (const p of plugins) {
+    const other = p.manifests.find((m) => first.includes(m))
+    if (other) {
+      return `${name} reads the ${p.name} plugin's ${other} in place of its ${PLUGIN_MANIFEST}, so reeval can't hold it to the parts it places: remove ${other} from the plugin, or leave the plugin out of this cell`
+    }
   }
   const layout = layoutOf(harness)
   const runs = layout.pluginHookEvents

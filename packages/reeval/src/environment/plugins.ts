@@ -40,6 +40,15 @@ export const PART_PATHS: Record<PluginPart, string> = {
 
 /** A plugin's manifest, relative to its directory. */
 export const PLUGIN_MANIFEST = '.claude-plugin/plugin.json'
+/** Other harnesses' plugin manifests, relative to the plugin's directory. */
+export const OTHER_MANIFESTS = [
+  'plugin.json',
+  '.antigravity-plugin/plugin.json',
+  '.gemini-plugin/plugin.json',
+  'gemini-extension.json',
+  '.codex-plugin/plugin.json',
+  '.cursor-plugin/plugin.json',
+]
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /** Manifest keys that move a part from its default place, which reeval doesn't follow. */
 const CUSTOM_PATHS = ['skills', 'agents', 'commands', 'hooks', 'outputStyles', 'lspServers']
@@ -102,6 +111,8 @@ export type PluginContents = {
   hooks: { events: string[]; commands: string[]; otherTypes: string[] }
   mcp: Record<string, McpServer>
   rules: string[]
+  /** The other harnesses' manifests it has ({@link OTHER_MANIFESTS}), which some read first. */
+  manifests: string[]
   /** The manifest's text, without `mcpServers` when `only` leaves MCP out. */
   manifest: string
 }
@@ -320,6 +331,7 @@ export function readPlugin(
     hooks: kept.includes('hooks') ? hooks : { events: [], commands: [], otherTypes: [] },
     mcp: kept.includes('mcp') ? mcp : {},
     rules: kept.includes('rules') ? rules : [],
+    manifests: OTHER_MANIFESTS.filter((m) => existsSync(join(dir, m))),
     manifest:
       kept.includes('mcp') || manifest.mcpServers === undefined
         ? readFileSync(manifestPath, 'utf8')

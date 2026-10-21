@@ -367,6 +367,32 @@ test('Cursor and Antigravity load every part, and refuse hook events they don’
   assert.deepEqual(LAYOUTS.antigravity.pluginHookEvents, Object.keys(ANTIGRAVITY_HOOK_EVENTS))
 })
 
+test('Antigravity refuses a plugin with a manifest agy reads in place of the Claude Code one', () => {
+  const none = { skills: [], mcp: [] }
+  for (const manifest of [
+    'plugin.json',
+    '.antigravity-plugin/plugin.json',
+    '.gemini-plugin/plugin.json',
+    'gemini-extension.json',
+  ]) {
+    const p = readPlugin(write(review(), { [manifest]: '{"name":"native"}' }), 'x', ['skills'])
+    assert.deepEqual(p.manifests, [manifest])
+    assert.equal(
+      refusedPlugins({ kind: 'antigravity' } as never, [p], none),
+      `Antigravity reads the review plugin's ${manifest} in place of its .claude-plugin/plugin.json, so reeval can't hold it to the parts it places: remove ${manifest} from the plugin, or leave the plugin out of this cell`,
+    )
+    assert.equal(refusedPlugins({ kind: 'cursor' } as never, [p], none), undefined)
+  }
+  // agy ignores Cursor's manifest, and Cursor's plugins are unpacked by reeval, never loaded.
+  const cursorManifest = readPlugin(
+    write(review(), { '.cursor-plugin/plugin.json': '{"name":"native"}' }),
+    'x',
+    ['skills'],
+  )
+  assert.equal(refusedPlugins({ kind: 'antigravity' } as never, [cursorManifest], none), undefined)
+  assert.equal(refusedPlugins({ kind: 'cursor' } as never, [cursorManifest], none), undefined)
+})
+
 test('on Cursor, two plugins’ subagents or commands unpacked to one file clash', () => {
   const other = (parts: Record<string, string>) =>
     readPlugin(write(tmp(), { '.claude-plugin/plugin.json': '{"name":"audit"}', ...parts }), 'y')

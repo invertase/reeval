@@ -550,6 +550,9 @@ export const inventory: InventoryFeature[] = [
     plan: ['plugins/antigravity-and-cursor'],
     tests: [
       plugin('Cursor and Antigravity load every part'),
+      plugin(
+        'Antigravity refuses a plugin with a manifest agy reads in place of the Claude Code one',
+      ),
       plugin('on Cursor, two plugins’ subagents or commands unpacked to one file clash'),
       plugin(
         'on Cursor, two rules unpacked to one file clash, and a hook that isn’t a command is refused',
