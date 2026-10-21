@@ -54,6 +54,15 @@ export function classifyDocker(error: unknown): PrepareFailure {
   }
 }
 
+/** How to install Docker on each platform, as a fix that starts lower-case. */
+export const DOCKER_INSTALL: Partial<Record<NodeJS.Platform, string>> = {
+  linux: 'install Docker Engine (https://docs.docker.com/engine/install/) or Docker Desktop',
+  darwin:
+    'install Docker Desktop (https://docs.docker.com/desktop/setup/install/mac-install/), or another Docker engine such as OrbStack or Colima',
+  win32:
+    'install Docker Desktop with the WSL 2 backend and Linux containers (https://docs.docker.com/desktop/setup/install/windows-install/)',
+}
+
 /** Why Docker (or Podman) can't run a sandbox, as the fix a user needs; null when it can. */
 export function dockerProblem(
   state: DockerState,
@@ -64,6 +73,8 @@ export function dockerProblem(
   if (engine === 'podman') return podmanProblem(platform)
   if (state === 'windows-containers')
     return "Docker is running Windows containers, but reeval's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again."
+  if (state === 'missing')
+    return `Docker isn't installed: there's no docker command on the PATH. ${upper(DOCKER_INSTALL[platform] ?? DOCKER_INSTALL.linux ?? '')}, and try again.`
   return platform === 'win32'
     ? 'Docker is not running. Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.'
     : 'Docker is not running. Start Docker and try again.'

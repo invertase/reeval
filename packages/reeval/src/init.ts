@@ -1,4 +1,5 @@
-// `reeval init`: scaffolds a project that passes on the fake agent, with one real agent configured.
+// `reeval init`: scaffolds a project with one real agent configured, an environment and an eval that
+// uses it (or, with --bare, only the config and its essentials), then says whether Docker is ready.
 // It plans every file first and writes nothing when one would overwrite a file that differs.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
@@ -35,7 +36,7 @@ export const INIT_HARNESSES: ReadonlyArray<{
   { kind: 'grok-build', label: 'Grok Build', factory: 'grokBuild', model: 'grok-4.6' },
 ]
 
-export type InitChoice = AgentKind | 'none'
+export type InitChoice = AgentKind
 
 const descriptorOf = (h: { kind: AgentKind; model: string }) =>
   ({ kind: h.kind, model: h.model }) as AgentHarnessDescriptor
@@ -44,10 +45,11 @@ const keyOf = (h: { kind: AgentKind; model: string }) => agentFor(descriptorOf(h
 /** The cell id an offered agent runs as, e.g. `opencode:gemini-3.8-flash`. */
 const cellOf = (h: { kind: AgentKind; model: string }) => harnessId(descriptorOf(h))
 
-const CHOICES: InitChoice[] = [...INIT_HARNESSES.map((h) => h.kind), 'none']
+const CHOICES: InitChoice[] = INIT_HARNESSES.map((h) => h.kind)
 const DEFAULT_CHOICE: InitChoice = 'cursor'
 const GITIGNORE = ['.reeval/', '.env*']
 const EVAL_FILE = 'evals/greet.eval.ts'
+const ENVIRONMENTS_FILE = 'evals/environments.ts'
 
 export type InitAction = {
   /** Relative to the project, with `/` on every platform. */
@@ -62,62 +64,58 @@ export type InitPlan = { dir: string; actions: InitAction[]; conflicts: string[]
 const posix = (path: string) => path.split(sep).join('/')
 
 function harnessOf(choice: InitChoice) {
-  return INIT_HARNESSES.find((h) => h.kind === choice)
+  const h = INIT_HARNESSES.find((h) => h.kind === choice)
+  if (!h) throw new UsageError(`--harness must be one of ${CHOICES.join(', ')} (got ${choice})`)
+  return h
 }
 
 export function configSource(pkg: string, choice: InitChoice): string {
-  const real = harnessOf(choice)
-  const harnessImports = real ? `${real.factory}, fakeHarness` : 'fakeHarness'
-  const fakeAgent = `// The fake agent writes the file ${EVAL_FILE} asks for: no keys, Docker or network.
-const fakeAgent = fakeHarness({
-  files: { 'greet.js': 'export const greet = (name) => \`Hello, \${name}!\`\\n' },
-  text: 'I created greet.js exporting greet(name).',
-})
-`
-  const profiles = `    // PR runs in CI: one attempt per cell, no variants.
+  const h = harnessOf(choice)
+  return `import { defineConfig } from '${pkg}'
+import { ${h.factory} } from '${pkg}/harness'
+
+export default defineConfig({
+  include: ['evals/**/*.eval.ts'],
+  harness: ${h.factory}({ model: '${h.model}' }), // needs ${keyOf(h)}
+  timeout: '15m',
+  // For c.judge, add a judge and its key, e.g. { model: 'google/gemini-3.8-flash' }
+  // with GOOGLE_GENERATIVE_AI_API_KEY.
+  defaultProfile: { ci: 'pr' },
+  profiles: {
+    // PR runs in CI: one attempt per cell, no variants.
     pr: { limit: { runs: 1, compare: false }, budget: { attempts: 20 } },
     // Thorough: three attempts per cell, recorded every time.
     nightly: {
       defaults: { runs: 3 },
       record: 'always',
       budget: { attempts: 80, duration: '2h' },
-    },`
-  const body = real
-    ? `  harness: ${real.factory}({ model: '${real.model}' }), // needs ${keyOf(real)}
-  timeout: '15m',
-  // For c.judge, add a judge and its key, e.g. { model: 'google/gemini-3.8-flash' }
-  // with GOOGLE_GENERATIVE_AI_API_KEY.
-  defaultProfile: { ci: 'pr' },
-  profiles: {
-    // reeval run --profile fake: the evals on the fake agent.
-    fake: { defaults: { harness: fakeAgent, sandbox: fakeSandbox() } },
-${profiles}
-  },`
-    : `  harness: fakeAgent,
-  sandbox: fakeSandbox(),
-  defaultProfile: { ci: 'pr' },
-  profiles: {
-${profiles}
-  },`
-  return `import { defineConfig } from '${pkg}'
-import { ${harnessImports} } from '${pkg}/harness'
-import { fakeSandbox } from '${pkg}/sandbox'
+    },
+  },
+})
+`
+}
 
-${fakeAgent}
-export default defineConfig({
-  include: ['evals/**/*.eval.ts'],
-${body}
+export function environmentsSource(pkg: string): string {
+  return `import { defineEnvironment } from '${pkg}'
+
+/** What every attempt of greet.eval.ts starts in, before the agent's first turn. */
+export const greeter = defineEnvironment('greeter', {
+  // Written into the workspace.
+  files: { 'package.json': '{ "type": "module" }\\n' },
+  // The project's rules: AGENTS.md, or CLAUDE.md for Claude Code.
+  rules: 'Write ES modules with named exports. Add no dependencies.\\n',
 })
 `
 }
 
 export function evalSource(pkg: string): string {
   return `import { evaluate, expect } from '${pkg}'
+import { greeter } from './environments.ts'
 
 const greetsAda = \`node -e "import('./greet.js').then((m) =>
   process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"\`
 
-evaluate('creates greet.js', async (c) => {
+evaluate('creates greet.js', { environment: greeter }, async (c) => {
   const turn = await c.send(
     'Create greet.js, an ES module exporting greet(name) that returns ' +
       '"Hello, <name>!". No dependencies.',
@@ -236,24 +234,36 @@ export function planInit(options: {
   force: boolean
   pkg: string
   version: string
+  /** Only the config and its essentials: no environment or eval. */
+  bare?: boolean
 }): InitPlan {
-  const { dir, choice, force, pkg, version } = options
+  const { dir, choice, force, pkg, version, bare } = options
   const conflicts: string[] = []
   const other = CONFIG_FILES.filter((f) => f !== 'reeval.config.ts' && existsSync(join(dir, f)))
   if (other.length && !force) conflicts.push(`${other.join(', ')} exists already`)
-  const real = harnessOf(choice)
+  const h = harnessOf(choice)
   const actions = [
     owned(
       dir,
       'reeval.config.ts',
       configSource(pkg, choice),
-      real
-        ? `harness ${cellOf(real)}; profiles fake, pr, nightly`
-        : 'the fake agent; profiles pr, nightly',
+      `harness ${cellOf(h)}; profiles pr, nightly`,
       force,
       conflicts,
     ),
-    owned(dir, EVAL_FILE, evalSource(pkg), 'one eval, passes on the fake agent', force, conflicts),
+    ...(bare
+      ? []
+      : [
+          owned(
+            dir,
+            ENVIRONMENTS_FILE,
+            environmentsSource(pkg),
+            'environment greeter: a package.json and rules',
+            force,
+            conflicts,
+          ),
+          owned(dir, EVAL_FILE, evalSource(pkg), 'one eval, in greeter', force, conflicts),
+        ]),
     gitignore(dir),
     packageJson(dir, pkg, version),
   ]
@@ -263,9 +273,8 @@ export function planInit(options: {
 /** Asks which agent to configure, by number or name; the empty answer takes the default. */
 export async function askHarness(input: Readable, output: Writable): Promise<InitChoice> {
   const lines = [
-    'Which agent should reeval.config.ts run? The fake profile needs no keys or Docker.',
+    'Which agent should reeval.config.ts run?',
     ...INIT_HARNESSES.map((h, i) => `  ${i + 1}) ${h.label.padEnd(12)} ${cellOf(h)}, ${keyOf(h)}`),
-    `  ${CHOICES.length}) None         the fake agent only`,
   ]
   output.write(`${lines.join('\n')}\n`)
   const rl = createInterface({ input, terminal: false })
@@ -281,7 +290,7 @@ export async function askHarness(input: Readable, output: Writable): Promise<Ini
       const byNumber = CHOICES[Number(answer) - 1]
       if (/^\d+$/.test(answer) && byNumber) return byNumber
       const byName = CHOICES.find(
-        (c) => c === answer || harnessOf(c)?.label.toLowerCase() === answer,
+        (c) => c === answer || harnessOf(c).label.toLowerCase() === answer,
       )
       if (byName) return byName
       output.write(`Answer 1 to ${CHOICES.length}, or one of ${CHOICES.join(', ')}.\n`)
@@ -309,6 +318,11 @@ export type InitIO = {
   cwd: string
 }
 
+const dockerLine = async (next: string) => {
+  const { defaultDeps, dockerReadiness } = await import('./doctor.ts')
+  return dockerReadiness(defaultDeps(), next)
+}
+
 /** `reeval init [dir]`: plans the scaffold, refuses conflicts without `--force`, then writes it. */
 export async function initCommand(flags: Flags, args: string[], io: InitIO): Promise<number> {
   const manifest = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'))
@@ -333,6 +347,7 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
     force: !!flags.force,
     pkg: manifest.name,
     version: manifest.version,
+    bare: !!flags.bare,
   })
   const where = posix(relative(io.cwd, dir)) || '.'
   if (plan.conflicts.length) {
@@ -355,22 +370,24 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
     }
   }
   const pm = packageManager(dir)
-  const real = harnessOf(choice)
+  const h = harnessOf(choice)
+  const build = `${pm.exec} image build`
   const next: Array<[string, string]> = [
     ...(where === '.' ? [] : [[`cd ${where}`, ''] as [string, string]]),
     [pm.install, ''],
+    [build, `bakes ${h.label} into its sandbox image (needs Docker)`],
     [
-      `${pm.exec} run${real ? ' --profile fake' : ''}`,
-      'passes now: the fake agent, no keys or Docker',
+      `${pm.exec} run`,
+      `${flags.bare ? 'the evals you write in evals/' : 'the eval'} on ${h.label}, with ${keyOf(h)} in .env.local`,
     ],
-    ...(real
-      ? ([
-          [`${pm.exec} image build`, `bakes ${real.label} into its sandbox image (needs Docker)`],
-          [`${pm.exec} run`, `on ${real.label}, with ${keyOf(real)} in .env.local`],
-        ] as Array<[string, string]>)
-      : []),
   ]
   const pad = Math.max(...next.map(([c]) => c.length))
   io.out(`Next:\n${next.map(([c, n]) => `  ${n ? `${c.padEnd(pad)}  ${n}` : c}`).join('\n')}`)
+  // A problem here is advice for the next step, never a failed init.
+  const docker = await dockerLine(build).catch(
+    (error: Error) =>
+      `Docker couldn't be checked (${error.message}); reeval doctor checks it again`,
+  )
+  io.out(docker)
   return 0
 }

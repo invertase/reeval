@@ -43,7 +43,7 @@ lift (variant pass@1 − control pass@1, 95% interval), gate, checks and judge, 
 
 ```bash
 npm i -D reeval
-npx reeval init --harness cursor   # then: npx reeval run --profile fake
+npx reeval init --harness cursor   # or --bare: the config, no example eval
 npx reeval run --dry-run           # the plan, no keys or Docker
 npx reeval image build             # once, for real agents
 npx reeval doctor                  # Docker, keys and images, with fixes
@@ -53,12 +53,13 @@ npx reeval run
 1. Install: `npm init -y` if there's no `package.json`, then `npm i -D reeval`
    (or a tarball: `npm i -D /path/to/reeval.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm, pnpm or Yarn.
-2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|grok-build|none>` (it only
-   asks in a terminal) writes `reeval.config.ts` (the agent, plus `fake`, `pr` and `nightly`
-   profiles), `evals/greet.eval.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval`
-   script; `npx reeval run --profile fake` passes with no keys. It never overwrites a file that
-   differs without `--force`. Or write `reeval.config.ts` and `evals/**/*.eval.ts` (the default
-   `include`) yourself.
+2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|grok-build>`
+   (it only asks in a terminal) writes `reeval.config.ts` (the agent, plus `pr` and `nightly`
+   profiles), `evals/environments.ts` (one `defineEnvironment`), `evals/greet.eval.ts` (an eval
+   in that environment), the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval` script, then
+   says whether Docker is running. `--bare` writes only the config, `.gitignore` and
+   `package.json`. It never overwrites a file that differs without `--force`. Or write
+   `reeval.config.ts` and `evals/**/*.eval.ts` (the default `include`) yourself.
 3. `npx reeval run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
 4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in
@@ -134,9 +135,8 @@ a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 's
 steps per turn), `layout` (an agent's id, such as `'claude-code'`), `failWith`, `delayMs`,
 `flakeRate`, `reasoning`, `tools` and `id`.
 
-`fakeSandbox()` is for trying reeval and testing configs without Docker (`reeval init`'s
-`fake` profile). It runs commands on your host with your tools, brokers no secrets and enforces
-no egress, so an eval passing there says nothing about its checks in the eval's real sandbox.
+`fakeSandbox()` is for testing configs and reeval itself without Docker. It runs commands on
+your host with your tools, brokers no secrets and enforces no egress, so an eval passing there says nothing about its checks in the eval's real sandbox.
 Don't use it to validate an eval, and don't put it on an environment that real harnesses use:
 real Cursor runs need Docker.
 

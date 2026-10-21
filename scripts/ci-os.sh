@@ -46,13 +46,26 @@ case $part in
     tarball=$(cd "$work" && ls ./*.tgz)
     reeval() { npx --no-install reeval "$@"; }
 
-    # A fresh project on the fake agent: init, run, doctor and a studio build of the run.
+    # A fresh project, its eval run on the fake agent: init, run, doctor and a studio build of the run.
     mkdir "$work/fake" && cd "$work/fake"
     npm init -y >/dev/null
     npm install --no-audit --no-fund "../$tarball"
-    reeval init -y --harness none
-    reeval run
-    reeval doctor
+    reeval init -y
+    cat >fake.config.ts <<'EOF'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+
+export default defineConfig({
+  include: ['evals/**/*.eval.ts'],
+  harness: fakeHarness({
+    files: { 'greet.js': 'export const greet = (name) => `Hello, ${name}!`\n' },
+  }),
+  sandbox: fakeSandbox(),
+})
+EOF
+    reeval run --config fake.config.ts
+    reeval doctor --config fake.config.ts
     reeval studio build --scratch | tee build.log
     grep -q 'built studio-dist/: 1 run' build.log
 
@@ -60,18 +73,20 @@ case $part in
     mkdir "$work/docker" && cd "$work/docker"
     npm init -y >/dev/null
     npm install --no-audit --no-fund "../$tarball"
-    reeval init -y --harness cursor
+    reeval init -y --harness cursor | tee init.log
     os=$(docker info --format '{{.OSType}}' 2>/dev/null || true)
     if reeval doctor >doctor.log 2>&1; then status=0; else status=$?; fi
     cat doctor.log
     case $os in
-      linux) ;;
+      linux) grep -q '^Docker is running: ready for npx reeval image build$' init.log ;;
       windows)
         [ "$status" = 1 ] && grep -q "is running Windows containers, but reeval's sandboxes are Linux containers" doctor.log &&
-          grep -q 'Switch to Linux containers' doctor.log
+          grep -q 'Switch to Linux containers' doctor.log &&
+          grep -q '^Docker is running Windows containers' init.log
         ;;
       *)
-        [ "$status" = 1 ] && grep -q "isn't running, and the config's sandboxes need it" doctor.log
+        [ "$status" = 1 ] && grep -Eq "isn't (running|installed).*, and the config's sandboxes need it" doctor.log &&
+          grep -Eq "^Docker isn't (running|installed): .*, then run npx reeval image build$" init.log
         case $(uname -s) in
           MINGW* | MSYS*) grep -q 'WSL 2 backend and Linux containers' doctor.log ;;
         esac

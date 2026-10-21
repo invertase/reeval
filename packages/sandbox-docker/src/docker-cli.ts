@@ -174,13 +174,19 @@ for (let i = 0; i < Number(seconds); i++) {
 /**
  * Whether the daemon (or Podman) answers, and runs Linux containers. Docker Desktop on Windows can be switched
  * to Windows containers (GitHub's Windows runners only have those), where no sandbox image runs.
+ * `missing` is no CLI on the PATH at all.
  */
-export type DockerState = 'running' | 'down' | 'windows-containers'
+export type DockerState = 'running' | 'down' | 'windows-containers' | 'missing'
 
 export async function dockerState(engine?: Engine): Promise<DockerState> {
+  let missing = false
   const r = await docker(['info', '--format', engineSpec(engine).stateFormat], { engine }).catch(
-    () => null,
+    (error: NodeJS.ErrnoException) => {
+      missing = error?.code === 'ENOENT'
+      return null
+    },
   )
+  if (missing) return 'missing'
   const [version, os] = r?.exitCode === 0 ? r.stdout.toString('utf8').trim().split(/\s+/) : []
   // Some CLI versions exit 0 without a daemon, printing no server version.
   if (!version) return 'down'
