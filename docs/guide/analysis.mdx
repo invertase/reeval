@@ -152,7 +152,7 @@ control  composer-2.5[fast=true]  4  92569  1458
 variant  composer-2.5[fast=true]  4  33045  494
 ```
 
-The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: with no `params` set, `composer-2.5` ran as `fast=true`.
+The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: this run's `composer-2.5` ran as `fast=true`.
 
 A cell's key repeats across evals in a run, so join `cells` on `eval_key` as well. `reeval query effort` also ranks those totals when both sides of a compare reported usage.
 

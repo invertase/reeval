@@ -166,7 +166,7 @@ A harness's id defaults to `<kind>:<model>`. Set `effort` and it becomes `<kind>
 reeval: evals/guide-matrix.eval.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
 ```
 
-`params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalogue lists (`fast=true` for `composer-2.5`), and reeval records and shows the variant that ran. The default can change, so pin every parameter, such as `params: { fast: 'false' }`, for reproducible evals.
+`params` sets Cursor's model parameters, as strings. `fast` defaults to `'false'`, the standard price, so Fast runs only with `params: { fast: 'true' }`. Any other parameter you leave out takes the default variant Cursor's catalogue lists, and reeval records and shows the variant that ran. The default can change, so pin every parameter for reproducible evals.
 
 `effort` is reasoning effort on every shipped factory but `fx()`, as the value that agent's CLI takes (`high`, `xhigh`, `max`, `off`, …), with no shared enum. On Cursor it maps onto the model parameter `Cursor.models.list()` names for that model, not `params.fast`.
 

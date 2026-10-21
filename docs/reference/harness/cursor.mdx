@@ -23,7 +23,7 @@ With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`
 </Property>
 
 <Property name="params" type="Record<string, string>" optional>
-  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the default variant in Cursor's model catalogue, which reeval sends explicitly: `composer-2.5` runs as `composer-2.5[fast=true]`, the Fast variant, unless you pass `{ fast: 'false' }`. Cursor can change that default, so pin every parameter for reproducible evals. Fast is not reasoning effort.
+  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. `fast` defaults to `'false'` on every model that takes it, so `composer-2.5` runs as `composer-2.5[fast=false]` at the standard price, even though Cursor's catalogue marks Fast as its default variant. Pass `{ fast: 'true' }` to run Fast, at several times the price. Any other parameter you don't set takes the default variant in Cursor's model catalogue, which reeval sends explicitly. Cursor can change that default, so pin every parameter for reproducible evals. Fast is not reasoning effort.
 </Property>
 
 <Property name="effort" type="string" optional>

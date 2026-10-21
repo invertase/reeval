@@ -54,7 +54,7 @@ export const cursorHarnessSchema = z
       .record(z.string(), z.string())
       .optional()
       .describe(
-        "Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.",
+        "Model parameters, e.g. `{ fast: 'true' }`. Unset ones take the default variant in Cursor's model catalog, sent explicitly, except `fast`, which is `false` wherever the model takes it.",
       ),
     effort: effort(
       'Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`.',
