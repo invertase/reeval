@@ -1700,6 +1700,13 @@ export const features: Feature[] = [
     canary: /expected '---\\nname: reviewer\\ndescription: Rev…' to contain 'BUILT-41'/,
   },
   {
+    dir: 'harness/opencode-plugin-build',
+    tiers: ['docker'],
+    image: 'opencode',
+    env: 'built',
+    canary: /expected '---\\ndescription: Reviews a change\. T…' to contain 'BUILT-58'/,
+  },
+  {
     dir: 'harness/antigravity-rules',
     tiers: ['fake', 'docker'],
     image: 'antigravity',

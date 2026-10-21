@@ -578,7 +578,12 @@ export const inventory: InventoryFeature[] = [
     id: 'harness.plugins.opencode-pi-fx',
     area: 'Environments',
     name: 'Plugins on OpenCode (skills, MCP servers, and subagents and commands unpacked into the workspace’s `.opencode/` with only the frontmatter it takes), pi (skills, MCP servers as `<plugin>_<server>`, commands as prompt templates in `.pi/prompts/`) and fx (skills and MCP servers): the parts each has no place for refused',
-    fixtures: ['harness/opencode-plugin', 'harness/pi-plugin', 'harness/fx-plugin'],
+    fixtures: [
+      'harness/opencode-plugin',
+      'harness/opencode-plugin-build',
+      'harness/pi-plugin',
+      'harness/fx-plugin',
+    ],
     plan: ['plugins/opencode-pi-and-fx'],
     tests: [
       plugin('OpenCode, pi and fx load the parts they have a place for, and refuse the rest'),
@@ -586,6 +591,9 @@ export const inventory: InventoryFeature[] = [
         'unpackPlugins gives OpenCode subagents and commands only the frontmatter it takes; pi takes commands as they are',
       ),
       plugin('pi names a plugin MCP server <plugin>_<server>, and refuses one named like another'),
+      plugin(
+        'the frontmatter OpenCode takes survives a byte-order mark, an empty block and a non-string description',
+      ),
       planTest(
         'OpenCode, pi and fx refuse the plugin parts they have no place for, and pi a plugin server named like one in mcp',
       ),
