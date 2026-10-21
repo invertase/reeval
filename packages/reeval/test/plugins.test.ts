@@ -20,6 +20,7 @@ import {
   claudePluginFiles,
   cursorHookMatcher,
   LAYOUTS,
+  piMcpServers,
   refusedPlugins,
   writePluginFiles,
 } from '../src/harness/agents.ts'
@@ -330,6 +331,94 @@ test('Cursor and Antigravity load every part, and refuse hook events they don’
   // Cursor takes them in its own MCP config, where reeval fills the secret in.
   assert.equal(LAYOUTS.cursor.pluginPlacement, 'flat')
   assert.deepEqual(LAYOUTS.antigravity.pluginHookEvents, Object.keys(ANTIGRAVITY_HOOK_EVENTS))
+})
+
+test('OpenCode, pi and fx load the parts they have a place for, and refuse the rest', () => {
+  const whole = readPlugin(review(), 'x')
+  for (const [kind, name, parts] of [
+    ['opencode', 'OpenCode', ['skills', 'agents', 'commands', 'mcp']],
+    ['pi', 'pi', ['skills', 'commands', 'mcp']],
+    ['fx', 'fx', ['skills', 'mcp']],
+  ] as const) {
+    assert.match(
+      refusedPlugins({ kind } as never, [whole], { skills: [], mcp: [] }) ?? '',
+      new RegExp(
+        `^${name} can't load the review plugin's .*hooks \\(hooks/hooks\\.json\\) and rules \\(rules/\\): use only: \\[${parts.map((p) => `'${p}'`).join(', ')}\\], or leave the plugin out of this cell$`,
+      ),
+      kind,
+    )
+    const kept = readPlugin(review(), 'x', [...parts])
+    assert.equal(refusedPlugins({ kind } as never, [kept], { skills: [], mcp: [] }), undefined)
+    assert.equal(LAYOUTS[kind].pluginPlacement, 'flat')
+  }
+  assert.deepEqual(
+    [LAYOUTS.opencode.pluginUnpack?.agents, LAYOUTS.opencode.pluginUnpack?.commands],
+    ['.opencode/agents', '.opencode/commands'],
+  )
+  assert.deepEqual(LAYOUTS.pi.pluginUnpack, { commands: '.pi/prompts' })
+  assert.equal(LAYOUTS.fx.pluginUnpack, undefined)
+})
+
+test('unpackPlugins gives OpenCode subagents and commands only the frontmatter it takes; pi takes commands as they are', () => {
+  const dir = write(review(), {
+    'agents/reviewer.md':
+      '---\nname: reviewer\ndescription: "Reviews: the diff"\ntools: Read, Grep\nmodel: sonnet\n---\n\nReview the diff.\n',
+    'agents/bare.md': 'No frontmatter.\n',
+    'commands/review.md':
+      "---\ndescription: Review the tree\nallowed-tools: Bash(git:*)\nargument-hint: '[path]'\n---\n\nReview $ARGUMENTS.\n",
+  })
+  const p = readPlugin(dir, 'x', ['agents', 'commands'])
+  const placed = { name: p.name, dir: '/home/reeval/.reeval/plugins/review', parts: p.kept }
+  const unpacked = (unpack: typeof LAYOUTS.pi.pluginUnpack) => {
+    assert.ok(unpack)
+    return Object.fromEntries(
+      unpackPlugins([{ ...placed, files: pluginFiles(p) }], unpack).map((f) => [f.path, f.content]),
+    )
+  }
+  assert.deepEqual(unpacked(LAYOUTS.opencode.pluginUnpack), {
+    '.opencode/agents/bare.md': '---\nmode: subagent\n---\n\nNo frontmatter.\n',
+    '.opencode/agents/reviewer.md':
+      '---\ndescription: "Reviews: the diff"\nmode: subagent\n---\n\nReview the diff.\n',
+    '.opencode/commands/review.md': '---\ndescription: Review the tree\n---\n\nReview $ARGUMENTS.\n',
+  })
+  assert.deepEqual(unpacked(LAYOUTS.pi.pluginUnpack), {
+    '.pi/prompts/review.md':
+      "---\ndescription: Review the tree\nallowed-tools: Bash(git:*)\nargument-hint: '[path]'\n---\n\nReview $ARGUMENTS.\n",
+  })
+  const broken = readPlugin(
+    write(review(), { 'agents/reviewer.md': '---\nname: [reviewer\n---\n\nReview.\n' }),
+    'x',
+    ['agents'],
+  )
+  assert.throws(
+    () =>
+      unpackPlugins(
+        [{ ...placed, parts: broken.kept, files: pluginFiles(broken) }],
+        LAYOUTS.opencode.pluginUnpack ?? {},
+      ),
+    /the review plugin's subagent agents\/reviewer\.md's frontmatter isn't valid YAML/,
+  )
+})
+
+test('pi names a plugin MCP server <plugin>_<server>, and refuses one named like another', () => {
+  const stdio = { transport: 'stdio', command: 'node', args: [], env: {} } as const
+  assert.deepEqual(Object.keys(piMcpServers({ 'review:docs': stdio, local: stdio })), [
+    'review_docs',
+    'local',
+  ])
+  assert.throws(
+    () => piMcpServers({ review_docs: stdio, 'review:docs': stdio }),
+    /pi names the review:docs MCP server review_docs, as it does the review_docs server, and keeps only one: rename one/,
+  )
+  const p = readPlugin(review(), 'x', ['skills', 'mcp'])
+  assert.equal(
+    refusedPlugins({ kind: 'pi' } as never, [p], { skills: [], mcp: ['review_docs'] }),
+    'pi names the review:docs MCP server review_docs, as it does the review_docs server, and keeps only one: rename one',
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'opencode' } as never, [p], { skills: [], mcp: ['review_docs'] }),
+    undefined,
+  )
 })
 
 test('on Cursor, two plugins’ subagents or commands unpacked to one file clash', () => {

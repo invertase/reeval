@@ -348,17 +348,28 @@ export function gooseMcpServers(
 /**
  * pi's `mcp.json` shape, which the adapter escapes and sets `"exposure": "direct"` on. pi
  * skips a server whose name isn't letters, digits, `_` and `-`, so the plan refuses it instead.
+ * A plugin's server, `<plugin>:<server>`, is named `<plugin>_<server>`, so its tools are
+ * `mcp__<plugin>_<server>__<tool>`.
  */
 export function piMcpServers(
   servers: Record<string, ResolvedMcpServer>,
 ): Record<string, PiMcpServer> {
+  const named = new Map<string, string>()
   return Object.fromEntries(
-    Object.entries(servers).map(([name, s]): [string, PiMcpServer] => {
+    Object.entries(servers).map(([key, s]): [string, PiMcpServer] => {
+      const name = /^[a-z0-9-]+:[^:]+$/.test(key) ? key.replace(':', '_') : key
       if (!/^[A-Za-z0-9_-]+$/.test(name)) {
         throw new InfraError(
-          `pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the ${name} server: rename it`,
+          `pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the ${key} server: rename it`,
         )
       }
+      const other = named.get(name)
+      if (other) {
+        throw new InfraError(
+          `pi names the ${key} MCP server ${name}, as it does the ${other} server, and keeps only one: rename one`,
+        )
+      }
+      named.set(name, key)
       if (s.transport === 'sse') {
         throw new InfraError(
           `pi has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
@@ -1064,8 +1075,11 @@ export function refusedPlugins(
     ),
   )
   if (agent && Object.keys(servers).length) {
+    // With the environment's own servers by name, for an agent that renames plugin servers (pi)
+    // and refuses a name two would share.
+    const stub: ResolvedMcpServer = { transport: 'stdio', command: 'true', args: [], env: {} }
     try {
-      agent.mcpServers(servers)
+      agent.mcpServers({ ...Object.fromEntries(own.mcp.map((n) => [n, stub])), ...servers })
     } catch (error) {
       if (error instanceof InfraError) return error.message
       throw error
