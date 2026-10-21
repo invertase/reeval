@@ -817,7 +817,7 @@ export function refusedPlugins(
     for (const server of Object.keys(p.mcp)) {
       const other = serverOwner.get(server)
       if (other) return `the ${p.name} plugin's MCP server "${server}" clashes with ${other}`
-      serverOwner.set(server, `the ${p.name} plugin's`)
+      serverOwner.set(server, `the ${p.name} plugin's MCP server "${server}"`)
     }
   }
   const skillOwner = new Map(own.skills.map((s) => [s.name, `${s.call}'s "${s.name}"`]))
