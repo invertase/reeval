@@ -41,7 +41,7 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session. They s
 </Property>
 
 <Property name="writeFile" type="(path: string, contents: string | Uint8Array) => Promise<void>">
-  Writes a file into the sandbox as the sandbox user, creating its directories: a workspace-relative path, or `~/` for the home directory. Later turns' `diff` leaves the file out, as it does the environment's files, but shows any change made to it afterwards, even under the workspace's `.gitignore`. Use it to place a hidden test after a turn, so the agent never sees it. Each write is a line in the debug trace and nothing in the record. An absolute path or one that leaves the workspace throws.
+  Writes a file into the sandbox as the sandbox user, creating its directories: a workspace-relative path, or `~/` for the home directory. Later turns' `diff` leaves the file out, as it does the environment's files, but shows any change made to it afterwards, even under the workspace's `.gitignore`. Use it to place a hidden test after a turn, so the agent never sees it, or seed a file before the first `c.send`. Each write is a line in the debug trace and nothing in the record. An absolute path or one that leaves the workspace throws.
 </Property>
 
 <Property name="judge" type="(question: string, options?: JudgeCallOptions) => Promise<Verdict>">
@@ -97,7 +97,7 @@ A fake run printing `c.attempt` shows:
 </Property>
 
 <Property name="usage" type="{ input, output, cacheRead, cacheWrite, reasoning } | null">
-  Tokens the turn used, when the harness reports them (`cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `pi()`, `codex()` and `fx()` do; `goose()` doesn't); otherwise `null`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+  Tokens the turn used, when the harness reports them (`cursor()`, `claudeCode()`, `antigravity()`, `opencode()`, `pi()`, `codex()`, `fx()` and `grokBuild()` do; `goose()` doesn't); otherwise `null`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 </Property>
 
 <Property name="model" type="string | null">

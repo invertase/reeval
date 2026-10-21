@@ -1,14 +1,28 @@
 // An eval's plan from its declaration alone: the options cascade, the profile and tags, the
-// matrix, the egress and MCP refusals, and each attempt's gate. Pure: whoever declared the eval
-// (an eval file's `evaluate`, or a declaration tree) registers what it returns.
+// matrix, the egress, MCP and plugin refusals, and each attempt's gate. Pure but for reading local
+// plugins: whoever declared the eval (an eval file's `evaluate`, or a declaration tree) registers
+// what it returns.
 import { type AttemptSpec, setupAllowance } from './attempt/index.ts'
 import type { DeclaredFamily } from './declaration.ts'
 import { parseDuration } from './duration.ts'
-import { unenforceable } from './egress.ts'
+import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
+import {
+  buildRefusal,
+  builtPlugins,
+  duplicateLocalPlugin,
+  fetchesAtStart,
+  layeredPlugins,
+  localPlugin,
+  localSkills,
+  type PluginContents,
+  PluginProblem,
+  pluginCall,
+  pluginSourceLabel,
+} from './environment/plugins.ts'
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { refusedMcp } from './harness/agents.ts'
+import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
@@ -21,6 +35,7 @@ import {
   matchesTags,
   type PlannedAttempt,
   type Resolved,
+  sandboxProvider,
   sandboxSetBy,
   secretVarsIn,
   unbrokered,
@@ -112,11 +127,18 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     const [first] = unbrokered(resolved.env, plannedAttempts)
     if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))
   }
+  const pluginNotes: string[] = []
+  const pluginLabels = new Map<PlannedAttempt, string[]>()
   for (const planned of plannedAttempts) {
     const why = unenforceable(planned.egress, planned.sandbox, where)
     if (why) throw new UsageError(why)
+    const on = `${where} on ${harnessId(planned.harness)}`
     const mcp = refusedMcp(planned.harness, planned.environment.layers)
-    if (mcp) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${mcp}`)
+    if (mcp) throw new UsageError(`${on}: ${mcp}`)
+    const plugins = planPlugins(planned, ctx.config.root)
+    if (plugins.refusal) throw new UsageError(`${on}: ${plugins.refusal}`)
+    for (const note of plugins.notes) if (!pluginNotes.includes(note)) pluginNotes.push(note)
+    if (plugins.labels.length) pluginLabels.set(planned, plugins.labels)
   }
   const path = ctx.file ? relativeFile(ctx.config.root, ctx.file) : null
   const rankFile = relativeFile(ctx.config.root, ctx.file ?? '')
@@ -126,6 +148,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   }
   const harnessBy = resolved.sources?.harness ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
+  plan.notes.push(...pluginNotes)
   const setByOf = (planned: PlannedAttempt) => ({
     sandbox: sandboxSetBy(planned, resolved, ctx.config.file),
     harness: harnessBy,
@@ -157,7 +180,13 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
     const workspace = workspaceOf(planned.environment.layers)
     const files = filesOf(planned.environment.layers)
-    const setBy = setByOf(planned)
+    const builds = builtPlugins(planned.environment.layers)
+    const setBy = builds.length
+      ? {
+          ...setByOf(planned),
+          pluginBuilds: `environment ${planned.environment.name}${path ? ` in ${path}` : ''}`,
+        }
+      : setByOf(planned)
     const id = evalId(rankFile, [...groups, name])
     const key = attemptKey(id, planned.cell.key, planned.n)
     const done = ctx.completed?.includes(key)
@@ -179,6 +208,8 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       egress: planned.egress,
       ...(workspace ? { workspace } : {}),
       ...(files.length ? { files } : {}),
+      ...(pluginLabels.has(planned) ? { plugins: pluginLabels.get(planned) } : {}),
+      ...(builds.length ? { pluginBuilds: builds } : {}),
       plan: skip ? { ...plan, skip } : plan,
       ...(skip ? { skip } : {}),
       ...(family ? { family } : {}),
@@ -217,11 +248,48 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   })
 }
 
+/**
+ * What the plan can tell of an attempt's plugins before any is fetched: a build outside Docker, a
+ * local plugin's content, and the harness's refusal, as a refusal; the commands that fetch a
+ * package at start, as notes under `allow-all`; and a label for each plugin. Git and npm plugins
+ * are read when the attempt resolves its environment, which refuses them the same way.
+ */
+function planPlugins(
+  planned: PlannedAttempt,
+  root: string,
+): { refusal?: string; notes: string[]; labels: string[] } {
+  const { layers } = planned.environment
+  const sources = layeredPlugins(layers)
+  if (sources.length === 0) return { notes: [], labels: [] }
+  const read: PluginContents[] = []
+  const unread: string[] = []
+  const labels: string[] = []
+  for (const source of sources) {
+    const call = pluginCall(source, root)
+    const p = localPlugin(source, root)
+    if (p instanceof PluginProblem) return { refusal: p.message, notes: [], labels }
+    const build = buildRefusal(source, planned.sandbox, p?.name, root)
+    if (build) return { refusal: build, notes: [], labels }
+    if (p) read.push(p)
+    else unread.push(call)
+    labels.push(p ? `${p.name} (${p.kept.join(', ')})` : pluginSourceLabel(source, root))
+  }
+  const twice = duplicateLocalPlugin(layers, root)
+  if (twice) return { refusal: twice, notes: [], labels }
+  const own = {
+    skills: localSkills(layers, root),
+    mcp: [...new Set(layers.flatMap((l) => Object.keys(l.spec.mcp ?? {})))],
+  }
+  const refusal = refusedPlugins(planned.harness, read, own, unread)
+  if (refusal) return { refusal, notes: [], labels }
+  return { ...fetchesAtStart(read, allowedHosts(planned.egress)), labels }
+}
+
 /** The run-wide cap, plus the sandbox provider's and harness's own caps when they set one. */
 function attemptLimits(planned: PlannedAttempt, concurrency: number): Limits {
   const limits: Limits = { attempts: concurrency }
   const { sandbox, harness } = planned
-  if (sandbox.maxConcurrent) limits[`sandbox:${sandbox.kind}`] = sandbox.maxConcurrent
+  if (sandbox.maxConcurrent) limits[`sandbox:${sandboxProvider(sandbox)}`] = sandbox.maxConcurrent
   if (harness.maxConcurrent) limits[`harness:${harness.kind}`] = harness.maxConcurrent
   return limits
 }

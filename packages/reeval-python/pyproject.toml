@@ -1,0 +1,59 @@
+[project]
+name = "reeval-python"
+version = "0.10.0"
+description = "Python authoring SDK for reeval (*.eval.py eval files)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Invertase" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Testing",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://reeval.ai"
+Repository = "https://github.com/invertase/reeval"
+Documentation = "https://github.com/invertase/reeval/tree/main/packages/reeval-python#readme"
+Issues = "https://github.com/invertase/reeval/issues"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.9",
+  "pyright>=1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pyright]
+include = ["src"]
+exclude = ["tests"]
+typeCheckingMode = "strict"
+pythonVersion = "3.11"
+reportUnknownLambdaType = false
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reeval_python"]

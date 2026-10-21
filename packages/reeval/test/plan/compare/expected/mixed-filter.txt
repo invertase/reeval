@@ -4,5 +4,5 @@ hint: 1 compare runs 2 times per cell; effort can't reach p < 0.05 below 4 vs 4 
 evals/variants.eval.ts › control and two variants               b/skilled/docker  variant skilled  gated  ×1
 evals/variants.eval.ts › every cell gated, with a minimum lift  b/skilled/docker  variant skilled  gated  ×2  minLift 0.2
 excluded: —
-image docker · 2 evals
+image docker · cursor · 2 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

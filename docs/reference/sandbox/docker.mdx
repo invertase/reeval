@@ -112,28 +112,43 @@ Each harness has its own sandbox image. `reeval image build` builds the images t
 
 ```text
 images  7 sandbox images (nothing built: --dry-run)
-docker · 23 evals
+docker · cursor · 23 evals
   + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
 docker · claude-code · 1 eval
-  + base  reeval-sandbox:claude-code-1.0.158-patch.6c1cff12  (to build: not built yet)
+  + base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (to build: not built yet)
 …
-docker+0ab0e263 + install · 1 eval
+docker+0ab0e263 · cursor + install · 1 eval
   + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
-python · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
+python · cursor · 1 eval
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
 …
-docker:sqlite · 1 eval
+docker:sqlite · cursor · 1 eval
   + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-9efec1fbf61588d3))
   + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.5 not built yet)
 ```
 
 | Image | Tag | Rebuilt when |
 |---|---|---|
-| reeval's sandbox image | `reeval-sandbox:<harness>-<adapter version>` | Missing, or reeval's base build context changed (its `ai.reeval.context` label); its toolchain layer is `reeval-sandbox-base:latest` |
-| `from` | `reeval-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, on the digest the tag names then (its `ai.reeval.from-digest` label, and `image.from.digest` in the record); `reeval image build` rebuilds it when the tag has moved upstream |
+| reeval's sandbox image | `reeval-sandbox:<harness>-<adapter version>` | Missing, or reeval's base build context or the way it bakes the harness changed (its `ai.reeval.context` label); its toolchain layer is `reeval-sandbox-base:latest` |
+| `from` | `reeval-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, or the way reeval bakes the harness changed (the hash has it), on the digest the tag names then (its `ai.reeval.from-digest` label, and `image.from.digest` in the record); `reeval image build` rebuilds it when the tag has moved upstream |
 | `install` | `reeval-install:<hash of base id and commands>` | The base image's id or a command changes |
 | `dockerfile` | `reeval-dockerfile:<name>-<hash>` | The Dockerfile or its context (less `.dockerignore`) changes, or, `FROM ${REEVAL_BASE}`, reeval's image is rebuilt (the hash has its id) |
+| A plugin's `build` | `reeval-plugin:<image id>-<hash of commit, source tree and build>` | The image under it, the plugin's commit, its files (less `.dockerignore` and `.git`) or its commands change |
+
+A [plugin](/reference/helpers#plugin) with a `build` adds a layer on top of the attempt's image, after `install`, one per plugin. The layer gets the plugin's whole source and runs the commands with bash, as root with `HOME=/home/reeval` and no secrets, from the plugin's `path` (or `cwd` from the source's root). Only `path` is kept in the image, and the attempt copies it to `~/.reeval/plugins/<name>/`. A `plugin.git` or `plugin.npm` source is fetched when the layer builds, so `--dry-run` lists its tag unresolved:
+
+```text
+docker · cursor + 1 plugin build · 1 eval
+  ✓ base                                  reeval-sandbox:cursor-0.1.5  (ready: built (96cb8a76212d))
+  + build plugin.local('plugins/review')  reeval-plugin:96cb8a76212d-f2d3c864c458c316  (to build: not built yet)
+```
+
+A failing build command fails the attempts that use the plugin as infra errors (exit 3), like a failing `install` step: `Building the build of plugin.local('plugins/review') failed: build 2/2 exited 7: exit 7`. So does a `cwd` that isn't a directory in the source (`build cwd tools isn't a directory in the source`), before any command runs. `fakeSandbox()` has no image, so the plan refuses a plugin with a `build` there.
+
+A plugin's content is fixed when its image is prepared, and the record's `plugins[]` shows which content the attempt used. A re-resolved npm spec, or a local plugin you edit mid-run, isn't picked up until the next run; only a moved git ref is noticed.
+
+The build doesn't see the source's `.git` directory. A build that needs git metadata (`git describe`, husky) has to get it another way, such as a version passed in through the build's commands or environment.
 
 `reeval image build --force` rebuilds every image and pulls each base again. A `from` pinned to a digest (`node:22@sha256:…`) never moves.
 
@@ -142,13 +157,14 @@ A rebuild removes the image its tag pointed at before, unless a container or ano
 | Harness | Adapter version in the tag |
 |---|---|
 | Cursor | `0.1.5` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.38) |
-| Claude Code | `1.0.158-patch.6c1cff12` (1.0.158, patched) |
+| Claude Code | `1.0.160-patch.b17cde50` (1.0.160, patched) |
 | Antigravity | `0.1.8` |
 | OpenCode | `0.2.8` |
 | Goose | `0.1.3` |
 | pi | `0.2.7` |
 | Codex | `0.1.7` |
 | fx | `0.1.0` |
+| Grok Build | `0.1.0` |
 
 A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
@@ -164,6 +180,8 @@ Image builds don't count toward the eval timeout.
 | The egress gateway | root | Node, which every image reeval builds has |
 
 Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The gateway enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests.
+
+Every command reeval runs in the container, the harness's bootstrap included, starts with umask `022`. The files and directories it makes aren't group- or world-writable, whatever umask the engine gives `docker exec`: Docker 29.6 and later give 0000 under Docker-in-Docker and rootless Docker.
 
 ```bash
 # the agent's shell in docker({ from: 'dart:stable' })
@@ -200,6 +218,7 @@ Before any attempt starts, reeval builds every image the plan needs that isn't t
 | Situation | Message |
 |---|---|
 | Docker isn't running | `Docker is not running. Start Docker and try again.` (exit 2); on Windows, `… Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.` |
+| No `docker` command | `Docker isn't installed: there's no docker command on the PATH. Install Docker Engine (https://docs.docker.com/engine/install/) or Docker Desktop, and try again.` (exit 2); macOS and Windows link their Docker Desktop installers |
 | Docker runs Windows containers | `Docker is running Windows containers, but reeval's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again.` (exit 2) |
 | An `image` that isn't there | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` |
 | The config's image fails | The failure, then `The sandbox docker+0ab0e263 + install is set by reeval.config.ts for every eval, so nothing ran.` (exit 3) |
@@ -227,6 +246,7 @@ A registry or network error (`no such host`, `i/o timeout`, `TLS handshake timeo
 
 ## Related
 
+- [podman()](/reference/sandbox/podman), the same sandbox on Podman
 - [Sandboxes guide](/guide/sandboxes)
 - [reeval image build and reeval clean](/reference/cli/image-clean)
 - [Egress](/reference/egress)

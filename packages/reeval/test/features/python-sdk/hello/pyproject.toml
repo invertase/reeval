@@ -1,0 +1,11 @@
+[project]
+name = "reeval-fixture-python-hello"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = [
+  "reeval-python",
+  "tomli>=2.0",
+]
+
+[tool.uv.sources]
+reeval-python = { path = "../../../../../reeval-python" }

@@ -1,6 +1,6 @@
 profile nightly (--profile) · 1 evals · 1 cells · 1 attempts
 evals/p.eval.ts › uses the config  fake/base/docker:nightly  control  gated  ×1  files NOTES.md
 excluded: —
-image docker:nightly · 1 evals
+image docker:nightly · cursor · 1 evals
   dockerfile nightly/Dockerfile  reeval-dockerfile:nightly-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
   harness                        reeval-dockerfile:nightly-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)

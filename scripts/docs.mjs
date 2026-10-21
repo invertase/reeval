@@ -111,6 +111,7 @@ function reevalVariables() {
   }
   walk(src)
   found.delete('REEVAL_BASE_ARG') // the constant that holds the name REEVAL_BASE
+  found.delete('REEVAL_PYTHON_MODULE') // python -m target, not an env var
   return [...found].sort()
 }
 
@@ -260,10 +261,12 @@ const RECORD_TYPES = [
   'ContextFile',
   'Cell',
   'EnvironmentRecord',
+  'PluginRecord',
   'EgressRecord',
   'AttemptImage',
   'PhaseTimings',
   'FileChange',
+  'McpStartup',
 ]
 
 /** One-line aliases the record uses, shown as a table of values. */

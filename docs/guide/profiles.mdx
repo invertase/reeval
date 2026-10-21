@@ -47,6 +47,8 @@ npx reeval image build --profile nightly   # the images nightly's plan needs
 | `limit.compare` | Over every eval | `false` runs the control only; `{ maxVariants: n }` keeps the first n |
 | `limit.harness` | Over every eval | Keeps only these harness ids; an eval left with none is skipped |
 
+With `compare: false` (or `maxVariants: 0`), the lone control gates like an eval without `compare`, on the eval's `gate`, whatever `compare.gate` says.
+
 An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it, and `--runs` on the command line beats both.
 
 A profile can also set a default `judge`, when to `record`, and `tags` filters like `--tag`.
@@ -84,7 +86,9 @@ evals/skill.eval.ts › house greeting › greets in the house style    1       
 evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
-`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed. The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history.
+`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed.
+
+The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history. With no history, `fakeHarness` is 1 second an attempt in `fakeSandbox()` and 30 seconds in a container, for the sandbox's setup.
 
 ```bash
 npx reeval run --dry-run --profile nightly
@@ -122,7 +126,7 @@ There's no cost or token budget. `budget: { usd: 5 }` stops the run before it st
 reeval: budget.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.
 ```
 
-`cursor()`, `claudeCode()`, `antigravity()`, `pi()`, `codex()` and `fx()` report tokens (`opencode()` and `goose()` can't), and the summary prints the total, but reeval has no model prices to turn them into a cost.
+`cursor()`, `claudeCode()`, `antigravity()`, `pi()`, `codex()`, `fx()` and `grokBuild()` report tokens (`opencode()` and `goose()` can't), and the run's last lines print the total, but reeval has no model prices to turn them into a cost.
 
 ## Write the config as YAML
 

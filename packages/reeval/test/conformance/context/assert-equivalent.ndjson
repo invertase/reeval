@@ -1,0 +1,6 @@
+{"case":"assert-equivalent","about":"plain assert and expect(…).toEqual(…) must produce the same assertion record (Python runner maps assert to this wire shape)","options":{}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/assert-equivalent.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"expect","subject":{"value":1},"matcher":"toEqual","args":[2],"not":false,"soft":false,"label":"one is two"}}}
+{"reeval":{"id":"1","ok":true,"op":"expect","assertion":{"label":"one is two","labelled":true,"matcher":"toEqual","status":"fail","soft":false,"message":"one is two: expected 1 to deeply equal 2"}}}
+{"runner":{"type":"done","error":{"name":"AssertionError","message":"one is two: expected 1 to deeply equal 2"}}}
+{"record":{"outcome":"fail","error":{"kind":"assertion","message":"one is two: expected 1 to deeply equal 2"},"assertions":[{"label":"one is two","labelled":true,"matcher":"toEqual","status":"fail","soft":false,"message":"one is two: expected 1 to deeply equal 2"}],"judgements":[],"checks":[]}}

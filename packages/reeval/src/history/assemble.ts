@@ -292,12 +292,18 @@ function activity(record: EvalRecord): AttemptRecord['activity'] {
     (n, e) => n + (e.type === 'reasoning' ? (e.durationMs ?? 0) : 0),
     0,
   )
+  const toolDurations = events.flatMap((e) =>
+    'durationMs' in e && typeof e.durationMs === 'number' ? [e.durationMs] : [],
+  )
+  const stalledTools = events.filter((e) => 'stalled' in e && e.stalled).length
   return {
     tools: count('tool'),
     fileEdits: count('file-edit'),
     webSearches: web('web-search'),
     webFetches: web('web-fetch'),
     reasoningMs,
+    stalledTools,
+    maxToolMs: toolDurations.length ? Math.max(...toolDurations) : null,
   }
 }
 
@@ -717,6 +723,7 @@ async function attemptEvidence(
       model: t.model ?? null,
       unreported: t.unreported ?? [],
       error: turnError(t.transcript),
+      ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
       text:
         t.text.length > TURN_TEXT_LIMIT
           ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
@@ -727,7 +734,15 @@ async function attemptEvidence(
     timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
     activity: record
       ? activity(record)
-      : { tools: 0, fileEdits: 0, webSearches: 0, webFetches: 0, reasoningMs: 0 },
+      : {
+          tools: 0,
+          fileEdits: 0,
+          webSearches: 0,
+          webFetches: 0,
+          reasoningMs: 0,
+          stalledTools: 0,
+          maxToolMs: null,
+        },
     judgements,
     ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
     ...(record?.assertions?.length ? { assertions: record.assertions } : {}),
@@ -1074,6 +1089,9 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     evals,
     ...(families.length ? { families } : {}),
+    ...(engine.unhandledErrors.length
+      ? { errors: engine.unhandledErrors.map((e) => redactSecrets(e)) }
+      : {}),
   }
   return { record, artifacts: out.files }
 }

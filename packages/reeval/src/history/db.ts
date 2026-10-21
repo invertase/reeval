@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 10
+const DB_VERSION = 13
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -155,6 +155,11 @@ CREATE TABLE tool_calls (
 CREATE TABLE context_reads (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, path TEXT NOT NULL
 );
+-- Each stdio MCP server start in each attempt's turns (turn from 1): ms from spawning it to its
+-- answer to initialize, null when it never answered.
+CREATE TABLE mcp_startup (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, turn INTEGER NOT NULL, server TEXT NOT NULL, ms INTEGER
+);
 -- Every expect / expect.soft matcher call each attempt made, in call order (seq from 1).
 CREATE TABLE assertions (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL,
@@ -202,6 +207,11 @@ CREATE VIEW flaky_cells AS SELECT * FROM flaky_m;
 -- Each run where a cell's fingerprint differs from its previous run: which parts, which context
 -- paths, and noise = 1 when only agent runtime state changed (not a real change).
 CREATE VIEW drift AS SELECT * FROM drift_m;
+
+-- Each check per cell, comparable fingerprint and branch over recorded runs: how many newest runs
+-- in a row it passed with no fail or error (on a variant, passed on both sides), their tries, and
+-- the run that ended the streak (null: it never failed).
+CREATE VIEW check_streaks AS SELECT * FROM check_streaks_m;
 
 -- Tool calls, agent time and tokens per cell, and a variant's against its control in the same run.
 CREATE VIEW effort AS SELECT * FROM effort_m;
@@ -285,6 +295,15 @@ CREATE VIEW check_discrimination AS
   JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key
   WHERE c.role = 'variant' AND k.verdict IS NOT NULL;
 
+-- Each check (expect label) per cell per run, on every cell (control and variant alike), over the
+-- cell's counted attempts. rate = pass / (pass + fail): an error (the matcher couldn't answer) and
+-- a not-run (a hard expect before it failed) are left out; null when neither passed nor failed.
+CREATE VIEW check_rates AS
+  SELECT k.run_id, k.eval_key, k.cell_key, c.harness, c.environment, c.role, k.label, k.pass,
+    k.fail, k.error, k.not_run, CAST(k.pass AS REAL) / NULLIF(k.pass + k.fail, 0) AS rate
+  FROM cell_checks k
+  JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key;
+
 -- One eval per run: outcome and pass@1, with the branch and pull request.
 CREATE VIEW eval_trend AS
   SELECT e.eval_key, r.run_id, r.started_at, r.branch, r.pr_number, r.recorded, e.outcome,
@@ -323,6 +342,8 @@ export const VIEW_NAMES = [
   'eval_trend',
   'verdict_flips',
   'check_discrimination',
+  'check_rates',
+  'check_streaks',
 ]
 
 const json = (value: unknown) => JSON.stringify(value)
@@ -626,6 +647,18 @@ function insertRun(
           declaredContext(c.path, skills) ? 1 : 0,
         )
       }
+      for (const [i, t] of a.turns.entries()) {
+        for (const m of t.mcpStartup ?? []) {
+          run(
+            'INSERT INTO mcp_startup VALUES (?, ?, ?, ?, ?)',
+            record.runId,
+            a.key,
+            i + 1,
+            m.server,
+            m.ms,
+          )
+        }
+      }
       for (const [i, x] of (a.assertions ?? []).entries()) {
         run(
           `INSERT INTO assertions VALUES (${Array(12).fill('?').join(', ')})`,
@@ -790,6 +823,7 @@ const DATA_TABLES = [
   'attempt_context',
   'tool_calls',
   'context_reads',
+  'mcp_startup',
   'assertions',
   'cell_checks',
 ]
@@ -852,9 +886,12 @@ export type SyncResult = { runs: number; added: number; removed: number; rebuilt
  * Brings the projection up to date with the record files: recorded runs in `historyDir` win over
  * the same run's scratch copy in `.reeval/runs`. Only new, changed or removed files are touched.
  */
-async function sync(db: DatabaseSync, root: string, historyDir: string): Promise<SyncResult> {
-  const rebuilt = !current(db)
-  if (rebuilt) freshSchema(db)
+async function sync(
+  db: DatabaseSync,
+  root: string,
+  historyDir: string,
+  rebuild: boolean,
+): Promise<SyncResult> {
   const wanted = new Map<string, { path: string; recorded: boolean }>()
   for (const [dir, recorded] of [
     [historyDir, true],
@@ -866,18 +903,24 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
       wanted.set(runId, { path: join(dir, name), recorded })
     }
   }
-  const known = new Map(
-    rowsOf<{
-      run_id: string
-      path: string
-      size: number
-      mtime_ms: number
-    }>(db.prepare('SELECT run_id, path, size, mtime_ms FROM files')).map((r) => [r.run_id, r]),
-  )
+  let rebuilt = false
   let added = 0
   let removed = 0
-  db.exec('BEGIN')
+  // IMMEDIATE takes the write lock before the first read, so a second process syncing the same
+  // database waits for this one and then sees its rows, instead of inserting the same runs.
+  db.exec('BEGIN IMMEDIATE')
   try {
+    if (rebuild) db.exec('DROP TABLE IF EXISTS meta')
+    rebuilt = !current(db)
+    if (rebuilt) freshSchema(db)
+    const known = new Map(
+      rowsOf<{
+        run_id: string
+        path: string
+        size: number
+        mtime_ms: number
+      }>(db.prepare('SELECT run_id, path, size, mtime_ms FROM files')).map((r) => [r.run_id, r]),
+    )
     for (const runId of known.keys()) {
       if (!wanted.has(runId)) {
         removeRun(db, runId)
@@ -916,8 +959,8 @@ export type QueryResult = { columns: string[]; rows: Array<Record<string, unknow
 
 export type HistoryDb = {
   sync: SyncResult
-  /** Runs one read-only statement, with `params` bound to its `?`s. */
-  query(sql: string, params?: SQLInputValue[]): QueryResult
+  /** Runs one read-only statement, with `params` bound to its `?`s, or by name (`:run`). */
+  query(sql: string, params?: SQLInputValue[] | Record<string, SQLInputValue>): QueryResult
   /** Every table and view, with its columns. */
   schema(): Array<{ name: string; type: 'table' | 'view'; columns: string[] }>
   close(): void
@@ -935,9 +978,10 @@ export async function openHistoryDb(
   const writer = new DatabaseSync(path)
   let synced: SyncResult
   try {
-    writer.exec('PRAGMA busy_timeout = 5000')
-    if (options.rebuild) writer.exec('DROP TABLE IF EXISTS meta')
-    synced = await sync(writer, root, historyDir)
+    // Long enough for another process's first build of a large history; that process is working,
+    // not stuck, and this one finds its rows once it has the lock.
+    writer.exec('PRAGMA busy_timeout = 120000')
+    synced = await sync(writer, root, historyDir, options.rebuild ?? false)
   } finally {
     writer.close()
   }
@@ -949,7 +993,9 @@ export async function openHistoryDb(
     query(sql, params = []) {
       try {
         const statement = db.prepare(sql)
-        const rows = statement.all(...params) as Array<Record<string, unknown>>
+        const rows = (
+          Array.isArray(params) ? statement.all(...params) : statement.all(params)
+        ) as Array<Record<string, unknown>>
         // `columns()` is newer than the Node floor; without it, a query with no rows has none.
         const columns =
           typeof statement.columns === 'function'

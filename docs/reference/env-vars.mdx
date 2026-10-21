@@ -20,6 +20,7 @@ TYPESAFE_AI_API_KEY=...
 | `TYPESAFE_AI_API_KEY` | `typesafe-ai/*` judges, such as Jev, directly |
 | `OPENAI_API_KEY` | `codex()`, and `fx()` on a bare OpenAI id: an OpenAI API key, brokered the same way. |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | `opencode()`, `goose()` and `pi()`: a Gemini API key, brokered the same way. Also `google/*` judges, directly. |
+| `XAI_API_KEY` | `grokBuild()`: an xAI API key, brokered the same way. |
 | `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN` | Any `provider/model` judge whose own key isn't set, through the Vercel AI Gateway. `AI_GATEWAY_API_KEY` is also `fx()`'s key on a gateway id, brokered the same way. |
 | Any name in `secret.fromEnv('NAME')` | Read on the host and passed into the sandbox (or brokered, or to checks only), redacted everywhere |
 
@@ -34,7 +35,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_UI` | `--ui` | `live`, `plain` or `agent` |
 | `REEVAL_LOG_ORDER` | `--log-order` | `stream` or `grouped` |
 | `REEVAL_LOG_PREFIX` | `--log-prefix` | `task` or `none` |
-| `REEVAL_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none` |
+| `REEVAL_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none`. Default `errors-only`: only failing attempts print their detail lines (`full` with `-v`) |
 | `REEVAL_HEARTBEAT` | | Plain mode's "still running" line after silence, e.g. `30s`. Default `60s`; `0` turns it off |
 | `REEVAL_DEBUG` | | `1` streams the hidden engine's output and the Docker sandbox and image-build logs to stderr, and prints stacks for unexpected errors |
 | `REEVAL_MCP_TOKEN` | `--token` | `reeval mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |
@@ -44,6 +45,11 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_FAKE_EXEC` | | Not read from your shell: on Windows, a random id reeval sets in each fake-sandbox command's environment, so that stopping the command also stops every MSYS process it started |
 | `REEVAL_BACKGROUND` | | Not read from your shell: in `docker()`, a random id reeval sets in a `c.exec(cmd, { background: true })` or `c.serve` command's environment, so that `kill()` also stops every process it started |
 | `REEVAL_BASE` | | Not read from your shell: the build argument reeval passes to a `docker({ dockerfile })` build, naming reeval's image for the cell's harness. Start a Dockerfile `ARG REEVAL_BASE` / `FROM ${REEVAL_BASE}` |
+| `REEVAL_PYTHON` | | Overrides the Python interpreter for the runner (skips `uv run` and `.venv`) |
+| `REEVAL_PYTHON_SDK` | | Path to the `reeval-python` package on the host; prepends its `src/` to `PYTHONPATH` when the eval project does not list the dependency |
+| `REEVAL_PROJECT_ROOT` | | Not read from your shell: project root the worker passes to a remote language runner |
+| `REEVAL_RUNNER` | | Not read from your shell: loopback address of the language-runner socket |
+| `REEVAL_RUNNER_TOKEN` | | Not read from your shell: one-time token the runner must send on `hello` |
 
 ## CI and agent detection
 

@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from AnalysisNote in src/view/analysis.ts by `pnpm schema:update`; don't edit. An analysis.agent note on one eval and harness: .reeval/analysis/<run>/notes/<eval>__<harness>.json.",
+  "$comment": "Generated from AnalysisNote in src/view/analysis.ts by `pnpm schema:update`; don't edit. A note on one eval and harness of a run: .reeval/analysis/<run>/notes/<eval>__<harness>.json.",
   "title": "AnalysisNote",
   "$ref": "#/$defs/AnalysisNote",
   "$defs": {
     "AnalysisNote": {
-      "description": "`analysis.agent`'s note on one eval and harness of a run, written once that harness's attempts finish: `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.",
+      "description": "A note on one eval and harness of a run, which the studio shows: `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.",
       "type": "object",
       "properties": {
         "attempts": {

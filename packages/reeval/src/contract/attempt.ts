@@ -85,6 +85,10 @@ export const transcriptEventSchema = z
       ),
       removed: nullableNumber,
       durationMs: nullableNumber,
+      stalled: z
+        .boolean()
+        .optional()
+        .describe('True when a shell-like tool or edit ran at least two minutes.'),
     }),
     z.strictObject({
       ...at,
@@ -96,6 +100,10 @@ export const transcriptEventSchema = z
       ),
       ok: z.boolean().optional().describe('Whether the search succeeded. Absent means it did.'),
       durationMs: nullableNumber,
+      stalled: z
+        .boolean()
+        .optional()
+        .describe('True when a shell-like tool or edit ran at least two minutes.'),
     }),
     z.strictObject({
       ...at,
@@ -104,6 +112,10 @@ export const transcriptEventSchema = z
       url: z.string(),
       ok: z.boolean(),
       durationMs: nullableNumber,
+      stalled: z
+        .boolean()
+        .optional()
+        .describe('True when a shell-like tool or edit ran at least two minutes.'),
     }),
     z.strictObject({
       ...at,
@@ -114,12 +126,16 @@ export const transcriptEventSchema = z
       output: z.unknown(),
       ok: z.boolean(),
       durationMs: nullableNumber,
+      stalled: z
+        .boolean()
+        .optional()
+        .describe('True when a shell-like tool or edit ran at least two minutes.'),
     }),
     z.strictObject({ ...at, type: z.literal('error'), message: z.string() }),
     z.strictObject({ ...at, type: z.literal('retry'), message: z.string() }),
   ])
   .describe(
-    'Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is null when the harness never reported the end.',
+    "Normalised agent events. Each tool call is one event, merged with its result; `durationMs` is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null when the harness never reported the end. Long shell or edit calls set `stalled: true`.",
   )
 
 export const turnDataSchema = z
@@ -578,7 +594,11 @@ export const cellSchema = z
   .strictObject({
     key: z.string(),
     harness: z.string(),
-    environment: z.string(),
+    environment: z
+      .string()
+      .describe(
+        "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
+      ),
     sandbox: z.string(),
     role: cellRoleSchema,
     variant: z.string().optional().describe("The variant's name, for variant cells."),

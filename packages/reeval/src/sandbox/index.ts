@@ -37,7 +37,8 @@ export async function createSandbox(
     }
   } catch (error) {
     if (error instanceof InfraError || options.signal.aborted) throw error
-    throw new InfraError(`Failed to create ${descriptor.kind} sandbox: ${(error as Error).message}`)
+    const kind = descriptor.kind === 'docker' ? (descriptor.engine ?? 'docker') : descriptor.kind
+    throw new InfraError(`Failed to create ${kind} sandbox: ${(error as Error).message}`)
   }
 }
 

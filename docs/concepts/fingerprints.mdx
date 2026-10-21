@@ -35,30 +35,31 @@ Only local imports are traced; packages are covered by the lockfile hashes the r
 
 ## Read a compare
 
-`reeval compare` diffs the latest run against its nearest recorded ancestor and gives each eval one status:
+`reeval compare` diffs the latest run against its nearest recorded ancestor and gives each eval one status. An eval whose fingerprint changed gets a `can't compare` block naming the part:
 
 ```text
-base 20260926T174239Z_b010670_ada-lovelace_yzmg (b010670) → head 20260926T174444Z_b010670_ada-lovelace_7gmj (b010670)
-0 regressed · 0 fixed · 0 not comparable · 2 same
-
-  · → ✓  new                       evals/skill.eval.ts › house greeting › greets in the house style
-  ✓ → ✓  same                      evals/hello.eval.ts › greet module › creates a tested greet module · cells added: cursor:composer-2.5/-/docker
-      antigravity:gemini-3.8-flash-medium/-/docker  tools 15 → 12.5 (×0.83) · agent 36s → 40s (×1.11)
+can't compare    bills in minor units with the billing doc
+  changed          environment
+  base             20261020T231407Z_ea2a649_ada-lovelace_8h1n  pass
+  head             20261020T231408Z_b2c98b4_ada-lovelace_fypq  fail
+  amount in minor units  failed
+    expected command to succeed, exit code 1
 …
+1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same
 ```
 
-Under a cell both runs share, a line shows how its median effort moved. Effort doesn't change the status.
+The environment's doc changed between the runs, so the flip from pass to fail isn't called a regression.
 
 | Status | Means |
 |---|---|
 | `regressed` | Same fingerprint, passed before, fails now |
 | `fixed` | Same fingerprint, failed before, passes now |
-| `same` | Same fingerprint, same outcome |
-| `changed (not comparable)` | The fingerprint changed; reeval names what, e.g. `evals/helpers.ts changed` or `agent CLI changed` |
+| `same` | Same fingerprint, same outcome; collapsed to `+N same` |
+| `can't compare` | The fingerprint changed; reeval names what, e.g. `evals/helpers.ts` or `agent CLI` |
 | `infra error` | Either side had an infra error |
 | `new`, `removed` | The eval is in only one of the runs |
 
-When two runs ran different cells of an eval (one was filtered to a harness, say), reeval compares the cells both ran and lists the rest, as in the `cells added` above, where the base run had Antigravity only. With no cell in common, it's not comparable. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or not comparable eval that fails.
+When two runs ran different cells of an eval (one was filtered to a harness, say), reeval compares the cells both ran and lists the rest as `cells added` or `cells removed`. With no cell in common, it can't compare them. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or `can't compare` eval that fails.
 
 ## Drift
 
@@ -73,7 +74,7 @@ flowchart LR
 
 A run filtered to fewer cells isn't drift, and neither is the full run after it: each cell is compared with the last run that had it.
 
-Some changes sit outside the fingerprint but still move results, such as the model id the judge provider says it served. When one of those changes between two runs, `reeval compare` prints a `stack changed:` line, and an outcome that flipped across it counts as not comparable rather than as a regression.
+Some changes sit outside the fingerprint but still move results, such as the model id the judge provider says it served. When one of those changes between two runs, an outcome that flipped across it is `can't compare`, its `changed` row naming the part (`judge model served`), rather than a regression. `reeval compare -v` lists every stack change.
 
 <Image src="/assets/studio/compare.png" alt="reeval studio compare page: evals marked regressed, fixed and not comparable, with the reason" width={800} />
 

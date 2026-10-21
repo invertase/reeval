@@ -1,5 +1,7 @@
-// Append-only output for CI, pipes and `| tee`. Lines are never rewritten. Modelled on
-// Turborepo's stream and grouped log orders.
+// The terminal's output while a run goes: attempt logs in Turborepo's stream and grouped log
+// orders, and on a TTY (`live`) one status line under them that's rewritten in place. No line
+// says how an attempt ended; the result blocks at the end do. Elsewhere it's append-only, for CI,
+// pipes and `| tee`.
 import { sandboxWarningLine } from '../text.ts'
 import type { SandboxWarning } from '../types.ts'
 import { type Colors, colors, stripAnsi } from './colors.ts'
@@ -16,8 +18,6 @@ import {
   debugLines,
   failureLines,
   formatDuration,
-  MISS_MARK,
-  mark,
   offset,
   outcomeOf,
   phaseOf,
@@ -25,7 +25,7 @@ import {
   progressLine,
 } from './format.ts'
 import type { OutputOptions } from './mode.ts'
-import { type AttemptDir, renderSummary } from './summary.ts'
+import { resultLines } from './result.ts'
 import { Tagger } from './tags.ts'
 
 export type RendererOptions = {
@@ -34,8 +34,6 @@ export type RendererOptions = {
   output: OutputOptions
   /** The harness name in prefixes when an attempt doesn't say, e.g. `cursor`. */
   harness: string
-  /** Where an attempt's artifacts will be, relative to the working directory. */
-  attemptDir: AttemptDir
   now?: () => number
   /** Off in tests, which call `tick()` themselves. */
   timers?: boolean
@@ -68,6 +66,8 @@ type Attempt = {
 }
 
 const ERROR_LINES = 12
+/** Back to the start of the line and clear it, for the live status line. */
+const CLEAR = '\r\x1b[2K'
 
 /** GitHub Actions workflow-command escaping. */
 const ghEscape = (s: string, property = false) => {
@@ -93,11 +93,21 @@ export class PlainRenderer implements Renderer {
   #runStartedAt = 0
   #lastWrite = 0
   #timer: NodeJS.Timeout | undefined
+  /** On a TTY: the status line is drawn under everything else, and redrawn after each write. */
+  readonly #live: boolean
+  #status = ''
+  /** Evals and tries collected (not skipped), and the tries that ended. */
+  readonly #evals = new Set<string>()
+  readonly #tries = new Set<string>()
+  readonly #ended = new Set<string>()
+  /** Insights after the last attempt, once they've started: they take the status line. */
+  #insights: { done: number; total: number; startedAt: number } | null = null
 
   constructor(options: RendererOptions) {
     this.#o = options
     this.#c = options.colors
     this.#now = options.now ?? Date.now
+    this.#live = options.output.requested === 'live'
     const { heartbeatMs } = options.output
     if (options.timers !== false && heartbeatMs > 0) {
       this.#timer = setInterval(() => this.tick(), Math.min(heartbeatMs, 5000))
@@ -106,8 +116,31 @@ export class PlainRenderer implements Renderer {
   }
 
   #write(text: string) {
-    this.#o.out.write(`${text.trimEnd()}\n`)
+    const line = `${text.trimEnd()}\n`
+    this.#o.out.write(this.#status ? `${CLEAR}${line}${this.#status}` : line)
     this.#lastWrite = this.#now()
+  }
+
+  /** `7 evals · 12/28 tries`: what's collected so far and how many tries ended; then `insights 3/7…`. */
+  #drawStatus() {
+    if (!this.#live) return
+    let status: string
+    if (this.#insights) {
+      status = this.#c.dim(`insights ${this.#insights.done}/${this.#insights.total}…`)
+    } else {
+      if (!this.#tries.size) return
+      const evals = `${this.#evals.size} eval${this.#evals.size === 1 ? '' : 's'}`
+      status = this.#c.dim(`${evals} · ${this.#ended.size}/${this.#tries.size} tries`)
+    }
+    if (status === this.#status) return
+    this.#o.out.write(`${CLEAR}${status}`)
+    this.#status = status
+  }
+
+  #clearStatus() {
+    if (!this.#status) return
+    this.#o.out.write(CLEAR)
+    this.#status = ''
   }
 
   #attempt(ref: AttemptRef, startedAt: number): Attempt {
@@ -156,14 +189,20 @@ export class PlainRenderer implements Renderer {
         return
       case 'collected':
         this.#tags.addFile(e.evals)
-        for (const x of e.evals) if (!x.skipped) this.#queued.add(x.key)
+        for (const x of e.evals) {
+          if (x.skipped) continue
+          this.#queued.add(x.key)
+          this.#evals.add(x.id)
+          this.#tries.add(x.key)
+        }
+        this.#drawStatus()
         return
       case 'eval-start': {
         const a = this.#attempt(e, e.at)
         a.last = e
         this.#queued.delete(e.key)
         this.#running.set(e.key, a)
-        this.#write(`${this.#prefix(a)} ${c.dim('▶')} ${e.id}`)
+        if (this.#streaming) this.#write(`${this.#prefix(a)} ${c.dim('▶')} ${e.id}`)
         return
       }
       case 'eval-progress': {
@@ -205,6 +244,8 @@ export class PlainRenderer implements Renderer {
       }
       case 'eval-end':
         this.#end(e.result, e.at)
+        if (this.#tries.has(e.result.key)) this.#ended.add(e.result.key)
+        this.#drawStatus()
         return
       case 'prepare': {
         for (const line of prepareLines(c, e, ERROR_LINES)) this.#write(line)
@@ -216,14 +257,23 @@ export class PlainRenderer implements Renderer {
         }
         return
       }
+      case 'insights-progress':
+        this.#insights = {
+          done: e.done,
+          total: e.total,
+          startedAt: this.#insights?.startedAt ?? e.at,
+        }
+        this.#drawStatus()
+        return
       case 'notice': {
         const paint = { info: c.dim, warn: c.yellow, error: c.red }[e.level]
         this.#write(paint(e.text))
         return
       }
       case 'run-end':
+        this.#clearStatus()
         this.#write('')
-        for (const line of renderSummary(c, e, this.#o.attemptDir)) this.#write(line)
+        for (const line of resultLines(c, e, (this.#o.verbosity ?? 0) > 0)) this.#write(line)
         return
     }
   }
@@ -238,6 +288,11 @@ export class PlainRenderer implements Renderer {
     this.#write(`::warning ${file}title=${ghEscape(title, true)}::${ghEscape(w.message)}`)
   }
 
+  /**
+   * An ended attempt's logs, as `--output-logs` picks: grouped, its block under a `▶` header;
+   * streamed, only its error lines, since the rest already printed. A sandbox that failed to
+   * prepare was annotated once, for all its attempts.
+   */
   #end(result: EvalResult, at: number) {
     const c = this.#c
     const a = this.#running.get(result.key) ?? this.#attempt(result, at - result.durationMs)
@@ -245,10 +300,8 @@ export class PlainRenderer implements Renderer {
     this.#queued.delete(result.key)
     const outcome = outcomeOf(result)
     const failed = outcome !== 'pass' && outcome !== 'skipped'
-    const time = outcome === 'skipped' ? '' : `  ${c.dim(formatDuration(result.durationMs))}`
-    const ungated = failed && result.attempt?.gate === 'none' ? `  ${c.dim('(not gated)')}` : ''
-    const missed = ungated !== '' && outcome === 'fail'
-    const head = `${this.#prefix(a)} ${missed ? MISS_MARK(c) : mark(c, outcome)} ${result.id}${time}${ungated}`
+    const ungated = failed && result.attempt?.gate === 'none'
+    const missed = ungated && outcome === 'fail'
     const { outputLogs, githubActions, logPrefix } = this.#o.output
 
     const showDetail =
@@ -270,13 +323,15 @@ export class PlainRenderer implements Renderer {
     const prefixed = logPrefix === 'task'
 
     // Like Turborepo on GitHub Actions: passing attempts collapse into a group, failing ones
-    // stay expanded under their result line.
+    // stay expanded.
+    const head = `${this.#prefix(a)} ${c.dim('▶')} ${result.id}`
     const group = githubActions && showDetail && (!failed || missed)
-    this.#write(group ? `::group::${stripAnsi(head)}` : head)
+    if (showDetail || (!this.#streaming && errors.length)) {
+      this.#write(group ? `::group::${stripAnsi(head)}` : head)
+    }
     if (showDetail) for (const line of lines) this.#write(this.#detail(a, line, prefixed))
     for (const line of errors) this.#write(prefixed ? `${this.#prefix(a)}  ${line}` : ` ${line}`)
     if (group) this.#write('::endgroup::')
-    // A sandbox that failed to prepare was annotated once, for all its attempts.
     if (githubActions && failed && !ungated && !result.meta?.prepare) {
       const which = result.attempt?.label ? ` [${result.attempt.label}]` : ''
       const title = ghEscape(`${result.id}${which}`, true)
@@ -287,12 +342,22 @@ export class PlainRenderer implements Renderer {
     }
   }
 
-  /** Prints the heartbeat if nothing was written for `heartbeatMs` and evals are running. */
+  /** Prints the heartbeat if nothing was written for `heartbeatMs` and evals or insights are running. */
   tick(now = this.#now()): void {
     const { heartbeatMs } = this.#o.output
-    if (heartbeatMs <= 0 || this.#running.size === 0) return
+    // On a TTY the status line already says the run is alive.
+    if (this.#live || heartbeatMs <= 0) return
     if (now - this.#lastWrite < heartbeatMs) return
     const c = this.#c
+    const insights = this.#insights
+    if (insights) {
+      const elapsed = formatDuration(now - insights.startedAt)
+      if (insights.done < insights.total) {
+        this.#write(c.dim(`… insights ${insights.done}/${insights.total} after ${elapsed}`))
+      }
+      return
+    }
+    if (this.#running.size === 0) return
     const running = [...this.#running.values()].map((a) => {
       const progress = a.last?.type === 'eval-progress' ? a.last.progress : undefined
       return `${this.#prefix(a)} ${phaseOf(progress)} ${c.dim(formatDuration(now - a.startedAt))}`
@@ -306,5 +371,6 @@ export class PlainRenderer implements Renderer {
 
   close(): void {
     clearInterval(this.#timer)
+    this.#clearStatus()
   }
 }

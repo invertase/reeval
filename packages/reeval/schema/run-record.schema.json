@@ -171,7 +171,22 @@
             "fileEdits": {
               "type": "number"
             },
+            "maxToolMs": {
+              "description": "Longest tool `durationMs` in the transcript; null when none reported a duration.",
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
             "reasoningMs": {
+              "type": "number"
+            },
+            "stalledTools": {
+              "description": "Transcript tool events with `stalled: true` (long shell or edit).",
               "type": "number"
             },
             "tools": {
@@ -199,7 +214,15 @@
               ]
             }
           },
-          "required": ["fileEdits", "reasoningMs", "tools", "webFetches", "webSearches"]
+          "required": [
+            "fileEdits",
+            "maxToolMs",
+            "reasoningMs",
+            "stalledTools",
+            "tools",
+            "webFetches",
+            "webSearches"
+          ]
         },
         "assertions": {
           "description": "Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.",
@@ -434,7 +457,7 @@
           "$ref": "#/$defs/PhaseTimings"
         },
         "turns": {
-          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.",
+          "description": "`text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).",
           "type": "array",
           "items": {
             "type": "object",
@@ -452,6 +475,13 @@
                     "type": "string"
                   }
                 ]
+              },
+              "mcpStartup": {
+                "description": "Each stdio MCP server start during the turn; see `McpStartup`.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/McpStartup"
+                }
               },
               "model": {
                 "description": "The model the harness says served the turn; null when it reports none.",
@@ -548,7 +578,7 @@
       ]
     },
     "CellCheck": {
-      "description": "One check over a cell's counted attempts. `verdict` (variant cells): `discriminates` when it passes on every counted attempt of one side and none of the other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them apart; `mixed` otherwise.",
+      "description": "One check over a cell's counted attempts. `verdict` (variant cells), over the attempts that reached the check: `discriminates` when it passes on every one of one side and none of the other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them apart; `mixed` otherwise. No verdict when a side never reached it: not run is not a fail.",
       "type": "object",
       "properties": {
         "control": {
@@ -615,6 +645,7 @@
           ]
         },
         "environment": {
+          "description": "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
           "type": "string"
         },
         "environmentDigest": {
@@ -1032,6 +1063,7 @@
           }
         },
         "mcp": {
+          "description": "Every MCP server, a plugin's as `<plugin>:<server>`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1057,6 +1089,13 @@
               "type": "string"
             }
           ]
+        },
+        "plugins": {
+          "description": "The plugins placed, each with what it placed; in the digest. Unset when there are none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginRecord"
+          }
         },
         "secrets": {
           "type": "array",
@@ -1097,6 +1136,10 @@
               },
               "placement": {
                 "$ref": "#/$defs/SkillPlacement"
+              },
+              "plugin": {
+                "description": "The plugin the skill came with; unset for a skill from `skills`.",
+                "type": "string"
               },
               "sha256": {
                 "type": "string"
@@ -1870,6 +1913,28 @@
       },
       "required": ["control", "interval", "points", "variant", "vs", "withinNoise"]
     },
+    "McpStartup": {
+      "description": "One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.",
+      "type": "object",
+      "properties": {
+        "ms": {
+          "description": "Milliseconds from spawning the server to its answer to the client's `initialize`; null when it never answered (it exited first, timed out, or its client closed it first).",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "server": {
+          "description": "The server's name in the environment's `mcp`.",
+          "type": "string"
+        }
+      },
+      "required": ["ms", "server"]
+    },
     "Outcome": {
       "enum": ["fail", "infra_error", "pass", "skipped"]
     },
@@ -1957,6 +2022,110 @@
         }
       },
       "required": ["agentMs", "checksMs", "diffMs", "judgeMs", "setupMs"]
+    },
+    "PluginRecord": {
+      "description": "A plugin as an attempt placed it.",
+      "type": "object",
+      "properties": {
+        "build": {
+          "description": "The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "commit": {
+          "description": "The commit a git source resolved to; null for a local or npm one.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "marketplace": {
+          "description": "The marketplace it was listed in; null when it was named directly.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "commit": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": ["commit", "name", "source"]
+            }
+          ]
+        },
+        "name": {
+          "description": "The manifest's `name`.",
+          "type": "string"
+        },
+        "parts": {
+          "description": "What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.",
+          "type": "object",
+          "properties": {
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "commands": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hooks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mcp": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rules": {
+              "type": "boolean"
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["agents", "commands", "hooks", "mcp", "rules", "skills"]
+        },
+        "sha256": {
+          "description": "The hash of the files placed.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`.",
+          "type": "string"
+        }
+      },
+      "required": ["build", "commit", "marketplace", "name", "parts", "sha256", "source"]
     },
     "PrepareFailureRecord": {
       "description": "The sandbox an attempt needed that couldn't be prepared before the run, on each attempt that needed it: its provider's stage (Docker's `image`, `from`, `dockerfile`, `harness` or `install`, or `workspace` for a git workspace, whose `ref` is `repo#ref:path`), what was being made, the class (`config`, `transient` after the retries, or `resource`), a named cause (`enospc`, `oom`), the build log, and the levels that set it.",
@@ -2346,6 +2515,13 @@
             "$ref": "#/$defs/EnvironmentRecord"
           }
         },
+        "errors": {
+          "description": "Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "evals": {
           "type": "array",
           "items": {
@@ -2707,7 +2883,7 @@
                 ]
               },
               "base": {
-                "description": "The harness image `install` was baked onto: `ref` itself without `install`.",
+                "description": "The harness image `install` and plugin builds were baked onto: `ref` itself without either.",
                 "type": "string"
               },
               "dockerfile": {

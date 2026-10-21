@@ -103,6 +103,7 @@
       "tab": "concepts",
       "pages": [
         { "title": "Output modes", "href": "/concepts/output" },
+        { "title": "Insights and remarks", "href": "/concepts/insights" },
         { "title": "Concurrency", "href": "/concepts/concurrency" }
       ]
     },
@@ -184,6 +185,7 @@
         { "title": "pi()", "href": "/reference/harness/pi" },
         { "title": "codex()", "href": "/reference/harness/codex" },
         { "title": "fx()", "href": "/reference/harness/fx" },
+        { "title": "grokBuild()", "href": "/reference/harness/grok-build" },
         { "title": "fakeHarness()", "href": "/reference/harness/fake" }
       ]
     },
@@ -192,6 +194,7 @@
       "tab": "reference",
       "pages": [
         { "title": "docker()", "href": "/reference/sandbox/docker" },
+        { "title": "podman()", "href": "/reference/sandbox/podman" },
         { "title": "fakeSandbox()", "href": "/reference/sandbox/fake" },
         { "title": "Sandbox providers", "href": "/reference/sandbox/providers" },
         { "title": "Egress", "href": "/reference/egress" }

@@ -126,7 +126,6 @@ See [Profiles and budgets](/reference/profiles).
 | `cursor: session did not become ready within 90s (tried twice)` | The harness's session start (its bootstrap) hung twice. The attempt is an infra error, its sandbox is destroyed and the other attempts carry on. Raise the harness's `startTimeout` if it's legitimately slow. |
 | `The worker running evals/a.eval.ts exited unexpectedly (signal SIGKILL)` | The process running that file died: killed, or out of memory. Its unfinished attempts fail and the run exits 1. |
 | `The reeval at <path> runs eval files with engine protocol N, but this reeval speaks M` | The project resolves another version of reeval than the `reeval` you ran. Run the project's own: `npx reeval`. |
-| `reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.` | Add `--dry-run`, or use `reeval show --json` after the run. |
 | `--runs must be a whole number of at least 1 (got 0)` | Pass a positive whole number. |
 | `--json doesn't take a value: pass --json on its own.` | Drop the `=…` after a yes/no flag. A flag that needs a value and has none gets `--runs needs a value (--runs <n>)`. |
 | `No run matches "abc". Pass latest, latest~N, a run id or a git SHA; reeval history lists them.` | `reeval show`, `compare` and the other history commands take one of those. |
@@ -158,6 +157,7 @@ See [Profiles and budgets](/reference/profiles).
 | Message | Fix |
 |---|---|
 | `Docker is not running. Start Docker and try again.` | Start Docker. On Windows, Docker Desktop on the WSL 2 backend. |
+| `Docker isn't installed: there's no docker command on the PATH. …` | Install Docker (Docker Engine or Docker Desktop), then `reeval image build`. |
 | `Docker is running Windows containers, but reeval's sandboxes are Linux containers. …` | Switch Docker Desktop to Linux containers. |
 | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` | Pull or build your image, or use `from` or `dockerfile` so reeval builds it. |
 | `… The sandbox <id> is set by reeval.config.ts for every eval, so nothing ran.` | The config's sandbox failed to prepare (exit 3); fix the failure above it. |
@@ -181,8 +181,12 @@ Before any attempt, reeval fetches each `workspace: git(…)` repository on the 
 ✗ workspace https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts failed to prepare (set by environment react-ts; only its attempts fail)
   Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).
 …
-   ! adds a reset button     17ms  0 turns
-   ✓ writes a README          5ms  0 turns
+infra error      adds a reset button
+  infra error      Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit…
+
+pass             writes a README
+…
+1 pass · 1 infra error
 ```
 
 Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace as its `ref`.
@@ -195,6 +199,31 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 | `Workspace git("…"): isn't readable with this machine's git credentials, or doesn't exist (could not read Username for 'https://github.com': terminal prompts disabled). …` | reeval never prompts. Give `git()` a `token`, or run `gh auth setup-git`, configure a credential helper or load an SSH key on the host; the sandbox never gets them. With a `token`, this means the token was refused. |
 | `Workspace git("…"): its token variable GITHUB_TOKEN isn't set. Set it in the environment or .env.local.` | Set the variable `token` names. |
 | `Workspace git("https://gitlab.invalid/acme/app#v1"): couldn't be fetched (unable to access 'https://gitlab.invalid/acme/app/': Could not resolve host: gitlab.invalid)` | The network, after two retries (its `class` is `transient`). A pinned SHA fetched before reruns from the cache offline. |
+
+## Plugins
+
+The plan reads every local plugin and checks each cell's harness can take it, so a plugin reeval can't place exits 2 before any attempt starts, naming the eval and the harness:
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.5: Cursor can't load plugins yet: leave the review plugin out of this cell
+```
+
+| Message after the prefix | Fix |
+|---|---|
+| `Cursor can't load plugins yet: leave the review plugin out of this cell` | Only Claude Code, Grok Build and the fake harness load plugins. Scope the plugin to cells that can take it. |
+| `Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell` | The harness doesn't load that part. Leave it out with `only`. |
+| `Claude Code loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in` | Claude Code and Grok Build start a plugin's servers themselves. Leave `mcp` out of `only` and declare the server in the environment's `mcp`. |
+| `Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp.docs, and keeps only one: rename one, or leave mcp out of the plugin with only` | Grok Build doesn't namespace a plugin's MCP servers. Rename one server, or leave `mcp` out of the plugin's `only`. |
+| `plugin.local('plugins/bare') has no .claude-plugin/plugin.json` | Point at the plugin's root, the directory with `.claude-plugin/plugin.json`. |
+| `the review plugin has no hooks, so only: ['hooks'] matches nothing (it has skills, mcp)` | Name parts the plugin has in `only`. |
+| `plugin "review" has a build, which runs in a Docker image layer: use docker()` | Builds run on Docker only. Run the eval on `docker()`, or leave `build` out on `fakeSandbox()`. |
+| `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: add a build that installs it, or allow the host in egress` | Give the plugin a `build` that installs the server, or add the registry to `egress`. Under `allow-all` this is a note in the plan instead. |
+| `the review plugin's manifest sets "skills", which reeval doesn't read: keep each part in its default place (skills/, agents/, commands/, hooks/hooks.json)` | Move the part to its default directory. |
+| `environment review lists two plugins named "review", plugin.local('plugins/a') and plugin.local('plugins/b'): rename one, or leave one out` | One environment lists each plugin name once. A child environment's plugin replaces its parent's of the same name. |
+| `the review plugin's MCP server "docs" would join mcp as review:docs, which mcp already names: rename mcp["review:docs"]` | Rename the environment's own server. |
+| `the review plugin's MCP server "docs": "${HOME}" in .mcp.json names a variable; reeval fills in only ${CLAUDE_PLUGIN_ROOT} in a command and its args, …` | Pass the host variable through the server's `env` as a whole value, such as `"TOKEN": "${TOKEN}"`. |
+
+A `plugin.git` or `plugin.npm` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way. A plugin `build` runs in preflight, like an `install` layer: a failing command fails the attempts that use it with `Building the build of plugin.local('plugins/review') failed: build 1/2 exited 1: npm ci` (exit 3), and a `plugin.git` ref that moves between preflight and the attempt fails it with `The review plugin's ref moved during the run: …. Pin ref to a commit or tag.`
 
 ## During an attempt
 

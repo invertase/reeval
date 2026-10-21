@@ -65,6 +65,8 @@ export type {
   PairFactor,
   PairVote,
   PinnableKey,
+  PluginPart,
+  PluginSource,
   Profile,
   ProfileDefaults,
   ProfileLimit,

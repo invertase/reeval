@@ -56,11 +56,17 @@ A dry run never fetches. With `--json`, each of the eval's cells has a `workspac
 ## Run it
 
 ```text
-plan  1 eval · 1 cell · 1 attempt · ~1s serial
+plan  run 20261020T215101Z_… · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
 workspace https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts at 814120f2ad38
 …
-[adds#1 fake]  +0:21 $ npm run build  exit 0 2s
-[adds#1 fake] ✓ evals/template.eval.ts › adds a reset button  22s
+[adds#1 cursor]  +0:25 sandbox ready 26s
+[adds#1 cursor]  +0:25 turn 1 started
+[adds#1 cursor]  +0:33 turn 1 done 8s · 2 tool calls, 1 file edit
+[adds#1 cursor]  +0:33 $ npm run build
+[adds#1 cursor]  +0:35 $ npm run build  exit 0 2s
+[adds#1 cursor]  +0:35 cleaning up
+
+pass             adds a reset button
 ```
 
 Before any attempt, reeval fetches the repository on the host and resolves the ref once. With a `path`, it fetches only that directory's files: the vite monorepo's template takes about a second.
@@ -140,8 +146,13 @@ A missing ref, directory or repository, or a token that's unset or refused, fail
 ✗ workspace https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts failed to prepare (set by environment react-ts; only its attempts fail)
   Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).
 …
-   ! adds a reset button     17ms  0 turns
-   ✓ writes a README          5ms  0 turns
+infra error      adds a reset button
+  infra error      Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit…
+
+pass             writes a README
+
+898ms · results .reeval/runs/20261020T213031Z_…/summary.md
+1 pass · 1 infra error
 ```
 
 Those attempts are infra errors, so the run exits 3. [Errors](/reference/errors#git-workspaces) lists each message.

@@ -13,6 +13,7 @@ const keys = [
   process.env.GEMINI_API_KEY,
   process.env.GOOGLE_GENERATIVE_AI_API_KEY,
   process.env.OPENAI_API_KEY,
+  process.env.XAI_API_KEY,
 ].filter((key): key is string => Boolean(key))
 
 /** The rolling hash scan.mjs uses: base 257, mod 2^32, over the bytes. */

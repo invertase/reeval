@@ -40,6 +40,11 @@ declare module '@vitest/expect' {
     hasAssertions: () => void
   }
   interface Matchers<R extends void | Promise<void> = void | Promise<void>, T = unknown> {
+    toBe(expected: unknown): void
+    toEqual(expected: unknown): void
+    toBeNull(): void
+    toBeTruthy(): void
+    toContain(needle: unknown): void
     toHaveFile(path: string, pattern?: RegExp | string): Promise<void>
     toSucceed(): Promise<void>
     toHaveSearched(query?: RegExp | string): void

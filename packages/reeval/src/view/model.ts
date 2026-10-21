@@ -170,15 +170,18 @@ export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'file
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────
 
 /**
- * A run's outcome, as `reeval run`'s exit code has it: a failed gated cell (or a budget stop) fails
- * the run, while failures in ungated cells (controls, by default) don't.
+ * A run's outcome, which `reeval run`'s exit code is read from: an error outside any attempt, a
+ * failed gated cell or a budget stop fails the run, while failures in ungated cells (controls, by
+ * default) don't. An interrupted run is `skipped`, whatever ran.
  */
 export function runOutcome(run: {
   status: RunRecord['status']
   evals: ReadonlyArray<{ outcome: Outcome }>
   families?: ReadonlyArray<{ outcome: 'pass' | 'fail' }>
+  errors?: readonly string[]
 }): Outcome {
   if (run.status === 'interrupted') return 'skipped'
+  if (run.errors?.length) return 'fail'
   const outcomes = [...run.evals, ...(run.families ?? [])].map((e) => e.outcome)
   if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'
@@ -554,6 +557,19 @@ export const isUngatedMiss = (
   a.outcome === 'fail' &&
   a.error?.kind !== 'aborted' &&
   e.cells.find((c) => c.key === a.cell)?.gate === 'none'
+
+/**
+ * The outcome an eval's mark shows. A pass needs a counted (passed or failed) attempt and no infra
+ * error: a gate that lets those through, such as `gate: 'none'`, still shows `!`, not `✓`.
+ */
+export function evalMarkOutcome(e: Pick<EvalEntry, 'outcome' | 'attempts'>): Outcome {
+  if (e.outcome !== 'pass') return e.outcome
+  const ran = e.attempts.filter((a) => a.outcome !== 'skipped')
+  const infra = ran.some((a) => a.outcome === 'infra_error')
+  return infra || (ran.length > 0 && !ran.some((a) => a.outcome === 'pass' || a.outcome === 'fail'))
+    ? 'infra_error'
+    : 'pass'
+}
 
 /** pass@1 in the gated cells, as an eval's `passRate` counts it. */
 function gatedPassAt1(cells: HistoryCell[]): number | null {

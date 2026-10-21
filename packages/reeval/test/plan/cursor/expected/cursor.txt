@@ -4,7 +4,7 @@ evals/a.eval.ts › standard and fast    cursor:composer-2.5/-/docker           
 evals/a.eval.ts › another model        cursor:gpt-5.2/-/docker                             control  gated  ×1
 evals/a.eval.ts › on a toolchain base  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1
 excluded: —
-image docker · 2 evals
+image docker · cursor · 2 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
-image docker:python:3.12-slim · 1 evals
-  from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+image docker:python:3.12-slim · cursor · 1 evals
+  from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

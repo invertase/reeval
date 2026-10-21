@@ -47,7 +47,7 @@ jobs:
   # Which jobs this run needs. Off PRs and the queue, and with the ci:full label, all of them
   # (`full`: also extended.yml and npm 10.9). Coverage is nightly, dispatch and release only.
   # Otherwise from the files changed against the base (the merge group's base in the queue).
-  # Docs-only changes (docs/, docs.json, root-level *.md, .agents/, issue templates) need only
+  # Docs-only changes (docs/, docs.json, root-level *.md, skills/, .agents/, issue templates) need only
   # `checks`, which always runs. Any other change needs `unit` unless it's only in
   # packages/studio-web. On the light tier, the rest follow their own paths, and a change to CI,
   # the lockfile or the workspace needs every job; on the full tier, every code change needs every
@@ -86,7 +86,7 @@ jobs:
             echo "Tier: $PR_TIER"
             while IFS= read -r f; do
               case $f in
-                docs/* | docs.json | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
+                docs/* | docs.json | skills/* | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
                 */*) ;;
                 *.md | LICENSE) continue ;;
               esac
@@ -110,6 +110,14 @@ jobs:
                 packages/reeval/tsdown.config.mjs | \
                 scripts/coverage.mjs)
                   engine=true ;;
+              esac
+              case $f in
+                packages/reeval-python/* | \
+                packages/reeval/src/language-runner/* | \
+                packages/reeval/test/python-sdk.test.ts | \
+                packages/reeval/test/language-runner.test.ts)
+                  unit=true
+                  features=true ;;
               esac
               case $f in
                 packages/reeval/src/engine/* | \
@@ -197,6 +205,16 @@ jobs:
       # docs.page's own check: internal links, assets and frontmatter targets.
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: reeval-python (uv sync, ruff, pyright, pytest)
+        if: ${{ !cancelled() }}
+        working-directory: packages/reeval-python
+        run: |
+          uv sync --dev
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run pyright
+          uv run pytest
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
   # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.
@@ -215,6 +233,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
@@ -229,7 +248,7 @@ jobs:
       - name: sandbox-docker (without containers) and the harness packages
         if: matrix.shard == '1/4'
         run: |
-          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx; do
+          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex harness-fx harness-grok-build; do
             echo "::group::@reeval/$p"
             pnpm --filter "@reeval/$p" test
             echo "::endgroup::"
@@ -249,6 +268,7 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
@@ -305,6 +325,8 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: matrix.package == 'reeval'
       - uses: ./.github/actions/sandbox-images
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
@@ -314,6 +336,46 @@ jobs:
         uses: ./.github/actions/upload-coverage
         with:
           name: docker-${{ strategy.job-index }}
+
+  # podman(): sandbox-docker's container tests and the fixtures' Podman tier, on the rootless
+  # Podman GitHub's Ubuntu image ships. systemd delegates only memory and pids to a user's cgroup,
+  # so a drop-in adds cpu (podman({ cpus })) before the user manager restarts. Fails without Podman.
+  podman:
+    name: podman (rootless)
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      REEVAL_TEST_ENGINE: podman
+      REEVAL_TEST_REQUIRE_PODMAN: '1'
+      REEVAL_FIXTURE_TIERS: podman
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - name: rootless Podman with the cpu, memory and pids controllers
+        run: |
+          sudo mkdir -p /etc/systemd/system/user@.service.d
+          printf '[Service]\nDelegate=cpu cpuset io memory pids\n' |
+            sudo tee /etc/systemd/system/user@.service.d/delegate.conf
+          sudo systemctl daemon-reload
+          sudo loginctl enable-linger "$(id -u)"
+          sudo systemctl restart "user@$(id -u).service"
+          podman system migrate
+          podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}} {{.Host.CgroupManager}} {{.Host.CgroupControllers}} {{.Host.NetworkBackend}}'
+      - run: pnpm build
+      - name: reeval's image, in Podman's store
+        run: |
+          node --input-type=module -e "
+            import { buildImage } from './packages/sandbox-docker/dist/index.js'
+            await buildImage(console.log, { harness: 'cursor', engine: 'podman' })"
+      - name: sandbox-docker on Podman
+        working-directory: packages/sandbox-docker
+        run: pnpm test
+      - name: the fixtures' Podman tier
+        working-directory: packages/reeval
+        run: node --test --experimental-strip-types --no-warnings --test-name-pattern='\[podman\]' test/features.test.ts
 
   studio:
     name: studio
@@ -442,7 +504,7 @@ jobs:
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
-    needs: [changes, checks, unit, features, docker, studio, engine-coverage, pack, extended]
+    needs: [changes, checks, unit, features, docker, podman, studio, engine-coverage, pack, extended]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

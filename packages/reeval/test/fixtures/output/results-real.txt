@@ -1,0 +1,32 @@
+pass             edit and run
+
+fail             edit and run canary
+  error            expected 'status: draft' to be 'status: final' // Object.is equality
+
+pass             egress
+
+fail             egress canary
+  error            expected '403 000' to match /^200 /
+
+pass             key
+
+fail             key canary
+  error            expected [ '/proc/1/environ (raw)', …(3) ] to deeply equal []
+
+pass             mcp
+
+fail             mcp canary
+  error            expected '' to contain 'tools/call'
+
+pass             rules
+
+fail             rules canary
+  error            expected null to be 'TANGERINE-41' // Object.is equality
+
+pass             skill
+
+fail             skill canary
+  error            expected null to be 'PROBE-7F3K-QUILL' // Object.is equality
+
+6 fail · 6 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.

@@ -6,6 +6,9 @@ import {
   DEFAULT_LIMITS,
   docker,
   type EgressEvent,
+  ENGINES,
+  type Engine,
+  engineSpec,
   imageInfo,
   LABEL,
   type NetworkPolicy,
@@ -25,10 +28,17 @@ import { InfraError, type Sandbox } from './types.ts'
  * Removes every container still labelled with the run: a worker killed by the signal that
  * cancelled the run (SIGTERM to the process group) never destroys its sandboxes.
  */
-export async function removeRunContainers(runId: string): Promise<void> {
-  const r = await docker(['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`]).catch(() => null)
-  const ids = r?.exitCode === 0 ? r.stdout.toString('utf8').split(/\s+/).filter(Boolean) : []
-  if (ids.length) await docker(['rm', '-f', ...ids]).catch(() => {})
+export async function removeRunContainers(
+  runId: string,
+  engines: readonly Engine[] = ['docker'],
+): Promise<void> {
+  for (const engine of engines) {
+    const r = await docker(['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
+      engine,
+    }).catch(() => null)
+    const ids = r?.exitCode === 0 ? r.stdout.toString('utf8').split(/\s+/).filter(Boolean) : []
+    if (ids.length) await docker([...ENGINES[engine].rmForce, ...ids], { engine }).catch(() => {})
+  }
 }
 
 /** A Docker sandbox also exposes its harness session, so the harness drives the same container. */
@@ -84,8 +94,10 @@ export async function createDockerSandbox(
   options: SandboxOptions,
 ): Promise<DockerSandbox> {
   const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
-  if (!(await imageInfo(image))) {
-    throw new InfraError(`Docker image ${image} not found. Build it with: reeval image build`)
+  const engine = descriptor.engine ?? 'docker'
+  const spec = engineSpec(engine)
+  if (!(await imageInfo(image, engine))) {
+    throw new InfraError(`${spec.name} image ${image} not found. Build it with: reeval image build`)
   }
   const { brokering, substitutions = [] } = options
   const brokered = [
@@ -112,6 +124,7 @@ export async function createDockerSandbox(
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
   const network = await createDockerSession({
     image,
+    engine,
     env: options.env,
     ...(root !== undefined && { root }),
     ...(capabilities && { capabilities }),
@@ -150,7 +163,7 @@ export async function createDockerSandbox(
   )
   debug?.log(
     'container',
-    `network policy ${egressLabel(options.egress) || 'allow-all'}${policy.mode === 'allow-all' ? ' · keeps its Docker network' : ' · detached from every Docker network, the gateway is its only way out'}`,
+    `network policy ${egressLabel(options.egress) || 'allow-all'}${policy.mode === 'allow-all' ? ` · keeps its ${spec.name} network` : ` · detached from every ${spec.name} network, the gateway is its only way out`}`,
   )
   debug?.log(
     'container',
@@ -162,7 +175,7 @@ export async function createDockerSandbox(
   if (network.egress?.active === false && brokered.length > 0) {
     await Promise.resolve(network.destroy()).catch(() => {})
     throw new InfraError(
-      `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and reeval adds it.`,
+      `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`,
     )
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)

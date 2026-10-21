@@ -81,11 +81,12 @@ describe('the matrix check (twins: it can fail)', () => {
       plan: { count: 1, canaries: 0 },
       fake: { count: 2, canaries: 1 },
       docker: { count: 1, canaries: 1 },
+      podman: { count: 0, canaries: 0 },
       real: { count: 0, canaries: 0 },
     })
     assert.match(
       renderMarkdown(m),
-      /\| X \| ✓ 1 \| ✓ 1 \| ◐ 2 \(1 without a canary\) \| ● 1 \| — \|/,
+      /\| X \| ✓ 1 \| ✓ 1 \| ◐ 2 \(1 without a canary\) \| ● 1 \| — \| — \|/,
     )
   })
 

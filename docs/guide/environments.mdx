@@ -1,6 +1,6 @@
 ---
 title: Environments and skills
-description: Give the agent a starting codebase, skills, MCP servers, rules, files, variables and setup steps with defineEnvironment.
+description: Give the agent a starting codebase, skills, plugins, MCP servers, rules, files, variables and setup steps with defineEnvironment.
 ---
 
 The sandbox is where the agent runs: put a specific machine on the environment (`defineEnvironment('python', { sandbox: docker({ from: 'python:3.12-slim' }) })`), or set `sandbox` on `defineConfig` as the default when the resolved environment omits one. An environment is also what the agent runs with: a starting codebase, skills, MCP servers, rules, files, variables and setup steps, applied fresh to every attempt. The house-greeting compare used the smallest one:
@@ -16,7 +16,7 @@ export const withHouseGreeting = plain.extendEnvironment(
 )
 ```
 
-`defineEnvironment(name, spec)` takes a plain object, or a callback that picks the helpers it needs: `skill`, `mcp`, `file`, `git` and `secret`. The callback runs once, when the file loads, and must return synchronously.
+`defineEnvironment(name, spec)` takes a plain object, or a callback that picks the helpers it needs: `skill`, `plugin`, `mcp`, `file`, `git` and `secret`. The callback runs once, when the file loads, and must return synchronously.
 
 ## Use an environment
 
@@ -86,6 +86,21 @@ export const withDocsMcp = base.extendEnvironment(
 ```
 
 Each server has a name, and the agent's calls to it show in the transcript as `mcp__<server>__<tool>`, such as `mcp__docs__search`. `mcp.stdio` starts a command in the sandbox; `mcp.http` and `mcp.sse` connect to a URL. Headers can carry secrets, which [Secrets and egress](/guide/secrets-and-egress) covers.
+
+## Add plugins
+
+```ts title="evals/env.ts"
+export const withReview = base.extendEnvironment(
+  'with-review',
+  ({ plugin }) => ({
+    plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] })],
+  }),
+)
+```
+
+A plugin bundles skills, subagents, commands, hooks, MCP servers and rules in Claude Code's layout. `only` picks the parts to place, and `plugin.git` and `plugin.npm` fetch one pinned. Its servers join `mcp` as `review:docs`, and the record lists the plugin with what it placed.
+
+Claude Code and Grok Build load every part but `rules`; the plan refuses a plugin on the other real harnesses, and the fake harness takes them. See [Helpers](/reference/helpers#plugin).
 
 ## Start from a repository
 
@@ -163,12 +178,12 @@ evaluate('sees the house rules', async (c) => {
 ```
 
 ```text
-[sees#1 fake]  +0:00 $ test -f docs/api.md  exit 0 2ms
+[sees#1 fake]  +0:00 $ test -f docs/api.md  exit 0 6ms
 …
-     ✓ sees the house rules         282ms  0 turns
+pass             sees the house rules
 ```
 
-The first `c.readFile` starts the sandbox and the agent session without a turn. Check an environment this way before you spend a turn on it.
+The `$ test -f` line is the attempt's detail, which a pass prints with `--output-logs full`. The first `c.readFile` starts the sandbox and the agent session without a turn. Check an environment this way before you spend a turn on it.
 
 ## Next
 

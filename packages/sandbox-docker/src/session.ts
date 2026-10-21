@@ -14,6 +14,7 @@ import { type Gateway, type GatewayOptions, startGateway } from './egress/gatewa
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
+import { type Engine, engineEnv, engineSpec } from './engine.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_USER } from './image.ts'
 import { shellQuote as q } from './process.ts'
 import { traceDocker } from './trace.ts'
@@ -88,20 +89,29 @@ export type SessionOptions = {
   capabilities?: readonly string[]
   /** Each unset one is {@link DEFAULT_LIMITS}'. */
   limits?: Partial<SandboxLimits>
+  /** The container CLI; Docker unless set. */
+  engine?: Engine
 }
 
-let hostCpus: Promise<number | undefined> | undefined
+const hostCpus = new Map<Engine, Promise<number | undefined>>()
 /** Docker refuses `--cpus` above the host's count, so cap it there. */
-async function cpuLimit(cpus: number): Promise<string> {
-  hostCpus ??= dockerCapacity().then(
-    (c) => c?.cpus,
-    () => undefined,
-  )
-  const available = await hostCpus
+async function cpuLimit(cpus: number, engine: Engine = 'docker'): Promise<string> {
+  let known = hostCpus.get(engine)
+  if (!known) {
+    known = dockerCapacity(engine).then(
+      (c) => c?.cpus,
+      () => undefined,
+    )
+    hostCpus.set(engine, known)
+  }
+  const available = await known
   return String(available ? Math.min(cpus, available) : cpus)
 }
 
-/** The `docker run` flags that confine the container: its user, capabilities and limits. */
+/**
+ * The `docker run` flags that confine the container: its user, capabilities and limits, and on
+ * Podman the bridge network and Docker's seccomp profile.
+ */
 export async function confinementArgs(options: SessionOptions): Promise<string[]> {
   const limits = { ...DEFAULT_LIMITS, ...options.limits }
   const caps = [...(options.root ? ROOT_CAPABILITIES : []), ...(options.capabilities ?? [])]
@@ -120,7 +130,8 @@ export async function confinementArgs(options: SessionOptions): Promise<string[]
     '--pids-limit',
     String(limits.pids),
     '--cpus',
-    await cpuLimit(limits.cpus),
+    await cpuLimit(limits.cpus, options.engine),
+    ...engineSpec(options.engine).runArgs(),
   ]
 }
 
@@ -146,32 +157,53 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
 const EXEC_MARKER = 'REEVAL_EXEC_ID'
 
 /**
+ * Every exec that can create a file starts with this. An exec'd process inherits the umask of the
+ * engine's shim, not the container's: since Docker 29.6 that's 0000 wherever dockerd starts
+ * containerd itself (Docker-in-Docker, rootless, OrbStack), which makes homes, the workspace and
+ * everything an agent writes world-writable, and tools such as fx and OpenSSH refuse them.
+ */
+const EXEC_UMASK = 'umask 022'
+
+/**
  * The container's cgroup counts every process the kernel killed at its memory limit: cgroup v2's
  * `memory.events` and v1's `memory.oom_control` both have an `oom_kill` line. Without either,
  * Docker's `OOMKilled` says only whether there was one.
  */
-export async function oomKills(id: string): Promise<number | null> {
-  const events = await docker([
-    'exec',
-    id,
-    'sh',
-    '-c',
-    'cat /sys/fs/cgroup/memory.events 2>/dev/null || cat /sys/fs/cgroup/memory/memory.oom_control',
-  ]).catch(() => null)
+export async function oomKills(id: string, engine?: Engine): Promise<number | null> {
+  const events = await docker(
+    [
+      'exec',
+      id,
+      'sh',
+      '-c',
+      'cat /sys/fs/cgroup/memory.events 2>/dev/null || cat /sys/fs/cgroup/memory/memory.oom_control',
+    ],
+    { engine },
+  ).catch(() => null)
   const count = events?.stdout.toString('utf8').match(/^oom_kill (\d+)$/m)?.[1]
   if (events?.exitCode === 0 && count !== undefined) return Number(count)
-  const inspected = await docker(['inspect', '--format', '{{.State.OOMKilled}}', id]).catch(
-    () => null,
-  )
+  const inspected = await docker(['inspect', '--format', '{{.State.OOMKilled}}', id], {
+    engine,
+  }).catch(() => null)
   if (inspected?.exitCode !== 0) return null
   const killed = inspected.stdout.toString('utf8').trim()
   return killed === 'true' ? 1 : killed === 'false' ? 0 : null
 }
 
 /** The Docker networks a container is attached to. */
-async function networksOf(id: string): Promise<string[]> {
-  const out = await dockerOk(['inspect', '--format', '{{json .NetworkSettings.Networks}}', id])
+async function networksOf(id: string, engine?: Engine): Promise<string[]> {
+  const out = await dockerOk(['inspect', '--format', '{{json .NetworkSettings.Networks}}', id], {
+    engine,
+  })
   return Object.keys(JSON.parse(out) ?? {})
+}
+
+/** How the container is networked when it's on no network: `host`, `slirp4netns`, `pasta`…  */
+async function networkMode(id: string, engine?: Engine): Promise<string> {
+  const r = await docker(['inspect', '--format', '{{.HostConfig.NetworkMode}}', id], {
+    engine,
+  }).catch(() => null)
+  return r?.exitCode === 0 ? r.stdout.toString('utf8').trim() || 'unknown' : 'unknown'
 }
 
 /**
@@ -184,6 +216,8 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   const labels = { [LABEL.managed]: 'true', [LABEL.session]: nonce, ...options.labels }
   const lifetime = Math.ceil((options.lifetimeMs ?? 24 * 3_600_000) / 1000)
   const signal = options.abortSignal
+  const { engine } = options
+  const spec = engineSpec(engine)
   const env = { ...userEnv(options), ...options.env }
   const id = await dockerOk(
     [
@@ -196,20 +230,21 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       ...Object.keys(env).flatMap((k) => ['--env', k]),
       '--publish',
       `127.0.0.1::${BRIDGE_PORT}`,
-      '--workdir',
-      SANDBOX_ROOT,
+      ...(spec.createsWorkdir ? ['--workdir', SANDBOX_ROOT] : []),
       '--entrypoint',
       'sleep',
       options.image,
       String(lifetime),
     ],
-    { signal, env },
+    { signal, env, engine },
   ).catch((error) => {
-    if (signal?.aborted) sweepLabelDetached(`${LABEL.session}=${nonce}`)
-    if (/unable to find user/i.test((error as Error).message)) {
-      sweepLabelDetached(`${LABEL.session}=${nonce}`)
+    const sweep = () => sweepLabelDetached(`${LABEL.session}=${nonce}`, undefined, engine)
+    if (signal?.aborted) sweep()
+    // Docker says "unable to find user", Podman "no matching entries in passwd file".
+    if (/unable to find user|no matching entries in passwd/i.test((error as Error).message)) {
+      sweep()
       throw new Error(
-        `${options.image} has no ${SANDBOX_USER} user to run the sandbox as. Images reeval builds have one: rebuild it (reeval image build), or start from reeval's image or docker({ from }). An eval that needs root at run time can opt in with docker({ root: true }).`,
+        `${options.image} has no ${SANDBOX_USER} user to run the sandbox as. Images reeval builds have one: rebuild it (reeval image build), or start from reeval's image or ${spec.fn}({ from }). An eval that needs root at run time can opt in with ${spec.fn}({ root: true }).`,
       )
     }
     throw error
@@ -218,12 +253,24 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   let removed: Promise<void> | undefined
   const remove = () => {
     gateway?.close()
-    removed ??= removeContainerDetached(id)
+    removed ??= removeContainerDetached(id, engine)
     return removed
   }
   if (signal?.aborted) {
     await remove()
     throw signal.reason
+  }
+  if (!spec.createsWorkdir) {
+    // Podman's `run --workdir` refuses a directory the image doesn't have; Docker makes it.
+    const made = await docker(
+      ['exec', '--user', '0:0', id, 'sh', '-c', `${EXEC_UMASK} && mkdir -p ${SANDBOX_ROOT}`],
+      { engine, signal },
+    ).catch((error) => ({ exitCode: 1, stderr: (error as Error).message }))
+    if (made.exitCode !== 0) {
+      await remove()
+      if (signal?.aborted) throw signal.reason
+      throw new Error(`Couldn't create ${SANDBOX_ROOT} in the container: ${made.stderr.trim()}`)
+    }
   }
 
   const egressOptions = options.egress === true ? {} : options.egress || undefined
@@ -232,10 +279,20 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   let detached: string[] = []
   const attach = async (policy: NetworkPolicy) => {
     if (isRestricted(policy) && detached.length === 0) {
-      detached = await networksOf(id)
-      for (const n of detached) await dockerOk(['network', 'disconnect', '--force', n, id])
+      detached = await networksOf(id, engine)
+      // A container on no network has a route out only in a network mode (`host`, rootless
+      // Podman's slirp4netns or pasta) no disconnect can take away.
+      const mode = detached.length === 0 ? await networkMode(id, engine) : 'none'
+      if (detached.length === 0 && mode !== 'none') {
+        throw new Error(
+          `the container's network is ${mode}, which ${spec.name} can't detach it from, so a restricted policy would still have a route out`,
+        )
+      }
+      for (const n of detached) {
+        await dockerOk(['network', 'disconnect', '--force', n, id], { engine })
+      }
     } else if (!isRestricted(policy) && detached.length > 0) {
-      for (const n of detached) await dockerOk(['network', 'connect', n, id])
+      for (const n of detached) await dockerOk(['network', 'connect', n, id], { engine })
       detached = []
     }
   }
@@ -244,7 +301,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     try {
       // Before anything but `sleep` runs, so a restricted container never has a route out.
       await attach(policy)
-      gateway = await startGateway(id, { ...rest, policy }, signal)
+      gateway = await startGateway(id, { ...rest, policy }, signal, engine)
       egress = { active: true }
     } catch (error) {
       if (signal?.aborted || isRestricted(policy)) {
@@ -274,7 +331,8 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     id,
     'bash',
     '-c',
-    command,
+    // On the command's own first line, so bash's `line N:` in its errors stays the command's.
+    `${EXEC_UMASK}; ${command}`,
   ]
   const nextMarker = () => `${id.slice(0, 12)}-${++execs}`
   /**
@@ -282,13 +340,16 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
    * every process there that inherited this exec's marker: the command and all it started.
    */
   const killExec = (marker: string) =>
-    docker([
-      'exec',
-      id,
-      'sh',
-      '-c',
-      `for e in /proc/[0-9]*/environ; do grep -qsxzF ${q(`${EXEC_MARKER}=${marker}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done; true`,
-    ]).then(
+    docker(
+      [
+        'exec',
+        id,
+        'sh',
+        '-c',
+        `for e in /proc/[0-9]*/environ; do grep -qsxzF ${q(`${EXEC_MARKER}=${marker}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done; true`,
+      ],
+      { engine },
+    ).then(
       () => {},
       () => {},
     )
@@ -300,6 +361,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       const r = await docker(execArgs(o.command, marker, o.workingDirectory, env), {
         env,
         signal: o.abortSignal,
+        engine,
       })
       return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
     } catch (error) {
@@ -311,6 +373,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   const readBinaryFile = async (o: { path: string; abortSignal?: AbortSignal }) => {
     const r = await docker(['exec', id, 'cat', '--', posix.resolve(SANDBOX_ROOT, o.path)], {
       signal: o.abortSignal,
+      engine,
     })
     return r.exitCode === 0 ? new Uint8Array(r.stdout) : null
   }
@@ -328,9 +391,9 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         id,
         'sh',
         '-c',
-        `mkdir -p ${q(posix.dirname(path))} && cat > ${q(path)}`,
+        `${EXEC_UMASK} && mkdir -p ${q(posix.dirname(path))} && cat > ${q(path)}`,
       ],
-      { input: Buffer.from(o.content), signal: o.abortSignal },
+      { input: Buffer.from(o.content), signal: o.abortSignal, engine },
     )
   }
 
@@ -359,7 +422,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
 
   const session: DockerSession = {
     id,
-    description: `Docker container ${id.slice(0, 12)} (${options.image})`,
+    description: `${spec.name} container ${id.slice(0, 12)} (${options.image})`,
     defaultWorkingDirectory: SANDBOX_ROOT,
     ports: [BRIDGE_PORT],
     get egress(): EgressStatus | undefined {
@@ -368,21 +431,21 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     },
     ...brokering,
     ...substituting,
-    oomKills: () => oomKills(id),
+    oomKills: () => oomKills(id, engine),
     run,
     async spawn(o) {
       const env = envFor(o.env)
       const marker = nextMarker()
       const args = execArgs(o.command, marker, o.workingDirectory, env)
       const startedAt = Date.now()
-      const child = spawn('docker', args, {
+      const child = spawn(spec.bin, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: true,
-        env: env ? { ...process.env, ...env } : process.env,
+        env: { ...process.env, ...engineEnv(engine), ...env },
       })
       const exited = new Promise<{ exitCode: number }>((resolve) =>
         child.on('close', (code) => {
-          traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' })
+          traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' }, spec.bin)
           resolve({ exitCode: code ?? 1 })
         }),
       )
@@ -433,10 +496,10 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         )
       }
       if (gateway) return { url: await gateway.portUrl(port, scheme) }
-      const mapped = await docker(['port', id, `${port}/tcp`])
+      const mapped = await docker(['port', id, `${port}/tcp`], { engine })
       const hostPort = mapped.stdout.toString('utf8').split('\n')[0]?.split(':').at(-1)
       if (mapped.exitCode !== 0 || !hostPort) {
-        const reason = mapped.stderr.trim() || 'Docker reports no host port for it'
+        const reason = mapped.stderr.trim() || `${spec.name} reports no host port for it`
         throw new Error(`Port ${port} of ${id.slice(0, 12)} isn't reachable: ${reason}`)
       }
       return { url: `${scheme}://127.0.0.1:${hostPort}` }
@@ -468,7 +531,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
 /** The session as an AI SDK harness sandbox provider. */
 export const dockerSandboxProvider = (options: SessionOptions): HarnessV1SandboxProvider => ({
   specificationVersion: 'harness-sandbox-v1',
-  providerId: 'reeval-docker',
+  providerId: options.engine === 'podman' ? 'reeval-podman' : 'reeval-docker',
   async createSession(o) {
     const session = await createDockerSession({ ...options, abortSignal: o?.abortSignal })
     await o?.onFirstCreate?.(session, { abortSignal: o.abortSignal })

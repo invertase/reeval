@@ -145,8 +145,9 @@ export function markedFiles(dir, marker, base) {
  * and its notices.
  * @param {string} name The package the notices ship in.
  * @param {ThirdParty[]} packages
- * @param {{ title: string, license: string, licenseText: string, source: string, files: string[] }[]} copied
- *   Code copied into the workspace's own sources.
+ * @param {{ title: string, license: string, licenseText: string, source: string, files: string[], into: string, modified: boolean }[]} copied
+ *   Code copied into the workspace's own sources: `into` names what ships it, `modified` whether
+ *   the copy was changed.
  */
 export function renderNotices(name, packages, copied) {
   const merged = new Map()
@@ -191,7 +192,7 @@ export function renderNotices(name, packages, copied) {
     lines.push('', `## ${c.title}`, '')
     lines.push(`- Licence: ${c.license}`, `- Source: ${c.source}`)
     lines.push(
-      '- Copied, then modified, into these source files of the studio app (`dist/studio-app`):',
+      `- Copied${c.modified ? ', then modified,' : ''} into these source files of ${c.into}:`,
     )
     lines.push(...c.files.map((f) => `  - \`${f}\``))
     lines.push('', fence(c.licenseText.trim()))

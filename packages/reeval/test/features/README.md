@@ -2,12 +2,15 @@
 
 Every user-facing feature or option lands with its tests in the same change. Pick the tier first.
 
+While implementing, do not run `pnpm test:features` or full `pnpm test` in an agent turn — use
+targeted `node --test test/<file>.test.ts` and the [Before you finish](../../../../AGENTS.md#before-you-finish)
+block instead ([AGENTS.md](../../../../AGENTS.md#while-you-work)).
+
 ## Which tier
 
-**Run `reeval run --dry-run` on an example before and after your change.** When the output
-differs, the behaviour is a **plan case**, not a fixture: add a directory under `test/plan/` (or
-extend an existing one), register it in `plan.test.ts`, then
-`REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan` and review the snapshot diff. CI enforces this through
+**Does `reeval run --dry-run` show the change?** Then it's a plan case, not a fixture: an option,
+its cascade or default, a profile, selection, compare or an image is checked without running an
+attempt. Only a change that shows once an attempt runs gets a fixture here. CI enforces this through
 [`eval-options.ts`](./eval-options.ts) and `matrix.test.ts`: each plan-affecting eval option must
 name an inventory entry with a plan case.
 
@@ -97,8 +100,10 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
   enforce a policy, so a restricted one makes its plan exit 2. For a host to reach,
   `features.test.ts` starts a listener on the host at a non-loopback address (the gateway never
   reaches loopback) that answers `reeval-egress-ok`; a row passes `hostEnv: egressEnv` to give the
-  fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). The row's
-  `record` checks the attempt's `egress` from outside.
+  fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). Beside it, a
+  DNS server answers every A query with `REEVAL_EGRESS_DNS_ANSWER` at `REEVAL_EGRESS_DNS` (address and
+  port), so whether a name resolves doesn't hang on the machine's own resolver. The row's `record`
+  checks the attempt's `egress` from outside.
 - **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
   `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
   agent's image, so a fixture under `harness/` covers what a real harness receives. List the
@@ -148,13 +153,14 @@ it and run `reeval run --ui plain`. Add `REEVAL_FIXTURE_SANDBOX=docker` for the 
 2. Each canary fails, with the message its row expects.
 3. Plan snapshot diffs are reviewed and show only the intended change
    (`REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan` from `packages/reeval`).
-4. `pnpm test`, `pnpm lint` and `pnpm typecheck` are green, with no Docker test skipped when the
-   feature touches Docker. After touching `src/contract/`, run `pnpm --filter reeval typecheck`.
-5. The change lists the fixtures it adds, updates [`inventory.ts`](./inventory.ts) and
-   [`eval-options.ts`](./eval-options.ts) when it adds or changes an eval option, then runs
-   `pnpm features:matrix --write` so `COVERAGE.md` and CI stay current.
+4. After `pnpm format`, `pnpm test`, `pnpm lint` and `pnpm typecheck` are green, with no Docker
+   test skipped when the feature touches Docker. See
+   [AGENTS.md's Before you finish](../../../../AGENTS.md#before-you-finish).
+5. The change lists the fixtures it adds, and its entry in [`inventory.ts`](./inventory.ts) names
+   them (or says why it's a gap); an added or changed eval option also updates
+   [`eval-options.ts`](./eval-options.ts). `pnpm features:matrix --write` regenerates `COVERAGE.md`.
 6. Refusal rows land in `test/refusals/cases.ts` when the option can be refused at plan time;
-   refresh with `REEVAL_UPDATE_SNAPSHOTS=1 pnpm --filter reeval test test/refusals.test.ts`.
+   refresh with `REEVAL_UPDATE_SNAPSHOTS=1` on `test/refusals.test.ts`.
 7. The docs are updated: the feature's page in the Reference tab (`docs/reference/`), and the
    Guide or a Recipe if it changes how people use reeval. `pnpm docs:gen && pnpm docs:check` is
    green (see [AGENTS.md](../../../../AGENTS.md#docs)).

@@ -10,7 +10,7 @@ import { describe, test } from 'node:test'
 import { nodeAtLeast, SQLITE_NODE } from '../src/history/db.ts'
 import { type ClassContext, classifyCall } from '../src/history/tool-class.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
-import { statementCount } from '../src/query.ts'
+import { statementCount, usesRunParameter } from '../src/query.ts'
 import { harnessLabel } from '../src/view/model.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, readRun, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
@@ -87,6 +87,115 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.equal(text.code, 0, text.stderr)
     assert.equal(text.stdout, 'key                       outcome\nevals/s.eval.ts › greets  pass\n')
     assert.match(text.stderr, /history\.db: 1 runs/)
+  })
+
+  test('check_rates gives each labelled check’s pass rate per cell, on both arms of a compare', async () => {
+    const p = await project('query-check-rates', {
+      'reeval.config.ts': fakeConfig({
+        harness:
+          "{ files: { 'ok.txt': 'y' }, withSkill: { files: { 'ok.txt': 'y', 'styled.txt': 'Ahoy' } } }",
+      }),
+      'skills/house/SKILL.md': skill('house'),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const styled = defineEnvironment('styled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/house')],
+}))
+evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }, async (c) => {
+  await c.send('go')
+  await expect.soft(c, 'writes ok.txt').toHaveFile('ok.txt')
+  await expect.soft(c, 'house style').toHaveFile('styled.txt', /Ahoy/)
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { run } = readRun(p.dir)
+    const cells = await query(p.dir, 'SELECT key, harness FROM cells ORDER BY key')
+    const harness = (key: string) => cells.find((c) => c.key === key)?.harness
+    assert.ok(harness('fake/plain/fake'))
+
+    const rows = await query(p.dir, 'SELECT * FROM check_rates ORDER BY role, label')
+    const row = (cell: string, environment: string, role: string, label: string) => ({
+      run_id: run.runId,
+      eval_key: 'evals/s.eval.ts › greets',
+      cell_key: cell,
+      harness: harness(cell),
+      environment,
+      role,
+      label,
+    })
+    assert.deepEqual(rows, [
+      {
+        ...row('fake/plain/fake', 'plain', 'control', 'house style'),
+        ...{ pass: 0, fail: 2, error: 0, not_run: 0, rate: 0 },
+      },
+      {
+        ...row('fake/plain/fake', 'plain', 'control', 'writes ok.txt'),
+        ...{ pass: 2, fail: 0, error: 0, not_run: 0, rate: 1 },
+      },
+      {
+        ...row('fake/styled/fake', 'styled', 'variant', 'house style'),
+        ...{ pass: 2, fail: 0, error: 0, not_run: 0, rate: 1 },
+      },
+      {
+        ...row('fake/styled/fake', 'styled', 'variant', 'writes ok.txt'),
+        ...{ pass: 2, fail: 0, error: 0, not_run: 0, rate: 1 },
+      },
+    ])
+  })
+
+  test('check_streaks counts each check’s clean recorded runs on a branch, newest first', async () => {
+    const p = await project('query-check-streaks', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+      'reeval.config.ts': fakeConfig(),
+      'evals/s.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('steady', { runs: 2 }, async (c) => {
+  await c.send('go')
+  expect.soft(1, 'always one').toBe(1)
+  expect.soft(process.env.FLIP, 'flips').toBeUndefined()
+})
+`,
+    })
+    const env = { ...baseEnv, GIT_AUTHOR_NAME: 'T', GIT_AUTHOR_EMAIL: 't@example.com' }
+    const git = (...args: string[]) =>
+      execFileSync('git', args, {
+        cwd: p.dir,
+        env: { ...env, GIT_COMMITTER_NAME: 'T', GIT_COMMITTER_EMAIL: 't@example.com' },
+      })
+    git('init', '-q', '-b', 'main')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'init')
+    assert.equal((await runCli(p.dir, ['run', '--record'], { env: { FLIP: '1' } })).code, 1)
+    const broke = readRun(p.dir).run.runId
+    for (let i = 0; i < 2; i++) assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const newest = readRun(p.dir).run.runId
+    assert.equal((await runCli(p.dir, ['run'])).code, 0, 'a scratch run is not counted')
+    const rows = await query(
+      p.dir,
+      'SELECT label, branch, runs, fails, streak_runs, streak_tries, last_run, ended_by FROM check_streaks ORDER BY label',
+    )
+    assert.deepEqual(rows, [
+      {
+        label: 'always one',
+        branch: 'main',
+        ...{ runs: 3, fails: 0, streak_runs: 3, streak_tries: 6, last_run: newest, ended_by: null },
+      },
+      {
+        label: 'flips',
+        branch: 'main',
+        ...{
+          runs: 3,
+          fails: 2,
+          streak_runs: 2,
+          streak_tries: 4,
+          last_run: newest,
+          ended_by: broke,
+        },
+      },
+    ])
   })
 
   test('reasoning effort, requested and served, is its own column; the effort view is the metric', async () => {
@@ -193,6 +302,78 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.match(again.stderr, /rebuilt, 1 read/)
   })
 
+  test('processes building the database at once each see every run once', async () => {
+    const p = await project('query-parallel-sync', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    for (let i = 0; i < 3; i++) assert.equal((await runCli(p.dir)).code, 0)
+    for (let round = 0; round < 3; round++) {
+      rmSync(join(p.dir, '.reeval/history.db'), { force: true })
+      const all = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM runs', '--json']),
+        ),
+      )
+      for (const r of all) {
+        assert.equal(r.code, 0, r.stderr)
+        assert.deepEqual(JSON.parse(r.stdout), [{ n: 3 }])
+      }
+    }
+  })
+
+  test('a sync waits for another process that holds the database longer than 5s', async () => {
+    const p = await project('query-held-sync', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    await query(p.dir, 'SELECT 1')
+    assert.equal((await runCli(p.dir)).code, 0)
+    const holder = new DatabaseSync(join(p.dir, '.reeval/history.db'))
+    holder.exec('BEGIN IMMEDIATE')
+    let held = true
+    const free = () => {
+      if (!held) return
+      held = false
+      holder.exec('COMMIT')
+      holder.close()
+    }
+    const started = Date.now()
+    const release = setTimeout(free, 7000)
+    try {
+      const r = await runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM runs', '--json'])
+      assert.equal(r.code, 0, r.stderr)
+      assert.deepEqual(JSON.parse(r.stdout), [{ n: 2 }])
+      assert.ok(Date.now() - started >= 7000, 'it waited for the lock')
+    } finally {
+      clearTimeout(release)
+      free()
+    }
+  })
+
+  test('SQL that starts with a -- comment is the statement, with flags before, after or --', async () => {
+    const p = await project('query-dash-comment', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const sql = '-- attempts per run\nSELECT COUNT(*) AS n FROM attempts'
+    for (const argv of [
+      ['query', sql, '--json'],
+      ['query', '--json', sql],
+      ['query', '--json', '--', sql],
+      ['query', '-- one line comment\n-- and another\nSELECT 1 AS n', '--json'],
+    ]) {
+      const r = await runCli(p.dir, argv)
+      assert.equal(r.code, 0, `${JSON.stringify(argv)}: ${r.stderr}`)
+      assert.deepEqual(JSON.parse(r.stdout), [{ n: 1 }], JSON.stringify(argv))
+    }
+    const rebuilt = await runCli(p.dir, ['query', sql, '--rebuild', '--json'])
+    assert.equal(rebuilt.code, 0, rebuilt.stderr)
+    assert.match(rebuilt.stderr, /rebuilt, 1 read/)
+  })
+
   test('it is read-only and runs one statement; mistakes exit 2 with a fix', async () => {
     const p = await project('query-readonly', {
       'reeval.config.ts': fakeConfig(),
@@ -208,7 +389,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
-        /no view or table named "nope"\. Views: check_discrimination, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts/,
+        /no view or table named "nope"\. Views: check_discrimination, check_rates, check_streaks, context_use, contrasts, drift, effort, eval_trend, factor_effects, failing_attempts.*\. Tables: artifacts, assertions, attempt_context, attempts, cell_checks, cells,/,
       ],
     ]
     for (const [sql, message] of cases) {
@@ -217,6 +398,63 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       assert.match(r.stderr, message)
     }
     assert.equal((await one(p.dir, 'SELECT COUNT(*) AS n FROM runs')).n, 1, 'nothing was deleted')
+  })
+
+  test('--run binds :run to a run id or the last run; a view filters on run_id', async () => {
+    const p = await project('query-run', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const first = readRun(p.dir).run.runId
+    assert.equal((await runCli(p.dir)).code, 0)
+    const last = readRun(p.dir).run.runId
+    assert.notEqual(first, last)
+    const rows = async (args: string[]) => {
+      const r = await runCli(p.dir, ['query', ...args, '--json'])
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      return JSON.parse(r.stdout) as Row[]
+    }
+    const byRun = 'SELECT run_id FROM runs WHERE run_id = :run'
+    assert.deepEqual(await rows([byRun, '--run', 'last']), [{ run_id: last }])
+    assert.deepEqual(await rows([byRun, '--run', first]), [{ run_id: first }])
+    assert.deepEqual(await rows(['SELECT $run AS id', '--run', 'last']), [{ id: last }])
+    assert.deepEqual(
+      (await rows(['eval_trend', '--run', first])).map((r) => r.run_id),
+      [first],
+      'a bare view name with --run keeps that run’s rows',
+    )
+    assert.equal((await rows(['eval_trend'])).length, 2, 'without --run, every run')
+    assert.deepEqual(
+      await rows(["SELECT ':run' AS s"]),
+      [{ s: ':run' }],
+      'a string, not a parameter',
+    )
+
+    const cases: Array<[string[], RegExp]> = [
+      [[byRun], /uses :run but no --run was given: pass --run <id\|last>/],
+      [['SELECT 1', '--run', 'last'], /--run binds :run, which the statement doesn't use/],
+      [[byRun, '--run', 'nope'], /--run nope: no run "nope" in \.reeval\/history\.db/],
+      [['flaky_cells', '--run', 'last'], /flaky_cells has no run_id column/],
+    ]
+    for (const [args, message] of cases) {
+      const r = await runCli(p.dir, ['query', ...args])
+      assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, message)
+    }
+  })
+
+  test('the text table prints sqlite_schema.sql in full; other long text is clipped', async () => {
+    const p = await project('query-sql-column', { 'reeval.config.ts': fakeConfig() })
+    const r = await runCli(p.dir, [
+      'query',
+      "SELECT name, sql FROM sqlite_master WHERE name = 'runs'",
+    ])
+    assert.equal(r.code, 0, r.stderr)
+    assert.doesNotMatch(r.stdout, /…/)
+    assert.match(r.stdout, /CREATE TABLE runs \([\s\S]*skipped INTEGER\n\)/)
+    const long = await runCli(p.dir, ['query', `SELECT '${'x'.repeat(80)}' AS other`])
+    assert.match(long.stdout, /x…$/m)
   })
 
   test('skill_reads counts a dedicated skill load, not only a path under skills/', async () => {
@@ -371,6 +609,21 @@ describe('reeval query plumbing', () => {
       ['', 0],
     ]
     for (const [sql, n] of cases) assert.equal(statementCount(sql), n, sql)
+  })
+
+  test(':run is found outside quotes and comments only', () => {
+    const cases: Array<[string, boolean]> = [
+      ['SELECT * FROM runs WHERE run_id = :run', true],
+      ['SELECT $run', true],
+      ['SELECT @run', true],
+      ["SELECT ':run'", false],
+      ['SELECT ":run" FROM t', false],
+      ['SELECT 1 -- :run', false],
+      ['SELECT 1 /* :run */', false],
+      ['SELECT :runner', false],
+      ['SELECT run FROM t', false],
+    ]
+    for (const [sql, uses] of cases) assert.equal(usesRunParameter(sql), uses, sql)
   })
 
   test('the Node floor is where node:sqlite arrives, in engines too', () => {

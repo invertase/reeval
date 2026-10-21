@@ -4,6 +4,23 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { type BakedHarness, imageFor } from '@reeval/sandbox-docker'
+import type { PluginPart } from '../../src/types.ts'
+
+/** Every plugin part, for a harness that loads them all. */
+export const EVERY_PART: readonly PluginPart[] = [
+  'skills',
+  'agents',
+  'commands',
+  'hooks',
+  'mcp',
+  'rules',
+]
+
+/** What a harness that reads Claude Code's plugin format loads: every part but rules. */
+const CLAUDE_FORMAT: readonly PluginPart[] = ['skills', 'agents', 'commands', 'hooks', 'mcp']
+
+/** Where reeval copies the probe plugin's skill, which `context` lists. */
+const PLACED_PLUGIN_SKILL = /^~\/\.reeval\/plugins\/probe\/skills\/plugin-probe\/SKILL\.md$/
 
 export type HarnessRow = {
   /** The name in test titles, `REEVAL_CONTRACT_HARNESSES` and the capture directory. */
@@ -18,6 +35,7 @@ export type HarnessRow = {
     | 'goose'
     | 'pi'
     | 'codex'
+    | 'grok-build'
     | 'fx'
     | 'fx-gateway'
   /**
@@ -41,6 +59,14 @@ export type HarnessRow = {
   image: BakedHarness
   /** Where the placed contract skill shows up in the attempt's `context`. */
   skillContext: RegExp
+  /**
+   * What reeval places of a plugin on this harness: the parts its catalog entry loads
+   * (`pluginParts`), which the probe plugin's `only` is narrowed to, and where the probe plugin's
+   * skill shows up in `context`. The hook and subagent evals run only where `parts` has `hooks`
+   * and `agents`. Unset for a harness reeval places no plugins on yet: its plugin evals are left
+   * out, and the plugin checks skip it, saying so.
+   */
+  plugin?: { parts: readonly PluginPart[]; skillContext: RegExp }
   /** What a restricted policy allows automatically for it. */
   autoHosts: string[]
   /** A host it reaches on every turn; null for the fake agent, which reaches none. */
@@ -72,6 +98,9 @@ export const harnesses: HarnessRow[] = [
     key: null,
     image: 'cursor',
     skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    // Plugin evals run it without a layout, so it takes every part and places plugin skills with
+    // its own.
+    plugin: { parts: EVERY_PART, skillContext: /^~\/\.agents\/skills\/plugin-probe\/SKILL\.md$/ },
     autoHosts: ['api2.cursor.sh', '*.cursor.sh'],
     apiHost: null,
     tokens: false,
@@ -109,6 +138,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
     image: 'claude-code',
     skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: { parts: CLAUDE_FORMAT, skillContext: PLACED_PLUGIN_SKILL },
     autoHosts: ['api.anthropic.com', '*.anthropic.com'],
     apiHost: 'api.anthropic.com',
     tokens: true,
@@ -136,15 +166,15 @@ export const harnesses: HarnessRow[] = [
     // response.
     id: 'opencode-anthropic',
     harness: 'opencode',
-    model: 'anthropic/claude-haiku-4-5',
+    model: 'anthropic/claude-sonnet-5-5',
     key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
     image: 'opencode',
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.anthropic.com', 'mcp.exa.ai'],
     apiHost: 'api.anthropic.com',
     tokens: true,
-    servedModel: /^claude-haiku-4-5/,
-    wireModel: /^claude-haiku-4-5/,
+    servedModel: /^claude-sonnet-5-5/,
+    wireModel: /^claude-sonnet-5-5/,
   },
   {
     // And OpenAI's: a Bearer key, the Responses API over HTTP (not OpenCode's WebSocket), and
@@ -245,6 +275,21 @@ export const harnesses: HarnessRow[] = [
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
   },
+  {
+    id: 'grok-build',
+    model: 'grok-4.6',
+    key: { name: 'XAI_API_KEY', from: ['XAI_API_KEY'] },
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: { parts: CLAUDE_FORMAT, skillContext: PLACED_PLUGIN_SKILL },
+    autoHosts: ['api.x.ai'],
+    apiHost: 'api.x.ai',
+    tokens: true,
+    // Its ACP server names no model; the turn records the one xAI's Responses API answered with.
+    servedModel: /^grok-4\.6/,
+    wireModel: /^grok-4\.6/,
+  },
 ]
 
 /** The row's key from the host, or undefined when none of its variables is set. */
@@ -296,6 +341,7 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   return {
     ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
+    ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...(process.env.REEVAL_RAW_TRANSCRIPT
       ? { REEVAL_RAW_TRANSCRIPT: process.env.REEVAL_RAW_TRANSCRIPT }
@@ -354,7 +400,7 @@ export function reserveAttempts(row: HarnessRow, attempts: number, what: string)
     : 0
   if (spent + attempts > budget) {
     throw new Error(
-      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise REEVAL_REAL_ATTEMPT_BUDGET in real.yml if the suite grew on purpose`,
+      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise the job's REEVAL_REAL_ATTEMPT_BUDGET (contract.yml, or real.yml's smoke job) if the suite grew on purpose`,
     )
   }
   appendFileSync(ledger, `${attempts} ${what} ${row.id}\n`)

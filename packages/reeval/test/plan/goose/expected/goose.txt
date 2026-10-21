@@ -5,11 +5,11 @@ evals/a.eval.ts › goose only, own id                         gs/-/docker      
 evals/a.eval.ts › goose on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim     control  gated  ×1  egress "deny-all" + api2.cursor.sh, *.cursor.sh
                                                              goose:gemini-3.8-flash/python/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + generativelanguage.googleapis.com
 excluded: —
-image docker · 1 evals
+image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
 image docker · goose · 2 evals
   base  reeval-sandbox:goose-0.1.3  (reeval's image: built when missing or when its base changed)
-image docker:python:3.12-slim · 1 evals
-  from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+image docker:python:3.12-slim · cursor · 1 evals
+  from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image docker:python:3.12-slim · goose · 1 evals
-  from python:3.12-slim  reeval-sandbox:goose-0.1.3-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:goose-0.1.3-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

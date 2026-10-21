@@ -17,6 +17,7 @@ import {
   gitWorkspaceSchema,
   hostFileSchema,
   mcpServerSchema,
+  pluginSourceSchema,
   skillSourceSchema,
 } from './plain.ts'
 import { type Assert, durationSchema, nonEmpty, type Same } from './shared.ts'
@@ -80,6 +81,12 @@ export const environmentSpecSchema = z
       .record(z.string(), mcpServerSchema)
       .optional()
       .describe('MCP servers the agent gets, by name.'),
+    plugins: z
+      .array(pluginSourceSchema)
+      .optional()
+      .describe(
+        "Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its parent's plugin of the same name.",
+      ),
   })
   .describe('What an eval runs in: the declarative, phased spec of one environment.')
 

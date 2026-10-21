@@ -5,8 +5,8 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { RETRY_DELAYS } from '@reeval/sandbox-docker'
-import { levelOf } from '../options.ts'
-import type { HarnessDescriptor, SandboxDescriptor } from '../types.ts'
+import { levelOf, sandboxProvider } from '../options.ts'
+import type { HarnessDescriptor, PluginSource, SandboxDescriptor } from '../types.ts'
 import {
   type PreparedHandle,
   PrepareError,
@@ -18,19 +18,24 @@ import {
 export type PrepareUse = {
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
-  setBy: { sandbox: string; harness: string }
+  /** Its environment's plugins with a `build`, layered. */
+  plugins?: readonly PluginSource[]
+  /** `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`; `pluginBuilds` names the environment its builds come from. */
+  setBy: { sandbox: string; harness: string; pluginBuilds?: string }
 }
 
 /** One distinct environment to prepare, with every level that asked for it. */
 export type PrepareTarget = {
+  /** The provider: the sandbox's kind, or `podman` for a Docker sandbox on Podman. */
   kind: string
   key: string
   /** How the terminal names it, e.g. `docker:python`. */
   label: string
   sandbox: SandboxDescriptor
   harness: HarnessDescriptor
-  /** The levels that set the sandbox, in first-use order. */
+  /** The plugins built into it. */
+  plugins: readonly PluginSource[]
+  /** The levels that set the sandbox, or the environments its plugin builds come from, in first-use order. */
   setBy: string[]
   /** Set by the config or a profile, sandbox and harness both: a failure stops the run. */
   runWide: boolean
@@ -60,20 +65,28 @@ export function prepareTargets(
 ): PrepareTarget[] {
   const targets = new Map<string, PrepareTarget>()
   for (const use of uses) {
-    const provider = providers[use.sandbox.kind]
+    const kind = sandboxProvider(use.sandbox)
+    const provider = providers[kind]
     if (!provider) continue
-    const key = `${use.sandbox.kind}\0${provider.key(use.sandbox, use.harness)}`
+    const plugins = use.plugins ?? []
+    const own = provider.key(use.sandbox, use.harness, plugins)
+    const key = `${kind}\0${own}`
     const target = targets.get(key) ?? {
-      kind: use.sandbox.kind,
-      key: provider.key(use.sandbox, use.harness),
+      kind,
+      key: own,
       label: label(use),
       sandbox: use.sandbox,
       harness: use.harness,
+      plugins,
       setBy: [],
       runWide: false,
     }
-    if (!target.setBy.includes(use.setBy.sandbox)) target.setBy.push(use.setBy.sandbox)
-    target.runWide ||= runWideLevel(use.setBy.sandbox) && runWideLevel(use.setBy.harness)
+    // A build's failure is the environment's that asked for it, not the sandbox's.
+    const by = plugins.length ? (use.setBy.pluginBuilds ?? use.setBy.sandbox) : use.setBy.sandbox
+    if (!target.setBy.includes(by)) target.setBy.push(by)
+    // Plugin builds come from an environment, not from where the sandbox was set.
+    target.runWide ||=
+      plugins.length === 0 && runWideLevel(use.setBy.sandbox) && runWideLevel(use.setBy.harness)
     targets.set(key, target)
   }
   return [...targets.values()]
@@ -163,7 +176,9 @@ export async function prepareAll(
     try {
       const ctx = { root, signal, log: options.log ?? (() => {}), retry }
       // A provider that doesn't retry its own steps is retried as a whole.
-      const handle = await retry(() => provider.prepare(target.sandbox, target.harness, ctx))
+      const handle = await retry(() =>
+        provider.prepare(target.sandbox, target.harness, ctx, target.plugins),
+      )
       return { target, ok: true, handle, ms: performance.now() - start }
     } catch (error) {
       const failure = failureOf(provider, error)
@@ -236,6 +251,7 @@ export function preparedFor(
   provider: SandboxProvider,
   sandbox: SandboxDescriptor,
   harness: HarnessDescriptor,
+  plugins: readonly PluginSource[] = [],
 ): PreparedHandle | undefined {
   const file = preparedFile(root, runId)
   if (!read.has(file)) {
@@ -245,7 +261,8 @@ export function preparedFor(
     } catch {}
     read.set(file, doc)
   }
-  const entry = read.get(file)?.[sandbox.kind]?.[provider.key(sandbox, harness)]
+  const entry =
+    read.get(file)?.[sandboxProvider(sandbox)]?.[provider.key(sandbox, harness, plugins)]
   if (!entry) return undefined
   if ('failure' in entry) {
     throw new PrepareError({
