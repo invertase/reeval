@@ -64,7 +64,9 @@ npx reeval run
 4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in
    `.env.local` next to `reeval.config.ts` (not the directory you run from), `npx reeval doctor`
    (exit 1 names each problem and its fix; `--json`, `--online` tries the keys), then
-   `npx reeval run`. Exit 0 means every gated cell passed.
+   `npx reeval run`. Exit 0 means every gated cell passed. `npx reeval run --json` prints the
+   results as one JSON document on stdout (each check `ran` or `not run`, each variant's
+   `effect`), with the progress on stderr.
 5. Read failures in the summary, then `.reeval/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
    `npx reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.

@@ -20,6 +20,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               default: defaultProfile.ci in CI, else defaultProfile.local)
   --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
                               with --json, as one JSON document (every cell, and what's excluded)
+  --json                      Print the run's results (suiteResult from reeval/view) as one JSON
+                              document on stdout when it ends; progress goes to stderr
   --force                     Run even when the plan is over budget.attempts
   --runs <n>                  Attempts per cell, overriding the config, groups and evals
   --concurrency <n>           Attempts running at once across evals and cells (default 8, at
@@ -89,6 +91,75 @@ images  4 sandbox images: 1 ready, 3 to build
   + python · cursor                     to build: from python:3.12-slim, on python:3.12-slim (f77ac9e44ae9)
   …
 ```
+
+## Results as JSON
+
+```bash
+npx reeval run --config reeval.fake.config.ts --json > results.json
+```
+
+```json
+{
+  "runId": "20261020T193408Z_2f4a6da_cursor-agent_c5zf",
+  "status": "complete",
+  "outcome": "pass",
+  "tally": { "pass": 16, "fail": 0, "infraError": 0, "skipped": 0 },
+  "files": [
+    …,
+    {
+      "path": "evals/skill.eval.ts",
+      "evals": [
+        {
+          "path": "evals%2Fskill.eval.ts › house greeting › greets in the house style",
+          "name": "greets in the house style",
+          "across": "change",
+          "family": false,
+          "outcome": "pass",
+          "cells": [
+            {
+              "key": "fake/plain/fake",
+              "baseline": true,
+              "gated": false,
+              "passed": 0,
+              "attempts": 1,
+              "checks": [
+                {
+                  "label": "house greeting",
+                  "outcome": {
+                    "status": "ran",
+                    "passed": 0,
+                    "failed": 1,
+                    "errored": 0,
+                    "notRun": 0,
+                    "assertion": "house greeting: expected command to succeed, …"
+                  },
+                  …
+                }
+              ],
+              …
+            },
+            …
+          ]
+        }
+      ]
+    }
+  ],
+  "paths": ["evals%2Fgreetings.eval.ts › greets %25s in the house style", …]
+}
+```
+
+`--json` prints the run's facts as one JSON document on stdout when the run ends; the progress and summary go to stderr. It's `suiteResult(record)` from `{{ pkg }}/view`, recomputed from the record, so `reeval show --json` still prints the record itself. The exit code is the same as without `--json`.
+
+| Field | What |
+|---|---|
+| `outcome`, `tally` | The run's outcome, and outcomes per block: each `evaluate.each` case and each other eval is one, and a family whose pooled `minLift` failed is one more fail |
+| `files[].evals[]` | An eval, or a pooled `evaluate.each` (`family: true`) with its `cases` and `pooled` variants |
+| `across` | What the cells compare: `none`, `change` (variants), `harness` or `both` |
+| `cells[]` | Each cell: counts (`infraError` and `skipped` apart from `failed`), `baseline`, `gated`, `fingerprint`, `context` (skill sources and files) |
+| `checks[].outcome` | `ran` with its counts and first failure, or `not run` when no counted attempt reached it |
+| `effect` | A variant against its baseline: `better`, `worse`, `same` or `unclear`. Fewer than 4 counted attempts a side is `unclear`, and so is a check the baseline never ran |
+| `effort` | Median tool calls, agent time and tokens, from 4 counted attempts |
+| `paths` | Every node's `path`, a stable id to cite it by: `<eval>/<case>/<harness>+<environment>+<sandbox>/checks/<label>` |
 
 A sandbox that runs as root or with capabilities added back gets a line under the plan, one per config, profile, group or eval that set it. See [Privilege warnings](/reference/sandbox/docker#privilege-warnings).
 

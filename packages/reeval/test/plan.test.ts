@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
-import { project, runCli } from './helpers.ts'
+import { fakeConfig, project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
@@ -370,11 +370,19 @@ evaluate('uses tools', { environment: tools }, async () => {})
     }
   })
 
-  test('--json without --dry-run exits 2 with the fix', async () => {
-    const p = await fixture('plan/matrix')
+  test('--json without --dry-run runs, and prints the suite result instead of the plan', async () => {
+    const p = await project('plan-run-json', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/hello.eval.ts': `import { evaluate } from 'reeval'
+evaluate('runs', async (c) => { await c.send('hi') })
+`,
+    })
     const r = await runCli(p.dir, ['run', '--json'])
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /reeval run --json only prints the plan: add --dry-run/)
+    assert.equal(r.code, 0, r.stderr)
+    const doc = JSON.parse(r.stdout)
+    assert.equal(typeof doc.runId, 'string', r.stderr)
+    assert.ok(Array.isArray(doc.files) && Array.isArray(doc.paths), 'a SuiteResult')
+    assert.equal(doc.totals, undefined, 'not the plan document')
   })
 })
 

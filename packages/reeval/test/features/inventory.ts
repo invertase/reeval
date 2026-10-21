@@ -322,7 +322,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['matrix/default'],
     tests: [
       'reeval/test/plan.test.ts › is one document with the host-dependent fields',
-      'reeval/test/plan.test.ts › --json without --dry-run exits 2',
+      'reeval/test/plan.test.ts › --json without --dry-run runs, and prints the suite result instead of the plan',
     ],
   },
   {
