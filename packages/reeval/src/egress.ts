@@ -7,6 +7,7 @@ import {
   PACKAGE_HOSTS,
 } from '@reeval/sandbox-docker'
 import { plannedSecrets } from './environment.ts'
+import { localPluginServers } from './environment/plugins.ts'
 import { agentFor, isAgentKind } from './harness/agents.ts'
 import { FAKE_EGRESS } from './sandbox/fake.ts'
 import type {
@@ -43,7 +44,7 @@ function harnessHosts(harness: HarnessDescriptor): readonly string[] {
   return harness.kind === 'fake' && harness.layout ? HARNESS_HOSTS[harness.layout] : []
 }
 
-/** MCP `http`/`sse` servers' hosts: the agent connects to them from the sandbox. */
+/** MCP `http`/`sse` servers' hosts, local plugins' included: the agent connects to them from the sandbox. */
 function mcpServerHosts(layers: readonly EnvironmentLayer[]): string[] {
   const urls = new Map<string, string>()
   for (const { spec } of layers) {
@@ -51,6 +52,9 @@ function mcpServerHosts(layers: readonly EnvironmentLayer[]): string[] {
       if (server.transport === 'stdio') urls.delete(name)
       else urls.set(name, server.url)
     }
+  }
+  for (const [name, server] of localPluginServers(layers)) {
+    if (server.transport !== 'stdio') urls.set(name, server.url)
   }
   return [...urls.values()].flatMap((url) => URL.parse(url)?.hostname ?? [])
 }

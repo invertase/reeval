@@ -9,12 +9,19 @@ import {
 } from '@reeval/harness-opencode/providers'
 import type { PiMcpServer } from '@reeval/harness-pi'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox-docker'
+import {
+  PART_PATHS,
+  PLUGIN_PARTS,
+  type PluginContents,
+  pluginServerName,
+} from '../environment/plugins.ts'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type {
   AgentHarnessDescriptor,
   EnvironmentLayer,
   HarnessDescriptor,
+  PluginPart,
   WebEventType,
 } from '../types.ts'
 
@@ -29,6 +36,12 @@ export type Layout = {
   workspaceSkillDir: string
   /** Where the adapter puts harness-placed skills, under `~/`; the fake agent writes them there. */
   harnessSkillDir: string
+  /**
+   * How the agent takes a plugin's items: `flat`, unpacked into the same lists as the
+   * environment's skills and MCP servers (so names can clash), or `namespaced` under the
+   * plugin's name.
+   */
+  pluginPlacement: 'flat' | 'namespaced'
 }
 
 /** What reeval needs to know about a real agent; everything else is the same for all of them. */
@@ -80,6 +93,8 @@ export type Agent = Layout & {
    * run.
    */
   forModel?: (model: string, env?: NodeJS.ProcessEnv) => ModelSpecific
+  /** The plugin parts reeval places for the agent; empty refuses every plugin. */
+  pluginParts: readonly PluginPart[]
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -412,17 +427,20 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.cursor/skills',
     harnessSkillDir: '.agents/skills',
+    pluginPlacement: 'flat',
   },
   'claude-code': {
     rulesFile: 'CLAUDE.md',
     workspaceSkillDir: '.claude/skills',
     harnessSkillDir: '.claude/skills',
+    pluginPlacement: 'namespaced',
   },
   // Home skills are ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli path its docs give.
   antigravity: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
+    pluginPlacement: 'namespaced',
   },
   // OpenCode reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
   // the workspace and the home directory; nothing turns that off.
@@ -430,6 +448,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
     harnessSkillDir: '.config/opencode/skills',
+    pluginPlacement: 'flat',
   },
   // Goose's bootstrap gives it a private home, so its home skills are under that. It also
   // reads .agents/skills and .claude/skills; nothing turns that off.
@@ -438,6 +457,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.goose/skills',
     harnessSkillDir:
       '.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills',
+    pluginPlacement: 'flat',
   },
   // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
   // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md).
@@ -445,6 +465,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.pi/skills',
     harnessSkillDir: '.pi/agent/skills',
+    pluginPlacement: 'flat',
   },
   // Codex reads skills from ~/.agents/skills and the repo's .agents/skills, AGENTS.md from
   // ~/.codex and the workspace.
@@ -452,6 +473,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.agents/skills',
+    pluginPlacement: 'namespaced',
   },
   // fx reads AGENTS.md and .fx/skills from the workspace, and ~/.fx/skills from the private home
   // the ACP bootstrap gives it.
@@ -459,6 +481,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.fx/skills',
     harnessSkillDir: '.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills',
+    pluginPlacement: 'flat',
   },
   // Grok's bootstrap gives it a private home, so its home skills are under that. It reads the
   // workspace's AGENTS.md and skills only in a trusted folder, which the adapter's
@@ -468,6 +491,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.grok/skills',
     harnessSkillDir:
       '.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/.grok/skills',
+    pluginPlacement: 'namespaced',
   },
 }
 
@@ -475,6 +499,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
 export const AGENTS: Record<AgentKind, Agent> = {
   cursor: {
     ...LAYOUTS.cursor,
+    pluginParts: [],
     name: 'Cursor',
     factory: 'cursor',
     credential: 'CURSOR_API_KEY',
@@ -502,6 +527,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   'claude-code': {
     ...LAYOUTS['claude-code'],
+    pluginParts: [],
     name: 'Claude Code',
     factory: 'claudeCode',
     credential: 'ANTHROPIC_API_KEY',
@@ -537,6 +563,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   antigravity: {
     ...LAYOUTS.antigravity,
+    pluginParts: [],
     name: 'Antigravity',
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
@@ -565,6 +592,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   opencode: {
     ...LAYOUTS.opencode,
+    pluginParts: [],
     name: 'OpenCode',
     factory: 'opencode',
     // Google's, for what names no model; forModel gives the model's provider's.
@@ -589,6 +617,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   goose: {
     ...LAYOUTS.goose,
+    pluginParts: [],
     name: 'Goose',
     factory: 'goose',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -610,6 +639,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   pi: {
     ...LAYOUTS.pi,
+    pluginParts: [],
     name: 'pi',
     factory: 'pi',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -628,6 +658,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   codex: {
     ...LAYOUTS.codex,
+    pluginParts: [],
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
@@ -649,6 +680,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   fx: {
     ...LAYOUTS.fx,
+    pluginParts: [],
     name: 'fx',
     factory: 'fx',
     // AI Gateway's, for what names no model; forModel gives the model's provider's.
@@ -667,6 +699,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   'grok-build': {
     ...LAYOUTS['grok-build'],
+    pluginParts: [],
     name: 'Grok Build',
     factory: 'grokBuild',
     credential: 'XAI_API_KEY',
@@ -727,6 +760,79 @@ export function refusedMcp(
   }
 }
 
+/** A skill the environment's `skills` place, named by the call that placed it. */
+export type OwnSkill = { name: string; call: string }
+
+const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join(', ')
+
+/**
+ * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
+ * load, a plugin MCP server it refuses (named `<plugin>:<server>`), or, where it takes plugin
+ * items flat, a skill or MCP server whose name another already has. `own` names the
+ * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
+ * npm ones, at plan time) by their call. Undefined when it can take them.
+ */
+export function refusedPlugins(
+  harness: HarnessDescriptor,
+  plugins: readonly PluginContents[],
+  own: { skills: readonly OwnSkill[]; mcp: readonly string[] },
+  unread: readonly string[] = [],
+): string | undefined {
+  if (plugins.length === 0 && unread.length === 0) return undefined
+  const agent = isAgentKind(harness.kind) ? AGENTS[harness.kind] : undefined
+  const loads = agent ? agent.pluginParts : PLUGIN_PARTS
+  const name = agent?.name ?? 'The fake agent'
+  if (loads.length === 0) {
+    const first = plugins[0] ? `the ${plugins[0].name} plugin` : unread[0]
+    return `${name} can't load plugins yet: leave ${first} out of this cell`
+  }
+  for (const p of plugins) {
+    const refused = p.kept.filter((part) => !loads.includes(part))
+    if (refused.length === 0) continue
+    const can = p.kept.filter((part) => loads.includes(part))
+    const what = refused.map((part) => `${part} (${PART_PATHS[part]})`).join(' and ')
+    const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
+    return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
+  }
+  const servers = Object.fromEntries(
+    plugins.flatMap((p) =>
+      Object.entries(p.mcp).map(([server, s]): [string, ResolvedMcpServer] => [
+        pluginServerName(p.name, server),
+        s.transport === 'stdio' ? { ...s, env: {} } : { ...s, headers: {} },
+      ]),
+    ),
+  )
+  if (agent && Object.keys(servers).length) {
+    try {
+      agent.mcpServers(servers)
+    } catch (error) {
+      if (error instanceof InfraError) return error.message
+      throw error
+    }
+  }
+  const layout = layoutOf(harness)
+  if (layout.pluginPlacement !== 'flat') return undefined
+  const serverOwner = new Map(own.mcp.map((n) => [n, `mcp.${n}`]))
+  for (const p of plugins) {
+    for (const server of Object.keys(p.mcp)) {
+      const other = serverOwner.get(server)
+      if (other) return `the ${p.name} plugin's MCP server "${server}" clashes with ${other}`
+      serverOwner.set(server, `the ${p.name} plugin's`)
+    }
+  }
+  const skillOwner = new Map(own.skills.map((s) => [s.name, `${s.call}'s "${s.name}"`]))
+  for (const p of plugins) {
+    for (const { name: skill } of p.skills) {
+      const other = skillOwner.get(skill)
+      if (other) {
+        return `the ${p.name} plugin's skill "${skill}" and ${other} would both be placed at ~/${layout.harnessSkillDir}/${skill}: rename one, or narrow it with only or exclude`
+      }
+      skillOwner.set(skill, `the ${p.name} plugin's skill "${skill}"`)
+    }
+  }
+  return undefined
+}
+
 /** A real agent's catalog entry, with what its model's provider decides. */
 export function agentFor(h: AgentHarnessDescriptor): Agent {
   const agent = AGENTS[h.kind]
@@ -745,6 +851,7 @@ const FAKE_LAYOUT: Layout = {
   rulesFile: 'AGENTS.md',
   workspaceSkillDir: '.agents/skills',
   harnessSkillDir: '.agents/skills',
+  pluginPlacement: 'flat',
 }
 
 /** Where a harness's agent reads rules and skills; a fake one with `layout` mimics that agent. */

@@ -388,6 +388,8 @@ export type PlanCell = Cell & {
   workspace?: { repo: string; ref: string | null; path: string | null }
   /** The paths its environment's `files` write (`directory()`'s included), sorted. */
   files?: string[]
+  /** Its environment's plugins: a local one's name and parts, else its source. */
+  plugins?: string[]
 }
 
 export type PlanEval = {
@@ -484,6 +486,7 @@ export function planDocument(
           },
         }),
         ...(attempt.files && { files: attempt.files }),
+        ...(attempt.plugins && { plugins: attempt.plugins }),
       })
     }
   }
