@@ -152,7 +152,7 @@ async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
         },
       }
     }
-    out.push({ name: plugin.name, dir, parts: plugin.parts })
+    out.push({ name: plugin.name, dir, parts: plugin.parts, servers: plugin.servers })
     debugLog(
       'env',
       `plugin ${plugin.name} → ${at}/ (${plugin.files.length} files; ${plugin.parts.join(', ')})`,
