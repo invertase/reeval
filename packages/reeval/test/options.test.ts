@@ -1729,6 +1729,26 @@ describe('common mistakes', { concurrency: 4 }, () => {
       /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. reeval fetches the repository on the host with your own git credentials/,
     ],
     [
+      'a plugin as a path',
+      `defineEnvironment('review', { plugins: ['./plugins/review' as never] })`,
+      /plugins in defineEnvironment\("review"\) must come from the plugin helper, e\.g\. plugins: \[plugin\.local\('\.\/plugins\/review'\)\] \(got "\.\/plugins\/review"\)/,
+    ],
+    [
+      'the singular plugin key',
+      `defineEnvironment('review', ({ plugin }) => ({ plugin: [plugin.local('.')] }) as never)`,
+      /Unknown field "plugin" in defineEnvironment\("review"\)\. Did you mean "plugins"\?/,
+    ],
+    [
+      'a plugin only as a string',
+      `defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('.', { only: 'skills' as never })] }))`,
+      /plugin\.local\("\."\): only lists the parts to place, from 'skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'/,
+    ],
+    [
+      'a plugin without a manifest',
+      `evaluate('e', { environment: defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('..')] })) }, async () => {})`,
+      /evaluate\("e"\) on fake: plugin\.local\('\.'\) has no \.claude-plugin\/plugin\.json/,
+    ],
+    [
       'capture as a string',
       `evaluate('e', { capture: 5173 as never }, async () => {})`,
       /capture in evaluate\("e"\) is \{ viewport\?, timeout\?, browser\?, model\? \} \(got 5173\)/,
