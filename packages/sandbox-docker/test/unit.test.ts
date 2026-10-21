@@ -21,6 +21,7 @@ import {
   dockerignoreMatcher,
   installLayerTag,
   installScript,
+  pluginBuildScript,
   sourceTreeHash,
 } from '../src/build-image.ts'
 import {
@@ -1027,6 +1028,22 @@ describe('image recipes', () => {
     const own = sourceTreeHash(dir)
     writeFileSync(join(dir, 'make.mjs'), 'console.log(2)\n')
     assert.notEqual(sourceTreeHash(dir), own, 'a file Docker sends changes the hash')
+  })
+
+  test("a plugin build runs from its cwd, and runs nothing when the cwd isn't in the source", () => {
+    const src = tmp().replaceAll('\\', '/')
+    mkdirSync(join(src, 'plugins', 'lint'), { recursive: true })
+    const steps = [{ run: 'pwd > ran.txt' }]
+    const ok = spawnSync('bash', ['-c', pluginBuildScript({ cwd: 'plugins/lint', steps }, src)])
+    assert.equal(ok.status, 0)
+    assert.equal(existsSync(join(src, 'plugins', 'lint', 'ran.txt')), true)
+    const r = spawnSync('bash', ['-c', pluginBuildScript({ cwd: 'nope', steps }, src)], {
+      cwd: src,
+      encoding: 'utf8',
+    })
+    assert.equal(r.status, 1)
+    assert.match(r.stderr, /reeval: build cwd nope isn't a directory in the source/)
+    assert.equal(existsSync(join(src, 'ran.txt')), false, 'no command ran from elsewhere')
   })
 
   test('install commands run in order from /, in one script, stopping at the first failure', () => {

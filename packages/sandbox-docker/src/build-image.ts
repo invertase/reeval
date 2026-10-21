@@ -649,6 +649,18 @@ export const pluginLayerTag = (parent: { id: string }, b: PluginBuildSpec) =>
 export const pluginBuildDir = (b: PluginBuildSpec) =>
   `${PLUGIN_BUILDS_DIR}/${pluginBuildKey(b).slice(0, 16)}`
 
+/** The line a plugin build's script fails with when its `cwd` isn't in the source. */
+const noCwd = (cwd: string) => `reeval: build cwd ${cwd} isn't a directory in the source`
+
+/**
+ * A plugin build's commands as one script, run from `cwd` under `src` (the source's root), stopping
+ * at the first failure as an install script does, or before any when `cwd` isn't there.
+ */
+export const pluginBuildScript = (b: Pick<PluginBuildSpec, 'cwd' | 'steps'>, src: string) =>
+  installScript(b.steps)
+    .replaceAll('reeval: install ', 'reeval: build ')
+    .replace(/^cd \/\n/, `cd ${q(`${src}/${b.cwd}`)} || { echo ${q(noCwd(b.cwd))} >&2; exit 1; }\n`)
+
 /**
  * Builds a plugin's layer on `parent` if it's missing: the whole source, then its commands from
  * `cwd` as root with the sandbox user's home as HOME (as an install layer runs), keeping only the
@@ -667,9 +679,7 @@ export async function buildPluginLayer(
   })
   if (exists.exitCode === 0) return tag
   const src = '/tmp/reeval-plugin-src'
-  const script = installScript(b.steps)
-    .replace(/^cd \/\n/, `cd ${q(`${src}/${b.cwd}`)}\n`)
-    .replaceAll('reeval: install ', 'reeval: build ')
+  const script = pluginBuildScript(b, src)
   const encoded = Buffer.from(script).toString('base64')
   const home = `$(getent passwd ${SANDBOX_USER} | cut -d: -f6)`
   const dir = pluginBuildDir(b)
@@ -694,6 +704,7 @@ export async function buildPluginLayer(
   options.output?.write(`${script}\n${dockerfile}\n\n${output}`)
   if (build.exitCode !== 0) {
     const failed = /reeval: build (\d+\/\d+) exited (\d+): (.*)/.exec(output)
+    const missing = output.includes(noCwd(b.cwd))
     throw buildError(
       output,
       {
@@ -704,7 +715,11 @@ export async function buildPluginLayer(
         engine,
       },
       () =>
-        failed ? `build ${failed[1]} exited ${failed[2]}: ${clipLine(failed[3] ?? '')}` : null,
+        missing
+          ? noCwd(b.cwd).slice('reeval: '.length)
+          : failed
+            ? `build ${failed[1]} exited ${failed[2]}: ${clipLine(failed[3] ?? '')}`
+            : null,
       (line) => !line.startsWith('reeval: build '),
     )
   }
