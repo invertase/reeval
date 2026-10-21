@@ -533,6 +533,33 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.plugins.codex-goose',
+    area: 'Environments',
+    name: 'Plugins on Codex (a home marketplace and `codex plugin add`, plugins on only for that session) and Goose (skills with its own, MCP servers as extensions): skills and MCP, a plugin with ChatGPT apps refused on Codex',
+    fixtures: ['harness/codex-plugin', 'harness/goose-plugin'],
+    plan: ['plugins/codex-and-goose'],
+    tests: [
+      plugin(
+        'Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugin server’s host secret',
+      ),
+      planTest("Codex refuses a plugin's hooks and its apps; Goose a plugin's hooks"),
+      codexAdapter(
+        'unit',
+        'plugins are listed in the home marketplace by their path from home, then added from it',
+      ),
+      codexAdapter(
+        'unit',
+        'a session with plugins writes the marketplace and adds each before its first turn',
+      ),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
     id: 'skill.exclude',
     area: 'Environments',
     name: 'Skill `exclude`: the defaults and a custom list',

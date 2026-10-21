@@ -452,7 +452,7 @@ export const behaviours: Behaviour[] = [
       // came from somewhere else (an account's plugins, a marketplace the agent fetched).
       const undeclared = a.context
         .map((c) => c.path)
-        .filter((p) => !isRuntimeState(p))
+        .filter((p) => !isRuntimeState(p) && !row.plugin?.own?.test(p))
         .filter(
           (p) =>
             (p.endsWith('/SKILL.md') && !p.endsWith('/plugin-probe/SKILL.md')) ||
