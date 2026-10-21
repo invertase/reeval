@@ -57,6 +57,8 @@ const checks = (name: string) => `reeval/test/checks.test.ts › ${name}`
 const engineExpect = (name: string) => `reeval/test/engine-expect.test.ts › ${name}`
 const judgeState = (name: string) => `reeval/test/judge-state.test.ts › ${name}`
 const history = (name: string) => `reeval/test/history.test.ts › ${name}`
+const plugin = (name: string) => `reeval/test/plugins.test.ts › ${name}`
+const planTest = (name: string) => `reeval/test/plan.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -489,6 +491,25 @@ export const inventory: InventoryFeature[] = [
     area: 'Environments',
     name: '`skill.npm`',
     fixtures: ['skills/npm-package', 'skills/npm-local-path'],
+  },
+  {
+    id: 'environment.plugins',
+    area: 'Environments',
+    name: '`plugins`: `plugin.local`, `plugin.git` and `plugin.npm` in Claude Code’s layout, `only`, layering, the refusals per harness and the record',
+    fixtures: [
+      'plugins/local-lands',
+      'plugins/only-skills',
+      'plugins/git-ref',
+      'plugins/npm-package',
+    ],
+    plan: ['plugins/parts', 'plugins/fetches-at-start'],
+    tests: [
+      plugin('a plugin is read in Claude Code’s layout'),
+      plugin('every real harness refuses every plugin'),
+      plugin('a child’s plugin replaces a same-named parent plugin'),
+      planTest('every real harness refuses a plugin at plan time'),
+      planTest('a plugin the plan reads and refuses exits 2'),
+    ],
   },
   {
     id: 'skill.exclude',

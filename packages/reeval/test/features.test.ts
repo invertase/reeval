@@ -265,6 +265,7 @@ const egressEnv = () => ({
 const landed = (run: RunRecord) => run.evals.find((e) => e.name === 'lands')?.attempts[0]
 
 const skills = (run: RunRecord) => run.environments.flatMap((e) => e.skills)
+const plugins = (run: RunRecord) => run.environments.flatMap((e) => e.plugins ?? [])
 const envFiles = (run: RunRecord) => run.environments.flatMap((e) => e.files.map((f) => f.path))
 
 const git = (cwd: string, ...args: string[]) =>
@@ -599,6 +600,96 @@ export const features: Feature[] = [
         skills(run).map((s) => [s.name, s.source]),
         [['house-greeting', 'npm:vendor/acme-skills-1.2.3.tgz:skills']],
       ),
+  },
+  {
+    dir: 'plugins/local-lands',
+    tiers: ['fake', 'docker'],
+    env: 'review',
+    canary: /expected '' to contain 'Review the working tree\.'/,
+    record: ({ run }) => {
+      const [p] = plugins(run)
+      assert.deepEqual(
+        { name: p?.name, source: p?.source, commit: p?.commit, build: p?.build },
+        { name: 'review', source: 'local:plugin', commit: null, build: null },
+      )
+      assert.deepEqual(p?.parts, {
+        skills: ['review-lint'],
+        agents: ['reviewer'],
+        commands: [],
+        hooks: [],
+        mcp: ['docs'],
+        rules: false,
+      })
+      assert.match(p?.sha256 ?? '', /^[0-9a-f]{64}$/)
+      assert.deepEqual(
+        run.environments.map((e) => e.mcp),
+        [['review:docs']],
+      )
+    },
+  },
+  {
+    dir: 'plugins/only-skills',
+    tiers: ['fake', 'docker'],
+    env: 'review',
+    canary: /expected '' to contain 'Review the diff for the house style\.'/,
+    record: ({ run }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement, s.plugin]),
+        [['review-lint', 'harness', 'review']],
+      )
+      assert.deepEqual(plugins(run)[0]?.parts.agents, [])
+      assert.deepEqual(
+        run.environments.map((e) => e.mcp),
+        [[]],
+      )
+    },
+  },
+  {
+    dir: 'plugins/git-ref',
+    tiers: ['fake', 'docker'],
+    env: 'review-v1',
+    canary: /expected '' to contain 'Review the diff for the house style\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'repo')
+      const commit = (version: string) => {
+        rmSync(join(repo, 'plugins'), { recursive: true, force: true })
+        cpSync(join(dir, 'plugin-repo', version), repo, { recursive: true })
+        git(repo, 'add', '-A')
+        git(repo, 'commit', '-q', '-m', version)
+      }
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      commit('v1')
+      git(repo, 'tag', 'v1')
+      commit('v2')
+    },
+    record: ({ run, project }) => {
+      const [p] = plugins(run)
+      assert.equal(p?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
+      assert.match(p?.source ?? '', /#v1:plugins\/review$/)
+      assert.deepEqual(p?.parts.commands, ['review'])
+    },
+  },
+  {
+    dir: 'plugins/npm-package',
+    tiers: ['fake', 'docker'],
+    env: 'review-1.2.3',
+    canary: /expected '' to contain 'SessionStart'/,
+    prepare: (dir) => publish(join(dir, 'packages')),
+    hostEnv: (dir) => ({
+      npm_config_registry: npmRegistry.url,
+      npm_config_cache: join(dir, '.npm-cache'),
+    }),
+    record: ({ run }) => {
+      assert.deepEqual(
+        plugins(run).map((p) => [p.name, p.source, p.parts.mcp, p.parts.hooks]),
+        [['review', 'npm:@acme/review-plugin@1.2.3', ['docs'], []]],
+      )
+      assert.ok(
+        npmRegistry.fetched.includes('@acme/review-plugin@1.2.3'),
+        'fetched from the registry',
+      )
+      assert.ok(!npmRegistry.fetched.includes('@acme/review-plugin@1.2.4'), 'never the latest')
+    },
   },
   {
     dir: 'skills/only-missing',
