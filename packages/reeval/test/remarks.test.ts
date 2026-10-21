@@ -319,6 +319,69 @@ ${coins
     assert.deepEqual(marks, [true, true, true, false])
   })
 
+  test('with model insights, a concern the cap hid prints in the next -v run', async () => {
+    const coins = ['one', 'two', 'three', 'four']
+    const p = await project('remarks-cap-insights', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+import { insights } from './insights.ts'
+export default defineConfig({
+  harness: fakeHarness(),
+  environment: defineEnvironment('fake', {
+    sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  }),
+  analysis: { model: fakeAnalysis({ insights }) },
+})
+`,
+      'insights.ts': readFileSync(
+        new URL('../scripts/output/project/insights.ts', import.meta.url),
+        'utf8',
+      ),
+      'evals/coin.eval.ts': `import { evaluate, expect } from 'reeval'
+${coins
+  .map(
+    (name) => `evaluate('coin ${name}', { runs: 3 }, async (c) => {
+  await c.send('go')
+  expect.soft(c.attempt.n, 'lands heads').toBe(1)
+})`,
+  )
+  .join('\n')}
+`,
+    })
+    for (let i = 0; i < 2; i++) await runCli(p.dir, ['run'])
+    const capped = remarksBlock((await runCli(p.dir, ['run'])).stdout) ?? ''
+    assert.match(capped, /\+1 more \(-v\)/)
+    const doc = insightsOf(p.dir)
+    assert.notEqual(doc?.model, 'none', 'the model wrote the document')
+    assert.deepEqual(
+      doc?.remarks.map((r) => r.printed),
+      [true, true, true, false],
+    )
+    const named = (block: string) => [...block.matchAll(/^ {2}(coin \w+):/gm)].map((m) => m[1])
+    const verbose = await runCli(p.dir, ['run', '-v'])
+    assert.deepEqual(
+      named(remarksBlock(verbose.stdout) ?? ''),
+      coins.map((c) => `coin ${c}`).filter((c) => !named(capped).includes(c)),
+      'only the concern the cap hid',
+    )
+    const later = insightsOf(p.dir)
+    assert.notEqual(later?.model, 'none')
+    assert.deepEqual(
+      later?.remarks.map((r) => r.printed),
+      [false, false, false, true],
+    )
+    const runId = readRun(p.dir).run.runId
+    assert.equal((await runCli(p.dir, ['record', runId])).code, 0)
+    const recorded = JSON.parse(
+      readFileSync(join(p.dir, 'evals/.history', runId, 'insights.json'), 'utf8'),
+    ) as RunInsights
+    assert.deepEqual(recorded.remarks, later?.remarks, 'recording keeps printed and firstSeenRun')
+    const after = await runCli(p.dir, ['run', '-v'])
+    assert.equal(remarksBlock(after.stdout), null, 'every concern has printed')
+  })
+
   test("an older reeval's remark, with no printed, counts as printed in the run that raised it", async () => {
     const p = await project('remarks-unmarked', {
       'reeval.config.ts': fakeConfig(),
