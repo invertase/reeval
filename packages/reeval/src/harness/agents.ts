@@ -505,6 +505,36 @@ const CURSOR_PLUGIN_UNPACK: PluginUnpack = {
 }
 
 /**
+ * A plugin subagent's or command's frontmatter as OpenCode 2 takes it: the description, and a
+ * subagent's `mode`. OpenCode skips a file whose frontmatter its schema refuses, without saying,
+ * and Claude Code's `tools: Read, Grep`, `model: sonnet` and `allowed-tools` are such keys.
+ */
+export function opencodeFrontmatter(
+  part: 'agents' | 'commands',
+  front: Record<string, unknown>,
+): Record<string, string> {
+  const description = typeof front.description === 'string' ? front.description : undefined
+  return {
+    ...(description ? { description } : {}),
+    ...(part === 'agents' ? { mode: 'subagent' } : {}),
+  }
+}
+
+/** Where OpenCode reads plugin subagents and commands, in the workspace's config directory. */
+const OPENCODE_PLUGIN_UNPACK: PluginUnpack = {
+  agents: '.opencode/agents',
+  commands: '.opencode/commands',
+  frontmatter: opencodeFrontmatter,
+}
+
+/**
+ * Where pi reads plugin commands, as prompt templates (`/<name>`), in the workspace, which its
+ * `--approve` trusts. Its frontmatter takes `description` and `argument-hint`, and ignores the
+ * rest of Claude Code's.
+ */
+const PI_PLUGIN_UNPACK: PluginUnpack = { commands: '.pi/prompts' }
+
+/**
  * What Claude Code's plugin format bundles, which Grok Build reads too: every part but rules,
  * which neither loads from a plugin.
  */
@@ -630,12 +660,15 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
   },
   // OpenCode reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
-  // the workspace and the home directory; nothing turns that off.
+  // the workspace and the home directory; nothing turns that off. Plugin skills join the home ones;
+  // plugin subagents and commands are unpacked into the workspace's .opencode/. Its own plugins
+  // are code modules, never loaded from an environment's plugins.
   opencode: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
     harnessSkillDir: '.config/opencode/skills',
     pluginPlacement: 'flat',
+    pluginUnpack: OPENCODE_PLUGIN_UNPACK,
   },
   // Goose's bootstrap gives it a private home, so its home skills are under that. It also
   // reads .agents/skills and .claude/skills; nothing turns that off.
@@ -647,12 +680,15 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     pluginPlacement: 'flat',
   },
   // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
-  // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md).
+  // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md). Plugin skills join the home
+  // ones and plugin commands are unpacked as the workspace's prompt templates; pi packages (its own
+  // plugins, with extension code) are never loaded from an environment's plugins.
   pi: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.pi/skills',
     harnessSkillDir: '.pi/agent/skills',
     pluginPlacement: 'flat',
+    pluginUnpack: PI_PLUGIN_UNPACK,
   },
   // Codex reads skills from ~/.agents/skills and the repo's .agents/skills, AGENTS.md from
   // ~/.codex and the workspace.
@@ -663,7 +699,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     pluginPlacement: 'namespaced',
   },
   // fx reads AGENTS.md and .fx/skills from the workspace, and ~/.fx/skills from the private home
-  // the ACP bootstrap gives it.
+  // the ACP bootstrap gives it. It has no plugins of its own: plugin skills join its home skills.
   fx: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.fx/skills',
@@ -780,7 +816,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   opencode: {
     ...LAYOUTS.opencode,
-    pluginParts: [],
+    // Plugin MCP servers go in its config with the environment's.
+    pluginParts: ['skills', 'agents', 'commands', 'mcp'],
     name: 'OpenCode',
     factory: 'opencode',
     // Google's, for what names no model; forModel gives the model's provider's.
@@ -827,7 +864,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   pi: {
     ...LAYOUTS.pi,
-    pluginParts: [],
+    // Plugin MCP servers go in its mcp.json with the environment's. It has no subagents.
+    pluginParts: ['skills', 'commands', 'mcp'],
     name: 'pi',
     factory: 'pi',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -868,7 +906,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   fx: {
     ...LAYOUTS.fx,
-    pluginParts: [],
+    // Plugin MCP servers go over ACP with the environment's. It reads no subagents or commands
+    // from files.
+    pluginParts: ['skills', 'mcp'],
     name: 'fx',
     factory: 'fx',
     // AI Gateway's, for what names no model; forModel gives the model's provider's.

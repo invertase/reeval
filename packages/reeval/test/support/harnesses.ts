@@ -165,6 +165,10 @@ export const harnesses: HarnessRow[] = [
     },
     image: 'opencode',
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'agents', 'commands', 'mcp'],
+      skillContext: /^~\/\.config\/opencode\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['generativelanguage.googleapis.com', 'mcp.exa.ai'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: true,
@@ -230,6 +234,10 @@ export const harnesses: HarnessRow[] = [
     },
     image: 'pi',
     skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'commands', 'mcp'],
+      skillContext: /^~\/\.pi\/agent\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: true,
@@ -262,6 +270,11 @@ export const harnesses: HarnessRow[] = [
     image: 'fx',
     skillContext:
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'mcp'],
+      skillContext:
+        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/fx\/implementation\/home\/\.fx\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['api.openai.com'],
     apiHost: 'api.openai.com',
     tokens: true,

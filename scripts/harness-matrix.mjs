@@ -70,12 +70,23 @@ const NOTES = [
     `It loads each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')}), and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
   (h) =>
     h.agent.pluginParts.length &&
-    h.kind === 'antigravity' &&
-    `Each plugin is installed with ${code('agy plugin install')} from where reeval copies it as the session starts; the CLI starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+    LAYOUTS[h.kind]?.pluginPlacement === 'flat' &&
+    `A plugin's skills sit beside the eval's and its MCP servers go in as ${code('<plugin>:<server>')}, so a skill or server whose name another already has is refused at plan time.`,
   (h) =>
     h.agent.pluginParts.length &&
-    LAYOUTS[h.kind]?.pluginUnpack &&
-    `Plugin rules, subagents, commands and hooks are unpacked into the workspace before the snapshot, flat, so two with one name clash; its own plugin loading is never used.`,
+    h.kind === 'antigravity' &&
+    `Each plugin is installed with ${code('agy plugin install')} from where reeval copies it as the session starts; the CLI starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
+  (h) => {
+    const unpack = LAYOUTS[h.kind]?.pluginUnpack
+    if (!h.agent.pluginParts.length || !unpack) return false
+    const parts = [
+      ['rules', 'rules'],
+      ['agents', 'subagents'],
+      ['commands', 'commands'],
+      ['hooks', 'hooks'],
+    ].flatMap(([part, what]) => (unpack[part] ? [what] : []))
+    return `Plugin ${list(parts)} are unpacked into the workspace before the snapshot, flat, so two with one name clash; its own plugin loading is never used.`
+  },
   (h) =>
     h.agent.forModel &&
     h.kind === 'opencode' &&

@@ -1,6 +1,7 @@
 // Plugin parts a flat agent loads from its own directories, unpacked there from the plugin's
 // Claude Code layout. Its skills and MCP servers aren't here: they join the environment's
 // harness-placed skills and `mcp`, which the agent already takes.
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { PLUGIN_ROOT, type PluginFile } from '../environment/plugins.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { PluginPart } from '../types.ts'
@@ -19,6 +20,11 @@ export type PluginUnpack = {
   agents?: string
   /** The commands directory: `commands/<name>.md` lands as `<name>.md`. */
   commands?: string
+  /**
+   * A subagent's or command's YAML frontmatter (`{}` when it has none) as the agent takes it,
+   * for an agent whose schema refuses Claude Code's keys; unset, the file lands as it is.
+   */
+  frontmatter?: (part: 'agents' | 'commands', front: Record<string, unknown>) => object
   /** The hooks file, in Cursor's `hooks.json` shape: `{ version: 1, hooks: { <event>: [...] } }`. */
   hooks?: {
     file: string
@@ -44,8 +50,32 @@ const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
 const FRONTMATTER = /^---\r?\n/
+const FRONTMATTER_BLOCK = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
 const RULE = /^rules\/([^/]+)\.mdc?$/
 const MARKDOWN = (dir: string) => new RegExp(`^${dir}/([^/]+)\\.md$`)
+
+/** A subagent's or command's Markdown with its frontmatter rewritten by `format`. */
+function reformatted(
+  text: string,
+  part: 'agents' | 'commands',
+  what: string,
+  format: NonNullable<PluginUnpack['frontmatter']>,
+): string {
+  const block = FRONTMATTER_BLOCK.exec(text)
+  let front: unknown = {}
+  if (block) {
+    try {
+      front = parseYaml(block[1] ?? '') ?? {}
+    } catch {
+      throw new InfraError(`${what}'s frontmatter isn't valid YAML`)
+    }
+    if (!isRecord(front)) throw new InfraError(`${what}'s frontmatter isn't a YAML mapping`)
+  }
+  const body = block ? text.slice(block[0].length).replace(/^\r?\n/, '') : text
+  const out = format(part, front as Record<string, unknown>)
+  const yaml = Object.keys(out).length ? stringifyYaml(out) : ''
+  return yaml ? `---\n${yaml}---\n\n${body}` : body
+}
 
 /** Cursor's handlers for one plugin's `hooks/hooks.json`, by Cursor's event name. */
 function hookHandlers(
@@ -120,7 +150,14 @@ export function unpackPlugins(
         ['commands', unpack.commands],
       ] as const) {
         const name = MARKDOWN(part).exec(f.path)?.[1]
-        if (name && keeps(part, dir)) out.push({ path: `${dir}/${name}.md`, content: text() })
+        if (!name || !keeps(part, dir)) continue
+        const what = `the ${plugin.name} plugin's ${part === 'agents' ? 'subagent' : 'command'} ${f.path}`
+        out.push({
+          path: `${dir}/${name}.md`,
+          content: unpack.frontmatter
+            ? reformatted(text(), part, what, unpack.frontmatter)
+            : text(),
+        })
       }
       if (f.path === 'hooks/hooks.json' && unpack.hooks && plugin.parts.includes('hooks')) {
         if (!hooks) {
