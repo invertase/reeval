@@ -460,6 +460,9 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
   }
   await Promise.all(running)
   if (!stopped() && !done.size && failed.size) throw failed.values().next().value
+  const left = ordered.flatMap((e) =>
+    done.has(e.path) || failed.has(e.path) || skipped.has(e.path) ? [] : [e.path],
+  )
   const insightOf = (path: string) => done.get(path) ?? kept.get(path)
   const evals = all.flatMap((e) => insightOf(e.path) ?? [])
   const headlineInput: HeadlineInput = {
@@ -526,16 +529,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
           ),
         }
       : {}),
-    ...(stopped()
-      ? {
-          stopped: {
-            signal: o.stopSignal?.() ?? 'SIGINT',
-            skipped: ordered.flatMap((e) =>
-              done.has(e.path) || failed.has(e.path) || skipped.has(e.path) ? [] : [e.path],
-            ),
-          },
-        }
-      : {}),
+    ...(left.length ? { stopped: { signal: o.stopSignal?.() ?? 'SIGINT', skipped: left } } : {}),
     headline,
     evals,
     remarks: prior?.remarks ?? [],

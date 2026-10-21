@@ -55,8 +55,9 @@ export type RunInsights = {
    */
   failed?: Array<{ evalId: string; error: string }>
   /**
-   * Set when the run was stopped (Ctrl-C, or SIGTERM) while insights ran: the evals that hadn't
-   * finished, which print without insights. Absent when insights ran to the end.
+   * Set when the run was stopped (Ctrl-C, or SIGTERM) before every eval's insights had finished:
+   * the evals that hadn't, which print without insights. Absent otherwise, even when the stop came
+   * during the headline call, which leaves `headline` null.
    */
   stopped?: { signal: 'SIGINT' | 'SIGTERM'; skipped: string[] }
   /** One sentence for the whole run, citing facts; null when the model's was dropped. */

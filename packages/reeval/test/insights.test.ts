@@ -1033,6 +1033,40 @@ describe('the analysis.maxTokens gate', () => {
   })
 })
 
+describe('Ctrl-C during insights', () => {
+  test('canary: a stop during the headline call leaves no eval to finish, so it writes no stopped list', async () => {
+    const stop = new AbortController()
+    const doc = await generate(
+      (input) => {
+        if (input.call !== 'headline') return recipeInsights(input)
+        stop.abort(new Error('Ctrl-C'))
+        return new Promise<FakeInsights>(() => {})
+      },
+      { signal: stop.signal },
+    )
+    assert.equal(doc.evals.length, insightEvals(suite).length)
+    assert.equal(doc.headline, null)
+    assert.equal(doc.stopped, undefined, 'no "insights stopped: 0 evals skipped" line to finish')
+  })
+
+  test('a stop while evals are in flight lists them in stopped', async () => {
+    const stop = new AbortController()
+    let asked = 0
+    const doc = await generate(
+      (input) => {
+        if (input.call === 'classify' && ++asked === 3) {
+          stop.abort(new Error('Ctrl-C'))
+          return new Promise<FakeInsights>(() => {})
+        }
+        return recipeInsights(input)
+      },
+      { signal: stop.signal },
+    )
+    assert.ok(doc.stopped?.skipped.length, 'the evals left are listed')
+    assert.equal(doc.evals.length + (doc.stopped?.skipped.length ?? 0), insightEvals(suite).length)
+  })
+})
+
 describe('each call has a timeout and one retry', () => {
   test('a hung call is given up after its timeout, tried once more, then that eval prints its facts alone', async () => {
     const asked: string[] = []

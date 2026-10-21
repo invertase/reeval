@@ -1060,7 +1060,7 @@ A run that raises [remarks](/reference/cli/run#remarks) writes one with no model
 | `usage` | Tokens over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it reports them; `costUsd` is `null`, since reeval has no prices |
 | `budget` | `maxTokens`, `analysis.maxTokens` when `reeval run` wrote the file, and `skipped`, the evals it ran out before; absent from `reeval analyze --insights` |
 | `failed` | The evals whose calls failed twice (an error, a reply cut off at the output cap, or a call past its timeout), each with `evalId` and the last `error`; they print their facts. Absent when none failed |
-| `stopped` | Set when Ctrl-C or SIGTERM stopped insights: `signal` (`SIGINT` or `SIGTERM`) and `skipped`, the evals that hadn't finished. Absent when insights ran to the end |
+| `stopped` | Set when Ctrl-C or SIGTERM stopped insights before every eval had finished: `signal` (`SIGINT` or `SIGTERM`) and `skipped`, the evals that hadn't. Absent otherwise; a stop during the headline call only leaves `headline` `null` |
 | `headline` | One sentence on the run, printed before the tally, or `null` |
 | `evals[].evalId` | The eval's or family's path: its file and name, `›` between them |
 | `evals[].intent` | The classification: `job` (`choose`, `finish` or `other`), `across`, `question`, `subject` (`tool`, `change`), `name` (`states-intent`, `no-intent` or `contradicts`) and `key`, the hash of what it read |
