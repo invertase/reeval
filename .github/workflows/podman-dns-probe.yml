@@ -72,12 +72,32 @@ jobs:
           node --input-type=module -e "
             import { buildImage } from './packages/sandbox-docker/dist/index.js'
             await buildImage(console.log, { harness: 'cursor', engine: 'podman' })"
-      - name: loop
+      - name: diagnostics in the dns probe
+        working-directory: packages/reeval/test/features/egress/deny-all
+        run: |
+          cat > /tmp/diag.sh <<'EOF'
+          s=$(date +%s); getent hosts example.com >/dev/null; r=$?; echo "dns=$r"
+          if [ $r != 0 ] && grep -q eth /proc/net/dev; then
+            echo "took=$(( $(date +%s)-s ))s at $(date +%T)"; cat /etc/resolv.conf | tr '\n' ' '
+            s=$(date +%s); getent ahostsv4 example.com >/dev/null; echo "retry=$? $(( $(date +%s)-s ))s"
+            for ns in 168.63.129.16 8.8.8.8; do
+              node -e "const r=new (require('dns').promises.Resolver)({timeout:3000,tries:1});r.setServers(['$ns']);r.resolve4('example.com').then(a=>console.log('$ns ok',a[0]),e=>console.log('$ns',e.code))" 2>/dev/null
+            done
+            curl -s -m 5 --noproxy '*' -o /dev/null -w 'tcp1111=%{http_code}' https://1.1.1.1/; echo " exit=$?"
+            cat /proc/net/route | tr '\n' ' '
+          fi
+          EOF
+          node -e "
+            const fs=require('fs');const f='reeval.config.ts';
+            const s=fs.readFileSync(f,'utf8').replace(/\{ exec: \`getent[^\n]*\n/, '{ exec: ' + JSON.stringify(fs.readFileSync('/tmp/diag.sh','utf8')) + ' },\n');
+            fs.writeFileSync(f,s)"
+          cat reeval.config.ts
+      - name: loop the podman tier
         working-directory: packages/reeval
         run: |
-          (while true; do date +%T; pgrep -af slirp4netns; sleep 2; done) > /tmp/slirp.log &
-          for i in $(seq 1 25); do
-            node --test --experimental-strip-types --no-warnings --test-name-pattern='egress/deny-all \[podman\]' test/features.test.ts > /tmp/run.log 2>&1 \
-              && echo "run $i ok" || { echo "run $i FAIL"; grep -E "dns=|turn 1 done" /tmp/run.log | head -6; }
+          (while true; do echo "$(date +%T) $(pgrep -f slirp4netns | tr '\n' ' ')"; sleep 1; done) > /tmp/slirp.log &
+          for i in $(seq 1 14); do
+            node --test --experimental-strip-types --no-warnings --test-name-pattern='\[podman\]' test/features.test.ts > /tmp/run.log 2>&1 \
+              && echo "run $i ok $(date +%T)" || { echo "run $i FAIL $(date +%T)"; grep -E "not ok|dns=|turn 1 done|took=" /tmp/run.log | head -12; }
           done
-          echo; sort -u -k2 /tmp/slirp.log | head -40
+          echo; uniq -f1 /tmp/slirp.log | head -200
