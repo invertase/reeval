@@ -39,7 +39,7 @@
   "dependencies": {
     "@ai-sdk/harness": "1.0.156",
     "@ai-sdk/harness-claude-code": "1.0.160",
-    "@reeval/harness-antigravity": "workspace:0.1.8",
+    "@reeval/harness-antigravity": "workspace:0.1.9",
     "@reeval/harness-codex": "workspace:0.1.7",
     "@reeval/harness-cursor-sdk": "workspace:0.1.6",
     "@reeval/harness-fx": "workspace:0.1.0",
