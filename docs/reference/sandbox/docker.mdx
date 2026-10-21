@@ -163,8 +163,11 @@ Image builds don't count toward the eval timeout.
 |---|---|---|
 | The agent, setup steps and checks | `reeval` (uid 10001, home `/home/reeval`, where `~/` paths go) | Every capability dropped, `no-new-privileges` and the limits above |
 | The egress gateway | root | Node, which every image reeval builds has |
+| reeval's workspace snapshot (the diff) | root, `docker exec --privileged` | `git` and `/bin/sh` from the system's `PATH`, never `~/.local/bin` |
 
 Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The gateway enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests.
+
+The snapshot that turns' `diff` is taken against lives in `/var/lib/reeval`, owned by root and mode `0700`, so the agent can't read it. It's always one commit with nothing unreachable left in it, so it never holds a file's content from before `c.writeFile` replaced it. With `root: true` the agent can read the directory, but it finds only the workspace as it already sees it.
 
 ```bash
 # the agent's shell in docker({ from: 'dart:stable' })

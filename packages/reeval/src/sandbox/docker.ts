@@ -14,6 +14,7 @@ import {
   type NetworkPolicy,
   SANDBOX_HOME,
   SANDBOX_ROOT,
+  SANDBOX_STATE,
   type Substitution,
   WORKSPACE_DIR,
 } from '@reeval/sandbox-docker'
@@ -183,10 +184,24 @@ export async function createDockerSandbox(
   const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
   const resolve = (path: string) =>
     path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
+  // A root container's agent is root too, and could swap the binaries a privileged exec runs.
+  const execOwn: Sandbox['execOwn'] = async (command, opts) =>
+    root
+      ? network.run({ command, workingDirectory: workdir, abortSignal: opts?.signal })
+      : network.runPrivileged({ command, workingDirectory: workdir, abortSignal: opts?.signal })
+  const state = await execOwn(
+    `mkdir -p ${SANDBOX_STATE} && chown 0:0 ${SANDBOX_STATE} && chmod 700 ${SANDBOX_STATE}`,
+  )
+  if (state.exitCode !== 0) {
+    await Promise.resolve(network.destroy()).catch(() => {})
+    throw new InfraError(`Couldn't create ${SANDBOX_STATE} in the sandbox: ${state.stderr.trim()}`)
+  }
 
   return {
     workdir,
     home,
+    stateDir: SANDBOX_STATE,
+    execOwn,
     network,
     exec: async (command, opts) =>
       network.run({

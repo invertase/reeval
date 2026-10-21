@@ -94,6 +94,7 @@ export {
   LABEL,
   SANDBOX_HOME,
   SANDBOX_ROOT,
+  SANDBOX_STATE,
   SANDBOX_USER,
   WORKSPACE_DIR,
 } from './image.ts'

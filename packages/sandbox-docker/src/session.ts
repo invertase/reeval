@@ -151,7 +151,21 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
   traffic?(): EgressTraffic
   /** Processes the kernel killed at the memory limit so far; `null` when Docker can't say. */
   oomKills(): Promise<number | null>
+  /**
+   * Runs `/bin/sh -c command` as root with every capability (`exec --privileged`), so it reads
+   * files the sandbox user keeps to itself and writes where that user can't look. For the
+   * caller's own fixed commands only: it runs nothing from a directory the sandbox user can
+   * write, and gets none of the gateway's variables.
+   */
+  runPrivileged(o: {
+    command: string
+    workingDirectory?: string
+    abortSignal?: AbortSignal
+  }): Promise<{ exitCode: number; stdout: string; stderr: string }>
 }
+
+/** Root's PATH in a privileged exec: none of the sandbox user's own `bin` directories. */
+const SYSTEM_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 
 /** Set on every exec, so a kill can find the command's whole process tree in the container. */
 const EXEC_MARKER = 'REEVAL_EXEC_ID'
@@ -361,6 +375,33 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     }
   }
 
+  const runPrivileged: DockerSession['runPrivileged'] = async (o) => {
+    const marker = nextMarker()
+    const args = [
+      'exec',
+      '--privileged',
+      '--user',
+      '0:0',
+      '--workdir',
+      o.workingDirectory ? posix.resolve(SANDBOX_ROOT, o.workingDirectory) : SANDBOX_ROOT,
+      '--env',
+      `${EXEC_MARKER}=${marker}`,
+      '--env',
+      `PATH=${SYSTEM_PATH}`,
+      id,
+      '/bin/sh',
+      '-c',
+      o.command,
+    ]
+    try {
+      const r = await docker(args, { signal: o.abortSignal, engine })
+      return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
+    } catch (error) {
+      if (o.abortSignal?.aborted) await killExec(marker)
+      throw error
+    }
+  }
+
   const readBinaryFile = async (o: { path: string; abortSignal?: AbortSignal }) => {
     const r = await docker(['exec', id, 'cat', '--', posix.resolve(SANDBOX_ROOT, o.path)], {
       signal: o.abortSignal,
@@ -424,6 +465,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     ...substituting,
     oomKills: () => oomKills(id, engine),
     run,
+    runPrivileged,
     async spawn(o) {
       const env = envFor(o.env)
       const marker = nextMarker()
