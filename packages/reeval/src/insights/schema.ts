@@ -129,5 +129,5 @@ export const insightsPrompt = (): string =>
 export const HEADLINE_PROMPT = `You write the one-sentence headline of a reeval run for the developer who wrote its evals: what the run found, leading with what needs work. You get each eval's id (F1), path, name, verdict and answer, and the tally.
 
 - 25 words or fewer, plain words, citing the evals it's about by their ids from evals[].id, in cites only, never in the text.
-- Counts come from the evals and the tally. The tally counts results, not evals (tally.unit): each case of a family counts one and \`total\` is their sum ("9 of 22 results fail"). The number of evals is evals.length; never call a tally number evals. Never: interval, significance, noise, p-value, confidence, pass@1, lift, control, variant, arm, cell.
+- Counts come from the evals and the tally. The tally counts results, not evals (tally.unit): each case of a family counts one and \`total\` is their sum ("9 of 22 results fail"). The number of evals is evals.length; never call a tally number evals. "All" needs more than one: a single result is "1 result passed", never "All 1 result passed". Never: interval, significance, noise, p-value, confidence, pass@1, lift, control, variant, arm, cell.
 When retry is set, your earlier headline was refused for those reasons: write it again within the rules.`
