@@ -5,7 +5,7 @@ evals/t.eval.ts › a literal sandbox      fake/-/docker:images    control  gate
 excluded: —
 image docker:docker · cursor · 1 evals
   dockerfile docker/Dockerfile  reeval-dockerfile:docker-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                       reeval-dockerfile:docker-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)
+  harness                       reeval-dockerfile:docker-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.6)
 image docker:images · cursor · 2 evals
   dockerfile evals/images/Dockerfile  reeval-dockerfile:images-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
-  harness                             reeval-dockerfile:images-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.5)
+  harness                             reeval-dockerfile:images-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.6)

@@ -5,11 +5,11 @@ evals/podman.eval.ts › podman from     fake/podman22/podman:node:22-bookworm  
 evals/podman.eval.ts › podman install  fake/tools/podman:node:22-bookworm+eba71b58  control  gated  ×1
 excluded: —
 image docker · cursor · 1 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image podman · cursor · 1 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image podman:node:22-bookworm · cursor · 1 evals
-  from node:22-bookworm  reeval-sandbox:cursor-0.1.5-node-22-bookworm-5df68861  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from node:22-bookworm  reeval-sandbox:cursor-0.1.6-node-22-bookworm-5df68861  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image podman:node:22-bookworm+eba71b58 · cursor + install · 1 evals
-  from node:22-bookworm  reeval-sandbox:cursor-0.1.5-node-22-bookworm-5df68861  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from node:22-bookworm  reeval-sandbox:cursor-0.1.6-node-22-bookworm-5df68861  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
   install 1 command      reeval-install:<base id + commands>                    (build unless cached)
