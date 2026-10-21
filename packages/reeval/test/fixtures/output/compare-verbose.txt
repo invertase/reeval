@@ -32,13 +32,13 @@ same             writes greet.js
 same             greets in French
   fake/-/fake      tools 0 → 0 (×–) · agent <0.1s → <0.1s
 
+removed          greets in German
+  base             20261020T230147Z_958e309_cursor-agent_aamj  fail
+
 new              greets in Spanish
   head             20261020T230148Z_958e309_cursor-agent_qghb  fail
   spanish greeting  failed
     expected command to succeed, exit code 1
-
-removed          greets in German
-  base             20261020T230147Z_958e309_cursor-agent_aamj  fail
 
 stack changed: environments with-doc@007345e67fac → with-doc@26d7ac38e3f5
 1 regressed · 1 fixed · 1 can't compare · 1 new · 1 removed · 4 same

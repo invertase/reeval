@@ -3,7 +3,7 @@
 // tally. A regressed eval lists the checks that flipped; a fixed one, the checks that now pass; one
 // that can't be compared names the part that changed. Pure and deterministic, from the two runs'
 // SuiteResults and compare rows; statistics print only with `verbose`.
-import type { HistoryCell } from '../history/types.ts'
+import type { HistoryCell, RunRecord } from '../history/types.ts'
 import type { Outcome } from '../types.ts'
 import type { CompareCell, CompareRow, CompareStatus, StackChange } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
@@ -33,6 +33,8 @@ export type CompareSide = {
   suite: SuiteResult
   /** Its commit isn't in HEAD's history (rebased or dropped). */
   unreachable?: boolean
+  /** How the run ended; one that didn't finish has evals that never ran to the end. */
+  status?: RunRecord['status']
 }
 
 export type CompareInput = {
@@ -114,23 +116,31 @@ const caseAsEval = (family: EvalResult, k: CaseResult): EvalResult => ({
 
 type Units = { base: Map<string, Unit>; head: Map<string, Unit> }
 
-/** The rows in head's order, then base's for the evals only base has, file by file. */
+/**
+ * The rows file by file, in head's source order, each eval only base has placed after the eval
+ * before it in base's, so a removed eval sits where it was (beside the one renamed from it).
+ */
 function ordered(rows: CompareRow[], units: Units): Array<{ row: CompareRow; unit?: Unit }> {
   const byId = new Map(rows.map((r) => [r.id, r]))
   const all = [...units.head.values(), ...units.base.values()]
   const files = [...new Set(all.map((u) => u.file))].sort()
-  const seen = new Set<string>()
   const out: Array<{ row: CompareRow; unit?: Unit }> = []
   for (const file of files) {
-    for (const side of [units.head, units.base]) {
-      for (const [id, unit] of side) {
-        const row = byId.get(id)
-        if (unit.file !== file || !row || seen.has(id)) continue
-        seen.add(id)
-        out.push({ row, unit })
-      }
+    const inFile = (side: Map<string, Unit>) =>
+      [...side].filter(([id, u]) => u.file === file && byId.has(id))
+    const ids = inFile(units.head).map(([id]) => id)
+    let at = -1
+    for (const [id] of inFile(units.base)) {
+      const i = ids.indexOf(id)
+      if (i >= 0) at = i
+      else ids.splice(++at, 0, id)
+    }
+    for (const id of ids) {
+      const unit = units.head.get(id) ?? units.base.get(id)
+      out.push({ row: byId.get(id) as CompareRow, ...(unit ? { unit } : {}) })
     }
   }
+  const seen = new Set(out.map((e) => e.row.id))
   for (const row of rows) if (!seen.has(row.id)) out.push({ row })
   return out
 }
@@ -367,17 +377,23 @@ export function compareTally(c: Colors, rows: CompareRow[]): string {
   return parts.length ? parts.join(c.dim(' · ')) : 'no evals to compare'
 }
 
-/** Where a run's commit isn't in HEAD's history, which makes the compare suspect. */
-function reachNotes(c: Colors, input: CompareInput): string[] {
+const UNFINISHED: Partial<Record<RunRecord['status'], string>> = {
+  interrupted: 'was interrupted, so some of its evals were cancelled before they finished',
+  budget: 'stopped at its duration budget, so some of its evals never ran',
+}
+
+/** What makes the compare suspect: a run whose commit isn't in HEAD's history, or that didn't finish. */
+function sideNotes(c: Colors, input: CompareInput): string[] {
   return (['base', 'head'] as const).flatMap((side) => {
     const s = input[side]
-    return s?.unreachable
-      ? [
-          c.yellow(
-            `${side} ${s.runId} ran on a commit that isn't in HEAD's history (rebased or dropped?)`,
-          ),
-        ]
-      : []
+    if (!s) return []
+    const unfinished = s.status && UNFINISHED[s.status]
+    return [
+      ...(s.unreachable
+        ? [`${side} ${s.runId} ran on a commit that isn't in HEAD's history (rebased or dropped?)`]
+        : []),
+      ...(unfinished ? [`${side} ${s.runId} ${unfinished}`] : []),
+    ].map((note) => c.yellow(note))
   })
 }
 
@@ -389,17 +405,15 @@ function stackNotes(c: Colors, changes: StackChange[]): string[] {
 function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): string[] {
   const { suite, runId } = input.head
   const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose, hint: false })
-  const failing = input.rows.filter((r) => r.head === 'fail').length
-  const passing = input.rows.filter((r) => r.head === 'pass').length
-  const counts = [
-    failing ? c.red(`${failing} fail`) : '',
-    passing ? c.green(`${passing} pass`) : '',
-  ].filter(Boolean)
+  const counts = (['fail', 'infra_error', 'pass', 'skipped'] as const).flatMap((o) => {
+    const n = input.rows.filter((r) => r.head === o).length
+    return n ? [paintOutcome(c, o)(`${n} ${OUTCOME[o]}`)] : []
+  })
   return [
     `No earlier recorded run to compare ${runId} with, so every eval is new.`,
     ...(blocks.length ? ['', ...blocks] : []),
     '',
-    ...reachNotes(c, input),
+    ...sideNotes(c, input),
     `${plural(input.rows.length, 'new eval')}${counts.length ? ` (${counts.join(c.dim(' · '))})` : ''}`,
   ]
 }
@@ -438,7 +452,7 @@ export function renderCompare(input: CompareInput, opts: CompareOptions): string
       ),
     )
   }
-  const notes = [...reachNotes(c, input), ...(opts.verbose ? stackNotes(c, input.changes) : [])]
+  const notes = [...sideNotes(c, input), ...(opts.verbose ? stackNotes(c, input.changes) : [])]
   return [...blocks.flatMap((b) => [...b, '']), ...notes, compareTally(c, input.rows)]
 }
 
@@ -447,7 +461,8 @@ export function renderCompareMarkdown(input: CompareInput, opts: CompareOptions)
   const title = input.base
     ? `### reeval compare: ${input.head.runId} vs ${input.base.runId}`
     : `### reeval compare: ${input.head.runId}`
-  return [title, '', '```text', ...renderCompare(input, { ...opts, color: false }), '```', ''].join(
-    '\n',
-  )
+  const lines = renderCompare(input, { ...opts, color: false })
+  const longest = Math.max(0, ...lines.flatMap((l) => (l.match(/`+/g) ?? []).map((m) => m.length)))
+  const fence = '`'.repeat(Math.max(3, longest + 1))
+  return [title, '', `${fence}text`, ...lines, fence, ''].join('\n')
 }

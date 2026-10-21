@@ -298,6 +298,64 @@ describe('catch regressions (reeval compare)', () => {
     )
   })
 
+  test('--md fences the layout past any backticks an assertion carries', () => {
+    const g = compareGolden('compare-regressed')
+    const input = goldenCompare(g)
+    for (const e of input.head.suite.files.flatMap((f) => f.evals)) {
+      for (const k of e.cells?.flatMap((cell) => cell.checks) ?? []) {
+        if (k.outcome.status === 'ran' && k.outcome.assertion) {
+          k.outcome.assertion = 'expected "```ts" to be "```js"'
+        }
+      }
+    }
+    const md = renderCompareMarkdown(input, { color: false, verbose: false }).split('\n')
+    assert.equal(md[2], '````text')
+    assert.equal(md.at(-2), '````')
+    assert.ok(
+      md.some((l) => l.includes('```ts')),
+      'the assertion is in the block',
+    )
+  })
+
+  test('a removed eval sits where base had it, beside the one renamed from it', () => {
+    const text = comparedText(compareGolden('compare'))
+    const at = (re: RegExp) => text.findIndex((l) => re.test(l))
+    const french = at(/^\+2 same$/)
+    const german = at(/^removed {10}greets in German$/)
+    const spanish = at(/^new {14}greets in Spanish$/)
+    assert.ok(french < german && german < spanish, text.join('\n'))
+  })
+
+  test('a run that did not finish is noted above the tally', () => {
+    const g = compareGolden('compare')
+    for (const [status, note] of [
+      ['interrupted', /^head \S+ was interrupted, so some of its evals were cancelled/m],
+      ['budget', /^head \S+ stopped at its duration budget, so some of its evals never ran$/m],
+    ] as const) {
+      const input = goldenCompare(g)
+      input.head.status = status
+      assert.match(comparedText(g, input).join('\n'), note)
+      assert.match(
+        renderCompare({ ...input, base: null }, { color: false, verbose: false }).join('\n'),
+        note,
+        'with no baseline too',
+      )
+    }
+    const complete = goldenCompare(g)
+    complete.head.status = 'complete'
+    assert.doesNotMatch(comparedText(g, complete).join('\n'), /interrupted|budget/, 'canary')
+  })
+
+  test('with no baseline, the count names every outcome, not only fail and pass', () => {
+    const g = compareGolden('compare-no-baseline')
+    const input = goldenCompare(g)
+    const [first, ...rest] = input.rows
+    assert.ok(first)
+    input.rows = [{ ...first, head: 'infra_error' }, ...rest]
+    const last = comparedText(g, input).at(-1) ?? ''
+    assert.match(last, /^8 new evals \(\d fail · 1 infra error · \d pass\)$/)
+  })
+
   test('colour is the only difference colour makes', () => {
     const input = goldenCompare(compareGolden('compare'))
     const plain = renderCompare(input, { color: false, verbose: false })

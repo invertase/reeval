@@ -212,11 +212,15 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
   const failing = regressions(rows)
   if (ctx.flags.json) ctx.out(JSON.stringify(json, null, 2))
   else {
-    const side = async (e: HistoryEntry) => ({
-      runId: e.runId,
-      suite: suiteResult(await recordOf(ctx.config, e)),
-      unreachable: unreachable(e, reach),
-    })
+    const side = async (e: HistoryEntry) => {
+      const record = await recordOf(ctx.config, e)
+      return {
+        runId: e.runId,
+        suite: suiteResult(record),
+        unreachable: unreachable(e, reach),
+        status: record.status,
+      }
+    }
     const input = {
       base: base ? await side(base) : null,
       head: await side(head),

@@ -63,7 +63,8 @@ reeval compare [base] [head]  Diff two runs; base defaults to head's nearest rec
 - **Defaults:** head is `latest`. Base is the nearest recorded, complete run on head's git ancestry, falling back to the previous run by time.
 - **Blocks:** one per eval that changed, in file order: `regressed` (both run ids and each check that flipped, `pass → fail` with its message, or `not run`), `fixed` (the checks that pass now), `can't compare` (what changed, and each side's id and result), `infra error`, `new` and `removed`. Runs of unchanged evals collapse to `+N same`. The last line is the tally, regressed first, zeros left out.
 - **Can't compare** means a fingerprint part or the grader changed, and reeval names it: `changed  evals/helpers.ts`.
-- **Not run:** a check head never reached reads `not run`, never `fail`. A check neither side reached isn't printed.
+- **Not run:** a check head never reached reads `not run`, never `fail`, and a check neither side reached is never a flip.
+- **Unfinished runs:** when base or head was interrupted or stopped at its duration budget, a note above the tally says so, since some of its evals didn't run to the end.
 - **Filtered runs:** when base and head ran different cells of an eval, the eval is classified on the cells both ran, and the rest are listed as `cells added` or `cells removed`. With no cell in common, it can't compare them.
 - `-v` adds each cell's lift and effort, base → head, and every stack change. The default output has no statistics.
 - `--md` prints a `### reeval compare: head vs base` heading and the same blocks in a text block, for a PR comment. `--json` returns `{ base, head, changes, rows }`.
