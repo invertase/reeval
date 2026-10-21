@@ -16,7 +16,7 @@ import { formatTokens } from '../usage.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
 import { contrastsOf } from '../view/contrasts.ts'
-import { DIRECTIONAL_MIN } from '../view/effort.ts'
+import { bothUnderATenth, DIRECTIONAL_MIN } from '../view/effort.ts'
 import { familyEffortLabel, familyLiftLabel, familyRateLabel } from '../view/family.ts'
 import { runHeader } from '../view/header.ts'
 import { labelledJudgements } from '../view/judgements.ts'
@@ -455,7 +455,12 @@ export async function buildDigestKeepingDropped(
               vsControl: {
                 n: `${row.n} vs ${row.control_n}`,
                 toolCalls: `${row.tools_median} vs ${row.control_tools_median} (${ratioText(row.tools_ratio)})`,
-                agentS: `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
+                agentS: bothUnderATenth(
+                  Number(row.agent_s_median) * 1000,
+                  Number(row.control_agent_s_median) * 1000,
+                )
+                  ? '<0.1 vs <0.1'
+                  : `${row.agent_s_median} vs ${row.control_agent_s_median} (${ratioText(row.agent_s_ratio)})`,
                 p: row.tools_p,
                 verdict: row.verdict,
                 timeVerdict: row.time_verdict,
@@ -931,7 +936,9 @@ export async function buildDigestKeepingDropped(
                 effort: {
                   n: `${ef.variant.n} vs ${ef.control.n}`,
                   toolCalls: `${ef.variant.tools.median} vs ${ef.control.tools.median} (${ratioText(ef.toolsRatio)})`,
-                  agentS: `${round1(ef.variant.agentMs.median / 1000)} vs ${round1(ef.control.agentMs.median / 1000)} (${ratioText(ef.agentMsRatio)})`,
+                  agentS: bothUnderATenth(ef.variant.agentMs.median, ef.control.agentMs.median)
+                    ? '<0.1 vs <0.1'
+                    : `${round1(ef.variant.agentMs.median / 1000)} vs ${round1(ef.control.agentMs.median / 1000)} (${ratioText(ef.agentMsRatio)})`,
                   verdict: ef.verdict,
                   timeVerdict: ef.timeVerdict,
                   ...(ef.tokensVerdict && ef.variant.tokens && ef.control.tokens

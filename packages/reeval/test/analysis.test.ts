@@ -2544,8 +2544,9 @@ describe('a study: several arms, every cell ungated', () => {
       | undefined
     const vs = effort?.cells.flatMap((c) => (c.vsControl ? [c.vsControl] : [])) ?? []
     assert.equal(vs.length, 2)
-    for (const v of vs) {
+    for (const v of vs as Array<{ n: string; agentS?: string }>) {
       assert.equal(v.n, '3 vs 3')
+      assert.doesNotMatch(v.agentS ?? '', /^0 vs 0 /, 'two sub-50 ms medians have no ratio')
       assert.deepEqual(Object.keys(v.separated ?? {}).slice(0, 2), ['tools', 'agentS'])
     }
     const current = digest.attempts['r1/auth/current-skill#1']

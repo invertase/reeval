@@ -225,7 +225,7 @@ export const formatRatio = (r: number | null) => (r === null ? '×–' : `×${r.
 const TENTH_MS = 50
 
 /** Two agent times that both print `<0.1s` have no ratio worth printing. */
-const bothUnderATenth = (a: number, b: number) => a < TENTH_MS && b < TENTH_MS
+export const bothUnderATenth = (a: number, b: number) => a < TENTH_MS && b < TENTH_MS
 
 /** Seconds for agent time: `<0.1s`, `0.4s`, `21s`, `1m 05s`. */
 export function formatSeconds(ms: number): string {
