@@ -1418,7 +1418,7 @@
           ]
         },
         "verdict": {
-          "description": "`insufficient` below 6 non-zero differences, where the exact test can't reach 0.05.",
+          "description": "`insufficient` below 6 non-zero differences, where the exact test can't reach 0.05. `fewer` and `more` are the test's direction (which side's differences rank higher), not the median's.",
           "enum": ["fewer", "insufficient", "more", "noise"]
         }
       },
