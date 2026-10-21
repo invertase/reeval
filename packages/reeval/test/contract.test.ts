@@ -60,7 +60,7 @@ const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => nam
 
 /**
  * The tags a row's run leaves out: the MCP evals on a harness with no MCP client, the plugin
- * evals on one reeval places no plugins on, and the hook, subagent and rules ones on one whose
+ * evals on a row with no plugin field, and the hook, subagent and rules ones on one whose
  * plugin parts lack them.
  */
 function tagsLeftOut(row: HarnessRow): string[] {
@@ -86,11 +86,11 @@ const attemptsFor = (row: HarnessRow) =>
   CONTRACT_ATTEMPTS -
   tagsLeftOut(row).reduce((sum, tag) => sum + TAGGED[tag as keyof typeof TAGGED], 0)
 
-/** Why a row skips the plugin behaviours: reeval places no plugins on its harness yet. */
+/** Why a row skips the plugin behaviours: it has no plugin field, as another row covers its harness's. */
 const noPlugins = (row: HarnessRow) =>
   row.plugin
     ? undefined
-    : `reeval places no plugins on ${harnessOf(row)} yet (its row has no plugin)`
+    : `the ${row.id} row places no plugins; another ${harnessOf(row)} row checks them`
 
 /** Why a row skips a plugin behaviour for a part its harness doesn't load. */
 const withoutPart = (part: PluginPart, what: string) => (row: HarnessRow) =>

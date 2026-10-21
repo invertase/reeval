@@ -63,8 +63,8 @@ export type HarnessRow = {
    * What reeval places of a plugin on this harness: the parts its catalog entry loads
    * (`pluginParts`), which the probe plugin's `only` is narrowed to, and where the probe plugin's
    * skill shows up in `context`. The hook and subagent evals run only where `parts` has `hooks`
-   * and `agents`. Unset for a harness reeval places no plugins on yet: its plugin evals are left
-   * out, and the plugin checks skip it, saying so.
+   * and `agents`. Unset for a row that leaves plugins to another row of its harness (to save
+   * budget): its plugin evals are left out, and the plugin checks skip it, saying so.
    */
   plugin?: {
     parts: readonly PluginPart[]
