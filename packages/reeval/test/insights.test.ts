@@ -300,6 +300,45 @@ describe('the insights validator', () => {
     assert.equal(doc.validation.dropped, 12, 'Mastra, and Gen, which is only part of a word')
   })
 
+  /** The choose eval with no try naming Genkit, so its count is 0 where the case passed 2 of 2. */
+  const withoutGenkit = (answer: string) =>
+    generate(
+      recipeWith(choose.path, (input, a) => {
+        if (input.call !== 'insights') return a
+        const chat = (choose.cases ?? []).find((k) => k.label === 'a chat app')
+        assert.ok(chat)
+        return {
+          ...a,
+          answer: { text: answer, cites: [idOf(input, chat.path)] },
+          namedTools: (a.namedTools ?? []).map((n) => ({
+            ...n,
+            tools: n.tools.filter((t) => t !== 'Genkit'),
+          })),
+        }
+      }),
+    )
+
+  test('canary: a count beside a named tool is that tool count, not the cited pass count', async () => {
+    const doc = await withoutGenkit('The agent recommended Genkit in 2 of 2 tries.')
+    assert.equal(insightOf(doc, choose).answer, null)
+    assert.deepEqual(
+      doc.validation.drops.map((d) => d.reason),
+      ['has 2 of 2, which no cited fact has'],
+    )
+  })
+
+  test("a named tool's own count is kept, and a pass count after the tool's outcome verb", async () => {
+    for (const text of [
+      'The agent recommended Genkit in 0 of 2 tries.',
+      'The agent recommended LangChain in 2 of 2 tries.',
+      'Recommending Genkit passed 2 of 2 tries.',
+    ]) {
+      const doc = await withoutGenkit(text)
+      assert.equal(insightOf(doc, choose).answer?.text, text)
+      assert.deepEqual(doc.validation.drops, [], text)
+    }
+  })
+
   test('a sentence over 25 words is dropped, and an effect word must be the cited effect', async () => {
     const plain = (measure.cells ?? []).find((c) => c.baseline)
     assert.ok(plain)

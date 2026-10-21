@@ -1902,6 +1902,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/insights.test.ts › canary: a quote in single, curly or backtick quotes',
       'reeval/test/insights.test.ts › canary: a reply that is not the schema JSON is asked for once more',
       'reeval/test/insights.test.ts › canary: a fourth finding is dropped',
+      'reeval/test/insights.test.ts › canary: a count beside a named tool is that tool count',
+      "reeval/test/insights.test.ts › a named tool's own count is kept",
       'reeval/test/insights.test.ts › a hand-edited sentence prints on one line',
       'reeval/test/output.test.ts › insights add only their sentences',
     ],

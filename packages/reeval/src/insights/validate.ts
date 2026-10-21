@@ -1,6 +1,7 @@
 // Holds the insight model's sentences to the facts and the plain-language rules. A sentence must
 // cite only facts in its input (`SuiteResult` paths, or a transcript line shown to it); its numbers
-// and quotes must be in what it cites; an effect word must be the cited fact's, unless a stated
+// and quotes must be in what it cites (a count beside a named tool is that tool's count, not a
+// pass count); an effect word must be the cited fact's, unless a stated
 // "can't tell yet if/whether" governs it; it is 25 words or fewer a sentence; and a row sentence
 // goes only on a row the layout opened. A sentence that fails is dropped. One that uses the
 // statistics vocabulary (or a percentage under 10 tries) is `banned`: the caller asks once more,
@@ -107,31 +108,64 @@ const OUTCOME_VERB = /\b(?:pass|fail|succeed|miss)\w*/gi
 const PASSED_AFTER = /^\s+(?:tries\s+|checks\s+)?pass(?:ed|es|ing)?\b/i
 const SMALL = /(?<![\w.#/:-])\d(?![\w/]|\.\d)/g
 
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const countOf = (raw: string) => {
   const word = NUMBER_WORDS.indexOf(raw.toLowerCase())
   return word >= 0 ? word : Number(raw)
 }
 
+/** Where a count's clause starts: a clause mark, a dash, or the end of the count before it. */
+const CLAUSE_END = /[.,:;!?()–—]|\s-\s/g
+
+/** The tool a count's clause names after its last outcome verb, lower-cased, or null. */
+function toolBefore(clause: string, tools: string[]): string | null {
+  const verbAt = [...clause.matchAll(OUTCOME_VERB)].at(-1)?.index ?? -1
+  let found: { tool: string; at: number } | null = null
+  for (const tool of tools) {
+    const re = new RegExp(`(?<!\\w)${escapeRegExp(tool)}(?!\\w)`, 'gi')
+    const at = [...clause.matchAll(re)].at(-1)?.index ?? -1
+    if (at > verbAt && (!found || at > found.at)) found = { tool, at }
+  }
+  return found ? found.tool.toLowerCase() : null
+}
+
+/** A sentence's tool counts: the tools it may name, and each one's counts over what it cites. */
+type ToolCounts = { names: string[]; held: (tool: string) => Set<string> }
+
 /**
  * The counts and numbers in `text` that what it cites doesn't hold. An `N of M` must be a cited
  * fact's own count (a transcript line's text isn't a count). When the facts count passes and the
  * nearest verb before it is a fail, it counts failures: `failed 4 of 4` over `0 of 4 passed`, and
- * `failed 0 of 4` there is dropped, unless `passed` follows it. Any other number must be in what
- * it cites, as `unverifiedNumbers` reads them, and a digit from 0 to 9 exactly.
+ * `failed 0 of 4` there is dropped, unless `passed` follows it. A count whose clause names a tool
+ * after its last outcome verb (`recommended Genkit in 1 of 1 tries`) counts the tries that named
+ * it, so it must be that tool's count over a cited fact, not a pass count. Any other number must
+ * be in what it cites, as `unverifiedNumbers` reads them, and a digit from 0 to 9 exactly.
  */
 function unheldNumbers(
   text: string,
   facts: string[],
   all: string[],
   passCounts: boolean,
+  tools?: ToolCounts,
 ): string[] {
   const known = new Set(facts.flatMap((f) => [...f.matchAll(FACT_PAIR)].map((m) => m[0])))
   const out: string[] = []
+  let from = 0
   for (const m of text.matchAll(PAIR)) {
+    const at = m.index ?? 0
     const n = countOf(m[1] as string)
     const of = countOf(m[2] as string)
-    const verb = [...text.slice(0, m.index).matchAll(OUTCOME_VERB)].at(-1)?.[0] ?? ''
-    const passedAfter = PASSED_AFTER.test(text.slice((m.index ?? 0) + m[0].length))
+    const before = text.slice(0, at)
+    const passedAfter = PASSED_AFTER.test(text.slice(at + m[0].length))
+    const clauseAt = Math.max(from, ...[...before.matchAll(CLAUSE_END)].map((c) => c.index + 1))
+    from = at + m[0].length
+    const tool = tools && !passedAfter ? toolBefore(before.slice(clauseAt), tools.names) : null
+    if (tool !== null) {
+      if (!tools?.held(tool).has(`${n} of ${of}`)) out.push(m[0])
+      continue
+    }
+    const verb = [...before.matchAll(OUTCOME_VERB)].at(-1)?.[0] ?? ''
     const failures = passCounts && /^(fail|miss)/i.test(verb) && !passedAfter
     if (known.has(failures ? `${of - n} of ${of}` : `${n} of ${of}`)) continue
     out.push(m[0])
@@ -164,6 +198,11 @@ export type Citable = {
   vocabulary: string
   /** Whether each `N of M` it cites counts passes, so one after a fail verb counts failures. */
   passCounts: boolean
+  /**
+   * A choose eval's named tools and its subject, and a tool's count over what a citation names,
+   * `N of M` as its row reads (the tries that named it over the tries counted), or null.
+   */
+  tools?: { names: string[]; count: (tool: string, cite: string) => string | null }
 }
 
 export function citableEval(
@@ -218,7 +257,6 @@ export type Verdict = { ok: Sentence } | { dropped: string } | { banned: string 
 
 const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+(?=\S)/).filter((s) => s.trim())
 const sameText = (text: string) => oneLine(text).toLowerCase()
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const wordsOf = (text: string) => text.match(/\S+/g)?.length ?? 0
 
 /** The largest `of M` in the cited facts: how many tries the sentence's counts are over. */
@@ -265,7 +303,17 @@ export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdic
       return { dropped: `quotes "${quote}", which isn't in what it cites` }
     }
   }
-  const numbers = unheldNumbers(text, factTexts, texts, c.passCounts)
+  const factCites = cites.filter((cite) => !TRANSCRIPT.test(cite))
+  const tools = c.tools && {
+    names: c.tools.names,
+    held: (tool: string) =>
+      new Set(
+        factCites
+          .map((cite) => c.tools?.count(tool, cite))
+          .filter((x): x is string => typeof x === 'string'),
+      ),
+  }
+  const numbers = unheldNumbers(text, factTexts, texts, c.passCounts, tools)
   if (numbers.length) {
     return { dropped: `has ${numbers.join(', ')}, which no cited fact has` }
   }
@@ -302,6 +350,41 @@ function tally<T>(value: T, judged: Judged[]): Checked<T> {
 type EvalSentences = Pick<EvalInsight, 'answer' | 'findings' | 'rows' | 'namedTools'>
 
 /**
+ * A choose eval's tool counts, as the layout prints them: under a fact's path, the counted tries
+ * whose kept named tools include the tool (case aside), over the counted tries. The names are
+ * every tool the model named, kept or not, and the subject, so a tool it named wrongly or never
+ * counts 0.
+ */
+function toolCounts(
+  output: InsightsOutput,
+  input: InsightInput,
+  kept: Array<{ attempt: string; tools: string[] }>,
+  texts: Map<string, string>,
+): NonNullable<Citable['tools']> {
+  const subject = input.intent?.subject.tool
+  const names = [
+    ...new Set(
+      [...output.namedTools.flatMap((n) => n.tools), ...(subject ? [subject] : [])]
+        .map(oneLine)
+        .filter(Boolean),
+    ),
+  ].sort((a, b) => b.length - a.length)
+  const named = new Map(kept.map((n) => [n.attempt, new Set(n.tools.map((t) => t.toLowerCase()))]))
+  const attempts = [...texts.keys()]
+  return {
+    names,
+    count: (tool, cite) => {
+      const under = attempts.filter(
+        (a) => a === cite || a.startsWith(`${cite}#`) || a.startsWith(`${cite}/`),
+      )
+      if (!under.length) return null
+      const n = under.filter((a) => named.get(a)?.has(tool.toLowerCase())).length
+      return `${n} of ${under.length}`
+    },
+  }
+}
+
+/**
  * An eval's insights call, checked. `texts` holds each attempt's whole final message, which a
  * named tool must appear in verbatim. Each drop's slot names the eval and where the sentence was
  * going: `answer`, `finding 2`, `row <path under the eval>` or `named tools <attempt>`.
@@ -312,13 +395,34 @@ export function validateEvalInsights(
   slots: InsightSlots,
   texts: Map<string, string>,
 ): Checked<EvalSentences> {
-  const c = citableEval(input)
   const judged: Judged[] = []
   const under = (path: string) =>
     path.startsWith(`${input.eval.path}/`) ? path.slice(input.eval.path.length + 1) : path
   const slot = (where: string) => `${input.eval.name} › ${where}`
   const drop = (where: string, text: string, reason: string) =>
     judged.push({ slot: slot(where), text, verdict: { dropped: reason } })
+  const namedTools = output.namedTools.flatMap((n) => {
+    const where = `named tools ${under(n.attempt)}`
+    if (!slots.namedTools) {
+      drop(where, n.tools.join(', '), "isn't on a choose eval")
+      return []
+    }
+    const text = texts.get(n.attempt)
+    if (text === undefined) {
+      drop(where, n.tools.join(', '), "isn't an attempt it was shown")
+      return []
+    }
+    const tools = [...new Set(n.tools.map(oneLine).filter(Boolean))].filter((t) => {
+      if (new RegExp(`(?<!\\w)${escapeRegExp(t)}(?!\\w)`).test(text)) return true
+      drop(where, t, "isn't in the attempt's final message")
+      return false
+    })
+    return tools.length ? [{ attempt: n.attempt, tools }] : []
+  })
+  const c: Citable = {
+    ...citableEval(input),
+    ...(slots.namedTools ? { tools: toolCounts(output, input, namedTools, texts) } : {}),
+  }
   const keep = (s: Sentence, where: string, max = 1) => {
     const v = checkSentence(s, c, max)
     judged.push({ slot: slot(where), text: s.text, verdict: v })
@@ -367,24 +471,6 @@ export function validateEvalInsights(
       findingsKept++
     }
     return kept ? [kept] : []
-  })
-  const namedTools = output.namedTools.flatMap((n) => {
-    const where = `named tools ${under(n.attempt)}`
-    if (!slots.namedTools) {
-      drop(where, n.tools.join(', '), "isn't on a choose eval")
-      return []
-    }
-    const text = texts.get(n.attempt)
-    if (text === undefined) {
-      drop(where, n.tools.join(', '), "isn't an attempt it was shown")
-      return []
-    }
-    const tools = [...new Set(n.tools.map(oneLine).filter(Boolean))].filter((t) => {
-      if (new RegExp(`(?<!\\w)${escapeRegExp(t)}(?!\\w)`).test(text)) return true
-      drop(where, t, "isn't in the attempt's final message")
-      return false
-    })
-    return tools.length ? [{ attempt: n.attempt, tools }] : []
   })
   return tally(
     {
