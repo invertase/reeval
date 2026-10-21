@@ -11,4 +11,8 @@ evaluate('lands', { environment: house }, async (c) => {
   expect(shellOutput(turn, 1)).toContain('"source": "./house"')
   expect(shellOutput(turn, 2)).toContain('Write every name in kebab-case.')
   expect(loaded(turn)).not.toContain('house:docs')
+  // The placed plugin's server goes through reeval's MCP timer, at its placed stamp.mjs.
+  const { mcpServers } = JSON.parse(shellOutput(turn, 3) ?? '{}')
+  expect(mcpServers.docs.args.slice(1, 4)).toEqual(['--name', 'house:docs', '--'])
+  expect(mcpServers.docs.args.at(-1)).toMatch(/\/\.reeval\/plugins\/house\/stamp\.mjs$/)
 })

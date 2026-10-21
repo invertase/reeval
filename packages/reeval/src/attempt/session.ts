@@ -2,9 +2,14 @@ import { readFile } from 'node:fs/promises'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
-import { PLUGIN_DIR, PLUGIN_ROOT, PLUGIN_ROOT_VAR } from '../environment/plugins.ts'
+import {
+  PLUGIN_DIR,
+  MANIFEST as PLUGIN_MANIFEST,
+  PLUGIN_ROOT,
+  PLUGIN_ROOT_VAR,
+} from '../environment/plugins.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
-import { brokeringFor, expectedBlockedFor } from '../harness/agents.ts'
+import { brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { harnessId } from '../options.ts'
@@ -162,6 +167,44 @@ async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
 }
 
 /**
+ * For an agent that starts a plugin's MCP servers from the plugin itself: rewrites each placed
+ * plugin's `.mcp.json` to the servers as reeval resolved them, through the MCP timer, so they're
+ * timed like the environment's. A manifest that declares `mcpServers` is pointed at that file.
+ * Only namespaced layouts, which refuse a plugin server reading a host secret, so no secret value
+ * lands in the file.
+ */
+async function writePluginMcp(
+  box: Sandbox,
+  env: ResolvedEnvironment,
+  plugins: Treatments['plugins'],
+  servers: Treatments['mcp'],
+) {
+  for (const placed of plugins) {
+    if (!placed.servers.length) continue
+    const own = Object.fromEntries(
+      placed.servers.flatMap((key) => {
+        const s = servers[key]
+        return s ? [[key.slice(placed.name.length + 1), s]] : []
+      }),
+    )
+    const at = `${PLUGIN_DIR}/${placed.name}`
+    const json = (v: unknown) => `${JSON.stringify(v, null, 2)}\n`
+    await box.writeFile(`${at}/.mcp.json`, json({ mcpServers: claudeMcpServers(own) }))
+    const manifest = env.plugins
+      .find((p) => p.name === placed.name)
+      ?.files.find((f) => f.path === PLUGIN_MANIFEST)
+    const parsed = manifest ? JSON.parse(Buffer.from(manifest.content).toString('utf8')) : {}
+    if (parsed.mcpServers !== undefined) {
+      await box.writeFile(
+        `${at}/${PLUGIN_MANIFEST}`,
+        json({ ...parsed, mcpServers: './.mcp.json' }),
+      )
+    }
+    debugLog('env', `plugin ${placed.name}'s MCP servers → ${at}/.mcp.json, through the timer`)
+  }
+}
+
+/**
  * Starts the harness session within its `startTimeout`. A start that doesn't become ready in time
  * is aborted (and closed, should it finish later) and started once more: a stuck bootstrap is
  * usually transient, and nothing has run yet, so the retry can't change what the attempt
@@ -283,6 +326,9 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     debugLog('env', "stdio MCP servers start through reeval's MCP timer")
   } else if (timed.untimed) {
     debugLog('env', `stdio MCP servers start untimed: ${timed.untimed}`)
+  }
+  if (layout.pluginPlacement === 'namespaced') {
+    await writePluginMcp(box, env, plugins, timed.servers)
   }
   const harness = await createHarness(spec.harness)
   const harnessStart = performance.now()

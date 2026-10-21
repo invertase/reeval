@@ -372,10 +372,23 @@ export const behaviours: Behaviour[] = [
         readFileSync(join(testDir, 'contract/stamp.mjs'), 'utf8'),
         "the probe plugin's stamp.mjs is a copy of the contract's",
       )
-      checkAndCanary(ran, row, 'plugin mcp', 'plugged', /expected '' to contain 'tools\/call'/)
+      const a = checkAndCanary(
+        ran,
+        row,
+        'plugin mcp',
+        'plugged',
+        /expected '' to contain 'tools\/call'/,
+      )
       const env = ran.run.environments.find((e) => e.name === 'plugged')
       assert.deepEqual(env?.plugins?.[0]?.parts.mcp, ['stamp'])
       assert.ok(env?.mcp.includes('probe:stamp'), JSON.stringify(env?.mcp))
+      // Whoever starts the plugin's server, the agent from the plugin or reeval's config, it goes
+      // through reeval's timer.
+      const starts = a.turns.flatMap((t) => t.mcpStartup ?? [])
+      assert.ok(
+        starts.some((s) => s.server === 'probe:stamp' && typeof s.ms === 'number'),
+        `no timed start of the plugin's stamp server: ${JSON.stringify(starts)}`,
+      )
     },
   },
   {

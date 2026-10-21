@@ -35,7 +35,8 @@ export const PART_PATHS: Record<PluginPart, string> = {
   rules: 'rules/',
 }
 
-const MANIFEST = '.claude-plugin/plugin.json'
+/** Where a plugin's manifest is, from its root. */
+export const MANIFEST = '.claude-plugin/plugin.json'
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /** Manifest keys that move a part from its default place, which reeval doesn't follow. */
 const CUSTOM_PATHS = ['skills', 'agents', 'commands', 'hooks', 'outputStyles', 'lspServers']

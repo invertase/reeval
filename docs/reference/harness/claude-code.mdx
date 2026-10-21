@@ -107,7 +107,9 @@ The agent runs with every permission granted, inside the sandbox.
 
 reeval copies each plugin to `~/.reeval/plugins/<name>/`, lists them in a `reeval` marketplace there (`.claude-plugin/marketplace.json`) and enables them in Claude Code's settings. Claude Code loads each whole, namespaced: the subagent `review:reviewer`, the MCP tool `mcp__plugin_review_docs__<tool>`.
 
-Claude Code starts a plugin's MCP servers itself, so reeval leaves them out of the config it passes. It can't fill in a host variable there, so a plugin server that reads one is refused at plan time; declare that server in `mcp`. A plugin's `rules/` aren't read by Claude Code, so the plan refuses a plugin that keeps them:
+Claude Code starts a plugin's MCP servers itself, so reeval leaves them out of the config it passes. reeval rewrites the placed plugin's `.mcp.json` to run each through its MCP timer, so each start is in `turns[].mcpStartup` as `<plugin>:<server>`. That file can't hold a host secret, so a plugin server that reads one is refused at plan time; declare that server in `mcp`.
+
+A plugin's `rules/` aren't read by Claude Code, so the plan refuses a plugin that keeps them:
 
 ```text
 reeval: evals/review.eval.ts: evaluate("reviews the diff") on claude-code:claude-sonnet-5: Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell
