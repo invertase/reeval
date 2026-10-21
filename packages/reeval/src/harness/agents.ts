@@ -12,6 +12,7 @@ import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox
 import {
   PART_PATHS,
   PLUGIN_DIR,
+  PLUGIN_MANIFEST,
   PLUGIN_PARTS,
   type PluginContents,
   pluginServerName,
@@ -121,6 +122,11 @@ export type Agent = Layout & {
    * keys, in one list with the environment's (Grok Build): it keeps one of two servers of a name.
    */
   pluginServersByName?: true
+  /**
+   * Plugin manifests it reads in place of `.claude-plugin/plugin.json` when a plugin has one, so it
+   * would load what reeval didn't place or rewrite; unset for an agent that reads only that one.
+   */
+  pluginManifestsFirst?: readonly string[]
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -798,6 +804,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
   antigravity: {
     ...LAYOUTS.antigravity,
     pluginParts: PLUGIN_PARTS,
+    // agy 1.4.2 installs a plugin as a native one when it has any of these, under that manifest's
+    // name and paths.
+    pluginManifestsFirst: [
+      'plugin.json',
+      '.antigravity-plugin/plugin.json',
+      '.gemini-plugin/plugin.json',
+      'gemini-extension.json',
+    ],
     name: 'Antigravity',
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
@@ -1026,10 +1040,10 @@ const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join
 
 /**
  * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
- * load, a hook event it doesn't run, a plugin MCP server it refuses (named `<plugin>:<server>`)
- * or whose `<plugin>:<server>` key `mcp` already has, or, where it takes plugin items flat, a
- * skill or MCP server whose name another already has, or a subagent or command another plugin
- * unpacks to the same file. `own` names the
+ * load, a hook event or type it doesn't run, a plugin MCP server it refuses (named
+ * `<plugin>:<server>`) or whose `<plugin>:<server>` key `mcp` already has, or, where it takes
+ * plugin items flat, a skill or MCP server whose name another already has, or a subagent, command
+ * or rule another unpacks to the same file. `own` names the
  * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
  * npm ones, at plan time) by their call. Undefined when it can take them.
  */
@@ -1057,14 +1071,24 @@ export function refusedPlugins(
     const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
     return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
   }
+  const first = (agent ?? mimics)?.pluginManifestsFirst ?? []
+  for (const p of plugins) {
+    const other = p.manifests.find((m) => first.includes(m))
+    if (other) {
+      return `${name} reads the ${p.name} plugin's ${other} in place of its ${PLUGIN_MANIFEST}, so reeval can't hold it to the parts it places: remove ${other} from the plugin, or leave the plugin out of this cell`
+    }
+  }
   const layout = layoutOf(harness)
   const runs = layout.pluginHookEvents
   for (const p of runs ? plugins : []) {
     const event = p.hooks.events.find((e) => !runs?.includes(e))
-    if (!event) continue
+    const type = p.hooks.otherTypes[0]
+    if (!event && !type) continue
     const rest = p.kept.filter((part) => part !== 'hooks')
     const fix = rest.length ? `use only: [${quoted(rest)}], or leave` : 'leave'
-    return `${name} can't run the ${p.name} plugin's ${event} hooks (hooks/hooks.json): it runs ${runs?.join(', ')} hooks; ${fix} the plugin out of this cell`
+    return event
+      ? `${name} can't run the ${p.name} plugin's ${event} hooks (hooks/hooks.json): it runs ${runs?.join(', ')} hooks; ${fix} the plugin out of this cell`
+      : `${name} can't run the ${p.name} plugin's ${type} hooks (hooks/hooks.json): it runs only command hooks; ${fix} the plugin out of this cell`
   }
   const servers = Object.fromEntries(
     plugins.flatMap((p) =>
@@ -1147,6 +1171,19 @@ export function refusedPlugins(
         }
         owner.set(item, p.name)
       }
+    }
+  }
+  const rules = layout.pluginUnpack?.rules
+  const ruleOwner = new Map<string, string>()
+  for (const p of rules ? plugins : []) {
+    for (const rule of p.rules) {
+      const file = `${p.name}-${rule.replace(/\.mdc?$/, '')}.mdc`
+      const what = `the ${p.name} plugin's rule "${rule}"`
+      const other = ruleOwner.get(file)
+      if (other) {
+        return `${what} and ${other} would both be placed at ${rules}/${file}: rename one, or narrow one with only`
+      }
+      ruleOwner.set(file, what)
     }
   }
   return undefined

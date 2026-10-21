@@ -8,6 +8,7 @@ import {
   PLUGIN_MANIFEST,
   PLUGIN_ROOT,
   PLUGIN_ROOT_VAR,
+  type PluginFile,
 } from '../environment/plugins.ts'
 import {
   type ResolvedEnvironment,
@@ -203,6 +204,24 @@ async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
 }
 
 /**
+ * The parts a flat agent has unpacked, as a built plugin's copy in the sandbox has them: its
+ * build's output, which `files` (the source before the build) may not match. Builds run on Docker
+ * only, so the sandbox has `find`.
+ */
+async function unpackedFromCopy(a: Attempt, box: Sandbox, dir: string): Promise<PluginFile[]> {
+  const r = await box.exec(
+    `cd ${shellQuote(dir)} && find rules agents commands hooks -maxdepth 1 -type f 2>/dev/null; true`,
+    { signal: a.signal },
+  )
+  const out: PluginFile[] = []
+  for (const path of r.stdout.split('\n').filter(Boolean)) {
+    const content = await box.readFile(`${dir}/${path}`)
+    if (content !== null) out.push({ path, content: Buffer.from(content) })
+  }
+  return out
+}
+
+/**
  * Unpacks the plugins' rules, subagents, commands and hooks into the workspace where a flat agent
  * reads them, before the snapshot, so the diff leaves them out. A file the workspace already has
  * is an infra error, except the hooks file, whose own handlers the plugins' join.
@@ -214,16 +233,18 @@ async function writeUnpackedPlugins(
   plugins: Treatments['plugins'],
   unpack: PluginUnpack,
 ) {
-  const placed = plugins.map((p) => ({
-    ...p,
-    files: env.plugins.find((r) => r.name === p.name)?.files ?? [],
-  }))
+  const placed = []
+  for (const p of plugins) {
+    const resolved = env.plugins.find((r) => r.name === p.name)
+    const files = resolved?.built ? await unpackedFromCopy(a, box, p.dir) : (resolved?.files ?? [])
+    placed.push({ ...p, files })
+  }
   const hooksFile = unpack.hooks ? await box.readFile(unpack.hooks.file) : null
   const files = unpackPlugins(placed, unpack, hooksFile)
   const fresh = files.filter((f) => f.path !== unpack.hooks?.file)
   if (fresh.length) {
     const r = await box.exec(
-      `for p in ${fresh.map((f) => shellQuote(f.path)).join(' ')}; do [ -e "$p" ] && echo "$p"; done; true`,
+      `for p in ${fresh.map((f) => shellQuote(f.path)).join(' ')}; do { [ -e "$p" ] || [ -L "$p" ]; } && echo "$p"; done; true`,
       { signal: a.signal },
     )
     const taken = r.stdout.trim().split('\n').filter(Boolean)

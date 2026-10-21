@@ -251,6 +251,56 @@ evaluate('greets', { compare: { baseline: plain, variants: [styled] }, runs: 2 }
     assert.match(again.stderr, /rebuilt, 1 read/)
   })
 
+  test('processes building the database at once each see every run once', async () => {
+    const p = await project('query-parallel-sync', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    for (let i = 0; i < 3; i++) assert.equal((await runCli(p.dir)).code, 0)
+    for (let round = 0; round < 3; round++) {
+      rmSync(join(p.dir, '.reeval/history.db'), { force: true })
+      const all = await Promise.all(
+        Array.from({ length: 8 }, () =>
+          runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM runs', '--json']),
+        ),
+      )
+      for (const r of all) {
+        assert.equal(r.code, 0, r.stderr)
+        assert.deepEqual(JSON.parse(r.stdout), [{ n: 3 }])
+      }
+    }
+  })
+
+  test('a sync waits for another process that holds the database longer than 5s', async () => {
+    const p = await project('query-held-sync', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    await query(p.dir, 'SELECT 1')
+    assert.equal((await runCli(p.dir)).code, 0)
+    const holder = new DatabaseSync(join(p.dir, '.reeval/history.db'))
+    holder.exec('BEGIN IMMEDIATE')
+    let held = true
+    const free = () => {
+      if (!held) return
+      held = false
+      holder.exec('COMMIT')
+      holder.close()
+    }
+    const started = Date.now()
+    const release = setTimeout(free, 7000)
+    try {
+      const r = await runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM runs', '--json'])
+      assert.equal(r.code, 0, r.stderr)
+      assert.deepEqual(JSON.parse(r.stdout), [{ n: 2 }])
+      assert.ok(Date.now() - started >= 7000, 'it waited for the lock')
+    } finally {
+      clearTimeout(release)
+      free()
+    }
+  })
+
   test('SQL that starts with a -- comment is the statement, with flags before, after or --', async () => {
     const p = await project('query-dash-comment', {
       'reeval.config.ts': fakeConfig(),

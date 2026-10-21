@@ -133,7 +133,7 @@ reeval copies each plugin to `~/.reeval/plugins/<name>/`, then unpacks it where 
 | `hooks/hooks.json` | Merged into `.cursor/hooks.json`, after the workspace's own hooks |
 | `.mcp.json` | Cursor's MCP config, as `<plugin>:<server>` |
 
-Items are flat, not namespaced, so two with the same name clash, and `${CLAUDE_PLUGIN_ROOT}` in a hook command or part is filled in with the plugin's copy. Hooks get Cursor's event names (`PreToolUse` as `preToolUse`, `UserPromptSubmit` as `beforeSubmitPrompt`) and tool matchers (`Bash` as `Shell`, `mcp__docs__search` as `MCP:search`); a group matching only tools Cursor lacks (`Glob`) is dropped. The plan refuses a hook event Cursor doesn't run:
+Items are flat, not namespaced, so two with the same name clash, and `${CLAUDE_PLUGIN_ROOT}` in a hook command or part is filled in with the plugin's copy. Hooks get Cursor's event names (`PreToolUse` as `preToolUse`, `UserPromptSubmit` as `beforeSubmitPrompt`) and tool matchers (`Bash` as `Shell`, `mcp__docs__search` as `MCP:search`); a group matching only tools Cursor lacks (`Glob`) is dropped. A built plugin's parts are unpacked from its build's output. The plan refuses a hook event Cursor doesn't run, and a hook that isn't a `command` (such as a `prompt` hook):
 
 ```text
 reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.5: Cursor can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: ['skills', 'mcp'], or leave the plugin out of this cell

@@ -1,0 +1,9 @@
+removed          greets in German
+  base             20261020T230147Z_958e309_cursor-agent_aamj  fail
+
+new              greets in Spanish
+  head             20261020T230148Z_958e309_cursor-agent_qghb  fail
+  spanish greeting  failed
+    expected command to succeed, exit code 1
+
+1 new · 1 removed

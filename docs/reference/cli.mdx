@@ -15,7 +15,7 @@ npx reeval run --dry-run
 
 | Command | What it does | Page |
 |---|---|---|
-| `reeval init [dir]` | Scaffold a config, a passing eval and profiles | [reeval init](/reference/cli/init) |
+| `reeval init [dir]` | Scaffold a config, an environment, an eval in it and profiles | [reeval init](/reference/cli/init) |
 | `reeval doctor` | Check Node, the config, Docker, images, keys, egress and `.gitignore` | [reeval doctor](/reference/cli/doctor) |
 | `reeval run [filter...]` | Plan and run evals | [reeval run](/reference/cli/run) |
 | `reeval record [run...]` | Copy scratch runs into the history folder | [reeval record](/reference/cli/record) |
@@ -93,7 +93,7 @@ A run id is `<UTC start>_<short sha>_<author>_<random>`. The author is `git conf
 | Code | When |
 |---|---|
 | 0 | Every gated cell passed. Failing controls under `compare.gate: 'variants'` don't count. Also `--dry-run`, and `reeval compare` without `--fail-on-regression`. |
-| 1 | A gated attempt failed, `reeval doctor` found a problem, a variant fell below its `minLift`, `budget.duration` stopped the run, or `reeval compare --fail-on-regression` found a regression, or a failing new or not comparable eval. |
+| 1 | A gated attempt failed, `reeval doctor` found a problem, a variant fell below its `minLift`, `budget.duration` stopped the run, or `reeval compare --fail-on-regression` found a regression, or a failing new or can't-compare eval. |
 | 2 | A usage, config or credentials error. That includes an unknown command, flag, option or profile, a filter or tag that matches no eval, a plan over `budget.attempts` without `--force`, `.only` in CI, Docker not running, a missing image, a bad run reference and a refused record. None of these writes a run. |
 | 3 | An infrastructure error (sandbox, harness or setup step) and no failures. A run with both a failure and an infra error exits 1. Also an error nothing caught, in reeval or in code your config runs: reeval prints `reeval: <message>`, with secrets masked, and stops without writing a run. Either way reeval suggests [`reeval report`](/reference/cli/report) on stderr. |
 | 130 | Interrupted with Ctrl-C (`SIGINT`). Sandboxes are destroyed and the run is saved as `interrupted`. A second signal forces the exit. |

@@ -1,0 +1,5 @@
+{"ts":"2026-10-20T23:01:48.540Z","atMs":0,"turn":0,"type":"prompt","text":"Bill the customer 12.50 GBP."}
+{"turn":0,"ts":"2026-10-20T23:01:48.540Z","atMs":0,"type":"text","text":"Working on: Bill the customer 12.50 GBP.","durationMs":0}
+{"turn":0,"ts":"2026-10-20T23:01:48.540Z","atMs":0,"type":"file-edit","toolCallId":"call_1","path":"greet.js","kind":"create","added":1,"removed":0,"durationMs":2}
+{"turn":0,"ts":"2026-10-20T23:01:48.542Z","atMs":2,"type":"text","text":"I wrote greet.js.","durationMs":0}
+{"ts":"2026-10-20T23:01:48.543Z","atMs":3,"turn":0,"type":"turn-end","status":"completed","durationMs":3}

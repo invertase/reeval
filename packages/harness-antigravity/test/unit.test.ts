@@ -162,6 +162,22 @@ describe('tools', () => {
     assert.equal(projectToolCall('manage_task', {}).dynamic, true)
   })
 
+  test('an invoke_subagent tool step names each agent as a subagent step does (CLI 1.4.2)', () => {
+    const p = {
+      Subagents: [
+        { Model: 'inherit', Prompt: 'Say PONG.', Role: 'Probe', TypeName: 'probe-agent' },
+      ],
+    }
+    assert.deepEqual(projectToolCall('invoke_subagent', p), {
+      toolName: 'invoke_subagent',
+      nativeName: 'invoke_subagent',
+      input: { ...p, subagents: [{ agent: 'probe-agent', role: 'Probe', prompt: 'Say PONG.' }] },
+      dynamic: false,
+    })
+    const translated = { subagents: [{ agent: 'probe-agent' }] }
+    assert.deepEqual(projectToolCall('invoke_subagent', translated).input, translated)
+  })
+
   test('an MCP call is named mcp__<server>__<tool>, like the other harnesses (CLI 1.2.11)', () => {
     const p = { Arguments: { n: 1 }, ServerName: 'stamp', ToolName: 'house_stamp' }
     assert.deepEqual(projectToolCall('call_mcp_tool', p), {

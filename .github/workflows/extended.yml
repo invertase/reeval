@@ -5,7 +5,8 @@
 #
 # The Docker tier runs on Linux only: GitHub's Windows runners have Windows containers only, while
 # reeval's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
-# have no Docker. Windows starts processes slowly, so its unit files run in six shards. macOS
+# have no Docker. Windows starts processes slowly, so its unit files run in six shards, split by
+# each file's running time (scripts/test-shard.mjs) rather than Node's round-robin. macOS
 # splits the same way so unit, tiers and packed overlap.
 name: extended
 

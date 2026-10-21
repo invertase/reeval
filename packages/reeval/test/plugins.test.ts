@@ -93,6 +93,7 @@ test('a plugin is read in Claude Code’s layout: every part, and its MCP server
   assert.deepEqual(p.hooks, {
     events: ['SessionStart'],
     commands: [`${ref('CLAUDE_PLUGIN_ROOT')}/start.sh`],
+    otherTypes: [],
   })
   assert.deepEqual(p.rules, ['style.md'])
   assert.deepEqual(p.mcp.docs, {
@@ -131,7 +132,7 @@ test('only keeps the parts it names, and the files it drops stay out of the sand
   const p = readPlugin(review(), 'x', ['skills'])
   assert.deepEqual(p.kept, ['skills'])
   assert.deepEqual(p.mcp, {})
-  assert.deepEqual(p.hooks, { events: [], commands: [] })
+  assert.deepEqual(p.hooks, { events: [], commands: [], otherTypes: [] })
   const files = pluginFiles(p)
   const paths = files.map((f) => f.path)
   assert.ok(paths.includes('skills/lint/SKILL.md'))
@@ -456,6 +457,32 @@ test('pi names a plugin MCP server <plugin>_<server>, and refuses one named like
   )
 })
 
+test('Antigravity refuses a plugin with a manifest agy reads in place of the Claude Code one', () => {
+  const none = { skills: [], mcp: [] }
+  for (const manifest of [
+    'plugin.json',
+    '.antigravity-plugin/plugin.json',
+    '.gemini-plugin/plugin.json',
+    'gemini-extension.json',
+  ]) {
+    const p = readPlugin(write(review(), { [manifest]: '{"name":"native"}' }), 'x', ['skills'])
+    assert.deepEqual(p.manifests, [manifest])
+    assert.equal(
+      refusedPlugins({ kind: 'antigravity' } as never, [p], none),
+      `Antigravity reads the review plugin's ${manifest} in place of its .claude-plugin/plugin.json, so reeval can't hold it to the parts it places: remove ${manifest} from the plugin, or leave the plugin out of this cell`,
+    )
+    assert.equal(refusedPlugins({ kind: 'cursor' } as never, [p], none), undefined)
+  }
+  // agy ignores Cursor's manifest, and Cursor's plugins are unpacked by reeval, never loaded.
+  const cursorManifest = readPlugin(
+    write(review(), { '.cursor-plugin/plugin.json': '{"name":"native"}' }),
+    'x',
+    ['skills'],
+  )
+  assert.equal(refusedPlugins({ kind: 'antigravity' } as never, [cursorManifest], none), undefined)
+  assert.equal(refusedPlugins({ kind: 'cursor' } as never, [cursorManifest], none), undefined)
+})
+
 test('on Cursor, two plugins’ subagents or commands unpacked to one file clash', () => {
   const other = (parts: Record<string, string>) =>
     readPlugin(write(tmp(), { '.claude-plugin/plugin.json': '{"name":"audit"}', ...parts }), 'y')
@@ -483,6 +510,51 @@ test('on Cursor, two plugins’ subagents or commands unpacked to one file clash
     ),
     undefined,
   )
+})
+
+test('on Cursor, two rules unpacked to one file clash, and a hook that isn’t a command is refused', () => {
+  const none = { skills: [], mcp: [] }
+  const p = readPlugin(write(review(), { 'rules/style.mdc': 'Typed.\n' }), 'x', ['rules'])
+  assert.equal(
+    refusedPlugins({ kind: 'cursor' } as never, [p], none),
+    `the review plugin's rule "style.mdc" and the review plugin's rule "style.md" would both be placed at .cursor/rules/review-style.mdc: rename one, or narrow one with only`,
+  )
+  const named = (name: string, rule: string) =>
+    readPlugin(
+      write(tmp(), {
+        '.claude-plugin/plugin.json': JSON.stringify({ name }),
+        [`rules/${rule}.md`]: 'Rule.\n',
+      }),
+      name,
+    )
+  assert.equal(
+    refusedPlugins({ kind: 'cursor' } as never, [named('a-b', 'c'), named('a', 'b-c')], none),
+    `the a plugin's rule "b-c.md" and the a-b plugin's rule "c.md" would both be placed at .cursor/rules/a-b-c.mdc: rename one, or narrow one with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'antigravity' } as never, [named('a-b', 'c'), named('a', 'b-c')], none),
+    undefined,
+  )
+  const prompted = readPlugin(
+    write(review(), {
+      'hooks/hooks.json': JSON.stringify({
+        hooks: { Stop: [{ hooks: [{ type: 'prompt', prompt: 'Is the task done?' }] }] },
+      }),
+    }),
+    'x',
+    ['commands', 'hooks'],
+  )
+  assert.deepEqual(prompted.hooks.otherTypes, ['prompt'])
+  for (const [kind, name] of [
+    ['cursor', 'Cursor'],
+    ['antigravity', 'Antigravity'],
+  ] as const) {
+    assert.equal(
+      refusedPlugins({ kind } as never, [prompted], none),
+      `${name} can't run the review plugin's prompt hooks (hooks/hooks.json): it runs only command hooks; use only: ['commands'], or leave the plugin out of this cell`,
+    )
+  }
+  assert.equal(refusedPlugins({ kind: 'claude-code' } as never, [prompted], none), undefined)
 })
 
 test('unpackPlugins writes a flat agent’s rules, subagents, commands and hooks', () => {

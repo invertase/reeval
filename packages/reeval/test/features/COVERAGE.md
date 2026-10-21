@@ -56,7 +56,7 @@
 | `skill.npm` | — | — | ● 2 | ● 2 | — | — |
 | `plugins`: `plugin.local`, `plugin.git` and `plugin.npm` in Claude Code’s layout, `only`, layering, the refusals per harness and the record | ✓ 5 | ✓ 3 | ● 4 | ● 4 | — | — |
 | Plugins on Claude Code (a directory marketplace in `~/.claude/settings.json`) and Grok Build (`--plugin-dir`): every part but rules, their MCP servers left to the agent, a host secret refused | ✓ 7 | ✓ 1 | ● 2 | ● 2 | — | ◐ 6 (2 without a canary) |
-| Plugins on Antigravity (`agy plugin install` as the session starts, hooks translated, rules always on) and Cursor (rules, subagents, commands and hooks unpacked into the workspace’s `.cursor/` before the snapshot, MCP servers in its own config): every part, the hook events each runs, clashes refused | ✓ 9 | ✓ 1 | ● 2 | ● 2 | — | ◐ 7 (1 without a canary) |
+| Plugins on Antigravity (`agy plugin install` as the session starts, hooks translated, rules always on) and Cursor (rules, subagents, commands and hooks unpacked into the workspace’s `.cursor/` before the snapshot, MCP servers in its own config): every part, the hook events each runs, clashes refused | ✓ 11 | ✓ 1 | ● 2 | ● 3 | — | ◐ 7 (1 without a canary) |
 | Plugins on OpenCode (skills, MCP servers, and subagents and commands unpacked into the workspace’s `.opencode/` with only the frontmatter it takes), pi (skills, MCP servers as `<plugin>_<server>`, commands as prompt templates in `.pi/prompts/`) and fx (skills and MCP servers): the parts each has no place for refused | ✓ 4 | ✓ 1 | ● 3 | ● 3 | — | ◐ 5 (2 without a canary) |
 | Plugin `build`: a cached image layer per built plugin, listed by `--dry-run` and `reeval image build`, refused on the fake sandbox | ✓ 3 | ✓ 1 | — | ● 1 | — | — |
 | Skill `exclude`: the defaults and a custom list | ✓ 2 | — | ● 2 | ● 2 | — | — |
@@ -161,7 +161,7 @@
 | Budget-stopped runs are recorded with status `budget` | ✓ 2 | — | — | — | — | — |
 | Recording, merges across branches, rebases and `reeval checkout` | ✓ 3 | — | — | — | — | — |
 | History `.gitignore` un-ignores recorded logs; `reeval record` warns when git still ignores them | ✓ 3 | — | — | — | — | — |
-| `reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md` | ✓ 5 | — | — | — | — | ◐ 2 (2 without a canary) |
+| `reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md` | ✓ 7 | — | — | — | — | ◐ 2 (2 without a canary) |
 | `reeval compare --fail-on-regression` | ✓ 2 | — | — | — | — | — |
 | `reeval query` | ✓ 1 | — | — | — | — | ◐ 1 (1 without a canary) |
 | `reeval mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP | ✓ 6 | — | — | — | — | — |
@@ -169,7 +169,7 @@
 | An eval whose cells are all `gate: 'none'` is marked ○ and `not gated` in the run summary when its attempts miss, never ✓ beside 0/n | ✓ 1 | — | — | — | — | — |
 | `reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 6 | — | — | — | — | — |
-| Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare` and the studio | ✓ 9 | — | — | — | — | — |
+| Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare -v` and the studio | ✓ 9 | — | — | — | — | — |
 | Effort separation per metric (`no overlap` at 3 vs 3 or more, directional in `reeval analyze`) and the plan hint below 4 runs a cell | ✓ 4 | ✓ 1 | — | — | — | — |
 | Contrasts: every arm side by side (checks, effort) in the run output, `reeval show` and `summary.md`; each pair of arms on one harness in `reeval query contrasts` and the digest | ✓ 2 | — | — | — | — | — |
 | Compare questions: pairs whose two orders disagree are splits, counted on the answer line, each pair head to head with three sides or more, `reeval query question_pairs` and `votes`, and the digest | ✓ 3 | — | — | — | — | — |

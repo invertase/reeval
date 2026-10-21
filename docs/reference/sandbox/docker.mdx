@@ -216,6 +216,7 @@ Before any attempt starts, reeval builds every image the plan needs that isn't t
 | Situation | Message |
 |---|---|
 | Docker isn't running | `Docker is not running. Start Docker and try again.` (exit 2); on Windows, `… Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.` |
+| No `docker` command | `Docker isn't installed: there's no docker command on the PATH. Install Docker Engine (https://docs.docker.com/engine/install/) or Docker Desktop, and try again.` (exit 2); macOS and Windows link their Docker Desktop installers |
 | Docker runs Windows containers | `Docker is running Windows containers, but reeval's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again.` (exit 2) |
 | An `image` that isn't there | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` |
 | The config's image fails | The failure, then `The sandbox docker+0ab0e263 + install is set by reeval.config.ts for every eval, so nothing ran.` (exit 3) |
