@@ -25,12 +25,13 @@ const greetsAda = `node -e "import('./greet.js').then((m) =>
 
 evaluate('creates greet.js', async (c) => {
   const turn = await c.send(
-    'Create greet.js, an ES module exporting greet(name) that returns ' +
-      '"Hello, <name>!". No dependencies.',
+    'Create greet.js, an ES module exporting `greet(name)` that returns "Hello, <name>!". No dependencies.',
   )
 
-  await expect(turn).toHaveFile('greet.js', /greet/)
-  await expect(c.exec(greetsAda)).toSucceed()
+  expect(turn).toHaveFile('greet.js', /greet/)
+  expect(await c.exec(greetsAda)).toSucceed()
+
+  expect(await c.judge('There are no dependencies')).toPass();
 })
 ```
 
