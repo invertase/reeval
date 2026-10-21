@@ -2090,16 +2090,41 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.not-run',
     area: 'CLI and runner',
-    name: 'A check that never ran reads `not run`, never `0 of N`',
-    fixtures: ['output/not-run'],
-    tests: ["reeval/test/output.test.ts › a check that didn't run reads not run, never 0 of N"],
+    name: 'A check that never ran reads `not run`, never `0 of N`, including every check of a cell with no counted attempt',
+    fixtures: ['output/not-run', 'output/zero-counted'],
+    tests: [
+      "reeval/test/output.test.ts › a check that didn't run reads not run, never 0 of N",
+      "reeval/test/suite.test.ts › a family's first case with no counted attempt lists the checks its other cases ran",
+    ],
   },
   {
     id: 'output.tally',
     area: 'CLI and runner',
-    name: 'The tally (`5 fail · 2 pass`, infra errors and skips apart) and the no-model hint',
+    name: 'The tally (`5 fail · 2 pass`, infra errors, cancelled attempts and skips apart) and the no-model hint',
     fixtures: ['output/infra-error'],
-    tests: ['reeval/test/output.test.ts › the tally puts fail first'],
+    tests: [
+      'reeval/test/output.test.ts › the tally puts fail first',
+      'reeval/test/suite.test.ts › an eval whose only failed attempts were cancelled is cancelled, not a fail',
+    ],
+  },
+  {
+    id: 'output.run-errors',
+    area: 'CLI and runner',
+    name: 'An error outside any attempt: printed first, `N run error` in the tally, `errors` in the record, and `outcome: fail` with exit 1',
+    fixtures: ['output/run-error'],
+    tests: [
+      engine("an error outside any attempt makes --json's outcome fail, as the exit code does"),
+      engine("an uncaught exception or unhandled rejection in an eval's worker fails the run"),
+    ],
+  },
+  {
+    id: 'output.family-cases',
+    area: 'CLI and runner',
+    name: "A family's block reads every case: its columns, pooled arms and summed compare questions",
+    tests: [
+      "reeval/test/suite.test.ts › a family's pooled arm and columns come from any case, not only the first",
+      "reeval/test/suite.test.ts › a family's questions are every case's, summed over the cases that answered them",
+    ],
   },
   {
     id: 'verbose',

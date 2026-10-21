@@ -3,7 +3,6 @@
 // Pure and deterministic: the same SuiteResult always prints the same lines. Counts read
 // `N of M` and effects are words; statistics print only with `verbose`.
 import { clip } from '../text.ts'
-import type { Outcome } from '../types.ts'
 import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
 import type {
@@ -17,6 +16,7 @@ import type {
   Interval,
   PooledArm,
   QuestionResult,
+  ResultOutcome,
   SuiteResult,
 } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
@@ -68,10 +68,11 @@ const CHECK_LABEL_MAX = 48
 /** A check's label on one line: an expected value can carry line breaks. */
 export const checkLabel = (label: string) => clip(label.replace(/\s*\n\s*/g, ' '), CHECK_LABEL_MAX)
 
-const VERDICT: Record<Outcome, string> = {
+const VERDICT: Record<ResultOutcome, string> = {
   pass: 'pass',
   fail: 'fail',
   infra_error: 'infra error',
+  cancelled: 'cancelled',
   skipped: 'skipped',
 }
 
@@ -124,8 +125,14 @@ export function table(items: Item[], width = LABEL): string[] {
   })
 }
 
-const paintOutcome = (c: Colors, o: Outcome): Paint =>
-  o === 'pass' ? c.green : o === 'fail' ? c.red : o === 'infra_error' ? c.yellow : c.dim
+const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
+  o === 'pass'
+    ? c.green
+    : o === 'fail'
+      ? c.red
+      : o === 'infra_error' || o === 'cancelled'
+        ? c.yellow
+        : c.dim
 
 /** A study (every cell `gate: 'none'`) passes whatever it saw, so it never reads `pass`. */
 function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): Text {
@@ -488,9 +495,11 @@ function pooledStats(p: PooledArm, label: string) {
  */
 function familyBlock(c: Colors, e: EvalResult, kind: Layout['kind'], verbose: boolean): string[] {
   const cases = e.cases ?? []
-  const columns = cases[0]?.cells ?? []
+  const columns = [
+    ...new Map(cases.flatMap((k) => k.cells).map((cell) => [cell.key, cell])).values(),
+  ]
   const pooled = e.pooled ?? []
-  const pooledOutcome: Outcome = pooled.some((p) => p.outcome === 'fail') ? 'fail' : 'pass'
+  const pooledOutcome: ResultOutcome = pooled.some((p) => p.outcome === 'fail') ? 'fail' : 'pass'
   const caseWord = (k: CaseResult) =>
     verdict(c, { outcome: k.outcome, todo: false, cells: k.cells })
   const pooledWord = t(VERDICT[pooledOutcome], paintOutcome(c, pooledOutcome))
@@ -551,12 +560,17 @@ export function evalBlock(c: Colors, e: EvalResult, verbose = false): string[] {
   return [head, ...body, ...questionLines(c, e.questions, 2)]
 }
 
-/** `5 fail · 2 pass`: fail first, every case counting one, zeros left out. */
+/**
+ * `5 fail · 2 pass · 1 cancelled`: errors outside any eval and fails first, every case counting
+ * one, zeros left out.
+ */
 export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
   const parts = [
+    tally.errors ? c.red(plural(tally.errors, 'run error')) : '',
     tally.fail ? c.red(`${tally.fail} fail`) : '',
     tally.pass ? c.green(`${tally.pass} pass`) : '',
     tally.infraError ? c.yellow(plural(tally.infraError, 'infra error')) : '',
+    tally.cancelled ? c.yellow(`${tally.cancelled} cancelled`) : '',
     tally.skipped ? c.dim(`${tally.skipped} skipped`) : '',
   ].filter(Boolean)
   return parts.length ? parts.join(c.dim(' · ')) : 'no evals ran'
@@ -577,14 +591,19 @@ export function renderBlocks(suite: SuiteResult, opts: RenderOptions): string[] 
   return out
 }
 
-/** A run's result: its blocks, then the tally and, with no analysis model, the hint. `insights` arrives with a model. */
+/**
+ * A run's result: its errors outside any eval, its blocks, then the tally and, with no analysis
+ * model, the hint. `insights` arrives with a model.
+ */
 export function render(suite: SuiteResult, _insights: null, opts: RenderOptions): string[] {
+  const c = colors(opts.color)
   const blocks = renderBlocks(suite, opts)
   return [
+    ...suite.errors.flatMap((error) => [c.red(`error: ${error}`), '']),
     ...blocks,
     ...(blocks.length ? [''] : []),
     ...(opts.notes ?? []),
-    tallyLine(colors(opts.color), suite.tally),
+    tallyLine(c, suite.tally),
     ...(opts.hint ? [NO_MODEL_HINT] : []),
   ]
 }

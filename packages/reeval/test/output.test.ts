@@ -30,6 +30,7 @@ import {
 } from '../src/ui/compare-layout.ts'
 import { layout, NO_MODEL_HINT, render, tallyLine } from '../src/ui/layout.ts'
 import { readableRecord } from '../src/view/record.ts'
+import type { SuiteTally } from '../src/view/suite.ts'
 
 const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
 const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
@@ -84,7 +85,11 @@ describe('every layout', () => {
     for (const g of GOLDENS) {
       const lines = rendered(g.name)
       assert.equal(lines.at(-1), NO_MODEL_HINT, g.name)
-      assert.match(lines.at(-2) ?? '', /^(\d+ (fail|pass|infra errors?|skipped)( · )?)+$/, g.name)
+      assert.match(
+        lines.at(-2) ?? '',
+        /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
+        g.name,
+      )
       if (!g.verbose) assert.doesNotMatch(lines.join('\n'), /\d%|pass@1|interval/, g.name)
     }
   })
@@ -96,7 +101,10 @@ describe('every layout', () => {
     const withModel = render(goldenSuite(g), null, { color: false, verbose: false, hint: false })
     assert.equal(without.at(-1), NO_MODEL_HINT)
     assert.ok(!withModel.includes(NO_MODEL_HINT))
-    assert.match(withModel.at(-1) ?? '', /^(\d+ (fail|pass|infra errors?|skipped)( · )?)+$/)
+    assert.match(
+      withModel.at(-1) ?? '',
+      /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
+    )
     assert.deepEqual(withModel, without.slice(0, -1))
   })
 
@@ -184,12 +192,26 @@ describe('every layout', () => {
 
   test('the tally puts fail first, leaves zeros out and counts infra errors and skips apart', () => {
     const c = colors(false)
-    assert.equal(tallyLine(c, { pass: 2, fail: 5, infraError: 0, skipped: 0 }), '5 fail · 2 pass')
+    const tally = (t: Partial<SuiteTally>): SuiteTally => ({
+      errors: 0,
+      pass: 0,
+      fail: 0,
+      infraError: 0,
+      cancelled: 0,
+      skipped: 0,
+      ...t,
+    })
+    assert.equal(tallyLine(c, tally({ pass: 2, fail: 5 })), '5 fail · 2 pass')
     assert.equal(
-      tallyLine(c, { pass: 1, fail: 0, infraError: 2, skipped: 1 }),
+      tallyLine(c, tally({ pass: 1, infraError: 2, skipped: 1 })),
       '1 pass · 2 infra errors · 1 skipped',
     )
-    assert.equal(tallyLine(c, { pass: 0, fail: 0, infraError: 0, skipped: 0 }), 'no evals ran')
+    assert.equal(
+      tallyLine(c, tally({ fail: 1, pass: 2, cancelled: 3 })),
+      '1 fail · 2 pass · 3 cancelled',
+    )
+    assert.equal(tallyLine(c, tally({ errors: 1, pass: 2 })), '1 run error · 2 pass')
+    assert.equal(tallyLine(c, tally({})), 'no evals ran')
   })
 
   test('render is pure, and colour is the only difference colour makes', () => {

@@ -100,10 +100,14 @@ npx reeval run --config reeval.fake.config.ts --json > results.json
 
 ```json
 {
-  "runId": "20261020T193408Z_2f4a6da_cursor-agent_c5zf",
+  "runId": "20261021T064035Z_02e3770_cursor-agent_nwqx",
   "status": "complete",
   "outcome": "pass",
-  "tally": { "pass": 16, "fail": 0, "infraError": 0, "skipped": 0 },
+  "errors": [],
+  "tally": {
+    "errors": 0, "pass": 16, "fail": 0,
+    "infraError": 0, "cancelled": 0, "skipped": 0
+  },
   "files": [
     …,
     {
@@ -152,11 +156,13 @@ npx reeval run --config reeval.fake.config.ts --json > results.json
 
 | Field | What |
 |---|---|
-| `outcome`, `tally` | The run's outcome, and outcomes per block: each `evaluate.each` case and each other eval is one, and a family whose pooled `minLift` failed is one more fail |
-| `files[].evals[]` | An eval, or a pooled `evaluate.each` (`family: true`) with its `cases` and `pooled` variants |
+| `outcome` | The run's outcome, which the exit code is read from: `fail` on any error outside an attempt, `skipped` when interrupted |
+| `errors` | Errors outside any attempt: an eval file's stray rejection or throw, a worker that died. Each fails the run |
+| `tally` | Outcomes per block: each `evaluate.each` case and each other eval is one, and a family whose pooled `minLift` failed is one more fail. `cancelled` counts the blocks whose only failed tries the interrupt cancelled, and `errors` the run's `errors` |
+| `files[].evals[]` | An eval, or a pooled `evaluate.each` (`family: true`) with its `cases`, `pooled` variants and `questions` summed over the cases |
 | `across` | What the cells compare: `none`, `change` (variants), `harness` or `both` |
 | `cells[]` | Each cell: counts (`infraError` and `skipped` apart from `failed`), `baseline`, `gated`, `fingerprint`, `context` (skill sources and files) |
-| `checks[].outcome` | `ran` with its counts and first failure, or `not run` when no counted attempt reached it |
+| `checks[].outcome` | `ran` with its counts and first failure, or `not run` when no counted attempt reached it. A cell with no counted attempt lists every check the eval (or family) recorded as `not run` |
 | `effect` | A variant against its baseline: `better`, `worse`, `same` or `unclear`. Fewer than 4 counted attempts a side is `unclear`, and so is a check the baseline never ran |
 | `effort` | Median tool calls, agent time and tokens, from 4 counted attempts |
 | `paths` | Every node's `path`, a stable id to cite it by: `<eval>/<case>/<harness>+<environment>+<sandbox>/checks/<label>` |
@@ -224,12 +230,15 @@ Every mode ends with a block per eval, in file-path order and then source order,
 | `pass` | Passed its gate, with no infra error |
 | `fail` | Failed its gate, or a pooled family's `minLift` |
 | `infra error` | Couldn't run: a sandbox, workspace or setup step failed |
+| `cancelled` | Its only failed tries were cancelled by Ctrl-C or `SIGTERM`, so the agent didn't fail it |
 | `skipped`, `todo` | `evaluate.skip` or `evaluate.todo` |
 | `not gated` | Passed with every cell ungated (a study), so it doesn't read `pass` beside `0 of 2` |
 
 Under the name, a pass prints nothing more. A fail prints each failed check with its first assertion (`failed` on one try, `N of M` on several), `not run` for a check that never ran, an error no check explains (`error`, `judge`, `timeout`, `cancelled`, `turn error`), and `+N more passed`. A compare prints a row per arm with `N of M` and its effect, then those checks a column per arm, then an effort table from four counted tries a side; [Output modes](/concepts/output#the-layout-follows-what-the-eval-varies) has each layout.
 
-The tally counts each eval, and each case of a family, once: `3 fail · 1 pass · 1 infra error · 2 skipped`, fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
+An error outside any attempt, such as an eval file's stray rejection, prints first as `error: …`; it fails the run, exit 1, though every eval passed.
+
+The tally counts each eval, and each case of a family, once: `1 run error · 3 fail · 1 pass · 1 infra error · 2 cancelled · 2 skipped`, run errors and fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
 
 ## What it writes
 

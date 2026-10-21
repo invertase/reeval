@@ -89,5 +89,6 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
           })),
         }
       : {}),
+    ...(record.errors?.length ? { errors: record.errors } : {}),
   }
 }
