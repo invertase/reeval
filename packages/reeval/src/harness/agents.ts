@@ -27,6 +27,7 @@ import type {
   WebEventType,
 } from '../types.ts'
 import type { PlacedPlugin } from './types.ts'
+import type { PluginUnpack } from './unpack.ts'
 
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
@@ -52,6 +53,13 @@ export type Layout = {
    * may already have put there, rather than replacing it.
    */
   pluginFiles?: (plugins: readonly PlacedPlugin[]) => PluginFile[]
+  /**
+   * Where a flat agent reads the plugin parts reeval unpacks into the workspace before the
+   * snapshot (rules, subagents, commands, hooks); unset for an agent that takes none.
+   */
+  pluginUnpack?: PluginUnpack
+  /** The Claude Code hook events the agent runs from a plugin; unset, every event. */
+  pluginHookEvents?: readonly string[]
 }
 
 /** A file a layout writes for the session's plugins. */
@@ -438,6 +446,64 @@ export function cursorMcpServers(
   )
 }
 
+/** Claude Code's hook events as Cursor names them, as the Cursor SDK converts Claude Code's own. */
+const CURSOR_HOOK_EVENTS: Readonly<Record<string, string>> = {
+  SessionStart: 'sessionStart',
+  SessionEnd: 'sessionEnd',
+  UserPromptSubmit: 'beforeSubmitPrompt',
+  PreToolUse: 'preToolUse',
+  PostToolUse: 'postToolUse',
+  SubagentStop: 'subagentStop',
+  PreCompact: 'preCompact',
+  Stop: 'stop',
+}
+
+/** Claude Code's tool names as Cursor's hooks match them; null for one Cursor has no tool for. */
+const CURSOR_HOOK_TOOLS: Readonly<Record<string, string | null>> = {
+  Bash: 'Shell',
+  Read: 'Read',
+  Write: 'Write',
+  Edit: 'Write',
+  Glob: null,
+  Grep: 'Grep',
+  WebFetch: 'WebFetch',
+  WebSearch: 'WebSearch',
+  Task: 'Task',
+}
+
+/**
+ * A Claude Code hook group's tool matcher as Cursor's, on the tool events only: each name mapped,
+ * `mcp__<server>__<tool>` as `MCP:<tool>`; null when it names only tools Cursor lacks.
+ */
+export function cursorHookMatcher(
+  event: string,
+  matcher: string | undefined,
+): string | null | undefined {
+  if (event !== 'PreToolUse' && event !== 'PostToolUse') return undefined
+  if (!matcher || matcher === '*') return undefined
+  const out: string[] = []
+  for (const raw of matcher.split('|')) {
+    const name = raw.trim()
+    const parts = name.split('__')
+    const tool =
+      name.startsWith('mcp__') && parts.length >= 3
+        ? `MCP:${parts.slice(2).join('__')}`
+        : CURSOR_HOOK_TOOLS[name] === undefined
+          ? name
+          : CURSOR_HOOK_TOOLS[name]
+    if (tool && !out.includes(tool)) out.push(tool)
+  }
+  return out.length ? out.join('|') : null
+}
+
+/** Where Cursor reads what reeval unpacks from a plugin, in the workspace (settingSources `project`). */
+const CURSOR_PLUGIN_UNPACK: PluginUnpack = {
+  rules: '.cursor/rules',
+  agents: '.cursor/agents',
+  commands: '.cursor/commands',
+  hooks: { file: '.cursor/hooks.json', events: CURSOR_HOOK_EVENTS, matcher: cursorHookMatcher },
+}
+
 /**
  * What Claude Code's plugin format bundles, which Grok Build reads too: every part but rules,
  * which neither loads from a plugin.
@@ -535,12 +601,16 @@ export function agentMcp(
 /** Where each agent with an image reads rules and skills. */
 export const LAYOUTS: Record<BakedHarness, Layout> = {
   // The SDK loads AGENTS.md and .cursor/skills from the workspace (settingSources `project`) and
-  // ~/.agents/skills from home (`user`).
+  // ~/.agents/skills from home (`user`). Plugin skills join the home ones; the rest of a plugin is
+  // unpacked into the workspace's .cursor/, never loaded with settingSources `plugins`, which also
+  // fetches the key owner's account plugins.
   cursor: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.cursor/skills',
     harnessSkillDir: '.agents/skills',
     pluginPlacement: 'flat',
+    pluginUnpack: CURSOR_PLUGIN_UNPACK,
+    pluginHookEvents: Object.keys(CURSOR_HOOK_EVENTS),
   },
   'claude-code': {
     rulesFile: 'CLAUDE.md',
@@ -550,11 +620,14 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     pluginFiles: claudePluginFiles,
   },
   // Home skills are ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli path its docs give.
+  // Plugins are installed whole with `agy plugin install`, which the adapter runs as it starts.
   antigravity: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
     pluginPlacement: 'namespaced',
+    // The adapter's ANTIGRAVITY_HOOK_EVENTS, which a test holds this to.
+    pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
   },
   // OpenCode reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
   // the workspace and the home directory; nothing turns that off.
@@ -613,7 +686,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
 export const AGENTS: Record<AgentKind, Agent> = {
   cursor: {
     ...LAYOUTS.cursor,
-    pluginParts: [],
+    pluginParts: PLUGIN_PARTS,
     name: 'Cursor',
     factory: 'cursor',
     credential: 'CURSOR_API_KEY',
@@ -677,7 +750,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   antigravity: {
     ...LAYOUTS.antigravity,
-    pluginParts: [],
+    pluginParts: PLUGIN_PARTS,
     name: 'Antigravity',
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
@@ -693,10 +766,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
     servedModel: geminiServedModel,
     mcpServers: antigravityMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
       (await import('@reeval/harness-antigravity')).createAntigravity({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
+        ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         ...(descriptor.kind === 'antigravity' && descriptor.effort
           ? { effort: descriptor.effort }
           : {}),
@@ -901,9 +975,10 @@ const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join
 
 /**
  * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
- * load, a plugin MCP server it refuses (named `<plugin>:<server>`) or whose `<plugin>:<server>`
- * key `mcp` already has, or, where it takes plugin items flat, a skill or MCP server whose name
- * another already has. `own` names the
+ * load, a hook event it doesn't run, a plugin MCP server it refuses (named `<plugin>:<server>`)
+ * or whose `<plugin>:<server>` key `mcp` already has, or, where it takes plugin items flat, a
+ * skill or MCP server whose name another already has, or a subagent or command another plugin
+ * unpacks to the same file. `own` names the
  * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
  * npm ones, at plan time) by their call. Undefined when it can take them.
  */
@@ -931,6 +1006,15 @@ export function refusedPlugins(
     const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
     return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
   }
+  const layout = layoutOf(harness)
+  const runs = layout.pluginHookEvents
+  for (const p of runs ? plugins : []) {
+    const event = p.hooks.events.find((e) => !runs?.includes(e))
+    if (!event) continue
+    const rest = p.kept.filter((part) => part !== 'hooks')
+    const fix = rest.length ? `use only: [${quoted(rest)}], or leave` : 'leave'
+    return `${name} can't run the ${p.name} plugin's ${event} hooks (hooks/hooks.json): it runs ${runs?.join(', ')} hooks; ${fix} the plugin out of this cell`
+  }
   const servers = Object.fromEntries(
     plugins.flatMap((p) =>
       Object.entries(p.mcp).map(([server, s]): [string, ResolvedMcpServer] => [
@@ -955,7 +1039,6 @@ export function refusedPlugins(
       }
     }
   }
-  const layout = layoutOf(harness)
   if (layout.pluginPlacement === 'namespaced') {
     for (const p of plugins) {
       if (!p.kept.includes('mcp')) continue
@@ -995,6 +1078,21 @@ export function refusedPlugins(
         return `the ${p.name} plugin's skill "${skill}" and ${other} would both be placed at ~/${layout.harnessSkillDir}/${skill}: rename one, or narrow it with only or exclude`
       }
       skillOwner.set(skill, `the ${p.name} plugin's skill "${skill}"`)
+    }
+  }
+  for (const part of ['agents', 'commands'] as const) {
+    const dir = layout.pluginUnpack?.[part]
+    if (!dir) continue
+    const owner = new Map<string, string>()
+    for (const p of plugins) {
+      for (const item of p[part]) {
+        const other = owner.get(item)
+        const what = part === 'agents' ? 'subagent' : 'command'
+        if (other) {
+          return `the ${p.name} plugin's ${what} "${item}" and the ${other} plugin's would both be placed at ${dir}/${item}.md: rename one, or narrow one with only`
+        }
+        owner.set(item, p.name)
+      }
     }
   }
   return undefined
