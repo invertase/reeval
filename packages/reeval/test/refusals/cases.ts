@@ -604,6 +604,47 @@ export const CASES: Record<string, Case[]> = {
       })),
     ],
     ['plugin.npm without a spec', helpers(({ plugin }) => ({ plugins: [plugin.npm('')] }))],
+    [
+      'plugin.marketplace without a name',
+      helpers(({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] })),
+    ],
+    [
+      'plugin.marketplace name not kebab-case',
+      helpers(({ plugin }) => ({ plugins: [plugin.marketplace('Lint@github:acme/tools')] })),
+    ],
+    [
+      'plugin.marketplace ref on npm',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@npm:@acme/plugins@2.0.0', { ref: 'v1' })],
+      })),
+    ],
+    [
+      'plugin.marketplace tree URL',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@https://github.com/acme/tools/tree/v1/market')],
+      })),
+    ],
+    [
+      'plugin.marketplace option with a typo',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@github:acme/tools', { path: 'x' } as never)],
+      })),
+    ],
+    [
+      'plugin.marketplace with credentials',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.marketplace('lint@https://user:token@github.com/acme/tools')],
+      })),
+    ],
+    [
+      'plugin.marketplace good',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.marketplace('lint@github:acme/tools', { ref: 'v3', only: ['skills'] }),
+          plugin.marketplace('format@npm:@acme/plugins@2.0.0'),
+        ],
+      })),
+    ],
     ['plugins not from the helper', env({ plugins: ['./plugins/review'] })],
     ['plugins not a list', env({ plugins: 'x' })],
     [
@@ -622,7 +663,24 @@ export const CASES: Record<string, Case[]> = {
     ],
     [
       'data: plugin with an unknown source',
+      env({ plugins: [{ kind: 'plugin', source: 'zip', name: 'x' }] }),
+    ],
+    [
+      'data: plugin marketplace without its source',
       env({ plugins: [{ kind: 'plugin', source: 'marketplace', name: 'x' }] }),
+    ],
+    [
+      'data: plugin marketplace with a typo',
+      env({
+        plugins: [
+          {
+            kind: 'plugin',
+            source: 'marketplace',
+            name: 'x',
+            marketplace: { source: 'git', repo: 'github:o/r', rev: 'v1' },
+          },
+        ],
+      }),
     ],
     [
       'data: plugin build empty',

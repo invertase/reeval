@@ -1744,6 +1744,11 @@ describe('common mistakes', { concurrency: 4 }, () => {
       /plugin\.local\("\."\): only lists the parts to place, from 'skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'/,
     ],
     [
+      'a marketplace plugin without its entry name',
+      `defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.marketplace('github:acme/agent-plugins')] }))`,
+      /plugin\.marketplace\(\) needs 'name@source': the plugin's entry and the marketplace's git repository or npm:<package>, e\.g\. plugin\.marketplace\('lint@github:acme\/agent-plugins'\) \(got "github:acme\/agent-plugins"\)/,
+    ],
+    [
       'a plugin without a manifest',
       `evaluate('e', { environment: defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('..')] })) }, async () => {})`,
       /evaluate\("e"\) on fake: plugin\.local\('\.'\) has no \.claude-plugin\/plugin\.json/,

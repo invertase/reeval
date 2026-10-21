@@ -106,6 +106,7 @@ export const cases: PlanCase[] = [
   { dir: 'plugins', name: 'parts', args: ['evals/parts.eval.ts'] },
   { dir: 'plugins', name: 'remote', args: ['evals/remote.eval.ts'] },
   { dir: 'plugins', name: 'fetches-at-start', args: ['evals/fetches.eval.ts'] },
+  { dir: 'plugins', name: 'marketplace', args: ['evals/marketplace.eval.ts'] },
   { dir: 'capture', name: 'options', args: [] },
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
