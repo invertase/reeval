@@ -156,6 +156,10 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
   Each pooled `evaluate.each` that ran; unset when none did.
 </Property>
 
+<Property name="errors" type="string[]" optional>
+  Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.
+</Property>
+
 ### GitInfo
 
 <Property name="sha" type="string">

@@ -1089,6 +1089,9 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     evals,
     ...(families.length ? { families } : {}),
+    ...(engine.unhandledErrors.length
+      ? { errors: engine.unhandledErrors.map((e) => redactSecrets(e)) }
+      : {}),
   }
   return { record, artifacts: out.files }
 }

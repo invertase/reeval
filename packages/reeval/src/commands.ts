@@ -8,6 +8,7 @@ import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
+  addedRow,
   type CompareRow,
   compare,
   formatHistory,
@@ -191,11 +192,7 @@ export async function compareView(config: ResolvedConfig, refs: string[]) {
     const candidates = entries.filter((e) => e.recorded && e.runId !== head.runId)
     base = pickBaseline(candidates, head, ancestry)
   }
-  const rows = base
-    ? compare(base, head)
-    : head.evals.map(
-        (e): CompareRow => ({ id: e.id, base: null, head: e.outcome, status: 'added' }),
-      )
+  const rows = base ? compare(base, head) : head.evals.map(addedRow)
   const flag = (e: HistoryEntry) => ({
     runId: e.runId,
     recorded: e.recorded,
@@ -239,13 +236,16 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
 
 /**
  * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new or
- * changed (can't compare) eval that fails, since nothing earlier vouches for it.
+ * changed (can't compare) eval that fails, since nothing earlier vouches for it. A head the run's
+ * interrupt cancelled didn't fail.
  */
 export const regressions = (rows: CompareRow[]) =>
   rows.filter(
     (r) =>
       r.status === 'regressed' ||
-      ((r.status === 'added' || r.status === 'drift') && r.head === 'fail'),
+      ((r.status === 'added' || r.status === 'drift') &&
+        r.head === 'fail' &&
+        !r.cancelled?.includes('head')),
   )
 
 /** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */

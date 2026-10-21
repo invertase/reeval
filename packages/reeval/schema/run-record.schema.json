@@ -2515,6 +2515,13 @@
             "$ref": "#/$defs/EnvironmentRecord"
           }
         },
+        "errors": {
+          "description": "Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "evals": {
           "type": "array",
           "items": {
