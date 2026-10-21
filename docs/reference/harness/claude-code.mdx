@@ -83,6 +83,8 @@ reeval starts the CLI with two variables:
 
 The agent runs with every permission granted, inside the sandbox.
 
+Its `AskUserQuestion` tool is off, because it waits for a person to answer. Claude Code asks in its reply instead, and the eval's next `c.send()` answers it.
+
 ## Skills, rules and MCP
 
 | What | Where |
