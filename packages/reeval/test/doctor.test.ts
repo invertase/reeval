@@ -21,6 +21,7 @@ import {
   configuredUses,
   type DoctorDeps,
   defaultDeps,
+  dockerReadiness,
   filledSecrets,
   judgeCallers,
   probeKey,
@@ -84,6 +85,35 @@ describe('reeval doctor checks', () => {
       dockerProblem('windows-containers', 'win32') ?? '',
       /running Windows containers, but reeval's sandboxes are Linux containers\. Switch Docker Desktop to Linux containers/,
     )
+    assert.match(
+      dockerProblem('missing', 'darwin') ?? '',
+      /^Docker isn't installed: there's no docker command on the PATH\. Install Docker Desktop \(https:\/\/docs\.docker\.com\/desktop\/setup\/install\/mac-install\/\).*, and try again\.$/,
+    )
+  })
+
+  test("reeval init's Docker line: ready, or what's wrong, the fix, then the next command", async () => {
+    const line = (
+      state: 'running' | 'down' | 'missing' | 'windows-containers',
+      platform = 'linux',
+    ) =>
+      dockerReadiness(
+        { dockerState: async () => state, platform: platform as NodeJS.Platform },
+        'npx reeval image build',
+      )
+    assert.equal(await line('running'), 'Docker is running: ready for npx reeval image build')
+    assert.equal(
+      await line('down'),
+      "Docker isn't running: start Docker Desktop, or the Docker service (sudo systemctl start docker), then run npx reeval image build",
+    )
+    assert.match(await line('down', 'darwin'), /^Docker isn't running: start Docker Desktop \(/)
+    assert.equal(
+      await line('missing'),
+      "Docker isn't installed: install Docker Engine (https://docs.docker.com/engine/install/) or Docker Desktop, then run npx reeval image build",
+    )
+    assert.match(
+      await line('windows-containers', 'win32'),
+      /^Docker is running Windows containers, .*Switch to Linux containers\), then run npx reeval image build$/,
+    )
   })
 
   test('the runtime, held to engines by its Node version', () => {
@@ -142,6 +172,10 @@ describe('reeval doctor checks', () => {
     assert.equal(off.running, false)
     assert.equal(off.checks[0]?.status, 'fail')
     assert.match(off.checks[0]?.fix ?? '', /start Docker/)
+    const absent = await checkDocker(real, deps({ dockerState: async () => 'missing' }))
+    assert.equal(absent.running, false)
+    assert.match(absent.checks[0]?.summary ?? '', /^isn't installed \(no docker command/)
+    assert.match(absent.checks[0]?.fix ?? '', /^install Docker Engine/)
     const small = await checkDocker(
       real,
       deps({ dockerCapacity: async () => ({ cpus: 2, memoryBytes: 2 * 1024 ** 3 }) }),

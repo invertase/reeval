@@ -57,6 +57,7 @@ export const FLAGS = {
   'no-cache': { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
+  bare: { type: 'boolean' },
   online: { type: 'boolean' },
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
@@ -107,16 +108,19 @@ const RUN_FLAGS: FlagName[] = [
 
 export const COMMANDS: Record<string, CommandSpec> = {
   init: {
-    flags: ['harness', 'yes', 'force', 'dry-run'],
+    flags: ['harness', 'yes', 'bare', 'force', 'dry-run'],
     positionals: 1,
     help: `
-  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
-                                eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx,
-                                grok-build or none (fake agent only); the config's harness, with a
-                                fake profile for no keys
+  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, an
+                                environment, an eval that runs in it, .gitignore entries and a
+                                package.json script; asks which agent, then checks Docker
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or
+                                grok-build: the config's harness
     -y, --yes                   Don't ask: take the defaults (--harness cursor)
-    --force                     Overwrite reeval.config.ts and the eval when they differ
+    --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
+                                or eval
+    --force                     Replace a reeval.config.ts init didn't write; no other file is ever
+                                overwritten
     --dry-run                   Print what it would create or change, and write nothing`,
   },
   doctor: {
