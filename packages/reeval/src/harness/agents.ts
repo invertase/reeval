@@ -378,7 +378,7 @@ export function piMcpServers(
       named.set(name, key)
       if (s.transport === 'sse') {
         throw new InfraError(
-          `pi has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+          `pi has no SSE MCP transport, so it can't use the ${key} server (mcp.sse): use mcp.http or mcp.stdio`,
         )
       }
       return s.transport === 'stdio'

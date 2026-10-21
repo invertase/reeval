@@ -455,6 +455,10 @@ test('pi names a plugin MCP server <plugin>_<server>, and refuses one named like
     refusedPlugins({ kind: 'opencode' } as never, [p], { skills: [], mcp: ['review_docs'] }),
     undefined,
   )
+  assert.throws(
+    () => piMcpServers({ 'review:events': { transport: 'sse', url: 'https://e.example.com' } }),
+    /pi has no SSE MCP transport, so it can't use the review:events server \(mcp\.sse\)/,
+  )
 })
 
 test('the frontmatter OpenCode takes survives a byte-order mark, an empty block and a non-string description', () => {
