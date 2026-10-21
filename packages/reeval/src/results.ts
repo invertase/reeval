@@ -27,12 +27,22 @@ export async function sweepStaging(root: string, keep?: string): Promise<void> {
   }
 }
 
-/** The run's remarks as remarks-only insights, or null; they never stop the run being written. */
-async function runRemarks(config: ResolvedConfig, record: RunRecord): Promise<RunInsights | null> {
+/**
+ * The run's remarks as remarks-only insights, each marked with whether the run's output prints it,
+ * or null; they never stop the run being written.
+ */
+async function runRemarks(
+  config: ResolvedConfig,
+  record: RunRecord,
+  verbose: boolean,
+): Promise<RunInsights | null> {
   try {
     const { remarksOf, remarksOnly } = await import('./remarks/index.ts')
+    const { shownRemarks } = await import('./ui/remarks.ts')
     const remarks = await remarksOf(config, record)
-    return remarks.length ? remarksOnly(record, remarks) : null
+    const shown = new Set(shownRemarks(remarks, record.runId, verbose).shown)
+    const marked = remarks.map((r) => ({ ...r, printed: shown.has(r) }))
+    return marked.length ? remarksOnly(record, marked) : null
   } catch (error) {
     process.stderr.write(`warning: no remarks for this run: ${(error as Error).message}\n`)
     return null
@@ -48,7 +58,9 @@ export async function writeScratchRun(
   landed?: () => void,
 ): Promise<WrittenRun & { record: RunRecord; insights: RunInsights | null }> {
   const { record, artifacts } = await assembleRun(input)
-  const insights = input.interrupted ? null : await runRemarks(input.ctx.config, record)
+  const insights = input.interrupted
+    ? null
+    : await runRemarks(input.ctx.config, record, (input.ctx.verbosity ?? 0) > 0)
   if (insights) artifacts.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}\n`))
   artifacts.set(
     'summary.md',
