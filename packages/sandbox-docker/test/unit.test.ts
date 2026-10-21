@@ -21,6 +21,7 @@ import {
   dockerignoreMatcher,
   installLayerTag,
   installScript,
+  sourceTreeHash,
 } from '../src/build-image.ts'
 import {
   docker,
@@ -1008,6 +1009,24 @@ describe('image recipes', () => {
       dockerfileTag(onReeval, 'cursor', 'sha256:a').tag,
       "REEVAL_BASE is the harness's image, so each harness builds its own",
     )
+  })
+
+  test("a plugin source's tree hash is what docker build sends from stdin: .dockerignore only, less .git", () => {
+    const dir = tmp()
+    writeFileSync(join(dir, 'make.mjs'), 'console.log(1)\n')
+    writeFileSync(join(dir, '.dockerignore'), 'node_modules\n')
+    mkdirSync(join(dir, '.git'))
+    const first = sourceTreeHash(dir)
+    writeFileSync(join(dir, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    assert.equal(sourceTreeHash(dir), first, '.git is left out')
+    mkdirSync(join(dir, 'node_modules'))
+    writeFileSync(join(dir, 'node_modules', 'x.js'), '')
+    assert.equal(sourceTreeHash(dir), first, '.dockerignore leaves files out')
+    // A Dockerfile from stdin has no <Dockerfile>.dockerignore: Docker reads .dockerignore.
+    writeFileSync(join(dir, 'Dockerfile.dockerignore'), 'make.mjs\n')
+    const own = sourceTreeHash(dir)
+    writeFileSync(join(dir, 'make.mjs'), 'console.log(2)\n')
+    assert.notEqual(sourceTreeHash(dir), own, 'a file Docker sends changes the hash')
   })
 
   test('install commands run in order from /, in one script, stopping at the first failure', () => {

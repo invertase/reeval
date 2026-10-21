@@ -611,7 +611,7 @@ export const PLUGIN_BUILDS_DIR = `${SANDBOX_ROOT}/plugin-builds`
  */
 export function sourceTreeHash(context: string): string {
   const hash = createHash('sha256')
-  for (const path of contextFiles(context, join(context, 'Dockerfile'))) {
+  for (const path of contextFiles(context, null)) {
     if (path === '.git' || path.startsWith('.git/')) continue
     const full = join(context, path)
     const stat = lstatSync(full)
@@ -677,7 +677,8 @@ export async function buildPluginLayer(
     `FROM ${parent.ref}`,
     'USER root',
     `COPY . ${src}`,
-    `RUN echo ${encoded} | base64 -d > /tmp/reeval-plugin-build.sh \\`,
+    // The tag's tree hash leaves `.git` out, so the commands mustn't see it either.
+    `RUN rm -rf ${src}/.git && echo ${encoded} | base64 -d > /tmp/reeval-plugin-build.sh \\`,
     `  && if id -u ${SANDBOX_USER} >/dev/null 2>&1; then export HOME="${home}"; fi \\`,
     '  && bash /tmp/reeval-plugin-build.sh && rm /tmp/reeval-plugin-build.sh \\',
     `  && mkdir -p ${dir} && cp -a ${q(`${src}/${b.path}`)}/. ${dir}/ && rm -rf ${src} ${dir}/.git \\`,
@@ -755,11 +756,17 @@ export function dockerignoreMatcher(text: string): (path: string) => boolean {
   }
 }
 
-/** Files in the build context that `docker build` would send, sorted, relative to `context`. */
-export function contextFiles(context: string, dockerfile: string): string[] {
-  const own = [`${dockerfile}.dockerignore`, join(context, '.dockerignore')].find(existsSync)
+/**
+ * Files in the build context that `docker build` would send, sorted, relative to `context`. A
+ * Dockerfile read from stdin (`dockerfile` null) has no `<Dockerfile>.dockerignore` of its own.
+ */
+export function contextFiles(context: string, dockerfile: string | null): string[] {
+  const own = [
+    ...(dockerfile ? [`${dockerfile}.dockerignore`] : []),
+    join(context, '.dockerignore'),
+  ].find(existsSync)
   const ignored = dockerignoreMatcher(own ? readFileSync(own, 'utf8') : '')
-  const always = new Set([relative(context, dockerfile), '.dockerignore'])
+  const always = new Set([...(dockerfile ? [relative(context, dockerfile)] : []), '.dockerignore'])
   const files: string[] = []
   const walk = (rel: string) => {
     for (const entry of readdirSync(join(context, rel), { withFileTypes: true })) {
