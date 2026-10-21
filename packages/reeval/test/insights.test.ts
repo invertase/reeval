@@ -1704,7 +1704,9 @@ evaluate('asks', { runs: 4, compare: { baseline: base, variants: [skilled], ques
     const { run } = readRun(p.dir)
     assert.match(
       r.stdout,
-      new RegExp(`insights skipped \\(Ctrl-C\\): reeval analyze ${run.runId} --insights to write them`),
+      new RegExp(
+        `insights skipped \\(Ctrl-C\\): reeval analyze ${run.runId} --insights to write them`,
+      ),
     )
     assert.equal(run.status, 'complete')
     assert.notEqual(scratchInsights(p.dir)?.model, 'fake')
