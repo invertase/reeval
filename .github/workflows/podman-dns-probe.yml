@@ -20,6 +20,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
+      - name: rootless Podman with the cpu, memory and pids controllers
+        run: |
+          sudo mkdir -p /etc/systemd/system/user@.service.d
+          printf '[Service]\nDelegate=cpu cpuset io memory pids\n' |
+            sudo tee /etc/systemd/system/user@.service.d/delegate.conf
+          sudo systemctl daemon-reload
+          sudo loginctl enable-linger "$(id -u)"
+          sudo systemctl restart "user@$(id -u).service"
+          podman system migrate
       - run: pnpm build
       - name: reeval's image, in Podman's store
         run: |
