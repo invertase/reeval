@@ -17,7 +17,7 @@ import {
   pluginServerName,
 } from '../environment/plugins.ts'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
-import { InfraError } from '../sandbox/types.ts'
+import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type {
   AgentHarnessDescriptor,
   EnvironmentLayer,
@@ -47,10 +47,15 @@ export type Layout = {
   pluginPlacement: 'flat' | 'namespaced'
   /**
    * Files under `~/` that make the agent load the session's plugins, written before it starts;
-   * unset for an agent pointed at them some other way (launch arguments, an install step).
+   * unset for an agent pointed at them some other way (launch arguments, an install step). One
+   * marked `merge` is a JSON object whose keys are merged into the file an environment's `files`
+   * may already have put there, rather than replacing it.
    */
-  pluginFiles?: (plugins: readonly PlacedPlugin[]) => Array<{ path: string; content: string }>
+  pluginFiles?: (plugins: readonly PlacedPlugin[]) => PluginFile[]
 }
+
+/** A file a layout writes for the session's plugins. */
+export type PluginFile = { path: string; content: string; merge?: true }
 
 /** What reeval needs to know about a real agent; everything else is the same for all of them. */
 export type Agent = Layout & {
@@ -442,7 +447,7 @@ export const CLAUDE_PLUGIN_MARKETPLACE = 'reeval'
  * they were copied to, listing each, and each enabled as `<plugin>@reeval`. Claude Code installs
  * and loads them as it starts, since the bridge leaves every settings source on.
  */
-export function claudePluginFiles(plugins: readonly PlacedPlugin[]) {
+export function claudePluginFiles(plugins: readonly PlacedPlugin[]): PluginFile[] {
   const [first] = plugins
   if (!first) return []
   const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
@@ -463,8 +468,49 @@ export function claudePluginFiles(plugins: readonly PlacedPlugin[]) {
   }
   return [
     { path: `${PLUGIN_DIR}/.claude-plugin/marketplace.json`, content: json(marketplace) },
-    { path: '~/.claude/settings.json', content: json(settings) },
+    { path: '~/.claude/settings.json', content: json(settings), merge: true },
   ]
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/**
+ * Writes the layout's plugin files into the sandbox and returns their paths. A `merge` file's keys
+ * go into the JSON object already at its path (an object-valued key merged one level down), so
+ * settings an environment's `files` wrote there stay.
+ */
+export async function writePluginFiles(
+  sandbox: Sandbox,
+  layout: Layout,
+  plugins: readonly PlacedPlugin[],
+): Promise<string[]> {
+  const written: string[] = []
+  for (const f of layout.pluginFiles?.(plugins) ?? []) {
+    const existing = f.merge ? await sandbox.readFile(f.path) : null
+    let content = f.content
+    if (existing?.trim()) {
+      let base: unknown
+      try {
+        base = JSON.parse(existing)
+      } catch {}
+      if (!isObject(base)) {
+        throw new InfraError(
+          `${f.path} isn't a JSON object, so reeval can't enable the session's plugins in it: write it as one in files, or leave it out`,
+        )
+      }
+      const ours = JSON.parse(f.content) as Record<string, unknown>
+      const merged: Record<string, unknown> = { ...base }
+      for (const [k, v] of Object.entries(ours)) {
+        const was = base[k]
+        merged[k] = isObject(v) && isObject(was) ? { ...was, ...v } : v
+      }
+      content = `${JSON.stringify(merged, null, 2)}\n`
+    }
+    await sandbox.writeFile(f.path, content)
+    written.push(f.path)
+  }
+  return written
 }
 
 /**

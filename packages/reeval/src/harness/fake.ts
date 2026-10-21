@@ -4,7 +4,7 @@ import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
-import { agentMcp, layoutOf } from './agents.ts'
+import { agentMcp, layoutOf, writePluginFiles } from './agents.ts'
 import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
@@ -28,9 +28,8 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       if (hangs === true || starts++ < (hangs ?? 0)) return new Promise<never>(() => {})
       const layout = layoutOf(descriptor)
       const mcp = agentMcp(layout, all, plugins)
-      for (const f of layout.pluginFiles?.(plugins) ?? []) {
-        await sandbox.writeFile(f.path, f.content)
-        debugLog('env', `plugin settings → ${f.path} by the fake agent`)
+      for (const path of await writePluginFiles(sandbox, layout, plugins)) {
+        debugLog('env', `plugin settings → ${path} by the fake agent`)
       }
       const dir = `~/${layout.harnessSkillDir}`
       for (const skill of skills) {
