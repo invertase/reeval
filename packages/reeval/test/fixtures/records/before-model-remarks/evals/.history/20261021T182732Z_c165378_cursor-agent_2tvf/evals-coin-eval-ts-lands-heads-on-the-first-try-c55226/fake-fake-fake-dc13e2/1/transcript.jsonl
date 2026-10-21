@@ -1,4 +1,0 @@
-{"ts":"2026-10-21T18:27:33.095Z","atMs":0,"turn":0,"type":"prompt","text":"flip the coin"}
-{"turn":0,"ts":"2026-10-21T18:27:33.095Z","atMs":0,"type":"text","text":"Working on: flip the coin","durationMs":0}
-{"turn":0,"ts":"2026-10-21T18:27:33.095Z","atMs":0,"type":"text","text":"Done.","durationMs":0}
-{"ts":"2026-10-21T18:27:33.096Z","atMs":1,"turn":0,"type":"turn-end","status":"completed","durationMs":1}
