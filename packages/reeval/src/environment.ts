@@ -546,23 +546,20 @@ function pluginBuild(what: string, build: unknown): PluginBuild {
         `${what}: build.run is a shell command or a list of them (got ${JSON.stringify(run)})`,
       )
     }
-    if (cwd !== undefined) {
-      const bad =
-        typeof cwd !== 'string' ||
-        !cwd ||
-        cwd.includes('\\') ||
-        cwd.startsWith('/') ||
-        (cwd !== '.' && cwd.split('/').some((p) => p === '..' || p === '.'))
-      if (bad) {
-        throw new DefinitionError(
-          `${what}: build.cwd is a directory relative to the source's root, with forward slashes and no .., or '.' for the root (got ${JSON.stringify(cwd)})`,
-        )
-      }
+    const dir = typeof cwd === 'string' ? cwd.replace(/(.)\/+$/, '$1') : cwd
+    if (
+      dir !== undefined &&
+      (typeof dir !== 'string' ||
+        !dir ||
+        dir.includes('\\') ||
+        dir.startsWith('/') ||
+        (dir !== '.' && dir.split('/').some((p) => p === '..' || p === '.' || p === '')))
+    ) {
+      throw new DefinitionError(
+        `${what}: build.cwd is a directory relative to the source's root, with forward slashes and no .., or '.' for the root (got ${JSON.stringify(cwd)})`,
+      )
     }
-    return {
-      run: copy(run as string | string[]),
-      ...(cwd !== undefined ? { cwd: (cwd as string).replace(/\/+$/, '') || '.' } : {}),
-    }
+    return { run: copy(run as string | string[]), ...(dir !== undefined ? { cwd: dir } : {}) }
   }
   throw new DefinitionError(
     `${what}: build is a shell command, a list of them, or { run, cwd } (got ${JSON.stringify(build)})`,

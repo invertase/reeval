@@ -13,6 +13,7 @@ import type {
   PluginPart,
   PluginRecord,
   PluginSource,
+  SandboxDescriptor,
   SecretTemplate,
   SkillSource,
 } from '../types.ts'
@@ -424,6 +425,20 @@ export function buildSteps(build: PluginBuild): { run: string[]; cwd: string | n
 /** The layered plugins with a build: what preflight builds into the attempt's image, in order. */
 export const builtPlugins = (layers: readonly EnvironmentLayer[]): PluginSource[] =>
   layeredPlugins(layers).filter((p) => p.build !== undefined)
+
+/**
+ * Why a plugin's build can't run in `sandbox`, or undefined: a build runs in a Docker image
+ * layer. `name` is the plugin's, once its manifest is read; else the call names it.
+ */
+export function buildRefusal(
+  p: PluginSource,
+  sandbox: SandboxDescriptor,
+  name?: string,
+  root?: string,
+): string | undefined {
+  if (p.build === undefined || sandbox.kind === 'docker') return undefined
+  return `${name ? `plugin "${name}"` : pluginCall(p, root)} has a build, which runs in a Docker image layer: use docker()`
+}
 
 /** ` + 2 plugin builds` in an image's label, or nothing without one. */
 export const pluginBuildsLabel = (plugins: readonly unknown[] = []) =>

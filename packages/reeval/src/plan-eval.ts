@@ -8,6 +8,7 @@ import { parseDuration } from './duration.ts'
 import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
 import {
+  buildRefusal,
   builtPlugins,
   fetchesAtStart,
   layeredPlugins,
@@ -261,13 +262,8 @@ function planPlugins(
     const call = pluginCall(source, root)
     const p = localPlugin(source, root)
     if (p instanceof PluginProblem) return { refusal: p.message, notes: [], labels }
-    if (source.build !== undefined && planned.sandbox.kind !== 'docker') {
-      return {
-        refusal: `${p ? `plugin "${p.name}"` : call} has a build, which runs in a Docker image layer: use docker()`,
-        notes: [],
-        labels,
-      }
-    }
+    const build = buildRefusal(source, planned.sandbox, p?.name, root)
+    if (build) return { refusal: build, notes: [], labels }
     if (p) read.push(p)
     else unread.push(call)
     labels.push(p ? `${p.name} (${p.kept.join(', ')})` : pluginSourceLabel(source, root))
