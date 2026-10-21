@@ -66,7 +66,11 @@ failing row, every one citing the facts. They never change a verdict or exit cod
 they run to the end (Ctrl-C skips the rest, keeping the exit code); `--no-insights` skips them.
 `reeval analyze <run> --insights` writes them for a run that has none, or finishes
 the evals a stopped, failed or over-budget run left out. Insights use
-`analysis.model` only, never the judge's model.
+`analysis.model` only, never the judge's model; `reeval init` sets it to
+`google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`, or `AI_GATEWAY_API_KEY`). Without the
+key a run prints `insights skipped: …` and its facts; `analysis.insights: false` turns them off.
+A sentence that cites no fact, or a count, quote or effect word its facts don't hold, is dropped
+before it prints (`-v` lists each with its reason), and a run headline prints above the tally.
 
 `reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`
 and `slow-mcp-start` (concerns, at most three), and with `-v` `too-few-tries` and

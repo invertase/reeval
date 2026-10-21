@@ -128,9 +128,9 @@ The effect reads `helped`, `made it worse` or `can't tell yet`, from the same [i
       LangChain               2 of 2
 ```
 
-With `analysis.model` set, `reeval run` writes the run's [insights](/reference/cli/analyze#insights) at its end (`reeval analyze <run> --insights` writes them for a run without), and the blocks, `summary.md` and `reeval show` fill the slots each layout opens: the answer under the heading, a sentence under a failing case, a failing harness or an arm that failed or moved, findings under a change, and a headline before the tally. The fact rows stay as they were; every sentence cites them and is checked before it's kept.
+With `analysis.model` set, `reeval run` writes the run's [insights](/concepts/insights) at its end, and the blocks, `summary.md` and `reeval show` fill the slots each layout opens: the answer under the heading, a sentence under a failing case, a failing harness or an arm that failed or moved, findings under a change, and a headline before the tally. The fact rows stay as they were; every sentence cites them and is checked before it's kept.
 
-An eval the model reads as choosing a tool gets its own layout: the tool it asks about counted on each case, and on a miss the tools the agent named.
+An eval the model reads as choosing a tool gets its own layout: the tool it asks about counted on each case, and on a miss the tools the agent named. After the tally, [remarks](/concepts/insights#remarks) list what reeval noticed about the evals themselves, with or without a model.
 
 ## Grouped or stream
 
@@ -238,6 +238,9 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ## Next
 
 <CardGroup cols={2}>
+  <Card title="Insights and remarks" icon="message" href="/concepts/insights">
+    The sentences in the blocks, and the remarks after the tally.
+  </Card>
   <Card title="Concurrency" icon="layer-group" href="/concepts/concurrency">
     How many attempts run at once, and in what order.
   </Card>
