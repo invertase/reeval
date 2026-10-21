@@ -1390,6 +1390,53 @@ describe('reeval run writes insights at its end', () => {
     }
   })
 
+  test('reeval analyze --insights keeps the remarks when it writes or finishes, and a refused one leaves the file', async () => {
+    const p = await project('run-insights-remarks-analyze', {
+      'reeval.config.ts': runConfig(),
+      'evals/skill.eval.ts': TOO_FEW_TRIES,
+    })
+    assert.equal((await runCli(p.dir, ['run', '--no-insights'])).code, 0)
+    const { run } = readRun(p.dir)
+    const file = join(p.dir, '.reeval/runs', run.runId, 'insights.json')
+    const remarks = scratchInsights(p.dir)?.remarks
+    assert.equal(remarks?.length, 1)
+    const written = await runCli(p.dir, ['analyze', run.runId, '--insights'])
+    assert.equal(written.code, 0, written.stdout + written.stderr)
+    const full = scratchInsights(p.dir)
+    assert.equal(full?.model, 'fake')
+    assert.deepEqual(full?.remarks, remarks)
+
+    assert.ok(full)
+    const stopped: RunInsights = {
+      ...full,
+      headline: null,
+      evals: [],
+      stopped: { signal: 'SIGINT', skipped: full.evals.map((e) => e.evalId) },
+    }
+    writeFileSync(file, `${JSON.stringify(stopped, null, 2)}\n`)
+    const finished = await runCli(p.dir, ['analyze', run.runId, '--insights'])
+    assert.equal(finished.code, 0, finished.stdout + finished.stderr)
+    assert.match(finished.stderr, /finishing insights/)
+    assert.equal(scratchInsights(p.dir)?.evals.length, 1)
+    assert.deepEqual(scratchInsights(p.dir)?.remarks, remarks)
+
+    const secret = `token ghp_${'a1B2'.repeat(9)}`
+    const leaky = `${JSON.stringify(
+      { ...stopped, remarks: stopped.remarks.map((x) => ({ ...x, text: secret })) },
+      null,
+      2,
+    )}\n`
+    writeFileSync(file, leaky)
+    const refused = await runCli(p.dir, ['analyze', run.runId, '--insights'])
+    assert.notEqual(refused.code, 0)
+    assert.match(refused.stderr, /looks like it contains a secret/)
+    assert.equal(readFileSync(file, 'utf8'), leaky)
+    assert.deepEqual(
+      readdirSync(join(p.dir, '.reeval/runs', run.runId)).filter((f) => f.includes('insights')),
+      ['insights.json'],
+    )
+  })
+
   test('a small analysis.maxTokens skips the lowest-priority evals; the failing one keeps its insight', async () => {
     const p = await project('run-insights-budget', {
       'reeval.config.ts': runConfig({ analysis: 'maxTokens: 6000,' }),
