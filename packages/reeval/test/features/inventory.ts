@@ -69,6 +69,8 @@ const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}
 const grokAdapter = (file: string, name: string) =>
   `harness-grok-build/test/${file}.test.ts › ${name}`
 const piAdapter = (file: string, name: string) => `harness-pi/test/${file}.test.ts › ${name}`
+const antigravityAdapter = (file: string, name: string) =>
+  `harness-antigravity/test/${file}.test.ts › ${name}`
 const codexAdapter = (file: string, name: string) => `harness-codex/test/${file}.test.ts › ${name}`
 const fxAdapter = (file: string, name: string) => `harness-fx/test/${file}.test.ts › ${name}`
 
@@ -529,6 +531,32 @@ export const inventory: InventoryFeature[] = [
       'contract › plugin hook ran',
       'contract › plugin subagent available',
       'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
+    ],
+  },
+  {
+    id: 'harness.plugins.antigravity-cursor',
+    area: 'Environments',
+    name: 'Plugins on Antigravity (`agy plugin install` as the session starts, hooks translated, rules always on) and Cursor (rules, subagents, commands and hooks unpacked into the workspace’s `.cursor/` before the snapshot, MCP servers in its own config): every part, the hook events each runs, clashes refused',
+    fixtures: ['harness/antigravity-plugin', 'harness/cursor-plugin'],
+    plan: ['plugins/antigravity-and-cursor'],
+    tests: [
+      plugin('Cursor and Antigravity load every part'),
+      plugin('on Cursor, two plugins’ subagents or commands unpacked to one file clash'),
+      plugin('unpackPlugins writes a flat agent’s rules, subagents, commands and hooks'),
+      plugin('cursorHookMatcher maps Claude Code tool names on the tool events only'),
+      planTest('Cursor refuses a plugin item that clashes where it unpacks or places it'),
+      antigravityAdapter('harness', 'plugins are installed with agy plugin install'),
+      antigravityAdapter('harness', 'a plugin agy refuses to install fails the session start'),
+      antigravityAdapter('unit', 'hooks: a flat event takes its handlers'),
+      antigravityAdapter('unit', 'install: agy plugin install, then names on skills'),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin hook ran',
+      'contract › plugin subagent available',
+      'contract › plugin rules read',
       'contract › plugin hermetic: nothing undeclared loaded or contacted',
     ],
   },
