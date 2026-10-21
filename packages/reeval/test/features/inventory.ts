@@ -1882,6 +1882,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/insights.test.ts › canary: a sentence citing a fact it was never shown is dropped',
       'reeval/test/insights.test.ts › canary: a cite to an id the model was never shown is dropped',
       'reeval/test/insights.test.ts › the model cites short ids, and insights.json keeps the fact paths',
+      'reeval/test/insights.test.ts › canary: ids never reach the text',
       'reeval/test/insights.test.ts › -v prints each sentence the checks removed and why',
       'reeval/test/insights.test.ts › canary: a banned word is asked for once more, then dropped',
       'reeval/test/insights.test.ts › canary: a sentence on a row the layout keeps closed',

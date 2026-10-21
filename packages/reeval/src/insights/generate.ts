@@ -22,6 +22,7 @@ import {
   type ModelInsightInput,
   modelHeadlineInput,
   modelInput,
+  withoutIdLists,
 } from './input.ts'
 import {
   CLASSIFY_PROMPT,
@@ -114,6 +115,7 @@ async function ask<S extends z.ZodType>(
 
 const sentenceFrom = <S extends Sentence>(s: S, ids: Ids): S => ({
   ...s,
+  text: withoutIdLists(s.text),
   cites: s.cites.map(ids.cite),
 })
 

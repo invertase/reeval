@@ -357,6 +357,14 @@ export type Ids = {
 }
 
 const TRANSCRIPT_ID = /^(A\d+)#L(\d+)$/
+const ID = String.raw`\b[FA]\d+(?:#L\d+)?\b`
+const ID_LIST = new RegExp(String.raw`\s*[([]${ID}(?:\s*(?:,|;|and)\s*${ID})*[)\]]`, 'g')
+
+/** A short id left in a sentence's text, which the reader would see. */
+export const ID_IN_TEXT = new RegExp(ID)
+
+/** The text without the bracketed id lists models append as citations (`… each (F2, F7).`). */
+export const withoutIdLists = (text: string): string => text.replace(ID_LIST, '')
 
 /**
  * The eval's input with a short id for each fact (`F1`…) and attempt (`A1`…), and the map back:

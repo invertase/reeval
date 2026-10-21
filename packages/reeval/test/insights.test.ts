@@ -149,6 +149,23 @@ describe('the insights validator', () => {
     for (const n of x.namedTools ?? []) assert.match(n.attempt, /#\d+$/)
   })
 
+  test('canary: ids never reach the text: a trailing id list is cut, an id inside is dropped', async () => {
+    const answerText = (text: string): Fake =>
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights' && a.answer ? { ...a, answer: { ...a.answer, text } } : a,
+      )
+    const trailing = await generate(answerText('Yes: every try passed (F1, F2 and A1#L3).'))
+    assert.equal(insightOf(trailing, measure).answer?.text, 'Yes: every try passed.')
+    assert.equal(trailing.validation.dropped, 0)
+    const inside = await generate(answerText('F1 says every try passed.'))
+    assert.equal(insightOf(inside, measure).answer, null)
+    assert.equal(inside.validation.regenerated, 1)
+    assert.deepEqual(
+      inside.validation.drops?.map((d) => d.reason),
+      ['names F1 in its text; ids go in cites only'],
+    )
+  })
+
   test('canary: a sentence citing a fact it was never shown is dropped', async () => {
     const doc = await generate(
       recipeWith(measure.path, (input, a) =>

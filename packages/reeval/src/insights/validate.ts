@@ -6,7 +6,13 @@
 // `banned`: the caller asks once more, and drops it if it comes back the same.
 import { unverifiedNumbers } from '../analysis/validate.ts'
 import type { EvalInsight, Sentence } from '../view/insights.ts'
-import { EFFECT_WORDS, type HeadlineInput, type InsightInput, type InsightSlots } from './input.ts'
+import {
+  EFFECT_WORDS,
+  type HeadlineInput,
+  ID_IN_TEXT,
+  type InsightInput,
+  type InsightSlots,
+} from './input.ts'
 import type { HeadlineOutput, InsightsOutput } from './schema.ts'
 
 /** The most words a sentence may have. */
@@ -128,6 +134,9 @@ export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdic
     if (t === null) return { dropped: `cites ${cite}, which isn't a fact it was shown` }
     texts.push(t)
   }
+  const id = ID_IN_TEXT.exec(text)?.[0]
+  if (id && !c.vocabulary.includes(normal(id)))
+    return { banned: `names ${id} in its text; ids go in cites only` }
   const parts = sentencesOf(text)
   if (parts.length > maxSentences) {
     return { dropped: `is ${parts.length} sentences, more than ${maxSentences}` }

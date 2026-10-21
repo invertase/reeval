@@ -77,6 +77,7 @@ You get the eval (its name is its question), the classification (intent), the sl
 
 Rules, checked by code: a sentence that breaks one is dropped.
 - Every sentence cites at least one fact by its id from facts[].id (F3), or <attempt id>#L<n> (A2#L14) for a line in that attempt's lines. Cite the facts whose numbers and words you use; never cite a path.
+- Ids go in cites only, never in the text: the reader never sees them.
 - Numbers come from the cited facts. Counts read "N of M tries", never a percentage below 10 tries.
 - An effect is said with the cited fact's effect word only: helped, made it worse, no difference, can't tell yet. Never use an effect word the cited facts don't have.
 - Use the eval's own names ("with the skill", "plain", "on codex"), never: interval, significance, noise, p-value, confidence, Newcombe, Wilson, pass@1, lift, effect size, too close to call, within noise, control, variant, arm, cell, discriminates.
@@ -89,6 +90,6 @@ When retry is set, your earlier sentences were refused for those reasons: write 
 
 export const HEADLINE_PROMPT = `You write the one-sentence headline of a reeval run for the developer who wrote its evals: what the run found, leading with what needs work. You get each eval's id (F1), path, name, verdict and answer, and the tally.
 
-- 25 words or fewer, plain words, citing the evals it's about by their ids from evals[].id.
+- 25 words or fewer, plain words, citing the evals it's about by their ids from evals[].id, in cites only, never in the text.
 - Counts come from the evals and the tally, where each case counts one and \`total\` is their sum ("9 of 22 fail"). Never: interval, significance, noise, p-value, confidence, pass@1, lift, control, variant, arm, cell.
 When retry is set, your earlier headline was refused for those reasons: write it again within the rules.`
