@@ -219,7 +219,9 @@ REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review t
 **The harness contract** (`test/contract.test.ts`, [its README](./packages/reeval/test/contract/README.md))
 runs one reeval project on each real harness (the rows in `test/support/harnesses.ts`: Cursor,
 Antigravity, Claude Code, OpenCode, Goose, pi, Codex, fx and Grok Build) and checks the same behaviours on each: a placed skill is used, rules are
-read, a stdio MCP server is called, a file edit and a command are in the transcript, tokens and the
+read, a stdio MCP server is called, a file edit and a command are in the transcript, every tool the
+CLI calls is in its adapter's catalog and the file edits, reads and commands land as those kinds
+(not as unknown tools under a renamed native name), tokens and the
 served model are recorded, the real key is nowhere in the container, `deny-all` with the automatic
 hosts works and a blocked host is refused and recorded, the native stream format is known, and
 nothing is left behind. Each behaviour is an eval, a canary that must fail and a check of the
