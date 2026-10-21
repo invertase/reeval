@@ -32,6 +32,7 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
+| [../eval-rubric/SKILL.md](../eval-rubric/SKILL.md) | A `Remarks:` block after a run, or reviewing an eval's name, prompts and judge questions: one section per remark kind, with its fix |
 
 Use reeval's terms in code and messages: eval (`evaluate`), attempt (one run of a cell;
 `runs: n`), harness (`cursor()`, …), cell (harness × environment × sandbox), control and variant,
@@ -276,7 +277,10 @@ or `can't tell yet`, and failed checks with their messages; `-v` adds intervals.
 (`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
 `1 run error` and fails the run), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
 model never stands in). `summary.md` and `reeval show` print the same blocks;
-`reeval analyze <run> --insights` adds each eval's answer to them for `reeval show`.
+`reeval analyze <run> --insights` adds each eval's answer to them for `reeval show`. A
+`Remarks:` block lists what's wrong with the evals themselves, each with the line to change: act on
+it, since a kind the project rarely acts on stops printing. The eval rubric
+([../eval-rubric/SKILL.md](../eval-rubric/SKILL.md)) explains each kind.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP
