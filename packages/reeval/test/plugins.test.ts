@@ -5,6 +5,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { ANTIGRAVITY_HOOK_EVENTS } from '@reeval/harness-antigravity'
 import {
   fetchesAtStart,
   PluginProblem,
@@ -17,10 +18,12 @@ import {
   AGENTS,
   agentMcp,
   claudePluginFiles,
+  cursorHookMatcher,
   LAYOUTS,
   refusedPlugins,
   writePluginFiles,
 } from '../src/harness/agents.ts'
+import { unpackPlugins } from '../src/harness/unpack.ts'
 import type { PluginPart } from '../src/types.ts'
 
 const write = (root: string, files: Record<string, string>) => {
@@ -256,12 +259,12 @@ test('a real harness without plugin parts refuses every plugin', () => {
     )
   }
   assert.equal(
-    refusedPlugins({ kind: 'cursor' } as never, [], { skills: [], mcp: [] }, [
+    refusedPlugins({ kind: 'goose' } as never, [], { skills: [], mcp: [] }, [
       "plugin.git('github:acme/x')",
     ]),
-    "Cursor can't load plugins yet: leave plugin.git('github:acme/x') out of this cell",
+    "Goose can't load plugins yet: leave plugin.git('github:acme/x') out of this cell",
   )
-  assert.equal(refusedPlugins({ kind: 'cursor' } as never, [], { skills: [], mcp: [] }), undefined)
+  assert.equal(refusedPlugins({ kind: 'goose' } as never, [], { skills: [], mcp: [] }), undefined)
   assert.equal(refusedPlugins({ kind: 'fake' }, [p], { skills: [], mcp: [] }), undefined)
 })
 
@@ -290,6 +293,146 @@ test('Claude Code and Grok Build load every part but rules, and refuse a plugin 
     }),
     "The fake agent with Claude Code's layout can't load the review plugin's rules (rules/): use only: ['skills', 'agents', 'commands', 'hooks', 'mcp'], or leave the plugin out of this cell",
   )
+})
+
+test('Cursor and Antigravity load every part, and refuse hook events they don’t run', () => {
+  const whole = readPlugin(review(), 'x')
+  const notified = readPlugin(
+    write(review(), {
+      'hooks/hooks.json': JSON.stringify({
+        hooks: { Notification: [{ hooks: [{ type: 'command', command: 'notify' }] }] },
+      }),
+    }),
+    'x',
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'cursor' } as never, [whole], { skills: [], mcp: [] }),
+    undefined,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'cursor' } as never, [notified], { skills: [], mcp: [] }),
+    "Cursor can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: ['skills', 'agents', 'commands', 'mcp', 'rules'], or leave the plugin out of this cell",
+  )
+  const kept = readPlugin(review(), 'x', ['skills', 'agents', 'commands', 'hooks', 'rules'])
+  assert.equal(
+    refusedPlugins({ kind: 'antigravity' } as never, [kept], { skills: [], mcp: [] }),
+    undefined,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'antigravity' } as never, [notified], { skills: [], mcp: [] }),
+    "Antigravity can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, PreToolUse, PostToolUse, Stop hooks; use only: ['skills', 'agents', 'commands', 'mcp', 'rules'], or leave the plugin out of this cell",
+  )
+  // agy installs the plugin's servers itself, from its .mcp.json, as Claude Code does.
+  assert.equal(
+    refusedPlugins({ kind: 'antigravity' } as never, [whole], { skills: [], mcp: [] }),
+    `Antigravity loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills', 'agents', 'commands', 'hooks', 'rules'] and declare the server in mcp, where reeval fills it in`,
+  )
+  // Cursor takes them in its own MCP config, where reeval fills the secret in.
+  assert.equal(LAYOUTS.cursor.pluginPlacement, 'flat')
+  assert.deepEqual(LAYOUTS.antigravity.pluginHookEvents, Object.keys(ANTIGRAVITY_HOOK_EVENTS))
+})
+
+test('on Cursor, two plugins’ subagents or commands unpacked to one file clash', () => {
+  const other = (parts: Record<string, string>) =>
+    readPlugin(write(tmp(), { '.claude-plugin/plugin.json': '{"name":"audit"}', ...parts }), 'y')
+  const p = readPlugin(review(), 'x', ['agents', 'commands'])
+  assert.equal(
+    refusedPlugins({ kind: 'cursor' } as never, [p, other({ 'agents/reviewer.md': 'Audit.\n' })], {
+      skills: [],
+      mcp: [],
+    }),
+    `the audit plugin's subagent "reviewer" and the review plugin's would both be placed at .cursor/agents/reviewer.md: rename one, or narrow one with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'cursor' } as never, [p, other({ 'commands/review.md': 'Audit.\n' })], {
+      skills: [],
+      mcp: [],
+    }),
+    `the audit plugin's command "review" and the review plugin's would both be placed at .cursor/commands/review.md: rename one, or narrow one with only`,
+  )
+  // Antigravity keeps each plugin in its own directory, so the same names don't meet.
+  assert.equal(
+    refusedPlugins(
+      { kind: 'antigravity' } as never,
+      [p, other({ 'agents/reviewer.md': 'Audit.\n' })],
+      { skills: [], mcp: [] },
+    ),
+    undefined,
+  )
+})
+
+test('unpackPlugins writes a flat agent’s rules, subagents, commands and hooks', () => {
+  const dir = write(review(), {
+    'rules/style.md': 'Write small functions.\n',
+    'rules/pinned.mdc': '---\nglobs: "*.ts"\n---\n\nTyped.\n',
+    'hooks/hooks.json': JSON.stringify({
+      hooks: {
+        SessionStart: [{ hooks: [{ type: 'command', command: `${ref('CLAUDE_PLUGIN_ROOT')}/s` }] }],
+        PreToolUse: [
+          { matcher: 'Bash|Edit', hooks: [{ type: 'command', command: 'check', timeout: 5 }] },
+          { matcher: 'Glob', hooks: [{ type: 'command', command: 'never' }] },
+          { matcher: 'mcp__docs__search', hooks: [{ type: 'command', command: 'mcp' }] },
+        ],
+      },
+    }),
+  })
+  const p = readPlugin(dir, 'x')
+  const placed = { name: p.name, dir: '/home/reeval/.reeval/plugins/review', parts: p.kept }
+  const own = JSON.stringify({ hooks: { stop: [{ type: 'command', command: 'own' }] } })
+  const unpack = LAYOUTS.cursor.pluginUnpack
+  assert.ok(unpack)
+  const files = Object.fromEntries(
+    unpackPlugins([{ ...placed, files: pluginFiles(p) }], unpack, own).map((f) => [
+      f.path,
+      f.content,
+    ]),
+  )
+  assert.deepEqual(Object.keys(files).sort(), [
+    '.cursor/agents/reviewer.md',
+    '.cursor/commands/review.md',
+    '.cursor/hooks.json',
+    '.cursor/rules/review-pinned.mdc',
+    '.cursor/rules/review-style.mdc',
+  ])
+  assert.equal(
+    files['.cursor/rules/review-style.mdc'],
+    '---\nalwaysApply: true\n---\n\nWrite small functions.\n',
+  )
+  assert.equal(files['.cursor/rules/review-pinned.mdc'], '---\nglobs: "*.ts"\n---\n\nTyped.\n')
+  assert.equal(files['.cursor/agents/reviewer.md'], 'Review the diff.\n')
+  assert.deepEqual(JSON.parse(files['.cursor/hooks.json'] ?? ''), {
+    version: 1,
+    hooks: {
+      stop: [{ type: 'command', command: 'own' }],
+      sessionStart: [{ type: 'command', command: '/home/reeval/.reeval/plugins/review/s' }],
+      preToolUse: [
+        { type: 'command', command: 'check', timeout: 5, matcher: 'Shell|Write' },
+        { type: 'command', command: 'mcp', matcher: 'MCP:search' },
+      ],
+    },
+  })
+  // Only the parts the plugin keeps.
+  const narrowed = readPlugin(dir, 'x', ['skills', 'rules'])
+  assert.deepEqual(
+    unpackPlugins([{ ...placed, parts: narrowed.kept, files: pluginFiles(narrowed) }], unpack).map(
+      (f) => f.path,
+    ),
+    ['.cursor/rules/review-pinned.mdc', '.cursor/rules/review-style.mdc'],
+  )
+  assert.throws(
+    () => unpackPlugins([{ ...placed, files: pluginFiles(p) }], unpack, '{'),
+    /The workspace's \.cursor\/hooks\.json isn't valid JSON/,
+  )
+})
+
+test('cursorHookMatcher maps Claude Code tool names on the tool events only', () => {
+  assert.equal(cursorHookMatcher('PreToolUse', 'Bash'), 'Shell')
+  assert.equal(cursorHookMatcher('PostToolUse', 'Edit|Write'), 'Write')
+  assert.equal(cursorHookMatcher('PreToolUse', 'Glob'), null)
+  assert.equal(cursorHookMatcher('PreToolUse', 'mcp__docs__search_all'), 'MCP:search_all')
+  assert.equal(cursorHookMatcher('PreToolUse', '*'), undefined)
+  assert.equal(cursorHookMatcher('PreToolUse', undefined), undefined)
+  assert.equal(cursorHookMatcher('SessionStart', 'startup'), undefined)
 })
 
 test('a part the harness can’t load is refused, naming what it can', () => {
@@ -464,9 +607,9 @@ test('resolving for a real harness refuses the plugin, and an http server egress
   )
   await assert.rejects(
     resolveEnvironment(env, {}, root, 'e', 'AGENTS.md', 'allow-all', undefined, {
-      harness: { kind: 'cursor' } as never,
+      harness: { kind: 'goose' } as never,
     }),
-    /environment review \(e\): Cursor can't load plugins yet: leave the review plugin out of this cell/,
+    /environment review \(e\): Goose can't load plugins yet: leave the review plugin out of this cell/,
   )
   await assert.rejects(
     resolveEnvironment(env, {}, root, 'e', 'AGENTS.md', 'allow-all', undefined, { allowed: [] }),

@@ -101,6 +101,47 @@ describe('createAntigravity', () => {
     })
   })
 
+  test('plugins are installed with agy plugin install, their hooks written as agy reads them', async () => {
+    const sandbox = fakeSandbox({})
+    const claude = {
+      hooks: {
+        SessionStart: [{ hooks: [{ type: 'command', command: '${CLAUDE_PLUGIN_ROOT}/start.sh' }] }],
+      },
+    }
+    sandbox.files.set('/root/.reeval/plugins/house/hooks/hooks.json', JSON.stringify(claude))
+    await start(sandbox, {
+      plugins: [
+        { name: 'house', dir: '/root/.reeval/plugins/house' },
+        { name: 'lite', dir: '/root/.reeval/plugins/lite' },
+      ],
+    })
+    assert.deepEqual(
+      sandbox.spawned.map((s) => /'[^']*agy' plugin install '([^']*)'/.exec(s.command)?.[1]),
+      ['/root/.reeval/plugins/house', '/root/.reeval/plugins/lite'],
+    )
+    assert.deepEqual(
+      JSON.parse(sandbox.files.get('/root/.gemini/config/plugins/house/hooks.json') ?? ''),
+      {
+        house: {
+          SessionStart: [
+            { type: 'command', command: '/root/.gemini/config/plugins/house/start.sh' },
+          ],
+        },
+      },
+    )
+    assert.equal(sandbox.files.has('/root/.gemini/config/plugins/lite/hooks.json'), false)
+  })
+
+  test('a plugin agy refuses to install fails the session start, with what it said', async () => {
+    const sandbox = fakeSandbox({
+      turns: [{ stdout: '', stderr: 'invalid plugin manifest\n', exitCode: 1 }],
+    })
+    await assert.rejects(
+      start(sandbox, { plugins: [{ name: 'house', dir: '/root/.reeval/plugins/house' }] }),
+      /agy plugin install \/root\/\.reeval\/plugins\/house exited 1: invalid plugin manifest$/,
+    )
+  })
+
   test('skills go to ~/.gemini/config/skills and instructions to ~/.gemini/GEMINI.md', async () => {
     const sandbox = fakeSandbox({ turns: [{ stdout: result('c') }] })
     const session = await start(sandbox)
