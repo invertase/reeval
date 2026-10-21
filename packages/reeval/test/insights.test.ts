@@ -608,6 +608,12 @@ describe('reeval analyze --insights', () => {
     assert.notEqual(refused.code, 0)
     assert.match(refused.stderr, /isn't recorded, so there's no history folder for its insights/)
     assert.ok(existsSync(file))
+
+    writeFileSync(file, '<<<<<<< HEAD\n{')
+    const conflicted = await runCli(p.dir, ['show', runId])
+    assert.equal(conflicted.code, 0, conflicted.stderr)
+    assert.match(conflicted.stderr, /warning: skipped .*insights\.json: it isn't valid JSON/)
+    assert.equal(conflicted.stdout, before.stdout)
   })
 
   test('canary: with only a judge model, --insights refuses and writes nothing', async () => {

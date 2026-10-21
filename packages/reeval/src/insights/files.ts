@@ -34,21 +34,25 @@ export async function writeInsights(file: string, doc: RunInsights): Promise<voi
 
 const warned = new Set<string>()
 
-/** The run's insights, or null when it has none; one from a newer reeval is skipped with a warning. */
+/**
+ * The run's insights, or null when it has none. One from a newer reeval, or one that isn't JSON
+ * (a merge conflict in the committed file), is skipped with a warning: the run prints without it.
+ */
 export async function readInsights(file: string): Promise<RunInsights | null> {
   const text = await readFile(file, 'utf8').catch(() => null)
   if (text === null) return null
+  const skip = (reason: string) => {
+    if (!warned.has(file)) {
+      warned.add(file)
+      process.stderr.write(`warning: skipped ${fromCwd(file)}: ${reason}\n`)
+    }
+    return null
+  }
   try {
     const doc = JSON.parse(text) as RunInsights
     return doc?.kind === 'reeval-insights' ? readableInsights(doc, fromCwd(file)) : null
   } catch (error) {
-    if (error instanceof NewerSchemaError) {
-      if (!warned.has(file)) {
-        warned.add(file)
-        process.stderr.write(`warning: skipped ${fromCwd(file)}: ${error.reason}\n`)
-      }
-      return null
-    }
-    throw new HistoryError(`${fromCwd(file)} isn't valid JSON: ${(error as Error).message}`)
+    if (error instanceof NewerSchemaError) return skip(error.reason)
+    return skip(`it isn't valid JSON (${(error as Error).message})`)
   }
 }
