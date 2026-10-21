@@ -3,7 +3,7 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
-// A record corpus entry (every result layout and a choose family (scripts/output/project) from before insights.json, recorded at 9c628bf), recorded by reeval 0.10.0.
+// A record corpus entry (every result layout and a choose family (scripts/output/project) from before insights.json, recorded at 02e3770), recorded by reeval 0.10.0.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
   harness: fakeHarness(),

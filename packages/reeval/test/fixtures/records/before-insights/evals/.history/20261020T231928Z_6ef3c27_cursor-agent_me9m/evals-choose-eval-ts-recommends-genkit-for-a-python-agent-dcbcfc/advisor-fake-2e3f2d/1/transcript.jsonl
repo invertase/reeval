@@ -1,4 +1,0 @@
-{"ts":"2026-10-20T23:19:30.145Z","atMs":0,"turn":0,"type":"prompt","text":"Which framework should I use to build a Python agent? Pick one."}
-{"turn":0,"ts":"2026-10-20T23:19:30.145Z","atMs":0,"type":"text","text":"Working on: Which framework should I use to build a Python agent? Pick one.","durationMs":0}
-{"turn":0,"ts":"2026-10-20T23:19:30.145Z","atMs":0,"type":"text","text":"I would build this with Genkit. If your team already writes Python, LangChain works too.","durationMs":0}
-{"ts":"2026-10-20T23:19:30.145Z","atMs":0,"turn":0,"type":"turn-end","status":"completed","durationMs":0}

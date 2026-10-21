@@ -13,9 +13,9 @@ fail             greets in the house style
   exclaims         not run  4 of 4      not run
   +1 more passed
   effort           tools  time
-  plain            1      0s
-  with-skill       1      0s
-  with-doc         1      0s
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-doc         1      <0.1s
   with-skill helped: 4 of 4 tries passed with it, against 0 of 4 tries on plain.
 
 fail             keeps the plain greeting
@@ -28,8 +28,8 @@ fail             keeps the plain greeting
   says hello       4 of 4  0 of 4
     expected command to succeed, exit code 1
   effort           tools  time
-  plain            1      0s
-  with-skill       1      0s
+  plain            1      <0.1s
+  with-skill       1      <0.1s
   with-skill made it worse: 0 of 4 tries passed with it, against 4 of 4 tries on plain.
 
 pass             greets once
