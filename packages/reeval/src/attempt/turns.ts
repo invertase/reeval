@@ -1,6 +1,6 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { diffSinceSnapshot } from '../diff.ts'
-import type { HarnessSession } from '../harness/types.ts'
+import type { HarnessResult, HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -78,6 +78,7 @@ function watchMcpStartup(log: McpStartupLog) {
   }, MCP_POLL_MS)
   return {
     signal: stop.signal,
+    close: () => clearInterval(timer),
     async end() {
       clearInterval(timer)
       await reading
@@ -125,9 +126,27 @@ export function turnSender(
     // An agent that ignores the abort would hold the attempt, and the run, until it finishes.
     const { cutoff, cancel } = cutOff(signal, entry.startedAt)
     const sendStarted = Date.now()
+    const sending = agent.send(prompt, signal).catch((error: unknown): HarnessResult => {
+      // A harness whose turn throws on abort (the fake agent's commands do) was cut off by the
+      // MCP timeout, which then fails the turn below.
+      if (!watch?.signal.aborted || a.signal.aborted) throw error
+      return {
+        text: '',
+        status: 'aborted',
+        transcript: [],
+        usage: null,
+        model: null,
+        unreported: [],
+        startedAt: entry.startedAt,
+        durationMs: Date.now() - sendStarted,
+      }
+    })
     const { raw, ...sent } = await a
-      .timed('agentMs', () => Promise.race([agent.send(prompt, signal), cutoff]))
-      .finally(cancel)
+      .timed('agentMs', () => Promise.race([sending, cutoff]))
+      .finally(() => {
+        cancel()
+        watch?.close()
+      })
     const sendWallMs = Date.now() - sendStarted
     const startup = await watch?.end()
     const timedOut = startup?.timedOut && mcpTimeoutMessage(startup.timedOut)
