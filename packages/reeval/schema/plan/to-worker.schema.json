@@ -1356,6 +1356,47 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "PluginMarketplace": {
+      "description": "A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "description": "A branch, tag or commit SHA; unset is the remote's `HEAD`.",
+              "type": "string"
+            },
+            "repo": {
+              "description": "As written: a URL or `github:owner/repo`.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "git"
+            }
+          },
+          "required": ["repo", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "const": "npm"
+            },
+            "spec": {
+              "description": "An npm package spec.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["source", "spec"],
+          "additionalProperties": false
+        }
+      ]
+    },
     "PluginPart": {
       "description": "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
       "type": "string",
@@ -1509,6 +1550,55 @@
             }
           },
           "required": ["kind", "source", "spec"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one.",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "marketplace": {
+              "description": "Where the marketplace is: a git repository (at `ref`) or an npm package.",
+              "$ref": "#/$defs/PluginMarketplace"
+            },
+            "name": {
+              "description": "The plugin's entry in the marketplace's `.claude-plugin/marketplace.json`.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "source": {
+              "type": "string",
+              "const": "marketplace"
+            }
+          },
+          "required": ["kind", "marketplace", "name", "source"],
           "additionalProperties": false
         }
       ]
