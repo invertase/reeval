@@ -9,7 +9,7 @@ import type { InsightSlots } from '../insights/input.ts'
 import { clip, oneLine } from '../text.ts'
 import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
-import type { EvalInsight, Job, RunInsights } from '../view/insights.ts'
+import { type EvalInsight, fromModel, type Job, type RunInsights } from '../view/insights.ts'
 import type {
   Across,
   CaseResult,
@@ -26,6 +26,7 @@ import type {
 } from '../view/suite.ts'
 import { cancelledOf, countedOf } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
+import { remarkLines } from './remarks.ts'
 
 export type { Job }
 
@@ -809,7 +810,7 @@ function insightNotes(
   fresh: RunInsights | null,
   verbose: boolean,
 ): string[] {
-  if (!insights) return []
+  if (!insights || !fromModel(insights)) return []
   if (insights.error) return [c.yellow(`insights failed (${clip(insights.error, 200)})`)]
   if (!fresh) {
     return [
@@ -834,8 +835,9 @@ function insightNotes(
 
 /**
  * A run's result: its errors outside any eval, its blocks with their insights, the headline,
- * then the tally and, with no analysis model, the hint. Insights written for other facts are
- * left out with a note.
+ * then the tally and, with no analysis model, the hint, then the remarks. Insights written for
+ * other facts are left out with a note; remarks come from the record and history, not a model,
+ * so they print either way.
  */
 export function render(
   suite: SuiteResult,
@@ -854,5 +856,6 @@ export function render(
     ...(opts.notes ?? []),
     tallyLine(c, suite.tally),
     ...(opts.hint ? [NO_MODEL_HINT] : []),
+    ...remarkLines(c, suite, insights, opts.verbose),
   ]
 }

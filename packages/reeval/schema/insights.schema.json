@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from RunInsights in src/view/insights.ts by `pnpm schema:update`; don't edit. A run's insights from reeval analyze --insights: <run>/insights.json in the history folder.",
+  "$comment": "Generated from RunInsights in src/view/insights.ts by `pnpm schema:update`; don't edit. A run's insights from reeval analyze --insights, or its deterministic remarks alone (model 'none') from reeval run: <run>/insights.json in the history folder or .reeval/runs.",
   "title": "RunInsights",
   "$ref": "#/$defs/RunInsights",
   "$defs": {
@@ -145,7 +145,7 @@
           }
         },
         "firstSeenRun": {
-          "description": "The run that first raised this `id`; it prints only in that run.",
+          "description": "The run that first raised this `id`; it prints only in that run, except `slow-mcp-start`, which is about the environment, not the eval's source, and prints in every run it happens.",
           "type": "string"
         },
         "fix": {
@@ -162,7 +162,7 @@
           "required": ["at", "edit"]
         },
         "id": {
-          "description": "sha256(kind, evalId, the eval's sources hash): one remark per kind per eval version.",
+          "description": "sha256(kind, evalId, the eval's sources hash, and for `slow-mcp-start` the server): one remark per kind (and server) per eval version.",
           "type": "string"
         },
         "kind": {
@@ -177,6 +177,7 @@
             "name-no-intent",
             "no-baseline",
             "prompt-names-tool",
+            "slow-mcp-start",
             "too-few-tries"
           ]
         },
@@ -254,7 +255,7 @@
           "const": "reeval-insights"
         },
         "model": {
-          "description": "The analysis model, as configured (`google/gemini-3.8-flash`, or `fake`).",
+          "description": "The analysis model, as configured (`google/gemini-3.8-flash`, or `fake`); `NO_MODEL` when reeval wrote the file without one, to hold the run's deterministic remarks only.",
           "type": "string"
         },
         "promptVersion": {
@@ -262,7 +263,7 @@
           "type": "string"
         },
         "remarks": {
-          "description": "Remarks about the evals' own quality, ranked. Empty: no kind is raised yet.",
+          "description": "Remarks about the evals' own quality, ranked: every one this run raised, including those an earlier run raised first (`firstSeenRun`), which don't print again.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Remark"

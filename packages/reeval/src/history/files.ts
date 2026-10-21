@@ -12,9 +12,12 @@ import {
 } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
+import { factsHash } from '../insights/hash.ts'
 import { BUILD_ID } from '../root.ts'
 import { runHeader } from '../view/header.ts'
+import { INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
 import { NewerSchemaError, readableRecord } from '../view/record.ts'
+import { suiteResult } from '../view/suite.ts'
 import {
   ensureHistoryGitignore,
   historyGitignorePath,
@@ -277,6 +280,8 @@ export type RecordOptions = {
   skipSecretScan?: boolean
   /** summary.md ends with the hint to set an analysis model: none resolves. */
   hint: boolean
+  /** The scratch run's remarks-only insights, recorded beside it as `insights.json`. */
+  insights?: RunInsights | null
 }
 
 export type RecordResult = WrittenRun & {
@@ -347,8 +352,13 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatch = null
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
+  // The recorded record can drop artifacts, so the insights are hashed against its facts.
+  const insights = options.insights
+    ? { ...options.insights, factsHash: factsHash(suiteResult(record)) }
+    : null
+  if (insights) files.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}\n`))
   if (level !== 'none')
-    files.set('summary.md', Buffer.from(renderSummary(record, { hint: options.hint })))
+    files.set('summary.md', Buffer.from(renderSummary(record, { hint: options.hint, insights })))
 
   if (!options.skipSecretScan) {
     const scanned: Array<[string, Finding[]]> = [

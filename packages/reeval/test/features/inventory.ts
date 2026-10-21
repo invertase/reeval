@@ -1816,6 +1816,60 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'query.check-streaks',
+    area: 'Records and studio',
+    name: 'Each check\u2019s streak of clean recorded runs per cell, setup and branch (`check_streaks`)',
+    tests: [
+      query('check_streaks counts each check’s clean recorded runs on a branch, newest first'),
+    ],
+  },
+  {
+    id: 'remarks',
+    area: 'CLI and runner',
+    name: 'Deterministic remarks at the end of `reeval run` and in `reeval show`, with no model: concerns only (at most 3), suggestions with `-v`, each once per eval version except `slow-mcp-start`, kept in `insights.json` `remarks` with `origin: deterministic`',
+    tests: [
+      'reeval/test/remarks.test.ts › a suggestion prints under -v once per eval version, and an edit re-arms it',
+      'reeval/test/remarks.test.ts › a well-written eval prints no Remarks heading',
+      'reeval/test/remarks.test.ts › check-never-fails needs 5 recorded runs on the default branch, and goes to insights.json',
+      'reeval/test/insights.test.ts › replaces remarks-only insights.json and keeps its remarks',
+    ],
+  },
+  {
+    id: 'remarks.too-few-tries',
+    area: 'CLI and runner',
+    name: 'Remark `too-few-tries`: a variant and its baseline differ by half their tries or more with fewer than 4 tries a side',
+    tests: [
+      'reeval/test/remarks.test.ts › too-few-tries: a gap of half the tries with fewer than 4 a side, not under it',
+    ],
+  },
+  {
+    id: 'remarks.check-never-fails',
+    area: 'CLI and runner',
+    name: 'Remark `check-never-fails`: a check passed every try in the last 5 recorded default-branch runs and 20 tries',
+    tests: [
+      'reeval/test/remarks.test.ts › check-never-fails: 5 clean recorded runs and 20 tries, not 4 runs or 19 tries',
+      'reeval/test/remarks.test.ts › check-never-fails needs 5 recorded runs on the default branch',
+    ],
+  },
+  {
+    id: 'remarks.flaky-check',
+    area: 'CLI and runner',
+    name: 'Remark `flaky-check`: a flaky cell\u2019s check both passed and failed in 2 of its newest 5 comparable runs, over 6 tries or more',
+    tests: [
+      'reeval/test/remarks.test.ts › flaky-check: flaky, 2 mixed runs and 6 tries, not 1 mixed run, 5 tries or infra',
+      'reeval/test/remarks.test.ts › flaky-check prints once the cell has 2 mixed runs and 6 tries behind it',
+    ],
+  },
+  {
+    id: 'remarks.slow-mcp-start',
+    area: 'CLI and runner',
+    name: 'Remark `slow-mcp-start`: a stdio MCP server took 2s or more to answer `initialize`, or never did, counted over the turns that recorded it; prints in every run',
+    tests: [
+      'reeval/test/remarks.test.ts › slow-mcp-start: 2000 ms or no answer on a recorded turn, not 1999 ms',
+      'reeval/test/remarks.test.ts › slow-mcp-start prints in every run, at 2000 ms, and for a server that never answers',
+    ],
+  },
+  {
     id: 'summary.judge-keys',
     area: 'Records and studio',
     name: 'Standing per-key judge pass rate on the studio eval page, with lift per key when both sides have enough counted attempts',

@@ -407,6 +407,7 @@ async function runCommand(
     summaryPath: fromCwd(summary),
     results: engineRun.evals,
     hint: !hasAnalysisModel(ctx.config),
+    insights: run.insights,
   })
   renderer.close()
   const stepSummary = process.env.GITHUB_STEP_SUMMARY

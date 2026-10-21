@@ -240,12 +240,39 @@ An error outside any attempt, such as an eval file's stray rejection, prints fir
 
 The tally counts each eval, and each case of a family, once: `1 run error · 3 fail · 1 pass · 1 infra error · 2 cancelled · 2 skipped`, run errors and fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
 
+## Remarks
+
+```text
+1 fail · 1 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
+
+Remarks:
+  coin: "lands heads" passed 2 of 6 tries over 2 runs with nothing changed, so one try can pass or fail it.
+    fix  evals/coin.eval.ts:8  make "lands heads" check something every good try does, or raise runs so one try doesn't decide it
+  coin: MCP server docs took 2s to start on each of 2 turns, in 3 of 3 tries.
+    fix  evals/env.ts:9  install what docs needs in the image (install or dockerfile), so it doesn't fetch or build it at start-up
+  …
+```
+
+After the tally and hint, a run lists what reeval noticed about the evals themselves, each with the source line to change. Remarks come from fixed thresholds over the record and the history, never a model, so they print without `analysis.model`. Only concerns print, at most three (`+N more (-v)`); `-v` adds the suggestions.
+
+| Remark | Severity | When |
+|---|---|---|
+| `flaky-check` | concern | The cell is `flaky` in [`flaky_cells`](/reference/cli/query#views) (not from infrastructure), and the check both passed and failed in 2 of its newest 5 comparable runs, over 6 tries or more |
+| `slow-mcp-start` | concern | A stdio MCP server took 2s or more to answer `initialize`, or never did. Turns count only where the server was started: every turn on a harness that starts servers per turn, the first on one that starts them per session |
+| `too-few-tries` | suggestion | A variant's and its baseline's pass rates differ by half or more, with fewer than 4 counted tries on a side |
+| `check-never-fails` | suggestion | A check passed every try, in every cell, this run and in the last 5 recorded runs on the default branch with 20 tries or more ([`check_streaks`](/reference/cli/query#views)); on a variant, on both sides |
+
+Each remark prints in the run that first raises it for that version of the eval (its sources' hashes), and again once you edit the eval; `slow-mcp-start` prints in every run that has it. The history kinds need an earlier run. The default branch is `origin`'s HEAD, else a local `main` or `master`; without one, `check-never-fails` isn't raised. Remarks never change the exit code.
+
+A run writes its remarks to `.reeval/runs/<runId>/insights.json` (`model: "none"`), and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them in the insights it writes.
+
 ## What it writes
 
 | Path | What | When |
 |---|---|---|
 | `.reeval/runs/<runId>.json` | The scratch run's record | Every run, including one where nothing passed |
-| `.reeval/runs/<runId>/` | Its artifacts | Every run |
+| `.reeval/runs/<runId>/` | Its artifacts, and `insights.json` when the run raised [remarks](#remarks) | Every run |
 | The history folder | A copy of both | `--record`, `record: 'ci'` with `CI` set, or `record: 'always'` |
 | `.reeval/debug/` | Each attempt's local debug data | Every run |
 

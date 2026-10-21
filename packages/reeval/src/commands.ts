@@ -24,6 +24,7 @@ import { fromCwd, sha256 } from './ids.ts'
 import { insightsFile, readInsights } from './insights/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
+import { fromModel } from './view/insights.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -91,6 +92,7 @@ export async function record(
     allowIncomplete: flags['allow-incomplete'],
     skipSecretScan: flags['skip-secret-scan'],
     hint: !hasAnalysisModel(config),
+    insights: await readInsights(insightsFile(scratchDir(config.root), runId)),
   })
   const where = rel(result.recordPath)
   if (!result.created) return `${where} is already recorded`
@@ -172,10 +174,8 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
     ctx.out(JSON.stringify(run, null, 2))
     return 0
   }
-  const insights = entry.recorded
-    ? await readInsights(insightsFile(config.history.dir, entry.runId))
-    : null
-  const hint = !insights && !hasAnalysisModel(config)
+  const insights = await readInsights(insightsFile(dir, entry.runId))
+  const hint = !(insights && fromModel(insights)) && !hasAnalysisModel(config)
   if (ctx.flags.md) ctx.out(renderSummary(run, { hint, insights }).trimEnd())
   else ctx.out(formatShow(run, { hint, insights }))
   return 0

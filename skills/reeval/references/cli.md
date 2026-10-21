@@ -68,6 +68,12 @@ answer, and a sentence under each failing row, every one citing the facts. `reev
 them in the blocks. Delete the file to write new ones; it never changes a verdict or exit code.
 It uses `analysis.model` only (never the judge's model) and exits 2 without it.
 
+`reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`
+and `slow-mcp-start` (concerns, at most three), and with `-v` `too-few-tries` and
+`check-never-fails` (suggestions). Each names the source line to change (`fix  <file:line>`).
+Act on them: raise `runs`, tighten or remove the check, or bake the MCP server's dependencies into
+the image. Each prints once per eval version (`slow-mcp-start` every run); an edit re-arms it.
+
 ## Config discovery, filters and exit codes
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key

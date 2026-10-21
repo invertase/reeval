@@ -33,6 +33,7 @@ config API like any other project.
 | `with-compare` | The fake harness on `scripts/output/compare`: a base run and a head run (`REEVAL_COMPARE_SIDE=head`) with an eval that regressed (a check flipped and one after it never ran), a fixed family case, an eval whose environment changed, a new and a removed eval, and evals that stayed the same, the pair the compare goldens render |
 | `before-insights` | The fake harness on `scripts/output/project`, with its choose family (`recommends Genkit for $task`), from before a run's `insights.json` |
 | `with-insights` | The same recipe with the `insights.json` `reeval analyze --insights` wrote on the recipe's fake analysis model: each eval's intent, answer, row sentences, findings and named tools, and the headline, from `insights-v1`, before `validation.drops`. The output goldens with insights render it |
+| `with-remarks` | Three recorded fake-harness runs whose `insights.json` holds only deterministic remarks (`model: 'none'`): `too-few-tries`, `slow-mcp-start` on a server that answers after two seconds, and `flaky-check` once the history has two mixed runs, with each remark's `firstSeenRun` |
 | `real-contract` | The same nightly run: the harness contract on Cursor, Claude Code and Codex, one run each of six behaviours that pass and six canaries that fail, with transcripts, raw transcripts and diffs. Copied from the contract projects' `.reeval/runs`, since the contract never records |
 
 What reads them:
