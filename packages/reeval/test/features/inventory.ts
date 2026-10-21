@@ -1972,9 +1972,11 @@ export const inventory: InventoryFeature[] = [
     name: "`reeval run`'s insights: once the exit code is fixed, `analysis.model` classifies and explains each eval into `.reeval/runs/<run>/insights.json` (copied by `reeval record`); `analysis.maxTokens` spends on failures, regressions and compares first and prints the evals it skipped; `analysis.insightsTimeout`, one retry, `--no-insights` and `analysis.insights: false`; classifications cached in `.reeval/analysis/classify/` and read back from the last recorded run",
     tests: [
       'reeval/test/insights.test.ts › a failure, then made worse, then a compare',
+      'reeval/test/insights.test.ts › a budget that fits exactly N evals starts N',
+      'reeval/test/insights.test.ts › a budget under the first estimate starts no eval',
       'reeval/test/insights.test.ts › within a tier the output order stands',
       'reeval/test/insights.test.ts › each eval gets its insight, printed under its block',
-      'reeval/test/insights.test.ts › a tiny analysis.maxTokens skips the lowest-priority evals',
+      'reeval/test/insights.test.ts › a small analysis.maxTokens skips the lowest-priority evals',
       'reeval/test/insights.test.ts › canary: insights never change the exit code',
       'reeval/test/insights.test.ts › analysis.insights: false makes no call',
       'reeval/test/insights.test.ts › canary: insights past analysis.insightsTimeout are left out',

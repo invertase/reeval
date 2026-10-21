@@ -9,6 +9,7 @@ import { describe, test } from 'node:test'
 import { insights as recipeInsights } from '../scripts/output/project/insights.ts'
 import type { ResolvedAnalysisModel } from '../src/analysis/model.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { admit, estimate, FIRST_ESTIMATE, ledger, reserve, settle } from '../src/insights/budget.ts'
 import { generateInsights, insightEvals } from '../src/insights/generate.ts'
 import { canonicalJson, factsHash } from '../src/insights/hash.ts'
 import { attemptTexts, evalFacts } from '../src/insights/input.ts'
@@ -913,6 +914,77 @@ describe('the order analysis.maxTokens is spent in', () => {
   })
 })
 
+describe('the analysis.maxTokens gate', () => {
+  /** Starts evals in order while the gate allows, each using `uses`, and returns how many started. */
+  const simulate = (maxTokens: number, uses: number[], concurrency = 8) => {
+    const l = ledger(maxTokens)
+    const flight: Array<{ held: number; uses: number }> = []
+    let started = 0
+    for (const tokens of uses) {
+      for (;;) {
+        if (flight.length >= concurrency) {
+          const done = flight.shift() as { held: number; uses: number }
+          settle(l, done.held, done.uses)
+          continue
+        }
+        const next = admit(l)
+        if (next !== 'wait') {
+          if (next === 'start') {
+            flight.push({ held: reserve(l), uses: tokens })
+            started++
+          }
+          break
+        }
+        const done = flight.shift() as { held: number; uses: number }
+        settle(l, done.held, done.uses)
+      }
+    }
+    for (const done of flight.splice(0)) settle(l, done.held, done.uses)
+    return { started, used: l.used }
+  }
+
+  test('a budget that fits exactly N evals starts N', () => {
+    const each = FIRST_ESTIMATE
+    for (const n of [1, 3, 8, 12]) {
+      assert.deepEqual(
+        simulate(n * each, Array(20).fill(each)),
+        { started: n, used: n * each },
+        `${n}`,
+      )
+    }
+  })
+
+  test('a budget under the first estimate starts no eval', () => {
+    assert.deepEqual(simulate(FIRST_ESTIMATE - 1, Array(5).fill(1000)), { started: 0, used: 0 })
+    assert.equal(admit(ledger(4000)), 'skip')
+  })
+
+  test('the estimate is the mean of the evals that finished', () => {
+    const l = ledger(100_000)
+    assert.equal(estimate(l), FIRST_ESTIMATE)
+    settle(l, reserve(l), 2000)
+    settle(l, reserve(l), 4000)
+    assert.equal(estimate(l), 3000)
+    assert.deepEqual(l, { maxTokens: 100_000, used: 6000, reserved: 0, finished: 2 })
+  })
+
+  test('an eval that does not fit waits while one is in flight, and is skipped when none is', () => {
+    const l = ledger(10_000)
+    const held = reserve(l)
+    assert.equal(admit(l), 'wait')
+    settle(l, held, 3000)
+    assert.equal(admit(l), 'start', '3000 used + a 3000 estimate fits')
+    settle(l, reserve(l), 7000)
+    assert.equal(admit(l), 'skip', '10000 used leaves nothing')
+  })
+
+  test('cheaper evals than the estimate let more start; the overshoot is only what is in flight', () => {
+    const { started, used } = simulate(30_000, Array(20).fill(2000))
+    assert.equal(started, 15)
+    assert.ok(used <= 30_000, `${used}`)
+  })
+})
+
 /** Nine passing evals, then one that fails: the budget reaches the failing one first. */
 const RUN_EVALS = {
   'evals/files.eval.ts': `import { evaluate, expect } from 'reeval'
@@ -1004,20 +1076,27 @@ describe('reeval run writes insights at its end', () => {
     )
   })
 
-  test('a tiny analysis.maxTokens skips the lowest-priority evals; the failing one keeps its insight', async () => {
+  test('a small analysis.maxTokens skips the lowest-priority evals; the failing one keeps its insight', async () => {
     const p = await project('run-insights-budget', {
-      'reeval.config.ts': runConfig({ analysis: 'maxTokens: 1,' }),
+      'reeval.config.ts': runConfig({ analysis: 'maxTokens: 6000,' }),
       ...RUN_EVALS,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const doc = scratchInsights(p.dir)
     assert.ok(doc)
-    assert.equal(doc.budget?.maxTokens, 1)
-    assert.deepEqual(doc.budget?.skipped, [
-      'evals%2Ffiles.eval.ts › writes ok.txt 8',
-      'evals%2Ffiles.eval.ts › writes ok.txt 9',
-    ])
+    assert.equal(doc.budget?.maxTokens, 6000)
+    assert.deepEqual(
+      doc.evals.map((e) => e.evalId.replace('evals%2Ffiles.eval.ts › ', '')),
+      ['writes ok.txt 1', 'writes ok.txt 2', 'writes missing.txt'],
+      'the failing eval first, then the others in order while the next estimate fits',
+    )
+    assert.deepEqual(
+      doc.budget?.skipped,
+      [3, 4, 5, 6, 7, 8, 9].map((n) => `evals%2Ffiles.eval.ts › writes ok.txt ${n}`),
+    )
+    const used = doc.usage.inputTokens + doc.usage.outputTokens
+    assert.ok(used <= 6000, `the run stays within its budget: ${used}`)
     assert.ok(
       doc.evals.some((e) => e.evalId === 'evals%2Ffiles.eval.ts › writes missing.txt' && e.answer),
       'the failing eval is explained first',
@@ -1025,7 +1104,7 @@ describe('reeval run writes insights at its end', () => {
     assert.ok(!calls(p.dir).some((c) => c.startsWith('headline')), 'no headline past the budget')
     assert.match(
       r.stdout,
-      /insights skipped for 2 evals: analysis\.maxTokens \(1\) reached — raise it in reeval\.config\.ts/,
+      /insights skipped for 7 evals: analysis\.maxTokens \(6,000\) reached — raise it in reeval\.config\.ts/,
     )
     assert.match(r.stdout, /No: the file is missing\./)
   })
@@ -1097,7 +1176,7 @@ evaluate('writes ok.txt', async (c) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /insights still running after 1s, so they're left out: reeval analyze \S+ --insights/,
+      /insights still running after 1s, so they're left out: raise analysis\.insightsTimeout in reeval\.config\.ts, or run reeval analyze \S+ --insights/,
     )
     assert.match(r.stdout, /writes missing\.txt/)
     assert.equal(scratchInsights(p.dir), null)

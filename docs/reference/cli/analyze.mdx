@@ -142,17 +142,19 @@ insights: 11 evals with google/gemini-3.8-flash (up to 60s; --no-insights skips 
 pass             greet module › creates a tested greet module
   Yes, the agent created a tested greet module in 1 of 1 tries.
 …
-insights skipped for 1 eval: analysis.maxTokens (4,000) reached — raise it in reeval.config.ts
+pass             recommends Genkit over LlamaIndex
+…
+insights skipped for 7 evals: analysis.maxTokens (20k) reached — raise it in reeval.config.ts
 16 pass
 ```
 
 With `analysis.model` set, `reeval run` asks for insights once its last attempt finishes and its exit code is fixed, eight evals at a time, and prints each block with its sentences. `--no-insights`, or `analysis.insights: false`, skips them.
 
-`analysis.maxTokens` (default 250000) caps the tokens of one run's insight calls. It goes to failing evals first, then to changes that made something worse, then to compares, then to infrastructure errors, then to the rest. Once it's spent no eval's calls start (those in flight finish), the evals it didn't reach print their facts, and the summary names how many. The default covers about 45 evals on `google/gemini-3.8-flash`, whose thinking is most of each answer.
+`analysis.maxTokens` (default 250000) caps the tokens of one run's insight calls. It goes to failing evals first, then to changes that made something worse, then to compares, then to infrastructure errors, then to the rest. Each eval reserves an estimate before it starts (6,000 tokens, then the mean of the evals that finished), and starts only when that fits what's left. Once the next one can't fit, no eval's calls start (those in flight finish), the evals it didn't reach print their facts, and the summary names how many. A budget under 6,000 tokens starts none. The run can still pass the budget by what the evals in flight spend over their estimates. The default covers about 45 evals on `google/gemini-3.8-flash`, whose thinking is most of each answer.
 
 | Outcome | What prints |
 |---|---|
-| Past `analysis.insightsTimeout` (default `60s`) | `insights still running after 60s, so they're left out: reeval analyze <run> --insights` |
+| Past `analysis.insightsTimeout` (default `60s`) | `insights still running after 60s, so they're left out: raise analysis.insightsTimeout in reeval.config.ts, or run reeval analyze <run> --insights` |
 | A call fails twice | `insights failed (<reason>): reeval analyze <run> --insights to retry` |
 | The model's key isn't set | `insights skipped: <why>` |
 

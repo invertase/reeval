@@ -2,8 +2,9 @@
 // skipped when the classification is cached) and one insights call on its scoped facts, then one
 // headline call for the run, each checked by the validator. A sentence the banned-word lint
 // refuses is asked for once more, then dropped. `maxTokens` is spent on the evals most worth
-// explaining first (`priority.ts`); once it's spent no eval's calls start, and those in flight
-// finish. Nothing here reads or changes a verdict: the facts are final before any call starts.
+// explaining first (`priority.ts`), each reserving an estimate before it starts (`budget.ts`);
+// once the next one can't fit, no eval's calls start, and those in flight finish. Nothing here
+// reads or changes a verdict: the facts are final before any call starts.
 import { generateText, type LanguageModel, NoObjectGeneratedError, Output } from 'ai'
 import type { z } from 'zod'
 import { cannedModel, providerModel, type ResolvedAnalysisModel } from '../analysis/model.ts'
@@ -12,6 +13,7 @@ import type { FakeInsights } from '../types.ts'
 import { slotsOf } from '../ui/layout.ts'
 import type { EvalInsight, Job, RunInsights, Sentence } from '../view/insights.ts'
 import { type EvalResult, type SuiteResult, suiteResult } from '../view/suite.ts'
+import { admit, ledger, reserve, settle } from './budget.ts'
 import type { Classified, ClassifyCache } from './classify.ts'
 import { factsHash } from './hash.ts'
 import {
@@ -288,20 +290,6 @@ async function evalInsight(
   }
 }
 
-/** Runs `f` over `items`, at most `n` at once, keeping their order. */
-async function mapLimit<T, R>(items: T[], n: number, f: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length)
-  let next = 0
-  const worker = async () => {
-    while (next < items.length) {
-      const i = next++
-      out[i] = await f(items[i] as T)
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(n, items.length) }, worker))
-  return out
-}
-
 /** The evals that get an insight, in the order the output prints them: none for a todo or a skip. */
 export const insightEvals = (suite: SuiteResult) =>
   suite.files.flatMap((f) =>
@@ -333,6 +321,12 @@ async function evalInsightOnce(
 
 const spent = (u: Usage) => u.inputTokens + u.outputTokens
 
+const addUsage = (to: Usage, from: Usage) => {
+  to.inputTokens += from.inputTokens
+  to.outputTokens += from.outputTokens
+  to.reasoningTokens += from.reasoningTokens
+}
+
 /**
  * Classifies each eval, writes and checks its sentences, then the run's headline. Evals start in
  * priority order and are kept in output order; with `maxTokens`, those it didn't reach are listed
@@ -342,18 +336,50 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
   const suite = suiteResult(o.record)
   const usage: Usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }
   const validation: Counts = { dropped: 0, regenerated: 0, drops: [] }
-  const within = () => o.maxTokens === undefined || spent(usage) < o.maxTokens
+  const budget = o.maxTokens === undefined ? null : ledger(o.maxTokens)
   const ordered = insightEvals(suite)
   const skipped = new Set<string>()
-  const done = await mapLimit(byPriority(ordered), o.concurrency ?? 4, async (e) => {
-    if (!within()) {
-      skipped.add(e.path)
-      return null
+  const done = new Map<string, EvalInsight>()
+  const running = new Set<Promise<void>>()
+  const concurrency = o.concurrency ?? 4
+  const failure: { error?: unknown; failed: boolean } = { failed: false }
+  for (const e of byPriority(ordered)) {
+    let decision: 'start' | 'skip' = 'start'
+    for (;;) {
+      if (failure.failed) break
+      if (running.size >= concurrency) {
+        await Promise.race(running)
+        continue
+      }
+      const next = budget ? admit(budget) : 'start'
+      if (next !== 'wait') {
+        decision = next
+        break
+      }
+      await Promise.race(running)
     }
-    return evalInsightOnce(o, e, usage, validation)
-  })
-  const byPath = new Map(done.flatMap((x) => (x ? [[x.evalId, x] as const] : [])))
-  const evals = ordered.flatMap((e) => byPath.get(e.path) ?? [])
+    if (failure.failed) break
+    if (decision === 'skip') {
+      skipped.add(e.path)
+      continue
+    }
+    const held = budget ? reserve(budget) : 0
+    const used: Usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }
+    const call: Promise<void> = evalInsightOnce(o, e, used, validation)
+      .then((insight) => void done.set(e.path, insight))
+      .catch((error) => {
+        if (!failure.failed) Object.assign(failure, { failed: true, error })
+      })
+      .finally(() => {
+        if (budget) settle(budget, held, spent(used))
+        addUsage(usage, used)
+        running.delete(call)
+      })
+    running.add(call)
+  }
+  await Promise.all(running)
+  if (failure.failed) throw failure.error
+  const evals = ordered.flatMap((e) => done.get(e.path) ?? [])
   const headlineInput: HeadlineInput = {
     call: 'headline',
     tally: {
@@ -365,7 +391,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
       path: e.path,
       name: e.template ?? e.name,
       verdict: e.outcome === 'infra_error' ? 'infra error' : e.outcome,
-      answer: byPath.get(e.path)?.answer?.text ?? null,
+      answer: done.get(e.path)?.answer?.text ?? null,
     })),
   }
   const headlineModel = modelHeadlineInput(headlineInput)
@@ -381,7 +407,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     return { headline: out.headline && sentenceFrom(out.headline, headlineModel.ids) }
   }
   const headline: Sentence | null =
-    evals.length && within()
+    evals.length && (budget === null || admit(budget) === 'start')
       ? await checked(
           await askHeadline(),
           askHeadline,
