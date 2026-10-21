@@ -99,6 +99,18 @@ export function observed(
   })
 }
 
+/**
+ * The built-in tools that wait on a person, which an eval has none of. Claude Code's
+ * `AskUserQuestion` ends the turn on a tool call only the host answers, and the session takes no
+ * new prompt until it gets one, so the agent is never offered it and asks in its reply instead.
+ */
+const INTERACTIVE_TOOLS = ['askUserQuestions']
+
+/** The adapter's built-in tools reeval turns off: those of {@link INTERACTIVE_TOOLS} it offers. */
+export function interactiveTools(adapter: HarnessV1): string[] {
+  return INTERACTIVE_TOOLS.filter((name) => Object.hasOwn(adapter.builtinTools, name))
+}
+
 /** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
 export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness {
   const catalog = agentFor(descriptor)
@@ -117,6 +129,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
       for (const path of await writePluginFiles(sandbox, catalog, plugins)) {
         debugLog('env', `plugin settings → ${path}`)
       }
+      const off = interactiveTools(adapter as HarnessV1)
       const agent = new HarnessAgent({
         harness: observed(adapter as HarnessV1, (part) => {
           if (part.type === 'stream-start' && part.modelId) servedModel = part.modelId
@@ -124,6 +137,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
         }),
         model: descriptor.model,
         permissionMode: 'allow-all',
+        ...(off.length ? { inactiveTools: off } : {}),
         sandboxConfig: { workDir: WORKSPACE_DIR },
         ...(skills.length ? { skills } : {}),
       })
