@@ -8,6 +8,7 @@ dist/
 .ignore/
 coverage/
 packages/reeval/docker/
+packages/reeval/bin/
 packages/reeval/assets/
 packages/reeval/README.md
 packages/reeval/THIRD_PARTY_NOTICES.md

@@ -11,6 +11,7 @@ import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
 import { asCheck } from './checks.ts'
+import { timeMcpServers } from './mcp-startup.ts'
 import { type Attempt, setupAllowance, startTimeoutMs } from './state.ts'
 
 const tailOf = (text: string) => text.trim().split('\n').slice(-10).join('\n')
@@ -230,13 +231,20 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   await runSetup(a, box, env)
   await snapshot(box, a.signal)
   debugLog('env', 'workspace snapshot taken: the diff starts here')
+  const timed = await timeMcpServers(box, env.mcp, a.signal)
+  if (timed.log) {
+    a.mcpStartup = timed.log
+    debugLog('env', "stdio MCP servers start through reeval's MCP timer")
+  } else if (timed.untimed) {
+    debugLog('env', `stdio MCP servers start untimed: ${timed.untimed}`)
+  }
   const harness = await createHarness(spec.harness)
   const harnessStart = performance.now()
   debugLog('harness', `starting ${harnessId(spec.harness)}: bootstrap and session`)
   const session = await startHarness(a, harness, box, {
     skills: env.skills,
     workspaceSkills: env.workspaceSkills.map((s) => s.name),
-    mcp: env.mcp,
+    mcp: timed.servers,
   })
   debugLog(
     'harness',

@@ -14,6 +14,7 @@ import type {
   Turn,
 } from '../types.ts'
 import type { ProgressUpdate } from '../ui/events.ts'
+import type { McpStartupLog } from './mcp-startup.ts'
 
 /** Extra time an attempt gets, outside its eval timeout, when its image may need building. */
 const SETUP_BUDGET_MS = 20 * 60_000
@@ -60,8 +61,13 @@ export type Attempt = {
   start: (who: string) => Promise<[Sandbox, HarnessSession]>
   /** Refuses starts from now on and waits for one in flight, so teardown sees its sandbox. */
   endStarts: () => Promise<void>
-  /** The start's failure, which fails the attempt whatever the eval's body made of it. */
+  /**
+   * The start's failure, or an MCP server's that never answered `initialize`, which fails the
+   * attempt whatever the eval's body made of it.
+   */
   startFailure?: { error: unknown }
+  /** The MCP timer's log, once the session starts with a stdio MCP server. */
+  mcpStartup?: McpStartupLog
   /** A judge call failed or had no model: a failed assertion is then the judge's. */
   judgeErrored: boolean
   /** Judge calls that failed without throwing, which fail the attempt once the eval's body is done. */
