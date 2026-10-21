@@ -75,4 +75,9 @@ export const SANDBOX_HOME = `/home/${SANDBOX_USER}`
 export const SANDBOX_ROOT = '/reeval'
 /** The agent's working directory, relative to {@link SANDBOX_ROOT}. */
 export const WORKSPACE_DIR = 'workspace'
+/**
+ * reeval's own state in the container, root's and mode 0700: outside {@link SANDBOX_ROOT}, which
+ * {@link SANDBOX_USER} owns and so could rename it away and put its own in its place.
+ */
+export const SANDBOX_STATE = '/var/lib/reeval'
 export const BRIDGE_PORT = 43210

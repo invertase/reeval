@@ -14,6 +14,7 @@ import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
+import { shellQuote } from '@reeval/sandbox-docker/process'
 import { createChecks } from '../src/attempt/checks.ts'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { Attempt, AttemptSpec } from '../src/attempt/state.ts'
@@ -34,7 +35,7 @@ import {
   UsageError,
 } from '../src/config.ts'
 import type { AttemptDebug } from '../src/debug/attempt.ts'
-import { diffSinceSnapshot, snapshot } from '../src/diff.ts'
+import { acceptIntoSnapshot, diffSinceSnapshot, snapshot } from '../src/diff.ts'
 import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
@@ -213,6 +214,55 @@ test('c.writeFile refuses absolute paths and paths that leave the workspace', as
     assert.equal(await box.readFile('a/placed.txt'), 'kept')
     assert.equal(await box.readFile('~/home.txt'), 'home')
     assert.deepEqual((await diffSinceSnapshot(box)).files, [])
+  } finally {
+    await box.destroy()
+  }
+})
+
+test("the snapshot keeps one commit and no placed file's earlier content", async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    await box.writeFile('src/sum.js', 'healthy\n')
+    await box.writeFile('keep.txt', 'kept\n')
+    await snapshot(box)
+    await box.writeFile('src/sum.js', '')
+    await acceptIntoSnapshot(box, 'src/sum.js')
+    await box.writeFile('src/sum.js', 'bug\n')
+    await acceptIntoSnapshot(box, 'src/sum.js')
+    const git = `git --git-dir=${shellQuote(join(box.stateDir, 'workspace.git'))}`
+    assert.equal((await box.exec(`${git} rev-list --all --count`)).stdout.trim(), '1')
+    const objects = await box.exec(`${git} cat-file --batch-all-objects --batch`)
+    assert.equal(objects.exitCode, 0)
+    assert.match(objects.stdout, /bug\n/)
+    assert.doesNotMatch(objects.stdout, /healthy/)
+    assert.ok(
+      !existsSync(join(box.workdir, '..', '.reeval-git-work')),
+      'nothing beside the workspace',
+    )
+    await box.writeFile('src/sum.js', 'fixed\n')
+    const diff = await diffSinceSnapshot(box)
+    assert.deepEqual(diff.files, [{ path: 'src/sum.js', status: 'modified' }])
+    assert.match(diff.patch, /^-bug\n\+fixed\n/m)
+  } finally {
+    await box.destroy()
+  }
+  assert.ok(!existsSync(box.stateDir), 'destroy removes the state directory')
+})
+
+test('the snapshot ignores a config the workspace user could plant in its HOME', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    // A privileged git's HOME can be the agent's on a custom `from` image, so a `~/.gitconfig`
+    // filter would run reeval's git as root. Prove the snapshot's git never reads it.
+    const ran = join(box.stateDir, 'filter-ran')
+    await box.writeFile('~/.gitconfig', `[filter "evil"]\n\tclean = touch ${ran}\n`)
+    await box.writeFile('.gitattributes', 'secret.txt filter=evil\n')
+    await box.writeFile('secret.txt', 'content\n')
+    await snapshot(box)
+    await box.writeFile('secret.txt', 'changed\n')
+    await acceptIntoSnapshot(box, 'secret.txt')
+    await diffSinceSnapshot(box)
+    assert.ok(!existsSync(ran), 'the planted clean filter never ran')
   } finally {
     await box.destroy()
   }

@@ -128,12 +128,18 @@ export async function createFakeSandbox(
   const base = await mkdtemp(join(parent, 'reeval-sandbox-'))
   const workdir = join(base, 'work')
   await mkdir(workdir)
+  // Beside the sandbox, not in its home: commands run as the host user, who can read it anyway.
+  const stateDir = `${base}.state`
+  await mkdir(stateDir)
   let destroyed: Promise<void> | undefined
   const resolve = (path: string) =>
     path.startsWith('~/') ? join(base, path.slice(2)) : join(workdir, path)
 
   return {
     workdir,
+    stateDir,
+    execOwn: (command, { signal } = {}) =>
+      run(sh, ['-c', command], { cwd: workdir, env: { HOME: base, ...env }, signal }),
     // The shell changes into `cwd`, so a missing one fails the command (as in Docker) rather
     // than the spawn.
     exec: (command, { cwd, env: extra, signal } = {}) => {
@@ -162,6 +168,7 @@ export async function createFakeSandbox(
     // POSIX unlinks the tree even if a process still has it as cwd, so a second destroy is just rm.
     destroy: () => {
       destroyed ??= (async () => {
+        await rm(stateDir, { recursive: true, force: true }).catch(() => {})
         if (process.platform === 'win32') {
           if (existsSync(base)) await runSh(sh, KILL_UNDER, base)
           await removeTree(base)
