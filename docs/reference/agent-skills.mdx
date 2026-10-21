@@ -1,0 +1,33 @@
+---
+title: Agent skills
+description: The skills reeval publishes for coding agents that set up, write and review evals.
+---
+
+reeval's repository has three skills for the coding agent you work with, in `skills/`. Install them with the [skills](https://www.npmjs.com/package/skills) CLI, or copy a folder into your agent's skill directory (`.cursor/skills/`, `.claude/skills/`, …):
+
+```bash
+npx skills add invertase/reeval --skill quick-start --skill reeval
+```
+
+| Skill | Your agent uses it to | Read it |
+|---|---|---|
+| `quick-start` | Set reeval up in a project or an empty directory: install, `reeval init --bare`, one to three small evals, `reeval doctor`, and how to read the first run | [`skills/quick-start/SKILL.md`](https://github.com/invertase/reeval/blob/main/skills/quick-start/SKILL.md) |
+| `reeval` | Write, run and debug evals: the authoring API, environments, compare, the CLI and every error's fix | [`skills/reeval/SKILL.md`](https://github.com/invertase/reeval/blob/main/skills/reeval/SKILL.md) |
+| `eval-rubric` | Review an eval's name, prompts and judge questions, and fix a `Remarks:` block | [`skills/eval-rubric/SKILL.md`](https://github.com/invertase/reeval/blob/main/skills/eval-rubric/SKILL.md) |
+
+The {{ pkg }} package ships `eval-rubric` too, in its `skills/` folder, because insights apply it when they raise remarks.
+
+## quick-start
+
+Ask your agent to "set up reeval here". It works in this order:
+
+| Step | What it does |
+|---|---|
+| Look | Finds a `reeval.config.*`, `evals/`, the package manager, the project's skills and which keys `.env.local` names (never their values) |
+| Agree | In a project, says what it found and proposes evals, then waits for your yes. In an empty directory, asks what you want to evaluate and researches it |
+| Install | `npm i -D {{ pkg }}` with your package manager, then `reeval init --bare --harness <name>`. Where it finds a config it skips init, and it never passes `--force` |
+| Write | One to three evals in `evals/`: a skill with and without, when the project has one; deterministic checks first; a `canary` profile when a check is a pattern it wrote |
+| Check | `reeval run --dry-run`, then `reeval doctor`, and tells you each missing key as the `.env.local` line to add |
+| Hand over | What it added, what's missing, the command to run, and how to read the result block |
+
+It never overwrites a file, edits an existing eval or writes a key. A real `reeval run` costs tokens, so it asks before starting one. The compare it writes for a project with skills is the one in [Prove a skill helps](/recipes/skill-lift).

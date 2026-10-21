@@ -6,8 +6,10 @@ edit.
 
 ## A. A skill, with and without
 
-The project has `skills/supabase-postgres-best-practices/SKILL.md`, whose rules include "index
-every foreign key". The task asks for the schema, not the rule.
+Say the project has `skills/acme-billing/SKILL.md`, and one of its rules is "money is an integer
+number of cents, in a column whose name ends in `_cents`". A capable agent without the skill
+writes `numeric(10,2)`, so the rule tells the arms apart. The task asks for the table, not the
+rule.
 
 ```ts
 // evals/environments.ts
@@ -18,40 +20,37 @@ export const plain = defineEnvironment('plain', {
   files: { '.gitignore': 'node_modules/\n' },
 })
 
-/** The same, with this repo's Postgres skill. */
-export const withSkill = plain.extendEnvironment('with-postgres-skill', ({ skill }) => ({
-  skills: [skill.local('../skills/supabase-postgres-best-practices')],
+/** The same, with this repo's billing skill. */
+export const withSkill = plain.extendEnvironment('with-billing-skill', ({ skill }) => ({
+  skills: [skill.local('../skills/acme-billing')],
 }))
 ```
 
 ```ts
-// evals/foreign-keys.eval.ts
+// evals/invoice-amounts.eval.ts
 import { evaluate, expect } from 'reeval'
 import { plain, withSkill } from './environments.ts'
 
-const migration = 'migrations/001_orders.sql'
+const migration = 'migrations/001_invoices.sql'
 
 evaluate(
-  'indexes foreign keys with the Postgres skill',
+  'stores invoice totals in cents with the billing skill',
   { compare: { baseline: plain, variants: [withSkill] }, runs: 2 },
   async (c) => {
     await c.send(
-      `Write ${migration}: a Postgres migration creating a customers table ` +
-        'and an orders table whose customer_id references customers.',
+      `Write ${migration}: a Postgres migration creating an invoices table ` +
+        'with a customer id, an issue date and the invoice total.',
     )
     const sql = ((await c.readFile(migration)) ?? '').toLowerCase()
-    expect.soft(sql, 'creates orders').toMatch(/create table[^;]*orders/)
-    expect.soft(sql, 'indexes orders.customer_id').toMatch(
-      /create index[^;]*on\s+(public\.)?orders\s*(using \w+\s*)?\(\s*customer_id/,
-    )
+    expect.soft(sql, 'creates invoices').toMatch(/create table[^;]*invoices/)
+    expect.soft(sql, 'total in integer cents').toMatch(/\btotal\w*_cents\s+(big)?int/)
   },
 )
 ```
 
-Pick a rule the agent is likely to miss without the skill: a project convention, a recent API,
-a non-obvious default. A rule every agent already follows shows no lift (both arms `2 of 2`),
-which is a real answer but a dull first run. Read the skill and choose the most specific rule
-that a file or a command can check.
+Read the skill you're evaluating and choose its own most specific rule that a file or a command
+can check; the example's rule is only a shape. A rule every agent already follows shows no lift
+(both arms `2 of 2`), which is a real answer but a dull first run.
 
 The canary: a profile in `reeval.config.ts` whose fake agent writes the wrong answer. Add
 `fakeHarness` to the harness import.
@@ -59,11 +58,14 @@ The canary: a profile in `reeval.config.ts` whose fake agent writes the wrong an
 ```ts
 import { cursor, fakeHarness } from 'reeval/harness'
 // … inside defineConfig({ … profiles: { …
-    // A fake agent that writes the migration without the index: every eval must fail.
+    // A fake agent that stores the total as numeric: every eval must fail.
     canary: {
       defaults: {
         harness: fakeHarness({
-          files: { 'migrations/001_orders.sql': 'create table orders (id int);\n' },
+          files: {
+            'migrations/001_invoices.sql':
+              'create table invoices (id int, total numeric(10,2));\n',
+          },
           text: 'Done.',
         }),
       },

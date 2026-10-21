@@ -1,11 +1,12 @@
 ---
 name: quick-start
 description: >
-  Get someone up and running with reeval, the eval runner for coding agents: detect what's set
-  up, install it, write one to three small evals that show its value (a skill with and without,
-  when the project has skills), check the keys and Docker with `reeval doctor`, and explain the
-  results. Use when asked to "set up reeval", "add evals", "try reeval" or "get started with
-  reeval", in an existing project or an empty directory.
+  Read this first, before the reeval skill, whenever you're asked to set up, install, add,
+  try or get started with reeval (the eval runner for coding agents), in a project or an empty
+  directory, including "set up reeval here" and "add evals". It detects what's set up, asks what
+  to evaluate, installs reeval, writes one to three small evals that show its value (a skill with
+  and without, when the project has skills), runs `reeval doctor` for keys and Docker, and
+  explains the results.
 ---
 
 # reeval quick start
@@ -21,8 +22,9 @@ Rules that hold throughout:
   `reeval.yaml` exists, never pass `--force`, never edit or delete an existing eval, and add new
   files beside the user's.
 - **Never write, print or ask for a key's value.** Name the variable and the file it goes in.
-- **Ask before you build,** then stop and wait (step 2). If the user's message already answers
-  the question, don't ask it again.
+- **Ask before you build,** then stop and wait (step 2): always, even when reeval is half set
+  up or the right eval looks obvious. Only a message that already says what to evaluate
+  ("add an eval for the postgres skill") skips the question.
 
 ## 1. Look before you touch anything
 
@@ -37,7 +39,7 @@ grep -o '^[A-Z_]*=' .env.local .env 2>/dev/null                      # key names
 
 | You find | State | Then |
 |---|---|---|
-| A `reeval.config.*` or `reeval.yaml` | Set up | No init. Read the config and the evals, run `npx reeval run --dry-run`, add only what's missing |
+| A `reeval.config.*` or `reeval.yaml` | Set up | No init. Read the config and the evals and run `npx reeval run --dry-run`; after step 2, add evals beside them |
 | `reeval` in `package.json`, no config | Installed | `npx reeval init --bare --harness <h>` |
 | Neither | New | Install, then `init --bare` (step 3) |
 
@@ -46,10 +48,14 @@ The directory is a **project** if it has code, docs or skills (`package.json`, `
 
 ## 2. Agree what to evaluate
 
+"Set up reeval" says to set reeval up, not what to evaluate, so it doesn't answer this step,
+however clear the choice looks from the repo. Your first reply is the proposal and the
+question, with nothing installed or written yet: end your turn there and wait for the answer.
+
 **In a project,** say in two or three sentences what you found and what you propose, then ask
 and stop. For example: "This repo has two skills. I'd set up reeval with one eval that runs Cursor
-on a Postgres task with and without `supabase-postgres-best-practices`, to show what the skill
-changes. Shall I set up evals for this project?"
+on a billing task with and without `acme-billing`, to show what the skill changes. Shall I set
+up evals for this project?"
 
 **In an empty directory, or when the user says no,** ask what they want to evaluate (an SDK, an
 API, a library, docs or a skill they're writing, a kind of task) and stop. When they answer,
@@ -96,18 +102,25 @@ Pick the low-hanging fruit, in this order:
 
 Each eval:
 
-- **One task, one prompt, that doesn't name the answer.** Ask for the outcome ("a migration with
-  customers and orders"), not the rule the skill teaches ("index the foreign key").
+- **Check a rule only the skill teaches.** Read the skill and pick its most specific rule: a
+  house convention, a helper or file it names, a version-specific API, a non-obvious default.
+  Ask: would a strong agent do this unprompted? If yes (deny public access, validate input),
+  both arms pass and there's no lift to see; pick another.
+- **One task, one prompt, that doesn't name the answer.** Ask for the outcome in the user's
+  words ("an invoices table with its total"), never the rule the check looks for ("store the
+  total in cents"). Reread the prompt: if it restates the rule, the control passes too.
 - **Deterministic checks first:** a file's content, a command's exit code, a script that imports
   the agent's code. Label each requirement with `expect.soft(x, 'label')`. Add a judge
   (`c.judge`) only for what no check can see, and then add `judge:` to the config.
-- **A name that states the question:** `indexes foreign keys with the Postgres skill`, not
-  `postgres test`. Insights read the name first.
+- **A name that states the question:** `stores invoice totals in cents with the billing skill`,
+  not `billing test`. Insights read the name first.
 - **Small:** `runs: 2` on a compare (4 attempts), 1 elsewhere. Seed only the files the task
   needs. If it needs the repo, seed it with `directory('..', { glob: ['!.env*', '!.reeval/',
   '!evals/'] })`: `directory()` doesn't skip `.env*`, and keys must not reach the sandbox.
 - **Eval files go in `evals/*.eval.ts`,** environments in `evals/environments.ts`. Paths in
-  `skill.local()`, `file()` and `directory()` are relative to the file that calls them.
+  `skill.local()`, `file()` and `directory()` are relative to the file that calls them. If
+  `evals/environments.ts` exists, append your environments below what's there and leave its
+  lines, comments included, as they are.
 
 Add a **canary** profile when a check is a regex or a script you wrote: a fake agent that does the
 task wrong must fail every check, so you know the checks check (Template A shows one).
@@ -137,17 +150,19 @@ their key. One compare at `runs: 2` on Cursor is a few minutes.
 End with a short message, not a report:
 
 1. What you added, one line per file, and what each eval asks.
-2. What's missing, as commands: the `.env.local` lines, `npx reeval image build`, Docker.
+2. Each key the config needs by name (`CURSOR_API_KEY`, the analysis key) and whether `doctor`
+   found it; then what's missing, as commands: the `.env.local` lines, `npx reeval image
+   build`, Docker.
 3. The command to run: `npx reeval run` (or `npx reeval run <eval-name>` for one).
 4. How to read the output, in a few lines:
 
 ```text
-pass             indexes foreign keys with the Postgres skill
-  arm                  pass
-  plain                0 of 2
-  with-postgres-skill  2 of 2  can't tell yet
-  check                       plain   with-postgres-skill
-  indexes orders.customer_id  0 of 2  2 of 2
+pass             stores invoice totals in cents with the billing skill
+  arm                 pass
+  plain               0 of 2
+  with-billing-skill  2 of 2  can't tell yet
+  check                   plain   with-billing-skill
+  total in integer cents  0 of 2  2 of 2
 ```
 
 - Each arm's `N of M` is passing attempts. The variant's word is its effect against the control:
@@ -155,6 +170,8 @@ pass             indexes foreign keys with the Postgres skill
   (`--runs 4` to find out). The check table shows which check told the arms apart.
 - The sentences under a block are insights (`analysis.model`): they explain, never change a
   verdict. `Remarks:` after the tally names an eval that needs work, with the line to fix.
+- Both arms passing is a result, not a broken eval: the agent already does this without the
+  skill. Say so, and suggest a harder task or a more specific rule from the skill next.
 - Exit 0 means every gated cell passed; only the variant is gated in a compare.
 - Details: `.reeval/runs/<run>/summary.md`, each attempt's `transcript.jsonl` and `diff.patch`;
   `npx reeval studio` browses them; `npx reeval query effort` compares tools, time and tokens.

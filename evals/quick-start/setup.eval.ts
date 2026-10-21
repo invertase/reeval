@@ -64,6 +64,7 @@ group('sets up reeval', () => {
     async (c) => {
       const before = names(await evalList(c))
       const greet = await c.readFile('evals/greet.eval.ts')
+      const environments = (await c.readFile('evals/environments.ts')) ?? ''
       const first = await c.send(`Set up reeval here.${INSTALL}`)
       asksFirst(
         first,
@@ -79,6 +80,9 @@ group('sets up reeval', () => {
       expect
         .soft(await c.readFile('evals/greet.eval.ts'), 'leaves greet.eval.ts as it was')
         .toBe(greet)
+      expect
+        .soft((await c.readFile('evals/environments.ts')) ?? '', 'keeps environments.ts as it was')
+        .toContain(environments.trim())
       expect.soft(c, 'leaves the skills alone').not.toHaveChanged(['skills/**', 'README.md'])
       expect.soft(last.text, 'names the Cursor key').toMatch(/CURSOR_API_KEY/)
     },
