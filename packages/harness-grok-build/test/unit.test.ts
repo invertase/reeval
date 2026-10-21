@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -74,8 +74,15 @@ test("config.toml puts every call on the run's model and turns off the extra cal
   assert.equal(file.content.includes('default_reasoning_effort'), false)
 })
 
-test('grok-acp starts grok agent --no-leader stdio with a --plugin-dir for each plugin directory', () => {
+// grok-acp runs in reeval's Linux sandbox; Windows can't run it or the stand-in grok, extensionless
+// scripts with a shebang.
+const posixOnly = process.platform === 'win32' && 'grok-acp and its stand-in are POSIX scripts'
+
+test('grok-acp starts grok agent --no-leader stdio with a --plugin-dir for each plugin directory', {
+  skip: posixOnly,
+}, (t) => {
   const home = mkdtempSync(join(tmpdir(), 'grok-acp-'))
+  t.after(() => rmSync(home, { recursive: true, force: true }))
   const bin = join(home, '.local/bin')
   const launcher =
     /cat > "\$HOME\/\.local\/bin\/grok-acp" <<'GROK_LAUNCH'\n([\s\S]*?)GROK_LAUNCH\n/.exec(

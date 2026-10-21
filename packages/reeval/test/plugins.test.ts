@@ -7,8 +7,12 @@ import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import { ANTIGRAVITY_HOOK_EVENTS } from '@reeval/harness-antigravity'
 import {
+  buildSteps,
+  builtPlugins,
+  droppedPaths,
   fetchesAtStart,
   PluginProblem,
+  pluginBuildId,
   pluginFiles,
   readPlugin,
 } from '../src/environment/plugins.ts'
@@ -24,7 +28,7 @@ import {
   writePluginFiles,
 } from '../src/harness/agents.ts'
 import { unpackPlugins } from '../src/harness/unpack.ts'
-import type { PluginPart } from '../src/types.ts'
+import type { PluginBuild, PluginPart } from '../src/types.ts'
 
 const write = (root: string, files: Record<string, string>) => {
   for (const [path, content] of Object.entries(files)) {
@@ -139,7 +143,9 @@ test('only keeps the parts it names, and the files it drops stay out of the sand
   ]) {
     assert.ok(!paths.includes(gone), `${gone} is left out`)
   }
-  assert.equal(files.find((f) => f.path === 'start.sh')?.executable, true, 'modes are kept')
+  if (process.platform !== 'win32') {
+    assert.equal(files.find((f) => f.path === 'start.sh')?.executable, true, 'modes are kept')
+  }
   const inline = write(tmp(), {
     '.claude-plugin/plugin.json': JSON.stringify({
       name: 'inline',
@@ -222,19 +228,47 @@ test('npx, bunx, uvx and pipx run fetch at start: refused under a policy without
   )
   assert.deepEqual(fetchesAtStart([fetcher], null), {
     notes: [
-      `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start; install it in the image (docker({ install })) to keep it off the network`,
-      `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start; install it in the image (docker({ install })) to keep it off the network`,
+      `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start; add a build that installs it to keep it off the network`,
+      `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start; add a build that installs it to keep it off the network`,
     ],
   })
   assert.equal(
     fetchesAtStart([fetcher], []).refusal,
-    `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: install it in the image (docker({ install })), or allow the host in egress`,
+    `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: add a build that installs it, or allow the host in egress`,
   )
   assert.equal(
     fetchesAtStart([fetcher], ['registry.npmjs.org']).refusal,
-    `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start: install it in the image (docker({ install })), or allow the host in egress`,
+    `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start: add a build that installs it, or allow the host in egress`,
   )
   assert.deepEqual(fetchesAtStart([fetcher], ['registry.npmjs.org', 'pypi.org']), { notes: [] })
+})
+
+test('a build is commands and where they run, the same for each way of writing it', () => {
+  const env = defineEnvironment('e', ({ plugin }) => ({
+    plugins: [
+      plugin.npm('a@1', { build: 'make' }),
+      plugin.npm('b@1', { build: ['npm ci', 'npm run build'] }),
+      plugin.git('github:o/r', { path: 'plugins/x', build: { run: 'pnpm i', cwd: './' } }),
+    ],
+  }))
+  const builds = builtPlugins(applied(env).layers)
+  assert.deepEqual(
+    builds.map((p) => buildSteps(p.build as PluginBuild)),
+    [
+      { run: ['make'], cwd: null },
+      { run: ['npm ci', 'npm run build'], cwd: null },
+      { run: ['pnpm i'], cwd: '.' },
+    ],
+  )
+  // Preflight and the attempt name a build by its declaration, so another build is another layer.
+  const ids = builds.map(pluginBuildId)
+  assert.equal(new Set(ids).size, 3)
+  assert.deepEqual(builtPlugins(applied(env).layers).map(pluginBuildId), ids)
+})
+
+test('a built plugin keeps only the parts only names: the rest of its directory is removed', () => {
+  assert.deepEqual(droppedPaths(['skills', 'mcp']), ['agents', 'commands', 'hooks', 'rules'])
+  assert.deepEqual(droppedPaths(['agents', 'hooks', 'rules']), ['skills', 'commands', '.mcp.json'])
 })
 
 /** Runs `fn` with the agent's catalog entry loading `parts`, as its placement PR will. */

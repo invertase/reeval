@@ -1,7 +1,7 @@
 // The contract a sandbox provider meets before any attempt starts: check it can work, then make
 // each distinct environment the plan needs, and class every failure so reeval's generic layer
 // (preflight.ts) can order, retry, cache and scope them the same way for every provider.
-import type { HarnessDescriptor, SandboxDescriptor } from '../types.ts'
+import type { HarnessDescriptor, PluginSource, SandboxDescriptor } from '../types.ts'
 import { InfraError } from './types.ts'
 
 /**
@@ -62,10 +62,21 @@ export interface SandboxProvider<D extends SandboxDescriptor = SandboxDescriptor
    * {@link PrepareError}, which stops the run.
    */
   check(): Promise<void>
-  /** Attempts whose sandbox and harness give the same key share one prepared environment. */
-  key(sandbox: D, harness: HarnessDescriptor): string
-  /** Builds, pulls or provisions the environment, and returns what attempts start from. */
-  prepare(sandbox: D, harness: HarnessDescriptor, ctx: PrepareContext): Promise<PreparedHandle>
+  /**
+   * Attempts whose sandbox, harness and built plugins give the same key share one prepared
+   * environment.
+   */
+  key(sandbox: D, harness: HarnessDescriptor, plugins?: readonly PluginSource[]): string
+  /**
+   * Builds, pulls or provisions the environment, with the plugins that have a `build` built into
+   * it, and returns what attempts start from.
+   */
+  prepare(
+    sandbox: D,
+    harness: HarnessDescriptor,
+    ctx: PrepareContext,
+    plugins?: readonly PluginSource[],
+  ): Promise<PreparedHandle>
   /** Classes an error `prepare` or `check` threw that isn't already a {@link PrepareError}. */
   classify(error: unknown): PrepareFailure
 }

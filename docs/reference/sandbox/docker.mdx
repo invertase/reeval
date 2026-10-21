@@ -134,6 +134,21 @@ docker:sqlite · cursor · 1 eval
 | `from` | `reeval-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, on the digest the tag names then (its `ai.reeval.from-digest` label, and `image.from.digest` in the record); `reeval image build` rebuilds it when the tag has moved upstream |
 | `install` | `reeval-install:<hash of base id and commands>` | The base image's id or a command changes |
 | `dockerfile` | `reeval-dockerfile:<name>-<hash>` | The Dockerfile or its context (less `.dockerignore`) changes, or, `FROM ${REEVAL_BASE}`, reeval's image is rebuilt (the hash has its id) |
+| A plugin's `build` | `reeval-plugin:<image id>-<hash of commit, source tree and build>` | The image under it, the plugin's commit, its files (less `.dockerignore` and `.git`) or its commands change |
+
+A [plugin](/reference/helpers#plugin) with a `build` adds a layer on top of the attempt's image, after `install`, one per plugin. The layer gets the plugin's whole source and runs the commands with bash, as root with `HOME=/home/reeval` and no secrets, from the plugin's `path` (or `cwd` from the source's root). Only `path` is kept in the image, and the attempt copies it to `~/.reeval/plugins/<name>/`. A `plugin.git` or `plugin.npm` source is fetched when the layer builds, so `--dry-run` lists its tag unresolved:
+
+```text
+docker · cursor + 1 plugin build · 1 eval
+  ✓ base                                  reeval-sandbox:cursor-0.1.5  (ready: built (96cb8a76212d))
+  + build plugin.local('plugins/review')  reeval-plugin:96cb8a76212d-f2d3c864c458c316  (to build: not built yet)
+```
+
+A failing build command fails the attempts that use the plugin as infra errors (exit 3), like a failing `install` step: `Building the build of plugin.local('plugins/review') failed: build 2/2 exited 7: exit 7`. So does a `cwd` that isn't a directory in the source (`build cwd tools isn't a directory in the source`), before any command runs. `fakeSandbox()` has no image, so the plan refuses a plugin with a `build` there.
+
+A plugin's content is fixed when its image is prepared, and the record's `plugins[]` shows which content the attempt used. A re-resolved npm spec, or a local plugin you edit mid-run, isn't picked up until the next run; only a moved git ref is noticed.
+
+The build doesn't see the source's `.git` directory. A build that needs git metadata (`git describe`, husky) has to get it another way, such as a version passed in through the build's commands or environment.
 
 `reeval image build --force` rebuilds every image and pulls each base again. A `from` pinned to a digest (`node:22@sha256:…`) never moves.
 
