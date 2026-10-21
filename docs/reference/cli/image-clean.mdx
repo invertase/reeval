@@ -34,7 +34,7 @@ Filters match as [`reeval run`'s](/reference/cli/run) do: a substring of an eval
 
 It collects the evals with `--config`, `--profile` or `REEVAL_PROFILE`, and filters (not `--tag`), then prepares every image, three at a time, the way `reeval run` does before a run. A profile's `defaults.harness` and `defaults.sandbox` pick the images and its `tags` narrow the evals, as they would for the run; an unknown profile exits 2.
 
-1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.5`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
+1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.6`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
 2. Each `docker({ from })` image: built when missing, and rebuilt when its tag has moved upstream since.
 3. Each `docker({ dockerfile })` image and `install` layer: built when its content hash (or its base) is new.
 
@@ -55,13 +55,13 @@ A real `--dry-run` in `examples/hello`, where `✓` is ready, `+` to build, `~` 
 ```text
 images  7 sandbox images (nothing built: --dry-run)
 docker · cursor · 23 evals
-  + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+  + base  reeval-sandbox:cursor-0.1.6  (to build: not built yet)
 …
 docker+0ab0e263 · cursor + install · 1 eval
-  + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+  + base               reeval-sandbox:cursor-0.1.6  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · cursor · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.6-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
 …
 ```
 

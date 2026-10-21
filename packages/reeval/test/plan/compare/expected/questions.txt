@@ -19,4 +19,4 @@ evals/questions.eval.ts › pinned                                 a/base/docker
                                                                  question: Which is shorter? · shows task, diff · 4 pairs · no language model
 excluded: —
 image docker · cursor · 3 evals
-  base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
