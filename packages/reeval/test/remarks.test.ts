@@ -394,4 +394,49 @@ evaluate('coin', { runs: 3 }, async (c) => {
     const fourth = await runCli(p.dir, ['run'])
     assert.doesNotMatch(fourth.stdout, /Remarks:/)
   })
+
+  test('a fix points into its own eval when another eval in the file shares the label', async () => {
+    const p = await project('remarks-shared-label', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/coin.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('steady', { runs: 3 }, async (c) => {
+  await c.send('go')
+  expect.soft(1, 'lands heads').toBe(1)
+})
+evaluate('coin', { runs: 3 }, async (c) => {
+  await c.send('go')
+  expect.soft(c.attempt.n, 'lands heads').toBe(1)
+})
+`,
+    })
+    for (let i = 0; i < 2; i++) await runCli(p.dir, ['run'])
+    const third = await runCli(p.dir, ['run'])
+    assert.match(
+      remarksBlock(third.stdout) ?? '',
+      /^Remarks:\n {2}coin: "lands heads".*\n {4}fix {2}evals\/coin\.eval\.ts:8 /,
+    )
+  })
+
+  test("a family's fix points at its name template", async () => {
+    const p = await project('remarks-family', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/fam.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const marked = defineEnvironment('marked', { files: { 'marker.txt': 'ok\\n' } })
+evaluate.each([{ id: 'a' }, { id: 'b' }])(
+  'fixes $id',
+  { runs: 2, compare: { baseline: plain, variants: [marked] } },
+  async (c) => {
+    await c.send('go')
+    expect.soft(c.attempt.cell.role === 'variant', 'uses the marker').toBe(true)
+  },
+)
+`,
+    })
+    const r = await runCli(p.dir, ['run', '-v'])
+    assert.match(
+      remarksBlock(r.stdout) ?? '',
+      /^Remarks:\n {2}fixes \$id: Marked passed .*\n {4}fix {2}evals\/fam\.eval\.ts:5 /,
+    )
+  })
 })

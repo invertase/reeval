@@ -104,7 +104,11 @@ function historyOf(db: HistoryDb, branch: string | null): NonNullable<RemarkCont
   }
 }
 
-/** Finds where a remark's fix goes: the first line of the eval's sources naming `needle`. */
+/**
+ * Finds where a remark's fix goes: the first line naming `needle` from the eval's own declaration
+ * on, so another eval in the same file using that label doesn't take it, then anywhere in its
+ * sources.
+ */
 function locator(root: string) {
   const files = new Map<string, Promise<string | null>>()
   const text = (path: string) => {
@@ -118,25 +122,34 @@ function locator(root: string) {
   const found = new Map<string, string>()
   return {
     async prepare(entry: EvalEntry, needles: Array<string | null>) {
-      const paths = [
-        entry.file,
-        ...entry.sources.map((s) => s.path).filter((p) => p !== entry.file),
+      const quoted = (s: string) => [`'${s}'`, `"${s}"`, `\`${s}\``]
+      const lines = async (path: string) => (await text(path))?.split('\n') ?? []
+      const own = await lines(entry.file)
+      const name = quoted(entry.family?.name ?? entry.name)
+      const declared = Math.max(
+        0,
+        own.findIndex((line) => name.some((w) => line.includes(w))),
+      )
+      const scans: Array<{ path: string; from: number }> = [
+        { path: entry.file, from: declared },
+        { path: entry.file, from: 0 },
+        ...entry.sources
+          .filter((s) => s.path !== entry.file)
+          .map((s) => ({ path: s.path, from: 0 })),
       ]
       for (const needle of needles) {
         const key = `${entry.id}\0${needle ?? ''}`
         if (found.has(key)) continue
-        const quoted = (s: string) => [`'${s}'`, `"${s}"`, `\`${s}\``]
         // Best first: an object key (`docs: mcp.stdio(…)`), then a string, then the bare word.
         const tiers =
           needle === null
-            ? [quoted(entry.name)]
+            ? [name]
             : [[`${needle}:`, ...quoted(needle).map((q) => `${q}:`)], quoted(needle), [needle]]
         let at = `source:${entry.file}`
         search: for (const wanted of tiers) {
-          for (const path of needle === null ? [entry.file] : paths) {
-            const lines = (await text(path))?.split('\n') ?? []
-            for (const [i, line] of lines.entries()) {
-              if (wanted.some((w) => line.includes(w))) {
+          for (const { path, from } of needle === null ? scans.slice(1, 2) : scans) {
+            for (const [i, line] of (await lines(path)).entries()) {
+              if (i >= from && wanted.some((w) => line.includes(w))) {
                 at = `source:${path}#L${i + 1}`
                 break search
               }
