@@ -1,0 +1,53 @@
+set -e
+# The oracle's second turn: what the quick-start skill asks for, in each target.
+if [ ! -f reeval.config.ts ]; then
+  [ -f package.json ] || npm init -y >/dev/null
+  if [ -f pnpm-lock.yaml ]; then pnpm add -D ~/reeval.tgz >/dev/null; else npm i -D ~/reeval.tgz --no-audit --no-fund --loglevel=error; fi
+  npx reeval init --bare --harness cursor
+fi
+mkdir -p evals
+if [ -d skills/supabase-postgres-best-practices ]; then
+  cat > evals/environments.ts <<'EOF'
+import { defineEnvironment } from 'reeval'
+export const plain = defineEnvironment('plain', { files: { '.gitignore': 'node_modules/\n' } })
+export const withSkill = plain.extendEnvironment('with-postgres-skill', ({ skill }) => ({
+  skills: [skill.local('../skills/supabase-postgres-best-practices')],
+}))
+EOF
+  cat > evals/foreign-keys.eval.ts <<'EOF'
+import { evaluate, expect } from 'reeval'
+import { plain, withSkill } from './environments.ts'
+evaluate('indexes foreign keys with the Postgres skill', { compare: { baseline: plain, variants: [withSkill] }, runs: 2 }, async (c) => {
+  await c.send('Write migrations/001_orders.sql creating customers and orders, orders.customer_id referencing customers.')
+  const sql = ((await c.readFile('migrations/001_orders.sql')) ?? '').toLowerCase()
+  expect.soft(sql, 'indexes orders.customer_id').toMatch(/create index[^;]*on\s+orders\s*\(\s*customer_id/)
+})
+EOF
+elif [ -d skills/firestore-rules-creation ]; then
+  cat > evals/firestore-rules.eval.ts <<'EOF'
+import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const withSkill = plain.extendEnvironment('with-rules-skill', ({ skill }) => ({
+  skills: [skill.local('../skills/firestore-rules-creation')],
+}))
+evaluate('locks down Firestore rules with the rules skill', { compare: { baseline: plain, variants: [withSkill] }, runs: 2 }, async (c) => {
+  await c.send('Write firestore.rules so each user can read and write only their own users/{uid} document.')
+  const rules = (await c.readFile('firestore.rules')) ?? ''
+  expect.soft(rules, 'checks request.auth.uid').toMatch(/request\.auth\.uid\s*==\s*uid/)
+})
+EOF
+else
+  npm view tailwindcss version
+  cat > evals/tailwind.eval.ts <<'EOF'
+import { defineEnvironment, evaluate, expect } from 'reeval'
+const vite = defineEnvironment('vite', { files: { 'package.json': '{ "type": "module" }\n' } })
+evaluate('sets up Tailwind CSS v4 with its CSS import', { environment: vite }, async (c) => {
+  await c.send('Add Tailwind CSS 4 to this project, with src/styles.css as the stylesheet.')
+  const css = (await c.readFile('src/styles.css')) ?? ''
+  expect.soft(css, 'uses @import "tailwindcss"').toMatch(/@import\s+["']tailwindcss["']/)
+  expect.soft(css, 'no v3 @tailwind directives').not.toMatch(/@tailwind\s+base/)
+})
+EOF
+fi
+npx reeval run --dry-run >/dev/null
+npx reeval doctor || true
