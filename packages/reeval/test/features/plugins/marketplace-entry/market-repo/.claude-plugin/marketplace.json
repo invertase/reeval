@@ -2,7 +2,7 @@
   "name": "acme-tools",
   "owner": { "name": "Acme" },
   "plugins": [
-    { "name": "review", "source": "./plugins/review", "description": "House review conventions" },
-    { "name": "lint", "source": "./plugins/lint", "description": "House lint command" }
+    { "name": "lint", "source": "./plugins/lint", "description": "House lint command" },
+    { "name": "review", "source": "./plugins/review", "description": "House review conventions" }
   ]
 }
