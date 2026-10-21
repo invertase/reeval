@@ -216,7 +216,14 @@ reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.
 | `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: install it in the image (docker({ install })), or allow the host in egress` | Install the server in the image, or add the registry to `egress`. Under `allow-all` this is a note in the plan instead. |
 | `the review plugin's manifest sets "skills", which reeval doesn't read: keep each part in its default place (skills/, agents/, commands/, hooks/hooks.json)` | Move the part to its default directory. |
 
-A `plugin.git` or `plugin.npm` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way.
+A `plugin.git`, `plugin.npm` or `plugin.marketplace` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way, as does a marketplace that can't give the entry:
+
+| Message after the prefix | Fix |
+|---|---|
+| `plugin.marketplace('lint@github:acme/tools'): github:acme/tools has no .claude-plugin/marketplace.json, so it isn't a Claude Code marketplace; name a plugin's own repository or package with plugin.git or plugin.npm` | Name a Claude Code marketplace, or the plugin's repository with `plugin.git`. |
+| `plugin.marketplace('lnt@github:acme/tools'): the acme-tools marketplace (github:acme/tools) has no plugin "lnt" (did you mean "lint"?); it lists lint, format, review` | Name an entry the marketplace lists. |
+| `the acme-tools marketplace's entry "lint" has source {"source":"hg","url":"…"}, which reeval doesn't fetch: it takes a ./path in the marketplace, or a github, url, git-subdir or npm source` | Name the plugin's own source with `plugin.git` or `plugin.npm`. |
+| `the acme-tools marketplace's entry "lint" sets "commands", which reeval doesn't read: keep each part in the plugin's own directory` | Use a plugin whose parts are in their default places. |
 
 ## During an attempt
 

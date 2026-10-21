@@ -907,15 +907,15 @@ A plugin as an attempt placed it.
 </Property>
 
 <Property name="source" type="string">
-  Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`.
+  Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source.
 </Property>
 
-<Property name="marketplace" type="{name: string; source: string; commit: string} | null">
-  The marketplace it was listed in; null when it was named directly.
+<Property name="marketplace" type="{name: string; source: string; commit: string | null} | null">
+  The marketplace it was listed in, with its `marketplace.json` name, its source as written (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved to (null for npm); null when the plugin was named directly.
 </Property>
 
 <Property name="commit" type="string | null">
-  The commit a git source resolved to; null for a local or npm one.
+  The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one.
 </Property>
 
 <Property name="sha256" type="string">

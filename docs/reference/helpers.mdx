@@ -164,6 +164,7 @@ export const review = defineEnvironment('review', ({ plugin }) => ({
       path: 'plugins/review',
     }),
     plugin.npm('@acme/review-plugin@1.2.0', { only: ['skills', 'mcp'] }),
+    plugin.marketplace('lint@github:acme/agent-plugins', { ref: 'v3' }),
   ],
 }))
 ```
@@ -190,6 +191,26 @@ A plugin is a directory in Claude Code's layout: `.claude-plugin/plugin.json` wi
 <Property name="plugin.npm(spec, options?)" type="PluginSource">
   A pinned npm package, fetched as for `skill.npm`. `path` is the plugin's directory in it, default the package root.
 </Property>
+
+<Property name="plugin.marketplace('name@source', options?)" type="PluginSource">
+  The entry `name` in a Claude Code marketplace: a git repository (a URL or `github:owner/repo`, at `ref`) or an npm package (`npm:<spec>`) whose root holds `.claude-plugin/marketplace.json`. The marketplace and the entry's own source are fetched on the host when an attempt starts, with the same clone and `npm pack` caches as `plugin.git` and `plugin.npm`. The record keeps the marketplace's name, source and commit, and the entry's own source and commit.
+</Property>
+
+An entry's `source` is one of the forms Claude Code's marketplaces use:
+
+| Entry `source` | Fetched as |
+|---|---|
+| `"./plugins/lint"`, or a bare name under `metadata.pluginRoot` | A directory in the marketplace's own repository or package |
+| `{ "source": "github", "repo": "owner/repo", "ref"?, "sha"? }` | `plugin.git('github:owner/repo')`, at `sha` or else `ref` |
+| `{ "source": "url", "url", "ref"?, "sha"? }` | `plugin.git(url)` |
+| `{ "source": "git-subdir", "url", "path", "ref"?, "sha"? }` | `plugin.git(url, { path })`; `url` may be `owner/repo` |
+| `{ "source": "npm", "package", "version"? }` | `plugin.npm('package@version')`; a custom `registry` is refused |
+
+Only Claude Code's marketplace format is read: a Cursor listing goes in as `plugin.git` on the repository it points at. An entry that sets its parts' paths (`skills`, `commands`, `mcpServers` and so on) is refused, as a manifest that moves a part is. A source without `.claude-plugin/marketplace.json`, or an entry the marketplace doesn't list, fails the attempt as an infra error:
+
+```text
+environment typo (evals/typo.eval.ts › names an entry the marketplace lacks [fake/typo/fake#1]): plugin.marketplace('reviwe@file:///tmp/mkt/market'): the acme-tools marketplace (file:///tmp/mkt/market#v3) has no plugin "reviwe" (did you mean "review"?); it lists review, lint, format
+```
 
 Every source takes:
 
@@ -361,6 +382,8 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | A bad `only` | `plugin.local("./plugins/review"): only lists the parts to place, from 'skills', 'agents', 'commands', 'hooks', 'mcp', 'rules', e.g. only: ['skills', 'mcp'] (got ["apps"])` |
 | An unknown plugin option | `plugin.git("github:acme/agent-plugins"): unknown option "refs"; it takes only, build, ref and path. Did you mean "ref"?` |
 | A bad `build` | `plugin.npm("@acme/review-plugin@1.2.0"): build is a shell command or a list of them (got 3)` |
+| A marketplace plugin without its name | `plugin.marketplace() needs 'name@source': the plugin's entry and the marketplace's git repository or npm:<package>, e.g. plugin.marketplace('lint@github:acme/agent-plugins') (got "github:acme/agent-plugins")` |
+| `ref` on an npm marketplace | `plugin.marketplace("lint@npm:@acme/plugins@2.0.0"): ref picks a commit of a git marketplace; pin an npm marketplace in its spec, e.g. npm:@acme/plugins@2.0.0` |
 | No plugin repository | `plugin.git() needs a repository: a URL or github:owner/repo, e.g. plugin.git('github:acme/agent-plugins', { ref: 'v1.2.0' }) (got "")` |
 | No command | `mcp.stdio() needs a command, e.g. mcp.stdio('npx', ['-y', 'server']) (got "")` |
 | A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |
