@@ -2,7 +2,7 @@
 // one insights call on its scoped facts, then one headline call for the run, each checked by the
 // validator. A sentence the banned-word lint refuses is asked for once more, then dropped. Nothing
 // here reads or changes a verdict: the facts are final before any call starts.
-import { generateText, type LanguageModel, Output } from 'ai'
+import { generateText, type LanguageModel, NoObjectGeneratedError, Output } from 'ai'
 import type { z } from 'zod'
 import { cannedModel, providerModel, type ResolvedAnalysisModel } from '../analysis/model.ts'
 import type { RunRecord } from '../history/types.ts'
@@ -99,17 +99,31 @@ async function ask<S extends z.ZodType>(
   input: ModelInput,
   usage: Usage,
 ): Promise<z.infer<S>> {
-  const result = await generateText({
-    model: await languageModel(o.model, call, input),
-    system,
-    prompt: JSON.stringify(input),
-    output: Output.object({ schema, name: call }),
-    temperature: 0.2,
-    maxOutputTokens: o.maxOutputTokens,
-    maxRetries: 3,
-  })
-  usage.inputTokens += result.usage?.inputTokens ?? 0
-  usage.outputTokens += result.usage?.outputTokens ?? 0
+  const count = (u: { inputTokens?: number; outputTokens?: number } | undefined) => {
+    usage.inputTokens += u?.inputTokens ?? 0
+    usage.outputTokens += u?.outputTokens ?? 0
+  }
+  const once = async () =>
+    generateText({
+      model: await languageModel(o.model, call, input),
+      system,
+      prompt: JSON.stringify(input),
+      output: Output.object({ schema, name: call }),
+      temperature: 0.2,
+      maxOutputTokens: o.maxOutputTokens,
+      maxRetries: 3,
+    })
+  let result: Awaited<ReturnType<typeof once>>
+  try {
+    result = await once()
+  } catch (error) {
+    // `maxRetries` retries the API's errors only; a reply that isn't the schema's JSON is asked
+    // for once more, so one bad reply among a run's calls doesn't lose the others.
+    if (!NoObjectGeneratedError.isInstance(error)) throw error
+    count(error.usage)
+    result = await once()
+  }
+  count(result.usage)
   return result.output as z.infer<S>
 }
 

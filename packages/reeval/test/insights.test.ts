@@ -377,6 +377,22 @@ describe('the insights validator', () => {
     }
   })
 
+  test('canary: a reply that is not the schema JSON is asked for once more, not fatal', async () => {
+    const replies = new Map<string, number>()
+    const once = (bad: number) =>
+      generate((input) => {
+        if (input.call !== 'insights') return recipeInsights(input)
+        const n = (replies.get(input.eval.path) ?? 0) + 1
+        replies.set(input.eval.path, n)
+        return n <= bad ? ({ findings: 'not a list' } as never) : recipeInsights(input)
+      })
+    const doc = await once(1)
+    assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
+    assert.ok(insightOf(doc, measure).answer)
+    replies.clear()
+    await assert.rejects(once(2), /No object generated/)
+  })
+
   test('canary: a fourth finding is dropped, and the call that wrote it still counts', async () => {
     const doc = await generate(
       recipeWith(measure.path, (input, a) =>
