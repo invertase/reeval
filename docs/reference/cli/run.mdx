@@ -269,7 +269,7 @@ After the tally and hint, a run lists what reeval noticed about the evals themse
 
 Each remark prints until a run prints it for that version of the eval (its sources' hashes), and again once you edit the eval; `slow-mcp-start` prints in every run that has it. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it, so `reeval run -v` shows the `+N more` and the suggestions. Only the terminal output counts; `summary.md` holds the concerns a run without `-v` prints. The history kinds need an earlier run.
 
-The default branch is `origin`'s HEAD, else a local `main` or `master`, else, when `CI` is set, `GITHUB_BASE_REF` (a GitHub Actions pull request build has neither ref; a push build checks its branch out locally). Without one, `check-never-fails` isn't raised. Remarks never change the exit code.
+The default branch is `origin`'s HEAD, else a local `main` or `master`, else, when `CI` is set, `GITHUB_BASE_REF` (a GitHub Actions pull request build has neither ref; a push build of `main` or `master` checks it out locally). Without one, `check-never-fails` isn't raised. Remarks never change the exit code.
 
 A run writes its remarks to `.reeval/runs/<runId>/insights.json`, in the run's [insights](/reference/cli/analyze#during-a-run) when it writes them and alone (`model: "none"`) otherwise, and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them in the insights it writes.
 

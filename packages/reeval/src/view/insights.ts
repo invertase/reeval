@@ -165,8 +165,9 @@ export type Remark = {
    */
   firstSeenRun: string
   /**
-   * Whether this run's `reeval run` output printed it: false when the cap or a run without `-v`
-   * left it out, so a later run prints it. Missing: printed in `firstSeenRun` only.
+   * Whether this run's `reeval run` output printed it: false when an earlier run printed it, or
+   * when the cap or a run without `-v` left it out, so a later run prints it. Missing: printed in
+   * `firstSeenRun` only.
    */
   printed?: boolean
   /** Set on later runs once the cited span changed: the remark was acted on. */

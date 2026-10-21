@@ -25,7 +25,7 @@ import {
 /**
  * The branch the default-branch views count: `origin`'s HEAD, else a local `main` or `master`,
  * else in CI a pull request's base, `GITHUB_BASE_REF`. A GitHub Actions pull request build checks
- * out the merge commit with neither ref; a push build checks out its branch locally.
+ * out the merge commit with neither ref; a push build of `main` or `master` checks it out locally.
  */
 export async function defaultBranch(
   root: string,
