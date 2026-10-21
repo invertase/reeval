@@ -63,7 +63,7 @@ beside the run; `reeval record` keeps it): each eval's job (`choose`, `finish` o
 from its name first, so name evals for what they ask), its answer, and a sentence under each
 failing row, every one citing the facts. They never change a verdict or exit code.
 `analysis.maxTokens` (default 250000) caps their tokens, failing evals first;
-`analysis.insightsTimeout` (default `60s`) the wait; `--no-insights` skips them.
+they run to the end (Ctrl-C skips the rest, keeping the exit code); `--no-insights` skips them.
 `reeval analyze <run> --insights` writes them for a run that has none. Insights use
 `analysis.model` only, never the judge's model.
 

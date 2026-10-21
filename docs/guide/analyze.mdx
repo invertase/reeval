@@ -95,7 +95,7 @@ export default defineConfig({
 ```
 
 ```text
-insights: 11 evals with google/gemini-3.8-flash (up to 60s; --no-insights skips them)
+insights: 11 evals with google/gemini-3.8-flash (Ctrl-C skips the rest; --no-insights skips them all)
 
 pass             greet module › adds a default name in a follow-up turn
   Yes, the agent added the default parameter without breaking existing functionality in 1 of 1 tries.
@@ -109,10 +109,9 @@ With `analysis.model` set, `reeval run` asks the model what each eval checks and
 | Setting | Default | What it does |
 |---|---|---|
 | `analysis.maxTokens` | `250000` | Caps one run's insight tokens; failing evals, regressions and compares go first |
-| `analysis.insightsTimeout` | `'60s'` | How long the run waits for them after its last attempt |
 | `analysis.insights`, `--no-insights` | on | Turns them off, for every run or for one |
 
-Insights never change an outcome or the exit code. Past the budget or the timeout, or when a call fails twice, the blocks print their facts and one line says why: `insights skipped for 1 eval: analysis.maxTokens (4,000) reached — raise it in reeval.config.ts`.
+Insights run to the end, with a progress line on a terminal (`insights 3/11…`). They never change an outcome or the exit code. Past the budget, when an eval's calls fail twice, or after Ctrl-C, those blocks print their facts and one line says why: `insights stopped: 4 evals skipped (Ctrl-C)`.
 
 ## Next
 

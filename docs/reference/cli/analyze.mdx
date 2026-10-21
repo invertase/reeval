@@ -137,26 +137,44 @@ The file is never rewritten: delete it to write new insights. When the run's fac
 ### During a run
 
 ```text
-insights: 11 evals with google/gemini-3.8-flash (up to 60s; --no-insights skips them)
+insights: 11 evals with google/gemini-3.8-flash (Ctrl-C skips the rest; --no-insights skips them all)
+insights 3/11…
+```
 
+With `analysis.model` set, `reeval run` asks for insights once its last attempt finishes and its exit code is fixed, eight evals at a time, and prints each block with its sentences. They run to the end, with no overall time limit. On a terminal, the status line counts the evals settled, in place; piped or in CI, the heartbeat says so after a quiet minute (`… insights 8/11 after 13s`), and the agent output prints nothing until the result. `--no-insights`, or `analysis.insights: false`, skips them.
+
+```text
 pass             greet module › creates a tested greet module
   Yes, the agent created a tested greet module in 1 of 1 tries.
 …
-pass             recommends Genkit over LlamaIndex
+pass             recommends Genkit over Semantic Kernel
+pass             recommends Genkit when choosing against LangChain
 …
-insights skipped for 7 evals: analysis.maxTokens (20k) reached — raise it in reeval.config.ts
+insights stopped: 4 evals skipped (Ctrl-C)
+2s · results .reeval/runs/20261021T144954Z_86f937e_cursor-agent_kh0w/summary.md
 16 pass
 ```
 
-With `analysis.model` set, `reeval run` asks for insights once its last attempt finishes and its exit code is fixed, eight evals at a time, and prints each block with its sentences. `--no-insights`, or `analysis.insights: false`, skips them.
+Ctrl-C (or SIGTERM) while insights run stops the calls in flight and starts no more. The sentences already written stay, `insights.json` keeps them and lists the rest in `stopped`, and the exit code is the run's own, not 130. A second Ctrl-C leaves at once, with the same code. Ctrl-C during the attempts cancels the run as before, and asks for no insights.
 
 `analysis.maxTokens` (default 250000) caps the tokens of one run's insight calls. It goes to failing evals first, then to changes that made something worse, then to compares, then to infrastructure errors, then to the rest. Each eval reserves an estimate before it starts (6,000 tokens, then the mean of the evals that finished), and starts only when that fits what's left. Once the next one can't fit, no eval's calls start (those in flight finish), the evals it didn't reach print their facts, and the summary names how many. A budget under 6,000 tokens starts none. The run can still pass the budget by what the evals in flight spend over their estimates. The default covers about 45 evals on `google/gemini-3.8-flash`, whose thinking is most of each answer.
 
 | Outcome | What prints |
 |---|---|
-| Past `analysis.insightsTimeout` (default `60s`) | `insights still running after 60s, so they're left out: raise analysis.insightsTimeout in reeval.config.ts, or run reeval analyze <run> --insights` |
-| A call fails twice | `insights failed (<reason>): reeval analyze <run> --insights to retry` |
+| Ctrl-C or SIGTERM while they run | `insights stopped: N evals skipped (Ctrl-C)` |
+| Some evals' calls fail twice | `insights failed for N evals (<reason>), so they print their facts` |
+| Every eval's calls fail twice | `insights failed (<reason>): reeval analyze <run> --insights to retry` |
 | The model's key isn't set | `insights skipped: <why>` |
+
+### The caps
+
+| Cap | Value | Measured on 104 evals, `google/gemini-3.8-flash` |
+|---|---|---|
+| Each eval's input | 24,000 characters of JSON (about 6k tokens) | largest 8,291, median 2,656 |
+| Each call's output, thinking included | 20,000 tokens | largest 9,801 (9,468 thinking) |
+| Each call's time | 3 minutes | slowest 68s, 95th percentile 46s |
+
+The caps are fixed, not options. An eval over its input cap is cut the same way every time, and the model is told so: passing tries' messages go first, then older transcript lines, passing checks and effort, then the rest. Its verdict, cells and failing checks with their messages always stay. A reply cut off at the output cap, or a call past its time, counts as a failed call: the eval is tried once more, then prints its facts alone, and the other evals and the exit code are untouched.
 
 Each eval's classification is cached in `.reeval/analysis/classify/<key>.json`, keyed by what it's read from, so an unchanged eval isn't classified again. Without the cache, reeval reads it from the last recorded run's `insights.json`.
 
@@ -169,10 +187,9 @@ export default defineConfig({
     // default: the judge's, when it's a language model
     model: 'google/gemini-3.8-flash',
     maxTokens: 250_000, // one run's insights, in and out
-    insightsTimeout: '60s', // the wait after the last attempt
     instructions: 'Fewer tool calls count as a win.',
     maxInputTokens: 20_000, // the digest's cap (characters ÷ 4)
-    maxOutputTokens: 8_000, // the answer's cap
+    maxOutputTokens: 8_000, // the answer's cap (not insights')
   },
 })
 ```
@@ -189,20 +206,16 @@ export default defineConfig({
   The tokens, in and out, one run's insight calls may use, at least 1. Default 250000. Going over it never fails the run.
 </Property>
 
-<Property name="analysis.insightsTimeout" type="duration" optional>
-  How long `reeval run` waits for insights after its last attempt. Default `'60s'`.
-</Property>
-
 <Property name="analysis.instructions" type="string" optional>
   Your own guidance: what counts as a win, which skill is under test. It opens the prompt, before the digest and the rules, as the question the analysis answers.
 </Property>
 
 <Property name="analysis.maxInputTokens" type="number" optional>
-  The digest's cap, at least 1000. Default 20000.
+  The digest's cap, at least 1000. Default 20000. Insights have [their own caps](#the-caps).
 </Property>
 
 <Property name="analysis.maxOutputTokens" type="number" optional>
-  The answer's cap, at least 500. Default 8000.
+  The answer's cap, at least 500. Default 8000. Insights have [their own caps](#the-caps).
 </Property>
 
 For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. A function that throws is a failed call. `fakeAnalysis({ insights })` answers `--insights` the same way; see [fakeAnalysis](/reference/judges#fakeanalysis).
