@@ -723,6 +723,7 @@ async function attemptEvidence(
       model: t.model ?? null,
       unreported: t.unreported ?? [],
       error: turnError(t.transcript),
+      ...(t.mcpStartup ? { mcpStartup: t.mcpStartup } : {}),
       text:
         t.text.length > TURN_TEXT_LIMIT
           ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`

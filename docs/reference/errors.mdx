@@ -215,6 +215,9 @@ reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.
 | `plugin.local('plugins/review') has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker({ install })` | Leave `build` out. |
 | `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: install it in the image (docker({ install })), or allow the host in egress` | Install the server in the image, or add the registry to `egress`. Under `allow-all` this is a note in the plan instead. |
 | `the review plugin's manifest sets "skills", which reeval doesn't read: keep each part in its default place (skills/, agents/, commands/, hooks/hooks.json)` | Move the part to its default directory. |
+| `environment review lists two plugins named "review", plugin.local('plugins/a') and plugin.local('plugins/b'): rename one, or leave one out` | One environment lists each plugin name once. A child environment's plugin replaces its parent's of the same name. |
+| `the review plugin's MCP server "docs" would join mcp as review:docs, which mcp already names: rename mcp["review:docs"]` | Rename the environment's own server. |
+| `the review plugin's MCP server "docs": "${HOME}" in .mcp.json names a variable; reeval fills in only ${CLAUDE_PLUGIN_ROOT} in a command and its args, …` | Pass the host variable through the server's `env` as a whole value, such as `"TOKEN": "${TOKEN}"`. |
 
 A `plugin.git`, `plugin.npm` or `plugin.marketplace` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way, as does a marketplace that can't give the entry:
 

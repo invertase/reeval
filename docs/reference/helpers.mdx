@@ -222,7 +222,7 @@ Every source takes:
   Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses a plugin with one: install what it needs with `docker({ install })`.
 </Property>
 
-Each plugin's MCP servers join the environment's `mcp` as `<plugin>:<server>`, so egress, brokering and the record treat them like any other server. A whole `${VAR}` env value is read as `secret.fromEnv('VAR')`, and `${VAR}` in a header as `secret.template`. `${CLAUDE_PLUGIN_ROOT}` is the plugin's directory in the sandbox, `~/.reeval/plugins/<name>`.
+Each plugin's MCP servers join the environment's `mcp` as `<plugin>:<server>`, so egress, brokering and the record treat them like any other server. A whole `${VAR}` env value is read as `secret.fromEnv('VAR')`, and `${VAR}` in a header as `secret.template`. `${CLAUDE_PLUGIN_ROOT}` is the plugin's directory in the sandbox, `~/.reeval/plugins/<name>`, and the only variable a command or its args may name. A git or npm plugin's http server needs its host in `egress.allow` under a restricted policy; a local plugin's is an automatic host.
 
 No real harness loads plugins yet: the plan refuses a plugin on each, naming it, and the fake harness takes them. A server or hook that runs `npx`, `bunx`, `uvx` or `pipx run` fetches at start, so it's refused under an egress policy that doesn't allow the registry, and noted in the plan under `allow-all`:
 
@@ -233,7 +233,7 @@ the fetcher plugin's MCP server "search" runs npx, which fetches from registry.n
 ## mcp
 
 <Property name="mcp.stdio(command, args?, options?)" type="McpServer">
-  A server the agent starts in the sandbox. `options.env` sets its variables, secrets included.
+  A server the agent starts in the sandbox. `options.env` sets its variables, secrets included. When the sandbox has `node`, the agent's MCP config runs it through reeval's timer (`node /reeval/bin/mcp-timer.cjs` in Docker), which passes its stdio through and records each start as `turns[].mcpStartup`. A server that doesn't answer `initialize` within 60s fails the attempt.
 </Property>
 
 <Property name="mcp.http(url, options?)" type="McpServer">
