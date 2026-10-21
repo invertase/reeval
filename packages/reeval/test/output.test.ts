@@ -111,8 +111,11 @@ describe('every layout', () => {
   })
 
   test('insights add only their sentences: every fact row prints as it does without them', () => {
-    // A choose eval's layout is its own (the subject's count on each row), so it's left out here.
-    for (const g of GOLDENS.filter((x) => x.insights && x.name !== 'insights-choose')) {
+    // A choose eval's layout is its own (the subject's count on each row), so it's left out here,
+    // and so is the budget golden, whose skip line is a note, not a fact.
+    for (const g of GOLDENS.filter(
+      (x) => x.insights && x.name !== 'insights-choose' && !x.budgetSkips,
+    )) {
       const suite = goldenSuite(g)
       const stored = goldenInsights(g, suite)
       assert.ok(stored, g.name)

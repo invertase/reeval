@@ -565,7 +565,7 @@ evaluate('a', async () => {})
     noSecret(gateway)
   })
 
-  test("analysis: analysis.model's key, required only with analysis.agent", async () => {
+  test("analysis: analysis.model's key, a warning only: a run without it prints no insights", async () => {
     const off = await configOf('analysis-off', '{ harness: fakeHarness() }')
     assert.deepEqual(await checkAnalysis(off, deps(), false, '.env.local'), [])
     const model = await configOf(
@@ -586,11 +586,6 @@ evaluate('a', async () => {})
     )
     assert.deepEqual(statuses(set), ['ok'])
     noSecret(set)
-    const agent = await configOf(
-      'analysis-agent',
-      "{ harness: fakeHarness(), analysis: { model: 'google/gemini-3.8-flash', agent: true } }",
-    )
-    assert.deepEqual(statuses(await checkAnalysis(agent, deps(), false, '.env.local')), ['fail'])
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {

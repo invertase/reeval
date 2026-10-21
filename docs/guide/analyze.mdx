@@ -1,6 +1,6 @@
 ---
 title: Explaining a run
-description: Get a checked, plain-words reading of a run with reeval analyze, and notes on each eval and harness while a run goes.
+description: Get a checked, plain-words reading of a run with reeval analyze, and insights on each eval at the end of a run.
 ---
 
 `reeval analyze` makes one LLM call over the facts `reeval query` computes and explains the run in plain words, with every claim checked against those facts.
@@ -85,55 +85,33 @@ export default defineConfig({
 
 `instructions` opens the prompt, before the digest, as the question the analysis answers. A run where every cell has `gate: 'none'` is read as a study: the TL;DR says how the arms differ, check by check, rather than that attempts failed.
 
-## Notes during a run
+## Insights during a run
 
 ```ts title="reeval.config.ts"
 export default defineConfig({
-  analysis: { agent: true, model: 'google/gemini-3.8-flash' },
+  analysis: { model: 'google/gemini-3.8-flash' },
   // …
 })
 ```
 
 ```text
-analysis: 1 note in .reeval/analysis/20260929T201657Z_33d6cda_cursor-agent_dr8k/notes
+insights: 11 evals with google/gemini-3.8-flash (Ctrl-C skips the rest; --no-insights skips them all)
+
+pass             greet module › adds a default name in a follow-up turn
+  Yes, the agent added the default parameter without breaking existing functionality in 1 of 1 tries.
+…
+All 16 results passed across greeting, code generation, and framework recommendations.
+16 pass
 ```
 
-With `agent: true`, `reeval run` writes a note on each eval and harness as soon as that harness's attempts of the eval have all finished. The model doesn't read whole transcripts. It gets tools: list the attempts, open one, and compare a failed attempt with a passing one to see where their steps diverged.
+With `analysis.model` set, `reeval run` asks the model what each eval checks and how the run answers it, once the attempts finish and the exit code is fixed. Each sentence cites the run's facts and passes the [insight checks](/reference/cli/analyze#insights), or it's dropped. They're written to the run's `insights.json`, and `reeval record` keeps them with the run.
 
-```json title=".reeval/analysis/<runId>/notes/<eval>__<harness>.json"
-{
-  "kind": "reeval-analysis-note",
-  "evalId": "evals/skill.eval.ts › house greeting › greets in the house style",
-  "harness": "fake",
-  "model": "google/gemini-3.8-flash",
-  "attempts": ["fake/plain/fake#1", "fake/with-house-greeting/fake#1"],
-  "text": "In fake/plain/fake#1, the agent failed the assertion check …",
-  "usage": { "inputTokens": 5768, "outputTokens": 549 },
-  …
-}
-```
+| Setting | Default | What it does |
+|---|---|---|
+| `analysis.maxTokens` | `250000` | Caps one run's insight tokens; failing evals, regressions and compares go first |
+| `analysis.insights`, `--no-insights` | on | Turns them off, for every run or for one |
 
-A note never changes an outcome or the exit code. If the call fails, the note keeps its `error` and the run prints a warning. `agent` is off by default because it's one more model call per eval and harness on every run; `maxInputTokens` and `maxOutputTokens` cap each one.
-
-## A summary after the run
-
-```text
-analysis: 2 notes in .reeval/analysis/20260929T224823Z_3e6c17d_cursor-agent_6jp9/notes
-analysis: summary in .reeval/analysis/2d23006542befac87f359270f49b8cc539a4fd24ef4070e6d342a50a75ba804b.json (reeval analyze shows it)
-…
-$ npx reeval analyze
-cached analysis from 2026-09-29T22:51:58.212Z (.reeval/analysis/2d23006542befac87f359270f49b8cc539a4fd24ef4070e6d342a50a75ba804b.json); --no-cache calls the model again
-…
-  - pi:control#1 failed because instead of creating greet.js, it exited asking for clarification on the greeting style. [E1:L63] [F8] [r1/questions/pi:control#1]
-…
-gemini-3.8-flash · analysis-v2 · digest v1 · 15493 in / 4862 out tokens · 18s · 33 citations checked, 0 invalid, 0 dropped · 2 commands checked, 0 rejected
-```
-
-Once the run is written, `agent: true` also summarises it: the document `reeval analyze` writes, against the same base and under the same cache key. So `reeval analyze` prints it with no call, and `--save` keeps it in the history folder. Before it answers, the model can read what the digest left out: evidence dropped to fit `maxInputTokens`, and any attempt's steps, checks and diff.
-
-If the summary's call fails, the cache keeps it with its `error`, the run prints a warning and the exit code stands. `reeval analyze` counts a failed summary as a miss and asks again. The studio's Analysis tab shows the summary, each harness's notes, and a failed call's error:
-
-<Image src="/assets/studio/run-analysis-notes.png" alt="The Analysis tab's notes by harness: one note each for cursor:composer-2.5 and pi:gemini-3.8-flash on the questions eval" width={800} />
+Insights run to the end, with a progress line on a terminal (`insights 3/11…`). They never change an outcome or the exit code. Past the budget, when an eval's calls fail twice, or after Ctrl-C, those blocks print their facts and one line says why: `insights stopped: 4 evals skipped (Ctrl-C): reeval analyze <run> --insights to finish`. That command asks about only those evals and keeps every sentence already written.
 
 ## Next
 

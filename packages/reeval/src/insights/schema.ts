@@ -5,7 +5,7 @@
 import { z } from 'zod'
 
 /** Bumped when a prompt or output schema changes: older insights were asked differently. */
-export const INSIGHTS_PROMPT_VERSION = 'insights-v4'
+export const INSIGHTS_PROMPT_VERSION = 'insights-v5'
 
 const sentence = z.object({
   text: z.string(),
@@ -67,7 +67,8 @@ You get the eval's NAME first. The name is the author's statement of what the ev
 - question: the eval's question in plain words, as a reader would ask it ("Do agents pick Genkit for production AI features?").
 - subject.tool: for choose, the tool the eval asks about, as the name writes it; else null. subject.change: when across is change, what the change adds (a skill, a doc), else null.
 - name: states-intent when the name says what the eval asks and the checks agree; no-intent when it's a topic, a ticket id or "test N"; contradicts when it names something no check or judge question looks at.
-- confidence: low when the name and the checks don't settle the job.`
+- confidence: low when the name and the checks don't settle the job.
+When trimmed is set, reeval left that detail out to fit.`
 
 export const INSIGHTS_PROMPT = `You explain one reeval eval's result to the developer who wrote it, in plain words an average developer understands. reeval ran a coding agent on the eval's task, a number of tries per row, and checked each try.
 
@@ -84,6 +85,7 @@ Rules, checked by code: a sentence that breaks one is dropped.
 - findings: only when slots.findings; up to three points on what moved, what broke or what the agent did.
 - rows: at most one sentence per fact id in slots.rows (row is that id), saying why that row failed or moved; none for other rows.
 - namedTools: only when slots.namedTools; for each attempt (attempt is its id), the tools, libraries or frameworks its final message recommended or used, each copied exactly as written there.
+When trimmed is set, reeval left that detail out to fit: say nothing about what isn't in the input.
 When retry is set, your earlier sentences were refused for those reasons: write them again within the rules.`
 
 export const HEADLINE_PROMPT = `You write the one-sentence headline of a reeval run for the developer who wrote its evals: what the run found, leading with what needs work. You get each eval's id (F1), path, name, verdict and answer, and the tally.

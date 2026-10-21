@@ -1,23 +1,27 @@
-// `reeval analyze [run] --insights`: classifies each eval of a recorded run and writes its
-// insights with the analysis model, checked by the validator, into `<run>/insights.json`
-// create-only (except over remarks-only insights, whose remarks it keeps), then prints the run's
-// blocks with them. The facts and the exit code don't depend
-// on what the model wrote: a dropped sentence is counted, never an error.
+// `reeval analyze [run] --insights`: classifies each eval of a run and writes its insights with
+// the analysis model, checked by the validator, into its `insights.json` create-only (the history
+// folder's, or the scratch run's before it's recorded), then prints the run's blocks with them.
+// It's what `reeval run` does at its end, for a run that has none. A document with stopped, failed
+// or budget-skipped evals is finished instead: only those are asked about, and it's replaced whole,
+// as are remarks-only insights. Either way the document's remarks are kept. The facts and the exit
+// code don't depend on what the model wrote: a dropped sentence is counted, never an error.
 import { existsSync } from 'node:fs'
-import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveAnalysisModel } from '../analysis/model.ts'
 import { allRuns, CommandError } from '../commands.ts'
 import { UsageError } from '../errors.ts'
-import { readRecord } from '../history/files.ts'
+import { readRecord, scratchDir } from '../history/files.ts'
 import { resolveRun } from '../history/views.ts'
 import { fromCwd } from '../ids.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { render } from '../ui/layout.ts'
 import { fromModel } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
-import { insightsFile, readInsights, writeInsights } from './files.ts'
-import { generateInsights } from './generate.ts'
+import { classifyCache } from './classify.ts'
+import { readInsights, replaceInsights, runInsightsFile, writeInsights } from './files.ts'
+import { generateInsights, unfinishedEvals } from './generate.ts'
+import { factsHash } from './hash.ts'
+import { INSIGHTS_PROMPT_VERSION } from './schema.ts'
 
 type Ctx = {
   config: ResolvedConfig
@@ -37,38 +41,51 @@ export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promis
     )
   }
   const entry = resolveRun(await allRuns(config), ref ?? 'latest')
-  if (!entry.recorded) {
-    throw new CommandError(
-      `${entry.runId} isn't recorded, so there's no history folder for its insights. Run reeval record ${entry.runId} first, then reeval analyze ${entry.runId} --insights.`,
-    )
-  }
-  const file = insightsFile(config.history.dir, entry.runId)
-  // Remarks-only insights hold no model's words, so they're the one kind written over.
+  const file = runInsightsFile(config, entry)
   const existing = existsSync(file) ? await readInsights(file) : null
-  if (existsSync(file) && (!existing || fromModel(existing))) {
+  // Remarks-only insights hold no model's words, so they're written over, not finished.
+  const prior = existing && fromModel(existing) ? existing : null
+  const unfinished = prior ? unfinishedEvals(prior).size : 0
+  if (existsSync(file) && (!existing || (prior && !unfinished))) {
     throw new CommandError(
       `${fromCwd(file)} already exists, and insights are never rewritten. reeval show ${entry.runId} prints them; delete the file to write new ones.`,
     )
   }
   const model = resolveAnalysisModel(config)
-  const record = await readRecord(join(config.history.dir, `${entry.runId}.json`))
-  ctx.err(`writing insights for ${entry.runId} with ${model.name}…`)
+  const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
+  const record = await readRecord(join(dir, `${entry.runId}.json`))
+  if (prior) {
+    const written = `${prior.model} (${prior.promptVersion})`
+    const asking = `${model.name} (${INSIGHTS_PROMPT_VERSION})`
+    const reason =
+      prior.factsHash !== factsHash(suiteResult(record))
+        ? "it was written for other facts than this run's"
+        : written !== asking
+          ? `it was written by ${written}, and this would ask ${asking}`
+          : null
+    if (reason) {
+      throw new CommandError(
+        `${fromCwd(file)} has ${unfinished === 1 ? 'an unfinished eval' : 'unfinished evals'}, but ${reason}: delete the file to write new ones.`,
+      )
+    }
+  }
+  ctx.err(
+    prior
+      ? `finishing insights for ${entry.runId} with ${model.name}: ${unfinished === 1 ? '1 eval' : `${unfinished} evals`} left…`
+      : `writing insights for ${entry.runId} with ${model.name}…`,
+  )
   const generated = await generateInsights({
     record,
-    runDir: join(config.history.dir, entry.runId),
+    runDir: join(dir, entry.runId),
     model,
-    maxOutputTokens: config.analysis.maxOutputTokens,
+    maxTokens: config.analysis.maxTokens,
+    cache: classifyCache(config.root, config.history.dir),
+    ...(prior ? { prior } : {}),
   })
-  const insights = { ...generated, remarks: [...generated.remarks, ...(existing?.remarks ?? [])] }
-  const kept = `${file}.remarks`
-  if (existing) await rename(file, kept)
-  try {
-    await writeInsights(file, insights)
-  } catch (error) {
-    if (existing) await rename(kept, file)
-    throw error
-  }
-  if (existing) await rm(kept)
+  const insights = prior ? generated : { ...generated, remarks: existing?.remarks ?? [] }
+  // replaceInsights refuses before its rename, so a refused document leaves the one there.
+  if (existing) await replaceInsights(file, insights)
+  else await writeInsights(file, insights)
   const { dropped, regenerated } = insights.validation
   ctx.err(
     `wrote ${fromCwd(file)}: ${insights.evals.length} evals, ${dropped} ${dropped === 1 ? 'sentence' : 'sentences'} removed by the checks${regenerated ? `, ${regenerated} asked for again` : ''}. Commit it with git.`,

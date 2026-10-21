@@ -566,7 +566,12 @@ export function resolveConfig(
   }
 }
 
-export const ANALYSIS_DEFAULTS = { maxInputTokens: 20_000, maxOutputTokens: 8_000 } as const
+export const ANALYSIS_DEFAULTS = {
+  maxInputTokens: 20_000,
+  maxOutputTokens: 8_000,
+  insights: true,
+  maxTokens: 250_000,
+} as const
 
 function checkAnalysis(
   analysis: ReevalConfig['analysis'],
@@ -580,13 +585,14 @@ function checkAnalysis(
   }
   unknownKey(
     analysis,
-    ['model', 'agent', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
+    ['model', 'insights', 'maxTokens', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
     'analysis',
     file,
   )
   const {
     model,
-    agent,
+    insights = ANALYSIS_DEFAULTS.insights,
+    maxTokens = ANALYSIS_DEFAULTS.maxTokens,
     instructions,
     maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens,
     maxOutputTokens = ANALYSIS_DEFAULTS.maxOutputTokens,
@@ -599,9 +605,14 @@ function checkAnalysis(
       `analysis.model in ${file} must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(model)})`,
     )
   }
-  if (agent !== undefined && typeof agent !== 'boolean') {
+  if (typeof insights !== 'boolean') {
     throw new UsageError(
-      `analysis.agent in ${file} must be true or false (got ${JSON.stringify(agent)})`,
+      `analysis.insights in ${file} must be true or false (got ${JSON.stringify(insights)})`,
+    )
+  }
+  if (!(Number.isInteger(maxTokens) && maxTokens >= 1)) {
+    throw new UsageError(
+      `analysis.maxTokens in ${file} must be a whole number of tokens of at least 1, e.g. 250000 (got ${JSON.stringify(maxTokens)})`,
     )
   }
   if (instructions !== undefined && typeof instructions !== 'string') {
@@ -619,7 +630,13 @@ function checkAnalysis(
       `analysis.maxOutputTokens in ${file} must be a whole number of at least 500 (got ${maxOutputTokens})`,
     )
   }
-  return { ...analysis, maxInputTokens, maxOutputTokens }
+  return {
+    ...analysis,
+    insights,
+    maxTokens,
+    maxInputTokens,
+    maxOutputTokens,
+  }
 }
 
 /** Runs whose local debug data `.reeval/debug` keeps, and the trace buffer per attempt. */
@@ -729,14 +746,6 @@ export const analysisModelOf = (config: ResolvedConfig): string | FakeAnalysisMo
 /** Whether `analysis.model` is set, so a model can answer what each eval asks. */
 export const hasAnalysisModel = (config: ResolvedConfig) => analysisModelOf(config) !== undefined
 
-/** The provider model `analysis.agent` calls during a run, if it's on: `analysis.model`, else the judge's. */
-function agentModel(config: ResolvedConfig): string | null {
-  if (!config.analysis.agent) return null
-  const model = config.analysis.model ?? config.judge.model
-  // An evaluation model can't analyse: the plan stops on that before it asks for keys.
-  return typeof model === 'string' && !model.startsWith('typesafe-ai/') ? model : null
-}
-
 /** The run's judge model: the profile's when it sets one, else the config's. */
 function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null | undefined) {
   return profile ? (profileJudge(profile).model ?? config.judge.model) : config.judge.model
@@ -745,7 +754,8 @@ function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null |
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
  * plans (default: the config's), the run's judge, the models that answer compare questions,
- * the analysis model with `analysis.agent`, and required config and profile secrets.
+ * and required config and profile secrets. Insights' model isn't among them: without its key a run
+ * prints no insights, and never stops for it.
  */
 export function missingCredentials(
   config: ResolvedConfig,
@@ -761,12 +771,7 @@ export function missingCredentials(
   const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
   for (const key of keys) if (!env[key]) missing.push(key)
   const judge = runJudgeModel(config, options.profile)
-  const agent = agentModel(config)
-  const models = [
-    ...(judge !== undefined ? [judge] : []),
-    ...(options.questionModels ?? []),
-    ...(agent ? [agent] : []),
-  ]
+  const models = [...(judge !== undefined ? [judge] : []), ...(options.questionModels ?? [])]
   for (const model of models) {
     const modelKeys = judgeCredentials(model)
     const alternatives = modelKeys.join(' or ')
@@ -805,8 +810,6 @@ export function malformedCredentials(
   const judge = runJudgeModel(config, options.profile)
   if (judge !== undefined) names.push(...judgeCredentials(judge))
   for (const model of options.questionModels ?? []) names.push(...judgeCredentials(model))
-  const analyst = agentModel(config)
-  if (analyst) names.push(...judgeCredentials(analyst))
   return [...new Set(names)].flatMap((name) => {
     const at = badCharacterAt(env[name] ?? '')
     return at ? [`${name} (character ${at})`] : []

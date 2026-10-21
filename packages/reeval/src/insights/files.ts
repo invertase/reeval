@@ -1,8 +1,10 @@
-// Where a run's insights live: `<history>/<run>/insights.json`, beside the record and written
-// create-only, so the record is never touched and two writers never overwrite each other.
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+// Where a run's insights live: `<history>/<run>/insights.json`, beside the record, or
+// `.reeval/runs/<run>/insights.json` before it's recorded (`reeval record` copies them). Written
+// create-only, so the record is never touched and two writers never overwrite each other. Only
+// `reeval analyze --insights` finishing a document's unfinished evals replaces it, by rename.
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { HistoryError, runDir } from '../history/files.ts'
+import { HistoryError, runDir, scratchDir } from '../history/files.ts'
 import { fromCwd } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
 import { INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
@@ -11,14 +13,28 @@ import { NewerSchemaError, readableInsights } from '../view/record.ts'
 export const insightsFile = (historyDir: string, runId: string) =>
   join(runDir(historyDir, runId), INSIGHTS_FILE)
 
-/** Writes the file create-only; refuses when it exists or looks like it holds a secret. */
-export async function writeInsights(file: string, doc: RunInsights): Promise<void> {
+/** A run's insights file: in the history folder once it's recorded, else beside the scratch run. */
+export const runInsightsFile = (
+  config: { root: string; history: { dir: string } },
+  entry: { runId: string; recorded: boolean },
+) =>
+  entry.recorded
+    ? insightsFile(config.history.dir, entry.runId)
+    : join(scratchDir(config.root), entry.runId, INSIGHTS_FILE)
+
+function insightsJson(file: string, doc: RunInsights): string {
   const json = `${JSON.stringify(doc, null, 2)}\n`
   if (countSecrets(json) > 0) {
     throw new HistoryError(
       `Refusing to write ${fromCwd(file)}: it looks like it contains a secret.`,
     )
   }
+  return json
+}
+
+/** Writes the file create-only; refuses when it exists or looks like it holds a secret. */
+export async function writeInsights(file: string, doc: RunInsights): Promise<void> {
+  const json = insightsJson(file, doc)
   await mkdir(join(file, '..'), { recursive: true })
   try {
     await writeFile(file, json, { flag: 'wx' })
@@ -28,6 +44,18 @@ export async function writeInsights(file: string, doc: RunInsights): Promise<voi
         `${fromCwd(file)} already exists, and insights are never rewritten. Delete it to write new ones.`,
       )
     }
+    throw error
+  }
+}
+
+/** Replaces the file whole, through a temporary file and a rename, so a reader never sees half. */
+export async function replaceInsights(file: string, doc: RunInsights): Promise<void> {
+  const partial = `${file}.${process.pid}.partial`
+  await writeFile(partial, insightsJson(file, doc))
+  try {
+    await rename(partial, file)
+  } catch (error) {
+    await rm(partial, { force: true })
     throw error
   }
 }

@@ -1015,9 +1015,9 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
 
 ## Insights
 
-`reeval analyze <run> --insights` writes `<runId>/insights.json` beside the record, once: delete it to write new ones. `reeval show` prints it with the run, on one line a sentence. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record. One from a newer reeval, or one that isn't valid JSON (a merge conflict), is skipped with a warning and the run prints without it.
+`reeval run` writes `<runId>/insights.json` beside the record once its attempts finish, when `analysis.model` is set, and `reeval record` copies it; `reeval analyze <run> --insights` writes it for a run without one, and finishes one with `stopped`, `failed` or `budget.skipped` evals, replacing it whole. A complete one is written once: delete it to write new ones. `reeval show` prints it with the run, on one line a sentence. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record. One from a newer reeval, or one that isn't valid JSON (a merge conflict), is skipped with a warning and the run prints without it.
 
-A run that raises [remarks](/reference/cli/run#remarks) writes one with no model's words (`model` and `promptVersion` `"none"`, `headline` `null`, `evals` empty) beside its scratch record, and `reeval record` copies it. `reeval analyze --insights` replaces that one, keeping its remarks.
+A run's [remarks](/reference/cli/run#remarks) go in the same file. A run that raises remarks but writes no insights (no `analysis.model`, `--no-insights`, or insights that fail or are skipped) writes one with no model's words (`model` and `promptVersion` `"none"`, `headline` `null`, `evals` empty), and `reeval analyze --insights` replaces it, keeping its remarks. `reeval record` copies a model's file byte for byte, so one written for other facts is still left out; a remarks-only one gets the recorded record's `factsHash`.
 
 ```json title="evals/.history/<runId>/insights.json (trimmed)"
 {
@@ -1025,7 +1025,7 @@ A run that raises [remarks](/reference/cli/run#remarks) writes one with no model
   "schemaVersion": 1,
   "runId": "20261020T231903Z_2e69951_cursor-agent_8s1m",
   "model": "fake",
-  "promptVersion": "insights-v4",
+  "promptVersion": "insights-v5",
   "factsHash": "sha256:0d56643daa2ea23e32a66492facca73fc5b3a85c6051d4f8690abec7c5281a18",
   "usage": { "inputTokens": 0, "outputTokens": 0, "costUsd": null },
   "headline": {
@@ -1057,7 +1057,10 @@ A run that raises [remarks](/reference/cli/run#remarks) writes one with no model
 |---|---|
 | `model`, `promptVersion` | The analysis model and the prompts' version that wrote it |
 | `factsHash` | `sha256:` of the run's facts as canonical JSON; when the facts no longer match, `reeval show` leaves the insights out with a note |
-| `usage` | Tokens over every call; `costUsd` is `null`, since reeval has no prices |
+| `usage` | Tokens over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it reports them; `costUsd` is `null`, since reeval has no prices |
+| `budget` | `maxTokens`, the `analysis.maxTokens` of the `reeval run` or `reeval analyze --insights` that wrote the file, and `skipped`, the evals it ran out before |
+| `failed` | The evals whose calls failed twice (an error, a reply cut off at the output cap, or a call past its timeout), each with `evalId` and the last `error`; they print their facts. Absent when none failed |
+| `stopped` | Set when Ctrl-C or SIGTERM stopped insights before every eval had finished: `signal` (`SIGINT` or `SIGTERM`) and `skipped`, the evals that hadn't. Absent otherwise; a stop during the headline call only leaves `headline` `null` |
 | `headline` | One sentence on the run, printed before the tally, or `null` |
 | `evals[].evalId` | The eval's or family's path: its file and name, `›` between them |
 | `evals[].intent` | The classification: `job` (`choose`, `finish` or `other`), `across`, `question`, `subject` (`tool`, `change`), `name` (`states-intent`, `no-intent` or `contradicts`) and `key`, the hash of what it read |

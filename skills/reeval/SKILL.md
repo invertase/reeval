@@ -163,7 +163,9 @@ group('hello', () => {
   (an error in CI), `.todo`, and `evaluate.each(cases)(name, [options,] (c, item) => …)` (`$key`,
   `%s`, `%#` in the name; cases pool into one family, see
   [references/evals.md](references/evals.md)). The eval id is `file › group › name`; renaming an
-  eval restarts its history.
+  eval restarts its history. Name the eval after the question it answers
+  (`recommends Genkit for a production AI feature`, not `genkit test 2`): insights read the name
+  first to tell what it checks.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`. `await c.readFile(path)` the text

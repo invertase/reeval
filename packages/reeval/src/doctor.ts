@@ -676,7 +676,7 @@ export async function judgeCallers(config: ResolvedConfig): Promise<string[]> {
     .map((file) => relativeFile(root, file))
 }
 
-/** `analysis.model`'s key: a problem when `analysis.agent` makes every run need it. */
+/** `analysis.model`'s key: a warning when it's missing, since a run then prints no insights but never stops. */
 export async function checkAnalysis(
   config: ResolvedConfig,
   deps: DoctorDeps,
@@ -691,7 +691,7 @@ export async function checkAnalysis(
   const keys = judgeCredentials(model)
   const who = `${model} (analysis.model)`
   if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: `${who} needs no key` }]
-  return [await keyCheck('analysis', keys, who, !!config.analysis.agent, deps, online, envFile)]
+  return [await keyCheck('analysis', keys, who, false, deps, online, envFile)]
 }
 
 // ---- Egress and git ------------------------------------------------------------------------

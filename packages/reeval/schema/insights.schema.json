@@ -222,6 +222,22 @@
       "description": "A run's insights, `<history>/<run>/insights.json`. Written create-only; the record is untouched. They're for the facts they were written from: a `factsHash` that isn't the run's marks them stale.",
       "type": "object",
       "properties": {
+        "budget": {
+          "description": "`analysis.maxTokens`, and the evals (`SuiteResult` paths) it ran out before: they print without insights. Absent when no budget applied.",
+          "type": "object",
+          "properties": {
+            "maxTokens": {
+              "type": "number"
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["maxTokens", "skipped"]
+        },
         "createdAt": {
           "type": "string"
         },
@@ -239,6 +255,22 @@
         "factsHash": {
           "description": "sha256 of the run's `SuiteResult` as canonical JSON: the facts the model saw.",
           "type": "string"
+        },
+        "failed": {
+          "description": "Evals whose calls failed twice (an error, a reply cut off at the output cap, or a call past its timeout), with the last error: they print without insights. Absent when none failed.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "evalId": {
+                "type": "string"
+              }
+            },
+            "required": ["error", "evalId"]
+          }
         },
         "headline": {
           "description": "One sentence for the whole run, citing facts; null when the model's was dropped.",
@@ -275,8 +307,24 @@
         "schemaVersion": {
           "const": 1
         },
+        "stopped": {
+          "description": "Set when the run was stopped (Ctrl-C, or SIGTERM) before every eval's insights had finished: the evals that hadn't, which print without insights. Absent otherwise, even when the stop came during the headline call, which leaves `headline` null.",
+          "type": "object",
+          "properties": {
+            "signal": {
+              "enum": ["SIGINT", "SIGTERM"]
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["signal", "skipped"]
+        },
         "usage": {
-          "description": "Over every call; `costUsd` is null when reeval doesn't know the model's price.",
+          "description": "Over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it reports them. `costUsd` is null when reeval doesn't know the model's price.",
           "type": "object",
           "properties": {
             "costUsd": {
@@ -293,6 +341,9 @@
               "type": "number"
             },
             "outputTokens": {
+              "type": "number"
+            },
+            "reasoningTokens": {
               "type": "number"
             }
           },

@@ -128,9 +128,9 @@ The effect reads `helped`, `made it worse` or `can't tell yet`, from the same [i
       LangChain               2 of 2
 ```
 
-Once [`reeval analyze <run> --insights`](/reference/cli/analyze#insights) has written a recorded run's insights, `reeval show` fills the slots each layout opens: the answer under the heading, a sentence under a failing case, a failing harness or an arm that failed or moved, findings under a change, and a headline before the tally. The fact rows stay as they were; every sentence cites them and is checked before it's kept.
+With `analysis.model` set, `reeval run` writes the run's [insights](/reference/cli/analyze#insights) at its end (`reeval analyze <run> --insights` writes them for a run without), and the blocks, `summary.md` and `reeval show` fill the slots each layout opens: the answer under the heading, a sentence under a failing case, a failing harness or an arm that failed or moved, findings under a change, and a headline before the tally. The fact rows stay as they were; every sentence cites them and is checked before it's kept.
 
-An eval the model reads as choosing a tool gets its own layout: the tool it asks about counted on each case, and on a miss the tools the agent named. `reeval run` doesn't write insights.
+An eval the model reads as choosing a tool gets its own layout: the tool it asks about counted on each case, and on a miss the tools the agent named.
 
 ## Grouped or stream
 

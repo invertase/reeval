@@ -107,6 +107,8 @@ export type ReevalEvent =
   | { type: 'eval-end'; at: number; result: EvalResult }
   /** Preflight preparing the sandboxes: the list, then each one ready or failed. */
   | ({ type: 'prepare'; at: number } & PrepareEvent)
+  /** Insights after the last attempt: evals settled of those asked about, as each settles. */
+  | { type: 'insights-progress'; at: number; done: number; total: number }
   /** A run-level message, e.g. the Ctrl-C notice. */
   | { type: 'notice'; at: number; level: 'info' | 'warn' | 'error'; text: string }
   | {
@@ -119,8 +121,10 @@ export type ReevalEvent =
       results: EvalResult[]
       /** `analysis.model` is unset, so the result ends with the hint to set it. */
       hint: boolean
-      /** The run's insights, when it raised remarks; the result ends with the ones it prints. */
+      /** The run's insights (a model's, or its remarks alone), or null when it has none. */
       insights?: RunInsights | null
+      /** Why the run wrote no insights, when it tried: printed above the tally. */
+      insightLines?: string[]
     }
 
 export interface Renderer {

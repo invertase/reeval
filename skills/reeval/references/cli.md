@@ -58,15 +58,15 @@ Anomalies are number-checked, and a cited judge score that disagrees is dropped.
 When every cell is `gate: 'none'`, it reads the run as a study: how the arms differ, check by
 check, so label your expects. `analysis.instructions` is the question it answers.
 
-`analysis: { agent: true }` also notes each eval × harness during `reeval run`
-(`.reeval/analysis/<run>/notes/`) and caches the run's summary for `reeval analyze`: a model call
-each, off by default, and it never gates.
-
-`reeval analyze <run> --insights` writes a recorded run's `<run>/insights.json` once: each eval's
-job (`choose`, `finish` or `other`, read from its name first, so name evals for what they ask), its
-answer, and a sentence under each failing row, every one citing the facts. `reeval show` prints
-them in the blocks. Delete the file to write new ones; it never changes a verdict or exit code.
-It uses `analysis.model` only (never the judge's model) and exits 2 without it.
+With `analysis.model` set, `reeval run` writes the run's insights at its end (`insights.json`
+beside the run; `reeval record` keeps it): each eval's job (`choose`, `finish` or `other`, read
+from its name first, so name evals for what they ask), its answer, and a sentence under each
+failing row, every one citing the facts. They never change a verdict or exit code.
+`analysis.maxTokens` (default 250000) caps their tokens, failing evals first;
+they run to the end (Ctrl-C skips the rest, keeping the exit code); `--no-insights` skips them.
+`reeval analyze <run> --insights` writes them for a run that has none, or finishes
+the evals a stopped, failed or over-budget run left out. Insights use
+`analysis.model` only, never the judge's model.
 
 `reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`
 and `slow-mcp-start` (concerns, at most three), and with `-v` `too-few-tries` and

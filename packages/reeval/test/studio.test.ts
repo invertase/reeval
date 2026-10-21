@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import fsp, { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -9,6 +9,7 @@ import { before, describe, mock, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
+import type { AnalysisNote } from '../src/view/analysis.ts'
 import {
   activityLabel,
   analysisDataPath,
@@ -1016,10 +1017,10 @@ describe('reeval studio build', () => {
     }
   })
 
-  test("analysis.agent's notes are in the build as the server serves them; a cached summary only live", async () => {
+  test("a run's notes are in the build as the server serves them; a cached summary only live", async () => {
     const p = await project('studio-notes', {
       'reeval.config.ts': fakeConfig({
-        extra: `analysis: { agent: true, model: fakeAnalysis({ note: 'A note.', output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
+        extra: `analysis: { insights: false, model: fakeAnalysis({ output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
       }).replace(
         "import { fakeJudge } from 'reeval/judge'",
         "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
@@ -1034,6 +1035,24 @@ evaluate('writes', async (c) => {
     const run = await runCli(p.dir)
     assert.equal(run.code, 0, run.stdout + run.stderr)
     const [runId] = readdirSync(join(p.dir, '.reeval/runs')).filter((n) => !n.endsWith('.json'))
+    const notes = join(p.dir, '.reeval/analysis', runId as string, 'notes')
+    mkdirSync(notes, { recursive: true })
+    const note: AnalysisNote = {
+      kind: 'reeval-analysis-note',
+      schemaVersion: 1,
+      runId: runId as string,
+      evalId: 'evals/a.eval.ts › writes',
+      harness: 'fake',
+      model: 'fake',
+      resolvedModel: null,
+      createdAt: '2026-10-21T00:00:00.000Z',
+      attempts: ['fake#1'],
+      text: 'A note.',
+      usage: { inputTokens: null, outputTokens: null },
+    }
+    writeFileSync(join(notes, 'writes__fake.json'), JSON.stringify(note))
+    const analyzed = await runCli(p.dir, ['analyze', 'latest', '--vs', 'none'])
+    assert.equal(analyzed.code, 0, analyzed.stdout + analyzed.stderr)
     const out = join(p.dir, 'site')
     assert.equal((await runCli(p.dir, ['studio', 'build', '--out', out, '--scratch'])).code, 0)
     const built = JSON.parse(readFileSync(join(out, analysisDataPath(runId as string)), 'utf8'))
