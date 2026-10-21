@@ -20,7 +20,7 @@ import {
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
@@ -1010,6 +1010,23 @@ export const features: Feature[] = [
     env: 'plain',
     canaryEnv: 'rooted',
     canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+  },
+  {
+    // Docker and Podman only: every exec goes through engine/umask-0000, which starts it at
+    // umask 0000 as Docker 29.6+ does under Docker-in-Docker and rootless; CI's engines don't.
+    dir: 'sandbox/exec-umask',
+    tiers: ['docker', 'podman'],
+    env: 'placed',
+    canaryEnv: 'unmasked',
+    canary: /expected \[ '777 out', '666 out\/log' \] to deeply equal \[\]/,
+    prepare: (dir) => {
+      mkdirSync(join(dir, 'bin'))
+      for (const engine of ['docker', 'podman']) {
+        cpSync(join(dir, 'engine/umask-0000'), join(dir, 'bin', engine))
+        chmodSync(join(dir, 'bin', engine), 0o755)
+      }
+    },
+    hostEnv: (dir) => ({ PATH: `${join(dir, 'bin')}${delimiter}${process.env.PATH}` }),
   },
   {
     dir: 'sandbox/podman-bridge',

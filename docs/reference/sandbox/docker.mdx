@@ -181,6 +181,8 @@ Image builds don't count toward the eval timeout.
 
 Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The gateway enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests.
 
+Every command reeval runs in the container, the harness's bootstrap included, starts with umask `022`. The files and directories it makes aren't group- or world-writable, whatever umask the engine gives `docker exec`: Docker 29.6 and later give 0000 under Docker-in-Docker and rootless Docker.
+
 ```bash
 # the agent's shell in docker({ from: 'dart:stable' })
 $ sh -lc 'echo $PATH; dart --version'
