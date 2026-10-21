@@ -133,7 +133,9 @@ test('only keeps the parts it names, and the files it drops stay out of the sand
   ]) {
     assert.ok(!paths.includes(gone), `${gone} is left out`)
   }
-  assert.equal(files.find((f) => f.path === 'start.sh')?.executable, true, 'modes are kept')
+  if (process.platform !== 'win32') {
+    assert.equal(files.find((f) => f.path === 'start.sh')?.executable, true, 'modes are kept')
+  }
   const inline = write(tmp(), {
     '.claude-plugin/plugin.json': JSON.stringify({
       name: 'inline',
