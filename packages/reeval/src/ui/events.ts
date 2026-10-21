@@ -4,6 +4,7 @@ import type { RunRecord } from '../history/types.ts'
 import type { PrepareEvent } from '../sandbox/preflight.ts'
 import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'
 import type { DebugLine } from '../view/debug.ts'
+import type { RunInsights } from '../view/insights.ts'
 
 /** One attempt's result. `id` is the eval's; `key` is unique per attempt. */
 export type EvalResult = {
@@ -106,6 +107,8 @@ export type ReevalEvent =
   | { type: 'eval-end'; at: number; result: EvalResult }
   /** Preflight preparing the sandboxes: the list, then each one ready or failed. */
   | ({ type: 'prepare'; at: number } & PrepareEvent)
+  /** Insights after the last attempt: evals settled of those asked about, as each settles. */
+  | { type: 'insights-progress'; at: number; done: number; total: number }
   /** A run-level message, e.g. the Ctrl-C notice. */
   | { type: 'notice'; at: number; level: 'info' | 'warn' | 'error'; text: string }
   | {
@@ -118,6 +121,10 @@ export type ReevalEvent =
       results: EvalResult[]
       /** `analysis.model` is unset, so the result ends with the hint to set it. */
       hint: boolean
+      /** The run's insights (a model's, or its remarks alone), or null when it has none. */
+      insights?: RunInsights | null
+      /** Why the run wrote no insights, when it tried: printed above the tally. */
+      insightLines?: string[]
     }
 
 export interface Renderer {

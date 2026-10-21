@@ -568,12 +568,12 @@
       "description": "A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`.",
       "type": "object",
       "properties": {
-        "kind": {
-          "const": "fake-analysis"
-        },
-        "note": {
-          "description": "`analysis.agent`'s note on each eval and harness: text, a function of its tools' results, or an error to throw.",
+        "insights": {
+          "description": "What insights get back, in `reeval run` and `reeval analyze --insights`: fixed insights, a function of each call's input (`input.call` is `classify` or `insights`, once each per eval, or `headline` once; it may return a promise), or `{ error }` to fail every call. It counts a token per 4 characters of each call's input and answer, so `analysis.maxTokens` applies.",
           "anyOf": [
+            {
+              "$ref": "#/$defs/FakeInsights"
+            },
             {
               "type": "object",
               "properties": {
@@ -587,11 +587,11 @@
               "type": "object",
               "properties": {},
               "required": []
-            },
-            {
-              "type": "string"
             }
           ]
+        },
+        "kind": {
+          "const": "fake-analysis"
         },
         "output": {
           "description": "The model's structured answer, or a function of the digest it was given."
@@ -775,6 +775,205 @@
       },
       "required": ["kind"],
       "additionalProperties": false
+    },
+    "FakeInsights": {
+      "description": "A fake insight answer. Each call takes its part: `intent` the classification, `answer`, `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's left out is empty, and the intent defaults to `job: 'other'`.",
+      "type": "object",
+      "properties": {
+        "answer": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "cites": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": ["cites", "text"]
+            }
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["cites", "text"]
+          }
+        },
+        "headline": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "cites": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": ["cites", "text"]
+            }
+          ]
+        },
+        "intent": {
+          "type": "object",
+          "properties": {
+            "confidence": {
+              "description": "`low` falls back to `job: 'other'`, as a real classification does.",
+              "enum": ["high", "low", "medium"]
+            },
+            "job": {
+              "enum": ["choose", "finish", "other"]
+            },
+            "name": {
+              "enum": ["contradicts", "no-intent", "states-intent"]
+            },
+            "question": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "object",
+              "properties": {
+                "change": {
+                  "type": "string"
+                },
+                "tool": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          "required": ["job"]
+        },
+        "namedTools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attempt": {
+                "type": "string"
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["attempt", "tools"]
+          }
+        },
+        "remarks": {
+          "description": "The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`). They go through the same gates as a model's, so one missing a part is dropped.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "fix": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "at": {
+                        "type": "string"
+                      },
+                      "edit": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["at", "edit"]
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string"
+              },
+              "source": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "at": {
+                        "type": "string"
+                      },
+                      "quote": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["at", "quote"]
+                  }
+                ]
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["kind", "text"]
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "row": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["cites", "row", "text"]
+          }
+        }
+      },
+      "required": []
     },
     "FakeJudgeModel": {
       "description": "A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a function of the state the judge would see works per group, eval or call, not in the config.",
@@ -2058,8 +2257,8 @@
         "analysis": {
           "type": "object",
           "properties": {
-            "agent": {
-              "description": "`reeval run` writes a note on each eval and harness once its attempts finish, with the analysis model (default false: one call per eval and harness, every run).",
+            "insights": {
+              "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
               "type": "boolean"
             },
             "instructions": {
@@ -2074,8 +2273,12 @@
               "description": "The most tokens the model may answer with (default 8000). reeval has no prices, so tokens are the cap.",
               "type": "number"
             },
+            "maxTokens": {
+              "description": "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
+              "type": "number"
+            },
             "model": {
-              "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one.",
+              "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and compare questions fall back to the judge's when it's a language model.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/FakeAnalysisModel"
@@ -2086,7 +2289,7 @@
               ]
             }
           },
-          "required": ["maxInputTokens", "maxOutputTokens"]
+          "required": ["insights", "maxInputTokens", "maxOutputTokens", "maxTokens"]
         },
         "budget": {
           "$ref": "#/$defs/Budget"

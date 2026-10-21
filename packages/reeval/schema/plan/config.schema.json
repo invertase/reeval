@@ -8,8 +8,8 @@
       "description": "`AnalysisConfig` as data: the model by name, or a fake analysis.",
       "type": "object",
       "properties": {
-        "agent": {
-          "description": "`reeval run` writes a note on each eval and harness once its attempts finish, with the analysis model (default false: one call per eval and harness, every run).",
+        "insights": {
+          "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
           "type": "boolean"
         },
         "instructions": {
@@ -28,8 +28,14 @@
           "minimum": 500,
           "maximum": 9007199254740991
         },
+        "maxTokens": {
+          "description": "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
         "model": {
-          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one.",
+          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and compare questions fall back to the judge's when it's a language model.",
           "anyOf": [
             {
               "type": "string"
@@ -604,24 +610,6 @@
         "kind": {
           "type": "string",
           "const": "fake-analysis"
-        },
-        "note": {
-          "description": "`analysis.agent`'s note on each eval and harness, or an error to throw.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "error": {
-                  "type": "string"
-                }
-              },
-              "required": ["error"],
-              "additionalProperties": false
-            }
-          ]
         },
         "output": {
           "description": "The model's structured answer."
@@ -2040,7 +2028,7 @@
       "type": "object",
       "properties": {
         "analysis": {
-          "description": "`reeval analyze`, compare questions without a model, and `agent`'s notes during a run.",
+          "description": "Insights during `reeval run`, `reeval analyze`, and compare questions without a model.",
           "$ref": "#/$defs/AnalysisConfigData"
         },
         "budget": {

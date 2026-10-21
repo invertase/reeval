@@ -39,12 +39,13 @@ A real `reeval init --yes` in an empty directory:
 
 ```text
 reeval init · .
-  create    reeval.config.ts       harness cursor:composer-2.5; profiles pr, nightly
+  create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
   create    evals/environments.ts  environment greeter: a package.json and rules
   create    evals/greet.eval.ts    one eval, in greeter
   create    .gitignore             node_modules/, .reeval/, .env*
   create    package.json           script eval, devDependency {{ pkg }}
   create    tsconfig.json          for editors and tsc: the evals' .ts imports, no emit
+Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
 Next:
   npm install
   npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
@@ -54,7 +55,7 @@ Docker is running: ready for npx reeval image build
 
 | File | What `reeval init` writes |
 |---|---|
-| `reeval.config.ts` | The chosen agent in `docker()`, with profiles `pr` (one attempt per cell, the CI default) and `nightly` (three, recorded) |
+| `reeval.config.ts` | The chosen agent in `docker()`, `analysis.model` for [insights](/concepts/insights), and profiles `pr` (one attempt per cell, the CI default) and `nightly` (three, recorded) |
 | `evals/environments.ts` | One environment, `greeter`: a `package.json` written into the workspace and the project's rules (`AGENTS.md`, or `CLAUDE.md` for Claude Code) |
 | `evals/greet.eval.ts` | One deterministic eval in `greeter`: the agent writes `greet.js`, and a command checks it |
 | `.gitignore` | `node_modules/`, `.reeval/` and `.env*` |
@@ -84,15 +85,33 @@ evaluate('creates greet.js', { environment: greeter }, async (c) => {
 })
 ```
 
+## The analysis model
+
+```ts title="reeval.config.ts"
+  // For c.judge, add a judge, e.g. judge: { model: 'google/gemini-3.8-flash' }.
+  // Insights explain each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY;
+  // insights: false turns them off.
+  analysis: { model: 'google/gemini-3.8-flash' },
+```
+
+Whichever agent you pick, the config sets `analysis.model` to `google/gemini-3.8-flash`, which writes the run's [insights](/concepts/insights). It's called with `GOOGLE_GENERATIVE_AI_API_KEY`, or through the Vercel AI Gateway with `AI_GATEWAY_API_KEY`. Without either, a run passes or fails on its checks as before and prints one line above the tally:
+
+```text
+insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }
+```
+
+`analysis: { insights: false }` or `--no-insights` turns them off; `reeval doctor` names both keys.
+
 ## Only the config: `--bare`
 
 `--bare` writes `reeval.config.ts`, the `.gitignore` entries and `package.json`, with no environment, eval or `tsconfig.json`:
 
 ```text
 reeval init · .
-  create    reeval.config.ts  harness cursor:composer-2.5; profiles pr, nightly
+  create    reeval.config.ts  harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
   create    .gitignore        node_modules/, .reeval/, .env*
   create    package.json      script eval, devDependency {{ pkg }}
+Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
 Next:
   npm install
   npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
@@ -128,7 +147,7 @@ Anywhere else, init only adds. Each line says `create`, `update` or `skip`, and 
 
 ```text
 reeval init · .
-  create    reeval.config.ts       harness cursor:composer-2.5; profiles pr, nightly
+  create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
   skip      evals/environments.ts  exists: left as it is
   skip      evals/greet.eval.ts    imports greeter, which your evals/environments.ts doesn't export
   update    .gitignore             .env*

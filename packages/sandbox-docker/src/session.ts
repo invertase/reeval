@@ -157,6 +157,14 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
 const EXEC_MARKER = 'REEVAL_EXEC_ID'
 
 /**
+ * Every exec that can create a file starts with this. An exec'd process inherits the umask of the
+ * engine's shim, not the container's: since Docker 29.6 that's 0000 wherever dockerd starts
+ * containerd itself (Docker-in-Docker, rootless, OrbStack), which makes homes, the workspace and
+ * everything an agent writes world-writable, and tools such as fx and OpenSSH refuse them.
+ */
+const EXEC_UMASK = 'umask 022'
+
+/**
  * The container's cgroup counts every process the kernel killed at its memory limit: cgroup v2's
  * `memory.events` and v1's `memory.oom_control` both have an `oom_kill` line. Without either,
  * Docker's `OOMKilled` says only whether there was one.
@@ -254,10 +262,10 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   }
   if (!spec.createsWorkdir) {
     // Podman's `run --workdir` refuses a directory the image doesn't have; Docker makes it.
-    const made = await docker(['exec', '--user', '0:0', id, 'mkdir', '-p', SANDBOX_ROOT], {
-      engine,
-      signal,
-    }).catch((error) => ({ exitCode: 1, stderr: (error as Error).message }))
+    const made = await docker(
+      ['exec', '--user', '0:0', id, 'sh', '-c', `${EXEC_UMASK} && mkdir -p ${SANDBOX_ROOT}`],
+      { engine, signal },
+    ).catch((error) => ({ exitCode: 1, stderr: (error as Error).message }))
     if (made.exitCode !== 0) {
       await remove()
       if (signal?.aborted) throw signal.reason
@@ -323,7 +331,8 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     id,
     'bash',
     '-c',
-    command,
+    // On the command's own first line, so bash's `line N:` in its errors stays the command's.
+    `${EXEC_UMASK}; ${command}`,
   ]
   const nextMarker = () => `${id.slice(0, 12)}-${++execs}`
   /**
@@ -382,7 +391,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         id,
         'sh',
         '-c',
-        `mkdir -p ${q(posix.dirname(path))} && cat > ${q(path)}`,
+        `${EXEC_UMASK} && mkdir -p ${q(posix.dirname(path))} && cat > ${q(path)}`,
       ],
       { input: Buffer.from(o.content), signal: o.abortSignal, engine },
     )

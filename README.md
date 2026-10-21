@@ -76,7 +76,9 @@ evaluate(
   or fail; an LLM judge answers what they can't.
 - **Compare, questions and analysis.** `compare` says whether each variant helped over the
   control, made it worse or can't tell yet (`-v` adds the 95% interval), and its effort;
-  `questions` asks a model which attempt did better, pair by pair and blind; `reeval analyze` writes a checked reading of a run.
+  `questions` asks a model which attempt did better, pair by pair and blind; with `analysis.model`
+  set, each eval's result gets sentences that answer what it asks, each checked against the run's
+  facts; `reeval analyze` writes a checked reading of a run.
 - **Results in your repo.** Every run is a JSON record you can commit, diff with `reeval compare`,
   query with SQL (`reeval query`) and browse in `reeval studio`.
 

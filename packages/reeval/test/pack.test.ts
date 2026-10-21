@@ -196,6 +196,11 @@ test('the packed package installs into a clean project and runs reeval', {
   // The bundled packages' other files, beside dist/ as in their own packages.
   assert.match(listing, /^package\/docker\/Dockerfile$/m)
   assert.match(listing, /^package\/assets\/pnpm-lock\.yaml$/m)
+  // The eval rubric the insights call is given, copied from the repository's skills/ at build.
+  assert.equal(
+    extract(dir, tarball, 'skills/eval-rubric/SKILL.md'),
+    readFileSync(join(pkgRoot, '..', '..', 'skills', 'eval-rubric', 'SKILL.md'), 'utf8'),
+  )
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
   assert.doesNotMatch(listing, /^package\/dist\/studio-app\/third-party\.json$/m)
 

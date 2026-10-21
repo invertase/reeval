@@ -1,0 +1,76 @@
+{
+  "kind": "reeval-insights",
+  "schemaVersion": 1,
+  "runId": "20261021T130823Z_nogit_cursor-agent_kq9t",
+  "model": "none",
+  "promptVersion": "none",
+  "factsHash": "sha256:1dc5f508a6237a93d63a75f85464a694b59d467d176a54cc77f774712a400d85",
+  "createdAt": "2026-10-21T13:08:32.577Z",
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "costUsd": null
+  },
+  "headline": null,
+  "evals": [],
+  "remarks": [
+    {
+      "id": "d5786cf9e76f25ba6449034cdfdf6740c2af31d5cdd0891bb7906933a03f3458",
+      "evalId": "evals%2Fcoin.eval.ts › coin",
+      "kind": "slow-mcp-start",
+      "severity": "concern",
+      "text": "MCP server docs took 2s to start on each of 2 turns, in 3 of 3 tries.",
+      "evidence": [
+        "evals%2Fcoin.eval.ts › coin/fake+docs+fake#1",
+        "evals%2Fcoin.eval.ts › coin/fake+docs+fake#2",
+        "evals%2Fcoin.eval.ts › coin/fake+docs+fake#3"
+      ],
+      "fix": {
+        "at": "source:evals/env.ts#L9",
+        "edit": "install what docs needs in the image (install or dockerfile), so it doesn't fetch or build it at start-up"
+      },
+      "origin": "deterministic",
+      "firstSeenRun": "20261021T130823Z_nogit_cursor-agent_kq9t"
+    },
+    {
+      "id": "ff8aa7458e53bb129944a6874ce0ba51156b7365aad28d008c8569c89851869c",
+      "evalId": "evals%2Fskill.eval.ts › skill helps",
+      "kind": "slow-mcp-start",
+      "severity": "concern",
+      "text": "MCP server docs took 2s to start on each of 2 turns, in 4 of 4 tries.",
+      "evidence": [
+        "evals%2Fskill.eval.ts › skill helps/fake+docs+fake#1",
+        "evals%2Fskill.eval.ts › skill helps/fake+docs+fake#2",
+        "evals%2Fskill.eval.ts › skill helps/fake+marked+fake#1",
+        "evals%2Fskill.eval.ts › skill helps/fake+marked+fake#2"
+      ],
+      "fix": {
+        "at": "source:evals/env.ts#L9",
+        "edit": "install what docs needs in the image (install or dockerfile), so it doesn't fetch or build it at start-up"
+      },
+      "origin": "deterministic",
+      "firstSeenRun": "20261021T130823Z_nogit_cursor-agent_kq9t"
+    },
+    {
+      "id": "9679c09f3ab124f0e15ca14f984fbb06b437f6fd1ece6bcf6ac4aebaa13591c7",
+      "evalId": "evals%2Fskill.eval.ts › skill helps",
+      "kind": "too-few-tries",
+      "severity": "suggestion",
+      "text": "Marked passed 2 of 2 tries and docs 0 of 2: too few tries to tell whether the difference holds.",
+      "evidence": [
+        "evals%2Fskill.eval.ts › skill helps/fake+marked+fake",
+        "evals%2Fskill.eval.ts › skill helps/fake+docs+fake"
+      ],
+      "fix": {
+        "at": "source:evals/skill.eval.ts#L5",
+        "edit": "set runs: 4 or more, so each side counts at least 4 tries"
+      },
+      "origin": "deterministic",
+      "firstSeenRun": "20261021T130823Z_nogit_cursor-agent_kq9t"
+    }
+  ],
+  "validation": {
+    "dropped": 0,
+    "regenerated": 0
+  }
+}

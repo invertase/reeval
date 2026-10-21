@@ -46,6 +46,8 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               skip completed attempts, restart in-flight ones. Without a ref, the
                               newest resumable (Stopped staging, or an interrupted/budget scratch),
                               not assembled latest. Ref is a run id or unique prefix
+  --no-insights               Skip insights for this run: no analysis.model calls, the blocks
+                              print their facts only (also analysis.insights: false)
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -238,7 +240,67 @@ Under the name, a pass prints nothing more. A fail prints each failed check with
 
 An error outside any attempt, such as an eval file's stray rejection, prints first as `error: …`; it fails the run (exit 1) even when every eval passed. An interrupted run still exits 130.
 
+With `analysis.model` set, the blocks also carry the run's [insights](/reference/cli/analyze#during-a-run): written once the attempts finish and the exit code is fixed, within `analysis.maxTokens` and [fixed caps per eval and call](/reference/cli/analyze#the-caps). Ctrl-C while they run skips the rest and keeps the run's exit code. `--no-insights` prints the facts only.
+
 The tally counts each eval, and each case of a family, once: `1 run error · 3 fail · 1 pass · 1 infra error · 2 cancelled · 2 skipped`, run errors and fails first, zeros left out. A family whose pooled `minLift` gate fails counts one more fail. Counts read `N of M`, with infra errors and cancelled and skipped tries named apart (`0 of 1 · 2 skipped`); `-v` adds each arm's difference and 95% interval. Judge scores per attempt, per-key judge rates and token usage per cell are in the studio and `reeval query`.
+
+## Remarks
+
+```text
+1 fail · 1 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
+
+Remarks:
+  coin: "lands heads" passed 2 of 6 tries over 2 runs with nothing changed, so one try can pass or fail it.
+    fix  evals/coin.eval.ts:8  make "lands heads" check something every good try does, or raise runs so one try doesn't decide it
+  coin: MCP server docs took 2s to start on each of 2 turns, in 3 of 3 tries.
+    fix  evals/env.ts:9  install what docs needs in the image (install or dockerfile), so it doesn't fetch or build it at start-up
+  …
+```
+
+After the tally and hint, a run lists what reeval noticed about the evals themselves, each with the source line to change. Only concerns print, at most three (`+N more (-v)`); `-v` adds the suggestions. Remarks never change the exit code.
+
+reeval's own remarks come from fixed thresholds over the record and the history, so they print without `analysis.model`:
+
+| Remark | Severity | When |
+|---|---|---|
+| `flaky-check` | concern | The cell is `flaky` in [`flaky_cells`](/reference/cli/query#views) (not from infrastructure), and the check both passed and failed in 2 of its newest 5 comparable runs, over 6 tries or more |
+| `slow-mcp-start` | concern | A stdio MCP server took 2s or more to answer `initialize`, or never did. Turns count only where the server was started: every turn on a harness that starts servers per turn, the first on one that starts them per session |
+| `no-baseline` | concern | With `analysis.model`: the classification says the eval is about a change (a skill, a doc, an MCP server), and the eval has no `compare`. Never under a profile's `limit.compare: false` |
+| `too-few-tries` | suggestion | A variant's and its baseline's pass rates differ by half or more, with fewer than 4 counted tries on a side |
+| `check-never-fails` | suggestion | A check passed every try, in every cell, this run and in the last 5 recorded runs on the default branch with 20 tries or more ([`check_streaks`](/reference/cli/query#views)); on a variant, on both sides |
+
+### Model remarks
+
+```text
+Remarks:
+  answers kindly: The judge asks whether the answer is okay, which any reply passes.
+    fix  evals/kinds.eval.ts:16  ask 'Does the reply thank the user by name and offer one next step?'
+  adds a cache: The name says it adds a cache, but the prompt asks to remove the debug logging.
+    fix  evals/kinds.eval.ts:4  rename it to 'removes the debug logging'
+  …
+```
+
+With `analysis.model`, each eval's [insights](/reference/cli/analyze#during-a-run) call may also raise remarks, by the eval rubric (`skills/eval-rubric/SKILL.md` in the repository and the package, its hash part of the insights prompt version). It's the same call, so `analysis.maxTokens` covers it. The model is told a remark is almost always none.
+
+| Remark | Severity | When |
+|---|---|---|
+| `name-contradicts` | concern | The name asks one thing and the checks or judge questions look at another |
+| `judge-too-loose` | concern | A judge question passed a reply that doesn't do what the eval asks |
+| `judge-leaks-answer` | concern | A judge question gives away the answer, so echoing its words passes |
+| `prompt-names-tool` | concern | A choose eval's prompt names the tool it asks about |
+| `name-no-intent` | suggestion | The name is a topic, a ticket id or "test 3" |
+| `compound-judge` | suggestion | One judge question asks two things, and failed |
+
+reeval checks every model remark in code and drops, without asking again, one whose kind isn't in this table, or that has no quote copied exactly from its cited line of the eval's declaration, in a file unchanged since the run. Its evidence and fix are the model's as written; one with no fix prints `at` and its quoted line. Each dropped remark is in `insights.json`'s `validation.drops` with the reason, and `reeval analyze --insights -v` lists them.
+
+### Once per eval
+
+Each remark prints until a run prints it: one of reeval's for that version of the eval (its sources' hashes), so an edit prints it again; a model remark while its quote is in the eval. `slow-mcp-start` prints in every run that has it. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it. Only the terminal output counts as printed; `summary.md` holds the concerns a run without `-v` prints.
+
+The default branch is `origin`'s HEAD, else a local `main` or `master`, else, when `CI` is set, `GITHUB_BASE_REF` (a GitHub Actions pull request build has neither ref; a push build of `main` or `master` checks it out locally). Without one, `check-never-fails` isn't raised. The history kinds need an earlier run.
+
+A run writes its remarks to `.reeval/runs/<runId>/insights.json`, in the run's [insights](/reference/cli/analyze#during-a-run) when it writes them and alone (`model: "none"`) otherwise, and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them and adds the model's.
 
 ## What it writes
 
@@ -246,6 +308,8 @@ The tally counts each eval, and each case of a family, once: `1 run error · 3 f
 |---|---|---|
 | `.reeval/runs/<runId>.json` | The scratch run's record | Every run, including one where nothing passed |
 | `.reeval/runs/<runId>/` | Its artifacts | Every run |
+| `.reeval/runs/<runId>/insights.json` | The run's insights and [remarks](#remarks) | `analysis.model` set, without `--no-insights`, or the run raised remarks |
+| `.reeval/analysis/classify/` | Each eval's cached classification | With insights |
 | The history folder | A copy of both | `--record`, `record: 'ci'` with `CI` set, or `record: 'always'` |
 | `.reeval/debug/` | Each attempt's local debug data | Every run |
 

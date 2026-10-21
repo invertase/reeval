@@ -25,7 +25,11 @@ import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
 import { fromCwd, newRunId, relativeFile } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
-import { judgeCredentials, RECOMMENDED_JUDGE_MODEL } from './judge/index.ts'
+import {
+  judgeCredentials,
+  RECOMMENDED_ANALYSIS_MODEL,
+  RECOMMENDED_JUDGE_MODEL,
+} from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
 import { redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
@@ -676,7 +680,10 @@ export async function judgeCallers(config: ResolvedConfig): Promise<string[]> {
     .map((file) => relativeFile(root, file))
 }
 
-/** `analysis.model`'s key: a problem when `analysis.agent` makes every run need it. */
+/**
+ * `analysis.model` and its key: a warning when either is missing, since a run then prints no
+ * insights but never stops. Nothing when `analysis.insights: false` leaves the model unset.
+ */
 export async function checkAnalysis(
   config: ResolvedConfig,
   deps: DoctorDeps,
@@ -684,14 +691,24 @@ export async function checkAnalysis(
   envFile: string,
 ): Promise<Check[]> {
   const model = config.analysis.model
-  if (model === undefined) return []
+  if (model === undefined) {
+    if (!config.analysis.insights) return []
+    return [
+      {
+        id: 'analysis',
+        status: 'warn',
+        summary: 'no analysis.model, so runs print no insights',
+        fix: `set analysis: { model: '${RECOMMENDED_ANALYSIS_MODEL}' } in ${config.file} for answers to what each eval asks, or analysis: { insights: false } to go without`,
+      },
+    ]
+  }
   if (typeof model !== 'string') {
     return [{ id: 'analysis', status: 'ok', summary: 'fakeAnalysis() needs no key' }]
   }
   const keys = judgeCredentials(model)
   const who = `${model} (analysis.model)`
   if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: `${who} needs no key` }]
-  return [await keyCheck('analysis', keys, who, !!config.analysis.agent, deps, online, envFile)]
+  return [await keyCheck('analysis', keys, who, false, deps, online, envFile)]
 }
 
 // ---- Egress and git ------------------------------------------------------------------------

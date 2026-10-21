@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { createSocket } from 'node:dgram'
 import {
   chmodSync,
   cpSync,
@@ -20,7 +21,7 @@ import {
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
-import { dirname, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
@@ -154,6 +155,25 @@ const listener = createServer((_, res) => {
   egressTarget.requests++
   res.end('reeval-egress-ok')
 })
+
+/**
+ * A DNS server beside the listener that answers every A query with {@link DNS_ANSWER}, so a
+ * fixture can tell whether a name resolves for the sandbox without depending on the machine's own
+ * resolver (rootless Podman reaches its upstream through slirp4netns, which sometimes gets no
+ * answer for a whole lookup). `REEVAL_EGRESS_DNS` is its address and port,
+ * `REEVAL_EGRESS_DNS_ANSWER` the address it answers with.
+ */
+const DNS_ANSWER = [192, 0, 2, 1]
+const dnsResponder = createSocket('udp4').on('message', (query, from) => {
+  if (query.length < 12) return
+  let end = 12
+  while (end < query.length && query[end] !== 0) end += (query[end] ?? 0) + 1
+  const question = query.subarray(12, end + 5)
+  const header = Buffer.from([0, 0, 0x81, 0x80, 0, 1, 0, 1, 0, 0, 0, 0])
+  query.copy(header, 0, 0, 2)
+  const answer = Buffer.from([0xc0, 12, 0, 1, 0, 1, 0, 0, 0, 0, 0, 4, ...DNS_ANSWER])
+  dnsResponder.send(Buffer.concat([header, question, answer]), from.port, from.address)
+})
 before(async () => {
   const addresses = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
     (list ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => ({ name, ...a })),
@@ -163,8 +183,12 @@ before(async () => {
     (addresses.find((a) => !bridge.test(a.name)) ?? addresses[0])?.address ?? '127.0.0.1'
   await new Promise<void>((resolve) => listener.listen(0, '0.0.0.0', resolve))
   egressTarget.port = (listener.address() as AddressInfo).port
+  await new Promise<void>((resolve) => dnsResponder.bind(0, '0.0.0.0', resolve))
 })
-after(() => listener.close())
+after(() => {
+  listener.close()
+  dnsResponder.close()
+})
 
 /** The token `workspace/token` fetches with, and the git HTTP server that insists on it. */
 const GIT_TOKEN = 'reeval-fixture-git-token-5e0b77c2d9a1'
@@ -260,6 +284,8 @@ function publish(dir: string) {
 const egressEnv = () => ({
   REEVAL_EGRESS_HOST: egressTarget.host,
   REEVAL_EGRESS_TARGET: `${egressTarget.host}:${egressTarget.port}`,
+  REEVAL_EGRESS_DNS: `${egressTarget.host}:${dnsResponder.address().port}`,
+  REEVAL_EGRESS_DNS_ANSWER: DNS_ANSWER.join('.'),
 })
 
 /** The `lands` eval's first attempt. */
@@ -1067,6 +1093,23 @@ export const features: Feature[] = [
     env: 'plain',
     canaryEnv: 'rooted',
     canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+  },
+  {
+    // Docker and Podman only: every exec goes through engine/umask-0000, which starts it at
+    // umask 0000 as Docker 29.6+ does under Docker-in-Docker and rootless; CI's engines don't.
+    dir: 'sandbox/exec-umask',
+    tiers: ['docker', 'podman'],
+    env: 'placed',
+    canaryEnv: 'unmasked',
+    canary: /expected \[ '777 out', '666 out\/log' \] to deeply equal \[\]/,
+    prepare: (dir) => {
+      mkdirSync(join(dir, 'bin'))
+      for (const engine of ['docker', 'podman']) {
+        cpSync(join(dir, 'engine/umask-0000'), join(dir, 'bin', engine))
+        chmodSync(join(dir, 'bin', engine), 0o755)
+      }
+    },
+    hostEnv: (dir) => ({ PATH: `${join(dir, 'bin')}${delimiter}${process.env.PATH}` }),
   },
   {
     dir: 'sandbox/podman-bridge',

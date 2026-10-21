@@ -19,8 +19,8 @@ npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift
 reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                               rebuilt from the records); views: lift, effort, factor_effects,
                               skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                              verdict_flips, check_discrimination, check_rates. No argument lists
-                              them
+                              verdict_flips, check_discrimination, check_rates, check_streaks. No
+                              argument lists them
   --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                               or table name, only that run's rows
   --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
@@ -62,6 +62,7 @@ npx reeval query failing_attempts --run last
 |---|---|
 | `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
 | `check_rates` | `run_id`, `eval_key`, `cell_key`, `harness`, `environment`, `role`, `label`, `pass`, `fail`, `error`, `not_run`, `rate` |
+| `check_streaks` | `eval_key`, `cell_key`, `label`, `fingerprint`, `branch`, `runs`, `fails`, `streak_runs`, `streak_tries`, `streak_since`, `last_run`, `ended_by` |
 | `context_use` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `class`, `calls`, `first_line`, `example` |
 | `contrasts` | `run_id`, `eval_key`, `harness`, `sandbox`, `a_key`, `b_key`, `a_environment`, `b_environment`, `a_pass`, `a_counted`, `b_pass`, `b_counted`, `points`, `lo`, `hi`, `pass_verdict`, `a_tools_median`, `b_tools_median`, `tools_ratio`, `tools_p`, `separated`, `verdict`, `agent_s_ratio`, `time_separated`, `time_verdict`, `tokens_ratio`, `tokens_separated`, `tokens_verdict`, `checks`, `discriminating` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
@@ -96,6 +97,7 @@ npx reeval query failing_attempts --run last
 | `verdict_flips` | Judge question per cell whose pass rate changed from its previous run |
 | `check_discrimination` | Check (`expect` label) of a variant cell per run, beside its control's: passes, failures and not-run on both sides, and whether it tells them apart |
 | `check_rates` | Check (`expect` label) per cell per run, control and variant alike: its harness, environment and `role`, `pass`, `fail`, `error`, `not_run` over the cell's counted attempts, and `rate` = `pass / (pass + fail)` (`NULL` when neither). An `error` (a matcher that couldn't answer) and a `not_run` (a hard `expect` before it failed) are left out of `rate` |
+| `check_streaks` | Check per cell, comparable fingerprint and branch over recorded runs: `runs` and `fails` (failed tries) in all, then, newest first, `streak_runs` in a row with no fail or error (on a variant, passed on both sides) and their `streak_tries`, `streak_since` (the streak's oldest run), `last_run` and `ended_by`, the run that broke it (`NULL`: it never broke). A run that never reached the check is skipped. The `check-never-fails` [remark](/reference/cli/run#remarks) reads it |
 
 In the text table, `·` is SQL `NULL`; `--json` has `null`. On `factor_effects`, a `pooled` row has `run_id` `NULL` (it spans runs), and a row pooled across evals (with `strata` set and `runs` `NULL`) has `eval_key` and `runs` `NULL` too.
 
