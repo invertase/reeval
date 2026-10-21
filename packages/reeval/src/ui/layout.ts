@@ -819,15 +819,24 @@ function insightNotes(
       ),
     ]
   }
-  if (!verbose) return []
+  const skipped = insights.budget?.skipped.length ?? 0
+  const budget = skipped
+    ? [
+        c.yellow(
+          `insights skipped for ${plural(skipped, 'eval')}: analysis.maxTokens (${formatTokens(insights.budget?.maxTokens ?? 0)}) reached — raise it in reeval.config.ts`,
+        ),
+      ]
+    : []
+  if (!verbose) return budget
   const { dropped, regenerated } = insights.validation
   return [
+    ...budget,
     c.dim(
       [
         `insights by ${insights.model} (${insights.promptVersion})`,
         `${plural(dropped, 'sentence')} removed`,
         ...(regenerated ? [`${regenerated} asked again`] : []),
-        `${formatTokens(insights.usage.inputTokens)} in, ${formatTokens(insights.usage.outputTokens)} out`,
+        `${formatTokens(insights.usage.inputTokens)} in, ${formatTokens(insights.usage.outputTokens)} out${insights.usage.reasoningTokens ? ` (${formatTokens(insights.usage.reasoningTokens)} reasoning)` : ''}`,
       ].join(' · '),
     ),
   ]

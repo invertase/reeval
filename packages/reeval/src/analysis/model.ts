@@ -34,18 +34,12 @@ function judgeAside(config: ResolvedConfig, task: string): string {
   return ` (the judge, ${isFakeJudge(judge) ? 'a fake judge' : judge}, is an evaluation model: it scores yes/no questions and can't ${task})`
 }
 
-/** Who needs the analysis model: `reeval analyze`, or `analysis.agent` during `reeval run`. */
-export type AnalysisUse = 'analyze' | 'agent'
-
 /** Which model analyses: `analysis.model`, else the judge's when it's a language model. */
-export function analysisModelName(
-  config: ResolvedConfig,
-  use: AnalysisUse = 'analyze',
-): string | FakeAnalysisModel {
+export function analysisModelName(config: ResolvedConfig): string | FakeAnalysisModel {
   const model = defaultModel(config)
   if (model !== undefined) return model
   throw new UsageError(
-    `${use === 'agent' ? `analysis.agent in ${config.file}` : 'reeval analyze'} needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}${use === 'agent' ? ', or turn agent off' : ', or run reeval analyze --context to hand the digest to your own coding agent'}.`,
+    `reeval analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}, or run reeval analyze --context to hand the digest to your own coding agent.`,
   )
 }
 
@@ -82,11 +76,8 @@ export function questionModel(
 }
 
 /** Checks the model and its credentials before any work; throws a UsageError (exit 2). */
-export function resolveAnalysisModel(
-  config: ResolvedConfig,
-  use: AnalysisUse = 'analyze',
-): ResolvedAnalysisModel {
-  const model = analysisModelName(config, use)
+export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisModel {
+  const model = analysisModelName(config)
   if (isFake(model)) return { name: 'fake', route: 'fake', fake: model }
   if (isEvaluationModel(model)) {
     throw new UsageError(
@@ -97,27 +88,34 @@ export function resolveAnalysisModel(
     return { name: model, route: judgeRoute(model).kind }
   } catch (error) {
     const message = (error as Error).message.replace('judge model', 'analysis model')
-    throw new UsageError(
-      use === 'agent' ? message : `${message} Or run reeval analyze --context, which needs no key.`,
-    )
+    throw new UsageError(`${message} Or run reeval analyze --context, which needs no key.`)
   }
 }
 
-/** A language model that answers `text`, through the AI SDK's own parsing, or throws `error`. */
-export function cannedModel(answer: { text: string } | { error: string }): LanguageModel {
+/**
+ * A language model that answers `text`, through the AI SDK's own parsing, or throws `error`.
+ * With `countTokens`, it reports a token per 4 characters of its prompt and its answer, so a
+ * token budget applies to it as it would to a real model; otherwise it reports none.
+ */
+export function cannedModel(
+  answer: { text: string } | { error: string },
+  countTokens = false,
+): LanguageModel {
   return {
     specificationVersion: 'v4',
     provider: 'fake',
     modelId: 'fake-analysis',
     supportedUrls: {},
-    doGenerate: async () => {
+    doGenerate: async (options) => {
       if ('error' in answer) throw new Error(answer.error)
+      const input = countTokens ? Math.ceil(JSON.stringify(options.prompt).length / 4) : 0
+      const output = countTokens ? Math.ceil(answer.text.length / 4) : 0
       return {
         content: [{ type: 'text', text: answer.text }],
         finishReason: { unified: 'stop', raw: 'stop' },
         usage: {
-          inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-          outputTokens: { total: 0, text: 0, reasoning: 0 },
+          inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: output, text: output, reasoning: 0 },
         },
         warnings: [],
         response: { modelId: 'fake-analysis' },

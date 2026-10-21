@@ -1,7 +1,9 @@
-// A run's insights from its record: per eval, one classification call (the name read first) and
-// one insights call on its scoped facts, then one headline call for the run, each checked by the
-// validator. A sentence the banned-word lint refuses is asked for once more, then dropped. Nothing
-// here reads or changes a verdict: the facts are final before any call starts.
+// A run's insights from its record: per eval, one classification call (the name read first, and
+// skipped when the classification is cached) and one insights call on its scoped facts, then one
+// headline call for the run, each checked by the validator. A sentence the banned-word lint
+// refuses is asked for once more, then dropped. `maxTokens` is spent on the evals most worth
+// explaining first (`priority.ts`); once it's spent no eval's calls start, and those in flight
+// finish. Nothing here reads or changes a verdict: the facts are final before any call starts.
 import { generateText, type LanguageModel, NoObjectGeneratedError, Output } from 'ai'
 import type { z } from 'zod'
 import { cannedModel, providerModel, type ResolvedAnalysisModel } from '../analysis/model.ts'
@@ -10,6 +12,7 @@ import type { FakeInsights } from '../types.ts'
 import { slotsOf } from '../ui/layout.ts'
 import type { EvalInsight, Job, RunInsights, Sentence } from '../view/insights.ts'
 import { type EvalResult, type SuiteResult, suiteResult } from '../view/suite.ts'
+import type { Classified, ClassifyCache } from './classify.ts'
 import { factsHash } from './hash.ts'
 import {
   attemptTexts,
@@ -24,6 +27,7 @@ import {
   modelInput,
   withoutIdLists,
 } from './input.ts'
+import { byPriority } from './priority.ts'
 import {
   CLASSIFY_PROMPT,
   type ClassificationOutput,
@@ -46,10 +50,21 @@ export type InsightOptions = {
   maxOutputTokens: number
   /** Evals asked about at once. */
   concurrency?: number
+  /** Tokens (in and out) over every call; once spent, no eval's calls start. Default: no cap. */
+  maxTokens?: number
+  /** Classifications already made, by key; none to classify every eval. */
+  cache?: ClassifyCache
+  /** Stops every call: the run gave up waiting. */
+  signal?: AbortSignal
+  /** Each call's tokens as it returns. */
+  onUsage?: (call: CallUsage) => void
 }
 
-type Usage = { inputTokens: number; outputTokens: number }
+type Usage = { inputTokens: number; outputTokens: number; reasoningTokens: number }
 type Call = 'classify' | 'insights' | 'headline'
+
+/** One call's tokens: `eval` is its eval's path, or null for the headline. */
+export type CallUsage = { call: Call; eval: string | null } & Usage
 type ModelInput = ModelInsightInput | ModelHeadlineInput
 type Counts = { dropped: number; regenerated: number; drops: Drop[] }
 
@@ -74,10 +89,22 @@ function fakePart(call: Call, answer: FakeInsights, input: ModelInput): unknown 
   }
 }
 
+/** `work`, or the signal's reason as soon as it aborts. */
+function abortable<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return work
+  if (signal.aborted) return Promise.reject(signal.reason)
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(signal.reason)
+    signal.addEventListener('abort', stop, { once: true })
+    work.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop))
+  })
+}
+
 async function languageModel(
   model: ResolvedAnalysisModel,
   call: Call,
   input: ModelInput,
+  signal: AbortSignal | undefined,
 ): Promise<LanguageModel> {
   if (!model.fake) return providerModel(model)
   const insights = model.fake.insights
@@ -87,8 +114,11 @@ async function languageModel(
   if (typeof insights === 'object' && insights !== null && 'error' in insights) {
     return cannedModel({ error: insights.error })
   }
-  const answer = typeof insights === 'function' ? insights(input) : insights
-  return cannedModel({ text: JSON.stringify(fakePart(call, answer, input)) })
+  const answer =
+    typeof insights === 'function'
+      ? await abortable(Promise.resolve(insights(input)), signal)
+      : insights
+  return cannedModel({ text: JSON.stringify(fakePart(call, answer, input)) }, true)
 }
 
 async function ask<S extends z.ZodType>(
@@ -99,19 +129,32 @@ async function ask<S extends z.ZodType>(
   input: ModelInput,
   usage: Usage,
 ): Promise<z.infer<S>> {
-  const count = (u: { inputTokens?: number; outputTokens?: number } | undefined) => {
-    usage.inputTokens += u?.inputTokens ?? 0
-    usage.outputTokens += u?.outputTokens ?? 0
+  type CallUsage = {
+    inputTokens?: number
+    outputTokens?: number
+    outputTokenDetails?: { reasoningTokens?: number }
+  }
+  const count = (u: CallUsage | undefined) => {
+    const used: Usage = {
+      inputTokens: u?.inputTokens ?? 0,
+      outputTokens: u?.outputTokens ?? 0,
+      reasoningTokens: u?.outputTokenDetails?.reasoningTokens ?? 0,
+    }
+    usage.inputTokens += used.inputTokens
+    usage.outputTokens += used.outputTokens
+    usage.reasoningTokens += used.reasoningTokens
+    o.onUsage?.({ call, eval: input.call === 'headline' ? null : input.eval.path, ...used })
   }
   const once = async () =>
     generateText({
-      model: await languageModel(o.model, call, input),
+      model: await languageModel(o.model, call, input, o.signal),
       system,
       prompt: JSON.stringify(input),
       output: Output.object({ schema, name: call }),
       temperature: 0.2,
       maxOutputTokens: o.maxOutputTokens,
       maxRetries: 3,
+      ...(o.signal ? { abortSignal: o.signal } : {}),
     })
   let result: Awaited<ReturnType<typeof once>>
   try {
@@ -167,14 +210,13 @@ async function checked<T, O>(
   return two.value
 }
 
-async function evalInsight(
+/** One classification call; a low-confidence one falls back to `other`. */
+async function classify(
   o: InsightOptions,
-  e: EvalResult,
+  base: Omit<InsightInput, 'call'>,
   usage: Usage,
-  counts: Counts,
-): Promise<EvalInsight> {
-  const base = await evalInput(o.record, o.runDir, e)
-  const classified = (await ask(
+): Promise<Classified> {
+  const out = (await ask(
     o,
     'classify',
     classificationSchema,
@@ -182,11 +224,29 @@ async function evalInsight(
     modelInput({ call: 'classify', ...base }).input,
     usage,
   )) as ClassificationOutput
-  const job: Job = classified.confidence === 'low' ? 'other' : classified.job
-  const subject = {
-    ...(classified.subject.tool ? { tool: classified.subject.tool } : {}),
-    ...(classified.subject.change ? { change: classified.subject.change } : {}),
+  const job: Job = out.confidence === 'low' ? 'other' : out.job
+  return {
+    job,
+    question: out.question,
+    subject: {
+      ...(out.subject.tool ? { tool: out.subject.tool } : {}),
+      ...(out.subject.change ? { change: out.subject.change } : {}),
+    },
+    name: out.name,
   }
+}
+
+async function evalInsight(
+  o: InsightOptions,
+  e: EvalResult,
+  usage: Usage,
+  counts: Counts,
+): Promise<EvalInsight> {
+  const base = await evalInput(o.record, o.runDir, e)
+  const key = classificationKey(o.record, e, o.model.name, INSIGHTS_PROMPT_VERSION)
+  const classified = (await o.cache?.get(key)) ?? (await classify(o, base, usage))
+  if (o.cache) await o.cache.set(key, classified).catch(() => {})
+  const { job, subject } = classified
   const slots = slotsOf(job, e)
   const input: InsightInput = {
     call: 'insights',
@@ -222,7 +282,7 @@ async function evalInsight(
       question: classified.question,
       subject,
       name: classified.name,
-      key: classificationKey(o.record, e, o.model.name, INSIGHTS_PROMPT_VERSION),
+      key,
     },
     ...sentences,
   }
@@ -250,15 +310,50 @@ export const insightEvals = (suite: SuiteResult) =>
       .filter((e) => !e.todo && e.outcome !== 'skipped'),
   )
 
-/** Classifies each eval, writes and checks its sentences, then the run's headline. */
+/** An eval's insight, asked for once more when a call fails; its sentences counted only once it lands. */
+async function evalInsightOnce(
+  o: InsightOptions,
+  e: EvalResult,
+  usage: Usage,
+  validation: Counts,
+): Promise<EvalInsight> {
+  for (let tries = 1; ; tries++) {
+    const counts: Counts = { dropped: 0, regenerated: 0, drops: [] }
+    try {
+      const insight = await evalInsight(o, e, usage, counts)
+      validation.dropped += counts.dropped
+      validation.regenerated += counts.regenerated
+      validation.drops.push(...counts.drops)
+      return insight
+    } catch (error) {
+      if (tries === 2 || o.signal?.aborted) throw error
+    }
+  }
+}
+
+const spent = (u: Usage) => u.inputTokens + u.outputTokens
+
+/**
+ * Classifies each eval, writes and checks its sentences, then the run's headline. Evals start in
+ * priority order and are kept in output order; with `maxTokens`, those it didn't reach are listed
+ * in `budget.skipped`. A call that fails twice, or the signal, rejects the whole run's insights.
+ */
 export async function generateInsights(o: InsightOptions): Promise<RunInsights> {
   const suite = suiteResult(o.record)
-  const usage: Usage = { inputTokens: 0, outputTokens: 0 }
+  const usage: Usage = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0 }
   const validation: Counts = { dropped: 0, regenerated: 0, drops: [] }
-  const evals = await mapLimit(insightEvals(suite), o.concurrency ?? 4, (e) =>
-    evalInsight(o, e, usage, validation),
-  )
-  const byPath = new Map(evals.map((x) => [x.evalId, x]))
+  const within = () => o.maxTokens === undefined || spent(usage) < o.maxTokens
+  const ordered = insightEvals(suite)
+  const skipped = new Set<string>()
+  const done = await mapLimit(byPriority(ordered), o.concurrency ?? 4, async (e) => {
+    if (!within()) {
+      skipped.add(e.path)
+      return null
+    }
+    return evalInsightOnce(o, e, usage, validation)
+  })
+  const byPath = new Map(done.flatMap((x) => (x ? [[x.evalId, x] as const] : [])))
+  const evals = ordered.flatMap((e) => byPath.get(e.path) ?? [])
   const headlineInput: HeadlineInput = {
     call: 'headline',
     tally: {
@@ -266,7 +361,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
       total: Object.values(suite.tally).reduce((a, b) => a + b, 0) - suite.tally.errors,
       unit: 'results',
     },
-    evals: insightEvals(suite).map((e) => ({
+    evals: ordered.map((e) => ({
       path: e.path,
       name: e.template ?? e.name,
       verdict: e.outcome === 'infra_error' ? 'infra error' : e.outcome,
@@ -285,12 +380,16 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     )) as HeadlineOutput
     return { headline: out.headline && sentenceFrom(out.headline, headlineModel.ids) }
   }
-  const headline: Sentence | null = await checked(
-    await askHeadline(),
-    askHeadline,
-    (out) => validateHeadline(out, headlineInput),
-    validation,
-  )
+  const headline: Sentence | null =
+    evals.length && within()
+      ? await checked(
+          await askHeadline(),
+          askHeadline,
+          (out) => validateHeadline(out, headlineInput),
+          validation,
+        )
+      : null
+  const { reasoningTokens, ...tokens } = usage
   return {
     kind: 'reeval-insights',
     schemaVersion: 1,
@@ -299,7 +398,15 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     promptVersion: INSIGHTS_PROMPT_VERSION,
     factsHash: factsHash(suite),
     createdAt: new Date().toISOString(),
-    usage: { ...usage, costUsd: null },
+    usage: { ...tokens, ...(reasoningTokens ? { reasoningTokens } : {}), costUsd: null },
+    ...(o.maxTokens !== undefined
+      ? {
+          budget: {
+            maxTokens: o.maxTokens,
+            skipped: ordered.flatMap((e) => (skipped.has(e.path) ? [e.path] : [])),
+          },
+        }
+      : {}),
     headline,
     evals,
     remarks: [],

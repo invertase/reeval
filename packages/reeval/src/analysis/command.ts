@@ -281,45 +281,6 @@ export async function analyseDigest(
   }
 }
 
-/** A failed analysis as the cache keeps it: an empty body and the `error`. */
-export async function failedAnalysis(
-  config: ResolvedConfig,
-  p: PreparedAnalysis,
-  model: ResolvedAnalysisModel,
-  error: string,
-  latencyMs: number,
-): Promise<AnalysisDoc> {
-  return {
-    ...(await docBase(config, p)),
-    model: model.name,
-    resolvedModel: null,
-    route: model.route,
-    usage: { inputTokens: null, outputTokens: null },
-    latencyMs,
-    createdAt: new Date().toISOString(),
-    validation: {
-      citations: 0,
-      invalid: [],
-      dropped: 0,
-      commands: 0,
-      invalidCommands: [],
-      unverifiedNumbers: 0,
-    },
-    analysis: {
-      tldr: '',
-      whatHappened: [],
-      results: [],
-      why: [],
-      anomalies: [],
-      actions: [],
-      confidence: { overall: 'low', why: '' },
-    },
-    attempts: {},
-    cited: {},
-    error,
-  }
-}
-
 export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { config, flags } = ctx
   if (flags.insights) {

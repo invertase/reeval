@@ -15,8 +15,8 @@ import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { factsHash } from '../insights/hash.ts'
 import { BUILD_ID } from '../root.ts'
 import { runHeader } from '../view/header.ts'
-import { INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
-import { NewerSchemaError, readableRecord } from '../view/record.ts'
+import { fromModel, INSIGHTS_FILE, type RunInsights } from '../view/insights.ts'
+import { NewerSchemaError, readableInsights, readableRecord } from '../view/record.ts'
 import { suiteResult } from '../view/suite.ts'
 import {
   ensureHistoryGitignore,
@@ -280,8 +280,6 @@ export type RecordOptions = {
   skipSecretScan?: boolean
   /** summary.md ends with the hint to set an analysis model: none resolves. */
   hint: boolean
-  /** The scratch run's remarks-only insights, recorded beside it as `insights.json`. */
-  insights?: RunInsights | null
 }
 
 export type RecordResult = WrittenRun & {
@@ -352,13 +350,22 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatch = null
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
-  // The recorded record can drop artifacts, so the insights are hashed against its facts.
-  const insights = options.insights
-    ? { ...options.insights, factsHash: factsHash(suiteResult(record)) }
-    : null
-  if (insights) files.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}\n`))
-  if (level !== 'none')
-    files.set('summary.md', Buffer.from(renderSummary(record, { hint: options.hint, insights })))
+  // The run's insights go with it whatever the artifact level: they're its answers, not evidence.
+  // The recorded record can drop artifacts, so they're hashed against its facts.
+  const insightBytes = await readFile(join(source, runId, INSIGHTS_FILE)).catch(() => null)
+  let insights: RunInsights | null = null
+  if (insightBytes) {
+    try {
+      const read = readableInsights(JSON.parse(insightBytes.toString()), INSIGHTS_FILE)
+      insights = { ...read, factsHash: factsHash(suiteResult(record)) }
+      files.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}
+`))
+    } catch {}
+  }
+  if (level !== 'none') {
+    const hint = options.hint && !(insights && fromModel(insights))
+    files.set('summary.md', Buffer.from(renderSummary(record, { hint, insights })))
+  }
 
   if (!options.skipSecretScan) {
     const scanned: Array<[string, Finding[]]> = [

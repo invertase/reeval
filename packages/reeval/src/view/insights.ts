@@ -34,8 +34,21 @@ export type RunInsights = {
   /** sha256 of the run's `SuiteResult` as canonical JSON: the facts the model saw. */
   factsHash: string
   createdAt: string
-  /** Over every call; `costUsd` is null when reeval doesn't know the model's price. */
-  usage: { inputTokens: number; outputTokens: number; costUsd: number | null }
+  /**
+   * Over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it
+   * reports them. `costUsd` is null when reeval doesn't know the model's price.
+   */
+  usage: {
+    inputTokens: number
+    outputTokens: number
+    reasoningTokens?: number
+    costUsd: number | null
+  }
+  /**
+   * `analysis.maxTokens`, and the evals (`SuiteResult` paths) it ran out before: they print
+   * without insights. Absent when no budget applied.
+   */
+  budget?: { maxTokens: number; skipped: string[] }
   /** One sentence for the whole run, citing facts; null when the model's was dropped. */
   headline: Sentence | null
   /** One per eval (a family is one), in the order the output prints them. */

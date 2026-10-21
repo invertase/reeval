@@ -173,10 +173,6 @@ export const fakeAnalysisDataSchema = z
   .strictObject({
     kind: z.literal('fake-analysis'),
     output: z.unknown().optional().describe("The model's structured answer."),
-    note: z
-      .union([z.string(), failure])
-      .optional()
-      .describe("`analysis.agent`'s note on each eval and harness, or an error to throw."),
     vote: z
       .union([
         fakeVote,
@@ -198,13 +194,26 @@ export const analysisConfigDataSchema = z
       .union([z.string(), fakeAnalysisDataSchema])
       .optional()
       .describe(
-        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one.",
+        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and compare questions fall back to the judge's when it's a language model.",
       ),
-    agent: z
+    insights: z
       .boolean()
       .optional()
       .describe(
-        '`reeval run` writes a note on each eval and harness once its attempts finish, with the analysis model (default false: one call per eval and harness, every run).',
+        '`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).',
+      ),
+    maxTokens: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe(
+        "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
+      ),
+    insightsTimeout: durationSchema
+      .optional()
+      .describe(
+        "How long `reeval run` waits for insights after the last attempt (default `'60s'`).",
       ),
     instructions: z
       .string()
