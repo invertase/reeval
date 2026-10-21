@@ -11,6 +11,7 @@ import { HarnessAgent } from '@ai-sdk/harness/agent'
 import {
   ANTIGRAVITY_BUILTIN_TOOLS,
   ANTIGRAVITY_HOME_SKILLS_DIR,
+  ANTIGRAVITY_HOOK_EVENTS,
   ANTIGRAVITY_WORKSPACE_RULES_FILE,
   ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
   AntigravityStreamTranslator,
@@ -66,6 +67,7 @@ import {
   brokeringFor,
   claudeMcpServers,
   claudePluginFiles,
+  cursorHookMatcher,
   cursorMcpServers,
   gooseMcpServers,
   LAYOUTS,
@@ -299,6 +301,7 @@ describe('the Antigravity harness', () => {
       workspaceSkillDir: '.agents/skills',
       harnessSkillDir: '.gemini/config/skills',
       pluginPlacement: 'namespaced',
+      pluginHookEvents: ['SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'],
     })
     assert.equal(imageHarness(h), 'antigravity')
   })
@@ -328,6 +331,7 @@ describe('the Antigravity harness', () => {
       workspaceSkillDir: ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: ANTIGRAVITY_HOME_SKILLS_DIR,
       pluginPlacement: 'namespaced',
+      pluginHookEvents: Object.keys(ANTIGRAVITY_HOOK_EVENTS),
     })
   })
 })
@@ -1012,7 +1016,25 @@ describe('the Cursor harness', () => {
       workspaceSkillDir: CURSOR_SDK_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: CURSOR_SDK_HOME_SKILLS_DIR,
       pluginPlacement: 'flat',
+      pluginUnpack: LAYOUTS.cursor.pluginUnpack,
+      pluginHookEvents: [
+        'SessionStart',
+        'SessionEnd',
+        'UserPromptSubmit',
+        'PreToolUse',
+        'PostToolUse',
+        'SubagentStop',
+        'PreCompact',
+        'Stop',
+      ],
     })
+    const unpack = LAYOUTS.cursor.pluginUnpack
+    assert.deepEqual(
+      [unpack?.rules, unpack?.agents, unpack?.commands, unpack?.hooks?.file],
+      ['.cursor/rules', '.cursor/agents', '.cursor/commands', '.cursor/hooks.json'],
+    )
+    assert.equal(unpack?.hooks?.matcher, cursorHookMatcher)
+    assert.deepEqual(Object.keys(unpack?.hooks?.events ?? {}), LAYOUTS.cursor.pluginHookEvents)
     assert.equal(imageHarness(h), 'cursor')
     assert.deepEqual(AGENTS.cursor.endpoints, cursorSdkEndpoints())
   })
