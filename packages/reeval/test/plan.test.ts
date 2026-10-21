@@ -163,6 +163,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'warnings',
       'sandboxWarnings',
       'hints',
+      'insights',
       'evals',
       'excluded',
       'images',
