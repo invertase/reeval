@@ -682,6 +682,31 @@ export default defineConfig({
 `
 
 describe('reeval analyze --insights', () => {
+  test('replaces remarks-only insights.json and keeps its remarks', async () => {
+    const p = await fixture('fixtures/records/with-remarks')
+    writeFileSync(join(p.dir, 'reeval.config.ts'), FAKE_CONFIG)
+    writeFileSync(
+      join(p.dir, 'insights.ts'),
+      readFileSync(new URL('../scripts/output/project/insights.ts', import.meta.url), 'utf8'),
+    )
+    const runId = corpusEntries()
+      .find((e) => e.name === 'with-remarks')
+      ?.runs.at(-1)?.runId
+    assert.ok(runId)
+    const file = join(p.dir, HISTORY_DIR, runId, 'insights.json')
+    const before = readableInsights(JSON.parse(readFileSync(file, 'utf8')))
+    assert.equal(before.model, 'none')
+    assert.ok(before.remarks.length > 0)
+
+    const r = await runCli(p.dir, ['analyze', runId, '--insights'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const after = readableInsights(JSON.parse(readFileSync(file, 'utf8')))
+    assert.equal(after.model, 'fake')
+    assert.deepEqual(after.remarks, before.remarks)
+    const again = await runCli(p.dir, ['analyze', runId, '--insights'])
+    assert.match(again.stderr, /already exists, and insights are never rewritten/)
+  })
+
   test('writes a recorded run insights.json once, reeval show prints them, and exits 0', async () => {
     const p = await fixture('fixtures/records/before-insights')
     writeFileSync(join(p.dir, 'reeval.config.ts'), FAKE_CONFIG)
