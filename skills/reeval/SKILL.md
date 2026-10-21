@@ -228,8 +228,8 @@ group(
 )
 ```
 
-- A spec, or a synchronous callback that destructures the helpers it needs (`skill`, `file`,
-  `directory`, `git`, `mcp`, `secret`): `files: { 'docs/api.md': file('../docs/api.md') }`,
+- A spec, or a synchronous callback that destructures the helpers it needs (`skill`, `plugin`,
+  `file`, `directory`, `git`, `mcp`, `secret`): `files: { 'docs/api.md': file('../docs/api.md') }`,
   `rules: file('../rules/house.md')` (AGENTS.md; CLAUDE.md for Claude Code),
   `mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }`,
   `setup: [{ run: 'npm ci', timeout: '5m' }]`. More in
