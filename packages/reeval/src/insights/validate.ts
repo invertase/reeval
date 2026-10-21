@@ -116,6 +116,7 @@ export function citableHeadline(input: HeadlineInput): Citable {
 export type Verdict = { ok: Sentence } | { dropped: string } | { banned: string }
 
 const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+(?=\S)/).filter((s) => s.trim())
+const sameText = (text: string) => text.trim().toLowerCase()
 const wordsOf = (text: string) => text.match(/\S+/g)?.length ?? 0
 
 /** The largest `of M` in the cited facts: how many tries the sentence's counts are over. */
@@ -215,14 +216,6 @@ export function validateEvalInsights(
     return 'ok' in v ? v.ok : null
   }
   const answer = output.answer ? keep(output.answer, 'answer', 2) : null
-  const findings = output.findings.flatMap((s, i) => {
-    if (!slots.findings) {
-      drop(`finding ${i + 1}`, s.text, "this eval's layout has no findings")
-      return []
-    }
-    const kept = keep(s, `finding ${i + 1}`)
-    return kept ? [kept] : []
-  })
   const open = new Set(slots.rows)
   const filled = new Set<string>()
   const rows = output.rows.flatMap((r) => {
@@ -239,6 +232,24 @@ export function validateEvalInsights(
     if (!kept) return []
     filled.add(r.row)
     return [{ ...kept, row: r.row }]
+  })
+  const shown = new Set(
+    [answer?.text, ...(answer ? sentencesOf(answer.text) : []), ...rows.map((r) => r.text)]
+      .filter((t): t is string => !!t)
+      .map(sameText),
+  )
+  const findings = output.findings.flatMap((s, i) => {
+    if (!slots.findings) {
+      drop(`finding ${i + 1}`, s.text, "this eval's layout has no findings")
+      return []
+    }
+    if (shown.has(sameText(s.text))) {
+      drop(`finding ${i + 1}`, s.text, 'repeats a sentence already shown')
+      return []
+    }
+    const kept = keep(s, `finding ${i + 1}`)
+    if (kept) shown.add(sameText(kept.text))
+    return kept ? [kept] : []
   })
   const namedTools = output.namedTools.flatMap((n) => {
     const where = `named tools ${under(n.attempt)}`

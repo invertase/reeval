@@ -191,6 +191,28 @@ describe('the insights validator', () => {
     assert.equal(right.headline?.text, `9 of ${total} results fail.`)
   })
 
+  test('canary: a finding that repeats a row sentence is dropped', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) => {
+        const row = a.rows?.[0]
+        return input.call === 'insights' && row
+          ? {
+              ...a,
+              findings: [...(a.findings ?? []), { ...row, text: ` ${row.text.toUpperCase()}` }],
+            }
+          : a
+      }),
+    )
+    const x = insightOf(doc, measure)
+    const shown = x.rows?.[0]?.text.toLowerCase()
+    assert.ok(shown)
+    assert.ok(!x.findings.some((f) => f.text.trim().toLowerCase() === shown))
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => d.reason),
+      ['repeats a sentence already shown'],
+    )
+  })
+
   test('canary: a sentence citing a fact it was never shown is dropped', async () => {
     const doc = await generate(
       recipeWith(measure.path, (input, a) =>
