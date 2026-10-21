@@ -1,9 +1,11 @@
 // A tiny MCP stdio server: one tool, `house_stamp`. It logs each request's method to a marker
 // file, so a check can see that an MCP client really called it.
 import { appendFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 
-const LOG = '/tmp/reeval-plugin-stamp.log'
+const LOG = join(tmpdir(), 'reeval-plugin-stamp.log')
 const send = (m) => process.stdout.write(`${JSON.stringify(m)}\n`)
 createInterface({ input: process.stdin }).on('line', (line) => {
   let m
