@@ -9,8 +9,13 @@ const GIT =
   'git -c user.name=reeval -c user.email=reeval@localhost -c core.hooksPath=/dev/null' +
   ' -c core.logAllRefUpdates=false -c gc.auto=0'
 
+// The git dir is root's, but `execOwn`'s HOME is the image's, which a custom `from` image could
+// point at the agent's own home. Ignore every config file git would otherwise read, so the agent
+// can't make reeval's privileged git run its code through a planted `~/.gitconfig` (an fsmonitor,
+// a `filter.*.clean`, a diff `textconv`) or weaken it with `safe.directory`. Hooks are off too.
 const snapshotEnv = (sandbox: Sandbox) =>
-  `export GIT_DIR=${shellQuote(`${sandbox.stateDir}/workspace.git`)} GIT_WORK_TREE="$PWD"`
+  `export GIT_DIR=${shellQuote(`${sandbox.stateDir}/workspace.git`)} GIT_WORK_TREE="$PWD"` +
+  ' GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null'
 
 /** Points HEAD at a commit of `$tree` with no parent, then drops every object nothing reaches. */
 const RESET_HEAD = `c=$(${GIT} commit-tree -m base "$tree") && ${GIT} update-ref HEAD "$c" && ${GIT} prune --expire=now`

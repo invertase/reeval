@@ -248,6 +248,25 @@ test("the snapshot keeps one commit and no placed file's earlier content", async
   assert.ok(!existsSync(box.stateDir), 'destroy removes the state directory')
 })
 
+test('the snapshot ignores a config the workspace user could plant in its HOME', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    // A privileged git's HOME can be the agent's on a custom `from` image, so a `~/.gitconfig`
+    // filter would run reeval's git as root. Prove the snapshot's git never reads it.
+    const ran = join(box.stateDir, 'filter-ran')
+    await box.writeFile('~/.gitconfig', `[filter "evil"]\n\tclean = touch ${ran}\n`)
+    await box.writeFile('.gitattributes', 'secret.txt filter=evil\n')
+    await box.writeFile('secret.txt', 'content\n')
+    await snapshot(box)
+    await box.writeFile('secret.txt', 'changed\n')
+    await acceptIntoSnapshot(box, 'secret.txt')
+    await diffSinceSnapshot(box)
+    assert.ok(!existsSync(ran), 'the planted clean filter never ran')
+  } finally {
+    await box.destroy()
+  }
+})
+
 test('an aborted fake sandbox command stops, with everything it started', async () => {
   const box = await createFakeSandbox({ kind: 'fake' })
   try {
