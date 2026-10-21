@@ -428,6 +428,12 @@ export function cursorMcpServers(
   )
 }
 
+/**
+ * What Claude Code's plugin format bundles, which Grok Build reads too: every part but rules,
+ * which neither loads from a plugin.
+ */
+const CLAUDE_FORMAT_PARTS: readonly PluginPart[] = PLUGIN_PARTS.filter((p) => p !== 'rules')
+
 /** The marketplace Claude Code's settings name for the session's plugins. */
 export const CLAUDE_PLUGIN_MARKETPLACE = 'reeval'
 
@@ -584,7 +590,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   'claude-code': {
     ...LAYOUTS['claude-code'],
-    pluginParts: PLUGIN_PARTS,
+    pluginParts: CLAUDE_FORMAT_PARTS,
     name: 'Claude Code',
     factory: 'claudeCode',
     credential: 'ANTHROPIC_API_KEY',
@@ -756,7 +762,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   'grok-build': {
     ...LAYOUTS['grok-build'],
-    pluginParts: PLUGIN_PARTS,
+    pluginParts: CLAUDE_FORMAT_PARTS,
     name: 'Grok Build',
     factory: 'grokBuild',
     credential: 'XAI_API_KEY',

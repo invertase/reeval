@@ -4,6 +4,16 @@ import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { type BakedHarness, imageFor } from '@reeval/sandbox-docker'
+import type { PluginPart } from '../../src/types.ts'
+
+/** Every plugin part, for a harness that loads them all. */
+export const EVERY_PART: readonly PluginPart[] = ['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules']
+
+/** What a harness that reads Claude Code's plugin format loads: every part but rules. */
+const CLAUDE_FORMAT: readonly PluginPart[] = ['skills', 'agents', 'commands', 'hooks', 'mcp']
+
+/** Where reeval copies the probe plugin's skill, which `context` lists. */
+const PLACED_PLUGIN_SKILL = /^~\/\.reeval\/plugins\/probe\/skills\/plugin-probe\/SKILL\.md$/
 
 export type HarnessRow = {
   /** The name in test titles, `REEVAL_CONTRACT_HARNESSES` and the capture directory. */
@@ -42,6 +52,14 @@ export type HarnessRow = {
   image: BakedHarness
   /** Where the placed contract skill shows up in the attempt's `context`. */
   skillContext: RegExp
+  /**
+   * What reeval places of a plugin on this harness: the parts its catalog entry loads
+   * (`pluginParts`), which the probe plugin's `only` is narrowed to, and where the probe plugin's
+   * skill shows up in `context`. The hook and subagent evals run only where `parts` has `hooks`
+   * and `agents`. Unset for a harness reeval places no plugins on yet: its plugin evals are left
+   * out, and the plugin checks skip it, saying so.
+   */
+  plugin?: { parts: readonly PluginPart[]; skillContext: RegExp }
   /** What a restricted policy allows automatically for it. */
   autoHosts: string[]
   /** A host it reaches on every turn; null for the fake agent, which reaches none. */
@@ -73,6 +91,9 @@ export const harnesses: HarnessRow[] = [
     key: null,
     image: 'cursor',
     skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    // Plugin evals run it without a layout, so it takes every part and places plugin skills with
+    // its own.
+    plugin: { parts: EVERY_PART, skillContext: /^~\/\.agents\/skills\/plugin-probe\/SKILL\.md$/ },
     autoHosts: ['api2.cursor.sh', '*.cursor.sh'],
     apiHost: null,
     tokens: false,
@@ -110,6 +131,7 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
     image: 'claude-code',
     skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: { parts: CLAUDE_FORMAT, skillContext: PLACED_PLUGIN_SKILL },
     autoHosts: ['api.anthropic.com', '*.anthropic.com'],
     apiHost: 'api.anthropic.com',
     tokens: true,
@@ -253,6 +275,7 @@ export const harnesses: HarnessRow[] = [
     image: 'grok-build',
     skillContext:
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: { parts: CLAUDE_FORMAT, skillContext: PLACED_PLUGIN_SKILL },
     autoHosts: ['api.x.ai'],
     apiHost: 'api.x.ai',
     tokens: true,
@@ -311,6 +334,7 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   return {
     ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
+    ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...(process.env.REEVAL_RAW_TRANSCRIPT
       ? { REEVAL_RAW_TRANSCRIPT: process.env.REEVAL_RAW_TRANSCRIPT }

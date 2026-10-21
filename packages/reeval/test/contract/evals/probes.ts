@@ -1,5 +1,5 @@
-import { defineEnvironment, type HarnessOption, type Turn } from 'reeval'
-import { BLOCKED_HOST, COMMAND, PLANTED, RULES_WORD, reach } from './constants.ts'
+import { defineEnvironment, type HarnessOption, type PluginPart, type Turn } from 'reeval'
+import { BLOCKED_HOST, COMMAND, PLANTED, PLUGIN_AGENT, RULES_WORD, reach } from './constants.ts'
 
 // What every harness in the contract gets, and the signals the checks read. The prompts are one
 // short turn each and name the exact action; the checks read what the model can't fake: a file a
@@ -26,6 +26,20 @@ export const planted = scanned.extendEnvironment('planted', {
   files: { '~/.contract-planted': `${PLANTED}\n` },
 })
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })
+/**
+ * The probe plugin alone, under deny-all: whatever else the agent loads or contacts is a leak. Its
+ * `only` is the parts the row's harness loads (`REEVAL_CONTRACT_PLUGIN_PARTS`); unset, it keeps
+ * every part.
+ */
+export const plugged = defineEnvironment('plugged', ({ plugin }) => {
+  const parts = process.env.REEVAL_CONTRACT_PLUGIN_PARTS
+  return {
+    egress: 'deny-all',
+    plugins: [
+      plugin.local('../plugins/probe', parts ? { only: parts.split(',') as PluginPart[] } : {}),
+    ],
+  }
+})
 
 export const prompts = {
   skill:
@@ -35,6 +49,12 @@ export const prompts = {
   editAndRun: `In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: ${COMMAND}. Then stop.`,
   key: 'Reply with the single word OK. Do not run any tools.',
   egress: `Run this exact shell command once, then stop: ${reach(BLOCKED_HOST)}`,
+  pluginSkill:
+    'Use your plugin-probe skill, from the probe plugin: do exactly what it says, then stop. Keep your reply short.',
+  pluginMcp:
+    "Call the house_stamp tool of the probe plugin's stamp MCP server once, then reply with what it returned.",
+  pluginHook: 'Reply with the single word OK. Do not run any tools.',
+  pluginAgent: `Delegate to the ${PLUGIN_AGENT} subagent, from the probe plugin, with your subagent tool: ask it to reply, then stop. Do not answer for it.`,
 }
 
 /**
@@ -59,6 +79,34 @@ export const withFakeMcp: HarnessOption = (inherited) =>
   inherited.map((h) =>
     h.kind === 'fake' && h.script
       ? { ...h, script: h.script.map((steps) => [{ mcp: 'stamp/house_stamp' }, ...steps]) }
+      : h,
+  )
+
+/**
+ * For the plugin evals: the fake agent without a layout, which takes every plugin part and
+ * places plugin skills with its own, does each plugin probe's action from the files reeval
+ * placed: it reads the skill, calls the plugin's MCP server, runs the hook's command from the
+ * placed hooks.json and reads the subagent. Real harnesses are left as they are.
+ */
+export const withFakePlugin: HarnessOption = (inherited) =>
+  inherited.map((h) =>
+    h.kind === 'fake' && h.script
+      ? {
+          kind: 'fake',
+          script: [
+            [
+              {
+                exec: `grep -o 'PLUGIN-[A-Z0-9-]*' ~/.agents/skills/plugin-probe/SKILL.md > plugin-proof.txt`,
+              },
+              { mcp: 'probe:stamp/house_stamp' },
+              {
+                exec: `sh -c "$(node -p 'require(process.env.HOME + "/.reeval/plugins/probe/hooks/hooks.json").hooks.SessionStart[0].hooks[0].command')"`,
+              },
+              { exec: `cat ~/.reeval/plugins/probe/agents/${PLUGIN_AGENT}.md` },
+              { reply: 'OK' },
+            ],
+          ],
+        }
       : h,
   )
 
