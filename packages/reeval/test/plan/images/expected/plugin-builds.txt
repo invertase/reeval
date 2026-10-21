@@ -1,0 +1,9 @@
+no profile · 2 evals · 2 cells · 2 attempts
+evals/plugins.eval.ts › built plugins       fake/built/docker+687abd2a  control  gated  ×1  plugins built (skills); github:acme/agent-plugins#v1.2.0:plugins/review
+evals/plugins.eval.ts › same plugins again  fake/built/docker+687abd2a  control  gated  ×1  plugins built (skills); github:acme/agent-plugins#v1.2.0:plugins/review
+excluded: —
+image docker+687abd2a · cursor + install + 2 plugin builds · 2 evals
+  base                                           reeval-sandbox:cursor-0.1.5                       (reeval's image: built when missing or when its base changed)
+  install 1 command                              reeval-install:<base id + commands>               (build unless cached)
+  build plugin.local('plugins/built')            reeval-plugin:<image id>-344bad2041a5fe22         (build unless cached: npm ci && npm run build)
+  build plugin.git('github:acme/agent-plugins')  reeval-plugin:<image id>-<commit + tree + build>  (build unless cached: pnpm install --frozen-lockfile (from .))

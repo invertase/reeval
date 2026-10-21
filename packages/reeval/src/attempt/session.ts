@@ -3,12 +3,18 @@ import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
 import {
+  droppedPaths,
   PLUGIN_DIR,
-  MANIFEST as PLUGIN_MANIFEST,
+  PLUGIN_MANIFEST,
   PLUGIN_ROOT,
   PLUGIN_ROOT_VAR,
 } from '../environment/plugins.ts'
-import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
+import {
+  type ResolvedEnvironment,
+  type ResolvedPlugin,
+  type ResolvedStep,
+  skillFiles,
+} from '../environment/resolve.ts'
 import { brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
@@ -123,16 +129,45 @@ async function copyWorkspace(
 }
 
 /**
- * Copies each plugin to `PLUGIN_DIR/<name>/` before the workspace snapshot, and points its MCP
- * servers' `${CLAUDE_PLUGIN_ROOT}` at that directory, for the adapter to load from there.
+ * A built plugin's directory, copied from where its layer left it in the image, less the parts
+ * `only` leaves out, with the manifest as reeval read it.
+ */
+async function copyBuiltPlugin(
+  a: Attempt,
+  box: Sandbox,
+  plugin: ResolvedPlugin & { built: NonNullable<ResolvedPlugin['built']> },
+  dir: string,
+) {
+  const dropped = droppedPaths(plugin.parts).map((p) => shellQuote(`${dir}/${p}`))
+  const r = await box.exec(
+    `mkdir -p ${shellQuote(dir)} && cp -a ${shellQuote(plugin.built.dir)}/. ${shellQuote(dir)}/${dropped.length ? ` && rm -rf ${dropped.join(' ')}` : ''}`,
+    { signal: a.signal },
+  )
+  if (r.exitCode !== 0) {
+    throw new InfraError(
+      `Couldn't copy the ${plugin.name} plugin's build from ${plugin.built.tag}: ${tailOf(r.stderr || r.stdout)}`,
+    )
+  }
+  const manifest = plugin.files.find((f) => f.path === PLUGIN_MANIFEST)
+  if (manifest) await box.writeFile(`${dir}/${PLUGIN_MANIFEST}`, manifest.content)
+}
+
+/**
+ * Copies each plugin to `PLUGIN_DIR/<name>/` before the workspace snapshot (a built one from its
+ * layer in the image, any other from the host), and points its MCP servers' `${CLAUDE_PLUGIN_ROOT}`
+ * at that directory, for the adapter to load from there.
  */
 async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   const out: Treatments['plugins'] = []
   for (const plugin of env.plugins) {
     const at = `${PLUGIN_DIR}/${plugin.name}`
     const dir = `${box.home}/${at.slice(2)}`
-    for (const f of plugin.files) await box.writeFile(`${at}/${f.path}`, f.content)
-    const executable = plugin.files.flatMap((f) => (f.executable ? [`${dir}/${f.path}`] : []))
+    const { built } = plugin
+    if (built) await copyBuiltPlugin(a, box, { ...plugin, built }, dir)
+    else for (const f of plugin.files) await box.writeFile(`${at}/${f.path}`, f.content)
+    const executable = built
+      ? []
+      : plugin.files.flatMap((f) => (f.executable ? [`${dir}/${f.path}`] : []))
     if (executable.length) {
       const r = await box.exec(`chmod +x ${executable.map(shellQuote).join(' ')}`, {
         signal: a.signal,
@@ -160,7 +195,7 @@ async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
     out.push({ name: plugin.name, dir, parts: plugin.parts, servers: plugin.servers })
     debugLog(
       'env',
-      `plugin ${plugin.name} → ${at}/ (${plugin.files.length} files; ${plugin.parts.join(', ')})`,
+      `plugin ${plugin.name} → ${at}/ (${built ? `built in ${built.tag}` : `${plugin.files.length} files`}; ${plugin.parts.join(', ')})`,
     )
   }
   return out

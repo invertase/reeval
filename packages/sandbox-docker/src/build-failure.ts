@@ -4,7 +4,7 @@
 import { type Engine, engineSpec } from './engine.ts'
 
 /** Which part of making a sandbox image failed. */
-export type ImageStage = 'image' | 'from' | 'dockerfile' | 'harness' | 'install'
+export type ImageStage = 'image' | 'from' | 'dockerfile' | 'harness' | 'install' | 'plugin'
 
 /** A cause reeval recognises and names in the headline. */
 export type FailureCause = 'enospc' | 'oom'
