@@ -111,6 +111,11 @@ export const cases: PlanCase[] = [
     name: 'claude-code-and-grok-build',
     args: ['--config', 'reeval.claude-grok.config.ts', 'evals/namespaced.eval.ts'],
   },
+  {
+    dir: 'plugins',
+    name: 'antigravity-and-cursor',
+    args: ['--config', 'reeval.antigravity-cursor.config.ts', 'evals/every-part.eval.ts'],
+  },
   { dir: 'capture', name: 'options', args: [] },
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
@@ -342,8 +347,6 @@ evaluate('uses tools', { environment: tools }, async () => {})
       'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
     }
     for (const [factory, model, name] of [
-      ['cursor', 'composer-2.5', 'Cursor'],
-      ['antigravity', 'gemini-3.8-flash-low', 'Antigravity'],
       ['opencode', 'google/gemini-3.8-flash', 'OpenCode'],
       ['goose', 'gemini-3.8-flash', 'Goose'],
       ['pi', 'gemini-3.8-flash', 'pi'],
@@ -418,6 +421,64 @@ evaluate('reviews', { environment: review }, async () => {})
           `${factory} ${label}`,
         )
       }
+    }
+  })
+
+  test('Cursor refuses a plugin item that clashes where it unpacks or places it, and a hook event it doesn’t run', async () => {
+    const plugin = (name: string, files: Record<string, string>) =>
+      Object.fromEntries([
+        [`plugins/${name}/.claude-plugin/plugin.json`, `{ "name": "${name}" }`],
+        ...Object.entries(files).map(([path, content]) => [`plugins/${name}/${path}`, content]),
+      ])
+    const skill = '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n'
+    for (const [label, files, environment, refusal] of [
+      [
+        'skill',
+        { ...plugin('review', { 'skills/lint/SKILL.md': skill }), 'skills/lint/SKILL.md': skill },
+        "{ skills: [skill.local('../skills/lint')], plugins: [plugin.local('../plugins/review')] }",
+        `the review plugin's skill "lint" and skill\\.local\\('skills/lint'\\)'s "lint" would both be placed at ~/\\.agents/skills/lint: rename one, or narrow it with only or exclude`,
+      ],
+      [
+        'subagent',
+        {
+          ...plugin('review', { 'agents/reviewer.md': 'Review.\n' }),
+          ...plugin('audit', { 'agents/reviewer.md': 'Audit.\n' }),
+        },
+        "{ plugins: [plugin.local('../plugins/review'), plugin.local('../plugins/audit')] }",
+        `the audit plugin's subagent "reviewer" and the review plugin's would both be placed at \\.cursor/agents/reviewer\\.md: rename one, or narrow one with only`,
+      ],
+      [
+        'hook',
+        plugin('review', {
+          'commands/review.md': 'Review.\n',
+          'hooks/hooks.json': JSON.stringify({
+            hooks: { Notification: [{ hooks: [{ type: 'command', command: 'notify' }] }] },
+          }),
+        }),
+        "{ plugins: [plugin.local('../plugins/review')] }",
+        `Cursor can't run the review plugin's Notification hooks \\(hooks/hooks\\.json\\): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: \\['commands'\\], or leave the plugin out of this cell`,
+      ],
+    ] as const) {
+      const p = await project(`plugin-cursor-clash-${label}`, {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }) })
+`,
+        'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const review = defineEnvironment('review', ({ plugin, skill }) => (${environment}))
+evaluate('reviews', { environment: review }, async () => {})
+`,
+        ...files,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, `${label}: ${r.stdout}${r.stderr}`)
+      assert.equal(r.stdout, '', label)
+      assert.match(
+        r.stderr,
+        new RegExp(`evaluate\\("reviews"\\) on cursor:[^:]+: ${refusal}`),
+        label,
+      )
+      assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, `${label}: nothing ran`)
     }
   })
 
