@@ -20,7 +20,7 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | plugin skill used | `plugin-proof.txt` holds a code only the probe plugin's skill has | no turn: no proof | the attempt's `context` lists the skill at the row's `plugin.skillContext`, and the environment's plugin record lists the skill |
 | plugin MCP server called | the plugin's `stamp.mjs` logged `tools/call`; a tool named `mcp__…stamp__house_stamp` is in the transcript | no turn: no call | the plugin record lists `stamp`, and the environment's `mcp` has `probe:stamp` |
 | plugin hook ran | the `SessionStart` hook wrote `/tmp/reeval-plugin-hook.txt` | an environment without the plugin: no marker | — |
-| plugin subagent available | a tool call mentions `probe-agent` (the agent delegated to it) | an environment without the plugin: no such call | — |
+| plugin subagent available | a successful tool call names `probe-agent` (or `probe:probe-agent`) in a field naming an agent, such as `subagent_type`: a search for the name, or a delegation the agent refuses, doesn't count | the same turn in an environment without the plugin: no such call (Claude Code's is refused, Grok Build spawns a general-purpose subagent) | — |
 | plugin part it can't load refused | — | — | `--dry-run` with the probe's every part (its `rules/` included) exits 2 naming the part and the parts the row loads; a row that loads every part skips |
 | plugin hermetic | — | — | the plugin skill attempt's `context` has no other skill and no plugin outside `~/.reeval/plugins/`, under `deny-all` nothing was blocked, and every host contacted is one of the row's automatic hosts |
 | clean teardown | — | — | the run is `complete` and no container with its label is left |

@@ -9,6 +9,12 @@ const sandbox =
 export const house = defineEnvironment('house', ({ plugin }) => ({
   sandbox,
   plugins: [plugin.local('../plugin')],
+  files: {
+    '~/.claude/settings.json': JSON.stringify({
+      env: { HOUSE: '1' },
+      enabledPlugins: { 'other@elsewhere': false },
+    }),
+  },
 }))
 
 /** What the scripted agent's `n`th shell command printed. */

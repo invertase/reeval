@@ -124,6 +124,30 @@ export const toolsMentioning = (turn: Turn | undefined, needle: string) =>
       : [],
   )
 
+/** Whether `input`, at any depth, has a field naming an agent whose value is `agent` or `<plugin>:<agent>`. */
+const namesAgent = (input: unknown, agent: string): boolean =>
+  typeof input === 'object' && input !== null
+    ? Object.entries(input).some(
+        ([key, value]) =>
+          (/agent/i.test(key) &&
+            typeof value === 'string' &&
+            (value === agent || value.endsWith(`:${agent}`))) ||
+          namesAgent(value, agent),
+      )
+    : false
+
+/**
+ * Successful tool calls that delegated to the subagent `agent`: a field naming an agent
+ * (`subagent_type`, …) holds its name. Not a search for the name, nor a call the agent refused
+ * for a subagent it doesn't have, as `toolsMentioning` would count.
+ */
+export const delegatedTo = (turn: Turn | undefined, agent: string) =>
+  (turn?.transcript ?? []).flatMap((e) =>
+    e.type === 'tool' && e.ok && namesAgent(e.input, agent)
+      ? [`${e.tool}: ${text(e.input).slice(0, 200)} → ${text(e.output).slice(0, 200)}`]
+      : [],
+  )
+
 /** Every tool event's name. */
 export const toolNames = (turn: Turn | undefined) =>
   (turn?.transcript ?? []).flatMap((e) => (e.type === 'tool' ? [e.tool] : []))

@@ -105,7 +105,7 @@ The agent runs with every permission granted, inside the sandbox.
 }
 ```
 
-reeval copies each plugin to `~/.reeval/plugins/<name>/`, lists them in a `reeval` marketplace there (`.claude-plugin/marketplace.json`) and enables them in Claude Code's settings. Claude Code loads each whole, namespaced: the subagent `review:reviewer`, the MCP tool `mcp__plugin_review_docs__<tool>`.
+reeval copies each plugin to `~/.reeval/plugins/<name>/`, lists them in a `reeval` marketplace there (`.claude-plugin/marketplace.json`) and enables them in Claude Code's settings. When the environment's `files` already write `~/.claude/settings.json`, reeval merges these keys into it. Claude Code loads each whole, namespaced: the subagent `review:reviewer`, the MCP tool `mcp__plugin_review_docs__<tool>`.
 
 Claude Code starts a plugin's MCP servers itself, so reeval leaves them out of the config it passes. reeval rewrites the placed plugin's `.mcp.json` to run each through its MCP timer, so each start is in `turns[].mcpStartup` as `<plugin>:<server>`. That file can't hold a host secret, so a plugin server that reads one is refused at plan time; declare that server in `mcp`.
 
@@ -134,6 +134,7 @@ The line under the result blocks totals them, and the record keeps them per turn
 | No key when the attempt starts | `ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate. Set it in the environment or .env.local.` |
 | A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox: set sandbox: docker() …` |
 | The CLI doesn't start | `Claude Code harness failed to start: …` |
+| `files` write `~/.claude/settings.json` as something other than a JSON object, with plugins | `~/.claude/settings.json isn't a JSON object, so reeval can't enable the session's plugins in it: write it as one in files, or leave it out` |
 
 A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the eval's result block and `summary.md` show the API's message, without `-v`. Scripted on the fake harness, the same failure prints:
 

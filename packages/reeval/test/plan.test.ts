@@ -475,6 +475,41 @@ evaluate('reviews', { environment: review }, async () => {})
     }
   })
 
+  test("Grok Build refuses a plugin MCP server named like one in mcp; Claude Code's namespaced name plans", async () => {
+    for (const [factory, model, refused] of [
+      ['grokBuild', 'grok-4.6', true],
+      ['claudeCode', 'claude-sonnet-5', false],
+    ] as const) {
+      const p = await project(`plugin-server-name-${factory}`, {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+`,
+        'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const review = defineEnvironment('review', ({ plugin, mcp }) => ({
+  mcp: { docs: mcp.stdio('docs-server') },
+  plugins: [plugin.local('../plugins/review')],
+}))
+evaluate('reviews', { environment: review }, async () => {})
+`,
+        'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
+        'plugins/review/.mcp.json': JSON.stringify({
+          mcpServers: { docs: { command: 'docs-server' } },
+        }),
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      if (!refused) {
+        assert.equal(r.code, 0, `${factory}: ${r.stdout}${r.stderr}`)
+        continue
+      }
+      assert.equal(r.code, 2, `${factory}: ${r.stdout}${r.stderr}`)
+      assert.match(
+        r.stderr,
+        /evaluate\("reviews"\) on grok-build:[^:]+: Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp\.docs, and keeps only one: rename one, or leave mcp out of the plugin with only/,
+      )
+    }
+  })
+
   test('a plugin the plan reads and refuses exits 2: no manifest, a build, npx under deny-all', async () => {
     const config = `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'

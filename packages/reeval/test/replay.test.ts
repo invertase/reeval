@@ -718,12 +718,25 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
       { ...hook, subtype: 'hook_response', output: 'hook-ran', exit_code: 0 },
       ...sdk.slice(init),
     ]
-    const parts = await replayBridge({
-      bridge: shipped,
-      start,
-      messages: hooked.map((m) => JSON.stringify(m)).join('\n'),
+    const replay = (bridge: string) =>
+      replayBridge({ bridge, start, messages: hooked.map((m) => JSON.stringify(m)).join('\n') })
+    assert.deepEqual((await replay(shipped))[0], {
+      type: 'stream-start',
+      modelId: 'claude-haiku-4-5',
     })
-    assert.deepEqual(parts[0], { type: 'stream-start', modelId: 'claude-haiku-4-5' })
+    // The twin: a bridge that skips only command_lifecycle starts the stream at the hook.
+    const source = readFileSync(shipped, 'utf8')
+    const hookClause =
+      ' || type === "system" && typeof msg.subtype === "string" && msg.subtype.startsWith("hook_")'
+    assert.ok(source.includes(hookClause), 'the shipped bridge skips hook messages')
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-hookless-'))
+    const hookless = join(dir, 'bridge.mjs')
+    writeFileSync(hookless, source.replace(hookClause, ''))
+    try {
+      assert.deepEqual((await replay(hookless))[0], { type: 'stream-start' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   test('twin: without the patch, command_lifecycle starts the stream and the model is lost', async () => {
