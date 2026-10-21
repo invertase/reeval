@@ -17,6 +17,9 @@ const NO_USAGE = {
 const GOOSE_ERROR =
   /^Ran into this error: ([\s\S]*?)\.?\n\nPlease retry if you think this is a transient or recoverable error\.$/
 
+/** An extension's name as Goose keys it: `probe:stamp` becomes `probe_stamp`. */
+const gooseName = (name: string) => name.replace(/[^A-Za-z0-9_-]/g, '_').toLowerCase()
+
 const isObjectLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 const record = (value: unknown): Record<string, unknown> => (isObjectLike(value) ? value : {})
@@ -26,7 +29,9 @@ const record = (value: unknown): Record<string, unknown> => (isObjectLike(value)
  *
  * - A call it couldn't name (`acp_tool_<id>`) is named from the `_meta.goose.toolCall` of Goose's
  *   `tool_call` update: an MCP server's tool (`stamp__house_stamp` from extension `stamp`) as
- *   `mcp__stamp__house_stamp`, Goose's own by its name (`tree`, `extensionmanager__…`).
+ *   `mcp__stamp__house_stamp`, Goose's own by its name (`tree`, `extensionmanager__…`). A server
+ *   whose name Goose rewrites keeps Goose's name: `probe:stamp`'s tool is
+ *   `mcp__probe_stamp__house_stamp`.
  * - The `finish` part's usage is dropped: Goose's ACP `PromptResponse.usage` is its last model
  *   call's, not the turn's, and an undercount is worse than none.
  * - A failed model call, which Goose sends as a message in its error template, is an `error`
@@ -40,7 +45,7 @@ export class GooseStreamTranslator {
   private readonly servers: ReadonlySet<string>
 
   constructor(options: { mcpServers?: readonly string[] } = {}) {
-    this.servers = new Set(options.mcpServers)
+    this.servers = new Set((options.mcpServers ?? []).map(gooseName))
   }
 
   push(part: Part): Part {
@@ -68,7 +73,7 @@ export class GooseStreamTranslator {
           : call.toolName
         this.names.set(
           update.toolCallId,
-          this.servers.has(ext) ? `mcp__${ext}__${tool}` : call.toolName,
+          this.servers.has(gooseName(ext)) ? `mcp__${ext}__${tool}` : call.toolName,
         )
       }
       return part

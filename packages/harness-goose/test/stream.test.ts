@@ -47,6 +47,13 @@ test('names a call from its tool_call metadata, and drops the usage', () => {
   assert.equal(finish.totalUsage.outputTokens?.total, undefined)
 })
 
+test("a plugin's server, whose name Goose rewrites, is named as Goose names it", () => {
+  assert.deepEqual(
+    names(turn(call('m1', 'probe_stamp__house_stamp', 'probe_stamp'), ['probe:stamp'])),
+    ['mcp__probe_stamp__house_stamp'],
+  )
+})
+
 test('twin: an extension that is not one of the MCP servers is not named as one', () => {
   assert.deepEqual(names(turn(call('m1', 'stamp__house_stamp', 'stamp'))), ['stamp__house_stamp'])
 })
