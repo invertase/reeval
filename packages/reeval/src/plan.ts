@@ -209,8 +209,8 @@ export async function buildPlan(options: {
   }
 }
 
-/** `analysis.model`, `analysis.maxTokens` and `analysis.insightsTimeout`, as the run uses them. */
-export type PlanInsights = { model: string; maxTokens: number; timeout: Duration }
+/** `analysis.model` and `analysis.maxTokens`, as the run uses them. */
+export type PlanInsights = { model: string; maxTokens: number }
 
 /** The plan's insights: null without `analysis.model`, with `analysis.insights: false` or `--no-insights`. */
 export async function planInsights(
@@ -223,7 +223,6 @@ export async function planInsights(
   return {
     model: questionModelLabel(config) ?? 'fake',
     maxTokens: config.analysis.maxTokens,
-    timeout: config.analysis.insightsTimeout,
   }
 }
 

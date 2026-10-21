@@ -49,6 +49,16 @@ export type RunInsights = {
    * without insights. Absent when no budget applied.
    */
   budget?: { maxTokens: number; skipped: string[] }
+  /**
+   * Evals whose calls failed twice (an error, a reply cut off at the output cap, or a call past its
+   * timeout), with the last error: they print without insights. Absent when none failed.
+   */
+  failed?: Array<{ evalId: string; error: string }>
+  /**
+   * Set when the run was stopped (Ctrl-C, or SIGTERM) while insights ran: the evals that hadn't
+   * finished, which print without insights. Absent when insights ran to the end.
+   */
+  stopped?: { signal: 'SIGINT' | 'SIGTERM'; skipped: string[] }
   /** One sentence for the whole run, citing facts; null when the model's was dropped. */
   headline: Sentence | null
   /** One per eval (a family is one), in the order the output prints them. */

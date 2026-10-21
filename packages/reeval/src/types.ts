@@ -1668,8 +1668,6 @@ export type AnalysisConfig = {
    * outcome and exit code never change.
    */
   maxTokens?: number
-  /** How long `reeval run` waits for insights after the last attempt (default `'60s'`). */
-  insightsTimeout?: Duration
   /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good." */
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
@@ -1861,7 +1859,6 @@ export type ResolvedConfig = {
     maxOutputTokens: number
     insights: boolean
     maxTokens: number
-    insightsTimeout: Duration
   }
 }
 

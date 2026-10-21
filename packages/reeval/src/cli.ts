@@ -83,6 +83,11 @@ const invocation: { flags?: Flags; runId: string | null; unhandledErrors: string
 let interrupted = false
 /** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
 let stopCode: number = EXIT.interrupted
+/**
+ * Set while insights run, after the attempts and the exit code: Ctrl-C or SIGTERM then stops the
+ * insights instead of cancelling the run, which has nothing left to cancel.
+ */
+let onInsightsSignal: ((signal: 'SIGINT' | 'SIGTERM') => void) | null = null
 
 async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseCli(argv)
@@ -394,14 +399,36 @@ async function runCommand(
   const { runInsights, wantsInsights } = await import('./insights/run.ts')
   if (!stopped && wantsInsights(ctx.config, !flags['no-insights'])) {
     const { scratchDir } = await import('./history/files.ts')
-    const done = await runInsights({
-      config: ctx.config,
-      record,
-      runDir: run.artifactDir ?? join(scratchDir(ctx.config.root), record.runId),
-      onStart: (text) => renderer.onEvent({ type: 'notice', at: Date.now(), level: 'info', text }),
-    })
-    insights = done.insights ?? insights
-    insightLines = done.lines
+    const stop = new AbortController()
+    let stopSignal: 'SIGINT' | 'SIGTERM' = 'SIGINT'
+    // A second signal while the calls in flight stop leaves at once, with the run's own code.
+    onInsightsSignal = (signal) => {
+      if (stop.signal.aborted) {
+        renderer.close()
+        process.exit(code)
+      }
+      stopSignal = signal
+      stop.abort(new Error(signal === 'SIGTERM' ? 'SIGTERM' : 'Ctrl-C'))
+    }
+    try {
+      const done = await runInsights({
+        config: ctx.config,
+        record,
+        runDir: run.artifactDir ?? join(scratchDir(ctx.config.root), record.runId),
+        signal: stop.signal,
+        stopSignal: () => stopSignal,
+        onStart: (text) => {
+          renderer.onEvent({ type: 'notice', at: Date.now(), level: 'info', text })
+        },
+        onProgress: (n, total) => {
+          renderer.onEvent({ type: 'insights-progress', at: Date.now(), done: n, total })
+        },
+      })
+      insights = done.insights ?? insights
+      insightLines = done.lines
+    } finally {
+      onInsightsSignal = null
+    }
   }
   const { pruneDebug } = await import('./debug/files.ts')
   await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
@@ -734,7 +761,7 @@ async function executeRun(
     if (setup.dryRun && plan.insights) {
       const { formatTokens } = await import('./usage.ts')
       lines.push(
-        `insights  ${plan.insights.model} · up to ${formatTokens(plan.insights.maxTokens)} tokens · ${plan.insights.timeout} after the last attempt`,
+        `insights  ${plan.insights.model} · up to ${formatTokens(plan.insights.maxTokens)} tokens`,
       )
     }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
@@ -924,6 +951,7 @@ async function executeRun(
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
       onCancellable: (cancel) => {
         const onSignal = (signal: NodeJS.Signals) => {
+          if (onInsightsSignal) return onInsightsSignal(signal === 'SIGTERM' ? 'SIGTERM' : 'SIGINT')
           stopCode = signal === 'SIGTERM' ? EXIT.terminated : EXIT.interrupted
           if (interrupted) {
             renderer.close()

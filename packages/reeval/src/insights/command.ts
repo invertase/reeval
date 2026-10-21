@@ -2,8 +2,8 @@
 // the analysis model, checked by the validator, into its `insights.json` create-only (the history
 // folder's, or the scratch run's before it's recorded; remarks-only insights are written over,
 // keeping their remarks), then prints the run's blocks with them. It's what `reeval run` does at
-// its end, without the time limit, for a run that has none. The facts and the exit code don't
-// depend on what the model wrote: a dropped sentence is counted, never an error.
+// its end, for a run that has none. The facts and the exit code don't depend on what the model
+// wrote: a dropped sentence is counted, never an error.
 import { existsSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -55,7 +55,6 @@ export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promis
     record,
     runDir: join(dir, entry.runId),
     model,
-    maxOutputTokens: config.analysis.maxOutputTokens,
     maxTokens: config.analysis.maxTokens,
     cache: classifyCache(config.root, config.history.dir),
   })

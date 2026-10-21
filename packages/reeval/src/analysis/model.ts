@@ -109,10 +109,20 @@ export function cannedModel(
     doGenerate: async (options) => {
       if ('error' in answer) throw new Error(answer.error)
       const input = countTokens ? Math.ceil(JSON.stringify(options.prompt).length / 4) : 0
-      const output = countTokens ? Math.ceil(answer.text.length / 4) : 0
+      let output = countTokens ? Math.ceil(answer.text.length / 4) : 0
+      let text = answer.text
+      // Counting, it stops at maxOutputTokens as a provider does: the reply cut off mid-way.
+      const cut =
+        countTokens && options.maxOutputTokens !== undefined && output > options.maxOutputTokens
+      if (cut) {
+        output = options.maxOutputTokens as number
+        text = text.slice(0, output * 4)
+      }
       return {
-        content: [{ type: 'text', text: answer.text }],
-        finishReason: { unified: 'stop', raw: 'stop' },
+        content: [{ type: 'text', text }],
+        finishReason: cut
+          ? { unified: 'length', raw: 'max_tokens' }
+          : { unified: 'stop', raw: 'stop' },
         usage: {
           inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
           outputTokens: { total: output, text: output, reasoning: 0 },

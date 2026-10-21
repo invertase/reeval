@@ -12,10 +12,6 @@
           "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
           "type": "boolean"
         },
-        "insightsTimeout": {
-          "description": "How long `reeval run` waits for insights after the last attempt (default `'60s'`).",
-          "$ref": "#/$defs/Duration"
-        },
         "instructions": {
           "description": "Added to the prompt, e.g. \"Fewer tool calls count as a win. The skill under test is reeval-good.\"",
           "type": "string"

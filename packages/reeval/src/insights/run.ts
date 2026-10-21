@@ -1,13 +1,12 @@
 // Insights during `reeval run`, once the record has landed and the exit code is fixed: the same
-// calls `reeval analyze --insights` makes, bounded by `analysis.maxTokens` and by
-// `analysis.insightsTimeout` from the last attempt. They go beside the scratch run as
-// `.reeval/runs/<run>/insights.json`, and `reeval record` copies them into the history. Whatever
-// happens here (no key, a model that fails, the clock running out), the run prints its facts and
-// keeps its exit code; this only ever adds a line saying why there are no insights.
+// calls `reeval analyze --insights` makes, bounded by `analysis.maxTokens`, each eval's input and
+// output caps and each call's timeout, and run to the end unless Ctrl-C stops them. They go beside
+// the scratch run as `.reeval/runs/<run>/insights.json`, and `reeval record` copies them into the
+// history. Whatever happens here (no key, a model that fails, Ctrl-C), the run prints its facts and
+// keeps its exit code; this only ever adds a line saying why some or all have no insights.
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveAnalysisModel } from '../analysis/model.ts'
-import { parseDuration } from '../duration.ts'
 import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { clip } from '../text.ts'
@@ -37,12 +36,15 @@ export async function runInsights(options: {
   record: RunRecord
   /** The scratch run's folder, `.reeval/runs/<run>`: transcripts in, insights out. */
   runDir: string
+  /** Ctrl-C: the calls in flight stop, no more start, and what finished is written. */
+  signal?: AbortSignal
+  stopSignal?: () => 'SIGINT' | 'SIGTERM'
   /** The line saying insights have started, once there's something to ask about. */
   onStart?: (text: string) => void
+  onProgress?: (done: number, total: number) => void
   onUsage?: (call: CallUsage) => void
 }): Promise<RunInsightsResult> {
   const { config, record, runDir } = options
-  const retry = `reeval analyze ${record.runId} --insights`
   const evals = insightEvals(suiteResult(record)).length
   if (!evals) return { insights: null, lines: [] }
   let model: ReturnType<typeof resolveAnalysisModel>
@@ -51,43 +53,31 @@ export async function runInsights(options: {
   } catch (error) {
     return { insights: null, lines: [`insights skipped: ${clip((error as Error).message, 240)}`] }
   }
-  const timeout = config.analysis.insightsTimeout
   options.onStart?.(
-    `insights: ${evals === 1 ? '1 eval' : `${evals} evals`} with ${model.name} (up to ${timeout}; --no-insights skips them)`,
+    `insights: ${evals === 1 ? '1 eval' : `${evals} evals`} with ${model.name} (Ctrl-C skips the rest; --no-insights skips them all)`,
   )
-  const abort = new AbortController()
-  const timer = setTimeout(
-    () => abort.abort(new Error(`insights took longer than analysis.insightsTimeout (${timeout})`)),
-    parseDuration(timeout),
-  )
+  options.onProgress?.(0, evals)
   let insights: RunInsights
   try {
     insights = await generateInsights({
       record,
       runDir,
       model,
-      maxOutputTokens: config.analysis.maxOutputTokens,
       maxTokens: config.analysis.maxTokens,
       concurrency: RUN_CONCURRENCY,
       cache: classifyCache(config.root, config.history.dir),
-      signal: abort.signal,
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.stopSignal ? { stopSignal: options.stopSignal } : {}),
+      ...(options.onProgress ? { onProgress: options.onProgress } : {}),
       ...(options.onUsage ? { onUsage: options.onUsage } : {}),
     })
   } catch (error) {
-    if (abort.signal.aborted) {
-      return {
-        insights: null,
-        lines: [
-          `insights still running after ${timeout}, so they're left out: raise analysis.insightsTimeout in reeval.config.ts, or run ${retry}`,
-        ],
-      }
-    }
     return {
       insights: null,
-      lines: [`insights failed (${clip((error as Error).message, 200)}): ${retry} to retry`],
+      lines: [
+        `insights failed (${clip((error as Error).message, 200)}): reeval analyze ${record.runId} --insights to retry`,
+      ],
     }
-  } finally {
-    clearTimeout(timer)
   }
   try {
     await writeInsights(join(runDir, INSIGHTS_FILE), insights)

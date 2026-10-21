@@ -66,8 +66,8 @@ export function renderPlan(plan: PlanDocument): string {
   if (caps.length) head.push(`budget ${caps.join(', ')} ${budget.fits ? '✓' : '✗'}`)
   if (plan.resume) head.push(`resume ${plan.resume.completed} skipped`)
   if (plan.insights) {
-    const { model, maxTokens, timeout } = plan.insights
-    head.push(`insights ${model} maxTokens ${maxTokens} timeout ${timeout}`)
+    const { model, maxTokens } = plan.insights
+    head.push(`insights ${model} maxTokens ${maxTokens}`)
   }
   const rows: string[][] = []
   for (const e of plan.evals) {

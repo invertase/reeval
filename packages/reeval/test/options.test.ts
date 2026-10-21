@@ -1406,7 +1406,7 @@ ${body}
     [
       'analysis.agent, which insights replaced',
       `analysis: { agent: true } as never,`,
-      /Unknown option "agent" in analysis in reeval\.config\.ts\. Use model, insights, maxTokens, insightsTimeout/,
+      /Unknown option "agent" in analysis in reeval\.config\.ts\. Use model, insights, maxTokens, instructions/,
     ],
     [
       'analysis.insights as text',
@@ -1417,11 +1417,6 @@ ${body}
       'a token budget of zero',
       `analysis: { maxTokens: 0 },`,
       /analysis\.maxTokens in reeval\.config\.ts must be a whole number of tokens of at least 1, e\.g\. 250000 \(got 0\)/,
-    ],
-    [
-      'an insights timeout that is not a duration',
-      `analysis: { insightsTimeout: 'soon' as never },`,
-      /analysis\.insightsTimeout in reeval\.config\.ts: /,
     ],
     [
       'a debug folder option',

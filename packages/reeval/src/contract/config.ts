@@ -210,11 +210,6 @@ export const analysisConfigDataSchema = z
       .describe(
         "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
       ),
-    insightsTimeout: durationSchema
-      .optional()
-      .describe(
-        "How long `reeval run` waits for insights after the last attempt (default `'60s'`).",
-      ),
     instructions: z
       .string()
       .optional()

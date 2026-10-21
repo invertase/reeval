@@ -571,7 +571,6 @@ export const ANALYSIS_DEFAULTS = {
   maxOutputTokens: 8_000,
   insights: true,
   maxTokens: 250_000,
-  insightsTimeout: '60s',
 } as const
 
 function checkAnalysis(
@@ -586,15 +585,7 @@ function checkAnalysis(
   }
   unknownKey(
     analysis,
-    [
-      'model',
-      'insights',
-      'maxTokens',
-      'insightsTimeout',
-      'instructions',
-      'maxInputTokens',
-      'maxOutputTokens',
-    ],
+    ['model', 'insights', 'maxTokens', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
     'analysis',
     file,
   )
@@ -602,7 +593,6 @@ function checkAnalysis(
     model,
     insights = ANALYSIS_DEFAULTS.insights,
     maxTokens = ANALYSIS_DEFAULTS.maxTokens,
-    insightsTimeout = ANALYSIS_DEFAULTS.insightsTimeout,
     instructions,
     maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens,
     maxOutputTokens = ANALYSIS_DEFAULTS.maxOutputTokens,
@@ -625,11 +615,6 @@ function checkAnalysis(
       `analysis.maxTokens in ${file} must be a whole number of tokens of at least 1, e.g. 250000 (got ${JSON.stringify(maxTokens)})`,
     )
   }
-  try {
-    parseDuration(insightsTimeout)
-  } catch (error) {
-    throw new UsageError(`analysis.insightsTimeout in ${file}: ${(error as Error).message}`)
-  }
   if (instructions !== undefined && typeof instructions !== 'string') {
     throw new UsageError(
       `analysis.instructions in ${file} must be a string (got ${JSON.stringify(instructions)})`,
@@ -649,7 +634,6 @@ function checkAnalysis(
     ...analysis,
     insights,
     maxTokens,
-    insightsTimeout,
     maxInputTokens,
     maxOutputTokens,
   }

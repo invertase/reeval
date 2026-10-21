@@ -1,7 +1,7 @@
 // Run insights: the validator's canaries (each a sentence a model could write that must not
 // print), the layouts insights fill, staleness, `reeval analyze --insights` end to end on a corpus
-// run, and `reeval run` writing them at its end (the budget, its order, the timeout, the cache),
-// all with the fake analysis model.
+// run, and `reeval run` writing them at its end (the budget, its order, the per-eval caps, the call
+// timeout, Ctrl-C, the cache), all with the fake analysis model.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,18 +10,19 @@ import { insights as recipeInsights } from '../scripts/output/project/insights.t
 import type { ResolvedAnalysisModel } from '../src/analysis/model.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { admit, estimate, FIRST_ESTIMATE, ledger, reserve, settle } from '../src/insights/budget.ts'
-import { generateInsights, insightEvals } from '../src/insights/generate.ts'
+import { generateInsights, INSIGHT_OUTPUT_TOKENS, insightEvals } from '../src/insights/generate.ts'
 import { canonicalJson, factsHash } from '../src/insights/hash.ts'
-import { attemptTexts, evalFacts } from '../src/insights/input.ts'
+import { attemptTexts, evalFacts, type InsightFact, type InsightInput } from '../src/insights/input.ts'
 import { type Citable, checkSentence } from '../src/insights/validate.ts'
 import { byPriority, insightTier } from '../src/insights/priority.ts'
+import { trimInput } from '../src/insights/trim.ts'
 import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
 import { colors } from '../src/ui/colors.ts'
 import { evalBlock, render, slotsOf } from '../src/ui/layout.ts'
 import type { RunInsights } from '../src/view/insights.ts'
 import { readableInsights, readableRecord } from '../src/view/record.ts'
 import { type EvalResult, suiteResult } from '../src/view/suite.ts'
-import { project, readRun, runCli } from './helpers.ts'
+import { noSignals, project, readRun, runCli } from './helpers.ts'
 import { corpusEntries, HISTORY_DIR } from './support/corpus.ts'
 import { fixture } from './support/fixture.ts'
 
@@ -61,13 +62,16 @@ const recipeWith =
     return input.call !== 'headline' && input.eval.path === path ? change(input, answer) : answer
   }
 
-const generate = (fake: Fake) => {
+const generate = (
+  fake: (input: FakeInsightsInput) => FakeInsights | Promise<FakeInsights>,
+  options: { callTimeoutMs?: number; maxInputChars?: number } = {},
+) => {
   const model: ResolvedAnalysisModel = {
     name: 'fake',
     route: 'fake',
     fake: { kind: 'fake-analysis', insights: fake },
   }
-  return generateInsights({ record, runDir, model, maxOutputTokens: 1000, concurrency: 2 })
+  return generateInsights({ record, runDir, model, concurrency: 2, ...options })
 }
 
 const insightOf = (doc: RunInsights, e: EvalResult) => {
@@ -985,6 +989,155 @@ describe('the analysis.maxTokens gate', () => {
   })
 })
 
+describe('each call has a timeout and one retry', () => {
+  test('a hung call is given up after its timeout, tried once more, then that eval prints its facts alone', async () => {
+    const asked: string[] = []
+    const doc = await generate(
+      (input) => {
+        if (input.call !== 'headline') asked.push(input.eval.path)
+        if (input.call !== 'headline' && input.eval.path === choose.path) {
+          return new Promise<FakeInsights>(() => {})
+        }
+        return recipeInsights(input)
+      },
+      { callTimeoutMs: 200 },
+    )
+    assert.deepEqual(doc.failed, [
+      { evalId: choose.path, error: 'the classify call took longer than 200ms' },
+    ])
+    assert.equal(asked.filter((p) => p === choose.path).length, 2, 'tried once more, then left')
+    assert.ok(!doc.evals.some((e) => e.evalId === choose.path))
+    assert.equal(
+      doc.evals.length,
+      insightEvals(suite).length - 1,
+      'every other eval has its insight',
+    )
+    assert.ok(doc.headline, 'the headline is still asked for')
+  })
+
+  test('canary: a slow call inside its timeout is kept', async () => {
+    const doc = await generate(
+      async (input) => {
+        if (input.call !== 'headline' && input.eval.path === choose.path) {
+          await new Promise((r) => setTimeout(r, 50))
+        }
+        return recipeInsights(input)
+      },
+      { callTimeoutMs: 2000 },
+    )
+    assert.equal(doc.failed, undefined)
+    assert.ok(insightOf(doc, choose).answer)
+  })
+})
+
+describe("each eval's input cap", () => {
+  const fact = (path: string, kind: string, extra: Record<string, unknown> = {}): InsightFact => ({
+    path,
+    kind,
+    ...extra,
+  })
+  /** A failing eval with many passing checks and tries, long messages and long transcripts. */
+  const big = (): Omit<InsightInput, 'call'> => ({
+    eval: {
+      path: 'e',
+      name: 'writes a greet module',
+      group: [],
+      file: 'evals/greet.eval.ts',
+      across: 'none',
+      family: false,
+      verdict: 'fail',
+    },
+    prompts: ['Write greet.js. '.repeat(100)],
+    judgeQuestions: [],
+    checks: ['exports greet'],
+    facts: [
+      fact('e', 'eval', { name: 'writes a greet module', verdict: 'fail' }),
+      fact('e/pass-cell', 'cell', { verdict: 'pass', passed: '3 of 3 tries' }),
+      fact('e/fail-cell', 'cell', {
+        verdict: 'fail',
+        passed: '0 of 3 tries',
+        errors: ['assertion: no greet.js'],
+      }),
+      fact('e/fail-cell/checks/greet', 'check', {
+        label: 'exports greet',
+        result: '0 of 3 passed',
+        assertion: 'expected greet.js to exist',
+      }),
+      ...Array.from({ length: 40 }, (_, i) =>
+        fact(`e/pass-cell/checks/${i}`, 'check', { label: `check ${i}`, result: '3 of 3 passed' }),
+      ),
+      fact('e/pass-cell/effort', 'effort', { toolCalls: 12, seconds: 30, tokens: 1000 }),
+    ],
+    attempts: [
+      ...Array.from({ length: 6 }, (_, i) => ({
+        id: `e/pass-cell#${i + 1}`,
+        cell: 'e/pass-cell',
+        outcome: 'pass',
+        lastText: 'I wrote greet.js and its test. '.repeat(48),
+        lines: [],
+      })),
+      ...Array.from({ length: 3 }, (_, i) => ({
+        id: `e/fail-cell#${i + 1}`,
+        cell: 'e/fail-cell',
+        outcome: 'fail',
+        lastText: 'I could not find the module. '.repeat(50),
+        lines: Array.from(
+          { length: 14 },
+          (_, n) => `L${n + 1} ${'tool shell: ls -la '.repeat(10)}`,
+        ),
+      })),
+    ],
+  })
+  const size = (x: unknown) => JSON.stringify(x).length
+
+  test('under the cap the input is untouched', () => {
+    const input = big()
+    assert.equal(trimInput(input, size(input)), input)
+  })
+
+  test('over it, the trim is the same every time, fits, says what it cut and keeps the failing facts', () => {
+    const cap = 8000
+    const once = trimInput(big(), cap)
+    assert.deepEqual(trimInput(big(), cap), once, 'deterministic')
+    assert.ok(size(once) <= cap, `${size(once)}`)
+    assert.ok(once.trimmed?.length, 'marked as trimmed')
+    assert.equal(once.trimmed?.[0], "passing attempts' final messages", 'passing detail goes first')
+    for (const path of ['e', 'e/fail-cell', 'e/fail-cell/checks/greet']) {
+      assert.deepEqual(
+        once.facts.find((f) => f.path === path),
+        big().facts.find((f) => f.path === path),
+        path,
+      )
+    }
+    assert.ok(
+      once.attempts.filter((a) => a.outcome === 'fail').length === 3,
+      'every failing try stays, if shorter',
+    )
+  })
+
+  test('canary: a passing check the layout opens a row on stays, whatever the cap', () => {
+    const kept = trimInput(big(), 4000, ['e/pass-cell/checks/7'])
+    assert.ok(kept.facts.some((f) => f.path === 'e/pass-cell/checks/7'))
+    assert.ok(!kept.facts.some((f) => f.path === 'e/pass-cell/checks/8'))
+  })
+
+  test('the model is told the input was trimmed, and still gets the failing facts', async () => {
+    const seen: FakeInsightsInput[] = []
+    await generate(
+      (input) => {
+        if (input.call !== 'headline' && input.eval.path === choose.path) seen.push(input)
+        return recipeInsights(input)
+      },
+      { maxInputChars: 1000 },
+    )
+    assert.ok(seen.length)
+    for (const input of seen) {
+      assert.ok(input.call !== 'headline' && input.trimmed?.length, input.call)
+      assert.ok(input.call !== 'headline' && input.facts.some((f) => f.path === choose.path))
+    }
+  })
+})
+
 /** Nine passing evals, then one that fails: the budget reaches the failing one first. */
 const RUN_EVALS = {
   'evals/files.eval.ts': `import { evaluate, expect } from 'reeval'
@@ -1052,6 +1205,39 @@ const scratchInsights = (dir: string) => {
   return existsSync(file) ? readableInsights(JSON.parse(readFileSync(file, 'utf8'))) : null
 }
 
+/** The default fake's answers, with one eval's insights reply padded to `chars` of JSON. */
+const padded = (name: string, chars: number) => `(input) => {
+        log(input)
+        if (input.call === 'headline') return {}
+        const answer = {
+          intent: { job: 'finish' },
+          answer: { text: 'Yes: every try passed.', cites: [input.facts[0]?.id ?? ''] },
+        }
+        if (input.call !== 'insights' || input.eval.name !== '${name}') return answer
+        const base = JSON.stringify({ answer: answer.answer, findings: [{ text: '', cites: [] }], rows: [], namedTools: [] }).length
+        return { ...answer, findings: [{ text: 'x'.repeat(${chars} - base), cites: [] }] }
+      }`
+
+/**
+ * The default fake's answers, at once for the failing eval and "writes ok.txt 1", after `ms` for
+ * the rest; each answer it gives is logged as "answered <call> <eval>".
+ */
+const waiting = (ms: number) => `async (input) => {
+        log(input)
+        if (input.call === 'headline') return {}
+        if (!['writes missing.txt', 'writes ok.txt 1'].includes(input.eval.name)) {
+          await new Promise((r) => setTimeout(r, ${ms}).unref())
+        }
+        appendFileSync(new URL('./calls.log', import.meta.url), \`answered \${input.call} \${input.eval.name}\\n\`)
+        return {
+          intent: { job: 'finish' },
+          answer: {
+            text: input.eval.verdict === 'pass' ? 'Yes: every try passed.' : 'No: the file is missing.',
+            cites: [input.facts[0]?.id ?? ''],
+          },
+        }
+      }`
+
 describe('reeval run writes insights at its end', () => {
   test('each eval gets its insight, printed under its block and written beside the record', async () => {
     const p = await project('run-insights', { 'reeval.config.ts': runConfig(), ...RUN_EVALS })
@@ -1059,7 +1245,7 @@ describe('reeval run writes insights at its end', () => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout + r.stderr,
-      /insights: 10 evals with fake \(up to 60s; --no-insights skips them\)/,
+      /insights: 10 evals with fake \(Ctrl-C skips the rest; --no-insights skips them all\)/,
     )
     assert.match(r.stdout, /No: the file is missing\./)
     assert.match(r.stdout, /Yes: every try passed\./)
@@ -1163,24 +1349,112 @@ evaluate('writes ok.txt', async (c) => {
     assert.equal(scratchInsights(p.dir), null)
   })
 
-  test('canary: insights past analysis.insightsTimeout are left out, and the facts still print', async () => {
-    const p = await project('run-insights-timeout', {
-      'reeval.config.ts': runConfig({
-        insights: `async (input) => { log(input); await new Promise((r) => setTimeout(r, 5000)); return {} }`,
-        analysis: "insightsTimeout: '1s',",
-      }),
+  test('a reply past the output cap is cut off and asked for once more, then that eval prints its facts alone', async () => {
+    const over = INSIGHT_OUTPUT_TOKENS * 4 + 1000
+    const p = await project('run-insights-cut-off', {
+      'reeval.config.ts': runConfig({ insights: padded('writes ok.txt 3', over) }),
       ...RUN_EVALS,
     })
-    const started = Date.now()
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
+    const doc = scratchInsights(p.dir)
+    assert.ok(doc)
+    assert.deepEqual(doc.failed, [
+      {
+        evalId: 'evals%2Ffiles.eval.ts › writes ok.txt 3',
+        error: `the insights reply was cut off at ${INSIGHT_OUTPUT_TOKENS} output tokens`,
+      },
+    ])
+    assert.equal(
+      calls(p.dir).filter((c) => c === 'insights writes ok.txt 3').length,
+      2,
+      'the cut-off call is asked for once more',
+    )
+    assert.equal(doc.evals.length, 9, 'every other eval keeps its insight')
+    assert.ok(!doc.evals.some((e) => e.evalId.endsWith('writes ok.txt 3')))
     assert.match(
       r.stdout,
-      /insights still running after 1s, so they're left out: raise analysis\.insightsTimeout in reeval\.config\.ts, or run reeval analyze \S+ --insights/,
+      new RegExp(
+        `insights failed for 1 eval \\(the insights reply was cut off at ${INSIGHT_OUTPUT_TOKENS} output tokens\\), so they print their facts`,
+      ),
     )
-    assert.match(r.stdout, /writes missing\.txt/)
-    assert.equal(scratchInsights(p.dir), null)
-    assert.ok(Date.now() - started < 30_000)
+    assert.match(r.stdout, /writes ok\.txt 2\n {2}Yes: every try passed\./)
+    assert.match(r.stdout, /writes ok\.txt 3\n\n/, 'its block prints its facts alone')
+  })
+
+  test('canary: a reply just under the output cap is kept', async () => {
+    const under = INSIGHT_OUTPUT_TOKENS * 4 - 1000
+    const p = await project('run-insights-under-cap', {
+      'reeval.config.ts': runConfig({ insights: padded('writes ok.txt 3', under) }),
+      ...RUN_EVALS,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const doc = scratchInsights(p.dir)
+    assert.ok(doc)
+    assert.equal(doc.failed, undefined)
+    assert.equal(doc.evals.length, 10)
+    assert.ok(doc.evals.find((e) => e.evalId.endsWith('writes ok.txt 3'))?.answer)
+    assert.equal(calls(p.dir).filter((c) => c === 'insights writes ok.txt 3').length, 1)
+  })
+
+  test('Ctrl-C during insights keeps those written, skips the rest with a line, and keeps the exit code', {
+    skip: noSignals,
+  }, async () => {
+    const p = await project('run-insights-sigint', {
+      'reeval.config.ts': runConfig({ insights: waiting(60_000) }),
+      ...RUN_EVALS,
+    })
+    const log = join(p.dir, 'calls.log')
+    let poll: ReturnType<typeof setInterval> | undefined
+    const r = await runCli(p.dir, ['run'], {
+      onOutput: (stdout, pid) => {
+        if (!/insights: 10 evals/.test(stdout)) return false
+        poll = setInterval(() => {
+          const lines = existsSync(log) ? readFileSync(log, 'utf8') : ''
+          if ((lines.match(/^answered insights /gm) ?? []).length < 2) return
+          if (!/^classify writes ok\.txt 2$/m.test(lines)) return
+          clearInterval(poll)
+          process.kill(-pid, 'SIGINT')
+        }, 50)
+        return true
+      },
+    })
+    clearInterval(poll)
+    assert.equal(r.code, 1, `the run's own exit code, not 130\n${r.stdout}${r.stderr}`)
+    const doc = scratchInsights(p.dir)
+    assert.ok(doc, 'insights.json holds what finished')
+    assert.deepEqual(
+      doc.evals.map((e) => e.evalId.replace('evals%2Ffiles.eval.ts › ', '')),
+      ['writes ok.txt 1', 'writes missing.txt'],
+    )
+    assert.equal(doc.stopped?.signal, 'SIGINT')
+    assert.deepEqual(
+      doc.stopped?.skipped,
+      [2, 3, 4, 5, 6, 7, 8, 9].map((n) => `evals%2Ffiles.eval.ts › writes ok.txt ${n}`),
+    )
+    assert.equal(doc.failed, undefined, 'stopped calls are not failures')
+    assert.equal(doc.headline, null)
+    assert.ok(!calls(p.dir).some((c) => c.startsWith('headline')))
+    assert.match(r.stdout, /insights stopped: 8 evals skipped \(Ctrl-C\)/)
+    assert.match(r.stdout, /No: the file is missing\./)
+    assert.doesNotMatch(r.stdout + r.stderr, /Cancelling/)
+    const { run } = readRun(p.dir)
+    assert.equal(run.status, 'complete')
+  })
+
+  test('canary: with no Ctrl-C, every eval waits its turn and gets its insight', async () => {
+    const p = await project('run-insights-no-sigint', {
+      'reeval.config.ts': runConfig({ insights: waiting(200) }),
+      ...RUN_EVALS,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const doc = scratchInsights(p.dir)
+    assert.ok(doc)
+    assert.equal(doc.evals.length, 10)
+    assert.equal(doc.stopped, undefined)
+    assert.doesNotMatch(r.stdout, /insights stopped/)
   })
 
   test('a classification is cached by its key, and read back from the last recorded run', async () => {

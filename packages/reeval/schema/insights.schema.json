@@ -256,6 +256,22 @@
           "description": "sha256 of the run's `SuiteResult` as canonical JSON: the facts the model saw.",
           "type": "string"
         },
+        "failed": {
+          "description": "Evals whose calls failed twice (an error, a reply cut off at the output cap, or a call past its timeout), with the last error: they print without insights. Absent when none failed.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "evalId": {
+                "type": "string"
+              }
+            },
+            "required": ["error", "evalId"]
+          }
+        },
         "headline": {
           "description": "One sentence for the whole run, citing facts; null when the model's was dropped.",
           "anyOf": [
@@ -290,6 +306,22 @@
         },
         "schemaVersion": {
           "const": 1
+        },
+        "stopped": {
+          "description": "Set when the run was stopped (Ctrl-C, or SIGTERM) while insights ran: the evals that hadn't finished, which print without insights. Absent when insights ran to the end.",
+          "type": "object",
+          "properties": {
+            "signal": {
+              "enum": ["SIGINT", "SIGTERM"]
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["signal", "skipped"]
         },
         "usage": {
           "description": "Over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it reports them. `costUsd` is null when reeval doesn't know the model's price.",

@@ -74,6 +74,8 @@ export type InsightInput = {
   slots?: InsightSlots
   facts: InsightFact[]
   attempts: InsightAttempt[]
+  /** What was left out to fit the eval's size cap (`trim.ts`), when anything was. */
+  trimmed?: string[]
   /** On a regeneration: why the earlier sentences were refused. */
   retry?: string[]
 }

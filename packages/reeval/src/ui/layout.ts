@@ -820,13 +820,31 @@ function insightNotes(
     ]
   }
   const skipped = insights.budget?.skipped.length ?? 0
-  const budget = skipped
-    ? [
-        c.yellow(
-          `insights skipped for ${plural(skipped, 'eval')}: analysis.maxTokens (${formatTokens(insights.budget?.maxTokens ?? 0)}) reached — raise it in reeval.config.ts`,
-        ),
-      ]
-    : []
+  const failed = insights.failed ?? []
+  const stopped = insights.stopped
+  const budget = [
+    ...(skipped
+      ? [
+          c.yellow(
+            `insights skipped for ${plural(skipped, 'eval')}: analysis.maxTokens (${formatTokens(insights.budget?.maxTokens ?? 0)}) reached — raise it in reeval.config.ts`,
+          ),
+        ]
+      : []),
+    ...(failed[0]
+      ? [
+          c.yellow(
+            `insights failed for ${plural(failed.length, 'eval')} (${clip(failed[0].error, 160)}), so they print their facts`,
+          ),
+        ]
+      : []),
+    ...(stopped
+      ? [
+          c.yellow(
+            `insights stopped: ${plural(stopped.skipped.length, 'eval')} skipped (${stopped.signal === 'SIGTERM' ? 'SIGTERM' : 'Ctrl-C'})`,
+          ),
+        ]
+      : []),
+  ]
   if (!verbose) return budget
   const { dropped, regenerated } = insights.validation
   return [
