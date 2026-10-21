@@ -263,7 +263,7 @@ After the tally and hint, a run lists what reeval noticed about the evals themse
 | `too-few-tries` | suggestion | A variant's and its baseline's pass rates differ by half or more, with fewer than 4 counted tries on a side |
 | `check-never-fails` | suggestion | A check passed every try, in every cell, this run and in the last 5 recorded runs on the default branch with 20 tries or more ([`check_streaks`](/reference/cli/query#views)); on a variant, on both sides |
 
-Each remark prints in the run that first raises it for that version of the eval (its sources' hashes), and again once you edit the eval; `slow-mcp-start` prints in every run that has it. The history kinds need an earlier run. Remarks never change the exit code.
+Each remark prints in the run that first raises it for that version of the eval (its sources' hashes), and again once you edit the eval; `slow-mcp-start` prints in every run that has it. The history kinds need an earlier run. The default branch is `origin`'s HEAD, else a local `main` or `master`; without one, `check-never-fails` isn't raised. Remarks never change the exit code.
 
 A run writes its remarks to `.reeval/runs/<runId>/insights.json` (`model: "none"`), and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them in the insights it writes.
 
