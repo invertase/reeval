@@ -64,9 +64,11 @@ export type HarnessRow = {
    * (`pluginParts`), which the probe plugin's `only` is narrowed to, and where the probe plugin's
    * skill shows up in `context`. The hook and subagent evals run only where `parts` has `hooks`
    * and `agents`. Unset for a harness reeval places no plugins on yet: its plugin evals are left
-   * out, and the plugin checks skip it, saying so.
+   * out, and the plugin checks skip it, saying so. `copy` is where the agent keeps a copy of the
+   * plugin of its own, when it installs one (`agy plugin install`), which the hermetic check
+   * allows beside reeval's.
    */
-  plugin?: { parts: readonly PluginPart[]; skillContext: RegExp }
+  plugin?: { parts: readonly PluginPart[]; skillContext: RegExp; copy?: string }
   /** What a restricted policy allows automatically for it. */
   autoHosts: string[]
   /** A host it reaches on every turn; null for the fake agent, which reaches none. */
@@ -113,6 +115,10 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'CURSOR_API_KEY', from: ['CURSOR_API_KEY'] },
     image: 'cursor',
     skillContext: /^~\/(.+\/)?\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: EVERY_PART,
+      skillContext: /^~\/(.+\/)?\.agents\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['api2.cursor.sh', '*.cursor.sh'],
     apiHost: 'api2.cursor.sh',
     tokens: true,
@@ -126,6 +132,11 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'GEMINI_API_KEY', from: ['GEMINI_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY'] },
     image: 'antigravity',
     skillContext: /^~\/\.gemini\/config\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: EVERY_PART,
+      skillContext: /^~\/\.gemini\/config\/plugins\/probe\/skills\/plugin-probe\/SKILL\.md$/,
+      copy: '~/.gemini/config/plugins/probe/',
+    },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: true,

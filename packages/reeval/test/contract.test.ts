@@ -11,7 +11,13 @@ import { after, before, describe, test } from 'node:test'
 import { isRuntimeState } from '../src/attempt/context.ts'
 import type { AttemptRecord, RunRecord } from '../src/history/types.ts'
 import type { PluginPart } from '../src/types.ts'
-import { BLOCKED_HOST, PLANTED, PLUGIN_PROOF } from './contract/evals/constants.ts'
+import { parseTranscript } from '../src/view/model.ts'
+import {
+  BLOCKED_HOST,
+  PLANTED,
+  PLUGIN_PROOF,
+  PLUGIN_RULES_WORD,
+} from './contract/evals/constants.ts'
 import { type CliRun, readRun, runCli } from './helpers.ts'
 import { containersLeft } from './support/containers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -54,19 +60,26 @@ const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => nam
 
 /**
  * The tags a row's run leaves out: the MCP evals on a harness with no MCP client, the plugin
- * evals on one reeval places no plugins on, and the hook and subagent ones on one whose plugin
- * parts lack them.
+ * evals on one reeval places no plugins on, and the hook, subagent and rules ones on one whose
+ * plugin parts lack them.
  */
 function tagsLeftOut(row: HarnessRow): string[] {
   const out = row.mcp === false ? ['mcp'] : []
   if (!row.plugin) return [...out, 'plugin']
   if (!row.plugin.parts.includes('hooks')) out.push('plugin-hooks')
   if (!row.plugin.parts.includes('agents')) out.push('plugin-agents')
+  if (!row.plugin.parts.includes('rules')) out.push('plugin-rules')
   return out
 }
 
 /** The evals (eval and canary) each tag a row can leave out has. */
-const TAGGED = { mcp: 2, plugin: 8, 'plugin-hooks': 2, 'plugin-agents': 2 } as const
+const TAGGED = {
+  mcp: 2,
+  plugin: 10,
+  'plugin-hooks': 2,
+  'plugin-agents': 2,
+  'plugin-rules': 2,
+} as const
 
 /** What a row's run starts: the contract's evals, less those its tags leave out. */
 const attemptsFor = (row: HarnessRow) =>
@@ -153,7 +166,7 @@ type TurnRecord = AttemptRecord['turns'][number] & {
 }
 
 /** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
-const CONTRACT_ATTEMPTS = 20
+const CONTRACT_ATTEMPTS = 22
 
 export const behaviours: Behaviour[] = [
   {
@@ -420,6 +433,20 @@ export const behaviours: Behaviour[] = [
       ),
   },
   {
+    name: 'plugin rules read',
+    canary: true,
+    skips: withoutPart('rules', 'rules'),
+    check: (ran, row) =>
+      void checkAndCanary(
+        ran,
+        row,
+        'plugin rules',
+        'plugged',
+        new RegExp(`expected null to be '${PLUGIN_RULES_WORD}'`),
+        'closed',
+      ),
+  },
+  {
     name: 'plugin part it can’t load refused',
     canary: false,
     skips: (row) =>
@@ -448,17 +475,33 @@ export const behaviours: Behaviour[] = [
     skips: noPlugins,
     check(ran, row) {
       const a = attempt(ran, row, 'plugin skill', 'plugged')
-      // Only the probe plugin was declared: any other skill, or a plugin item outside its copy,
+      // Only the probe plugin was declared: any other skill, or a plugin item outside its copies,
       // came from somewhere else (an account's plugins, a marketplace the agent fetched).
+      const copy = row.plugin?.copy
       const undeclared = a.context
         .map((c) => c.path)
         .filter((p) => !isRuntimeState(p))
+        .filter((p) => !copy || !p.startsWith(copy))
         .filter(
           (p) =>
             (p.endsWith('/SKILL.md') && !p.endsWith('/plugin-probe/SKILL.md')) ||
             (/(^|\/)plugins\//.test(p) && !p.startsWith('~/.reeval/plugins/')),
         )
       assert.deepEqual(undeclared, [], 'undeclared plugin items in the context')
+      // Nor did the agent reach another plugin's MCP servers or files while it worked.
+      for (const name of ['plugin skill', 'plugin mcp']) {
+        const ref = attempt(ran, row, name, 'plugged').files.transcript
+        assert.ok(ref, `${name}: no transcript`)
+        const lines = parseTranscript(readFileSync(join(ran.runDir, ref.path), 'utf8'))
+        const mcpTools = lines.flatMap((l) =>
+          l.type === 'tool' && /mcp/i.test(l.tool) && !/stamp/.test(l.tool) ? [l.tool] : [],
+        )
+        assert.deepEqual(mcpTools, [], `${name}: MCP tools beyond the probe plugin's stamp server`)
+        const elsewhere = lines
+          .map((l) => JSON.stringify(l))
+          .filter((l) => /\.cursor\/plugins\/|\.claude\/plugins\/|plugins\/cache\//.test(l))
+        assert.deepEqual(elsewhere, [], `${name}: another plugin's files in the transcript`)
+      }
       const egress = a.egress
       assert.equal(egress?.policy, 'deny-all')
       assert.deepEqual(egress?.blocked, [], 'hosts contacted under deny-all')

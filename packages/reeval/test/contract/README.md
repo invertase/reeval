@@ -21,8 +21,9 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | plugin MCP server called | the plugin's `stamp.mjs` logged `tools/call`; a tool named `mcp__…stamp__house_stamp` is in the transcript | no turn: no call | the plugin record lists `stamp`, and the environment's `mcp` has `probe:stamp` |
 | plugin hook ran | the `SessionStart` hook wrote `/tmp/reeval-plugin-hook.txt` | an environment without the plugin: no marker | — |
 | plugin subagent available | a tool call mentions `probe-agent` (the agent delegated to it) | an environment without the plugin: no such call | — |
+| plugin rules read | `plugin-codeword.txt` holds the codeword only the probe plugin's rule has | an environment without the plugin: no codeword | — |
 | plugin part it can't load refused | — | — | `--dry-run` with the probe's every part (its `rules/` included) exits 2 naming the part and the parts the row loads; a row that loads every part skips |
-| plugin hermetic | — | — | the plugin skill attempt's `context` has no other skill and no plugin outside `~/.reeval/plugins/`, under `deny-all` nothing was blocked, and every host contacted is one of the row's automatic hosts |
+| plugin hermetic | — | — | the plugin skill attempt's `context` has no other skill and no plugin outside `~/.reeval/plugins/` (or the row's `plugin.copy`), the plugin skill and MCP attempts' transcripts call no other MCP server and name no other plugin's files, under `deny-all` nothing was blocked, and every host contacted is one of the row's automatic hosts |
 | clean teardown | — | — | the run is `complete` and no container with its label is left |
 
 The key scanner ([`scan.mjs`](./scan.mjs)) is given only the sha256, length and a rolling hash of
@@ -47,7 +48,7 @@ anything.
 
 The plugin behaviours run the probe plugin in [`plugins/probe/`](./plugins/probe): a skill with a
 code, a subagent (`probe-agent`), a slash command, the `stamp.mjs` MCP server, a `SessionStart`
-hook that writes a marker, and a `rules/` file most harnesses can't load. A row takes part when it
+hook that writes a marker, and a `rules/` file with a codeword that only Cursor and Antigravity load. A row takes part when it
 has a `plugin` field; without one, the plugin evals (tagged `plugin`) are left out of its run and
 each plugin behaviour skips, saying so.
 
@@ -62,11 +63,15 @@ plugin: {
   (`scripts/harness-matrix.mjs` fails `pnpm docs:gen` when they differ). The run narrows the probe
   to them with `only` (`REEVAL_CONTRACT_PLUGIN_PARTS`), and the part-refused check plans the
   probe whole and expects the refusal of the parts left out. Without `hooks` the hook evals
-  (tagged `plugin-hooks`) are left out; without `agents`, the subagent evals (`plugin-agents`).
+  (tagged `plugin-hooks`) are left out; without `agents`, the subagent evals (`plugin-agents`);
+  without `rules`, the rules evals (`plugin-rules`).
 - `skillContext` matches where the attempt's `context` shows the plugin's `SKILL.md`: under
   `~/.reeval/plugins/probe/` for a harness that loads the plugin whole (namespaced), or the
-  harness's own skill directory for one that places plugin skills with its own (flat).
-- The row then runs 20 attempts instead of 12 (fewer if it leaves hooks or agents out): raise
+  harness's own skill directory for one that places plugin skills with its own (flat), or the
+  agent's own copy for one that installs the plugin itself (Antigravity's `agy plugin install`).
+- `copy`, for such an agent, is where its copy lives (`~/.gemini/config/plugins/probe/`): the
+  hermetic check allows the plugin items under it.
+- The row then runs 22 attempts instead of 12 (fewer if it leaves hooks, agents or rules out): raise
   `REEVAL_REAL_ATTEMPT_BUDGET` in `contract.yml` by the difference.
 
 ## Running it
@@ -81,7 +86,7 @@ pnpm test:replay            # the captured streams, key-free
 
 Without `REEVAL_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
 anything, naming the variable it needs: narrow the run with `REEVAL_CONTRACT_HARNESSES=cursor`, which
-picks rows. Each real row is 12 attempts, 6 of them with one short agent turn, or 20 with a
+picks rows. Each real row is 12 attempts, 6 of them with one short agent turn, or up to 22 with a
 `plugin` field, at `--concurrency 2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
 (`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
 and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.
