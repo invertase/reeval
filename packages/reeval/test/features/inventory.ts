@@ -522,7 +522,9 @@ export const inventory: InventoryFeature[] = [
       plugin('Claude Code enables the placed plugins from a directory marketplace'),
       plugin('Claude Code’s plugin settings merge into a ~/.claude/settings.json'),
       plugin('Grok Build refuses a plugin MCP server named like another'),
-      planTest('Grok Build refuses a plugin MCP server named like one in mcp'),
+      planTest(
+        "Grok Build and Codex refuse a plugin MCP server named like one in mcp; Claude Code's namespaced name plans",
+      ),
       planTest("Claude Code and Grok Build refuse a plugin's rules"),
       grokAdapter('unit', 'grok-acp starts grok agent --no-leader stdio'),
     ],
