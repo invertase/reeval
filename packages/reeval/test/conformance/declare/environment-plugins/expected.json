@@ -1,0 +1,94 @@
+{
+  "children": [
+    {
+      "type": "group",
+      "name": "remote plugins",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "fetched",
+          "layers": [
+            {
+              "name": "fetched",
+              "spec": {
+                "plugins": [
+                  {
+                    "kind": "plugin",
+                    "source": "git",
+                    "repo": "github:acme/agent-plugins",
+                    "ref": "v1.2.0",
+                    "path": "plugins/review"
+                  },
+                  {
+                    "kind": "plugin",
+                    "source": "npm",
+                    "spec": "@acme/review-plugin@1.2.0",
+                    "only": ["skills"]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "children": [
+        {
+          "type": "eval",
+          "name": "git and npm read at the attempt",
+          "mode": "run",
+          "options": {},
+          "body": "b1"
+        },
+        {
+          "type": "eval",
+          "name": "a child adds another",
+          "mode": "run",
+          "options": {
+            "environment": {
+              "kind": "environment",
+              "name": "pinned",
+              "layers": [
+                {
+                  "name": "fetched",
+                  "spec": {
+                    "plugins": [
+                      {
+                        "kind": "plugin",
+                        "source": "git",
+                        "repo": "github:acme/agent-plugins",
+                        "ref": "v1.2.0",
+                        "path": "plugins/review"
+                      },
+                      {
+                        "kind": "plugin",
+                        "source": "npm",
+                        "spec": "@acme/review-plugin@1.2.0",
+                        "only": ["skills"]
+                      }
+                    ]
+                  }
+                },
+                {
+                  "name": "pinned",
+                  "spec": {
+                    "plugins": [
+                      {
+                        "kind": "plugin",
+                        "source": "git",
+                        "repo": "github:acme/agent-plugins",
+                        "ref": "v1.3.0",
+                        "path": "plugins/review"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          "body": "b2"
+        }
+      ]
+    }
+  ]
+}

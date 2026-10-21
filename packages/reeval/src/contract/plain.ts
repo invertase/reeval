@@ -228,7 +228,7 @@ export const skillSourceSchema = z
 export const pluginPartSchema = z
   .enum(['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'])
   .describe(
-    '`skills/*/SKILL.md`, `agents/*.md`, `commands/*.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest\'s `mcpServers`) or `rules/`.',
+    "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
   )
 
 const plugin = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fields: F) =>
@@ -269,10 +269,15 @@ export const pluginSourceSchema = z
     }),
     plugin('npm', {
       spec: nonEmpty().describe('A pinned npm package spec.'),
-      path: z.string().optional().describe("The plugin's directory in the package; default its root."),
+      path: z
+        .string()
+        .optional()
+        .describe("The plugin's directory in the package; default its root."),
     }),
   ])
-  .describe('A plugin to place for the agent, in Claude Code\'s layout, made by the `plugin` helper.')
+  .describe(
+    "A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper.",
+  )
 
 export const mcpServerSchema = z
   .discriminatedUnion('transport', [

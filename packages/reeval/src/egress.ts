@@ -6,8 +6,8 @@ import {
   HARNESS_HOSTS,
   PACKAGE_HOSTS,
 } from '@reeval/sandbox-docker'
-import { plannedSecrets } from './environment.ts'
 import { localPluginServers } from './environment/plugins.ts'
+import { plannedSecrets } from './environment.ts'
 import { agentFor, isAgentKind } from './harness/agents.ts'
 import { FAKE_EGRESS } from './sandbox/fake.ts'
 import type {

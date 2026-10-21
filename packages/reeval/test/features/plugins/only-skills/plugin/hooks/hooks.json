@@ -1,7 +1,5 @@
 {
   "hooks": {
-    "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "echo review plugin loaded" }] }
-    ]
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "echo review plugin loaded" }] }]
   }
 }

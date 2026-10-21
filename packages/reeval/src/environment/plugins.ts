@@ -2,7 +2,7 @@
 // the parts beside it. Synchronous and host-only, so the plan reads a local plugin and the worker
 // reads every plugin (git and npm ones once fetched) the same way.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { basename, join, relative, sep } from 'node:path'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import type {
   EnvironmentLayer,
@@ -63,6 +63,22 @@ export function pluginCall(p: PluginSource, root?: string): string {
   return `plugin.${p.source}('${arg}')`
 }
 
+/**
+ * A plugin's source as the record writes it: `local:plugins/review`,
+ * `github:acme/agent-plugins#v1.2.0:plugins/review` or `npm:@acme/review-plugin@1.2.0`.
+ */
+export function pluginSourceLabel(p: PluginSource, root: string): string {
+  const rel = (path: string) => relative(root, path).split(sep).join('/') || '.'
+  switch (p.source) {
+    case 'local':
+      return `local:${rel(p.path)}`
+    case 'git':
+      return `${p.repo}${p.ref ? `#${p.ref}` : ''}${p.path ? `:${p.path}` : ''}`
+    case 'npm':
+      return `npm:${isAbsolute(p.spec) ? rel(p.spec) : p.spec}${p.path ? `:${p.path}` : ''}`
+  }
+}
+
 /** What a plugin directory has, and what of it `only` keeps. */
 export type PluginContents = {
   name: string
@@ -89,9 +105,7 @@ const readJson = (path: string, what: string): unknown => {
   try {
     return JSON.parse(readFileSync(path, 'utf8'))
   } catch (error) {
-    throw new PluginProblem(
-      `${what} isn't valid JSON (${(error as Error).message.split('\n')[0]})`,
-    )
+    throw new PluginProblem(`${what} isn't valid JSON (${(error as Error).message.split('\n')[0]})`)
   }
 }
 
@@ -204,7 +218,11 @@ function hookCommands(raw: unknown, plugin: string): { events: string[]; command
  * Reads the plugin at `dir`: its manifest, the parts it has and what `only` keeps. Throws a
  * `PluginProblem` for a plugin reeval can't place as written.
  */
-export function readPlugin(dir: string, call: string, only?: readonly PluginPart[]): PluginContents {
+export function readPlugin(
+  dir: string,
+  call: string,
+  only?: readonly PluginPart[],
+): PluginContents {
   if (!isDir(dir)) throw new PluginProblem(`${call} isn't a directory`)
   const manifestPath = join(dir, MANIFEST)
   if (!existsSync(manifestPath)) throw new PluginProblem(`${call} has no ${MANIFEST}`)
@@ -242,7 +260,11 @@ export function readPlugin(dir: string, call: string, only?: readonly PluginPart
         ? mcpServers(readJson(join(dir, from), `the ${name} plugin's ${from}`), name, from)
         : mcpServers(from, name, MANIFEST)
   } else if (existsSync(join(dir, '.mcp.json'))) {
-    mcp = mcpServers(readJson(join(dir, '.mcp.json'), `the ${name} plugin's .mcp.json`), name, '.mcp.json')
+    mcp = mcpServers(
+      readJson(join(dir, '.mcp.json'), `the ${name} plugin's .mcp.json`),
+      name,
+      '.mcp.json',
+    )
   }
   const rules = filesIn(join(dir, 'rules'), (n) => n.endsWith('.md') || n.endsWith('.mdc'))
   const found: Record<PluginPart, boolean> = {
@@ -317,7 +339,11 @@ export function pluginFiles(p: PluginContents): PluginFile[] {
       else if (entry.isFile() && path !== MANIFEST && !dropped.some((d) => d(path))) {
         const full = join(p.dir, path)
         const executable = (statSync(full).mode & 0o100) !== 0
-        out.push({ path, content: readFileSync(full), ...(executable ? { executable: true as const } : {}) })
+        out.push({
+          path,
+          content: readFileSync(full),
+          ...(executable ? { executable: true as const } : {}),
+        })
       }
     }
   }
@@ -345,7 +371,10 @@ const read = new Map<string, PluginContents | PluginProblem>()
  * A local plugin as the plan reads it, once per process: its contents, or the problem with it.
  * Git and npm plugins aren't fetched until an attempt, so the plan has nothing for them.
  */
-export function localPlugin(p: PluginSource, root?: string): PluginContents | PluginProblem | undefined {
+export function localPlugin(
+  p: PluginSource,
+  root?: string,
+): PluginContents | PluginProblem | undefined {
   if (p.source !== 'local') return undefined
   const key = JSON.stringify([p.path, p.only, root])
   let found = read.get(key)
@@ -375,7 +404,8 @@ export function localPluginServers(layers: readonly EnvironmentLayer[]): Map<str
   }
   const out = new Map<string, McpServer>()
   for (const p of plugins.values()) {
-    for (const [name, server] of Object.entries(p.mcp)) out.set(pluginServerName(p.name, name), server)
+    for (const [name, server] of Object.entries(p.mcp))
+      out.set(pluginServerName(p.name, name), server)
   }
   return out
 }
@@ -444,7 +474,10 @@ export function localSkills(
 }
 
 /** The package registry a command fetches from at start, or undefined. */
-function fetcher(command: string, args: readonly string[]): { tool: string; host: string } | undefined {
+function fetcher(
+  command: string,
+  args: readonly string[],
+): { tool: string; host: string } | undefined {
   const tool = basename(command)
   if (tool === 'npx' || tool === 'bunx') return { tool, host: 'registry.npmjs.org' }
   if (tool === 'uvx') return { tool, host: 'pypi.org' }
@@ -469,7 +502,13 @@ export function fetchesAtStart(
     const runs = [
       ...Object.entries(p.mcp).flatMap(([name, s]) =>
         s.transport === 'stdio'
-          ? [{ what: `the ${p.name} plugin's MCP server "${name}"`, command: s.command, args: s.args }]
+          ? [
+              {
+                what: `the ${p.name} plugin's MCP server "${name}"`,
+                command: s.command,
+                args: s.args,
+              },
+            ]
           : [],
       ),
       ...p.hooks.commands.map((c) => {
@@ -482,7 +521,9 @@ export function fetchesAtStart(
       if (!f) continue
       const runsIt = `${what} runs ${f.tool}, which fetches from ${f.host} at start`
       if (allowed === null) {
-        notes.push(`${runsIt}; install it in the image (docker({ install })) to keep it off the network`)
+        notes.push(
+          `${runsIt}; install it in the image (docker({ install })) to keep it off the network`,
+        )
       } else if (!allows(allowed, f.host)) {
         return {
           refusal: `${runsIt}: install it in the image (docker({ install })), or allow the host in egress`,

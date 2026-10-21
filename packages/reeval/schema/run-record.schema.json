@@ -1063,6 +1063,7 @@
           }
         },
         "mcp": {
+          "description": "Every MCP server, a plugin's as `<plugin>:<server>`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1088,6 +1089,13 @@
               "type": "string"
             }
           ]
+        },
+        "plugins": {
+          "description": "The plugins placed, each with what it placed; in the digest. Unset when there are none.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginRecord"
+          }
         },
         "secrets": {
           "type": "array",
@@ -1128,6 +1136,10 @@
               },
               "placement": {
                 "$ref": "#/$defs/SkillPlacement"
+              },
+              "plugin": {
+                "description": "The plugin the skill came with; unset for a skill from `skills`.",
+                "type": "string"
               },
               "sha256": {
                 "type": "string"
@@ -2010,6 +2022,110 @@
         }
       },
       "required": ["agentMs", "checksMs", "diffMs", "judgeMs", "setupMs"]
+    },
+    "PluginRecord": {
+      "description": "A plugin as an attempt placed it.",
+      "type": "object",
+      "properties": {
+        "build": {
+          "description": "The image layer its build ran in; null without a build.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "commit": {
+          "description": "The commit a git source resolved to; null for a local or npm one.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "marketplace": {
+          "description": "The marketplace it was listed in; null when it was named directly.",
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "commit": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": ["commit", "name", "source"]
+            }
+          ]
+        },
+        "name": {
+          "description": "The manifest's `name`.",
+          "type": "string"
+        },
+        "parts": {
+          "description": "What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.",
+          "type": "object",
+          "properties": {
+            "agents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "commands": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "hooks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mcp": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rules": {
+              "type": "boolean"
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["agents", "commands", "hooks", "mcp", "rules", "skills"]
+        },
+        "sha256": {
+          "description": "The hash of the files placed.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`.",
+          "type": "string"
+        }
+      },
+      "required": ["build", "commit", "marketplace", "name", "parts", "sha256", "source"]
     },
     "PrepareFailureRecord": {
       "description": "The sandbox an attempt needed that couldn't be prepared before the run, on each attempt that needed it: its provider's stage (Docker's `image`, `from`, `dockerfile`, `harness` or `install`, or `workspace` for a git workspace, whose `ref` is `repo#ref:path`), what was being made, the class (`config`, `transient` after the retries, or `resource`), a named cause (`enospc`, `oom`), the build log, and the levels that set it.",

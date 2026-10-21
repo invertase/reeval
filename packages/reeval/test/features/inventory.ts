@@ -502,7 +502,7 @@ export const inventory: InventoryFeature[] = [
       'plugins/git-ref',
       'plugins/npm-package',
     ],
-    plan: ['plugins/parts', 'plugins/fetches-at-start'],
+    plan: ['plugins/parts', 'plugins/remote', 'plugins/fetches-at-start'],
     tests: [
       plugin('a plugin is read in Claude Code’s layout'),
       plugin('every real harness refuses every plugin'),

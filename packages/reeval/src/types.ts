@@ -1002,10 +1002,13 @@ export type EnvironmentSpec = {
   plugins?: PluginSource[]
 }
 
-/** A part of a plugin, as Claude Code's layout bundles it. */
+/**
+ * A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`,
+ * `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.
+ */
 export type PluginPart = 'skills' | 'agents' | 'commands' | 'hooks' | 'mcp' | 'rules'
 
-/** A plugin to place for the agent, made by the `plugin` helper. */
+/** A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper. */
 export type PluginSource = {
   kind: 'plugin'
   /** The parts to place; default every part the plugin has. */
