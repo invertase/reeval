@@ -105,7 +105,7 @@ export function citableHeadline(input: HeadlineInput): Citable {
   return {
     resolve: (cite) => {
       const e = evals.get(cite)
-      return e ? flatText({ ...e, tally: input.tally }) : null
+      return e ? flatText({ ...e, tally: input.tally, evals: input.evals.length }) : null
     },
     effects: () => [],
     vocabulary: normal(input.evals.map((e) => e.name).join('\n')),
@@ -269,12 +269,60 @@ export function validateEvalInsights(
   )
 }
 
+const NUMBER_WORDS = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+  'twenty',
+]
+const EVAL_COUNT = new RegExp(
+  String.raw`\b(\d+|${NUMBER_WORDS.join('|')})\s+(?:[a-z-]+\s+)?evals?\b`,
+  'gi',
+)
+
+/**
+ * Why a headline calls a tally number a count of evals, or undefined. The tally counts results
+ * (each case of a family is one), so "22 evals" on a run of 13 evals is false.
+ */
+function evalMiscount(text: string, input: HeadlineInput): string | undefined {
+  const evals = input.evals.length
+  const { unit: _, ...counts } = input.tally
+  const tallied = new Set(Object.values(counts))
+  for (const [, raw = ''] of text.matchAll(EVAL_COUNT)) {
+    const word = NUMBER_WORDS.indexOf(raw.toLowerCase())
+    const n = word >= 0 ? word : Number(raw)
+    if (n !== evals && tallied.has(n)) {
+      return `says ${raw} evals, but the run has ${evals}; the tally counts results, not evals`
+    }
+  }
+  return undefined
+}
+
 export function validateHeadline(
   output: HeadlineOutput,
   input: HeadlineInput,
 ): Checked<Sentence | null> {
   if (!output.headline) return { value: null, dropped: [], banned: [] }
-  const v = checkSentence(output.headline, citableHeadline(input))
+  const checked = checkSentence(output.headline, citableHeadline(input))
+  const miscounted = 'ok' in checked ? evalMiscount(checked.ok.text, input) : undefined
+  const v: Verdict = miscounted ? { dropped: miscounted } : checked
   return tally('ok' in v ? v.ok : null, [
     { slot: 'headline', text: output.headline.text, verdict: v },
   ])

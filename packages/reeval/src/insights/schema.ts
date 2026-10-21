@@ -5,7 +5,7 @@
 import { z } from 'zod'
 
 /** Bumped when a prompt or output schema changes: older insights were asked differently. */
-export const INSIGHTS_PROMPT_VERSION = 'insights-v2'
+export const INSIGHTS_PROMPT_VERSION = 'insights-v3'
 
 const sentence = z.object({
   text: z.string(),
@@ -91,5 +91,5 @@ When retry is set, your earlier sentences were refused for those reasons: write 
 export const HEADLINE_PROMPT = `You write the one-sentence headline of a reeval run for the developer who wrote its evals: what the run found, leading with what needs work. You get each eval's id (F1), path, name, verdict and answer, and the tally.
 
 - 25 words or fewer, plain words, citing the evals it's about by their ids from evals[].id, in cites only, never in the text.
-- Counts come from the evals and the tally, where each case counts one and \`total\` is their sum ("9 of 22 fail"). Never: interval, significance, noise, p-value, confidence, pass@1, lift, control, variant, arm, cell.
+- Counts come from the evals and the tally. The tally counts results, not evals (tally.unit): each case of a family counts one and \`total\` is their sum ("9 of 22 results fail"). The number of evals is evals.length; never call a tally number evals. Never: interval, significance, noise, p-value, confidence, pass@1, lift, control, variant, arm, cell.
 When retry is set, your earlier headline was refused for those reasons: write it again within the rules.`

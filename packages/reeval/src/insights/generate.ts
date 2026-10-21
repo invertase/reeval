@@ -247,7 +247,11 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
   const byPath = new Map(evals.map((x) => [x.evalId, x]))
   const headlineInput: HeadlineInput = {
     call: 'headline',
-    tally: { ...suite.tally, total: Object.values(suite.tally).reduce((a, b) => a + b, 0) },
+    tally: {
+      ...suite.tally,
+      total: Object.values(suite.tally).reduce((a, b) => a + b, 0),
+      unit: 'results',
+    },
     evals: insightEvals(suite).map((e) => ({
       path: e.path,
       name: e.template ?? e.name,

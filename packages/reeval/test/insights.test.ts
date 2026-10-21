@@ -88,7 +88,7 @@ describe('the insights validator', () => {
   test('the recipe insights pass every check, as the with-insights entry holds them', async () => {
     const doc = await generate(recipeInsights)
     assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
-    assert.equal(doc.promptVersion, 'insights-v2')
+    assert.equal(doc.promptVersion, 'insights-v3')
     const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
     assert.deepEqual(
       sentencesOf(doc),
@@ -164,6 +164,31 @@ describe('the insights validator', () => {
       inside.validation.drops?.map((d) => d.reason),
       ['names F1 in its text; ids go in cites only'],
     )
+  })
+
+  test('canary: a headline calling the tally a count of evals is dropped', async () => {
+    const total = Object.values(suite.tally).reduce((a, b) => a + b, 0)
+    const evals = insightEvals(suite).length
+    assert.notEqual(total, evals, 'the recipe has families, so results outnumber evals')
+    const headline =
+      (text: string): Fake =>
+      (input) =>
+        input.call === 'headline'
+          ? { headline: { text, cites: [input.evals[0]?.id ?? ''] } }
+          : recipeInsights(input)
+    const wrong = await generate(headline(`Nine of ${total} evals fail.`))
+    assert.equal(wrong.headline, null)
+    assert.deepEqual(
+      wrong.validation.drops?.map((d) => [d.slot, d.reason]),
+      [
+        [
+          'headline',
+          `says ${total} evals, but the run has ${evals}; the tally counts results, not evals`,
+        ],
+      ],
+    )
+    const right = await generate(headline(`9 of ${total} results fail.`))
+    assert.equal(right.headline?.text, `9 of ${total} results fail.`)
   })
 
   test('canary: a sentence citing a fact it was never shown is dropped', async () => {
