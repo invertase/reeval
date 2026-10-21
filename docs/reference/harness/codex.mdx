@@ -141,7 +141,7 @@ reeval: evals/p.eval.ts: evaluate("reviews") on codex:gpt-5.4-mini: Codex can't 
 reeval: evals/p.eval.ts: evaluate("reviews") on codex:gpt-5.4-mini: Codex can't load the chat plugin's apps: they need a ChatGPT login
 ```
 
-A plugin has apps when its manifest names `apps` or it has an `.app.json`.
+A plugin has apps when its manifest names `apps` or it has an `.app.json`. Codex reads a plugin's `.codex-plugin/plugin.json`, or a root `plugin.json` with an Agent Plugins `$schema`, in place of its `.claude-plugin/plugin.json`, so the plan refuses a plugin that has either: reeval couldn't hold Codex to the parts it places.
 
 ## Errors
 

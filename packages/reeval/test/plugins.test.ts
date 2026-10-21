@@ -383,6 +383,39 @@ test('Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugi
   }
 })
 
+test('Codex refuses a plugin with a manifest it reads first; a root plugin.json counts only with its schema', () => {
+  const own = { skills: [], mcp: [] }
+  const base = {
+    '.claude-plugin/plugin.json': '{ "name": "dual" }',
+    'skills/lint/SKILL.md': skillMd('lint'),
+  }
+  for (const [files, manifest] of [
+    [{ '.codex-plugin/plugin.json': '{ "name": "dual" }' }, '.codex-plugin/plugin.json'],
+    [
+      {
+        'plugin.json':
+          '{ "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json" }',
+      },
+      'plugin.json',
+    ],
+  ] as const) {
+    const dual = readPlugin(write(tmp(), { ...base, ...files }), 'x', ['skills'])
+    assert.deepEqual(dual.manifests, [manifest])
+    assert.equal(
+      refusedPlugins({ kind: 'codex' } as never, [dual], own),
+      `Codex reads the dual plugin's ${manifest} in place of its .claude-plugin/plugin.json, so reeval can't hold it to the parts it places: remove ${manifest} from the plugin, or leave the plugin out of this cell`,
+    )
+    assert.equal(refusedPlugins({ kind: 'goose' } as never, [dual], own), undefined)
+  }
+  for (const files of [
+    { 'plugin.json': '{ "name": "dual", "version": "1.0.0" }' },
+    { '.cursor-plugin/plugin.json': '{ "name": "dual" }' },
+  ]) {
+    const dual = readPlugin(write(tmp(), { ...base, ...files }), 'x')
+    assert.equal(refusedPlugins({ kind: 'codex' } as never, [dual], own), undefined)
+  }
+})
+
 test("Codex's plugin sync hosts are expected blocks only in a session with plugins", () => {
   const codex = { kind: 'codex', model: 'gpt-5.4-mini' } as const
   assert.equal(

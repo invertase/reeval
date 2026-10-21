@@ -40,6 +40,25 @@ export const PART_PATHS: Record<PluginPart, string> = {
 
 /** A plugin's manifest, relative to its directory. */
 export const PLUGIN_MANIFEST = '.claude-plugin/plugin.json'
+/** Other harnesses' plugin manifests, relative to the plugin's directory. */
+export const OTHER_MANIFESTS = [
+  'plugin.json',
+  '.codex-plugin/plugin.json',
+  '.cursor-plugin/plugin.json',
+]
+
+/** Whether a manifest is one an agent reads: any but a root `plugin.json` without the schema. */
+function readsAsManifest(dir: string, path: string): boolean {
+  const file = join(dir, path)
+  if (!existsSync(file)) return false
+  if (path !== 'plugin.json') return true
+  try {
+    const schema = (JSON.parse(readFileSync(file, 'utf8')) as { $schema?: unknown }).$schema
+    return typeof schema === 'string' && schema.startsWith('https://agent-plugins.org/schemas/')
+  } catch {
+    return false
+  }
+}
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /** Manifest keys that move a part from its default place, which reeval doesn't follow. */
 const CUSTOM_PATHS = ['skills', 'agents', 'commands', 'hooks', 'outputStyles', 'lspServers']
@@ -104,6 +123,11 @@ export type PluginContents = {
   rules: string[]
   /** Whether it bundles ChatGPT apps (Codex's `.app.json`, or the manifest's `apps`). */
   apps: boolean
+  /**
+   * The other harnesses' manifests it has, which some read before its `.claude-plugin/plugin.json`:
+   * of {@link OTHER_MANIFESTS}, a root `plugin.json` only with an Agent Plugins `$schema`.
+   */
+  manifests: string[]
   /** The manifest's text, without `mcpServers` when `only` leaves MCP out. */
   manifest: string
 }
@@ -320,6 +344,7 @@ export function readPlugin(
     mcp: kept.includes('mcp') ? mcp : {},
     rules: kept.includes('rules') ? rules : [],
     apps: manifest.apps !== undefined || existsSync(join(dir, '.app.json')),
+    manifests: OTHER_MANIFESTS.filter((m) => readsAsManifest(dir, m)),
     manifest:
       kept.includes('mcp') || manifest.mcpServers === undefined
         ? readFileSync(manifestPath, 'utf8')

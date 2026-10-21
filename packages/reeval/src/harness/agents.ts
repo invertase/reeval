@@ -12,6 +12,7 @@ import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox
 import {
   PART_PATHS,
   PLUGIN_DIR,
+  PLUGIN_MANIFEST,
   PLUGIN_PARTS,
   type PluginContents,
   pluginServerName,
@@ -86,6 +87,11 @@ export type Agent = Layout & {
    * plugin; unset for an agent that ignores them.
    */
   pluginApps?: string
+  /**
+   * Plugin manifests it reads in place of `.claude-plugin/plugin.json` when a plugin has one, so it
+   * would load what reeval didn't place or rewrite; unset for an agent that reads only that one.
+   */
+  pluginManifestsFirst?: readonly string[]
   /**
    * Transcript events a turn may have had that its harness didn't report, from the turn's
    * `finish` part's `harnessMetadata`. Each turn carries these as `unreported`, so web matchers
@@ -813,6 +819,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // What Codex's plugin format has besides apps; it installs a plugin whole, from a marketplace.
     pluginParts: ['skills', 'mcp'],
     pluginApps: 'they need a ChatGPT login',
+    // Codex 0.163.0 reads a root plugin.json (with an Agent Plugins $schema), then
+    // .codex-plugin/plugin.json, then .claude-plugin/plugin.json.
+    pluginManifestsFirst: ['plugin.json', '.codex-plugin/plugin.json'],
     pluginServersByName: true,
     name: 'Codex',
     factory: 'codex',
@@ -979,6 +988,13 @@ export function refusedPlugins(
     const what = refused.map((part) => `${part} (${PART_PATHS[part]})`).join(' and ')
     const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
     return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
+  }
+  const first = (agent ?? mimics)?.pluginManifestsFirst ?? []
+  for (const p of plugins) {
+    const other = p.manifests.find((m) => first.includes(m))
+    if (other) {
+      return `${name} reads the ${p.name} plugin's ${other} in place of its ${PLUGIN_MANIFEST}, so reeval can't hold it to the parts it places: remove ${other} from the plugin, or leave the plugin out of this cell`
+    }
   }
   const apps = (agent ?? mimics)?.pluginApps
   const withApps = apps ? plugins.find((p) => p.apps) : undefined
