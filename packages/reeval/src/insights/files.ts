@@ -1,6 +1,5 @@
 // Where a run's insights live: `<history>/<run>/insights.json`, beside the record and written
-// create-only, so the record is never touched and two writers never overwrite each other; and
-// `.reeval/staging/<run>/insights.json` while the run is still going.
+// create-only, so the record is never touched and two writers never overwrite each other.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
@@ -11,10 +10,6 @@ import { NewerSchemaError, readableInsights } from '../view/record.ts'
 
 export const insightsFile = (historyDir: string, runId: string) =>
   join(runDir(historyDir, runId), INSIGHTS_FILE)
-
-/** A live run's insights, before the run is recorded. */
-export const stagingInsightsFile = (root: string, runId: string) =>
-  join(root, '.reeval', 'staging', runId, INSIGHTS_FILE)
 
 /** Writes the file create-only; refuses when it exists or looks like it holds a secret. */
 export async function writeInsights(file: string, doc: RunInsights): Promise<void> {
