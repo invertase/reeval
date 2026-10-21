@@ -1,4 +1,5 @@
 import type { ArtifactLevel, FileRef, JudgeRetry, RecordMode } from './history/types.ts'
+import type { ModelHeadlineInput, ModelInsightInput } from './insights/input.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -17,12 +18,17 @@ export type FileEditEvent = {
 
 /**
  * Normalised agent events. Each tool call is one event, merged with its result; `durationMs`
- * is null when the harness never reported the end.
+ * is wall time until the result arrived (Cursor's own `completed_at_ms` can be earlier). Null
+ * when the harness never reported the end. Long shell or edit calls set `stalled: true`.
  */
 export type TranscriptEvent = EventTime &
   (
     | { type: 'text' | 'reasoning'; text: string; durationMs: number | null }
-    | (FileEditEvent & { durationMs: number | null })
+    | (FileEditEvent & {
+        durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
+      })
     | {
         type: 'web-search'
         toolCallId: string
@@ -32,8 +38,18 @@ export type TranscriptEvent = EventTime &
         /** Whether the search succeeded. Absent means it did. */
         ok?: boolean
         durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
       }
-    | { type: 'web-fetch'; toolCallId: string; url: string; ok: boolean; durationMs: number | null }
+    | {
+        type: 'web-fetch'
+        toolCallId: string
+        url: string
+        ok: boolean
+        durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
+      }
     | {
         type: 'tool'
         toolCallId: string
@@ -42,6 +58,8 @@ export type TranscriptEvent = EventTime &
         output: unknown
         ok: boolean
         durationMs: number | null
+        /** True when a shell-like tool or edit ran at least two minutes. */
+        stalled?: boolean
       }
     | { type: 'error'; message: string }
     /** A step that failed while the turn went on: a model call the harness retried. */
@@ -452,9 +470,19 @@ export type FakeHarnessDescriptor = {
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
    * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`,
    * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`, fx's private home for
-   * `fx`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
+   * `fx`, Grok's private home for `grok-build`). Defaults to the fake's own (`AGENTS.md`,
+   * `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex' | 'fx'
+  layout?:
+    | 'cursor'
+    | 'claude-code'
+    | 'antigravity'
+    | 'opencode'
+    | 'goose'
+    | 'pi'
+    | 'codex'
+    | 'fx'
+    | 'grok-build'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -658,6 +686,29 @@ export type FxHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
+/**
+ * xAI's Grok Build through `@reeval/harness-grok-build` (`grok agent stdio`), made by
+ * `grokBuild()`. It runs xAI models on an xAI API key and reports each turn's tokens.
+ */
+export type GrokBuildHarnessDescriptor = {
+  kind: 'grok-build'
+  /** An xAI model id Grok Build runs on the xAI API, e.g. `grok-4.6`. */
+  model: string
+  /**
+   * Reasoning effort as Grok's `default_reasoning_effort`, e.g. `low`, `medium` or `high`, for a
+   * model that takes one.
+   */
+  effort?: string
+  /** Cell id; defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set. */
+  id?: string
+  /** The most Grok Build attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
@@ -668,6 +719,7 @@ export type AgentHarnessDescriptor =
   | PiHarnessDescriptor
   | CodexHarnessDescriptor
   | FxHarnessDescriptor
+  | GrokBuildHarnessDescriptor
 /** The agent an attempt runs: a real harness, or the fake one. */
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
@@ -681,10 +733,15 @@ export type FakeSandboxDescriptor = {
   /** The most attempts on this sandbox kind at once, across the run. */
   maxConcurrent?: number
 }
-/** A local Docker container, made by `docker()`. */
+/** A local Docker container, made by `docker()`, or a Podman one, made by `podman()`. */
 export type DockerSandboxDescriptor = {
   kind: 'docker'
-  /** Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash. */
+  /** The container CLI the sandbox runs on: `podman` for `podman()`, Docker when unset. */
+  engine?: 'docker' | 'podman'
+  /**
+   * Cell id; defaults to `docker` (`podman`), or `docker:<image>` for other images, plus an
+   * install hash.
+   */
   id?: string
   /** An image that already has the harness baked in, used as is. */
   image?: string
@@ -939,6 +996,82 @@ export type EnvironmentSpec = {
   skills?: SkillSource[]
   /** MCP servers the agent gets, by name. */
   mcp?: Record<string, McpServer>
+  /**
+   * Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its
+   * parent's plugin of the same name.
+   */
+  plugins?: PluginSource[]
+}
+
+/**
+ * A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`,
+ * `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.
+ */
+export type PluginPart = 'skills' | 'agents' | 'commands' | 'hooks' | 'mcp' | 'rules'
+
+/** A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper. */
+export type PluginSource = {
+  kind: 'plugin'
+  /** The parts to place; default every part the plugin has. */
+  only?: PluginPart[]
+  /** Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise. */
+  build?: PluginBuild
+} & (
+  | {
+      source: 'local'
+      /** A host directory with a `.claude-plugin/plugin.json`. */
+      path: string
+    }
+  | {
+      source: 'git'
+      /** As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. */
+      repo: string
+      /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+      ref?: string
+      /** The plugin's directory in the repository; default its root. */
+      path?: string
+    }
+  | {
+      source: 'npm'
+      /** A pinned npm package spec. */
+      spec: string
+      /** The plugin's directory in the package; default its root. */
+      path?: string
+    }
+)
+
+/**
+ * Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root
+ * and with no secrets: one, a list, or `{ run, cwd }`. They run from the plugin's directory, or from
+ * `cwd`, relative to the source's root (`'.'` for the repository's or package's root).
+ */
+export type PluginBuild =
+  | string
+  | string[]
+  | {
+      /** The command, or the commands in order. */
+      run: string | string[]
+      /** Where they run, relative to the source's root; default the plugin's directory. */
+      cwd?: string
+    }
+
+type PluginOptions = {
+  /** The parts to place, e.g. `['skills', 'mcp']`; default every part the plugin has. */
+  only?: readonly PluginPart[]
+  /**
+   * Commands that build the plugin in a Docker image layer, e.g. `'npm ci && npm run build'`, or
+   * `{ run, cwd: '.' }` to run them from the source's root. Only the plugin's directory is placed.
+   */
+  build?: string | readonly string[] | { run: string | readonly string[]; cwd?: string }
+}
+
+export type PluginHelper = {
+  /** A directory with a `.claude-plugin/plugin.json`, relative to the calling file. */
+  local(path: string | URL, options?: PluginOptions): PluginSource
+  /** `https://…`, `git@…`, `github:owner/repo` or a GitHub `/tree/<ref>/<path>` URL. */
+  git(repo: string, options?: PluginOptions & { ref?: string; path?: string }): PluginSource
+  /** A pinned npm package spec; the plugin is at `path` inside it (default its root). */
+  npm(spec: string, options?: PluginOptions & { path?: string }): PluginSource
 }
 
 /** One environment in an `extend` chain. */
@@ -975,6 +1108,7 @@ export type EnvironmentHelpers = {
   secret: SecretHelper
   skill: SkillHelper
   mcp: McpHelper
+  plugin: PluginHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
   /**
@@ -1434,27 +1568,62 @@ export type Profile = {
   tags?: string[]
 }
 
-/** What a fake note is written from: the eval, the harness, and what its tools returned. */
-export type FakeNoteInput = {
-  eval: string
-  harness: string
-  attempts: Array<{ id: string; outcome: string }>
-  /** Each failed attempt the fake opened beside a passing one, and the step where they diverged. */
-  compared: Array<{ failed: string; passed: string; divergedAt: number | null }>
-}
-
 /** A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`. */
 export type FakeAnalysisModel = {
   kind: 'fake-analysis'
   /** The model's structured answer, or a function of the digest it was given. */
   output?: unknown | ((digest: unknown) => unknown)
-  /** `analysis.agent`'s note on each eval and harness: text, a function of its tools' results, or an error to throw. */
-  note?: string | ((input: FakeNoteInput) => string) | { error: string }
   /**
    * How it answers compare questions: a fixed pick, a function of the blinded pair, or
    * `{ error }` to fail every call. A pick may be `{ winner, reason? }`. Default `'tie'`.
    */
   vote?: FakePick | ((pair: BlindPair) => FakePick) | { error: string }
+  /**
+   * What insights get back, in `reeval run` and `reeval analyze --insights`: fixed insights, a
+   * function of each call's input (`input.call` is `classify` or `insights`, once each per eval,
+   * or `headline` once; it may return a promise), or `{ error }` to fail every call. It counts a
+   * token per 4 characters of each call's input and answer, so `analysis.maxTokens` applies.
+   */
+  insights?:
+    | FakeInsights
+    | ((input: FakeInsightsInput) => FakeInsights | Promise<FakeInsights>)
+    | { error: string }
+}
+
+/** What a fake insights function is given: one eval's scoped facts, or the run's evals for the headline. */
+export type FakeInsightsInput = ModelInsightInput | ModelHeadlineInput
+
+/**
+ * A fake insight answer. Each call takes its part: `intent` the classification, `answer`,
+ * `findings`, `rows`, `namedTools` and `remarks` the eval's, `headline` the run's. Whatever's
+ * left out is empty, and the intent defaults to `job: 'other'`.
+ */
+export type FakeInsights = {
+  intent?: {
+    job: 'choose' | 'finish' | 'other'
+    question?: string
+    subject?: { tool?: string; change?: string }
+    name?: 'states-intent' | 'no-intent' | 'contradicts'
+    /** `low` falls back to `job: 'other'`, as a real classification does. */
+    confidence?: 'high' | 'medium' | 'low'
+  }
+  answer?: { text: string; cites: string[] } | null
+  findings?: Array<{ text: string; cites: string[] }>
+  rows?: Array<{ row: string; text: string; cites: string[] }>
+  namedTools?: Array<{ attempt: string; tools: string[] }>
+  /**
+   * The eval's remarks, as the model's JSON would have them: `source.at` and `fix.at` are
+   * `L<n>` lines of the eval's source, `evidence` fact ids (`F1`) or attempt lines (`A1#L3`).
+   * They go through the same gates as a model's, so one missing a part is dropped.
+   */
+  remarks?: Array<{
+    kind: string
+    text: string
+    source?: { at: string; quote: string } | null
+    evidence?: string[]
+    fix?: { at: string; edit: string } | null
+  }>
+  headline?: { text: string; cites: string[] } | null
 }
 
 /** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */
@@ -1493,15 +1662,24 @@ export type BlindSide = BlindTurn & {
   >
 }
 
-/** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
+/** Insights and `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
-  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  /**
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
+   * and compare questions fall back to the judge's when it's a language model.
+   */
   model?: string | FakeAnalysisModel
   /**
-   * `reeval run` writes a note on each eval and harness once its attempts finish, with the analysis
-   * model (default false: one call per eval and harness, every run).
+   * `reeval run` classifies each eval and explains its result with `model` once the attempts
+   * finish (default true when `model` is set; `--no-insights` turns it off for one run).
    */
-  agent?: boolean
+  insights?: boolean
+  /**
+   * Tokens (in and out) that one run's insights may use, over every classification, insight and
+   * headline call (default 250000). Past it, the evals left print without insights; the run's
+   * outcome and exit code never change.
+   */
+  maxTokens?: number
   /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good." */
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
@@ -1560,7 +1738,7 @@ export type ReevalConfig = {
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
-  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
+  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfig
 }
 
@@ -1582,15 +1760,16 @@ export type FakeAnalysisData = {
   kind: 'fake-analysis'
   /** The model's structured answer. */
   output?: unknown
-  /** `analysis.agent`'s note on each eval and harness, or an error to throw. */
-  note?: string | { error: string }
   /** How it answers compare questions: a fixed pick, or `{ error }` to fail every call. */
   vote?: FakePick | { error: string }
 }
 
 /** `AnalysisConfig` as data: the model by name, or a fake analysis. */
 export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
-  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  /**
+   * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
+   * and compare questions fall back to the judge's when it's a language model.
+   */
   model?: string | FakeAnalysisData
 }
 
@@ -1625,7 +1804,7 @@ export type ReevalConfigData = Omit<
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
   profiles?: Record<string, ProfileData>
-  /** `reeval analyze`, compare questions without a model, and `agent`'s notes during a run. */
+  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfigData
 }
 
@@ -1687,7 +1866,12 @@ export type ResolvedConfig = {
   defaultProfile: { ci?: string; local?: string }
   secrets: { unbrokered: 'warn' | 'error' }
   debug: { keep: number; traceBufferBytes: number }
-  analysis: AnalysisConfig & { maxInputTokens: number; maxOutputTokens: number }
+  analysis: AnalysisConfig & {
+    maxInputTokens: number
+    maxOutputTokens: number
+    insights: boolean
+    maxTokens: number
+  }
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
@@ -1737,7 +1921,29 @@ export type TurnRecord = Pick<
   | 'usage'
   | 'model'
   | 'unreported'
-> & { raw?: unknown[] }
+> & {
+  raw?: unknown[]
+  /** Each stdio MCP server start during the turn; see the run record's `turns[].mcpStartup`. */
+  mcpStartup?: McpStartup[]
+}
+
+/**
+ * One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by
+ * reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per
+ * turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts
+ * them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra
+ * error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the
+ * environment has no stdio MCP server, or the sandbox has no `node` to run the timer.
+ */
+export type McpStartup = {
+  /** The server's name in the environment's `mcp`. */
+  server: string
+  /**
+   * Milliseconds from spawning the server to its answer to the client's `initialize`; null when it
+   * never answered (it exited first, timed out, or its client closed it first).
+   */
+  ms: number | null
+}
 
 /** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
 export type PhaseTimings = {
@@ -1759,11 +1965,37 @@ export type CellRole = 'control' | 'variant'
 export type Cell = {
   key: string
   harness: string
+  /** The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix). */
   environment: string
   sandbox: string
   role: CellRole
   /** The variant's name, for variant cells. */
   variant?: string
+}
+
+/** A plugin as an attempt placed it. */
+export type PluginRecord = {
+  /** The manifest's `name`. */
+  name: string
+  /** Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`. */
+  source: string
+  /** The marketplace it was listed in; null when it was named directly. */
+  marketplace: { name: string; source: string; commit: string } | null
+  /** The commit a git source resolved to; null for a local or npm one. */
+  commit: string | null
+  /** The hash of the files placed. */
+  sha256: string
+  /** The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build. */
+  build: string | null
+  /** What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules. */
+  parts: {
+    skills: string[]
+    agents: string[]
+    commands: string[]
+    hooks: string[]
+    mcp: string[]
+    rules: boolean
+  }
 }
 
 /** An environment as it was applied, without secret values. */
@@ -1784,8 +2016,13 @@ export type EnvironmentRecord = {
     placement: SkillPlacement
     /** Paths left out of the sandbox by `exclude` (directories end in `/`); `.git` isn't listed. */
     excluded: string[]
+    /** The plugin the skill came with; unset for a skill from `skills`. */
+    plugin?: string
   }>
+  /** Every MCP server, a plugin's as `<plugin>:<server>`. */
   mcp: string[]
+  /** The plugins placed, each with what it placed; in the digest. Unset when there are none. */
+  plugins?: PluginRecord[]
   files: Array<{ path: string; sha256: string }>
   vars: string[]
   secrets: string[]
@@ -1839,7 +2076,7 @@ export type AttemptImage = {
   /** Content-addressed image id (`sha256:…`). */
   id: string
   agentCli: string | null
-  /** The harness image `install` was baked onto: `ref` itself without `install`. */
+  /** The harness image `install` and plugin builds were baked onto: `ref` itself without either. */
   base: string
   /** The `docker({ install })` commands, in order. */
   install: string[]
@@ -2034,8 +2271,8 @@ export type AttemptMeta = {
   label: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
-  setBy: { sandbox: string; harness: string }
+  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`; with `pluginBuilds`, the environment its plugin builds come from (`environment review in evals/review.eval.ts`). */
+  setBy: { sandbox: string; harness: string; pluginBuilds?: string }
   /** How its cell's attempts decide the cell's outcome; `'none'` when they don't fail the run. */
   gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */
@@ -2052,6 +2289,10 @@ export type AttemptMeta = {
   workspace?: GitWorkspace
   /** The paths its environment's `files` write, layered and sorted; unset when there are none. */
   files?: string[]
+  /** Its environment's plugins, layered: a local one's name and parts, else its source. */
+  plugins?: string[]
+  /** Its environment's plugins with a `build`, layered, which preflight builds into its image. */
+  pluginBuilds?: PluginSource[]
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string

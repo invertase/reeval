@@ -29,7 +29,7 @@ export function channels(base: Environment) {
     skills: [skill.local('./vendor/skill-current/reeval')],
   }))
   const skillSplit = base.extendEnvironment('skill-split', ({ skill }) => ({
-    skills: [skill.local('../../../.agents/skills/reeval')],
+    skills: [skill.local('../../../skills/reeval')],
   }))
   const docs = base.extendEnvironment('docs', ({ directory }) => ({
     files: directory('./vendor/docs', { into: 'reeval-docs' }),

@@ -6,5 +6,5 @@ evals/workspace.eval.ts › a variant swaps the starting code  fake/pinned/docke
                                                              fake/next/docker    variant next  gated    ×1  workspace https://github.com/acme/app#v3.0.0:examples/basic
 evals/workspace.eval.ts › no workspace                       fake/-/docker       control       gated    ×1
 excluded: —
-image docker · 4 evals
+image docker · cursor · 4 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

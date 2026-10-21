@@ -1,0 +1,6 @@
+{"ts":"2026-10-20T23:19:05.093Z","atMs":0,"turn":0,"type":"prompt","text":"Read the fixture repo."}
+{"turn":0,"ts":"2026-10-20T23:19:05.093Z","atMs":0,"type":"text","text":"Working on: Read the fixture repo.","durationMs":0}
+{"turn":0,"ts":"2026-10-20T23:19:05.093Z","atMs":0,"type":"tool","toolCallId":"call_1","tool":"shell","input":{"command":"ls"},"output":"greet.js","ok":true,"durationMs":0}
+{"turn":0,"ts":"2026-10-20T23:19:05.093Z","atMs":0,"type":"file-edit","toolCallId":"call_2","path":"greet.js","kind":"create","added":1,"removed":0,"durationMs":3}
+{"turn":0,"ts":"2026-10-20T23:19:05.096Z","atMs":3,"type":"text","text":"I wrote greet.js.","durationMs":0}
+{"ts":"2026-10-20T23:19:05.097Z","atMs":4,"turn":0,"type":"turn-end","status":"completed","durationMs":4}

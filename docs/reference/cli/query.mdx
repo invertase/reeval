@@ -19,7 +19,10 @@ npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift
 reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                               rebuilt from the records); views: lift, effort, factor_effects,
                               skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                              verdict_flips, check_discrimination. No argument lists them
+                              verdict_flips, check_discrimination, check_rates, check_streaks. No
+                              argument lists them
+  --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
+                              or table name, only that run's rows
   --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
 ```
 
@@ -27,10 +30,12 @@ reeval query [sql | view]     Read-only SQL over every recorded and scratch run 
 
 ## Behaviour
 
-- **Argument:** a view or table name runs `SELECT * FROM <name>`. Anything else is a SQL statement. No argument lists the views and tables with examples.
+- **Argument:** a view or table name runs `SELECT * FROM <name>`. Anything else is a SQL statement. No argument lists the views and tables with examples. An unknown name exits 2 listing both.
+- **SQL from a file:** `reeval query "$(cat q.sql)"` works when the file opens with a `-- comment`: an argument with whitespace before any `=` is SQL, never a flag. `--json`, `--schema`, `--rebuild` and `--run` go before or after it, and `--` ends option parsing: `reeval query --json -- "<sql>"`.
+- **`--run <id|last>`** binds a run id to the named parameter `:run` (`$run` and `@run` work too). `last` (or `latest`) is the run with the newest `started_at` in `history.db`; an id may be a unique prefix. reeval never rewrites your SQL: a statement that uses `:run` without `--run`, or `--run` with a statement that doesn't use `:run`, exits 2. With a bare view or table name, `--run` runs `SELECT * FROM <name> WHERE run_id = :run`; `flaky_cells` pools runs and has no `run_id`, so it refuses `--run`.
 - **Read-only, one statement at a time.**
 - **Always current:** each query re-reads only records that are new or changed. A recorded run wins over its scratch copy. `--rebuild` rebuilds the database from scratch, and you can delete it at any time.
-- **Output:** an aligned table, or JSON rows with `--json`. The sync line (`history.db: 13 runs`) goes to stderr, so output pipes cleanly.
+- **Output:** an aligned table, or JSON rows with `--json`. The table clips a long value to 60 characters with `…`, except a `sql` column (`sqlite_schema.sql`, each CREATE statement), which prints in full; `--json` has every value whole. The sync line (`history.db: 13 runs`) goes to stderr, so output pipes cleanly.
 - **Needs** Node 22.13 or later (`node:sqlite`).
 
 A real query (`points`, `lo` and `hi` are fractions: 1 is +100 points):
@@ -41,6 +46,14 @@ eval_key                                                   harness              
 evals/skill.eval.ts › house greeting › greets in the house…  cursor:composer-2.5                  with-house-greeting  2             2                0             2                1       0.07  1   0
 ```
 
+The last run's evals, with `--run`:
+
+```bash
+npx reeval query "SELECT key, outcome FROM evals WHERE run_id = :run" \
+  --run last
+npx reeval query failing_attempts --run last
+```
+
 ## Views
 
 [//]: # (generated:query-views)
@@ -48,6 +61,8 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | Name | Columns |
 |---|---|
 | `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
+| `check_rates` | `run_id`, `eval_key`, `cell_key`, `harness`, `environment`, `role`, `label`, `pass`, `fail`, `error`, `not_run`, `rate` |
+| `check_streaks` | `eval_key`, `cell_key`, `label`, `fingerprint`, `branch`, `runs`, `fails`, `streak_runs`, `streak_tries`, `streak_since`, `last_run`, `ended_by` |
 | `context_use` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `class`, `calls`, `first_line`, `example` |
 | `contrasts` | `run_id`, `eval_key`, `harness`, `sandbox`, `a_key`, `b_key`, `a_environment`, `b_environment`, `a_pass`, `a_counted`, `b_pass`, `b_counted`, `points`, `lo`, `hi`, `pass_verdict`, `a_tools_median`, `b_tools_median`, `tools_ratio`, `tools_p`, `separated`, `verdict`, `agent_s_ratio`, `time_separated`, `time_verdict`, `tokens_ratio`, `tokens_separated`, `tokens_verdict`, `checks`, `discriminating` |
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
@@ -79,11 +94,71 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | `question_pairs` | Compare question and pair of sides (arms within a harness, `held`; harnesses across an arm): runs voted, wins when both orders agree (or one ties), ties, and `splits`, pairs whose two orders picked opposite sides (`splits_first`: to the side shown first both times) |
 | `context_use` | Attempt and tool-call class: `context` (a placed skill, rules file or MCP tool), `dependency` (`node_modules`, `site-packages`, `vendor`, `.venv`, `--help`), `web`, `verify` (a check's command, or a test, build, lint or typecheck) or `workspace`, with the count, the first call's line and an example target. The classes are a heuristic over tool names and paths |
 | `skill_files` | Attempt and file its environment declared (each skill's files, rules and config): how many tool calls opened it, directly or through a glob, and the first one's line (`NULL`: never opened) |
+| `verdict_flips` | Judge question per cell whose pass rate changed from its previous run |
+| `check_discrimination` | Check (`expect` label) of a variant cell per run, beside its control's: passes, failures and not-run on both sides, and whether it tells them apart |
+| `check_rates` | Check (`expect` label) per cell per run, control and variant alike: its harness, environment and `role`, `pass`, `fail`, `error`, `not_run` over the cell's counted attempts, and `rate` = `pass / (pass + fail)` (`NULL` when neither). An `error` (a matcher that couldn't answer) and a `not_run` (a hard `expect` before it failed) are left out of `rate` |
+| `check_streaks` | Check per cell, comparable fingerprint and branch over recorded runs: `runs` and `fails` (failed tries) in all, then, newest first, `streak_runs` in a row with no fail or error (on a variant, passed on both sides) and their `streak_tries`, `streak_since` (the streak's oldest run), `last_run` and `ended_by`, the run that broke it (`NULL`: it never broke). A run that never reached the check is skipped. The `check-never-fails` [remark](/reference/cli/run#remarks) reads it |
 
 In the text table, `·` is SQL `NULL`; `--json` has `null`. On `factor_effects`, a `pooled` row has `run_id` `NULL` (it spans runs), and a row pooled across evals (with `strata` set and `runs` `NULL`) has `eval_key` and `runs` `NULL` too.
 
 Several views repeat a cell's key across evals in a run, so join `attempts` and `cells` on `eval_key` as well as `cell_key`; on `cell_key` alone each attempt matches every eval's cell of that key and is counted once per eval.
-| `verdict_flips` | Judge question per cell whose pass rate changed from its previous run |
+
+## Per-cell rates
+
+`lift` pools each attempt's pass, every check at once. `check_rates` gives one labelled check's rate per cell, here from `examples/hello` on the fake config:
+
+```bash
+npx reeval query "SELECT cell_key, role, label, pass, fail, rate
+  FROM check_rates WHERE label = 'house greeting'"
+```
+
+```text
+cell_key                       role     label           pass  fail  rate
+fake/plain/fake                control  house greeting  0     1     0
+fake/with-house-greeting/fake  variant  house greeting  1     0     1
+…
+```
+
+Adoption, whether an arm used what its environment gave it, is the share of counted attempts with at least one `context` call in `context_use` (a placed skill, rules file or MCP tool of the environment). The `LEFT JOIN` keeps attempts with no such call, so they count as not adopted. Here on the harness contract's recorded runs on Cursor, Claude Code and Codex:
+
+```bash
+npx reeval query "SELECT a.eval_key, a.cell_key, COUNT(*) AS attempts,
+  COUNT(u.attempt_key) AS adopted,
+  CAST(COUNT(u.attempt_key) AS REAL) / COUNT(*) AS adoption
+FROM attempts a
+LEFT JOIN context_use u ON u.run_id = a.run_id
+  AND u.attempt_key = a.key AND u.class = 'context'
+WHERE a.outcome IN ('pass', 'fail')
+GROUP BY a.run_id, a.eval_key, a.cell_key"
+```
+
+```text
+eval_key                        cell_key                                     attempts  adopted  adoption
+…
+evals/mcp.eval.ts › mcp         claude-code:claude-haiku-4-5/stamped/docker  1         1        1
+evals/mcp.eval.ts › mcp canary  claude-code:claude-haiku-4-5/stamped/docker  1         0        0
+evals/skill.eval.ts › skill     codex:gpt-5.4-mini/skilled/docker            1         1        1
+…
+```
+
+For one MCP server or one shell command, match `tool_calls` instead: an MCP tool is `mcp__<server>__<tool>`, and a shell command's `target` is its command line (`t.target LIKE '%<cli> <subcommand>%'`):
+
+```bash
+npx reeval query "SELECT a.eval_key, a.cell_key,
+  COUNT(DISTINCT a.key) AS attempts, COUNT(DISTINCT t.attempt_key) AS used
+FROM attempts a
+LEFT JOIN tool_calls t ON t.run_id = a.run_id AND t.attempt_key = a.key
+  AND t.tool LIKE 'mcp__stamp__%'
+GROUP BY a.run_id, a.eval_key, a.cell_key"
+```
+
+```text
+eval_key                        cell_key                                     attempts  used
+…
+evals/mcp.eval.ts › mcp         cursor:composer-2.5/stamped/docker           1         1
+evals/mcp.eval.ts › mcp canary  cursor:composer-2.5/stamped/docker           1         0
+…
+```
 
 ## Tables
 
@@ -103,6 +178,7 @@ Several views repeat a cell's key across evals in a run, so join `attempts` and 
 | `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
+| `mcp_startup` | `run_id`, `attempt_key`, `turn`, `server`, `ms` |
 | `question_pairs_m` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `reeval`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
 | `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms`, `class` |
@@ -110,7 +186,25 @@ Several views repeat a cell's key across evals in a run, so join `attempts` and 
 
 [//]: # (/generated:query-tables)
 
-The tables mirror [the run record](/reference/record) and join on `run_id`, `eval_key`, `cell_key` and `environment_digest`.
+The tables mirror [the run record](/reference/record) and join on `run_id` plus the keys below. A table's own key is plain `key` (or `digest`), so most joins pair differently named columns:
+
+| Column | Joins | Also on |
+|---|---|---|
+| `cells.eval_key`, `attempts.eval_key` | `evals.key` | `run_id` |
+| `attempts.cell_key`, `assertions.cell_key`, `cell_checks.cell_key`, `families.cell_key` | `cells.key` | `run_id`, `eval_key` (`families`: its cases' evals) |
+| `cells.lift_vs` | `cells.key` of the control | `run_id`, `eval_key` |
+| `judgements.attempt_key`, `assertions.attempt_key`, `tool_calls.attempt_key`, `artifacts.attempt_key`, `attempt_context.attempt_key`, `context_reads.attempt_key` | `attempts.key` | `run_id` |
+| `cells.environment_digest` | `environments.digest`, `env_skills.digest` | `run_id` |
+| `evals.family_id` | `families.family_id` | `run_id` |
+
+```sql
+SELECT a.key, c.harness, e.name
+FROM attempts a
+JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key
+  AND c.key = a.cell_key
+JOIN evals e ON e.run_id = c.run_id AND e.key = c.eval_key
+WHERE a.run_id = :run
+```
 
 ## Related
 

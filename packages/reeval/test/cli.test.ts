@@ -5,7 +5,14 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { parseCli } from '../src/cli-parse.ts'
-import { COMMANDS, FLAGS, type FlagName, GLOBAL, helpText } from '../src/cli-spec.ts'
+import {
+  COMMANDS,
+  commandHelpText,
+  FLAGS,
+  type FlagName,
+  GLOBAL,
+  helpText,
+} from '../src/cli-spec.ts'
 import { UsageError } from '../src/config.ts'
 import { fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 
@@ -33,7 +40,7 @@ describe('cli', () => {
     assert.equal(text, readFileSync(GOLDEN, 'utf8'))
   })
 
-  test('every command prints the same help with --help and -h, exit 0', async () => {
+  test('every command prints its own help with --help and -h, exit 0', async () => {
     const p = await project('cli-help', { 'reeval.config.ts': fakeConfig() })
     const golden = readFileSync(GOLDEN, 'utf8').replace('reeval VERSION', `reeval ${version}`)
     const lines = [[], ...PATHS.map((c) => c.path), ['image']]
@@ -41,11 +48,26 @@ describe('cli', () => {
       lines.flatMap((path) =>
         ['--help', '-h'].map(async (flag) => {
           const r = await runCli(p.dir, [...path, flag])
+          const expected = path.length ? `${commandHelpText(version, path)}\n` : golden
           assert.equal(r.code, 0, `reeval ${path.join(' ')} ${flag}: ${r.stderr}`)
-          assert.equal(r.stdout, golden, `reeval ${path.join(' ')} ${flag}`)
+          assert.equal(r.stdout, expected, `reeval ${path.join(' ')} ${flag}`)
         }),
       ),
     )
+  })
+
+  test('a command help names only that command, and image lists its subcommands', () => {
+    const build = commandHelpText('V', ['image', 'build'])
+    assert.match(build, /^ {2}reeval image build \[filter\.\.\.\]$/m)
+    assert.match(build, /--force/)
+    assert.doesNotMatch(build, /^ {2}reeval (run|init)\b/m)
+    assert.match(build, /^Options: --config <path>/m)
+    assert.equal(commandHelpText('V', ['image']), build)
+    const studio = commandHelpText('V', ['studio'])
+    assert.match(studio, /reeval studio build/)
+    assert.doesNotMatch(commandHelpText('V', ['studio', 'build']), /--no-token/)
+    assert.equal(commandHelpText('V', ['run', 'greet']), commandHelpText('V', ['run']))
+    assert.equal(commandHelpText('V', ['bogus']), helpText('V'))
   })
 
   test('reeval alone prints the help and exits 2; --version prints the version', async () => {
@@ -95,6 +117,24 @@ describe('cli', () => {
     })
     assert.deepEqual(parseCli(['run', '--', '--odd', 'x']).positionals, ['run', '--odd', 'x'])
     assert.deepEqual(parseCli(['query', 'select 1']).positionals, ['query', 'select 1'])
+    const sql = '-- fix rate\nSELECT 1'
+    assert.deepEqual(parseCli(['query', sql]), { positionals: ['query', sql], values: {} })
+    assert.deepEqual(parseCli(['query', '--json', sql, '--rebuild']), {
+      positionals: ['query', sql],
+      values: { json: true, rebuild: true },
+    })
+    assert.deepEqual(parseCli(['--config', 'c.ts', 'query', sql, '--schema']), {
+      positionals: ['query', sql],
+      values: { config: 'c.ts', schema: true },
+    })
+    assert.deepEqual(parseCli(['query', '-- one line, no newline']).positionals, [
+      'query',
+      '-- one line, no newline',
+    ])
+    assert.deepEqual(parseCli(['query', '--json', '--', sql]), {
+      positionals: ['query', sql],
+      values: { json: true },
+    })
     assert.deepEqual(parseCli(['compare', 'a', 'b']).positionals, ['compare', 'a', 'b'])
     assert.deepEqual(parseCli(['image', 'build', 'x', 'y', '--dry-run']), {
       positionals: ['image', 'build', 'x', 'y'],
@@ -130,6 +170,10 @@ describe('cli', () => {
     usage(['--bogus'], /^Unknown option '--bogus'\. Run reeval --help\.$/)
     usage(['run', '--dry-runn'], /^Unknown option '--dry-runn'\. Did you mean --dry-run\?/)
     usage(['run', '-x'], /^Unknown option '-x'/)
+    // The whole argument, on one line, for every command.
+    usage(['run', '-- x\nSELECT 1'], /^Unknown option '-- x\\nSELECT 1'\. Run reeval --help\.$/)
+    usage(['show', "--it's\r\nx"], /^Unknown option '--it's\\r\\nx'\. Run reeval --help\.$/)
+    usage(['query', '--jsonn'], /^Unknown option '--jsonn'\. Did you mean --json\? Run reeval/)
     usage(['run', '--runs'], /^--runs needs a value, e\.g\. --runs <value>\. Run reeval --help\.$/)
     usage(['run', '--json=1'], /^--json doesn't take a value: pass --json on its own\.$/)
     usage(['run', '--port', '3'], /^--port isn't an option of reeval run\. Run reeval --help\.$/)
@@ -174,11 +218,14 @@ describe('cli', () => {
       ],
       [['--bogus'], /^reeval: Unknown option '--bogus'\. Run reeval --help\.\n$/],
       [
+        ['run', '-- x\nSELECT 1'],
+        /^reeval: Unknown option '-- x\\nSELECT 1'\. Run reeval --help\.\n$/,
+      ],
+      [
         ['run', '--runs'],
         /^reeval: --runs needs a value, e\.g\. --runs <value>\. Run reeval --help\.\n$/,
       ],
       [['run', '--runs', '0'], /^reeval: --runs must be a whole number of at least 1 \(got 0\)\n$/],
-      [['run', '--json'], /^reeval: reeval run --json only prints the plan: add --dry-run\./],
       [['clean', '--keep', 'x'], /^reeval: --keep must be a whole number \(got x\)\n$/],
       [
         ['run', '--port', '3'],

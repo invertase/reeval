@@ -1,28 +1,16 @@
 import { formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
-import {
-  type CompareCell,
-  type CompareRow,
-  type CompareStatus,
-  cellsChanged,
-  stackChanges,
-} from '../view/compare.ts'
-import { effortChangeLabel } from '../view/effort.ts'
-import { labelledJudgements } from '../view/judgements.ts'
+import { render } from '../ui/layout.ts'
+import { cellsChanged } from '../view/compare.ts'
+import type { RunInsights } from '../view/insights.ts'
+import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
-import {
-  cellCounts,
-  contrastLines,
-  OUTCOME_MARK,
-  repeatsVerdict,
-  stateRows,
-  summaryCounts,
-} from './summary.ts'
-import type { HistoryCell, HistoryEntry, RunRecord } from './types.ts'
+import { OUTCOME_MARK, runTally, stateRows } from './summary.ts'
+import type { HistoryEntry, RunRecord } from './types.ts'
 
 export {
+  addedRow,
   type CompareRow,
-  type CompareStatus,
   compare,
   stackChanges,
 } from '../view/compare.ts'
@@ -170,152 +158,24 @@ export function formatHistory({ runs, rows, orphaned }: ReturnType<typeof histor
   return lines.join('\n')
 }
 
-const STATUS_LABEL: Record<CompareStatus, string> = {
-  regressed: 'regressed',
-  fixed: 'fixed',
-  same: 'same',
-  drift: 'changed (not comparable)',
-  added: 'new',
-  removed: 'removed',
-  infra: 'infra error',
-}
-
-/**
- * `: evals/helpers.ts changed, harness config changed` for a row that isn't comparable, and
- * ` · cells removed: …` when the runs ran different cells of the eval.
- */
-const why = (r: CompareRow) =>
-  [
-    r.changes?.length ? `: ${r.changes.join(', ')}` : '',
-    r.cells?.added.length ? ` · cells added: ${r.cells.added.join(', ')}` : '',
-    r.cells?.removed.length ? ` · cells removed: ${r.cells.removed.join(', ')}` : '',
-  ].join('')
-
-const ORDER: CompareStatus[] = ['regressed', 'fixed', 'drift', 'infra', 'added', 'removed', 'same']
-
-const describeRun = (e: HistoryEntry, reach: Reachability) =>
-  `${e.runId} (${shortSha(e)}${e.recorded ? '' : ', not recorded'}${unreachable(e, reach) ? ", commit not in HEAD's history" : ''})`
-
-export function formatCompare(
-  base: HistoryEntry,
-  head: HistoryEntry,
-  rows: CompareRow[],
-  md: boolean,
-  reach: Reachability = null,
-) {
-  const sorted = [...rows].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status))
-  const mark = (o: Outcome | null) => (o ? OUTCOME_MARK[o] : '·')
-  const count = (s: CompareStatus) => rows.filter((r) => r.status === s).length
-  const tally = `${count('regressed')} regressed · ${count('fixed')} fixed · ${count('drift')} not comparable · ${count('same')} same`
-  const changes = stackChanges(base, head)
-  const changeText = changes.map((c) => `${c.label} ${c.base} → ${c.head}`).join('; ')
-  const esc = (s: string) => s.replace(/\|/g, '\\|')
-  const cells = sorted.flatMap((r) => (r.perCell ?? []).map((c) => ({ row: r, cell: c })))
-  if (md) {
-    return [
-      `### reeval: ${head.runId} vs ${base.runId}`,
-      '',
-      `Base ${describeRun(base, reach)} → head ${describeRun(head, reach)}. ${tally}.`,
-      '',
-      ...(changes.length ? [`**Stack changed:** ${changeText}.`, ''] : []),
-      '| Eval | Base | Head | Change |',
-      '|---|---|---|---|',
-      ...sorted.map(
-        (r) =>
-          `| ${esc(r.id)} | ${mark(r.base)} | ${mark(r.head)} | ${STATUS_LABEL[r.status]}${why(r)} |`,
-      ),
-      '',
-      ...(cells.length
-        ? [
-            '| Eval | Cell | Lift, base → head | Effort, base → head |',
-            '|---|---|---|---|',
-            ...cells.map(
-              ({ row, cell }) =>
-                `| ${esc(row.id)} | ${esc(cell.key)} | ${liftChange(cell)} | ${effortChange(cell)} |`,
-            ),
-            '',
-          ]
-        : []),
-    ].join('\n')
-  }
-  return [
-    `base ${describeRun(base, reach)} → head ${describeRun(head, reach)}`,
-    tally,
-    ...(changes.length ? [`stack changed: ${changeText}`] : []),
-    '',
-    ...sorted.flatMap((r) => [
-      `  ${mark(r.base)} → ${mark(r.head)}  ${STATUS_LABEL[r.status].padEnd(24)}  ${r.id}${why(r)}`,
-      ...(r.perCell ?? []).map(
-        (c) =>
-          `      ${c.key}  ${[c.base.lift || c.head.lift ? `lift ${liftChange(c)}` : '', effortChange(c)].filter(Boolean).join(' · ')}`,
-      ),
-    ]),
-  ].join('\n')
-}
-
-/** `reeval compare` when head has no earlier recorded run: every eval is new. */
-export function formatNoBaseline(head: HistoryEntry, rows: CompareRow[], md: boolean): string {
-  const failing = rows.filter((r) => r.head === 'fail').length
-  const note = `No earlier recorded run to compare ${head.runId} with: every eval is new${failing ? `, and ${failing} fail${failing === 1 ? 's' : ''}` : ''}.`
-  const mark = (o: Outcome | null) => (o ? OUTCOME_MARK[o] : '·')
-  if (md) {
-    return [
-      `### reeval: ${head.runId}`,
-      '',
-      note,
-      '',
-      '| Eval | Head |',
-      '|---|---|',
-      ...rows.map((r) => `| ${r.id.replace(/\|/g, '\\|')} | ${mark(r.head)} |`),
-      '',
-    ].join('\n')
-  }
-  return [note, '', ...rows.map((r) => `  ${mark(r.head)}  new  ${r.id}`)].join('\n')
-}
-
-const liftShort = (l: NonNullable<HistoryCell['lift']> | undefined) =>
-  l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})${l.withinNoise ? ' noise' : ''}` : '–'
-const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
-const liftChange = (c: CompareCell) => `${liftShort(c.base.lift)} → ${liftShort(c.head.lift)}`
-const effortChange = (c: CompareCell) =>
-  c.base.effort && c.head.effort ? effortChangeLabel(c.base.effort, c.head.effort) : 'effort –'
-
-export function formatShow(run: RunRecord): string {
+/** `reeval show`: the run's header and state, then the result blocks `reeval run` ended with. */
+export function formatShow(
+  run: RunRecord,
+  opts: { hint: boolean; insights?: RunInsights | null },
+): string {
   const rows = stateRows(run)
   const width = Math.max(...rows.map(([k]) => k.length))
-  const lines = [
-    `run ${run.runId}  ${summaryCounts(run.summary)}${run.status === 'interrupted' ? '  (interrupted)' : ''}`,
+  return [
+    `run ${run.runId}  ${runTally(run)}`,
     `  started ${run.startedAt}  (${formatDuration(run.durationMs)}) · artifacts ${run.artifacts}`,
     '',
     ...rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`),
     ...warnings(run).map((w) => `  ! ${w}`),
     '',
-  ]
-  for (const e of run.evals) {
-    const single = e.attempts.length === 1
-    const first = e.attempts[0]
-    lines.push(
-      `  ${OUTCOME_MARK[e.outcome]} ${e.id}${single && first ? `  ${formatDuration(first.durationMs)}` : `  ${cellCounts(e)}`}`,
-    )
-    const contrasts = contrastLines(e)
-    if (contrasts.length) {
-      lines.push('      contrasts (each pair of arms, same harness)')
-      for (const line of contrasts) lines.push(`        ${line}`)
-    }
-    for (const t of e.attempts) {
-      const indent = single ? '      ' : '        '
-      if (!single) {
-        lines.push(`      ${OUTCOME_MARK[t.outcome]} ${t.id}  ${formatDuration(t.durationMs)}`)
-      }
-      for (const { judgement: j, label, labelled } of labelledJudgements(t)) {
-        lines.push(
-          `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${labelled ? `${label}: ` : ''}${j.question}`,
-        )
-      }
-      if (t.error && !repeatsVerdict(t)) {
-        lines.push(`${indent}${t.error.kind}: ${t.error.message.split('\n')[0]}`)
-      }
-    }
-  }
-  return lines.join('\n')
+    ...render(suiteResult(run), opts.insights ?? null, {
+      color: false,
+      verbose: false,
+      hint: opts.hint,
+    }),
+  ].join('\n')
 }

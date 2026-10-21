@@ -30,22 +30,24 @@ The checks run after both turns, and the judge grades the latest one.
 ## Run it
 
 ```bash
-npx reeval run hello --log-order grouped
+npx reeval run hello --log-order grouped --output-logs full
 ```
 
 ```text
 …
-[adds#1 cursor] ✓ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  16s
-[adds#1 cursor]  +0:00 sandbox ready 1s
-[adds#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 1 file edit
+[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
+[adds#1 cursor]  +0:00 sandbox ready 2s
+[adds#1 cursor]  +0:01 turn 1 done 8s · 3 tool calls, 1 file edit
 [adds#1 cursor]  +0:10 turn 2 done 4s · 1 tool call, 1 file edit
-[adds#1 cursor]  +0:14 $ node -e "import('./greet.js').then((m) => {…  exit 0 79ms
+[adds#1 cursor]  +0:14 $ node -e "import('./greet.js').then((m) => {…  exit 0 103ms
 [adds#1 cursor]  +0:14 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+
+pass             greet module › creates a tested greet module
+pass             greet module › adds a default name in a follow-up turn
 …
-     ✓ adds a default name in a follow-up turn      16s  judge 1.00  2 turns
 ```
 
-Each turn gets a line with its time, tool calls and file edits. The summary counts the turns.
+Each turn gets a line with its time, tool calls and file edits. The record and the studio keep each turn.
 
 ## Keep each turn
 

@@ -224,6 +224,12 @@ export default defineConfig({
       // The published package's README is the repo-root README, copied so the
       // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
       cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))
+      // The eval rubric is a consumer skill in the repo's skills/, and the insight model's
+      // rubric (src/insights/rubric.ts), so it ships beside dist/.
+      rmSync(join(here, 'skills'), { recursive: true, force: true })
+      cpSync(join(here, '../..', 'skills/eval-rubric'), join(here, 'skills/eval-rubric'), {
+        recursive: true,
+      })
       const shadcn = markedFiles(join(studioWeb, 'src'), 'shadcn/ui', join(here, '../..'))
       writeFileSync(
         join(here, 'THIRD_PARTY_NOTICES.md'),
@@ -234,6 +240,21 @@ export default defineConfig({
             licenseText: readFileSync(join(studioWeb, 'src/components/ui/LICENSE'), 'utf8'),
             source: 'https://github.com/shadcn-ui/ui',
             files: shadcn,
+            into: 'the studio app (`dist/studio-app`)',
+            modified: true,
+          },
+          {
+            title: 'moby/profiles (Docker default seccomp profile)',
+            license: 'Apache-2.0',
+            licenseText: readFileSync(
+              join(here, '../../scripts/third-party-licenses/moby-profiles'),
+              'utf8',
+            ),
+            source:
+              'https://github.com/moby/profiles/blob/6fe7deb1b9fb7c0397a4593480d7d22b9ee8caef/seccomp/default.json',
+            files: ['packages/sandbox-docker/src/seccomp-profile.ts'],
+            into: "reeval's bundle (`dist/`), as data",
+            modified: false,
           },
         ]),
       )

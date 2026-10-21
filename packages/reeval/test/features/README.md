@@ -1,19 +1,35 @@
 # Feature fixtures
 
-Each directory here is a small reeval project that checks **one** behaviour of one feature, from
-inside the attempt, with reeval's own API. `features.test.ts` runs it and checks the record from
-outside. Every user-facing feature or option lands with its fixtures in the same change.
+Every user-facing feature or option lands with its tests in the same change. Pick the tier first.
+
+While implementing, do not run `pnpm test:features` or full `pnpm test` in an agent turn — use
+targeted `node --test test/<file>.test.ts` and the [Before you finish](../../../../AGENTS.md#before-you-finish)
+block instead ([AGENTS.md](../../../../AGENTS.md#while-you-work)).
 
 ## Which tier
 
+**Does `reeval run --dry-run` show the change?** Then it's a plan case, not a fixture: an option,
+its cascade or default, a profile, selection, compare or an image is checked without running an
+attempt. Only a change that shows once an attempt runs gets a fixture here.
+
 | The feature changes… | Add |
 |---|---|
-| which evals, cells, attempts or notes a run plans (options, profiles, selection, compare, images) | a plan case in `plan.test.ts`: a new directory under `test/plan/`, or a case on an existing one |
+| which evals, cells, attempts or notes a run plans (options and their cascade, profiles, selection, compare, images) | a plan case in `plan.test.ts`: a new directory under `test/plan/`, or a case on an existing one, then `REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan` and review the diff |
+| what input reeval accepts or refuses (a new option or value) | rows in `test/refusals/cases.ts`, then `REEVAL_UPDATE_SNAPSHOTS=1` on `test/refusals.test.ts`; also the plan case above |
 | what lands in or happens inside an attempt (environment fields, sandbox behaviour, harness inputs, the `c` API) | a fixture here: one check and one canary |
 | … and touches Docker, images, egress, ports or brokering | list it with `tiers: ['fake', 'docker']` (only `docker` if the fake can't model it) |
 | what a real harness receives (skills, MCP, rules, auth) | also list the `real` tier: the same fixture on real Cursor (see Running) |
 | runner behaviour (exit codes, output, history, cancel, budget, redaction) | a plain `node:test` case in the matching existing test file |
 | a new error message | a row in the `common mistakes` table in `options.test.ts` |
+
+Every tier also adds or updates the feature's entry in [`inventory.ts`](./inventory.ts), then
+`pnpm features:matrix --write` (see [The inventory](#the-inventory-and-coveragemd)).
+
+## What a fixture is
+
+Each directory here is a small reeval project that checks **one** behaviour of one feature, from
+inside the attempt, with reeval's own API. `features.test.ts` runs it and checks the record from
+outside.
 
 ## Shape of a fixture
 
@@ -79,8 +95,10 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
   enforce a policy, so a restricted one makes its plan exit 2. For a host to reach,
   `features.test.ts` starts a listener on the host at a non-loopback address (the gateway never
   reaches loopback) that answers `reeval-egress-ok`; a row passes `hostEnv: egressEnv` to give the
-  fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). The row's
-  `record` checks the attempt's `egress` from outside.
+  fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). Beside it, a
+  DNS server answers every A query with `REEVAL_EGRESS_DNS_ANSWER` at `REEVAL_EGRESS_DNS` (address and
+  port), so whether a name resolves doesn't hang on the machine's own resolver. The row's `record`
+  checks the attempt's `egress` from outside.
 - **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
   `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
   agent's image, so a fixture under `harness/` covers what a real harness receives. List the
@@ -129,8 +147,9 @@ it and run `reeval run --ui plain`. Add `REEVAL_FIXTURE_SANDBOX=docker` for the 
    includes Docker when the feature touches it.
 2. Each canary fails, with the message its row expects.
 3. Plan snapshot diffs are reviewed and show only the intended change.
-4. `pnpm test`, `pnpm lint` and `pnpm typecheck` are green, with no Docker test skipped when the
-   feature touches Docker.
+4. After `pnpm format`, `pnpm test`, `pnpm lint` and `pnpm typecheck` are green, with no Docker
+   test skipped when the feature touches Docker. See
+   [AGENTS.md's Before you finish](../../../../AGENTS.md#before-you-finish).
 5. The change lists the fixtures it adds, and its entry in `inventory.ts` names them (or says why
    it's a gap), with `COVERAGE.md` regenerated.
 6. The docs are updated: the feature's page in the Reference tab (`docs/reference/`), and the

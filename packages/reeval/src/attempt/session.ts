@@ -2,15 +2,28 @@ import { readFile } from 'node:fs/promises'
 import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
-import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
-import { brokeringFor, expectedBlockedFor } from '../harness/agents.ts'
+import {
+  droppedPaths,
+  PLUGIN_DIR,
+  PLUGIN_MANIFEST,
+  PLUGIN_ROOT,
+  PLUGIN_ROOT_VAR,
+} from '../environment/plugins.ts'
+import {
+  type ResolvedEnvironment,
+  type ResolvedPlugin,
+  type ResolvedStep,
+  skillFiles,
+} from '../environment/resolve.ts'
+import { brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
-import type { Harness, HarnessSession } from '../harness/types.ts'
+import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
 import { harnessId } from '../options.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
 import { asCheck } from './checks.ts'
+import { timeMcpServers } from './mcp-startup.ts'
 import { type Attempt, setupAllowance, startTimeoutMs } from './state.ts'
 
 const tailOf = (text: string) => text.trim().split('\n').slice(-10).join('\n')
@@ -116,6 +129,117 @@ async function copyWorkspace(
 }
 
 /**
+ * A built plugin's directory, copied from where its layer left it in the image, less the parts
+ * `only` leaves out, with the manifest as reeval read it.
+ */
+async function copyBuiltPlugin(
+  a: Attempt,
+  box: Sandbox,
+  plugin: ResolvedPlugin & { built: NonNullable<ResolvedPlugin['built']> },
+  dir: string,
+) {
+  const dropped = droppedPaths(plugin.parts).map((p) => shellQuote(`${dir}/${p}`))
+  const r = await box.exec(
+    `mkdir -p ${shellQuote(dir)} && cp -a ${shellQuote(plugin.built.dir)}/. ${shellQuote(dir)}/${dropped.length ? ` && rm -rf ${dropped.join(' ')}` : ''}`,
+    { signal: a.signal },
+  )
+  if (r.exitCode !== 0) {
+    throw new InfraError(
+      `Couldn't copy the ${plugin.name} plugin's build from ${plugin.built.tag}: ${tailOf(r.stderr || r.stdout)}`,
+    )
+  }
+  const manifest = plugin.files.find((f) => f.path === PLUGIN_MANIFEST)
+  if (manifest) await box.writeFile(`${dir}/${PLUGIN_MANIFEST}`, manifest.content)
+}
+
+/**
+ * Copies each plugin to `PLUGIN_DIR/<name>/` before the workspace snapshot (a built one from its
+ * layer in the image, any other from the host), and points its MCP servers' `${CLAUDE_PLUGIN_ROOT}`
+ * at that directory, for the adapter to load from there.
+ */
+async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
+  const out: Treatments['plugins'] = []
+  for (const plugin of env.plugins) {
+    const at = `${PLUGIN_DIR}/${plugin.name}`
+    const dir = `${box.home}/${at.slice(2)}`
+    const { built } = plugin
+    if (built) await copyBuiltPlugin(a, box, { ...plugin, built }, dir)
+    else for (const f of plugin.files) await box.writeFile(`${at}/${f.path}`, f.content)
+    const executable = built
+      ? []
+      : plugin.files.flatMap((f) => (f.executable ? [`${dir}/${f.path}`] : []))
+    if (executable.length) {
+      const r = await box.exec(`chmod +x ${executable.map(shellQuote).join(' ')}`, {
+        signal: a.signal,
+      })
+      if (r.exitCode !== 0) {
+        throw new InfraError(
+          `Couldn't make the ${plugin.name} plugin's ${executable.length} executable files executable: ${tailOf(r.stderr || r.stdout)}`,
+        )
+      }
+    }
+    const root = (v: string) => v.replaceAll(PLUGIN_ROOT, dir)
+    for (const key of plugin.servers) {
+      const server = env.mcp[key]
+      if (server?.transport !== 'stdio') continue
+      env.mcp[key] = {
+        ...server,
+        command: root(server.command),
+        args: server.args.map(root),
+        env: {
+          ...Object.fromEntries(Object.entries(server.env).map(([k, v]) => [k, root(v)])),
+          [PLUGIN_ROOT_VAR]: dir,
+        },
+      }
+    }
+    out.push({ name: plugin.name, dir, parts: plugin.parts, servers: plugin.servers })
+    debugLog(
+      'env',
+      `plugin ${plugin.name} → ${at}/ (${built ? `built in ${built.tag}` : `${plugin.files.length} files`}; ${plugin.parts.join(', ')})`,
+    )
+  }
+  return out
+}
+
+/**
+ * For an agent that starts a plugin's MCP servers from the plugin itself: rewrites each placed
+ * plugin's `.mcp.json` to the servers as reeval resolved them, through the MCP timer, so they're
+ * timed like the environment's. A manifest that declares `mcpServers` is pointed at that file.
+ * Only namespaced layouts, which refuse a plugin server reading a host secret, so no secret value
+ * lands in the file.
+ */
+async function writePluginMcp(
+  box: Sandbox,
+  env: ResolvedEnvironment,
+  plugins: Treatments['plugins'],
+  servers: Treatments['mcp'],
+) {
+  for (const placed of plugins) {
+    if (!placed.servers.length) continue
+    const own = Object.fromEntries(
+      placed.servers.flatMap((key) => {
+        const s = servers[key]
+        return s ? [[key.slice(placed.name.length + 1), s]] : []
+      }),
+    )
+    const at = `${PLUGIN_DIR}/${placed.name}`
+    const json = (v: unknown) => `${JSON.stringify(v, null, 2)}\n`
+    await box.writeFile(`${at}/.mcp.json`, json({ mcpServers: claudeMcpServers(own) }))
+    const manifest = env.plugins
+      .find((p) => p.name === placed.name)
+      ?.files.find((f) => f.path === PLUGIN_MANIFEST)
+    const parsed = manifest ? JSON.parse(Buffer.from(manifest.content).toString('utf8')) : {}
+    if (parsed.mcpServers !== undefined) {
+      await box.writeFile(
+        `${at}/${PLUGIN_MANIFEST}`,
+        json({ ...parsed, mcpServers: './.mcp.json' }),
+      )
+    }
+    debugLog('env', `plugin ${placed.name}'s MCP servers → ${at}/.mcp.json, through the timer`)
+  }
+}
+
+/**
  * Starts the harness session within its `startTimeout`. A start that doesn't become ready in time
  * is aborted (and closed, should it finish later) and started once more: a stuck bootstrap is
  * usually transient, and nothing has run yet, so the retry can't change what the attempt
@@ -153,7 +277,7 @@ async function startHarness(
 
 /**
  * Starts the sandbox (with the brokered secrets its gateway swaps in), writes the
- * environment's files and workspace skills, runs its setup steps, snapshots the workspace for
+ * environment's files, workspace skills and plugins, runs its setup steps, snapshots the workspace for
  * the diff, and starts the harness session with the harness-placed skills and MCP servers.
  */
 export async function startSession(a: Attempt, runId: string): Promise<[Sandbox, HarnessSession]> {
@@ -214,6 +338,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
       `skill ${skill.name} → ${skillDir}/${skill.name}/ (${files.length} files, workspace)`,
     )
   }
+  const plugins = await copyPlugins(a, box, env)
   const layout = layoutOf(spec.harness)
   for (const skill of env.skills) {
     debugLog(
@@ -230,13 +355,24 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   await runSetup(a, box, env)
   await snapshot(box, a.signal)
   debugLog('env', 'workspace snapshot taken: the diff starts here')
+  const timed = await timeMcpServers(box, env.mcp, a.signal)
+  if (timed.log) {
+    a.mcpStartup = timed.log
+    debugLog('env', "stdio MCP servers start through reeval's MCP timer")
+  } else if (timed.untimed) {
+    debugLog('env', `stdio MCP servers start untimed: ${timed.untimed}`)
+  }
+  if (layout.pluginPlacement === 'namespaced') {
+    await writePluginMcp(box, env, plugins, timed.servers)
+  }
   const harness = await createHarness(spec.harness)
   const harnessStart = performance.now()
   debugLog('harness', `starting ${harnessId(spec.harness)}: bootstrap and session`)
   const session = await startHarness(a, harness, box, {
     skills: env.skills,
     workspaceSkills: env.workspaceSkills.map((s) => s.name),
-    mcp: env.mcp,
+    mcp: timed.servers,
+    plugins,
   })
   debugLog(
     'harness',

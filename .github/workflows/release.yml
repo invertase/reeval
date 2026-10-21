@@ -1,13 +1,20 @@
-# Releases reeval. release-please keeps a release PR open from the Conventional
-# Commits on main (version, CHANGELOG.md); merging it tags vX.Y.Z and creates the GitHub release.
-# Then ci.yml runs on that commit, and the tarball its pack job uploads is published to npm with
-# trusted publishing (OIDC, no token). npm's trusted publisher for the package names this file
-# and the `npm` environment, so keep both names in sync with npm.
+# Releases reeval (npm) and reeval-python (PyPI). release-please keeps one release PR per package open
+# from Conventional Commits on main; merging tags vX.Y.Z (npm) or reeval-python-vX.Y.Z (PyPI).
+# Then ci.yml runs on that commit; npm publishes the packed tarball with trusted publishing (OIDC,
+# environment `npm`). PyPI publishes from packages/reeval-python with OIDC, environment `pypi`.
+# Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
+# GitHub environments that allow deployment from branch `main` still approve the job.
 name: release
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      republish:
+        description: Run full CI on main and publish npm/PyPI from the manifest (tags must already exist)
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -18,14 +25,16 @@ concurrency:
 jobs:
   release-please:
     name: release-please
-    if: github.repository == 'invertase/reeval'
+    if: github.repository == 'invertase/reeval' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write
     outputs:
-      created: ${{ steps.release.outputs.release_created }}
+      any_created: ${{ steps.release.outputs.release_created == 'true' || steps.release.outputs['packages/reeval-python--release_created'] == 'true' }}
+      npm_created: ${{ steps.release.outputs.release_created }}
+      pypi_created: ${{ steps.release.outputs['packages/reeval-python--release_created'] }}
     steps:
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
@@ -42,21 +51,69 @@ jobs:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
           if [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then
-            echo "::error::The release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
+            echo "::error::The reeval release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
+            exit 1
+          fi
+      - if: steps.release.outputs['packages/reeval-python--release_created'] == 'true'
+        env:
+          RELEASE_SHA: ${{ steps.release.outputs['packages/reeval-python--sha'] }}
+        run: |
+          if [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::The reeval-python release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
             exit 1
           fi
 
-  test:
-    name: test
-    needs: release-please
-    if: needs.release-please.outputs.created == 'true'
+  republish-gate:
+    name: republish gate
+    if: github.repository == 'invertase/reeval' && github.event_name == 'workflow_dispatch' && inputs.republish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
       contents: read
+    outputs:
+      any_created: ${{ steps.check.outputs.any_created }}
+      npm_created: ${{ steps.check.outputs.npm_created }}
+      pypi_created: ${{ steps.check.outputs.pypi_created }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+      - id: check
+        run: |
+          set -euo pipefail
+          npm_v=$(jq -r '."."' .release-please-manifest.json)
+          py_v=$(jq -r '."packages/reeval-python"' .release-please-manifest.json)
+          git rev-parse "refs/tags/v${npm_v}^{commit}" >/dev/null
+          git rev-parse "refs/tags/reeval-python-v${py_v}^{commit}" >/dev/null
+          echo "any_created=true" >> "$GITHUB_OUTPUT"
+          echo "npm_created=true" >> "$GITHUB_OUTPUT"
+          echo "pypi_created=true" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: test
+    needs: [release-please, republish-gate]
+    if: |
+      always() && !cancelled() && !failure() &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.any_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.result == 'success')
+      )
+    permissions:
+      contents: read
+      actions: read
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: publish to npm
-    needs: test
+    needs: [release-please, republish-gate, test]
+    if: |
+      always() && needs.test.result == 'success' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.npm_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.npm_created == 'true')
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: npm
@@ -74,4 +131,45 @@ jobs:
           path: ${{ runner.temp }}/package
       # Provenance is automatic with trusted publishing, but npm only generates it for public
       # repositories.
-      - run: npm publish --access public "$RUNNER_TEMP"/package/*.tgz
+      - name: Publish to npm
+        run: |
+          set -euo pipefail
+          tgz=$(ls "$RUNNER_TEMP"/package/*.tgz)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ver=$(tar -xOf "$tgz" package/package.json | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")
+            if npm view "reeval@${ver}" version >/dev/null 2>&1; then
+              echo "::notice::reeval@${ver} is already on npm, skipping publish"
+              exit 0
+            fi
+          fi
+          npm publish --access public "$tgz"
+
+  publish-pypi:
+    name: publish to PyPI
+    needs: [release-please, republish-gate, test]
+    if: |
+      always() && needs.test.result == 'success' && github.repository == 'invertase/reeval' &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.pypi_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.pypi_created == 'true')
+      )
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Build sdist and wheel
+        working-directory: packages/reeval-python
+        run: uv build
+      # v1.14.3 (aef6c9b): commit SHAs are not published to ghcr.io; the release tag is.
+      - uses: pypa/gh-action-pypi-publish@v1.14.3
+        with:
+          packages-dir: packages/reeval-python/dist
+          skip-existing: true

@@ -1,6 +1,6 @@
 // The plain-data descriptors an environment and the eval options carry: the gate, the egress
-// policy, secrets, host files, skills, MCP servers and git workspaces. The helpers that make them
-// (`secret`, `skill`, `mcp`, `file`, `git`) check their own arguments in their own words; these
+// policy, secrets, host files, skills, plugins, MCP servers and git workspaces. The helpers that
+// make them (`secret`, `skill`, `plugin`, `mcp`, `file`, `git`) check their own arguments in their own words; these
 // schemas check what arrives as data (from another language, or built by hand) and give the
 // JSON Schema in schema/plan/.
 import { isIP } from 'node:net'
@@ -13,6 +13,8 @@ import type {
   GitWorkspace,
   HostFile,
   McpServer,
+  PluginPart,
+  PluginSource,
   Secret,
   SecretTemplate,
   SkillPlacement,
@@ -223,6 +225,80 @@ export const skillSourceSchema = z
   ])
   .describe('Skills to place for the agent, made by the `skill` helper.')
 
+export const pluginPartSchema = z
+  .enum(['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'])
+  .describe(
+    "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
+  )
+
+const buildCommands = z.union([nonEmpty(), z.array(nonEmpty()).min(1, 'at least one command')])
+
+export const pluginBuildSchema = z
+  .union([
+    buildCommands,
+    z.strictObject({
+      run: buildCommands.describe('The command, or the commands in order.'),
+      cwd: z
+        .string()
+        .regex(
+          /^(?:\.|(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[^\\]+)$/,
+          "a directory relative to the source's root, with forward slashes and no ..",
+        )
+        .optional()
+        .describe("Where they run, relative to the source's root; default the plugin's directory."),
+    }),
+  ])
+  .describe(
+    "Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root and with no secrets: one, a list, or `{ run, cwd }`. They run from the plugin's directory, or from `cwd`, relative to the source's root (`'.'` for the repository's or package's root).",
+  )
+
+const plugin = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fields: F) =>
+  z.strictObject({
+    kind: z.literal('plugin'),
+    source: z.literal(source),
+    ...fields,
+    only: z
+      .array(pluginPartSchema)
+      .min(1, 'at least one part')
+      .optional()
+      .describe('The parts to place; default every part the plugin has.'),
+    build: pluginBuildSchema
+      .optional()
+      .describe(
+        'Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.',
+      ),
+  })
+
+export const pluginSourceSchema = z
+  .discriminatedUnion('source', [
+    plugin('local', {
+      path: nonEmpty().describe('A host directory with a `.claude-plugin/plugin.json`.'),
+    }),
+    plugin('git', {
+      repo: nonEmpty().describe(
+        'As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.',
+      ),
+      ref: z
+        .string()
+        .optional()
+        .describe("A branch, tag or commit SHA; unset is the remote's `HEAD`."),
+      path: z
+        .string()
+        .optional()
+        .describe("The plugin's directory in the repository; default its root."),
+    }),
+    plugin('npm', {
+      spec: nonEmpty().describe('A pinned npm package spec.'),
+      path: z
+        .string()
+        .optional()
+        .describe("The plugin's directory in the package; default its root."),
+    }),
+  ])
+  .describe(
+    "A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper.",
+  )
+
 export const mcpServerSchema = z
   .discriminatedUnion('transport', [
     z.strictObject({
@@ -295,6 +371,8 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof hostFileSchema>, HostFile>>,
   Assert<Same<z.infer<typeof skillPlacementSchema>, SkillPlacement>>,
   Assert<Same<z.infer<typeof skillSourceSchema>, SkillSource>>,
+  Assert<Same<z.infer<typeof pluginPartSchema>, PluginPart>>,
+  Assert<Same<z.infer<typeof pluginSourceSchema>, PluginSource>>,
   Assert<Same<z.infer<typeof mcpServerSchema>, McpServer>>,
   Assert<Same<z.infer<typeof gitWorkspaceSchema>, GitWorkspace>>,
   Assert<Same<keyof z.infer<typeof gitWorkspaceSchema>, keyof GitWorkspace>>,

@@ -20,5 +20,5 @@ evals/questions-model.eval.ts › no question model                  a/base/dock
                                                                    b/skilled/docker  variant skilled  gated    ×1
                                                                    question: Which is clearer? · shows task, diff · environment · 2 pairs · no language model
 excluded: —
-image docker · 4 evals
+image docker · cursor · 4 evals
   base  reeval-sandbox:cursor-0.1.5  (reeval's image: built when missing or when its base changed)

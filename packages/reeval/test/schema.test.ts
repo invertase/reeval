@@ -101,6 +101,8 @@ describe('persisted shapes', () => {
     )
     const bare = compare(before80, snapshot('run-record'), none).filter((c) => c.breaking)
     assert.deepEqual(bare.map((c) => c.path).sort(), [
+      'evals[].attempts[].activity.maxToolMs',
+      'evals[].attempts[].activity.stalledTools',
       'evals[].attempts[].effort',
       'evals[].attempts[].servedEffort',
       'evals[].cells[].effort',

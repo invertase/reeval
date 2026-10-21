@@ -26,6 +26,7 @@
       ],
       "project": ["src/**/*.ts", "test/**/*.{ts,mjs}", "scripts/**/*.ts"],
       "ignore": ["test/fixtures/records/**"],
+      "ignoreBinaries": ["uv", "podman"],
       "ignoreDependencies": [
         "@ai-sdk/harness-acp",
         "@ai-sdk/provider",
@@ -45,6 +46,10 @@
       "ignoreDependencies": ["@ai-sdk/provider"]
     },
     "packages/harness-goose": {
+      "entry": ["test/**/*.ts"],
+      "ignoreDependencies": ["@ai-sdk/provider"]
+    },
+    "packages/harness-grok-build": {
       "entry": ["test/**/*.ts"],
       "ignoreDependencies": ["@ai-sdk/provider"]
     },

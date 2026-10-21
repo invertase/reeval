@@ -7,13 +7,14 @@ import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
 const src = join(root, 'packages/reeval/src')
-const { AGENTS, agentFor, gooseMcpServers, refusedMcp } = await import(
+const { AGENTS, LAYOUTS, agentFor, gooseMcpServers, refusedMcp } = await import(
   join(src, 'harness/agents.ts')
 )
 const { OPENCODE_PROVIDERS, REFUSED_OPENCODE_PROVIDERS } = await import(
   join(root, 'packages/harness-opencode/src/opencode-providers.ts')
 )
 const { InfraError } = await import(join(src, 'sandbox/types.ts'))
+const { PLUGIN_PARTS } = await import(join(src, 'environment/plugins.ts'))
 const { harnesses } = await import(join(root, 'packages/reeval/test/support/harnesses.ts'))
 
 const TRANSPORTS = ['stdio', 'http', 'sse']
@@ -46,6 +47,7 @@ async function webEvents(kind, agent, model) {
   const adapter = await agent.adapter({
     auth: { [agent.credential]: 'probe' },
     descriptor: { kind, model },
+    plugins: [],
   })
   const tools = Object.keys(adapter.builtinTools ?? {})
   return {
@@ -61,6 +63,10 @@ const code = (s) => `\`${s}\``
 
 /** Each note is said only while its fact holds. */
 const NOTES = [
+  (h) =>
+    h.agent.pluginParts.length &&
+    LAYOUTS[h.kind]?.pluginPlacement === 'namespaced' &&
+    `It loads each plugin whole from where reeval copies it, namespaced (${code('review:reviewer')}), and starts the plugin's MCP servers itself, so a plugin server that reads a host variable is refused: declare it in ${code('mcp')} instead.`,
   (h) =>
     h.agent.forModel &&
     h.kind === 'opencode' &&
@@ -123,6 +129,10 @@ const NOTES = [
     h.kind === 'codex' &&
     `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.6-luna[effort=medium]')}): its CLI doesn't report them.`,
   (h) =>
+    h.agent.modelResponses &&
+    h.kind === 'grok-build' &&
+    `Served model from each API response, which the gateway reads: its CLI doesn't report it.`,
+  (h) =>
     h.kind === 'codex' &&
     h.web.search &&
     `Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.`,
@@ -167,6 +177,11 @@ export async function harnessFacts() {
     if ((row.mcp !== false) !== mcp.stdio.ok) {
       problems.push(`${kind}: the contract row's mcp and the catalog disagree on stdio MCP servers`)
     }
+    if (String(row.plugin?.parts ?? []) !== String(agent.pluginParts)) {
+      problems.push(
+        `${kind}: the contract row's plugin.parts (${row.plugin?.parts ?? 'unset'}) and the catalog's pluginParts (${agent.pluginParts}) disagree`,
+      )
+    }
     const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)
     const h = { kind, agent, row, page, mcp, web }
     h.notes = NOTES.map((note) => note(h)).filter(Boolean)
@@ -188,6 +203,13 @@ export async function harnessFacts() {
 
 const yes = (ok) => (ok ? '✓' : '✗')
 
+/** The plugin parts the agent loads: ✓ for every part, ✗ for none, else the parts it leaves out. */
+const pluginCell = (parts) => {
+  if (!parts.length) return '✗'
+  const missing = PLUGIN_PARTS.filter((p) => !parts.includes(p))
+  return missing.length ? `all but ${missing.join(', ')}` : '✓'
+}
+
 /**
  * The matrix and its notes. `href` turns a docs page (`reference/harness/pi`) into a link for
  * the file it goes in; `text` escapes a note for it.
@@ -203,6 +225,7 @@ export function renderMatrix(facts, { href, text = (s) => s }) {
     'MCP stdio',
     'MCP http',
     'MCP sse',
+    'Plugins',
     'Tokens',
     'Served model',
     'Web search events',
@@ -217,6 +240,7 @@ export function renderMatrix(facts, { href, text = (s) => s }) {
     yes(!!h.agent.workspaceSkillDir),
     yes(!!h.agent.harnessSkillDir),
     ...TRANSPORTS.map((t) => yes(h.mcp[t].ok)),
+    pluginCell(h.agent.pluginParts),
     yes(h.row.tokens),
     h.row.servedModel && !h.row.servedModelGap ? '✓' : h.row.wireModel ? 'partial' : '✗',
     yes(h.web.search),

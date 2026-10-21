@@ -49,17 +49,19 @@ evals/strings.eval.ts › writes $fn  1          —         1     3         3 c
 The plan shows the family as one row. Under the [fake harness](/recipes/fake-harness), with a config whose `titleCase.js` joins words with `_`:
 
 ```text
-Summary
- evals/strings.eval.ts
-   ✗ writes $fn  3 cases
-       ✓ slugify  ✓ camelCase  ✗ titleCase
-       pass@1 2/3 · 67% (95% 21…94)
-…
-Families  1 passed (1)
-   Evals  2 passed · 1 failed (3)
+                 writes $fn
+  pass  slugify       1 of 1
+  pass  camelCase     1 of 1
+  fail  titleCase     0 of 1
+    toBe Hello World  failed
+      expected 'Hello_World' to be 'Hello World' // Object.is equality
+    +1 more passed
+
+800ms · results .reeval/runs/20261020T214352Z_…/summary.md
+1 fail · 2 pass
 ```
 
-Each case still passes or fails on its own, and a failed case fails the run as before. The family's row adds the pooled pass rate with its 95% interval, so you read the suite once. A filter matches the generated names: `reeval run camelCase` runs one case, and the plan says `1 of 3 cases`.
+Each case still passes or fails on its own, a row under the family's template, and a failed case fails the run as before. `reeval query families` has the pooled pass rate with its 95% interval (`2 of 3`, `0.208`…`0.939` here), so you read the suite once. A filter matches the generated names: `reeval run camelCase` runs one case, and the plan says `1 of 3 cases`.
 
 ## Compare across the cases
 
@@ -90,34 +92,39 @@ evaluate.each(names)(
 ```
 
 ```text
-Summary
- evals/greetings.eval.ts
-   ✓ greets %s in the house style  6 cases · paired
-       ✓ Ada  ✓ Grace  ✓ Linus  ✓ Margaret  ✓ Dennis  ✓ Barbara
-       fake/with-house-greeting/fake  pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031) (minLift 20)
-         effort: agent time ×0.60 per case (noise, signed-rank p 0.094)
-
-Expected misses, not gated (6)
- ○ evals/greetings.eval.ts › greets %s in the house style  6 attempts on fake/plain/fake
-
-Families  1 passed (1)
+                 greets %s in the house style
+  pass  Ada
+    arm                  pass
+    plain                0 of 1
+    with-house-greeting  1 of 1
+  pass  Grace
+…
+  pass  Barbara
+    arm                  pass
+    plain                0 of 1
+    with-house-greeting  1 of 1
+  pass  all cases
+    arm                  pass
+    plain                0 of 6
+    with-house-greeting  6 of 6  helped
+      with-house-greeting: 6 paired cases, 95% interval +45…+100
 ```
 
-Six cases at `runs: 1` give a verdict that six separate evals can't: one attempt a side is always within noise. `minLift` gates the pooled lift's lower bound, not each case's. Below it (here with `minLift: 0.6`), the family fails the run with exit 1:
+That's `reeval run greetings -v`, which adds the pooled interval under `all cases`. Six cases at `runs: 1` give a verdict that six separate evals can't: one attempt a side is always within noise, so each case's row has no effect word. `minLift` gates the pooled lift's lower bound, not each case's. Below it (here with `minLift: 0.6`), the family fails the run with exit 1:
 
 ```text
-   ✗ greets %s in the house style  6 cases · paired
-       ✓ Ada  ✓ Grace  ✓ Linus  ✓ Margaret  ✓ Dennis  ✓ Barbara
-       fake/with-house-greeting/fake  pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031) (minLift 60 ✗)
 …
-Lift below minLift (1)
- ✗ evals/greetings.eval.ts › greets %s in the house style  fake/with-house-greeting/fake pooled pass@1 100% vs 0%  lift +100 pts (95% +45…+100, paired, 6 vs 0 discordant, p 0.031): its lower bound is below minLift 60
+  fail  all cases
+    arm                  pass
+    plain                0 of 6
+    with-house-greeting  6 of 6  helped, not by minLift 60
 
-Families  1 failed (1)
+1s · results .reeval/runs/20261020T214334Z_…/summary.md
+1 fail · 6 pass
 ```
 
 <Info>
-  At `runs: 1` the lift uses Newcombe's paired interval and McNemar's exact test; with more runs it's a t interval over each case's pass-rate difference. Fewer than six discordant cases (or six cases, with runs) reads `insufficient`. [Lift](/concepts/lift) has the details.
+  At `runs: 1` the lift uses Newcombe's paired interval and McNemar's exact test; with more runs it's a t interval over each case's pass-rate difference. Fewer than six discordant cases (or six cases, with runs) reads `can't tell yet` (`insufficient` in `reeval query family_lift`). [Lift](/concepts/lift) has the details.
 </Info>
 
 ## Name placeholders

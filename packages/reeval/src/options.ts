@@ -129,16 +129,21 @@ function installId(install: readonly InstallStep[] | undefined): string {
   return `+${createHash('sha256').update(key).digest('hex').slice(0, 8)}`
 }
 
+/** The provider a sandbox runs on: its kind, or `podman` for a Docker sandbox on Podman. */
+export const sandboxProvider = (s: SandboxDescriptor): 'docker' | 'podman' | 'fake' =>
+  s.kind === 'docker' && s.engine === 'podman' ? 'podman' : s.kind
+
 export function sandboxId(s: SandboxDescriptor): string {
   if (s.id) return s.id
   if (s.kind === 'fake') return 'fake'
   const install = s.kind === 'docker' ? installId(s.install) : ''
+  const engine = s.engine ?? 'docker'
   if (s.dockerfile) {
     const [file = '', dir = ''] = s.dockerfile.split(/[\\/]/).reverse()
-    return `docker:${sanitize(file === 'Dockerfile' ? dir || file : file)}${install}`
+    return `${engine}:${sanitize(file === 'Dockerfile' ? dir || file : file)}${install}`
   }
   const image = s.image ?? s.from
-  return image ? `docker:${sanitize(image)}${install}` : `docker${install}`
+  return image ? `${engine}:${sanitize(image)}${install}` : `${engine}${install}`
 }
 
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
@@ -222,7 +227,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     const kind = (o.sandbox as { kind?: string }).kind
     if (kind !== 'docker' && kind !== 'fake') {
       throw new UsageError(
-        `sandbox in ${where} must come from docker() or fakeSandbox() (got ${describe(o.sandbox)})`,
+        `sandbox in ${where} must come from docker(), podman() or fakeSandbox() (got ${describe(o.sandbox)})`,
       )
     }
     const max = o.sandbox.maxConcurrent
@@ -799,7 +804,9 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
             sandbox: sid,
             role: 'control' as const,
           },
-          gate: gateIf(!compare || compare.gate === 'all'),
+          // A compare a profile's limit left without variants has nothing to compare the
+          // control against, so it gates like an eval without compare.
+          gate: gateIf(!compare || compare.variants.length === 0 || compare.gate === 'all'),
         }
       })(),
     ]
@@ -892,14 +899,26 @@ export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): Unbrokered
 /** An optional secret whose host variable isn't set never reaches the sandbox, so it gets no warning. */
 const reachesSandbox = (s: UnbrokeredSecret) => !s.optional || Boolean(process.env[s.from])
 
-/** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret an attempt brokers. */
-export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [
+/** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret with `hosts`. */
+const withHosts = (env: EnvVars, attempt: PlannedAttempt): string[] => [
   ...new Set(
     plannedSecrets(env, attempt.environment.layers).flatMap((s) =>
       s.hosts ? [`${s.label} → ${s.hosts.join(', ')}`] : [],
     ),
   ),
 ]
+
+/** The secrets an attempt brokers: only Docker's egress gateway swaps a placeholder for its value. */
+export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
+  attempt.sandbox.kind === 'docker' ? withHosts(env, attempt) : []
+
+/** The plan's note for secrets with `hosts` on the fake sandbox, which only ever has their placeholder. */
+function unbrokeredOnFake(env: EnvVars, attempts: PlannedAttempt[]): string[] {
+  const names = [
+    ...new Set(attempts.flatMap((a) => (a.sandbox.kind === 'fake' ? withHosts(env, a) : []))),
+  ]
+  return names.length ? [`not brokered (fake sandbox, placeholder only): ${names.join('; ')}`] : []
+}
 
 /** The host variables an attempt's secrets read, brokered or not. */
 export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [
@@ -980,7 +999,11 @@ export function evalPlan(
 ): EvalPlan {
   const { resolved, skip } = r
   const capture = captureNote(resolved.capture)
-  const notes = capture ? [...r.notes, capture] : r.notes
+  const notes = [
+    ...r.notes,
+    ...(capture ? [capture] : []),
+    ...unbrokeredOnFake(resolved.env, attempts),
+  ]
   return {
     harnesses: skip ? 0 : resolved.harness.length,
     variants: resolved.compare

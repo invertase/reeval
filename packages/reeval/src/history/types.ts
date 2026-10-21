@@ -10,6 +10,7 @@ import type {
   EvalCompareMeta,
   FileChange,
   JudgeArtifactRef,
+  McpStartup,
   Outcome,
   PhaseTimings,
   ResolvedJudgeStateOptions,
@@ -161,7 +162,10 @@ export type AttemptRecord = {
   outcome: Outcome
   error: AttemptError | null
   durationMs: number
-  /** `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. */
+  /**
+   * `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.
+   * `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
+   */
   turns: Array<{
     prompt: string
     status: TurnStatus
@@ -176,6 +180,8 @@ export type AttemptRecord = {
     unreported: WebEventType[]
     /** The turn's first error, such as a provider's billing or auth error, cut at 1 KB; else null. */
     error: string | null
+    /** Each stdio MCP server start during the turn; see `McpStartup`. */
+    mcpStartup?: McpStartup[]
   }>
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null
@@ -193,6 +199,10 @@ export type AttemptRecord = {
     webSearches: number | null
     webFetches: number | null
     reasoningMs: number
+    /** Transcript tool events with `stalled: true` (long shell or edit). */
+    stalledTools: number
+    /** Longest tool `durationMs` in the transcript; null when none reported a duration. */
+    maxToolMs: number | null
   }
   judgements: JudgementRecord[]
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
@@ -424,9 +434,10 @@ export type CellRecord = Cell & {
 export type CheckTally = { pass: number; fail: number; error: number; notRun: number }
 
 /**
- * One check over a cell's counted attempts. `verdict` (variant cells): `discriminates` when it
- * passes on every counted attempt of one side and none of the other; `both-pass` or `both-fail`
- * when it does the same on both sides, so it can't tell them apart; `mixed` otherwise.
+ * One check over a cell's counted attempts. `verdict` (variant cells), over the attempts that
+ * reached the check: `discriminates` when it passes on every one of one side and none of the
+ * other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them
+ * apart; `mixed` otherwise. No verdict when a side never reached it: not run is not a fail.
  */
 export type CellCheck = CheckTally & {
   label: string
@@ -528,6 +539,11 @@ export type RunRecord = {
   evals: EvalEntry[]
   /** Each pooled `evaluate.each` that ran; unset when none did. */
   families?: FamilyRecord[]
+  /**
+   * Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no
+   * attempt awaited, a worker that died. Any one fails the run. Unset when there were none.
+   */
+  errors?: string[]
 }
 
 /** What ran and graded the agents: the machine, images, harnesses and judge. */
@@ -639,6 +655,8 @@ export type HistoryCell = Pick<
   lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean }
   /** Median tool calls, agent time and tokens over the counted attempts; null when none counted. */
   effort: CellEffort | null
+  /** Of `fail`, the attempts the run's interrupt cancelled (`error.kind: 'aborted'`); unset when none. */
+  cancelled?: number
 }
 
 /**
@@ -677,4 +695,6 @@ export type HistoryEntry = {
   }>
   /** The run's pooled families; unset when none ran. */
   families?: Array<Pick<FamilyRecord, 'id' | 'name' | 'cases' | 'ran' | 'outcome'>>
+  /** The run's errors outside any attempt; unset when there were none. */
+  errors?: string[]
 }

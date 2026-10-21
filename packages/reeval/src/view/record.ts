@@ -1,5 +1,5 @@
 // How a file reeval wrote earlier (or later) reads in this reeval. Browser-safe. Every reader of a run
-// record, transcript line, analysis document and note goes through here, and `pnpm schema:check` holds
+// record, transcript line, analysis document, note and insights file goes through here, and `pnpm schema:check` holds
 // the types to it: a field added as required needs a read default below, or a schemaVersion bump
 // with a migration.
 
@@ -8,6 +8,7 @@ import { SCHEMA_VERSION } from '../history/types.ts'
 import type { CliInvocation } from '../report/types.ts'
 import type { AnalysisDoc, AnalysisNote } from './analysis.ts'
 import type { DebugRequest } from './debug.ts'
+import type { RunInsights } from './insights.ts'
 import type { TranscriptLine } from './model.ts'
 
 /** Each shape reeval persists and reads back; `schema/<name>.schema.json` is its snapshot. */
@@ -16,6 +17,7 @@ export type ShapeName =
   | 'transcript-line'
   | 'analysis'
   | 'analysis-note'
+  | 'insights'
   | 'debug-request'
   | 'live-progress'
   | 'cli-invocation'
@@ -37,10 +39,13 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
     { path: 'evals[].cells[].effort', empty: () => null },
     { path: 'evals[].attempts[].effort', empty: () => null },
     { path: 'evals[].attempts[].servedEffort', empty: () => null },
+    { path: 'evals[].attempts[].activity.stalledTools', empty: () => 0 },
+    { path: 'evals[].attempts[].activity.maxToolMs', empty: () => null },
   ],
   'transcript-line': [],
   analysis: [],
   'analysis-note': [],
+  insights: [],
   'debug-request': [],
   'live-progress': [],
   'cli-invocation': [],
@@ -57,6 +62,7 @@ export const SCHEMA_VERSIONS = {
   'run-record': SCHEMA_VERSION,
   analysis: 1,
   'analysis-note': 1,
+  insights: 1,
 } as const
 
 /** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
@@ -138,11 +144,15 @@ export const readableTranscriptLine = (line: TranscriptLine): TranscriptLine =>
 export const readableAnalysis = (doc: AnalysisDoc, what = 'This analysis'): AnalysisDoc =>
   fillDefaults('analysis', upgrade('analysis', doc, what))
 
-/** An `analysis.agent` note as every reader sees it; one from a newer reeval throws. */
+/** A run's note as every reader sees it; one from a newer reeval throws. */
 export const readableAnalysisNote = (
   note: AnalysisNote,
   what = 'This analysis note',
 ): AnalysisNote => fillDefaults('analysis-note', upgrade('analysis-note', note, what))
+
+/** A run's insights as every reader sees them; a file from a newer reeval throws. */
+export const readableInsights = (doc: RunInsights, what = 'These insights'): RunInsights =>
+  fillDefaults('insights', upgrade('insights', doc, what))
 
 /** A gateway request line from `.reeval/debug` as the studio sees it. */
 export const readableDebugRequest = (request: DebugRequest): DebugRequest =>

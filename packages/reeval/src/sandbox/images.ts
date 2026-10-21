@@ -3,53 +3,119 @@ import {
   type BakedHarness,
   contextHash,
   dockerfileTag,
+  type Engine,
+  engineSpec,
   harnessImageFor,
+  type ImageInfo,
   imageFor,
   imageInfo,
   installLayerTag,
   isTransient,
   LABEL,
+  pluginBuildKey,
+  pluginLayerTag,
   REEVAL_BASE_ARG,
   resolveFrom,
 } from '@reeval/sandbox-docker'
-import { sandboxId } from '../options.ts'
+import type { PlannedItem } from '../engine/node.ts'
+import { buildSteps, pluginBuildId, pluginBuildsLabel, pluginCall } from '../environment/plugins.ts'
+import { sandboxId, sandboxProvider } from '../options.ts'
 import type {
   AttemptImage,
   DockerSandboxDescriptor,
   HarnessDescriptor,
+  PluginBuild,
+  PluginSource,
+  RunContext,
   SandboxDescriptor,
 } from '../types.ts'
 import { prepareAll } from './preflight.ts'
-import { imageHarness, installSteps, projectPath, usesReevalBase } from './prepare.ts'
+import {
+  imageHarness,
+  installSteps,
+  pluginBuildSpec,
+  projectPath,
+  usesReevalBase,
+} from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
 import { attemptImage, createProviders, dockerKey } from './providers.ts'
 
 /**
- * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, plus
- * the harness unless it's Cursor, `+ install`, and a number where that's still ambiguous.
+ * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, the
+ * harness, `+ install`, and a number where that's still ambiguous.
  */
 export type ImageTarget = {
   id: string
   harness: BakedHarness
   sandbox: DockerSandboxDescriptor
+  /** The plugins with a `build`, each a layer on top. */
+  plugins: readonly PluginSource[]
   evals: number
 }
 
-/** The distinct Docker sandbox and harness pairs, in first-use order, with how many evals use each. */
-export function imageTargets(
-  uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }>,
-) {
+export type ImageUse = {
+  id: string
+  harness: HarnessDescriptor
+  sandbox: SandboxDescriptor
+  plugins?: readonly PluginSource[]
+}
+
+/**
+ * What `reeval image build` builds and `reeval doctor` checks: the harness and sandbox of each
+ * attempt the evals plan (collected as `--dry-run` does), or the config's harnesses on its sandbox
+ * when they plan none.
+ */
+export async function plannedImageUses(
+  run: Pick<
+    RunContext,
+    'runId' | 'stagingDir' | 'config' | 'runs' | 'tags' | 'concurrency' | 'profile'
+  >,
+  filters: string[] = [],
+  unmatched?: (parts: string[]) => Error,
+): Promise<ImageUse[]> {
+  const { runEngine } = await import('../engine/node.ts')
+  let planned: PlannedItem[] = []
+  await runEngine({
+    run: JSON.parse(JSON.stringify(run)),
+    filters,
+    onPlan: async (collected) => {
+      if (unmatched && collected.unmatched.length) throw unmatched(collected.unmatched)
+      planned = collected.planned.filter((p) => !p.attempt.plan.skip)
+      return false
+    },
+  })
+  return planned.length
+    ? planned.map((p) => ({
+        id: p.id,
+        harness: p.attempt.harness,
+        sandbox: p.attempt.sandbox,
+        plugins: p.attempt.pluginBuilds ?? [],
+      }))
+    : run.config.harness.map((harness) => ({ id: '', harness, sandbox: run.config.sandbox }))
+}
+
+/**
+ * The distinct Docker sandbox, harness and plugin build sets, in first-use order, with how many
+ * evals use each.
+ */
+export function imageTargets(uses: ImageUse[]) {
   const targets = new Map<string, ImageTarget & { seen: Set<string> }>()
-  for (const { id, sandbox, ...use } of uses) {
+  for (const { id, sandbox, plugins = [], ...use } of uses) {
     if (sandbox.kind !== 'docker') continue
     const harness = imageHarness(use.harness)
     // What's in the image, not the limits or user the container runs with.
-    const { image, from, dockerfile, install } = sandbox
-    const key = JSON.stringify({ harness, image: { image, from, dockerfile, install } })
+    const { engine, image, from, dockerfile, install } = sandbox
+    const key = JSON.stringify({
+      harness,
+      engine,
+      image: { image, from, dockerfile, install },
+      plugins: plugins.map(pluginBuildId),
+    })
     const target = targets.get(key) ?? {
-      id: harness === 'cursor' ? sandboxId(sandbox) : `${sandboxId(sandbox)} · ${harness}`,
+      id: `${sandboxId(sandbox)} · ${harness}`,
       harness,
       sandbox,
+      plugins,
       evals: 0,
       seen: new Set(),
     }
@@ -59,10 +125,10 @@ export function imageTargets(
     }
     targets.set(key, target)
   }
-  // Cell ids ignore install, so tell sandboxes apart by it, then by number.
+  // Cell ids ignore install and plugin builds, so tell sandboxes apart by them, then by number.
   const labels = new Map<string, number>()
   return [...targets.values()].map(({ seen: _, ...t }) => {
-    const label = `${t.id}${t.sandbox.install?.length ? ' + install' : ''}`
+    const label = `${t.id}${t.sandbox.install?.length ? ' + install' : ''}${pluginBuildsLabel(t.plugins)}`
     const n = (labels.get(label) ?? 0) + 1
     labels.set(label, n)
     return { ...t, id: n === 1 ? label : `${label} (${n})` }
@@ -70,7 +136,7 @@ export function imageTargets(
 }
 
 /** How a step of making an image would go, checked without building or pulling. */
-export type StageStatus = 'ready' | 'build' | 'stale' | 'missing'
+export type StageStatus = 'ready' | 'build' | 'stale' | 'missing' | 'unknown'
 
 /** `action` says how the step works; `status` and `detail`, how it stands on this machine. */
 export type Stage = {
@@ -83,17 +149,31 @@ export type Stage = {
 
 const short = (digest: string) => digest.replace(/^sha256:/, '').slice(0, 12)
 
+/** An image inspect's answer: the image or null, or the error of a Docker that couldn't say. */
+type Look = { info: ImageInfo | null; error?: string }
+
+const look = (ref: string, engine?: Engine): Promise<Look> =>
+  imageInfo(ref, engine).then(
+    (info) => ({ info }),
+    (error: Error) => ({ info: null, error: error.message }),
+  )
+
 /** `from`'s image, checked against what the tag names now (a registry lookup, no pull). */
-async function fromStatus(from: string, ref: string): Promise<Pick<Stage, 'status' | 'detail'>> {
-  const [cached, now] = await Promise.all([imageInfo(ref), resolveFrom(from)])
-  if (!cached) {
+async function fromStatus(
+  from: string,
+  ref: string,
+  engine?: Engine,
+): Promise<Pick<Stage, 'status' | 'detail'>> {
+  const [cached, now] = await Promise.all([look(ref, engine), resolveFrom(from, undefined, engine)])
+  if (cached.error) return { status: 'unknown', detail: cached.error }
+  if (!cached.info) {
     if (!('error' in now)) return { status: 'build', detail: `on ${from} (${short(now.digest)})` }
     // A registry that's down or rate-limiting says nothing about whether the tag exists.
     return isTransient(now.error)
       ? { status: 'build', detail: `${from} couldn't be checked: ${now.error}` }
       : { status: 'missing', detail: `doesn't resolve: ${now.error}` }
   }
-  const was = cached.labels[LABEL.fromDigest]
+  const was = cached.info.labels[LABEL.fromDigest]
   if ('error' in now) return { status: 'ready', detail: `built; ${from} couldn't be checked` }
   if (was && was !== now.digest) {
     return {
@@ -104,13 +184,18 @@ async function fromStatus(from: string, ref: string): Promise<Pick<Stage, 'statu
   return { status: 'ready', detail: `built on ${short(now.digest)}` }
 }
 
-/** How each target's image is made, in build order, and how each step stands, building nothing. */
+/**
+ * How each target's image is made, in build order, and how each step stands, building nothing. A
+ * step whose image Docker couldn't say is there is `unknown`, with Docker's error.
+ */
 export async function imageStages(target: ImageTarget, root: string): Promise<Stage[]> {
   const { sandbox, harness } = target
+  const { engine } = sandbox
   const stages: Stage[] = []
-  type Probe = { info: Awaited<ReturnType<typeof imageInfo>>; status: StageStatus; detail: string }
+  type Probe = { info: ImageInfo | null; status: StageStatus; detail: string }
   const exists = async (ref: string): Promise<Probe> => {
-    const info = await imageInfo(ref)
+    const { info, error } = await look(ref, engine)
+    if (error) return { info, status: 'unknown', detail: error }
     return {
       info,
       status: info ? 'ready' : 'build',
@@ -118,7 +203,8 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     }
   }
   const reevalBase = async (): Promise<Probe> => {
-    const info = await imageInfo(imageFor(harness))
+    const { info, error } = await look(imageFor(harness), engine)
+    if (error) return { info, status: 'unknown', detail: error }
     if (!info) return { info, status: 'build', detail: 'not built yet' }
     return info.labels[LABEL.context] === contextHash()
       ? { info, status: 'ready', detail: `built (${short(info.id)})` }
@@ -129,21 +215,27 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
         }
   }
   let parent: string | null = null
+  // Set when Docker couldn't answer for the image the install layer goes on.
+  let unanswered: string | null = null
   if (sandbox.image) {
-    const found = await imageInfo(sandbox.image)
-    parent = found?.id ?? null
+    const found = await look(sandbox.image, engine)
+    parent = found.info?.id ?? null
+    unanswered = found.error ?? null
     stages.push({
       what: 'image',
       ref: sandbox.image,
       action: 'used as is',
-      ...(found
-        ? { status: 'ready', detail: `found (${short(found.id)})` }
-        : { status: 'missing', detail: 'not found: pull or build it yourself' }),
+      ...(found.error
+        ? { status: 'unknown', detail: found.error }
+        : found.info
+          ? { status: 'ready', detail: `found (${short(found.info.id)})` }
+          : { status: 'missing', detail: 'not found: pull or build it yourself' }),
     })
   } else if (sandbox.from) {
     const ref = harnessImageFor(harness, sandbox.from)
-    const status = await fromStatus(sandbox.from, ref)
-    parent = status.status === 'ready' ? ((await imageInfo(ref))?.id ?? null) : null
+    const status = await fromStatus(sandbox.from, ref, engine)
+    parent = status.status === 'ready' ? ((await look(ref, engine)).info?.id ?? null) : null
+    if (status.status === 'unknown') unanswered = status.detail
     stages.push({
       what: `from ${sandbox.from}`,
       ref,
@@ -161,22 +253,30 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
       ref: tag,
-      action: 'docker build (layer cache), tagged by content hash',
+      action: `${engineSpec(engine).bin} build (layer cache), tagged by content hash`,
       status: built.status,
-      detail: built.info || !onReeval ? built.detail : `${built.detail} (${real})`,
+      detail:
+        built.info || !onReeval || built.status === 'unknown'
+          ? built.detail
+          : `${built.detail} (${real})`,
     })
     if (onReeval) {
       parent = built.info?.id ?? null
+      if (built.status === 'unknown') unanswered = built.detail
       stages.push({
         what: 'harness',
         ref: tag,
         action: `inherited: FROM \${${REEVAL_BASE_ARG}}, which is ${imageFor(harness)}`,
         status: base?.status ?? 'build',
-        detail: `${imageFor(harness)} ${base?.detail ?? ''}`.trim(),
+        detail:
+          base?.status === 'unknown'
+            ? base.detail
+            : `${imageFor(harness)} ${base?.detail ?? ''}`.trim(),
       })
     } else {
       const baked = await exists(harnessImageFor(harness, real))
       parent = baked.info?.id ?? null
+      if (baked.status === 'unknown') unanswered = baked.detail
       stages.push({
         what: 'harness',
         ref: harnessImageFor(harness, tag),
@@ -188,6 +288,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   } else {
     const base = await reevalBase()
     parent = base.status === 'ready' ? (base.info?.id ?? null) : null
+    if (base.status === 'unknown') unanswered = base.detail
     stages.push({
       what: 'base',
       ref: imageFor(harness),
@@ -198,13 +299,54 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   }
   const steps = installSteps(sandbox)
   if (steps.length) {
-    const layer = parent ? await exists(installLayerTag({ id: parent }, steps)) : null
+    // The tag hashes its base's image id, so it's known only once the base is built.
+    const ref = parent ? installLayerTag({ id: parent }, steps) : null
+    const layer: Probe = ref
+      ? await exists(ref)
+      : unanswered
+        ? { info: null, status: 'unknown', detail: unanswered }
+        : { info: null, status: 'build', detail: 'not built yet' }
+    parent = layer.info?.id ?? null
+    if (layer.status === 'unknown') unanswered ??= layer.detail
     stages.push({
       what: `install ${steps.length} command${steps.length === 1 ? '' : 's'}`,
-      ref: 'reeval-install:<base id + commands>',
+      ref: ref ?? 'reeval-install:<base id + commands>',
       action: 'build unless cached',
-      status: layer?.status ?? 'build',
-      detail: layer?.detail ?? 'not built yet',
+      status: layer.status,
+      detail: layer.detail,
+    })
+  }
+  for (const source of target.plugins) {
+    const { run, cwd } = buildSteps(source.build as PluginBuild)
+    const action = `build unless cached: ${run.join(' && ')}${cwd === null ? '' : ` (from ${cwd})`}`
+    const what = `build ${pluginCall(source, root)}`
+    // A git or npm source is fetched to hash it, which only a build does.
+    if (source.source !== 'local') {
+      parent = null
+      stages.push({
+        what,
+        ref: 'reeval-plugin:<image id>-<commit + tree + build>',
+        action,
+        status: 'unknown',
+        detail: `${pluginCall(source, root)} is fetched when reeval image build or a run builds it`,
+      })
+      continue
+    }
+    const spec = await pluginBuildSpec(root, source)
+    const ref = parent ? pluginLayerTag({ id: parent }, spec) : null
+    const layer: Probe = ref
+      ? await exists(ref)
+      : unanswered
+        ? { info: null, status: 'unknown', detail: unanswered }
+        : { info: null, status: 'build', detail: 'not built yet' }
+    parent = layer.info?.id ?? null
+    if (layer.status === 'unknown') unanswered ??= layer.detail
+    stages.push({
+      what,
+      ref: ref ?? `reeval-plugin:<image id>-${pluginBuildKey(spec).slice(0, 16)}`,
+      action,
+      status: layer.status,
+      detail: layer.detail,
     })
   }
   return stages
@@ -222,13 +364,20 @@ export const reevalImages = (targets: ImageTarget[]): BakedHarness[] => [
   ),
 ]
 
-const WORST: StageStatus[] = ['missing', 'stale', 'build', 'ready']
-const MARKS: Record<StageStatus, string> = { ready: '✓', build: '+', stale: '~', missing: '✗' }
+const WORST: StageStatus[] = ['missing', 'unknown', 'stale', 'build', 'ready']
+const MARKS: Record<StageStatus, string> = {
+  ready: '✓',
+  build: '+',
+  stale: '~',
+  missing: '✗',
+  unknown: '?',
+}
 const WORDS: Record<StageStatus, string> = {
   ready: 'ready',
   build: 'to build',
   stale: 'stale',
   missing: 'missing',
+  unknown: 'unchecked',
 }
 
 /** A target's standing: its worst step. */
@@ -296,11 +445,12 @@ export async function buildImages(
 ): Promise<BuiltImage[]> {
   const providers = createProviders({ refresh: options.force ? 'force' : 'check' })
   const prepared = targets.map((t) => ({
-    kind: 'docker',
-    key: dockerKey(t.sandbox, harnessFor(t.harness)),
+    kind: sandboxProvider(t.sandbox),
+    key: dockerKey(t.sandbox, harnessFor(t.harness), t.plugins),
     label: t.id,
     sandbox: t.sandbox,
     harness: harnessFor(t.harness),
+    plugins: t.plugins,
     setBy: [],
     runWide: false,
   }))

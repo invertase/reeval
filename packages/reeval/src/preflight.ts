@@ -1,4 +1,5 @@
 import { imageInfo, LABEL } from '@reeval/sandbox-docker'
+import { pluginBuildsLabel } from './environment/plugins.ts'
 import { UsageError } from './errors.ts'
 import { sandboxId } from './options.ts'
 import {
@@ -22,12 +23,19 @@ export type SandboxImage = {
 /** The Docker images preflight prepared for the run. */
 export type SandboxVersions = { images: SandboxImage[] }
 
-/** How the terminal names a sandbox to prepare: its cell id, `+ install`, and a harness other than Cursor. */
-export function prepareLabel({ sandbox, harness }: Pick<PrepareUse, 'sandbox' | 'harness'>) {
+/**
+ * How the terminal names a sandbox to prepare: its cell id, `+ install`, `+ plugin builds`, and a
+ * harness other than Cursor.
+ */
+export function prepareLabel({
+  sandbox,
+  harness,
+  plugins,
+}: Pick<PrepareUse, 'sandbox' | 'harness' | 'plugins'>) {
   if (sandbox.kind !== 'docker') return sandboxId(sandbox)
   const baked = imageHarness(harness)
   const install = sandbox.install?.length ? ' + install' : ''
-  return `${sandboxId(sandbox)}${install}${baked === 'cursor' ? '' : ` · ${baked}`}`
+  return `${sandboxId(sandbox)}${install}${pluginBuildsLabel(plugins)}${baked === 'cursor' ? '' : ` · ${baked}`}`
 }
 
 /** A run that stopped in preflight on an infra failure: exit 3. */
@@ -81,10 +89,10 @@ export async function preflight(
   writePrepared(options.root, options.runId, outcomes)
   const images: SandboxImage[] = []
   for (const o of outcomes) {
-    if (!o.ok || o.target.kind !== 'docker') continue
+    if (!o.ok || o.target.sandbox.kind !== 'docker') continue
     const { ref, id, agentCli } = attemptImage(o.handle)
     if (images.some((i) => i.id === id)) continue
-    const info = await imageInfo(ref)
+    const info = await imageInfo(ref, o.target.sandbox.engine)
     images.push({
       ref,
       id,

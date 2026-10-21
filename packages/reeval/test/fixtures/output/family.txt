@@ -1,0 +1,10 @@
+                 adds a $name button that builds
+  pass  reset      1 of 1
+  fail  double     0 of 1
+    build          failed
+      expected command to succeed, exit code 1
+    +1 more passed
+  pass  clear      1 of 1
+
+1 fail · 2 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.

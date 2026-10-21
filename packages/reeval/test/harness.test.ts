@@ -39,6 +39,11 @@ import {
   GOOSE_WORKSPACE_SKILLS_DIR,
 } from '@reeval/harness-goose'
 import {
+  GROK_ENDPOINTS,
+  GROK_HOME_SKILLS_DIR,
+  GROK_WORKSPACE_SKILLS_DIR,
+} from '@reeval/harness-grok-build'
+import {
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
   openCodeEndpoints,
@@ -54,13 +59,14 @@ import { observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
+  acpMcpServers,
   agentAuth,
   agentFor,
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
+  claudePluginFiles,
   cursorMcpServers,
-  fxMcpServers,
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
@@ -78,6 +84,7 @@ import {
   fakeHarness,
   fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from '../src/harness.ts'
@@ -155,6 +162,8 @@ describe('the Claude Code harness', () => {
       rulesFile: 'CLAUDE.md',
       workspaceSkillDir: '.claude/skills',
       harnessSkillDir: '.claude/skills',
+      pluginPlacement: 'namespaced',
+      pluginFiles: claudePluginFiles,
     })
     assert.equal(layoutOf(cursor({ model: 'composer-2.5' })).rulesFile, 'AGENTS.md')
     assert.equal(workspaceSkillDir(cursor({ model: 'composer-2.5' })), '.cursor/skills')
@@ -175,6 +184,7 @@ describe('the Claude Code harness', () => {
       goose({ model: 'm' }),
       pi({ model: 'm' }),
       codex({ model: 'm' }),
+      grokBuild({ model: 'm' }),
       fx({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
@@ -183,7 +193,7 @@ describe('the Claude Code harness', () => {
     }
     assert.throws(
       () => fakeHarness({ layout: 'cline' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx' \(got "cline"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex', 'fx', 'grok-build' \(got "cline"\)/,
     )
   })
 
@@ -288,6 +298,7 @@ describe('the Antigravity harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: '.agents/skills',
       harnessSkillDir: '.gemini/config/skills',
+      pluginPlacement: 'namespaced',
     })
     assert.equal(imageHarness(h), 'antigravity')
   })
@@ -316,6 +327,7 @@ describe('the Antigravity harness', () => {
       rulesFile: ANTIGRAVITY_WORKSPACE_RULES_FILE,
       workspaceSkillDir: ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: ANTIGRAVITY_HOME_SKILLS_DIR,
+      pluginPlacement: 'namespaced',
     })
   })
 })
@@ -448,6 +460,7 @@ describe('the OpenCode harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: OPENCODE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: OPENCODE_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'opencode')
     assert.deepEqual(brokeringFor(h)?.endpoints, openCodeEndpoints('google/m'))
@@ -550,6 +563,7 @@ describe('the Goose harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: GOOSE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/${GOOSE_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'goose')
     assert.deepEqual(AGENTS.goose.endpoints, GOOSE_ENDPOINTS)
@@ -610,13 +624,14 @@ describe('the fx harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: FX_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/${FX_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'fx')
   })
 
   test("gets MCP servers in ACP's shape, a bare stdio command through env's PATH lookup", () => {
     assert.deepEqual(
-      fxMcpServers({
+      acpMcpServers({
         files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/r' } },
         local: { transport: 'stdio', command: '/usr/bin/node', args: ['s.mjs'], env: {} },
         docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
@@ -635,6 +650,61 @@ describe('the fx harness', () => {
         },
       },
     )
+  })
+})
+
+describe('the Grok Build harness', () => {
+  test('is plain data with its own cell id, and needs an xAI model id', () => {
+    const h = grokBuild({ model: 'grok-4.6' })
+    assert.deepEqual(h, { kind: 'grok-build', model: 'grok-4.6' })
+    assert.equal(harnessId(h), 'grok-build:grok-4.6')
+    assert.equal(
+      harnessId(grokBuild({ model: 'grok-4.6', effort: 'high' })),
+      'grok-build:grok-4.6[effort=high]',
+    )
+    for (const model of [undefined, '', 'xai/grok-4.6']) {
+      assert.throws(
+        () => grokBuild({ model } as never),
+        /grokBuild\(\) needs an xAI model id, without a provider, since it runs on an xAI API key, e\.g\. grokBuild\(\{ model: 'grok-4\.6' \}\)/,
+        String(model),
+      )
+    }
+  })
+
+  test('is accepted by the config and needs XAI_API_KEY', () => {
+    const config = resolveConfig({ harness: [grokBuild({ model: 'm' })] }, '/p')
+    assert.deepEqual(missingCredentials(config, {}), ['XAI_API_KEY'])
+    assert.deepEqual(missingCredentials(config, { XAI_API_KEY: 'x' }), [])
+  })
+
+  test('Grok reads rules from AGENTS.md, repo skills from .grok/skills, home skills in its own home', () => {
+    const h = grokBuild({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: GROK_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/${GROK_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'namespaced',
+    })
+    assert.equal(imageHarness(h), 'grok-build')
+    assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
+  })
+
+  test("gets MCP servers in ACP's McpServer shape, as fx does", () => {
+    assert.equal(AGENTS['grok-build'].mcpServers, acpMcpServers)
+  })
+
+  test("the served model is what each model call's response names, on api.x.ai only", () => {
+    const brokering = brokeringFor(grokBuild({ model: 'grok-4.6' }))
+    assert.equal(brokering?.credential, 'XAI_API_KEY')
+    assert.deepEqual(
+      brokering?.modelResponses?.map((e) => ('exact' in e.path ? e.path.exact : '')),
+      ['/v1/chat/completions', '/v1/responses'],
+    )
+    const served = brokering?.servedModel
+    const call = { method: 'POST', host: 'api.x.ai', path: '/v1/chat/completions' }
+    assert.equal(served?.({ ...call, responseModel: 'grok-4.6-0709' }), 'grok-4.6-0709')
+    assert.equal(served?.({ ...call, host: 'api.example', responseModel: 'x' }), undefined)
+    assert.equal(served?.(call), undefined)
   })
 })
 
@@ -660,6 +730,13 @@ describe('mcp.sse', () => {
       pi: /^InfraError: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       codex:
         /^InfraError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+      'grok-build': {
+        events: {
+          type: 'sse',
+          url: 'http://events.example/sse',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
       fx: {
         events: {
           type: 'sse',
@@ -694,6 +771,7 @@ describe('the pi harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: PI_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: PI_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'pi')
     assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
@@ -777,6 +855,7 @@ describe('the Codex harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: CODEX_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: CODEX_HOME_SKILLS_DIR,
+      pluginPlacement: 'namespaced',
     })
     assert.equal(imageHarness(h), 'codex')
     const config = resolveConfig({ harness: [h] }, '/p')
@@ -932,6 +1011,7 @@ describe('the Cursor harness', () => {
       rulesFile: CURSOR_SDK_WORKSPACE_RULES_FILE,
       workspaceSkillDir: CURSOR_SDK_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: CURSOR_SDK_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'cursor')
     assert.deepEqual(AGENTS.cursor.endpoints, cursorSdkEndpoints())
@@ -1048,6 +1128,7 @@ const HOST_CREDENTIALS = [
   'GOOGLE_API_KEY',
   'GOOGLE_GEMINI_BASE_URL',
   'GOOGLE_GENERATIVE_AI_API_KEY',
+  'XAI_API_KEY',
 ]
 
 /**
@@ -1058,7 +1139,7 @@ async function adapterRules(kind: AgentKind, env: Record<string, string>, model 
   return withHostEnv(env, async () => {
     const descriptor = { kind, model } as AgentHarnessDescriptor
     const agent = agentFor(descriptor)
-    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
     const { session, rules } = recordingSession()
     await assert.rejects(
       adapter.doStart({ sessionId: 's', sandboxSession: session }),
@@ -1229,6 +1310,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: antigravity({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1337,7 +1419,7 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
       const descriptor = opencode({ model: 'google/m' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1377,6 +1459,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: goose({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1426,7 +1509,7 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ OPENAI_API_KEY: 'sk-real' }, async () => {
       const descriptor = fx({ model: 'gpt-4.1-mini' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1442,6 +1525,65 @@ describe('credential brokering per agent', () => {
           },
         }),
         /can't broker OPENAI_API_KEY/,
+      )
+      assert.equal(ran, false)
+    })
+  })
+
+  test("Grok Build's adapter brokers only the xAI key, on Authorization, to the xAI API's endpoints", async () => {
+    const rules = await adapterRules('grok-build', { ...everything, XAI_API_KEY: 'xai-real' })
+    assert.equal(rules.length, 1)
+    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
+    assert.match(placeholder, /^Bearer aisdkhc_/)
+    assert.deepEqual(rules[0]?.transform.headers, { Authorization: 'Bearer xai-real' })
+    const endpoints = brokeringFor(grokBuild({ model: 'm' }))?.endpoints
+    const send = (method: string, host: string, path: string) =>
+      applyTransformations(
+        rules,
+        { host, method, path, headers: { authorization: placeholder } },
+        endpoints,
+      )
+    for (const [method, path] of [
+      ['GET', '/v1/models'],
+      ['GET', '/v1/api-key'],
+      ['POST', '/v1/chat/completions'],
+      ['POST', '/v1/responses'],
+    ] as const) {
+      assert.equal(send(method, 'api.x.ai', path).headers.authorization, 'Bearer xai-real', path)
+    }
+    for (const [method, host, path] of [
+      ['POST', 'api.x.ai', '/v1/models'],
+      ['GET', 'api.x.ai', '/v1/files'],
+      ['POST', 'evil.example', '/v1/chat/completions'],
+    ] as const) {
+      const r = send(method, host, path)
+      assert.notEqual(r.headers.authorization, 'Bearer xai-real', `${method} ${host}${path}`)
+    }
+  })
+
+  test("Grok Build fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    await withHostEnv({ XAI_API_KEY: 'xai-real' }, async () => {
+      const agent = AGENTS['grok-build']
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor: grokBuild({ model: 'm' }),
+        plugins: [],
+      })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let ran = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            run: async () => {
+              ran = true
+              throw new Error('ran')
+            },
+          },
+        }),
+        /can't broker XAI_API_KEY/,
       )
       assert.equal(ran, false)
     })
@@ -1733,6 +1875,42 @@ describe('Antigravity transcripts', () => {
         ['tool', 'read', 'stat /nope.txt: no such file', false],
       ],
     )
+  })
+})
+
+describe('Cursor tool wall time when completed_at_ms is early', () => {
+  test('durationMs follows the stream until the tool result, and marks long shells stalled', () => {
+    const startedAt = Date.parse('2026-10-18T12:00:00.000Z')
+    const events = normaliseStream(
+      [
+        { ms: 100, part: { type: 'tool-call', toolCallId: 'b', toolName: 'bash', input: {} } },
+        {
+          ms: 2_810_000,
+          part: { type: 'tool-result', toolCallId: 'b', output: 'ok' },
+        },
+        {
+          ms: 150,
+          part: {
+            type: 'raw',
+            rawValue: {
+              type: 'event',
+              event: {
+                type: 'tool_call',
+                call_id: 'b',
+                status: 'completed',
+                started_at_ms: startedAt + 100,
+                completed_at_ms: startedAt + 200,
+              },
+            },
+          },
+        },
+      ],
+      startedAt,
+    )
+    const bash = events.find((e) => e.type === 'tool' && e.tool === 'bash')
+    assert.ok(bash && bash.type === 'tool')
+    assert.equal(bash.durationMs, 2_809_900)
+    assert.equal(bash.stalled, true)
   })
 })
 
@@ -2125,7 +2303,7 @@ describe('token usage and the served model, from any harness', () => {
   })
 
   test('Claude Code: the API usage its bridge maps, cache creation as cache writes', async () => {
-    // harness-claude-code 1.0.158's bridge (`mapUsage`) on a real Messages API usage block:
+    // harness-claude-code 1.0.160's bridge (`mapUsage`) on a real Messages API usage block:
     // input_tokens 6, cache_creation_input_tokens 4210, cache_read_input_tokens 15022, output 311.
     const claude = {
       inputTokens: { total: 19238, noCache: 6, cacheRead: 15022, cacheWrite: 4210 },

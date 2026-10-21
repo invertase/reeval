@@ -3,7 +3,7 @@ title: fakeSandbox()
 description: A temporary directory on the host that stands in for a container, for tests and the fake harness.
 ---
 
-`fakeSandbox()` gives each attempt a temporary directory on the host instead of a container. It's for the fake harness and for testing your evals and configs; it isolates nothing.
+`fakeSandbox()` gives each attempt a temporary directory on the host instead of a container. It's for trying reeval and testing configs without Docker; it isolates nothing. It runs commands with your host's tools, brokers no secrets and enforces no egress, so it can't tell you whether an eval's checks work in the eval's real sandbox: for that, run the [fake harness in it](/recipes/fake-harness#oracle-and-canary).
 
 ```ts title="reeval.fake.config.ts"
 import { defineConfig, defineEnvironment } from '{{ pkg }}'
@@ -58,7 +58,7 @@ On Windows, `sh` is [Git for Windows](https://git-scm.com/download/win)' `sh.exe
 | Real harnesses | Refused: `The Cursor harness needs the Docker sandbox: set sandbox: docker() …` |
 | Egress policy | Not enforced. A plan with `'deny-all'` or an allowlist stops before it runs. |
 | Egress record | Not recorded: the record's `egress.recorded` is `false` |
-| Credential brokering | No gateway, so a brokered secret's placeholder is never swapped for its value |
+| Credential brokering | No gateway, so a secret with `hosts` keeps its placeholder, never swapped for its value. The plan's notes say so: `not brokered (fake sandbox, placeholder only): GEMINI_API_KEY → generativelanguage.googleapis.com` |
 | Images | None: `docker()` options don't apply |
 
 An eval that asks for an egress policy the fake sandbox can't enforce is an error:

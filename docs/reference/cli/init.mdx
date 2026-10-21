@@ -1,13 +1,14 @@
 ---
 title: reeval init
-description: Scaffold a project with a config, a passing eval, profiles and .gitignore entries.
+description: Scaffold a project with a config, an environment, an eval that runs in it, profiles and .gitignore entries.
 ---
 
-`reeval init` sets up reeval in the current directory, or in the directory you name. It asks which agent to configure, then writes a project whose eval passes on the fake agent straight away. `reeval run` and `reeval image build` need that config file: with none found they exit 2 and point here.
+`reeval init` sets up reeval in the current directory, or in the directory you name. It asks which agent to configure, writes a config for it, an environment and an eval that runs in that environment, then checks whether Docker can run the sandboxes. `reeval run` and `reeval image build` need that config file: with none found they exit 2 and point here.
 
 ```bash
 npx reeval init
 npx reeval init evals --harness claude-code
+npx reeval init --yes --bare
 ```
 
 ## Flags
@@ -15,13 +16,16 @@ npx reeval init evals --harness claude-code
 [//]: # (generated:cli-help:init)
 
 ```text
-reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
-                              eval, .gitignore entries and a package.json script; asks which agent
-  --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or none
-                              (fake agent only); the config's harness, with a fake profile for no
-                              keys
+reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, an
+                              environment, an eval that runs in it, .gitignore entries and a
+                              package.json script; asks which agent, then checks Docker
+  --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or
+                              grok-build: the config's harness
   -y, --yes                   Don't ask: take the defaults (--harness cursor)
-  --force                     Overwrite reeval.config.ts and the eval when they differ
+  --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
+                              or eval
+  --force                     Replace a reeval.config.ts init didn't write; no other file is ever
+                              overwritten
   --dry-run                   Print what it would create or change, and write nothing
 ```
 
@@ -35,35 +39,134 @@ A real `reeval init --yes` in an empty directory:
 
 ```text
 reeval init · .
-  create    reeval.config.ts       harness cursor:composer-2.5; profiles fake, pr, nightly
-  create    evals/greet.eval.ts  one eval, passes on the fake agent
-  create    .gitignore         .reeval/, .env*
-  create    package.json       script eval, devDependency {{ pkg }}
+  create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
+  create    evals/environments.ts  environment greeter: a package.json and rules
+  create    evals/greet.eval.ts    one eval, in greeter
+  create    .gitignore             node_modules/, .reeval/, .env*
+  create    package.json           script eval, devDependency {{ pkg }}
+  create    tsconfig.json          for editors and tsc: the evals' .ts imports, no emit
+Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
 Next:
   npm install
-  npx reeval run --profile fake  passes now: the fake agent, no keys or Docker
-  npx reeval image build         bakes Cursor into its sandbox image (needs Docker)
-  npx reeval run                 on Cursor, with CURSOR_API_KEY in .env.local
+  npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
+  npx reeval run          the eval on Cursor, with CURSOR_API_KEY in .env.local
+Docker is running: ready for npx reeval image build
 ```
 
-| File | What `reeval init` does |
+| File | What `reeval init` writes |
 |---|---|
-| `reeval.config.ts` | The chosen agent in `docker()`, with profiles `fake` (the fake agent and sandbox), `pr` (one attempt per cell, the CI default) and `nightly` (three, recorded). With `--harness none`, the fake agent is the config's harness. |
-| `evals/greet.eval.ts` | One deterministic eval: the agent writes `greet.js`, and a command checks it |
-| `.gitignore` | Appends `.reeval/` and `.env*` when they're missing |
-| `package.json` | Adds an `eval` script (`reeval run`) and {{ pkg }} as a devDependency, unless it has them; creates the file when there's none |
+| `reeval.config.ts` | The chosen agent in `docker()`, `analysis.model` for [insights](/concepts/insights), and profiles `pr` (one attempt per cell, the CI default) and `nightly` (three, recorded) |
+| `evals/environments.ts` | One environment, `greeter`: a `package.json` written into the workspace and the project's rules (`AGENTS.md`, or `CLAUDE.md` for Claude Code) |
+| `evals/greet.eval.ts` | One deterministic eval in `greeter`: the agent writes `greet.js`, and a command checks it |
+| `.gitignore` | `node_modules/`, `.reeval/` and `.env*` |
+| `package.json` | An `eval` script (`reeval run`) and {{ pkg }} as a devDependency |
+| `tsconfig.json` | ES2023, `nodenext`, `strict`, and `allowImportingTsExtensions` with `noEmit`, so editors and `tsc` accept the eval's `./environments.ts` import. reeval doesn't need it to run |
 
-## Existing files
+The environment and the eval are linked by an import:
 
-`reeval init` plans every file before it writes one. When `reeval.config.ts` or the eval exists and differs, or another `reeval.config.*` exists, it exits 2 and writes nothing:
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+/** What every attempt of greet.eval.ts starts in, before the agent's first turn. */
+export const greeter = defineEnvironment('greeter', {
+  // Written into the workspace.
+  files: { 'package.json': '{ "type": "module" }\n' },
+  // The project's rules: AGENTS.md, or CLAUDE.md for Claude Code.
+  rules: 'Write ES modules with named exports. Add no dependencies.\n',
+})
+```
+
+```ts title="evals/greet.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { greeter } from './environments.ts'
+
+evaluate('creates greet.js', { environment: greeter }, async (c) => {
+  …
+})
+```
+
+## The analysis model
+
+```ts title="reeval.config.ts"
+  // For c.judge, add a judge, e.g. judge: { model: 'google/gemini-3.8-flash' }.
+  // Insights explain each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY;
+  // insights: false turns them off.
+  analysis: { model: 'google/gemini-3.8-flash' },
+```
+
+Whichever agent you pick, the config sets `analysis.model` to `google/gemini-3.8-flash`, which writes the run's [insights](/concepts/insights). It's called with `GOOGLE_GENERATIVE_AI_API_KEY`, or through the Vercel AI Gateway with `AI_GATEWAY_API_KEY`. Without either, a run passes or fails on its checks as before and prints one line above the tally:
 
 ```text
-reeval: reeval init won't overwrite files in .: reeval.config.ts exists and differs. Nothing was written. Pass --force to overwrite them.
+insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }
 ```
 
-`--force` overwrites them. It never removes lines from `.gitignore` or keys from `package.json`, and a second `reeval init` with the same answer changes nothing: each file says `keep`.
+`analysis: { insights: false }` or `--no-insights` turns them off; `reeval doctor` names both keys.
+
+## Only the config: `--bare`
+
+`--bare` writes `reeval.config.ts`, the `.gitignore` entries and `package.json`, with no environment, eval or `tsconfig.json`:
+
+```text
+reeval init · .
+  create    reeval.config.ts  harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
+  create    .gitignore        node_modules/, .reeval/, .env*
+  create    package.json      script eval, devDependency {{ pkg }}
+Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
+Next:
+  npm install
+  npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
+  npx reeval run          the evals you write in evals/ on Cursor, with CURSOR_API_KEY in .env.local
+Docker is running: ready for npx reeval image build
+```
+
+The config's `include` is still `evals/**/*.eval.ts`, so the evals you add there run.
+
+## The Docker check
+
+Init's last line says whether Docker can run the sandboxes, from the same check [reeval doctor](/reference/cli/doctor) makes. It never fails init or changes its exit code:
+
+| Docker | The line |
+|---|---|
+| Running Linux containers | `Docker is running: ready for npx reeval image build` |
+| Installed, not running | `Docker isn't running: start Docker Desktop, or the Docker service (sudo systemctl start docker), then run npx reeval image build` (on Linux; macOS and Windows name Docker Desktop) |
+| No `docker` command | `Docker isn't installed: install Docker Engine (https://docs.docker.com/engine/install/) or Docker Desktop, then run npx reeval image build` (on Linux; macOS and Windows link their Docker Desktop installers) |
+| Running Windows containers | `Docker is running Windows containers, but reeval's sandboxes are Linux containers: switch Docker Desktop to Linux containers …` |
+| No answer in 10 s (Docker Desktop starting, say) | `Docker didn't answer within 10s: wait for it to start, or check it with reeval doctor, then run npx reeval image build` |
+
+## An existing project
+
+`reeval init` plans every file before it writes one. Where reeval is set up already, it exits 2 before asking anything and writes nothing:
+
+```text
+reeval: reeval is already set up in .: reeval.config.ts exists and isn't the one reeval init writes. Nothing was written. Pass --force to replace it; init never overwrites another file.
+```
+
+`--force` replaces `reeval.config.ts` and nothing else. Another config (`reeval.config.mjs`, `reeval.yaml`, …) is refused even with `--force`, since a new `reeval.config.ts` would shadow it or clash with it. A `reeval.config.ts` that init wrote is kept, with the agent it names.
+
+Anywhere else, init only adds. Each line says `create`, `update` or `skip`, and why:
+
+```text
+reeval init · .
+  create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
+  skip      evals/environments.ts  exists: left as it is
+  skip      evals/greet.eval.ts    imports greeter, which your evals/environments.ts doesn't export
+  update    .gitignore             .env*
+  update    package.json           devDependency {{ pkg }}; kept its eval script (vitest)
+  skip      tsconfig.json          exists: left as it is; for the eval's .ts import, add "allowImportingTsExtensions": true (with noEmit)
+```
+
+| File that exists | What init does |
+|---|---|
+| `evals/environments.ts`, `evals/greet.eval.ts` | Skips it. The eval is skipped too when your `environments.ts` exports no `greeter` |
+| `.gitignore` | Appends the missing entries of `.reeval/` and `.env*` (`/.reeval` and `.reeval` count), in its line endings |
+| `package.json` | Adds the `eval` script and the devDependency when missing, in the file's own indentation and layout; every other byte stays. Its own `eval` script is kept |
+| `tsconfig.json` | Skips it, with a hint when it allows no `.ts` imports (through `extends` too) |
+| `.env.local` | Never read or written |
+
+A second `reeval init` with the same answer changes nothing: each file says `skip`.
 
 ## Related
 
 - [Quickstart](/quickstart): `reeval init`, then your first run
+- [Environments](/reference/environment): what `defineEnvironment` takes
 - [Profiles and budgets](/reference/profiles): the profiles it writes

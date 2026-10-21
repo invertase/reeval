@@ -7,6 +7,7 @@ import {
   fakeHarness,
   fx,
   goose,
+  grokBuild,
   opencode,
   pi,
 } from 'reeval/harness'
@@ -33,6 +34,8 @@ const harness = () => {
       return pi({ model })
     case 'codex':
       return codex({ model })
+    case 'grok-build':
+      return grokBuild({ model })
     case 'fx':
       return fx({ model })
     default:
@@ -45,6 +48,6 @@ export default defineConfig({
   // No retries, one attempt per cell: a failure is a failure (see README, flake policy).
   runs: 1,
   timeout: '4m',
-  // The hard cap: the 12 evals in evals/, and nothing a stray eval file could add.
-  budget: { attempts: 12 },
+  // The hard cap: the 20 evals in evals/, and nothing a stray eval file could add.
+  budget: { attempts: 20 },
 })
