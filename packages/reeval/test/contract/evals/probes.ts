@@ -128,14 +128,22 @@ export const toolsMentioning = (turn: Turn | undefined, needle: string) =>
       : [],
   )
 
-/** Whether `input`, at any depth, has a field naming an agent whose value is `agent` or `<plugin>:<agent>`. */
+const isAgent = (value: unknown, agent: string) =>
+  typeof value === 'string' && (value === agent || value.endsWith(`:${agent}`))
+
+/**
+ * Whether `input`, at any depth, has a field naming an agent whose value is `agent` or
+ * `<plugin>:<agent>`, or an object whose `name` is (Cursor's `subagentType: { kind, name }`).
+ */
 const namesAgent = (input: unknown, agent: string): boolean =>
   typeof input === 'object' && input !== null
     ? Object.entries(input).some(
         ([key, value]) =>
           (/agent/i.test(key) &&
-            typeof value === 'string' &&
-            (value === agent || value.endsWith(`:${agent}`))) ||
+            (isAgent(value, agent) ||
+              (typeof value === 'object' &&
+                value !== null &&
+                isAgent((value as { name?: unknown }).name, agent)))) ||
           namesAgent(value, agent),
       )
     : false
