@@ -40,6 +40,13 @@ export {
   createAntigravity,
 } from './antigravity-harness.ts'
 export {
+  ANTIGRAVITY_HOOK_EVENTS,
+  ANTIGRAVITY_PLUGINS_DIR,
+  antigravityHooks,
+  antigravityPluginInstall,
+  installedPluginDir,
+} from './antigravity-plugins.ts'
+export {
   type AntigravityEvent,
   type AntigravityResult,
   type AntigravityStepUpdate,
