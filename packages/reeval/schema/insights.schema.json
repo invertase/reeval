@@ -125,7 +125,7 @@
       "type": "object",
       "properties": {
         "actedOn": {
-          "description": "Set in a later run that found the cited source changed after a run printed the remark: its `quote` gone from the file, or, without one, the eval's sources changed. That run lists the remark again with this set and `printed: false`; it's what `remark_outcomes` counts.",
+          "description": "Set on later runs once the cited span changed: the remark was acted on.",
           "type": "object",
           "properties": {
             "run": {
@@ -134,15 +134,11 @@
           },
           "required": ["run"]
         },
-        "demoted": {
-          "description": "Set when the project rarely acts on this kind (`remark_outcomes`): `suggestion`, acted on in under 20% of at least 10 printed, prints only under `-v`; `hidden`, under 5%, never prints.",
-          "enum": ["hidden", "suggestion"]
-        },
         "evalId": {
           "type": "string"
         },
         "evidence": {
-          "description": "Facts from this run (or history facts) showing it mattered now: at least one.",
+          "description": "Facts from this run (or history facts) showing it mattered now; a model's, as it cited them.",
           "type": "array",
           "items": {
             "type": "string"
@@ -153,7 +149,7 @@
           "type": "string"
         },
         "fix": {
-          "description": "A concrete edit at a source location (`source:<file>#L<n>`) in the eval.",
+          "description": "An edit at a source location (`source:<file>#L<n>`) in the eval. A model remark's `edit` is empty when the model gave none, and its `at` is the quoted line when it named no line.",
           "type": "object",
           "properties": {
             "at": {
@@ -193,7 +189,7 @@
           "type": "boolean"
         },
         "severity": {
-          "description": "Fixed by kind (`REMARK_KINDS`), never chosen by the model; `demoted` makes it a suggestion.",
+          "description": "Fixed by kind (`REMARK_KINDS`), never chosen by the model.",
           "enum": ["concern", "suggestion"]
         },
         "source": {
@@ -303,7 +299,7 @@
           "type": "string"
         },
         "remarks": {
-          "description": "Remarks about the evals' own quality, ranked: every one this run raised, including those an earlier run printed first (`firstSeenRun`), which don't print again; then, with `actedOn`, each remark an earlier run printed whose cited source this run found changed.",
+          "description": "Remarks about the evals' own quality, ranked: every one this run raised, including those an earlier run printed first (`firstSeenRun`), which don't print again.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Remark"

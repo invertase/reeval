@@ -350,7 +350,7 @@ const NEXT_EVAL = /\bevaluate(?:\.each|\.todo|\.skip|\.only)?\s*[(<]/
  * a family's template) up to the next eval's, at most `SOURCE_LINES`, as 0-based `[from, to)`.
  * Null when no line names it.
  */
-export function declarationOf(lines: string[], name: string): { from: number; to: number } | null {
+function declarationOf(lines: string[], name: string): { from: number; to: number } | null {
   const named = lines.findIndex((l) =>
     [`'${name}'`, `"${name}"`, `\`${name}\``].some((q) => l.includes(q)),
   )

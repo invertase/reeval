@@ -1,9 +1,8 @@
 // The `Remarks:` section under the tally: what's wrong with the evals themselves, each with its
 // fix. Concerns only and at most `REMARK_CAP` of them; `verbose` adds the rest and the
 // suggestions. A remark prints until a run has printed it, so once you've seen it a run on the
-// same source prints nothing, except a slow MCP start, which prints in every run it happens. A
-// kind the project rarely acts on prints as a suggestion, or not at all (`demoted`), and a remark
-// listed only as acted on never prints. With none to print there's no heading.
+// same source prints nothing, except a slow MCP start, which prints in every run it happens. With
+// none to print there's no heading.
 import { clip } from '../text.ts'
 import type { Remark, RunInsights } from '../view/insights.ts'
 import type { SuiteResult } from '../view/suite.ts'
@@ -12,12 +11,9 @@ import type { Colors } from './colors.ts'
 /** The most concerns the section prints without `verbose`. */
 export const REMARK_CAP = 3
 
-/**
- * Whether a remark may print in this run: no earlier run printed it, or it's a slow MCP start;
- * never one acted on, or one whose kind is hidden.
- */
+/** Whether a remark may print in this run: no earlier run printed it, or it's a slow MCP start. */
 export const printsIn = (r: Remark, runId: string) =>
-  !r.actedOn && r.demoted !== 'hidden' && (r.firstSeenRun === runId || r.kind === 'slow-mcp-start')
+  r.firstSeenRun === runId || r.kind === 'slow-mcp-start'
 
 /** The remarks the section prints, in order, and how many concerns the cap left out. */
 export function shownRemarks(remarks: Remark[], runId: string, verbose: boolean) {
@@ -54,7 +50,9 @@ export function remarkLines(
     'Remarks:',
     ...shown.flatMap((r) => [
       `  ${names.get(r.evalId) ?? r.evalId}: ${r.text}`,
-      `    ${c.dim('fix')}  ${location(r.fix.at)}  ${clip(r.fix.edit, 160)}`,
+      r.fix.edit
+        ? `    ${c.dim('fix')}  ${location(r.fix.at)}  ${clip(r.fix.edit, 160)}`
+        : `    ${c.dim('at')}   ${location(r.fix.at)}`,
     ]),
     ...(hidden > 0 ? [c.dim(`  +${hidden} more (-v)`)] : []),
   ]

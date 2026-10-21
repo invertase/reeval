@@ -44,10 +44,6 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
   `--run last` (or a run id) binds `:run`: `reeval query failing_attempts --run last`, or
   `reeval query "SELECT … FROM cells WHERE run_id = :run" --run last`. Without it a query spans
   every run.
-- `reeval query remark_outcomes`: each remark kind's printed and acted-on counts over the
-  project's runs, and whether that kept, demoted (a concern prints as a suggestion) or hid it.
-  A remark counts as acted on once a later run finds its quoted line edited
-  ([../../eval-rubric/SKILL.md](../../eval-rubric/SKILL.md) has each kind's fix).
 - If your client has a `reeval` MCP server (`reeval mcp`), prefer its tools for reading results:
   `failures` is the quickest way from "it failed" to why (failed checks and judge scores, check
   logs, the transcript's tail, and whether the cell failed in earlier runs), far smaller than

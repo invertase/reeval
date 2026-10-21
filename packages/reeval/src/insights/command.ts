@@ -87,11 +87,11 @@ export async function insightsCommand(ctx: Ctx, ref: string | undefined): Promis
   })
   const earlier = existing?.remarks ?? []
   const { withModelRemarks } = await import('../remarks/index.ts')
-  // The run's own remarks stay as its output marked them; acted-on belongs to the run that found
-  // the edit, so only new remarks are added, marked as this prints them.
+  // The run's own remarks stay as its output marked them; only new remarks are added, marked as
+  // this prints them.
   const had = new Set(earlier.map((r) => r.id))
   const fresh = (await withModelRemarks(config, record, generated, earlier)).filter(
-    (r) => !had.has(r.id) && !r.actedOn,
+    (r) => !had.has(r.id),
   )
   const marked = new Set(
     markPrinted([...earlier, ...fresh], entry.runId, false)

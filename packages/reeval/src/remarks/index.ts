@@ -1,9 +1,8 @@
 // A run's remarks, at the end of `reeval run`: the rules over its record and the history, then,
 // with model insights, the model's gated remarks and `no-baseline` on its classification. Each is
-// settled against earlier runs' insights: the first run that printed it, its kind's demotion from
-// `remark_outcomes`, and the earlier remarks whose cited source this run found changed
-// (`actedOn`). Without a model they go in a remarks-only insights.json beside the scratch run,
-// which `reeval record` carries into the history.
+// settled against earlier runs' insights, which give the first run that printed it. Without a
+// model they go in a remarks-only insights.json beside the scratch run, which `reeval record`
+// carries into the history.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { inCI } from '../env.ts'
@@ -14,11 +13,9 @@ import type { EvalEntry, RunRecord } from '../history/types.ts'
 import { RUN_ID } from '../ids.ts'
 import { insightsFile, readInsights } from '../insights/files.ts'
 import { factsHash } from '../insights/hash.ts'
-import { declarationOf } from '../insights/input.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { NO_MODEL, REMARK_KINDS, type Remark, type RunInsights } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
-import { printedIn, type RunRemarks, remarkOutcomes } from './outcomes.ts'
 import {
   type Candidate,
   type CheckWindow,
@@ -27,7 +24,6 @@ import {
   noBaseline,
   type RemarkContext,
   rankRemarks,
-  remarkId,
 } from './rules.ts'
 
 /**
@@ -66,6 +62,8 @@ async function otherRuns(config: ResolvedConfig, runId: string) {
   return out
 }
 
+type RunRemarks = { runId: string; remarks: Remark[] }
+
 /** Each run's remarks, from its insights.json; a run without one has none. */
 async function remarksIn(runs: Array<{ dir: string; runId: string }>): Promise<RunRemarks[]> {
   const out: RunRemarks[] = []
@@ -85,7 +83,7 @@ function printedBefore(runs: RunRemarks[]) {
   const first = new Map<string, string>()
   for (const run of runs) {
     for (const r of run.remarks) {
-      if (r.actedOn || (r.printed === false && r.firstSeenRun === run.runId)) continue
+      if (r.printed === false && r.firstSeenRun === run.runId) continue
       const was = first.get(r.id)
       if (!was || r.firstSeenRun < was) first.set(r.id, r.firstSeenRun)
     }
@@ -94,129 +92,32 @@ function printedBefore(runs: RunRemarks[]) {
 }
 
 /** A remark as raised, before it's settled: its kind's severity, and no run-specific marks. */
-export function candidateOf(r: Remark): Candidate {
-  const { firstSeenRun: _, printed: __, actedOn: ___, demoted: ____, ...rest } = r
+function candidateOf(r: Remark): Candidate {
+  const { firstSeenRun: _, printed: __, actedOn: ___, ...rest } = r
   return { ...rest, severity: REMARK_KINDS[r.kind].severity }
 }
 
-const NAME_KINDS = new Set<Remark['kind']>(['name-contradicts', 'name-no-intent'])
-
-/** `source:<file>#L<n>` → the file. */
-const fileOf = (at: string) => at.replace(/^source:/, '').replace(/#L\d+$/, '')
-
-/**
- * Whether the quote is still in the eval's declaration, or anywhere in the file once no line
- * names the eval (a rename): another eval in the file may share the quoted text.
- */
-function quoteIn(text: string | null, name: string | undefined, quote: string): boolean {
-  if (text === null) return false
-  const lines = text.split('\n')
-  const at = name === undefined ? null : declarationOf(lines, name)
-  return (at ? lines.slice(at.from, at.to).join('\n') : text).includes(quote)
-}
-
-/**
- * The remarks earlier runs printed whose cited source this run finds changed: the quote is gone
- * from the eval's declaration (`quoteIn`), or, for a remark without one, the eval's sources
- * changed (its id for this run's sources isn't its own) and this run doesn't raise its kind on
- * that eval again. Only evals this run ran are checked, and a name remark's eval renamed in a file
- * this run ran; one already acted on, or raised again by this run, isn't. `slow-mcp-start` is
- * about the environment, so no edit acts on it.
- */
-async function actedOn(
-  root: string,
-  record: RunRecord,
-  before: RunRemarks[],
-  raised: Remark[],
-): Promise<Remark[]> {
-  const ids = new Set(raised.map((r) => r.id))
-  const kinds = new Set(raised.map((r) => `${r.kind}\0${r.evalId}`))
-  const done = new Set(before.flatMap((d) => d.remarks.filter((r) => r.actedOn).map((r) => r.id)))
-  const printed = new Map<string, Remark>()
-  for (const run of before) {
-    for (const r of run.remarks) {
-      if (r.kind === 'slow-mcp-start' || r.actedOn || !printedIn(r, run.runId)) continue
-      if (!printed.has(r.id)) printed.set(r.id, r)
-    }
-  }
-  const byId = new Map(record.evals.map((e) => [e.id, e]))
-  const entries = new Map(
-    suiteResult(record).files.flatMap((f) =>
-      f.evals.map((e) => [
-        e.path,
-        (e.cases ? e.cases.map((k) => k.id) : [e.id]).flatMap((id) => byId.get(id) ?? []),
-      ]),
-    ),
-  )
-  const texts = new Map<string, Promise<string | null>>()
-  const text = (path: string) => {
-    let t = texts.get(path)
-    if (!t) {
-      t = readFile(join(root, path), 'utf8').catch(() => null)
-      texts.set(path, t)
-    }
-    return t
-  }
-  const out: Remark[] = []
-  const ranFiles = new Set(record.evals.map((e) => e.file))
-  for (const r of printed.values()) {
-    if (done.has(r.id) || ids.has(r.id)) continue
-    const own = entries.get(r.evalId)
-    if (!own?.length) {
-      // A rename is a name remark's fix, and gives the eval a new id: the run ran its file, and
-      // the old name is gone from it.
-      const renamed =
-        NAME_KINDS.has(r.kind) &&
-        r.source?.quote &&
-        ranFiles.has(fileOf(r.source.at)) &&
-        !(await text(fileOf(r.source.at)))?.includes(r.source.quote)
-      if (renamed) out.push({ ...r, printed: false, actedOn: { run: record.runId } })
-      continue
-    }
-    const name = own[0]?.family?.name ?? own[0]?.name
-    const changed = r.source?.quote
-      ? !quoteIn(await text(fileOf(r.source.at)), name, r.source.quote)
-      : !kinds.has(`${r.kind}\0${r.evalId}`) &&
-        !own.some((entry) => remarkId(r.kind, r.evalId, entry) === r.id)
-    if (changed) out.push({ ...r, printed: false, actedOn: { run: record.runId } })
-  }
-  return out
-}
-
-/**
- * The run's remarks from what it raised: each with the first run that printed it, demoted as its
- * kind's `remark_outcomes` says, ranked, then the earlier remarks this run found acted on.
- */
-export async function settleRemarks(
+/** The run's remarks from what it raised, once each: with the first run that printed it, ranked. */
+async function settleRemarks(
   config: ResolvedConfig,
   record: RunRecord,
   candidates: Candidate[],
 ): Promise<Remark[]> {
-  const runs = await remarksIn(await otherRuns(config, record.runId))
-  const before = runs.filter((r) => r.runId < record.runId)
-  const first = printedBefore(runs)
-  const status = new Map(remarkOutcomes(before).map((o) => [o.kind, o.status]))
+  const first = printedBefore(await remarksIn(await otherRuns(config, record.runId)))
   const seen = new Set<string>()
-  const settled = rankRemarks(
+  return rankRemarks(
     candidates.flatMap((c): Remark[] => {
       if (seen.has(c.id)) return []
       seen.add(c.id)
-      const r = candidateOf({ ...c, firstSeenRun: '' })
-      const was = first.get(r.id)
-      const firstSeenRun = was && was < record.runId ? was : record.runId
-      const kind = status.get(r.kind)
-      const demoted =
-        kind === 'hidden'
-          ? 'hidden'
-          : kind === 'demoted' && r.severity === 'concern'
-            ? 'suggestion'
-            : null
+      const was = first.get(c.id)
       return [
-        demoted ? { ...r, severity: 'suggestion', demoted, firstSeenRun } : { ...r, firstSeenRun },
+        {
+          ...candidateOf({ ...c, firstSeenRun: '' }),
+          firstSeenRun: was && was < record.runId ? was : record.runId,
+        },
       ]
     }),
   )
-  return [...settled, ...(await actedOn(config.root, record, before, settled))]
 }
 
 const one = <T>(db: HistoryDb, sql: string, params: Array<string>) =>
@@ -346,11 +247,9 @@ export async function remarksOf(config: ResolvedConfig, record: RunRecord): Prom
       locate: loc.locate,
     }
     const candidates = deterministicRemarks(suiteResult(record), record, ctx)
+    return candidates.length ? await settleRemarks(config, record, candidates) : []
+  } finally {
     db?.close()
-    return runs.length || candidates.length ? settleRemarks(config, record, candidates) : []
-  } catch (error) {
-    db?.close()
-    throw error
   }
 }
 
@@ -369,7 +268,7 @@ export async function withModelRemarks(
   for (const entry of record.evals) await loc.prepare(entry, [null])
   const ctx: RemarkContext = { history: null, comparable: () => '', locate: loc.locate }
   const classified = noBaseline(suiteResult(record), record, insights.evals, ctx)
-  const keep = (r: Remark) => !r.actedOn && r.kind !== 'no-baseline'
+  const keep = (r: Remark) => r.kind !== 'no-baseline'
   return settleRemarks(config, record, [
     ...earlier.filter((r) => keep(r) && r.origin === 'deterministic').map(candidateOf),
     ...insights.remarks.filter((r) => keep(r) && r.origin === 'model').map(candidateOf),

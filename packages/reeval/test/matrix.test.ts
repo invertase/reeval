@@ -153,7 +153,7 @@ describe('the matrix check (twins: it can fail)', () => {
     assert.deepEqual(unclaimed.problems, [
       'inventory y: contract.test.ts has no behaviour "nope"',
       'inventory y: e2e-real.test.ts has no test "nope"',
-      'inventory y: "rules read" isn\'t "contract › <behaviour>", "e2e › <title>", "questions › <title>" or "remarks › <title>"',
+      'inventory y: "rules read" isn\'t "contract › <behaviour>", "e2e › <title>" or "questions › <title>"',
       'contract behaviour "clean teardown" covers no feature: add it to an entry in inventory.ts',
     ])
   })

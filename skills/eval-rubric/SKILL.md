@@ -19,15 +19,13 @@ and drops, without asking again, a remark that:
 
 - has any other kind;
 - has no `source`: the `L<n>` of a line in the eval's source and a quote copied exactly from that
-  line (the file must be unchanged since the run);
-- cites no evidence from this run (fact ids or attempt transcript lines), or cites one it wasn't
-  shown;
-- has no `fix`: the `L<n>` of the line to change and a concrete edit ("ask 'Is Genkit the first
-  framework the reply recommends?'"), not advice ("consider clarifying the question").
+  line (the file must be unchanged since the run).
 
 The text is one plain sentence of at most 25 words saying what's wrong. One remark of a kind per
-eval. The rest of the kinds are reeval's own rules, from hard thresholds: the model never raises
-them.
+eval. Give the evidence from this run (fact ids or attempt transcript lines) and a `fix`: the
+`L<n>` of the line to change and a concrete edit ("ask 'Is Genkit the first framework the reply
+recommends?'"), not advice ("consider clarifying the question"). The rest of the kinds are
+reeval's own rules, from hard thresholds: the model never raises them.
 
 ## `name-contradicts`
 

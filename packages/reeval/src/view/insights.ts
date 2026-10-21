@@ -66,8 +66,7 @@ export type RunInsights = {
   evals: EvalInsight[]
   /**
    * Remarks about the evals' own quality, ranked: every one this run raised, including those an
-   * earlier run printed first (`firstSeenRun`), which don't print again; then, with `actedOn`, each
-   * remark an earlier run printed whose cited source this run found changed.
+   * earlier run printed first (`firstSeenRun`), which don't print again.
    */
   remarks: Remark[]
   /**
@@ -129,8 +128,8 @@ export type Sentence = { text: string; cites: string[] }
 
 /**
  * Each remark kind's origin and severity: an analysis model raises the `model` kinds, through the
- * gates (a quote on the cited line, evidence from this run, a fix); reeval's rules raise the others.
- * The severity is the kind's, never the model's; `remark_outcomes` can demote it.
+ * gates (a known kind, a quote verbatim on the cited line); reeval's rules raise the others. The
+ * severity is the kind's, never the model's.
  */
 export const REMARK_KINDS: Record<
   Remark['kind'],
@@ -175,13 +174,8 @@ export type Remark = {
     | 'flaky-check'
     | 'no-baseline'
     | 'slow-mcp-start'
-  /** Fixed by kind (`REMARK_KINDS`), never chosen by the model; `demoted` makes it a suggestion. */
+  /** Fixed by kind (`REMARK_KINDS`), never chosen by the model. */
   severity: 'concern' | 'suggestion'
-  /**
-   * Set when the project rarely acts on this kind (`remark_outcomes`): `suggestion`, acted on in
-   * under 20% of at least 10 printed, prints only under `-v`; `hidden`, under 5%, never prints.
-   */
-  demoted?: 'suggestion' | 'hidden'
   /** One plain sentence: what's wrong. */
   text: string
   /**
@@ -189,9 +183,12 @@ export type Remark = {
    * file at the run's source hash. Every model remark has one.
    */
   source?: { at: string; quote: string }
-  /** Facts from this run (or history facts) showing it mattered now: at least one. */
+  /** Facts from this run (or history facts) showing it mattered now; a model's, as it cited them. */
   evidence: string[]
-  /** A concrete edit at a source location (`source:<file>#L<n>`) in the eval. */
+  /**
+   * An edit at a source location (`source:<file>#L<n>`) in the eval. A model remark's `edit` is
+   * empty when the model gave none, and its `at` is the quoted line when it named no line.
+   */
   fix: { at: string; edit: string }
   origin: 'model' | 'deterministic'
   /**
@@ -206,10 +203,6 @@ export type Remark = {
    * `firstSeenRun` only.
    */
   printed?: boolean
-  /**
-   * Set in a later run that found the cited source changed after a run printed the remark: its
-   * `quote` gone from the file, or, without one, the eval's sources changed. That run lists the
-   * remark again with this set and `printed: false`; it's what `remark_outcomes` counts.
-   */
+  /** Set on later runs once the cited span changed: the remark was acted on. */
   actedOn?: { run: string }
 }

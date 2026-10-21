@@ -4,7 +4,6 @@
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
-import { type RunRemarks, remarkOutcomes } from '../remarks/outcomes.ts'
 import { liftInterval, median, round3, wilson } from '../stats.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
@@ -14,7 +13,6 @@ import {
   type EffortVerdict,
   effortOf,
 } from '../view/effort.ts'
-import type { Remark } from '../view/insights.ts'
 import { rowsOf } from './rows.ts'
 import { TOOL_CLASSES } from './tool-class.ts'
 import type { CheckTally } from './types.ts'
@@ -71,10 +69,6 @@ CREATE TABLE drift_m (
   run_id TEXT, prev_run_id TEXT, eval_key TEXT, cell_key TEXT, changed TEXT,
   changed_paths TEXT, noise INTEGER, real_changed TEXT
 );
-CREATE TABLE remark_outcomes_m (
-  kind TEXT, origin TEXT, severity TEXT, raised INTEGER, acted_on INTEGER, rate REAL,
-  status TEXT, min_raised INTEGER
-);
 CREATE TABLE check_streaks_m (
   eval_key TEXT, cell_key TEXT, label TEXT, fingerprint TEXT, branch TEXT, runs INTEGER,
   fails INTEGER, streak_runs INTEGER, streak_tries INTEGER, streak_since TEXT, last_run TEXT,
@@ -109,7 +103,6 @@ export const DERIVED = [
   'flaky_m',
   'drift_m',
   'check_streaks_m',
-  'remark_outcomes_m',
 ]
 
 type Cell = {
@@ -839,42 +832,6 @@ export function deriveFacts(db: DatabaseSync): void {
   insertAll(db, 'flaky_m', flakyRows)
 
   insertAll(db, 'check_streaks_m', checkStreaks(db))
-  insertAll(db, 'remark_outcomes_m', remarkOutcomes(runRemarks(db)))
-}
-
-type RemarkRow = {
-  run_id: string
-  id: string
-  eval_key: string
-  kind: Remark['kind']
-  origin: Remark['origin']
-  severity: Remark['severity']
-  first_seen_run: string
-  printed: number | null
-  acted_on_run: string | null
-}
-
-/** Each run's remarks as its insights.json listed them, for `remarkOutcomes`. */
-function runRemarks(db: DatabaseSync): RunRemarks[] {
-  const rows = rowsOf<RemarkRow>(db.prepare('SELECT * FROM remarks ORDER BY run_id, rowid'))
-  const runs = new Map<string, Remark[]>()
-  for (const r of rows) {
-    const remark: Remark = {
-      id: r.id,
-      evalId: r.eval_key,
-      kind: r.kind,
-      severity: r.severity,
-      text: '',
-      evidence: [],
-      fix: { at: '', edit: '' },
-      origin: r.origin,
-      firstSeenRun: r.first_seen_run,
-      ...(r.printed === null ? {} : { printed: r.printed === 1 }),
-      ...(r.acted_on_run ? { actedOn: { run: r.acted_on_run } } : {}),
-    }
-    runs.set(r.run_id, [...(runs.get(r.run_id) ?? []), remark])
-  }
-  return [...runs].map(([runId, remarks]) => ({ runId, remarks }))
 }
 
 type StreakCheck = {

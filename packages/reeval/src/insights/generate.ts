@@ -7,7 +7,7 @@
 // those in flight finish. Every call has `CALL_TIMEOUT_MS` and `INSIGHT_OUTPUT_TOKENS`; an eval
 // whose call fails, is cut off or times out is tried once more, then prints its facts alone, and
 // no other eval is touched. The insights call also returns the eval's remarks, which the gates
-// (`remarks.ts`) hold to the eval's source as the run saw it and to this run's facts. Nothing here
+// (`remarks.ts`) hold to the eval's source as the run saw it. Nothing here
 // reads or changes a verdict: the facts are final before any call starts.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -369,7 +369,6 @@ async function evalInsight(
   )
   const gated = gateRemarks((last as InsightsOutput | null)?.remarks ?? [], {
     input,
-    name: classified.name,
     entries: entriesOf(o.record, e).map((x) => x.entry),
     files: await sourceFiles(o.root, o.record, e),
   })

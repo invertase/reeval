@@ -19,8 +19,8 @@ npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift
 reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                               rebuilt from the records); views: lift, effort, factor_effects,
                               skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                              verdict_flips, check_discrimination, check_rates, check_streaks,
-                              remark_outcomes. No argument lists them
+                              verdict_flips, check_discrimination, check_rates, check_streaks. No
+                              argument lists them
   --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                               or table name, only that run's rows
   --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
@@ -74,7 +74,6 @@ npx reeval query failing_attempts --run last
 | `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `pass_at_1`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `variant_pass_at_1`, `control_pass_at_1`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
 | `question_pairs` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
-| `remark_outcomes` | `kind`, `origin`, `severity`, `raised`, `acted_on`, `rate`, `status`, `min_raised` |
 | `skill_files` | `run_id`, `eval_key`, `cell_key`, `environment`, `attempt_key`, `attempt_id`, `path`, `reads`, `first_line` |
 | `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
 | `verdict_flips` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `judgement_key`, `question`, `prev_pass_rate`, `pass_rate`, `n` |
@@ -99,7 +98,6 @@ npx reeval query failing_attempts --run last
 | `check_discrimination` | Check (`expect` label) of a variant cell per run, beside its control's: passes, failures and not-run on both sides, and whether it tells them apart |
 | `check_rates` | Check (`expect` label) per cell per run, control and variant alike: its harness, environment and `role`, `pass`, `fail`, `error`, `not_run` over the cell's counted attempts, and `rate` = `pass / (pass + fail)` (`NULL` when neither). An `error` (a matcher that couldn't answer) and a `not_run` (a hard `expect` before it failed) are left out of `rate` |
 | `check_streaks` | Check per cell, comparable fingerprint and branch over recorded runs: `runs` and `fails` (failed tries) in all, then, newest first, `streak_runs` in a row with no fail or error (on a variant, passed on both sides) and their `streak_tries`, `streak_since` (the streak's oldest run), `last_run` and `ended_by`, the run that broke it (`NULL`: it never broke). A run that never reached the check is skipped. The `check-never-fails` [remark](/reference/cli/run#remarks) reads it |
-| `remark_outcomes` | Remark kind over every recorded and scratch run: `raised` (distinct remarks some run printed), `acted_on` (those a later run found the cited source edited), `rate` = `acted_on / raised`, and `status`: `kept` below `min_raised` (10) raised, else `hidden` under 5%, `demoted` under 20% (a concern prints as a suggestion), else `kept`. `slow-mcp-start` isn't counted. See [remarks](/reference/cli/run#remarks) |
 
 In the text table, `·` is SQL `NULL`; `--json` has `null`. On `factor_effects`, a `pooled` row has `run_id` `NULL` (it spans runs), and a row pooled across evals (with `strata` set and `runs` `NULL`) has `eval_key` and `runs` `NULL` too.
 
@@ -179,11 +177,9 @@ evals/mcp.eval.ts › mcp canary  cursor:composer-2.5/stamped/docker           1
 | `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
 | `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_at_1`, `sources`, `family_id`, `case_index` |
 | `families` | `run_id`, `family_id`, `file`, `groups`, `name`, `cases`, `ran`, `cell_key`, `cell_cases`, `pass`, `counted`, `pass_at_1`, `lo`, `hi`, `method`, `outcome` |
-| `insight_files` | `run_id`, `path`, `size`, `mtime_ms` |
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
 | `mcp_startup` | `run_id`, `attempt_key`, `turn`, `server`, `ms` |
 | `question_pairs_m` | `run_id`, `eval_key`, `question`, `cut`, `held`, `a`, `b`, `pairs`, `a_wins`, `b_wins`, `ties`, `splits`, `splits_first` |
-| `remarks` | `run_id`, `id`, `eval_key`, `kind`, `origin`, `severity`, `demoted`, `text`, `source_at`, `fix_at`, `first_seen_run`, `printed`, `acted_on_run` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `reeval`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
 | `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms`, `class` |
 | `votes` | `run_id`, `eval_key`, `question`, `cut`, `held`, `pair_run`, `a`, `b`, `winner`, `swapped`, `reason` |
