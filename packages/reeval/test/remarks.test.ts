@@ -5,14 +5,22 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
+import { modelRubric, rubric, rubricHash, rubricKinds } from '../src/insights/rubric.ts'
+import { insightsPromptVersion } from '../src/insights/schema.ts'
 import { defaultBranch } from '../src/remarks/index.ts'
+import { OUTCOME_MIN_RAISED, type RunRemarks, remarkOutcomes } from '../src/remarks/outcomes.ts'
 import {
   type CheckWindow,
   deterministicRemarks,
   type RemarkContext,
   type Streak,
 } from '../src/remarks/rules.ts'
-import type { RunInsights } from '../src/view/insights.ts'
+import {
+  MODEL_REMARK_KINDS,
+  REMARK_KINDS,
+  type Remark,
+  type RunInsights,
+} from '../src/view/insights.ts'
 import { suiteResult } from '../src/view/suite.ts'
 import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 
@@ -582,5 +590,383 @@ evaluate.each([{ id: 'a' }, { id: 'b' }])(
       remarksBlock(r.stdout) ?? '',
       /^Remarks:\n {2}fixes \$id: Marked passed .*\n {4}fix {2}evals\/fam\.eval\.ts:5 /,
     )
+  })
+})
+
+const REMARKS_DIR = new URL('./fixtures/remarks/', import.meta.url)
+const KINDS_EVAL = readFileSync(new URL('kinds.eval.ts', REMARKS_DIR), 'utf8')
+
+/** A fake project whose analysis model raises one remark per eval it knows (`fixtures/remarks`). */
+const modelProject = (name: string, evals: string, extra = '') =>
+  project(name, {
+    'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+import { insights } from './insights.ts'
+export default defineConfig({
+  harness: fakeHarness(),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', {}),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  analysis: { model: fakeAnalysis({ insights }) },
+  ${extra}
+})
+`,
+    'insights.ts': readFileSync(new URL('insights.ts', REMARKS_DIR), 'utf8'),
+    'evals/kinds.eval.ts': evals,
+  })
+
+const MODEL_KINDS = [
+  'name-contradicts',
+  'name-no-intent',
+  'judge-too-loose',
+  'judge-leaks-answer',
+  'compound-judge',
+  'prompt-names-tool',
+]
+
+/** The evals a remarks block names, in order. */
+const namedIn = (block: string | null) =>
+  [...(block ?? '').matchAll(/^ {2}(\S[^:]*):/gm)].map((m) => m[1])
+
+/** `count` evals whose judge question any reply passes: a `judge-too-loose` remark each. */
+const looseJudges = (count: number, from = 1) =>
+  `import { evaluate, expect } from 'reeval'
+${Array.from(
+  { length: count },
+  (_, i) => `
+evaluate('answers kindly ${from + i}', async (c) => {
+  await c.send('Thank the user and suggest a next step.')
+  expect(await c.judge('Is the answer okay?')).toPass()
+})`,
+).join('\n')}
+`
+
+/** Acts on the first `n` loose judges: their question no longer has the quote. */
+const actOn = (source: string, n: number) => {
+  let left = n
+  return source.replace(/Is the answer okay\?/g, (q) =>
+    left-- > 0 ? 'Does the reply thank the user by name and offer one next step?' : q,
+  )
+}
+
+describe('model remarks', () => {
+  test('each kind passes its gates, prints once with its fix, and never changes the exit code', async () => {
+    const p = await modelProject('remarks-model-kinds', KINDS_EVAL)
+    const first = await runCli(p.dir, ['run', '-v'])
+    assert.equal(first.code, 1, 'ships the release fails its judge')
+    const doc = insightsOf(p.dir)
+    assert.deepEqual(doc?.validation.drops ?? [], [])
+    assert.deepEqual(
+      doc?.remarks.map((r) => [r.kind, r.origin, r.severity]).sort(),
+      [
+        ...MODEL_KINDS.map((k) => [
+          k,
+          'model',
+          k === 'name-no-intent' || k === 'compound-judge' ? 'suggestion' : 'concern',
+        ]),
+        ['no-baseline', 'deterministic', 'concern'],
+      ].sort(),
+    )
+    const block = remarksBlock(first.stdout) ?? ''
+    assert.deepEqual(namedIn(block), [
+      'answers kindly',
+      'finds the bug',
+      'adds a cache',
+      'picks Genkit',
+      'adds dark mode',
+      'ships the release',
+      'test 1',
+    ])
+    assert.match(
+      block,
+      /^ {2}answers kindly: The judge asks whether the answer is okay, which any reply passes\.\n {4}fix {2}evals\/kinds\.eval\.ts:16 {2}ask 'Does the reply thank the user by name and offer one next step\?'$/m,
+    )
+    const loose = doc?.remarks.find((r) => r.kind === 'judge-too-loose')
+    assert.deepEqual(loose?.source, {
+      at: 'source:evals/kinds.eval.ts#L16',
+      quote: 'Is the answer okay?',
+    })
+    assert.match(
+      loose?.evidence[0] ?? '',
+      /answers kindly\/.*\/checks\/toPass Is the answer okay\?$/,
+    )
+
+    const off = await runCli(p.dir, ['run', '--no-insights'])
+    assert.equal(off.code, first.code, 'the same exit code without the model')
+    const second = await runCli(p.dir, ['run', '-v'])
+    assert.equal(second.code, first.code)
+    assert.equal(remarksBlock(second.stdout), null, 'every remark has printed')
+  })
+
+  test('without -v, concerns print up to the cap and suggestions wait', async () => {
+    const p = await modelProject('remarks-model-cap', KINDS_EVAL)
+    const r = await runCli(p.dir, ['run'])
+    const block = remarksBlock(r.stdout)
+    assert.deepEqual(namedIn(block), ['answers kindly', 'finds the bug', 'adds a cache'])
+    assert.match(block ?? '', /\+2 more \(-v\)/)
+  })
+
+  test('canary: an unknown kind, no evidence, a quote not on its line and no fix are each dropped', async () => {
+    const p = await modelProject('remarks-model-gates', KINDS_EVAL)
+    const broken = [
+      'name-contradicts:kind',
+      'judge-too-loose:evidence',
+      'judge-leaks-answer:line',
+      'prompt-names-tool:fix',
+    ]
+    const r = await runCli(p.dir, ['run', '-v'], { env: { REMARKS: broken.join(',') } })
+    assert.equal(r.code, 1)
+    const doc = insightsOf(p.dir)
+    assert.deepEqual(doc?.remarks.map((x) => x.kind).sort(), [
+      'compound-judge',
+      'name-no-intent',
+      'no-baseline',
+    ])
+    assert.deepEqual((doc?.validation.drops ?? []).map((d) => [d.slot, d.reason]).sort(), [
+      ['adds a cache › remark vague-name', 'is kind "vague-name", which the model can\'t raise'],
+      ['answers kindly › remark judge-too-loose', 'cites no evidence from this run'],
+      [
+        'finds the bug › remark judge-leaks-answer',
+        'quotes "off-by-one in parse()", which isn\'t on line 1 of evals/kinds.eval.ts',
+      ],
+      ['picks Genkit › remark prompt-names-tool', 'has no fix'],
+    ])
+    assert.doesNotMatch(r.stdout, /answers kindly:|finds the bug:|adds a cache:|picks Genkit:/)
+  })
+
+  test('canary: a remark whose quoted file changed since the run is dropped', async () => {
+    const p = await modelProject('remarks-model-stale', KINDS_EVAL)
+    await runCli(p.dir, ['run', '--no-insights'])
+    await writeFile(join(p.dir, 'evals/kinds.eval.ts'), `${KINDS_EVAL}\n// edited\n`)
+    const r = await runCli(p.dir, ['analyze', readRun(p.dir).run.runId, '--insights', '-v'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const drops = insightsOf(p.dir)?.validation.drops ?? []
+    assert.equal(drops.length, 6, JSON.stringify(drops))
+    for (const d of drops) assert.match(d.reason, /evals\/kinds\.eval\.ts changed since the run/)
+  })
+
+  test('an edit to the quoted source marks the remark acted on; an edit elsewhere prints nothing', async () => {
+    const p = await modelProject('remarks-model-acted', KINDS_EVAL)
+    const raised = await runCli(p.dir, ['run', '-v'])
+    const firstRun = readRun(p.dir).run.runId
+    assert.match(remarksBlock(raised.stdout) ?? '', /answers kindly:/)
+
+    const file = join(p.dir, 'evals/kinds.eval.ts')
+    await writeFile(file, `${KINDS_EVAL}// a comment\n`)
+    const elsewhere = await runCli(p.dir, ['run', '-v'])
+    assert.deepEqual(
+      namedIn(remarksBlock(elsewhere.stdout)),
+      ['adds dark mode'],
+      "a model remark's quote is still there; no-baseline's sources changed, so it re-arms",
+    )
+    assert.ok(!insightsOf(p.dir)?.remarks.some((r) => r.actedOn), 'nothing acted on')
+
+    await writeFile(file, actOn(`${KINDS_EVAL}// a comment\n`, 1))
+    const acted = await runCli(p.dir, ['run', '-v'])
+    assert.deepEqual(namedIn(remarksBlock(acted.stdout)), ['adds dark mode'])
+    const doc = insightsOf(p.dir)
+    const done = doc?.remarks.filter((r) => r.actedOn)
+    assert.deepEqual(
+      done?.map((r) => [r.kind, r.firstSeenRun, r.printed, r.actedOn?.run]),
+      [['judge-too-loose', firstRun, false, readRun(p.dir).run.runId]],
+    )
+    const later = await runCli(p.dir, ['run', '-v'])
+    assert.equal(remarksBlock(later.stdout), null)
+    assert.ok(!insightsOf(p.dir)?.remarks.some((r) => r.actedOn), 'acted on once')
+
+    await writeFile(
+      file,
+      readFileSync(file, 'utf8').replace("'adds a cache'", "'removes the logging'"),
+    )
+    await runCli(p.dir, ['run', '-v'])
+    assert.deepEqual(
+      insightsOf(p.dir)
+        ?.remarks.filter((r) => r.actedOn)
+        .map((r) => r.kind),
+      ['name-contradicts'],
+      'a rename acts on a name remark, though the eval has a new id',
+    )
+  })
+})
+
+describe('no-baseline', () => {
+  const darkMode = (
+    options: string,
+  ) => `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
+const dark = defineEnvironment('dark', { files: { 'dark.css': 'body {}\\n' } })
+void plain
+void dark
+evaluate('adds dark mode', ${options}, async (c) => {
+  await c.send('Add a dark mode toggle to the settings page.')
+  expect(true, 'toggle added').toBe(true)
+})
+`
+
+  test('raised when the classification names a change and nothing compares it', async () => {
+    const p = await modelProject('remarks-nb-at', darkMode('{}'))
+    const r = await runCli(p.dir, ['run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(
+      remarksBlock(r.stdout)?.split('\n').slice(0, 3).join('\n'),
+      [
+        'Remarks:',
+        "  adds dark mode: It's about dark mode, but nothing runs it without dark mode, so the result can't show what dark mode changes.",
+        '    fix  evals/kinds.eval.ts:6  add compare: { baseline: <an environment without dark mode>, variants: [<one with it>] }',
+      ].join('\n'),
+    )
+  })
+
+  test('canary: a compare, a profile with limit.compare: false, or no change raises none', async () => {
+    const compared = await modelProject(
+      'remarks-nb-compare',
+      darkMode('{ compare: { baseline: plain, variants: [dark] } }'),
+    )
+    const c = await runCli(compared.dir, ['run'])
+    assert.equal(c.code, 0, c.stdout + c.stderr)
+    assert.ok(!insightsOf(compared.dir)?.remarks.some((r) => r.kind === 'no-baseline'))
+
+    const limited = await modelProject(
+      'remarks-nb-profile',
+      darkMode('{ compare: { baseline: plain, variants: [dark] } }'),
+      `profiles: { quick: { limit: { compare: false } } },`,
+    )
+    const l = await runCli(limited.dir, ['run', '--profile', 'quick'])
+    assert.equal(l.code, 0, l.stdout + l.stderr)
+    assert.ok(!insightsOf(limited.dir)?.remarks.some((r) => r.kind === 'no-baseline'))
+
+    const unnamed = await modelProject(
+      'remarks-nb-nochange',
+      darkMode('{}').replace("'adds dark mode'", "'adds a dark toggle'"),
+    )
+    const u = await runCli(unnamed.dir, ['run'])
+    assert.equal(u.code, 0, u.stdout + u.stderr)
+    assert.doesNotMatch(u.stdout, /Remarks:/)
+  })
+})
+
+describe('remark outcomes', () => {
+  const run = (runId: string, remarks: Array<Partial<Remark>>): RunRemarks => ({
+    runId,
+    remarks: remarks.map((r, i) => ({
+      id: `id${i}`,
+      evalId: 'e',
+      kind: 'judge-too-loose',
+      severity: 'concern',
+      text: '',
+      evidence: [],
+      fix: { at: '', edit: '' },
+      origin: 'model',
+      firstSeenRun: runId,
+      printed: true,
+      ...r,
+    })),
+  })
+  /** `raised` printed remarks of a kind, then a later run acting on `acted` of them. */
+  const outcome = (raised: number, acted: number, kind: Remark['kind'] = 'judge-too-loose') => {
+    const ids = Array.from({ length: raised }, (_, i) => ({ id: `r${i}`, kind }))
+    const [row] = remarkOutcomes([
+      run('a', ids),
+      run(
+        'b',
+        ids.slice(0, acted).map((r) => ({ ...r, printed: false, actedOn: { run: 'b' } })),
+      ),
+    ])
+    return row
+  }
+
+  test('a concern acted on under 20% of 10 printed is demoted, under 5% hidden', () => {
+    assert.equal(outcome(10, 1)?.status, 'demoted')
+    assert.equal(outcome(10, 0)?.status, 'hidden')
+    assert.equal(outcome(20, 1)?.status, 'demoted', '5% is not under 5%')
+    assert.deepEqual(outcome(10, 1), {
+      kind: 'judge-too-loose',
+      origin: 'model',
+      severity: 'concern',
+      raised: 10,
+      acted_on: 1,
+      rate: 0.1,
+      status: 'demoted',
+      min_raised: OUTCOME_MIN_RAISED,
+    })
+  })
+
+  test('canary: 20% acted on, or 9 printed, keeps the kind', () => {
+    assert.equal(outcome(10, 2)?.status, 'kept')
+    assert.equal(outcome(9, 0)?.status, 'kept')
+  })
+
+  test('canary: a remark never printed, and slow-mcp-start, count for nothing', () => {
+    const unprinted = Array.from({ length: 10 }, (_, i) => ({ id: `u${i}`, printed: false }))
+    assert.deepEqual(remarkOutcomes([run('a', unprinted)]), [])
+    assert.equal(outcome(10, 0, 'slow-mcp-start'), undefined)
+  })
+
+  test('a demoted kind prints as a suggestion, a hidden one not at all; reeval query remark_outcomes says why', async () => {
+    const demoted = await modelProject('remarks-demote', looseJudges(10))
+    await runCli(demoted.dir, ['run', '-v'])
+    await writeFile(join(demoted.dir, 'evals/kinds.eval.ts'), actOn(looseJudges(10), 1))
+    await runCli(demoted.dir, ['run', '-v'])
+    await writeFile(join(demoted.dir, 'evals/kinds.eval.ts'), actOn(looseJudges(11), 1))
+    const quiet = await runCli(demoted.dir, ['run'])
+    assert.doesNotMatch(quiet.stdout, /Remarks:/, 'a suggestion now, so only under -v')
+    const raised = insightsOf(demoted.dir)?.remarks.find((r) => r.evalId.endsWith('kindly 11'))
+    assert.deepEqual([raised?.severity, raised?.demoted], ['suggestion', 'suggestion'])
+    const rows = JSON.parse(
+      (await runCli(demoted.dir, ['query', 'remark_outcomes', '--json'])).stdout,
+    )
+    // The 11th printed nothing (a suggestion, without -v), so it isn't counted.
+    assert.deepEqual(rows, [
+      {
+        kind: 'judge-too-loose',
+        origin: 'model',
+        severity: 'concern',
+        raised: 10,
+        acted_on: 1,
+        rate: 0.1,
+        status: 'demoted',
+        min_raised: 10,
+      },
+    ])
+
+    const hidden = await modelProject('remarks-hide', looseJudges(10))
+    await runCli(hidden.dir, ['run', '-v'])
+    await writeFile(join(hidden.dir, 'evals/kinds.eval.ts'), looseJudges(11))
+    const none = await runCli(hidden.dir, ['run', '-v'])
+    assert.equal(remarksBlock(none.stdout), null, 'hidden even under -v')
+    const gone = insightsOf(hidden.dir)?.remarks.find((r) => r.evalId.endsWith('kindly 11'))
+    assert.deepEqual([gone?.demoted, gone?.printed], ['hidden', false])
+  })
+
+  test('canary: 2 of 10 acted on keeps a new remark a concern', async () => {
+    const p = await modelProject('remarks-demote-under', looseJudges(10))
+    await runCli(p.dir, ['run', '-v'])
+    await writeFile(join(p.dir, 'evals/kinds.eval.ts'), actOn(looseJudges(10), 2))
+    await runCli(p.dir, ['run', '-v'])
+    await writeFile(join(p.dir, 'evals/kinds.eval.ts'), actOn(looseJudges(11), 2))
+    const r = await runCli(p.dir, ['run'])
+    assert.deepEqual(namedIn(remarksBlock(r.stdout)), ['answers kindly 11'])
+  })
+})
+
+describe('the eval rubric', () => {
+  const source = readFileSync(
+    new URL('../../../skills/eval-rubric/SKILL.md', import.meta.url),
+    'utf8',
+  )
+
+  test('has one section per remark kind, and none for anything else', () => {
+    const sections = rubricKinds(source)
+    assert.deepEqual([...sections].sort(), Object.keys(REMARK_KINDS).sort())
+    assert.equal(new Set(sections).size, sections.length, 'one section each')
+  })
+
+  test('ships beside dist as the repository has it, and its hash is in the prompt version', () => {
+    assert.equal(rubric(), source, 'pnpm build copies skills/eval-rubric')
+    assert.match(insightsPromptVersion(), new RegExp(`-${rubricHash()}$`))
+    assert.deepEqual(rubricKinds(modelRubric(MODEL_REMARK_KINDS)), [...MODEL_REMARK_KINDS])
+    assert.deepEqual([...MODEL_REMARK_KINDS].sort(), [...MODEL_KINDS].sort())
   })
 })

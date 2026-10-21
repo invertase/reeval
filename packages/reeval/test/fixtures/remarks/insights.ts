@@ -1,6 +1,7 @@
 // A rule-based stand-in for the insight model that raises one remark per eval it knows, for
 // `fakeAnalysis({ insights })`: it reads the `L<n>` source lines and facts each call is shown and
-// cites them as a model does, so its remarks go through the same gates with no key. `REMARKS`
+// cites them as a model does, so its remarks go through the same gates with no key. A name with a
+// trailing number (`answers kindly 3`) gets its base name's remark. `REMARKS`
 // (an env var, a comma list of `kind:part`) breaks one part of a kind's remark, for the canaries.
 import type { FakeInsights, FakeInsightsInput } from 'reeval/judge'
 
@@ -73,7 +74,7 @@ const lineOf = (input: Call, needle: string) =>
 
 export function insights(input: FakeInsightsInput): FakeInsights {
   if (input.call === 'headline') return {}
-  const spec = SPECS[input.eval.name]
+  const spec = SPECS[input.eval.name] ?? SPECS[input.eval.name.replace(/ \d+$/, '')]
   if (!spec) return {}
   if (input.call === 'classify' || !spec.kind || !spec.quote) return { intent: spec.intent }
   const kind = spec.kind
