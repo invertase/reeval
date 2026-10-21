@@ -894,7 +894,7 @@ describe('the order analysis.maxTokens is spent in', () => {
   const at = (over: Partial<EvalResult>) =>
     ({ outcome: 'pass', questions: [], across: 'none', ...over }) as EvalResult
 
-  test('a failure, then made worse, then a compare, then an infra error, then the rest', () => {
+  test('a failure, then made worse, then a compare, then an infra error, then a flaky pass, then the rest', () => {
     const rest = at({ name: 'rest' })
     const infra = at({ name: 'infra', outcome: 'infra_error' })
     const compare = at({ name: 'compare', across: 'harness' as EvalResult['across'] })
@@ -904,13 +904,36 @@ describe('the order analysis.maxTokens is spent in', () => {
       cells: [{ effect: 'worse', checks: [] }] as unknown as EvalResult['cells'],
     })
     const fail = at({ name: 'fail', outcome: 'fail' })
+    const flaky = at({
+      name: 'flaky',
+      cases: [
+        { cells: [{ passed: 3, failed: 0, checks: [] }] },
+        { cells: [{ passed: 2, failed: 1, checks: [] }] },
+      ] as unknown as EvalResult['cases'],
+    })
     assert.deepEqual(
-      [rest, infra, compare, question, worse, fail].map(insightTier),
-      [4, 3, 2, 2, 1, 0],
+      [rest, flaky, infra, compare, question, worse, fail].map(insightTier),
+      [5, 4, 3, 2, 2, 1, 0],
     )
     assert.deepEqual(
-      byPriority([rest, infra, compare, question, worse, fail]).map((e) => e.name),
-      ['fail', 'worse', 'compare', 'question', 'infra', 'rest'],
+      byPriority([rest, flaky, infra, compare, question, worse, fail]).map((e) => e.name),
+      ['fail', 'worse', 'compare', 'question', 'infra', 'flaky', 'rest'],
+    )
+  })
+
+  test('canary: a clean pass stays below a flaky one, whichever prints first', () => {
+    const clean = at({
+      name: 'clean',
+      cells: [{ passed: 3, failed: 0, checks: [] }] as unknown as EvalResult['cells'],
+    })
+    const flaky = at({
+      name: 'flaky',
+      cells: [{ passed: 2, failed: 1, checks: [] }] as unknown as EvalResult['cells'],
+    })
+    assert.equal(insightTier(clean), 5)
+    assert.deepEqual(
+      byPriority([clean, flaky]).map((e) => e.name),
+      ['flaky', 'clean'],
     )
   })
 

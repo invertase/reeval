@@ -1,7 +1,8 @@
 // The order `analysis.maxTokens` is spent in: the evals most worth explaining first. A failure
 // first, then a change that made something worse, then a compare (a question, variants or
-// harnesses side by side), then an infrastructure error, then the rest. Within a tier, the order
-// the output prints them. Pure: the same facts always give the same order.
+// harnesses side by side), then an infrastructure error, then a pass with failed tries in any
+// cell, then the clean passes and the rest. Within a tier, the order the output prints them.
+// Pure: the same facts always give the same order.
 import type { EvalResult } from '../view/suite.ts'
 
 const cellsOf = (e: EvalResult) => [...(e.cells ?? []), ...(e.cases ?? []).flatMap((k) => k.cells)]
@@ -16,7 +17,8 @@ export function insightTier(e: EvalResult): number {
   if (madeWorse(e)) return 1
   if (e.questions.length || e.across !== 'none') return 2
   if (e.outcome === 'infra_error') return 3
-  return 4
+  if (e.outcome === 'pass' && cellsOf(e).some((c) => c.failed > 0)) return 4
+  return 5
 }
 
 /** `evals` (in output order) in the order the budget reaches them. */
