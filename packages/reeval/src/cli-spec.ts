@@ -119,8 +119,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
     -y, --yes                   Don't ask: take the defaults (--harness cursor)
     --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
                                 or eval
-    --force                     Overwrite reeval.config.ts, the environment and the eval when they
-                                differ
+    --force                     Replace a reeval.config.ts init didn't write; no other file is ever
+                                overwritten
     --dry-run                   Print what it would create or change, and write nothing`,
   },
   doctor: {

@@ -56,9 +56,11 @@ npx reeval run
 2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|codex|fx|grok-build>`
    (it only asks in a terminal) writes `reeval.config.ts` (the agent, plus `pr` and `nightly`
    profiles), `evals/environments.ts` (one `defineEnvironment`), `evals/greet.eval.ts` (an eval
-   in that environment), the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval` script, then
-   says whether Docker is running. `--bare` writes only the config, `.gitignore` and
-   `package.json`. It never overwrites a file that differs without `--force`. Or write
+   in that environment), the `.gitignore` entries (`.reeval/`, `.env*`), an `eval` script and a
+   `tsconfig.json` that allows the evals' `.ts` imports, then says whether Docker is running.
+   `--bare` writes only the config, `.gitignore` and `package.json`. Where a config exists it
+   exits 2 before asking; `--force` replaces only `reeval.config.ts`. Otherwise it only adds:
+   it merges into `package.json` and `.gitignore` and skips any other file that exists. Or write
    `reeval.config.ts` and `evals/**/*.eval.ts` (the default `include`) yourself.
 3. `npx reeval run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.

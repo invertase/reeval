@@ -22,6 +22,7 @@ description: Scaffold a project, then run your first eval on a real agent in Doc
       create    evals/greet.eval.ts    one eval, in greeter
       create    .gitignore             node_modules/, .reeval/, .env*
       create    package.json           script eval, devDependency {{ pkg }}
+      create    tsconfig.json          for editors and tsc: the evals' .ts imports, no emit
     Next:
       npm install
       npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
@@ -29,7 +30,7 @@ description: Scaffold a project, then run your first eval on a real agent in Doc
     Docker is running: ready for npx reeval image build
     ```
 
-    In a script, pass `--harness <name>` or `--yes`; `--bare` writes only the config. It never overwrites a file that differs without `--force`: see [reeval init](/reference/cli/init).
+    In a script, pass `--harness <name>` or `--yes`; `--bare` writes only the config. In an existing project it only adds files and merges into `package.json` and `.gitignore`: see [reeval init](/reference/cli/init).
   </Step>
   <Step title="Install">
     ```bash
