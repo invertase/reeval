@@ -1619,6 +1619,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/history.test.ts › reeval run writes scratch; reeval record promotes it',
       'reeval/test/history.test.ts › an imported helper is part of the fingerprint',
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
+      'reeval/test/output.test.ts › a check not run on one side is not run',
+      'reeval/test/output.test.ts › a check not run on both sides is no change',
       'reeval/test/history.test.ts › a history file that is not a readable record is named on stderr',
       docker('two runs with the same agent context are comparable'),
     ],
@@ -1696,7 +1698,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'effort',
     area: 'Records and studio',
-    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare` and the studio',
+    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare -v` and the studio',
     tests: [
       analysis('the rank test is exact'),
       analysis('tokens join the rank test when both sides reported usage'),
