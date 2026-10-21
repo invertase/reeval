@@ -153,9 +153,19 @@ export const behaviours: Behaviour[] = [
         assert.equal(evalsNamed(ran.run, /^mcp/).length, 0, 'the MCP evals were left out')
         return 'refused at plan time'
       }
-      checkAndCanary(ran, row, 'mcp', 'stamped', /expected '' to contain 'tools\/call'/)
+      const a = checkAndCanary(ran, row, 'mcp', 'stamped', /expected '' to contain 'tools\/call'/)
       const env = ran.run.environments.find((e) => e.name === 'stamped')
       assert.deepEqual(env?.mcp, ['stamp'])
+      // reeval's timer saw every start of the server answer initialize.
+      const starts = a.turns.flatMap((t) => t.mcpStartup ?? [])
+      assert.ok(
+        starts.some((s) => s.server === 'stamp' && typeof s.ms === 'number'),
+        `no timed start of the stamp server: ${JSON.stringify(a.turns.map((t) => t.mcpStartup))}`,
+      )
+      assert.ok(
+        starts.every((s) => s.ms !== null),
+        `a start never answered: ${JSON.stringify(starts)}`,
+      )
     },
   },
   {

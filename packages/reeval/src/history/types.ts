@@ -10,6 +10,7 @@ import type {
   EvalCompareMeta,
   FileChange,
   JudgeArtifactRef,
+  McpStartup,
   Outcome,
   PhaseTimings,
   ResolvedJudgeStateOptions,
@@ -176,6 +177,14 @@ export type AttemptRecord = {
     unreported: WebEventType[]
     /** The turn's first error, such as a provider's billing or auth error, cut at 1 KB; else null. */
     error: string | null
+    /**
+     * Each stdio MCP server start the turn saw, in start order: `ms` from spawning the server to
+     * its answer to the client's `initialize`, null when it never answered (it exited first, or
+     * timed out after 60s). An agent CLI that runs a process per turn (Antigravity, pi, Codex)
+     * starts its servers on every turn; one that keeps a session starts them on its first. Absent
+     * when the environment has no stdio MCP server.
+     */
+    mcpStartup?: McpStartup[]
   }>
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null

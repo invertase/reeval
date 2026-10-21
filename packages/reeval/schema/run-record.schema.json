@@ -476,6 +476,13 @@
                   }
                 ]
               },
+              "mcpStartup": {
+                "description": "Each stdio MCP server start the turn saw, in start order: `ms` from spawning the server to its answer to the client's `initialize`, null when it never answered (it exited first, or timed out after 60s). An agent CLI that runs a process per turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts them on its first. Absent when the environment has no stdio MCP server.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/McpStartup"
+                }
+              },
               "model": {
                 "description": "The model the harness says served the turn; null when it reports none.",
                 "anyOf": [
@@ -1893,6 +1900,26 @@
         }
       },
       "required": ["control", "interval", "points", "variant", "vs", "withinNoise"]
+    },
+    "McpStartup": {
+      "description": "One start of a stdio MCP server: `ms` from spawning it to its answer to the client's `initialize`; null when it never answered (it exited first, or timed out).",
+      "type": "object",
+      "properties": {
+        "ms": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "server": {
+          "type": "string"
+        }
+      },
+      "required": ["ms", "server"]
     },
     "Outcome": {
       "enum": ["fail", "infra_error", "pass", "skipped"]

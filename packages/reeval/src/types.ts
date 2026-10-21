@@ -1793,7 +1793,17 @@ export type TurnRecord = Pick<
   | 'usage'
   | 'model'
   | 'unreported'
-> & { raw?: unknown[] }
+> & {
+  raw?: unknown[]
+  /** Each stdio MCP server start during the turn; see the run record's `turns[].mcpStartup`. */
+  mcpStartup?: McpStartup[]
+}
+
+/**
+ * One start of a stdio MCP server: `ms` from spawning it to its answer to the client's
+ * `initialize`; null when it never answered (it exited first, or timed out).
+ */
+export type McpStartup = { server: string; ms: number | null }
 
 /** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
 export type PhaseTimings = {

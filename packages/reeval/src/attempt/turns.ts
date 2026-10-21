@@ -2,9 +2,15 @@ import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { diffSinceSnapshot } from '../diff.ts'
 import type { HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
-import type { Sandbox } from '../sandbox/index.ts'
+import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
-import type { Diff, ExecResult, Turn, TurnData } from '../types.ts'
+import type { Diff, ExecResult, Turn, TurnData, TurnRecord } from '../types.ts'
+import {
+  type McpStartupLog,
+  mcpStartupOf,
+  mcpTimeoutMessage,
+  timedOutServer,
+} from './mcp-startup.ts'
 import type { Attempt } from './state.ts'
 
 /** How long a turn gets to stop once its attempt is aborted, before reeval stops waiting for it. */
@@ -44,6 +50,43 @@ function cutOff(signal: AbortSignal, startedAt: string, grace = TURN_STOP_GRACE_
   return { cutoff, cancel }
 }
 
+/** How often a turn reads the MCP timer's log for a server that never answered `initialize`. */
+const MCP_POLL_MS = 2_000
+
+/**
+ * Reads the MCP timer's log through a turn. `signal` aborts as soon as a server has timed out, so
+ * an agent stuck waiting for it stops; `end` takes the turn's last entries.
+ */
+function watchMcpStartup(log: McpStartupLog) {
+  const stop = new AbortController()
+  const entries: Awaited<ReturnType<McpStartupLog['read']>> = []
+  let timedOut: string | undefined
+  let at = 0
+  let reading: Promise<void> | undefined
+  const poll = async () => {
+    entries.push(...(await log.read()))
+    timedOut ??= timedOutServer(entries)
+    if (timedOut && !stop.signal.aborted) {
+      at = Date.now()
+      stop.abort(new InfraError(mcpTimeoutMessage(timedOut)))
+    }
+  }
+  const timer = setInterval(() => {
+    reading ??= poll().finally(() => {
+      reading = undefined
+    })
+  }, MCP_POLL_MS)
+  return {
+    signal: stop.signal,
+    async end() {
+      clearInterval(timer)
+      await reading
+      await poll()
+      return { entries, timedOut, at: at || Date.now() }
+    },
+  }
+}
+
 type Checks = {
   exec: (command: string) => Promise<ExecResult>
   readFile: (path: string) => Promise<string | null>
@@ -61,10 +104,10 @@ export function turnSender(
 ) {
   return async (prompt: string): Promise<Turn> => {
     const [box, agent] = await a.start('c.send()')
-    const entry = {
+    const entry: TurnRecord = {
       prompt,
       text: '',
-      status: 'error' as const,
+      status: 'error',
       transcript: [],
       usage: null,
       model: null,
@@ -77,15 +120,37 @@ export function turnSender(
     a.report({ kind: 'turn-start', turn: turnNumber })
     debugLog('harness', `turn ${turnNumber} started: ${JSON.stringify(clip(prompt, 160))}`)
     debugTrace('harness', 'prompt', { turn: turnNumber, prompt }, `turn ${turnNumber} prompt`)
+    const watch = a.mcpStartup && watchMcpStartup(a.mcpStartup)
+    const signal = watch ? AbortSignal.any([a.signal, watch.signal]) : a.signal
     // An agent that ignores the abort would hold the attempt, and the run, until it finishes.
-    const { cutoff, cancel } = cutOff(a.signal, entry.startedAt)
+    const { cutoff, cancel } = cutOff(signal, entry.startedAt)
     const sendStarted = Date.now()
-    const { raw, ...result } = await a
-      .timed('agentMs', () => Promise.race([agent.send(prompt, a.signal), cutoff]))
+    const { raw, ...sent } = await a
+      .timed('agentMs', () => Promise.race([agent.send(prompt, signal), cutoff]))
       .finally(cancel)
     const sendWallMs = Date.now() - sendStarted
+    const startup = await watch?.end()
+    const timedOut = startup?.timedOut && mcpTimeoutMessage(startup.timedOut)
+    const seenAt = startup?.at ?? Date.now()
+    // The timeout goes in at the moment it was seen, before any error the abort caused.
+    const result = timedOut
+      ? {
+          ...sent,
+          status: 'error' as const,
+          transcript: [
+            ...sent.transcript,
+            {
+              type: 'error' as const,
+              message: timedOut,
+              ts: new Date(seenAt).toISOString(),
+              atMs: Math.max(0, seenAt - Date.parse(sent.startedAt)),
+            },
+          ].sort((x, y) => x.atMs - y.atMs),
+        }
+      : sent
     Object.assign(entry, result, raw ? { raw } : {}, {
       durationMs: Math.max(result.durationMs, sendWallMs),
+      ...(startup ? { mcpStartup: mcpStartupOf(startup.entries) } : {}),
     })
     for (const event of result.transcript) {
       debugTrace(
@@ -115,6 +180,18 @@ export function turnSender(
       'harness',
       `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(String(failure.message), 200)}` : ''}${result.model ? ` · model ${result.model}` : ''}`,
     )
+    for (const s of entry.mcpStartup ?? []) {
+      debugLog(
+        'harness',
+        `turn ${turnNumber} mcp ${s.server} ${s.ms === null ? "didn't answer initialize" : `answered initialize in ${formatDuration(s.ms)}`}`,
+      )
+    }
+    if (timedOut) {
+      // Fails the attempt even when the eval's body catches it, like a failed start.
+      const error = new InfraError(timedOut)
+      a.startFailure ??= { error }
+      throw error
+    }
     a.signal.throwIfAborted()
     const diff: Diff = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
     a.record.diff = diff

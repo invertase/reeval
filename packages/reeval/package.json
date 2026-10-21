@@ -51,6 +51,7 @@
   "files": [
     "dist",
     "docker",
+    "bin",
     "assets",
     "README.md",
     "THIRD_PARTY_NOTICES.md"

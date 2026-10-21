@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 11
+const DB_VERSION = 12
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -154,6 +154,11 @@ CREATE TABLE tool_calls (
 -- Each placed file a tool call named (directly or through a glob), by the call's line.
 CREATE TABLE context_reads (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, path TEXT NOT NULL
+);
+-- Each stdio MCP server start in each attempt's turns (turn from 1): ms from spawning it to its
+-- answer to initialize, null when it never answered.
+CREATE TABLE mcp_startup (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, turn INTEGER NOT NULL, server TEXT, ms INTEGER
 );
 -- Every expect / expect.soft matcher call each attempt made, in call order (seq from 1).
 CREATE TABLE assertions (
@@ -636,6 +641,18 @@ function insertRun(
           declaredContext(c.path, skills) ? 1 : 0,
         )
       }
+      for (const [i, t] of a.turns.entries()) {
+        for (const m of t.mcpStartup ?? []) {
+          run(
+            'INSERT INTO mcp_startup VALUES (?, ?, ?, ?, ?)',
+            record.runId,
+            a.key,
+            i + 1,
+            m.server,
+            m.ms,
+          )
+        }
+      }
       for (const [i, x] of (a.assertions ?? []).entries()) {
         run(
           `INSERT INTO assertions VALUES (${Array(12).fill('?').join(', ')})`,
@@ -800,6 +817,7 @@ const DATA_TABLES = [
   'attempt_context',
   'tool_calls',
   'context_reads',
+  'mcp_startup',
   'assertions',
   'cell_checks',
 ]
