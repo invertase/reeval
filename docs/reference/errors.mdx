@@ -157,6 +157,7 @@ See [Profiles and budgets](/reference/profiles).
 | Message | Fix |
 |---|---|
 | `Docker is not running. Start Docker and try again.` | Start Docker. On Windows, Docker Desktop on the WSL 2 backend. |
+| `Docker isn't installed: there's no docker command on the PATH. …` | Install Docker (Docker Engine or Docker Desktop), then `reeval image build`. |
 | `Docker is running Windows containers, but reeval's sandboxes are Linux containers. …` | Switch Docker Desktop to Linux containers. |
 | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` | Pull or build your image, or use `from` or `dockerfile` so reeval builds it. |
 | `… The sandbox <id> is set by reeval.config.ts for every eval, so nothing ran.` | The config's sandbox failed to prepare (exit 3); fix the failure above it. |
