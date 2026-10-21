@@ -1414,7 +1414,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
 test('a check a side never ran has no verdict, and not-run attempts are not failures', async () => {
   const { checkVerdict } = await import('../src/view/contrasts.ts')
   const { checksLabel } = await import('../src/history/summary.ts')
-  const t = (pass: number, fail: number, notRun = 0) => ({ pass, fail, error: 0, notRun })
+  const t = (pass: number, fail: number, notRun = 0, error = 0) => ({ pass, fail, error, notRun })
   assert.equal(checkVerdict(t(0, 2), t(0, 0, 2)), undefined, 'failed against never ran')
   assert.equal(checkVerdict(t(2, 0), t(0, 0, 2)), undefined, 'passed against never ran')
   assert.equal(checkVerdict(t(2, 0, 1), t(2, 0)), 'both-pass', 'a not-run attempt is no fail')
@@ -1440,6 +1440,18 @@ test('a check a side never ran has no verdict, and not-run attempts are not fail
       ]),
     ),
     "has the marker 2/2 vs 0/2 · has a README 0/2 vs not run · reached 2/2 vs 2/2 (1 not run, doesn't discriminate)",
+  )
+  assert.equal(checkVerdict(t(2, 0), t(0, 0, 0, 2)), undefined, 'ran but never answered')
+  assert.equal(
+    checksLabel(
+      cell([
+        ['searched', t(2, 0), t(0, 0, 0, 2)],
+        ['fetched', t(1, 0, 0, 1), t(0, 0, 0, 2)],
+        ['in another cell', t(0, 0, 2), t(0, 0, 2)],
+      ]),
+    ),
+    "searched 2/2 vs couldn't answer · fetched 1/1 vs couldn't answer (1 couldn't answer)",
+    'an errored check ran, so it is not "not run"; one neither side reached is left out',
   )
 })
 
