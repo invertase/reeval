@@ -42,6 +42,7 @@ import type {
 import type { PreparedWorkspace } from '../workspace.ts'
 import {
   fetchesAtStart,
+  marketplaceLabel,
   type PluginContents,
   type PluginFile,
   PluginProblem,
@@ -50,6 +51,7 @@ import {
   pluginParts,
   pluginServerName,
   pluginSourceLabel,
+  readMarketplace,
   readPlugin,
   skillCall,
 } from './plugins.ts'
@@ -437,28 +439,88 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
   }
 }
 
-type FoundPlugin = { contents: PluginContents; source: string; commit: string | null }
+type FoundPlugin = {
+  contents: PluginContents
+  source: string
+  commit: string | null
+  marketplace: PluginRecord['marketplace']
+}
 
-async function resolvePlugin(root: string, p: PluginSource, where: string): Promise<FoundPlugin> {
-  let dir: string
-  let commit: string | null = null
-  switch (p.source) {
-    case 'local':
-      dir = p.path
-      break
+/** The marketplace entry's plugin directory, its source as the record writes it, and its commit. */
+async function resolveEntry(
+  root: string,
+  p: Extract<PluginSource, { source: 'marketplace' }>,
+): Promise<{
+  dir: string
+  source: string
+  commit: string | null
+  marketplace: FoundPlugin['marketplace'] & {}
+}> {
+  const m = p.marketplace
+  const label = marketplaceLabel(m, root)
+  const fetched =
+    m.source === 'git'
+      ? await cloneSkills(root, parseGitRepo(m.repo).url, m.ref)
+      : { dir: await unpackNpm(root, m.spec), commit: null }
+  const { marketplace: name, entry } = readMarketplace(
+    fetched.dir,
+    pluginCall(p, root),
+    label,
+    p.name,
+  )
+  const marketplace = { name, source: label, commit: fetched.commit }
+  switch (entry.source) {
+    case 'path':
+      return {
+        dir: join(fetched.dir, entry.path),
+        source: entry.path ? `${label}:${entry.path}` : label,
+        commit: fetched.commit,
+        marketplace,
+      }
     case 'git': {
-      const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
-      dir = join(clone.dir, p.path ?? '')
-      commit = clone.commit
-      break
+      const clone = await cloneSkills(root, entry.url, entry.ref)
+      return {
+        dir: join(clone.dir, entry.path ?? ''),
+        source: `${entry.repo}${entry.ref ? `#${entry.ref}` : ''}${entry.path ? `:${entry.path}` : ''}`,
+        commit: clone.commit,
+        marketplace,
+      }
     }
     case 'npm':
-      dir = join(await unpackNpm(root, p.spec), p.path ?? '')
-      break
+      return {
+        dir: await unpackNpm(root, entry.spec),
+        source: `npm:${entry.spec}`,
+        commit: null,
+        marketplace,
+      }
   }
+}
+
+async function resolvePlugin(root: string, p: PluginSource, where: string): Promise<FoundPlugin> {
   try {
+    let dir: string
+    let source = pluginSourceLabel(p, root)
+    let commit: string | null = null
+    let marketplace: FoundPlugin['marketplace'] = null
+    switch (p.source) {
+      case 'local':
+        dir = p.path
+        break
+      case 'git': {
+        const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
+        dir = join(clone.dir, p.path ?? '')
+        commit = clone.commit
+        break
+      }
+      case 'npm':
+        dir = join(await unpackNpm(root, p.spec), p.path ?? '')
+        break
+      case 'marketplace':
+        ;({ dir, source, commit, marketplace } = await resolveEntry(root, p))
+        break
+    }
     const contents = readPlugin(dir, pluginCall(p, root), p.only)
-    return { contents, source: pluginSourceLabel(p, root), commit }
+    return { contents, source, commit, marketplace }
   } catch (error) {
     if (error instanceof PluginProblem) throw new InfraError(`${where}: ${error.message}`)
     throw error
@@ -605,7 +667,7 @@ export async function resolveEnvironment(
   > = []
   const resolvedPlugins: ResolvedPlugin[] = []
   const pluginRecords: PluginRecord[] = []
-  for (const { contents: p, source, commit } of pluginList) {
+  for (const { contents: p, source, commit, marketplace } of pluginList) {
     const loaded = p.skills.length
       ? loadSkills(
           join(p.dir, 'skills'),
@@ -633,7 +695,7 @@ export async function resolveEnvironment(
     pluginRecords.push({
       name: p.name,
       source,
-      marketplace: null,
+      marketplace,
       commit,
       sha256: sha256(JSON.stringify(files.map((f) => [f.path, sha256(f.content)]))),
       build: null,

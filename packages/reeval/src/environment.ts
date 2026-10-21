@@ -19,7 +19,7 @@ import {
 } from './contract/plain.ts'
 import { closest, genericProblem, got, type Issue, refusal } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
-import { localPluginServers, PLUGIN_PARTS } from './environment/plugins.ts'
+import { localPluginServers, PLUGIN_NAME, PLUGIN_PARTS } from './environment/plugins.ts'
 import { isObjectLike } from './object.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -646,6 +646,64 @@ function pluginHelper(base: string): PluginHelper {
         ...options,
       }
     },
+    marketplace: (entry, o = {}) => {
+      const at = typeof entry === 'string' ? entry.indexOf('@') : -1
+      const name = typeof entry === 'string' ? entry.slice(0, at) : ''
+      const from = typeof entry === 'string' ? entry.slice(at + 1).trim() : ''
+      if (at < 1 || !from) {
+        throw new DefinitionError(
+          `plugin.marketplace() needs 'name@source': the plugin's entry and the marketplace's git repository or npm:<package>, e.g. plugin.marketplace('lint@github:acme/agent-plugins') (got ${JSON.stringify(entry)})`,
+        )
+      }
+      const what = `plugin.marketplace(${JSON.stringify(entry)})`
+      if (!PLUGIN_NAME.test(name)) {
+        throw new DefinitionError(
+          `${what}: the entry's name is kebab-case, as marketplace.json lists it (got ${JSON.stringify(name)})`,
+        )
+      }
+      const options = common(what, o, ['ref'])
+      const ref = (o as { ref?: unknown }).ref
+      if (from.startsWith('npm:')) {
+        if (ref !== undefined) {
+          throw new DefinitionError(
+            `${what}: ref picks a commit of a git marketplace; pin an npm marketplace in its spec, e.g. npm:@acme/plugins@2.0.0`,
+          )
+        }
+        const spec = from.slice('npm:'.length)
+        if (!spec) throw new DefinitionError(`${what}: npm: needs a package spec`)
+        return {
+          kind: 'plugin',
+          source: 'marketplace',
+          name,
+          marketplace: { source: 'npm', spec: localNpmSpec(spec, base) },
+          ...options,
+        }
+      }
+      const masked = credentialsIn(from)
+      if (masked) {
+        throw new DefinitionError(
+          `plugin.marketplace(${JSON.stringify(`${name}@${masked}`)}): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.`,
+        )
+      }
+      const parsed = parseGitRepo(from)
+      if (parsed.ref !== undefined || parsed.path !== undefined) {
+        throw new DefinitionError(
+          `${what}: name the marketplace's repository, whose root holds .claude-plugin/marketplace.json, and pick its commit with ref, e.g. plugin.marketplace('${name}@github:owner/repo', { ref: 'v1' })`,
+        )
+      }
+      if (ref !== undefined && (typeof ref !== 'string' || !ref.trim() || ref.startsWith('-'))) {
+        throw new DefinitionError(
+          `${what}: ref is a branch, tag or commit SHA (got ${JSON.stringify(ref)})`,
+        )
+      }
+      return {
+        kind: 'plugin',
+        source: 'marketplace',
+        name,
+        marketplace: { source: 'git', repo: from, ...(ref ? { ref: ref as string } : {}) },
+        ...options,
+      }
+    },
   }
 }
 
@@ -1078,7 +1136,7 @@ export function sandboxPaths(
 /**
  * An environment spec written as data with its host paths made absolute against `base`, as the
  * helpers resolve theirs: host files in `files` and `rules`, a local skill's or plugin's `path`, a
- * local npm skill or plugin spec, a local git workspace's `url`, and the sandbox's. Only a
+ * local npm skill, plugin or marketplace spec, a local git workspace's `url`, and the sandbox's. Only a
  * non-empty string changes, and an absolute path stays as written.
  */
 export function specPaths(
@@ -1108,7 +1166,15 @@ export function specPaths(
   }
   if ('rules' in value) out.rules = hostFile(rules)
   if (Array.isArray(skills)) out.skills = skills.map(skill)
-  if (Array.isArray(plugins)) out.plugins = plugins.map(skill)
+  if (Array.isArray(plugins)) {
+    out.plugins = plugins.map((v) => {
+      if (!isRecord(v) || v.source !== 'marketplace') return skill(v)
+      const m = v.marketplace
+      return isRecord(m) && m.source === 'npm' && isPath(m.spec)
+        ? { ...v, marketplace: { ...m, spec: localNpmSpec(m.spec, base) } }
+        : v
+    })
+  }
   return out
 }
 

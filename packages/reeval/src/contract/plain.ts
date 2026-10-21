@@ -13,6 +13,7 @@ import type {
   GitWorkspace,
   HostFile,
   McpServer,
+  PluginMarketplace,
   PluginPart,
   PluginSource,
   Secret,
@@ -231,6 +232,25 @@ export const pluginPartSchema = z
     "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
   )
 
+export const pluginMarketplaceSchema = z
+  .discriminatedUnion('source', [
+    z.strictObject({
+      source: z.literal('git'),
+      repo: nonEmpty().describe('As written: a URL or `github:owner/repo`.'),
+      ref: z
+        .string()
+        .optional()
+        .describe("A branch, tag or commit SHA; unset is the remote's `HEAD`."),
+    }),
+    z.strictObject({
+      source: z.literal('npm'),
+      spec: nonEmpty().describe('An npm package spec.'),
+    }),
+  ])
+  .describe(
+    'A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.',
+  )
+
 const plugin = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fields: F) =>
   z.strictObject({
     kind: z.literal('plugin'),
@@ -273,6 +293,14 @@ export const pluginSourceSchema = z
         .string()
         .optional()
         .describe("The plugin's directory in the package; default its root."),
+    }),
+    plugin('marketplace', {
+      name: nonEmpty().describe(
+        "The plugin's entry in the marketplace's `.claude-plugin/marketplace.json`.",
+      ),
+      marketplace: pluginMarketplaceSchema.describe(
+        'Where the marketplace is: a git repository (at `ref`) or an npm package.',
+      ),
     }),
   ])
   .describe(
@@ -352,6 +380,7 @@ export type _SameAsSchema = [
   Assert<Same<z.infer<typeof skillPlacementSchema>, SkillPlacement>>,
   Assert<Same<z.infer<typeof skillSourceSchema>, SkillSource>>,
   Assert<Same<z.infer<typeof pluginPartSchema>, PluginPart>>,
+  Assert<Same<z.infer<typeof pluginMarketplaceSchema>, PluginMarketplace>>,
   Assert<Same<z.infer<typeof pluginSourceSchema>, PluginSource>>,
   Assert<Same<z.infer<typeof mcpServerSchema>, McpServer>>,
   Assert<Same<z.infer<typeof gitWorkspaceSchema>, GitWorkspace>>,
