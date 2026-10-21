@@ -7,6 +7,12 @@ import type { Across } from './suite.ts'
 /** `<history>/<run>/insights.json`, beside the record. */
 export const INSIGHTS_FILE = 'insights.json'
 
+/** `RunInsights.model` when no analysis model wrote the file: it holds deterministic remarks only. */
+export const NO_MODEL = 'none'
+
+/** Whether an analysis model wrote these insights, rather than reeval alone for its remarks. */
+export const fromModel = (insights: RunInsights) => insights.model !== NO_MODEL
+
 /** What one attempt tests. Only an analysis model can tell; without one every eval is `other`. */
 export type Job = 'choose' | 'finish' | 'other'
 
@@ -18,7 +24,10 @@ export type RunInsights = {
   kind: 'reeval-insights'
   schemaVersion: 1
   runId: string
-  /** The analysis model, as configured (`google/gemini-3.8-flash`, or `fake`). */
+  /**
+   * The analysis model, as configured (`google/gemini-3.8-flash`, or `fake`); `NO_MODEL` when
+   * reeval wrote the file without one, to hold the run's deterministic remarks only.
+   */
   model: string
   /** The prompts' version: insights from another version were asked differently. */
   promptVersion: string
@@ -31,7 +40,10 @@ export type RunInsights = {
   headline: Sentence | null
   /** One per eval (a family is one), in the order the output prints them. */
   evals: EvalInsight[]
-  /** Remarks about the evals' own quality, ranked. Empty: no kind is raised yet. */
+  /**
+   * Remarks about the evals' own quality, ranked: every one this run raised, including those an
+   * earlier run raised first (`firstSeenRun`), which don't print again.
+   */
   remarks: Remark[]
   /**
    * What the checks dropped, and how many sentences were asked for again, so the output can say
@@ -107,6 +119,7 @@ export type Remark = {
     | 'check-never-fails'
     | 'flaky-check'
     | 'no-baseline'
+    | 'slow-mcp-start'
   /** Fixed by kind, never chosen by the model. */
   severity: 'concern' | 'suggestion'
   /** One plain sentence: what's wrong. */
@@ -118,7 +131,10 @@ export type Remark = {
   /** A concrete edit at a location. */
   fix: { at: string; edit: string }
   origin: 'model' | 'deterministic'
-  /** The run that first raised this `id`; it prints only in that run. */
+  /**
+   * The run that first raised this `id`; it prints only in that run, except `slow-mcp-start`,
+   * which is about the environment, not the eval's source, and prints in every run it happens.
+   */
   firstSeenRun: string
   /** Set on later runs once the cited span changed: the remark was acted on. */
   actedOn?: { run: string }

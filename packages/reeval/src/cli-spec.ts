@@ -222,8 +222,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,
                                 skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                                verdict_flips, check_discrimination, check_rates. No argument lists
-                                them
+                                verdict_flips, check_discrimination, check_rates, check_streaks. No
+                                argument lists them
     --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                                 or table name, only that run's rows
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,

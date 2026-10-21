@@ -5,6 +5,8 @@ import { type AssembleInput, assembleRun } from './history/assemble.ts'
 import { readRecord, scratchDir, type WrittenRun, writeRun } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { RunRecord } from './history/types.ts'
+import type { ResolvedConfig } from './types.ts'
+import { INSIGHTS_FILE, type RunInsights } from './view/insights.ts'
 
 const STALE_STAGING_MS = 24 * 60 * 60 * 1000
 
@@ -25,15 +27,32 @@ export async function sweepStaging(root: string, keep?: string): Promise<void> {
   }
 }
 
-/** Assembles the run into `.reeval/runs/`, with every artifact and a summary.md. */
+/** The run's remarks as remarks-only insights, or null; they never stop the run being written. */
+async function runRemarks(config: ResolvedConfig, record: RunRecord): Promise<RunInsights | null> {
+  try {
+    const { remarksOf, remarksOnly } = await import('./remarks/index.ts')
+    const remarks = await remarksOf(config, record)
+    return remarks.length ? remarksOnly(record, remarks) : null
+  } catch (error) {
+    process.stderr.write(`warning: no remarks for this run: ${(error as Error).message}\n`)
+    return null
+  }
+}
+
+/**
+ * Assembles the run into `.reeval/runs/`, with every artifact, a summary.md and, when a finished
+ * run raised remarks, its remarks-only insights.json.
+ */
 export async function writeScratchRun(
   input: AssembleInput,
   landed?: () => void,
-): Promise<WrittenRun & { record: RunRecord }> {
+): Promise<WrittenRun & { record: RunRecord; insights: RunInsights | null }> {
   const { record, artifacts } = await assembleRun(input)
+  const insights = input.interrupted ? null : await runRemarks(input.ctx.config, record)
+  if (insights) artifacts.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}\n`))
   artifacts.set(
     'summary.md',
-    Buffer.from(renderSummary(record, { hint: !hasAnalysisModel(input.ctx.config) })),
+    Buffer.from(renderSummary(record, { hint: !hasAnalysisModel(input.ctx.config), insights })),
   )
   const scratch = scratchDir(input.ctx.config.root)
   const existing = join(scratch, `${record.runId}.json`)
@@ -47,5 +66,5 @@ export async function writeScratchRun(
   const written = await writeRun(scratch, record, artifacts)
   landed?.()
   await rm(input.ctx.stagingDir, { recursive: true, force: true })
-  return { ...written, record }
+  return { ...written, record, insights }
 }

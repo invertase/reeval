@@ -4,6 +4,7 @@ import type { RunRecord } from '../history/types.ts'
 import type { PrepareEvent } from '../sandbox/preflight.ts'
 import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'
 import type { DebugLine } from '../view/debug.ts'
+import type { RunInsights } from '../view/insights.ts'
 
 /** One attempt's result. `id` is the eval's; `key` is unique per attempt. */
 export type EvalResult = {
@@ -118,6 +119,8 @@ export type ReevalEvent =
       results: EvalResult[]
       /** `analysis.model` is unset, so the result ends with the hint to set it. */
       hint: boolean
+      /** The run's insights, when it raised remarks; the result ends with the ones it prints. */
+      insights?: RunInsights | null
     }
 
 export interface Renderer {
