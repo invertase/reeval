@@ -127,8 +127,9 @@ Each eval:
 When a check is a regex or a script you wrote, add two fake-agent profiles (Template A shows
 both): a **canary** that does the task wrong must fail every check, so the checks check; an
 **oracle** that does it right, written another way than you'd expect (another helper name,
-another order), must pass, so the checks don't demand one spelling. A regex that wants
-`isValidUser` fails the agent that calls it `isValidNote`.
+another order, schema-qualified `public.notes`), must pass, so the checks don't demand one
+spelling: a regex that wants `on notes (` fails the agent that writes `on public.notes (`. A
+check that runs a build or the project's tests needs no oracle.
 
 ## 5. Check it plans, then the machine
 
@@ -144,9 +145,11 @@ npx reeval doctor               # Docker, image, keys; exit 1 names each fix
   analysis key is a warning only: runs pass or fail the same without insights.
 - No Docker, or `doctor` says the image isn't built: the user installs or starts Docker, then
   runs `npx reeval image build` once (minutes, cached).
-- With Docker: `npx reeval run --profile canary --no-insights` must fail every check you wrote,
-  and `--profile oracle` must pass them. Needs no keys, seconds each. A canary that passes means
-  a check isn't checking; an oracle that fails means a check is too narrow. Fix the check.
+- With Docker: `npx reeval run --profile canary --no-insights <eval-name>` must fail every
+  check you wrote, and `--profile oracle` must pass them. Name the eval: a fake agent writes the
+  same files for every eval, so it answers only the one it was written for. Needs no keys,
+  seconds each. A canary that passes means a check isn't checking; an oracle that fails means a
+  check is too narrow. Fix the check.
 
 Only start a real `npx reeval run` if the user asked for it or agrees: it runs a real agent on
 their key. One compare at `runs: 2` on Cursor is a few minutes.
@@ -183,6 +186,8 @@ pass             stores invoice totals in cents with the billing skill
   verdict. `Remarks:` after the tally names an eval that needs work, with the line to fix.
 - Both arms passing is a result, not a broken eval: the agent already does this without the
   skill. Say so, and suggest a harder task or a more specific rule from the skill next.
+- A check that fails every attempt on both arms is more often a broken check than a hard task.
+  Open one attempt's `diff.patch` before you say the agent can't do it.
 - Exit 0 means every gated cell passed; only the variant is gated in a compare.
 - Details: `.reeval/runs/<run>/summary.md`, each attempt's `transcript.jsonl` and `diff.patch`;
   `npx reeval studio` browses them; `npx reeval query effort` compares tools, time and tokens.

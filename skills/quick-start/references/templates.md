@@ -55,7 +55,8 @@ lift (both arms `2 of 2`), which is a real answer but a dull first run.
 
 The canary and the oracle: profiles in `reeval.config.ts` whose fake agent writes a wrong and a
 right answer. Write the oracle's answer differently from the one you had in mind (other column
-names, another order, `bigint` for `integer`), so it catches a check that wants one spelling.
+names, another order, `bigint` for `integer`, `public.` before the table), so it catches a check
+that wants one spelling.
 Add `fakeHarness` to the harness import.
 
 ```ts
@@ -79,7 +80,7 @@ import { cursor, fakeHarness } from 'reeval/harness'
         harness: fakeHarness({
           files: {
             'migrations/001_invoices.sql':
-              'CREATE TABLE invoices (\n  id bigserial PRIMARY KEY,\n' +
+              'CREATE TABLE public.invoices (\n  id bigserial PRIMARY KEY,\n' +
               '  currency_code varchar(3) NOT NULL,\n  total_amount_cents bigint NOT NULL\n);\n',
           },
           text: 'Done.',
@@ -88,10 +89,11 @@ import { cursor, fakeHarness } from 'reeval/harness'
     },
 ```
 
-`npx reeval run --profile canary --no-insights` and `--profile oracle` run them in the real
-Docker sandbox with no keys (after `npx reeval image build`): the canary must exit 1 and the
-oracle 0. One of each per eval
-is plenty; a check that runs the project's own tests needs neither.
+`npx reeval run --profile canary --no-insights invoice` and `--profile oracle` run them in the
+real Docker sandbox with no keys (after `npx reeval image build`): the canary must exit 1 and
+the oracle 0. Name the eval (`invoice` matches its name): the fake agent writes these files for
+every eval, so with a second eval, give it its own `canary-<name>` and `oracle-<name>`. One of
+each per eval is plenty; a check that runs the project's own tests needs neither.
 
 ## B. A task in this repository
 

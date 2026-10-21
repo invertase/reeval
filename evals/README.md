@@ -56,6 +56,36 @@ evals/skill/scripts/vendor.mjs` packs it, renders the docs and extracts the pre-
 `evals/skill/reeval.oracle.config.ts` runs a fake agent that applies a known-good answer to each
 task, so every check must pass there.
 
+## quick-start: can an agent set reeval up for someone?
+
+[`evals/quick-start/`](./quick-start) asks the agent to "set up reeval here", in two turns: the
+first should end with a question about what to evaluate, the second answers it. The control has
+the reeval skill; the variant adds [`skills/quick-start/`](../skills/quick-start).
+
+| Target | Starts from | Checks beyond the shared ones |
+|---|---|---|
+| `supabase` | supabase/agent-skills, no reeval | A skill compare, skills and docs untouched |
+| `firebase-set-up` | firebase/agent-skills after `reeval init` | The `greet` eval and `environments.ts` kept |
+| `empty` | An empty directory; turn 2 asks for Tailwind CSS v4 | Researched first, evals about v4's `@import` |
+
+Every target checks that the agent asks before writing evals, adds one to three that plan with
+`--dry-run`, runs `reeval doctor`, names the harness key and never forces `init`. On Cursor
+(`composer-2.5`, one attempt a cell) the control set up 0 of 3 every time; the variant went
+1, 2, 3 and 3 of 3 over four iterations of the skill. Claude Code (`claude-sonnet-5`) set up
+`supabase` and `firebase-set-up`.
+
+```bash
+node evals/skill/scripts/vendor.mjs                     # packs this checkout's reeval
+pnpm reeval run evals/quick-start                       # Cursor, with CURSOR_API_KEY
+cd evals/quick-start
+pnpm reeval run --config reeval.oracle.config.ts                  # 3 passed
+pnpm reeval run --config reeval.oracle.config.ts --profile canary # every check missed
+pnpm reeval run --config reeval.claude.config.ts                  # Claude Code
+```
+
+The Cursor harness runs `composer-2.5` in Fast mode unless `params: { fast: 'false' }` is set,
+at about six times the standard token price, so a full run of this eval costs a few dollars.
+
 ## mcp-debugging: does `reeval mcp` help an agent debug a failing run?
 
 [`evals/mcp-debugging/`](./mcp-debugging) hands the agent a broken reeval project and asks why it

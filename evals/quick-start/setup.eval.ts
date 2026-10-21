@@ -20,6 +20,10 @@ async function plan(c: AttemptContext): Promise<Plan | null> {
   }
 }
 
+/** The key each harness `reeval init` offers needs. */
+const HARNESS_KEY =
+  /\b(CURSOR|ANTHROPIC|OPENAI|GEMINI|GOOGLE_GENERATIVE_AI|XAI|AI_GATEWAY)_API_KEY\b/
+
 const evalFiles = "find evals -name '*.eval.ts' 2>/dev/null | sort"
 
 /** The checks every target shares, after the user has answered the agent's question. */
@@ -55,7 +59,7 @@ group('sets up reeval', () => {
     expect
       .soft(c, 'leaves the skills and docs alone')
       .not.toHaveChanged(['skills/**', 'README.md', 'AGENTS.md', 'test/**'])
-    expect.soft(last.text, 'names the Cursor key').toMatch(/CURSOR_API_KEY/)
+    expect.soft(last.text, 'names the harness key').toMatch(HARNESS_KEY)
   })
 
   evaluate(
@@ -84,7 +88,7 @@ group('sets up reeval', () => {
         .soft((await c.readFile('evals/environments.ts')) ?? '', 'keeps environments.ts as it was')
         .toContain(environments.trim())
       expect.soft(c, 'leaves the skills alone').not.toHaveChanged(['skills/**', 'README.md'])
-      expect.soft(last.text, 'names the Cursor key').toMatch(/CURSOR_API_KEY/)
+      expect.soft(last.text, 'names the harness key').toMatch(HARNESS_KEY)
     },
   )
 
@@ -105,6 +109,6 @@ group('sets up reeval', () => {
     const sources = (await c.exec('cat evals/*.ts 2>/dev/null')).stdout
     expect.soft(sources, 'evals about Tailwind').toMatch(/tailwind/i)
     expect.soft(sources, "checks v4's CSS @import").toMatch(/@import/)
-    expect.soft(last.text, 'names the Cursor key').toMatch(/CURSOR_API_KEY/)
+    expect.soft(last.text, 'names the harness key').toMatch(HARNESS_KEY)
   })
 })
