@@ -8,8 +8,19 @@ export interface Sandbox {
   readonly workdir: string
   /** Absolute path of the home directory; `~/` paths in `writeFile` resolve here. */
   readonly home: string
+  /**
+   * Absolute path of a directory for reeval's own state (the diff's snapshot), outside the
+   * workspace and home. In Docker without `root` the agent's user can't read it; a `root`
+   * container's agent and the fake sandbox's host user can.
+   */
+  readonly stateDir: string
   /** `cwd` is relative to the workspace; `env` adds variables for this command only. */
   exec(command: string, opts?: ExecOptions): Promise<ExecResult>
+  /**
+   * Runs one of reeval's own commands in the workspace, able to read every file in it and to
+   * write {@link stateDir}. Without the eval's per-command variables or the gateway's.
+   */
+  execOwn(command: string, opts?: { signal?: AbortSignal }): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
   /** Strings are written as UTF-8; bytes as they are. */
   writeFile(path: string, content: string | Uint8Array): Promise<void>

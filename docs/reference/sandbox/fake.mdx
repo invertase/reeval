@@ -39,11 +39,12 @@ export default defineConfig({
 ```text
 <dir>/reeval-sandbox-*/    the attempt's directory and HOME, where ~/ paths land
   work/                    the workspace, where commands run with sh -c
+<dir>/reeval-sandbox-*.state/  the snapshot turns' diff is taken against
 ```
 
 Each attempt gets a directory `reeval-sandbox-*` under `dir`, with the workspace in `work/`. `HOME` is the attempt's directory, so `~/` paths in `files`, `c.readFile` and skills land there.
 
-`c.exec`, setup steps and the fake agent's `exec` steps run with `sh -c` on the host, in the workspace. The directory is removed when the attempt ends.
+`c.exec`, setup steps and the fake agent's `exec` steps run with `sh -c` on the host, in the workspace. Both directories are removed when the attempt ends. Your user can read the `.state` directory, but it holds one commit of the workspace as the agent already sees it, never a file's content from before `c.writeFile` replaced it.
 
 On Windows, `sh` is [Git for Windows](https://git-scm.com/download/win)' `sh.exe`: the one on `PATH`, or else the one in Git's install folder. Without it, the attempt fails with `The fake sandbox runs commands with a POSIX sh, and there's none on this machine.`
 

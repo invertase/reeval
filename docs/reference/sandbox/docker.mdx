@@ -113,19 +113,19 @@ Each harness has its own sandbox image. `reeval image build` builds the images t
 ```text
 images  7 sandbox images (nothing built: --dry-run)
 docker · cursor · 23 evals
-  + base  reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+  + base  reeval-sandbox:cursor-0.1.6  (to build: not built yet)
 docker · claude-code · 1 eval
   + base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (to build: not built yet)
 …
 docker+0ab0e263 · cursor + install · 1 eval
-  + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
+  + base               reeval-sandbox:cursor-0.1.6  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · cursor · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.6-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
 …
 docker:sqlite · cursor · 1 eval
   + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-9efec1fbf61588d3))
-  + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.5 not built yet)
+  + harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (to build: reeval-sandbox:cursor-0.1.6 not built yet)
 ```
 
 | Image | Tag | Rebuilt when |
@@ -140,7 +140,7 @@ A [plugin](/reference/helpers#plugin) with a `build` adds a layer on top of the 
 
 ```text
 docker · cursor + 1 plugin build · 1 eval
-  ✓ base                                  reeval-sandbox:cursor-0.1.5  (ready: built (96cb8a76212d))
+  ✓ base                                  reeval-sandbox:cursor-0.1.6  (ready: built (96cb8a76212d))
   + build plugin.local('plugins/review')  reeval-plugin:96cb8a76212d-f2d3c864c458c316  (to build: not built yet)
 ```
 
@@ -156,7 +156,7 @@ A rebuild removes the image its tag pointed at before, unless a container or ano
 
 | Harness | Adapter version in the tag |
 |---|---|
-| Cursor | `0.1.5` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.38) |
+| Cursor | `0.1.6` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.40) |
 | Claude Code | `1.0.160-patch.b17cde50` (1.0.160, patched) |
 | Antigravity | `0.1.9` |
 | OpenCode | `0.2.8` |
@@ -178,8 +178,11 @@ Image builds don't count toward the eval timeout.
 |---|---|---|
 | The agent, setup steps and checks | `reeval` (uid 10001, home `/home/reeval`, where `~/` paths go) | Every capability dropped, `no-new-privileges` and the limits above |
 | The egress gateway | root | Node, which every image reeval builds has |
+| reeval's workspace snapshot (the diff) | root, `docker exec --privileged` | `git` and `/bin/sh` from the system's `PATH`, never `~/.local/bin` |
 
 Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The gateway enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests.
+
+The snapshot that turns' `diff` is taken against lives in `/var/lib/reeval`, owned by root and mode `0700`, so the agent can't read it. It's always one commit with nothing unreachable left in it, so it never holds a file's content from before `c.writeFile` replaced it. With `root: true` the agent can read the directory, but it finds only the workspace as it already sees it.
 
 Every command reeval runs in the container, the harness's bootstrap included, starts with umask `022`. The files and directories it makes aren't group- or world-writable, whatever umask the engine gives `docker exec`: Docker 29.6 and later give 0000 under Docker-in-Docker and rootless Docker.
 
