@@ -62,7 +62,8 @@ import type {
   SandboxWarning,
 } from './types.ts'
 
-const KNOWN = [
+/** Every eval/group option key `checkOptions` accepts. The feature matrix holds each to an inventory entry. */
+export const EVAL_OPTION_KEYS = [
   'harness',
   'sandbox',
   'environment',
@@ -77,7 +78,9 @@ const KNOWN = [
   'timeout',
   'tags',
   'pin',
-]
+] as const
+
+const KNOWN: string[] = [...EVAL_OPTION_KEYS]
 const SUGGEST: Record<string, string> = {
   harnesses: 'harness',
   sandboxes: 'sandbox',

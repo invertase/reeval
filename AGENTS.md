@@ -422,6 +422,12 @@ Follow [the feature contract](./packages/reeval/test/features/README.md). It say
 a change needs (plan case, fixture with a canary, runner test or error-message row), the shape of
 a fixture, how to run and debug the tiers, and what "done" means.
 
+**Options, cascades and refusals** (not attempt behaviour): plan cases live under
+`packages/reeval/test/plan/`, refusal rows under `packages/reeval/test/refusals/`, and cascade
+behaviour in `options.test.ts` — not under `test/features/`. Register each eval option in
+`test/features/eval-options.ts`; `matrix.test.ts` fails when `--dry-run` coverage or refusals are
+missing.
+
 **Every user-visible change updates the docs in the same PR.** A new or changed option, helper,
 harness, CLI command or flag, exit code, `reeval query` view, record field or environment variable
 updates its page in the docs' Reference tab (`docs/reference/`), and a change to how people use
@@ -488,7 +494,7 @@ pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # t
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.5`, `claude-code-1.0.160-patch.b17cde50`,
-   `antigravity-0.1.8`, `opencode-0.2.8`, `goose-0.1.3`, `pi-0.2.7`, `codex-0.1.7`, `fx-0.1.0`, `grok-build-0.1.1`), so
+   `antigravity-0.1.9`, `opencode-0.2.8`, `goose-0.1.3`, `pi-0.2.7`, `codex-0.1.7`, `fx-0.1.0`, `grok-build-0.1.1`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 
