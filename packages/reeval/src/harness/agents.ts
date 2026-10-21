@@ -324,10 +324,31 @@ export function opencodeMcpServers(
   )
 }
 
+/**
+ * The key Goose keeps an extension by (its `name_to_key`): whitespace dropped, anything but ASCII
+ * letters, digits, `_` and `-` made `_`, lower-cased. Of two extensions with one key it keeps one.
+ */
+const gooseKey = (name: string) =>
+  name
+    .replace(/\s/g, '')
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .toLowerCase()
+
 /** Goose's extension shape (its `config.yaml`); it has no SSE transport. */
 export function gooseMcpServers(
   servers: Record<string, ResolvedMcpServer>,
 ): Record<string, Record<string, unknown>> {
+  const byKey = new Map<string, string>()
+  for (const name of Object.keys(servers)) {
+    const key = gooseKey(name)
+    const other = byKey.get(key)
+    if (other !== undefined) {
+      throw new InfraError(
+        `Goose keys the ${other} and ${name} MCP servers both as ${key}, and keeps only one: rename one`,
+      )
+    }
+    byKey.set(key, name)
+  }
   return Object.fromEntries(
     Object.entries(servers).map(([name, s]) => {
       if (s.transport === 'sse') {
@@ -964,8 +985,19 @@ export function refusedPlugins(
     ),
   )
   if (agent && Object.keys(servers).length) {
+    // A flat agent gets the environment's servers in one list with the plugins', so its own name
+    // rules see both; refusedMcp has already checked the environment's servers themselves.
+    const alongside =
+      agent.pluginPlacement === 'flat'
+        ? Object.fromEntries(
+            own.mcp.map((n): [string, ResolvedMcpServer] => [
+              n,
+              { transport: 'stdio', command: 'true', args: [], env: {} },
+            ]),
+          )
+        : {}
     try {
-      agent.mcpServers(servers)
+      agent.mcpServers({ ...alongside, ...servers })
     } catch (error) {
       if (error instanceof InfraError) return error.message
       throw error

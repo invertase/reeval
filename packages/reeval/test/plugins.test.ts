@@ -353,6 +353,10 @@ test('Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugi
     undefined,
     'Goose takes plugin servers in its own config, where reeval fills in secrets',
   )
+  assert.equal(
+    refusedPlugins({ kind: 'goose' } as never, [withMcp], { skills: [], mcp: ['Review_Docs'] }),
+    'Goose keys the Review_Docs and review:docs MCP servers both as review_docs, and keeps only one: rename one',
+  )
   for (const files of [
     { '.app.json': '{ "apps": {} }' },
     { '.claude-plugin/plugin.json': '{ "name": "chat", "apps": "./apps.json" }' },

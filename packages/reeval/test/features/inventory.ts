@@ -548,6 +548,9 @@ export const inventory: InventoryFeature[] = [
         'Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugin server’s host secret',
       ),
       planTest("Codex refuses a plugin's hooks and its apps; Goose a plugin's hooks"),
+      planTest(
+        "Goose refuses a plugin MCP server it keys like one in mcp; Claude Code's namespaced name plans",
+      ),
       codexAdapter(
         'unit',
         'plugins are listed in the home marketplace by their path from home, then added from it',

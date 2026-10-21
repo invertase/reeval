@@ -56,7 +56,7 @@
 | `skill.npm` | — | — | ● 2 | ● 2 | — | — |
 | `plugins`: `plugin.local`, `plugin.git` and `plugin.npm` in Claude Code’s layout, `only`, layering, the refusals per harness and the record | ✓ 5 | ✓ 3 | ● 4 | ● 4 | — | — |
 | Plugins on Claude Code (a directory marketplace in `~/.claude/settings.json`) and Grok Build (`--plugin-dir`): every part but rules, their MCP servers left to the agent, a host secret refused | ✓ 7 | ✓ 1 | ● 2 | ● 2 | — | ◐ 6 (2 without a canary) |
-| Plugins on Codex (a home marketplace and `codex plugin add`, plugins on only for that session) and Goose (skills with its own, MCP servers as extensions): skills and MCP, a plugin with ChatGPT apps refused on Codex | ✓ 4 | ✓ 1 | ● 2 | ● 2 | — | ◐ 4 (2 without a canary) |
+| Plugins on Codex (a home marketplace and `codex plugin add`, plugins on only for that session) and Goose (skills with its own, MCP servers as extensions): skills and MCP, a plugin with ChatGPT apps refused on Codex | ✓ 5 | ✓ 1 | ● 2 | ● 2 | — | ◐ 4 (2 without a canary) |
 | Plugin `build`: a cached image layer per built plugin, listed by `--dry-run` and `reeval image build`, refused on the fake sandbox | ✓ 3 | ✓ 1 | — | ● 1 | — | — |
 | Skill `exclude`: the defaults and a custom list | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | `only` naming a missing skill | — | — | ● 1 | ● 1 | — | — |

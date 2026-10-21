@@ -100,9 +100,9 @@ const review = defineEnvironment('review', ({ plugin }) => ({
 }))
 ```
 
-Goose takes a plugin's skills and MCP servers as if the eval declared them. reeval copies the plugin to `~/.reeval/plugins/<name>/`, places its skills in Goose's home skills directory beside the eval's own, and adds its servers to `config.yaml` as `<plugin>:<server>`, through reeval's MCP timer. Goose renames such an extension (`review:docs` becomes `review_docs`), so the transcript names a call `mcp__review_docs__<tool>`.
+Goose takes a plugin's skills and MCP servers as if the eval declared them. reeval copies the plugin to `~/.reeval/plugins/<name>/`, places its skills in Goose's home skills directory beside the eval's own, and adds its servers to `config.yaml` as `<plugin>:<server>`, through reeval's MCP timer. Goose renames such an extension (`review:docs` becomes `review_docs`); the transcript still names a call by reeval's name, `mcp__review:docs__<tool>`, so `toHaveCalledMcp('review:docs', …)` matches it.
 
-The names share one space, so the plan refuses a plugin skill or server that another already has. It also refuses hooks and subagents, which Goose doesn't load:
+The names share one space, so the plan refuses a plugin skill or server that another already has, including two servers Goose would key the same. It also refuses hooks and subagents, which Goose doesn't load:
 
 ```text
 reeval: evals/p.eval.ts: evaluate("reviews") on goose:gemini-3.8-flash: Goose can't load the review plugin's hooks (hooks/hooks.json): use only: ['skills'], or leave the plugin out of this cell
@@ -120,6 +120,7 @@ reeval doesn't use `goose plugin install`: it needs the plugin in a git reposito
 | Goose doesn't start | `Goose harness failed to start: …` |
 | Goose reports a failed model call as its message | The turn fails with `Goose's model call failed: <error>` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on goose:<model>: Goose has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| Two MCP servers Goose keys the same, such as a plugin's `review:docs` and `mcp.review_docs` (at plan time, exit 2) | `evaluate("<eval>") on goose:<model>: Goose keys the review_docs and review:docs MCP servers both as review_docs, and keeps only one: rename one` |
 
 ## Related
 

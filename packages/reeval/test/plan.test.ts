@@ -514,6 +514,41 @@ evaluate('reviews', { environment: review }, async () => {})
     }
   })
 
+  test("Goose refuses a plugin MCP server it keys like one in mcp; Claude Code's namespaced name plans", async () => {
+    for (const [factory, model, refused] of [
+      ['goose', 'gemini-3.8-flash', true],
+      ['claudeCode', 'claude-sonnet-5', false],
+    ] as const) {
+      const p = await project(`plugin-server-key-${factory}`, {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+`,
+        'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const review = defineEnvironment('review', ({ plugin, mcp }) => ({
+  mcp: { review_docs: mcp.stdio('docs-server') },
+  plugins: [plugin.local('../plugins/review')],
+}))
+evaluate('reviews', { environment: review }, async () => {})
+`,
+        'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
+        'plugins/review/.mcp.json': JSON.stringify({
+          mcpServers: { docs: { command: 'docs-server' } },
+        }),
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      if (!refused) {
+        assert.equal(r.code, 0, `${factory}: ${r.stdout}${r.stderr}`)
+        continue
+      }
+      assert.equal(r.code, 2, `${factory}: ${r.stdout}${r.stderr}`)
+      assert.match(
+        r.stderr,
+        /evaluate\("reviews"\) on goose:[^:]+: Goose keys the review_docs and review:docs MCP servers both as review_docs, and keeps only one: rename one/,
+      )
+    }
+  })
+
   test('a plugin the plan reads and refuses exits 2: no manifest, a build outside Docker, npx under deny-all', async () => {
     const config = `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
