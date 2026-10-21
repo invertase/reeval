@@ -972,7 +972,9 @@ export async function openHistoryDb(
   const writer = new DatabaseSync(path)
   let synced: SyncResult
   try {
-    writer.exec('PRAGMA busy_timeout = 5000')
+    // Long enough for another process's first build of a large history; that process is working,
+    // not stuck, and this one finds its rows once it has the lock.
+    writer.exec('PRAGMA busy_timeout = 120000')
     synced = await sync(writer, root, historyDir, options.rebuild ?? false)
   } finally {
     writer.close()
