@@ -100,7 +100,7 @@ The agent runs with every permission granted, inside the sandbox.
 | Cache creation | `cacheWrite` |
 | Output tokens | `output` |
 
-The summary totals them on its `Tokens` line, and the record keeps them per turn, per attempt and for the run. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+The line under the result blocks totals them, and the record keeps them per turn, per attempt and for the run. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
 ## Errors
 
@@ -111,14 +111,15 @@ The summary totals them on its `Tokens` line, and the record keeps them per turn
 | A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox: set sandbox: docker() …` |
 | The CLI doesn't start | `Claude Code harness failed to start: …` |
 
-A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the failure and `summary.md` show the API's message, without `-v`:
+A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the eval's result block and `summary.md` show the API's message, without `-v`. Scripted on the fake harness, the same failure prints:
 
 ```text
-[creates#1 claude-code]  +0:01 turn 1 error: Credit balance is too low to access the Anthropic API 1s · 0 tool calls, 0 file edits
+[creates#1 fake]  +0:00 turn 1 error: Credit balance is too low to access the Anthropic API 0ms · 0 tool calls, 0 file edits
 …
- ✗ evals/hello.eval.ts › greet module › creates a tested greet module
-   Error: expected file greet.js to exist
-   turn 1 error: Credit balance is too low to access the Anthropic API
+fail             greet module › creates a tested greet module
+  toHaveFile greet.js  failed
+    expected file greet.js to exist
+  turn error           Credit balance is too low to access the Anthropic API
 ```
 
 ## Related

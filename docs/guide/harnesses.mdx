@@ -111,35 +111,43 @@ npx reeval run --config reeval.agents.config.ts --runs 2 --log-order grouped
 ```
 
 ```text
-plan  3 evals · 8 cells · 16 attempts · ~12m 31s serial (~3m 08s at concurrency 4)
-reeval 0.0.1 · 2 eval files · harness cursor:composer-2.5, antigravity:gemini-3.8-flash-medium · sandbox docker · concurrency 4 · grouped logs
+plan  run 20261020T214202Z_… · 3 evals · 8 cells · 16 attempts · ~28m 07s serial (~7m 02s at concurrency 4)
 …
-Summary
- evals/hello.eval.ts
-   greet module
-     ✓ creates a tested greet module                4/4  pass@1 100%  4 attempts
-         cursor:composer-2.5/-/docker                    2/2  pass@1 100%   gate passRate 0.5
-         antigravity:gemini-3.8-flash-medium/-/docker    2/2  pass@1 100%   gate passRate 0.5
-     ✓ adds a default name in a follow-up turn      4/4  pass@1 100%  4 attempts
-         cursor:composer-2.5/-/docker                    2/2  pass@1 100%   gate passRate 0.5
-         antigravity:gemini-3.8-flash-medium/-/docker    2/2  pass@1 100%   gate passRate 0.5
- evals/skill.eval.ts
-   house greeting
-     ✓ greets in the house style                    4/8 · pass@1 100% gated  8 attempts
-         cursor:composer-2.5/plain/docker                                control    0/2  pass@1   0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
-           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
-         antigravity:gemini-3.8-flash-medium/plain/docker                control    0/2  pass@1   0%   not gated
-         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
-           effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
-…
-Attempts  12 passed · 4 missed, not gated (16 attempts, 3 evals)
-Duration  2m 39s
-  Tokens  5,149k in (2,946k cached) · 64k out
-…
+pass             greet module › creates a tested greet module
+  harness                              pass
+  cursor:composer-2.5                  2 of 2
+  antigravity:gemini-3.8-flash-medium  2 of 2
+
+pass             greet module › adds a default name in a follow-up turn
+  harness                              pass
+  cursor:composer-2.5                  2 of 2
+  antigravity:gemini-3.8-flash-medium  2 of 2
+
+pass             house greeting › greets in the house style
+  cursor:composer-2.5
+    arm                  pass
+    plain                0 of 2
+    with-house-greeting  2 of 2  can't tell yet
+    check                plain   with-house-greeting
+    house greeting       0 of 2  2 of 2
+      expected command to succeed, exit code 1
+    +2 more passed
+  antigravity:gemini-3.8-flash-medium
+    arm                  pass
+    plain                0 of 2
+    with-house-greeting  2 of 2  can't tell yet
+    check                plain   with-house-greeting
+    house greeting       0 of 2  2 of 2
+      expected command to succeed, exit code 1
+    +2 more passed
+  question  Which greet.js reads more like our house style?
+    4 votes, every one a tie
+
+4m 29s · 9,123k in (5,063k cached) · 71k out · results .reeval/runs/20261020T214202Z_…/summary.md
+3 pass
 ```
 
-Lift and effort are always against the control on the same harness. Without the skill, Cursor wrote `Welcome home, Ada!` and Antigravity `Hello, Ada!`. With it, both wrote the house greeting with far less work: Antigravity's median fell from 24.5 tool calls to 3.5.
+Each harness's arms are measured against the control on the same harness. Without the skill, Cursor wrote `Welcome home, Ada!` and Antigravity `Hello, Ada!`; with it, both wrote the house greeting. Two tries a side is too few to tell, so the effect reads `can't tell yet`. `reeval query effort` shows the work it saved: Cursor's median fell from 44 tool calls to 3, and Antigravity's from 27.5 to 6.
 
 Line prefixes name the harness when there are several, as in `[greets#1 antigravity:gemini-3.8-flash-medium · control]`.
 

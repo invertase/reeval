@@ -41,12 +41,12 @@ The filter is a case-insensitive substring of the eval id. Runs go oldest to new
 [//]: # (generated:cli-help:show)
 
 ```text
-reeval show [run]             One run: table, --md (summary.md) or --json (the record)
+reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
 ```
 
 [//]: # (/generated:cli-help:show)
 
-The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then a line per eval. `--md` prints the run's `summary.md`; `--json` prints the record.
+The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then the result blocks and tally `reeval run` ended with. `--md` prints the run's `summary.md`; `--json` prints the record.
 
 ## reeval compare
 

@@ -1,6 +1,7 @@
 // The analysis model: a language model, routed like the judge (a provider key goes direct, else
 // the AI Gateway). Evaluation models (typesafe-ai/*) score yes/no questions and can't write one.
 import { generateText, type LanguageModel, Output } from 'ai'
+import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { isFakeJudge, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, ResolvedConfig } from '../types.ts'
@@ -18,13 +19,12 @@ export const isFake = (m: unknown): m is FakeAnalysisModel =>
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-/** `analysis.model`, else the judge's when it's a language model; undefined when neither is. */
+/** `reeval analyze`'s model: `analysis.model`, else the judge's when it's a language model. */
 function defaultModel(config: ResolvedConfig): string | FakeAnalysisModel | undefined {
-  const model = config.analysis.model
+  const model = analysisModelOf(config)
   if (model !== undefined) return model
   const judge = config.judge.model
-  if (typeof judge === 'string' && !isEvaluationModel(judge)) return judge
-  return undefined
+  return typeof judge === 'string' && !isEvaluationModel(judge) ? judge : undefined
 }
 
 /** ` (the judge, typesafe-ai/jev-1.14.0, is an evaluation model: it scores yes/no questions and can't <task>)`, when it is one. */

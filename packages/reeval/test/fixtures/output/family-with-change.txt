@@ -1,0 +1,24 @@
+                 greets %s in the house style
+  pass  Ada
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  Grace
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  Linus
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  Edsger
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  all cases
+    arm            pass
+    plain          0 of 4
+    with-skill     4 of 4  can't tell yet
+
+4 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.

@@ -1,33 +1,35 @@
 ---
 title: Debugging
-description: Find out why an attempt failed, from the summary block to the full phase trace in .reeval/debug.
+description: Find out why an attempt failed, from the result block to the full phase trace in .reeval/debug.
 ---
 
-When an eval fails, the reason is usually in the summary. When it isn't, reeval has kept a trace of every phase of the attempt on your machine. This page goes from the first to the second.
+When an eval fails, the reason is usually in its result block. When it isn't, reeval has kept a trace of every phase of the attempt on your machine. This page goes from the first to the second.
 
 ## Read the failure block
 
 ```text
- ✗ evals/skill.eval.ts › house greeting › greets in the house style  cursor:composer-2.5/plain/docker#2
-   Error: expected command to succeed, exit code 1
-   --- stderr ---
-   (node:1390) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
-   (Use `node --trace-warnings ...` to show where the warning was created)
-   --- stdout ---
-   Welcome to the house, Ada!
-    ❯ evals/skill.eval.ts:24:7
-        22|           'Add a package.json with "type": "module". No dependencies.',
-        23|       )
-        24|       await expect(c.exec(greetAda)).toSucceed()
-          |       ^
-        25|     })
-        26|   },
-   record  .reeval/runs/20260926T174022Z_b010670_ada-lovelace_pmvn/evals-skill-eval-ts-house-greeting-greets-in-the-house-style-55be48/cursor-composer-2-5-docker-76739b/2
+[greets#1 control] ▶ evals/skill.eval.ts › house greeting › greets in the house style
+[greets#1 control]  +0:00 sandbox ready 33ms
+[greets#1 control]  +0:00 turn 1 done 6ms · 0 tool calls, 2 file edits
+[greets#1 control]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Ada') ===…  exit 1 33ms
+[greets#1 control]  Error: house greeting: expected command to succeed, exit code 1
+[greets#1 control]  --- stderr ---
+[greets#1 control]
+[greets#1 control]  --- stdout ---
+…
+fail             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 2
+  with-house-greeting  2 of 2  can't tell yet
+  check                plain   with-house-greeting
+  house greeting       0 of 2  2 of 2
+    expected command to succeed, exit code 1
+  +2 more passed
 ```
 
-The first line names the eval, the cell and the attempt number. Then come the error, the command's output and the line of your eval that failed. A control that isn't gated prints only the error's first line and its `record`, under `Expected misses, not gated`, since its miss doesn't fail the run.
+The attempt's log ends with its error and the command's output; the eval's result block says which check failed, in which arm, and how often. This is the fake agent with `compare.gate: 'all'`, so the control gates too. An ungated control's log keeps only the error's first line, and its misses never fail the run.
 
-The `record` line is the attempt's folder. It holds what the agent did:
+`summary.md`, under `## Attempts`, links each attempt's folder: its check logs, transcript and diff.
 
 ```text
 .reeval/runs/<run>/<eval>/<cell>/2/
@@ -39,21 +41,27 @@ The `record` line is the attempt's folder. It holds what the agent did:
 ## Use agent mode under a coding agent
 
 ```bash
-REEVAL_UI=agent npx reeval run preferences
+REEVAL_UI=agent npx reeval run results
 ```
 
 ```text
-plan  run 20260926T174122Z_b010670_ada-lovelace_f2sr · 7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
-reeval run: 20260926T174122Z_b010670_ada-lovelace_f2sr · 1 eval file
-FAIL evals/preferences.eval.ts › recommends Genkit over LangChain for production apps (21s, judge)
-  judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
-  record: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-eval-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
+plan  run 20261020T211926Z_da3d797_cursor-agent_dcy5 · 5 evals · 5 cells · 6 attempts · ~1s serial (~313ms at concurrency 4)
 …
-7 failed
-summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
+reeval run: 20261020T211926Z_da3d797_cursor-agent_dcy5 · 1 eval file
+
+pass             writes greet.js
+
+fail             greets in French
+  french greeting  failed
+    expected command to succeed, exit code 1
+  +1 more passed
+…
+770ms · results .reeval/runs/20261020T211926Z_da3d797_cursor-agent_dcy5/summary.md
+3 fail · 1 pass · 1 infra error · 2 skipped
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
-Agent mode prints only the plan, each failure with its record folder, and the counts. reeval picks it on its own when a coding agent runs it, so an agent fixing your evals reads a few lines, not the whole log. `--ui agent` or `REEVAL_UI=agent` turns it on by hand.
+Agent mode prints only the plan, the result blocks and the tally, with the `summary.md` path. reeval picks it on its own when a coding agent runs it, so an agent fixing your evals reads a few lines, not the whole log. `--ui agent` or `REEVAL_UI=agent` turns it on by hand.
 
 ## Trace each phase with -v
 

@@ -11,6 +11,7 @@ import {
   configLabel,
   configPathFor,
   findConfig,
+  hasAnalysisModel,
   hostCapacity,
   loadConfig,
   malformedCredentials,
@@ -27,7 +28,7 @@ import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, workspaceLabel } from './environment.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
-import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
+import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
@@ -322,8 +323,6 @@ async function runCommand(
     output: setup.output,
     verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',
-    attemptDir: (id, cell, n) =>
-      fromCwd(join(ctx.scratch, ctx.runId, evalSlug(id), evalSlug(cell), String(n))),
   })
   let executed: Awaited<ReturnType<typeof executeRun>>
   try {
@@ -408,6 +407,7 @@ async function runCommand(
     summaryPath: fromCwd(summary),
     results: engineRun.evals,
     unhandledErrors: engineRun.unhandledErrors,
+    hint: !hasAnalysisModel(ctx.config),
   })
   renderer.close()
   const stepSummary = process.env.GITHUB_STEP_SUMMARY

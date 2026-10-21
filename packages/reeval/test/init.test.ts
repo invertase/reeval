@@ -40,7 +40,7 @@ describe('reeval init', () => {
     assert.match(init.stdout, /npx reeval run +passes now/)
     const run = await runCli(p.dir, ['run'])
     assert.equal(run.code, 0, run.stdout + run.stderr)
-    assert.match(run.stdout, /✓ evals\/greet\.eval\.ts › creates greet\.js/)
+    assert.match(run.stdout, /^pass {13}creates greet\.js$/m)
     const manifest = JSON.parse(p.read('package.json'))
     assert.deepEqual(manifest.scripts, { eval: 'reeval run' })
     assert.deepEqual(manifest.devDependencies, { [pkg]: `^${version}` })

@@ -1,5 +1,6 @@
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { hasAnalysisModel } from './config.ts'
 import { type AssembleInput, assembleRun } from './history/assemble.ts'
 import { readRecord, scratchDir, type WrittenRun, writeRun } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
@@ -30,7 +31,10 @@ export async function writeScratchRun(
   landed?: () => void,
 ): Promise<WrittenRun & { record: RunRecord }> {
   const { record, artifacts } = await assembleRun(input)
-  artifacts.set('summary.md', Buffer.from(renderSummary(record)))
+  artifacts.set(
+    'summary.md',
+    Buffer.from(renderSummary(record, { hint: !hasAnalysisModel(input.ctx.config) })),
+  )
   const scratch = scratchDir(input.ctx.config.root)
   const existing = join(scratch, `${record.runId}.json`)
   try {

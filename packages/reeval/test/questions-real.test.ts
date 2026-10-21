@@ -11,7 +11,6 @@ import { test } from 'node:test'
 import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { fits, validate } from '../scripts/schema/validate.ts'
 import { ratesOf } from '../src/compare/pairs.ts'
-import { answersLabel } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import type { PairVote } from '../src/types.ts'
 import type { AnalysisDoc, AnalysisNote } from '../src/view/analysis.ts'
@@ -66,7 +65,7 @@ test('examples/hello --profile questions: every pair is voted in both orders; no
   const [answer] = e.answers ?? []
   assert.ok(answer)
   t.diagnostic(`${e.attempts.map((a) => `${a.id} ${a.outcome}`).join(', ')}`)
-  t.diagnostic(answersLabel(answer))
+  t.diagnostic(answer.rates.map((r) => `${r.name} won ${r.wins} of ${r.n}`).join(', '))
   const doc = schema('run-record')
   assert.ok(fits(doc, { $ref: '#/$defs/CompareAnswer' }, answer), 'the answer fits CompareAnswer')
   assert.equal(answer.error, undefined, `the model call failed: ${answer.error}`)

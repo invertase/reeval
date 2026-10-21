@@ -163,9 +163,9 @@ evaluate('sees the house rules', async (c) => {
 ```
 
 ```text
-[sees#1 fake]  +0:00 $ test -f docs/api.md  exit 0 2ms
+[sees#1 fake]  +0:00 $ test -f docs/api.md  exit 0 6ms
 …
-     ✓ sees the house rules         282ms  0 turns
+pass             sees the house rules
 ```
 
 The `$ test -f` line is the attempt's detail, which a pass prints with `--output-logs full`. The first `c.readFile` starts the sandbox and the agent session without a turn. Check an environment this way before you spend a turn on it.

@@ -92,14 +92,16 @@ await expect(turn).toHaveFile('nope.js')  // right
 ```
 
 ```text
-Summary
- evals/guide-unawaited.eval.ts
-   ✗ unawaited     45ms  1 turn
 …
- ✗ evals/guide-unawaited.eval.ts › unawaited
-   Error: expected file nope.js to exist
+[unawaited#1 fake]  Error: expected file nope.js to exist
+[unawaited#1 fake]
+[unawaited#1 fake]  expect(…).toHaveFile() wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`.
 
-   expect(…).toHaveFile() wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`.
+fail             unawaited
+  toHaveFile nope.js  failed
+    expected file nope.js to exist
+…
+1 fail
 ```
 
 <Warning>
@@ -250,16 +252,16 @@ evaluate.todo('greets a list of names')
 ```
 
 ```text
-Summary
- evals/guide.eval.ts
-   greet module
-     ✓ writes a module            57ms  1 turn
-     ✓ passes its own tests      121ms  1 turn
-     ↓ greets in French        skipped
-     ↓ greets a list of names  todo
+pass             greet module › writes a module
+pass             greet module › passes its own tests
+skipped          greet module › greets in French
+todo             greet module › greets a list of names
+
+724ms · results .reeval/runs/20261020T214211Z_…/summary.md
+2 pass · 2 skipped
 ```
 
-`.skip` keeps an eval without running it, and `.todo(name)` notes one to write, shown as todo in the plan, the summary, the record and the studio. `.only` runs only the marked evals in a file while you work on them; it's an error when `CI` is set, so it can't slip into a pipeline. `group` has all three too.
+`.skip` keeps an eval without running it, and `.todo(name)` notes one to write, shown as todo in the plan, the result blocks, the record and the studio. `.only` runs only the marked evals in a file while you work on them; it's an error when `CI` is set, so it can't slip into a pipeline. `group` has all three too.
 
 ## Next
 

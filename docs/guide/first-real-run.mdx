@@ -126,41 +126,35 @@ npx reeval run hello --log-order grouped --output-logs full
 ```
 
 ```text
-plan  2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
-reeval 0.0.1 · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
+plan  run … · 2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
+reeval 0.10.0 · run … · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 [creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module
-[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
-[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  9s
-[creates#1 cursor]  +0:00 sandbox ready 1s
+[creates#1 cursor]  +0:00 sandbox ready 2s
 [creates#1 cursor]  +0:01 turn 1 done 6s · 1 tool call, 2 file edits
-[creates#1 cursor]  +0:07 $ node --test  exit 0 130ms
-[creates#1 cursor]  +0:07 judge  pass 0.99 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
-[adds#1 cursor] ✓ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  16s
-[adds#1 cursor]  +0:00 sandbox ready 1s
-[adds#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 1 file edit
+[creates#1 cursor]  +0:07 $ node --test  exit 0 159ms
+[creates#1 cursor]  +0:08 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
+[adds#1 cursor]  +0:00 sandbox ready 2s
+[adds#1 cursor]  +0:01 turn 1 done 8s · 3 tool calls, 1 file edit
 [adds#1 cursor]  +0:10 turn 2 done 4s · 1 tool call, 1 file edit
-[adds#1 cursor]  +0:14 $ node -e "import('./greet.js').then((m) => {…  exit 0 79ms
+[adds#1 cursor]  +0:14 $ node -e "import('./greet.js').then((m) => {…  exit 0 103ms
 [adds#1 cursor]  +0:14 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
 
-Summary
- evals/hello.eval.ts
-   greet module
-     ✓ creates a tested greet module                 9s  pass 0.99/0.80  1 turn
-     ✓ adds a default name in a follow-up turn      16s  pass 1.00/0.80  2 turns
+pass             greet module › creates a tested greet module
+pass             greet module › adds a default name in a follow-up turn
 
-   Evals  2 passed (2)
-Duration  17s
-  Tokens  155k in (72k cached) · 1,205 out
- Results  .reeval/runs/20260926T174005Z_b010670_ada-lovelace_xdb9/summary.md
+17s · 132k in (49k cached) · 1,489 out · results .reeval/runs/…/summary.md
+2 pass
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
 
-`hello` is a filter: it matches the file `evals/hello.eval.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict.
+`hello` is a filter: it matches the file `evals/hello.eval.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict (`pass 1.00 (≥ 0.8)`: its score against the threshold).
 
-Each attempt line shows the judge as `pass 0.99/0.80`: its score against the threshold. `Tokens` is what Cursor reported for the run (input, the cached part and output), and each attempt line shows the same figures when the harness reports them. reeval records them per turn and per attempt but prices no models, so there's no cost.
+Then comes a block per eval: a pass prints its name only. The line under the blocks has the run's time and the tokens Cursor reported (input, the cached part and output); reeval records them per turn and per attempt but prices no models, so there's no cost. Last are the tally and a hint: with [`analysis.model`](/guide/analysis) set, a model answers what each eval asks.
 
 On a terminal, the same run is in colour:
 
-<Image src="/assets/cli/run-tty.png" alt="A colour terminal showing a reeval run with two passing evals and the summary" width={800} />
+<Image src="/assets/cli/run-tty.png" alt="A colour terminal showing a reeval run with two passing evals and their result blocks" width={800} />
 
 ## Find the run
 

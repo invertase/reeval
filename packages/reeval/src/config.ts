@@ -36,6 +36,7 @@ import type {
   Budget,
   ConfigHelpers,
   EnvVars,
+  FakeAnalysisModel,
   HarnessDescriptor,
   Profile,
   ProfileData,
@@ -720,6 +721,13 @@ export function secretSources(env: EnvVars): Array<[string, string]> {
       isSecret(value) && !value.optional ? [[name, value.from ?? name]] : [],
   )
 }
+
+/** The model that answers what each eval asks: `analysis.model` only, never the judge's. */
+export const analysisModelOf = (config: ResolvedConfig): string | FakeAnalysisModel | undefined =>
+  config.analysis.model
+
+/** Whether `analysis.model` is set, so a model can answer what each eval asks. */
+export const hasAnalysisModel = (config: ResolvedConfig) => analysisModelOf(config) !== undefined
 
 /** The provider model `analysis.agent` calls during a run, if it's on: `analysis.model`, else the judge's. */
 function agentModel(config: ResolvedConfig): string | null {

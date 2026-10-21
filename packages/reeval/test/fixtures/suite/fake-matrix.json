@@ -47,7 +47,10 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -73,13 +76,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › fails its check",
@@ -115,7 +128,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "assertion",
+                    "message": "expected command to succeed, exit code 1",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -141,13 +163,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › fails its judge",
@@ -183,7 +215,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "judge",
+                    "message": "judge score 0.80 is below 0.95 for \"Is greet.js perfect?\" (fake)",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -209,13 +250,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › is skipped for now",
@@ -251,7 +302,10 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               },
@@ -277,13 +331,17 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.es.ts › greets in Welsh",
@@ -319,13 +377,17 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       },
@@ -366,7 +428,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "assertion",
+                    "message": "expected command to succeed, exit code 1",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -395,7 +466,10 @@
                   "low": -0.122,
                   "high": 1
                 },
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -421,7 +495,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               },
@@ -447,13 +530,23 @@
                 "checks": [],
                 "effect": "unclear",
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       }
@@ -528,13 +621,17 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0, 0, 0],
                 "fetches": [0, 0, 0]
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       }

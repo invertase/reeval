@@ -239,9 +239,10 @@ group(
 - Each variant runs as that environment on its own; `compare` does not layer, inherit or
   extend. Share setup with `parent.extendEnvironment(name, spec)` before `compare`. Without
   `baseline`, the cascaded `environment` is the control.
-- Only variant cells gate by default; a control's miss prints `(not gated)`. Lift with few runs
-  is usually "within noise"; the `effort:` line under each variant often shows a skill's effect
-  first. In a compare, prefer `expect.soft` with labels for independent requirements.
+- Only variant cells gate by default; a control's misses don't fail the run. Below four tries a
+  side each variant's effect reads `can't tell yet`; from four, the block adds an effort table
+  (median tools, time, tokens per arm), which often shows a skill's effect first. In a compare,
+  prefer `expect.soft` with labels for independent requirements.
 - `compare.questions: ['Which … reads more like our house style?']` asks which side did better,
   pair by pair, after the run; it never gates and needs a language model. Details, gates,
   `minLift` and `reeval query skill_files` (which skill files each attempt opened) are in
@@ -264,6 +265,12 @@ reeval analyze           reeval studio          reeval image build      reeval d
 | 1 | A gated failure |
 | 2 | A usage or config error, including a filter that matches nothing |
 | 3 | An infra error |
+
+`reeval run` ends with a result block per eval, laid out by what it varies (a row per eval, per
+arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`
+or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
+(`1 fail · 2 pass`), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
+model never stands in). `summary.md` and `reeval show` print the same blocks.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP

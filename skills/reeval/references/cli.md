@@ -27,7 +27,7 @@ reeval doctor            Docker, keys and images, with fixes (--json, --online)
 
 ## From a failure to what the agent did
 
-- The summary names each failure. Then `.reeval/runs/<run>/summary.md` and each attempt's
+- The result blocks name each failed check with its message. Then `.reeval/runs/<run>/summary.md` and each attempt's
   directory (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`,
   `setup.log`). `reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
 - `reeval query "SELECT … FROM failing_attempts"`: each failed attempt and infra error with its

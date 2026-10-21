@@ -56,7 +56,16 @@
                     "checks": [],
                     "effect": null,
                     "interval": null,
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [
+                      {
+                        "kind": "assertion",
+                        "message": "expected command to succeed, exit code 1",
+                        "attempts": 1
+                      }
+                    ],
                     "searches": [0],
                     "fetches": [0]
                   },
@@ -85,7 +94,10 @@
                       "low": -0.122,
                       "high": 1
                     },
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [],
                     "searches": [0],
                     "fetches": [0]
                   },
@@ -111,7 +123,16 @@
                     "checks": [],
                     "effect": null,
                     "interval": null,
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [
+                      {
+                        "kind": "infra",
+                        "message": "the fake sandbox fell over",
+                        "attempts": 1
+                      }
+                    ],
                     "searches": [],
                     "fetches": []
                   },
@@ -137,7 +158,16 @@
                     "checks": [],
                     "effect": "unclear",
                     "interval": null,
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [
+                      {
+                        "kind": "infra",
+                        "message": "the fake sandbox fell over",
+                        "attempts": 1
+                      }
+                    ],
                     "searches": [],
                     "fetches": []
                   }
@@ -173,7 +203,16 @@
                     "checks": [],
                     "effect": null,
                     "interval": null,
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [
+                      {
+                        "kind": "assertion",
+                        "message": "expected command to succeed, exit code 1",
+                        "attempts": 1
+                      }
+                    ],
                     "searches": [0],
                     "fetches": [0]
                   },
@@ -202,7 +241,10 @@
                       "low": -0.122,
                       "high": 1
                     },
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [],
                     "searches": [0],
                     "fetches": [0]
                   },
@@ -228,7 +270,16 @@
                     "checks": [],
                     "effect": null,
                     "interval": null,
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [
+                      {
+                        "kind": "infra",
+                        "message": "the fake sandbox fell over",
+                        "attempts": 1
+                      }
+                    ],
                     "searches": [],
                     "fetches": []
                   },
@@ -254,7 +305,16 @@
                     "checks": [],
                     "effect": "unclear",
                     "interval": null,
+                    "minLift": null,
                     "effort": null,
+                    "effortDiffers": false,
+                    "errors": [
+                      {
+                        "kind": "infra",
+                        "message": "the fake sandbox fell over",
+                        "attempts": 1
+                      }
+                    ],
                     "searches": [],
                     "fetches": []
                   }
@@ -272,9 +332,11 @@
                   "low": 0.07,
                   "high": 1
                 },
+                "minLift": 0.2,
                 "outcome": "fail"
               }
-            ]
+            ],
+            "questions": []
           },
           {
             "path": "evals%2Fcases.eval.ts › writes greet.js for Ada",
@@ -310,7 +372,10 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -336,13 +401,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fcases.eval.ts › writes greet.js for Grace",
@@ -378,7 +453,10 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -404,13 +482,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       },
@@ -451,7 +539,10 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -477,13 +568,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › fails its check",
@@ -519,7 +620,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "assertion",
+                    "message": "expected command to succeed, exit code 1",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -545,13 +655,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › fails its judge",
@@ -587,7 +707,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "judge",
+                    "message": "judge score 0.80 is below 0.95 for \"Is greet.js perfect?\" (fake)",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -613,13 +742,23 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › is skipped for now",
@@ -655,7 +794,10 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               },
@@ -681,13 +823,17 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           },
           {
             "path": "evals%2Fgreet.eval.ts › greets in Welsh",
@@ -723,13 +869,17 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       },
@@ -770,7 +920,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "assertion",
+                    "message": "expected command to succeed, exit code 1",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -799,7 +958,10 @@
                   "low": -0.122,
                   "high": 1
                 },
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -825,7 +987,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               },
@@ -851,13 +1022,36 @@
                 "checks": [],
                 "effect": "unclear",
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": [
+              {
+                "question": "Which greeting reads more like our house style?",
+                "votes": 0,
+                "rates": [],
+                "error": null
+              },
+              {
+                "question": "Which greeting handles a missing name?",
+                "votes": 0,
+                "rates": [],
+                "error": null
+              }
+            ]
           },
           {
             "path": "evals%2Fskill.eval.ts › house greeting › writes a greeting",
@@ -893,7 +1087,10 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -922,7 +1119,10 @@
                   "low": -0.793,
                   "high": 0.793
                 },
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0],
                 "fetches": [0]
               },
@@ -948,7 +1148,16 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               },
@@ -974,13 +1183,49 @@
                 "checks": [],
                 "effect": "unclear",
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [
+                  {
+                    "kind": "infra",
+                    "message": "the fake sandbox fell over",
+                    "attempts": 1
+                  }
+                ],
                 "searches": [],
                 "fetches": []
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": [
+              {
+                "question": "Which greeting reads more like our house style?",
+                "votes": 2,
+                "rates": [
+                  {
+                    "cut": "within",
+                    "name": "plain",
+                    "wins": 0,
+                    "n": 2
+                  },
+                  {
+                    "cut": "within",
+                    "name": "with-house-greeting",
+                    "wins": 2,
+                    "n": 2
+                  }
+                ],
+                "error": null
+              },
+              {
+                "question": "Which greeting handles a missing name?",
+                "votes": 0,
+                "rates": [],
+                "error": "Rate limit exceeded (429)"
+              }
+            ]
           }
         ]
       }
@@ -1078,13 +1323,17 @@
                 "checks": [],
                 "effect": null,
                 "interval": null,
+                "minLift": null,
                 "effort": null,
+                "effortDiffers": false,
+                "errors": [],
                 "searches": [0, 0, 0],
                 "fetches": [0, 0, 0]
               }
             ],
             "cases": null,
-            "pooled": null
+            "pooled": null,
+            "questions": []
           }
         ]
       }

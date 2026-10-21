@@ -117,6 +117,8 @@ export type ReevalEvent =
       /** The engine's results, for Vitest-formatted failure details. */
       results: EvalResult[]
       unhandledErrors: string[]
+      /** `analysis.model` is unset, so the result ends with the hint to set it. */
+      hint: boolean
     }
 
 export interface Renderer {

@@ -1,9 +1,9 @@
 ---
 title: Output modes
-description: How reeval run picks live, plain or agent output, and how grouped and stream logs differ.
+description: How reeval run picks live, plain or agent output, what each eval's result block shows, and how grouped and stream logs differ.
 ---
 
-`reeval run` prints for whoever is reading: a person at a terminal, a CI log or a coding agent. It picks a mode on its own, and a few flags, named after Turborepo's, change the details.
+`reeval run` prints for whoever is reading: a person at a terminal, a CI log or a coding agent. It picks a mode on its own, and a few flags, named after Turborepo's, change the details. Every mode ends the same way: a result block per eval and the tally.
 
 ```bash
 reeval run --ui plain --log-order grouped --log-prefix task \
@@ -19,56 +19,137 @@ flowchart TD
   B -- yes --> AG[agent]
   B -- no --> C{"CI, or stdout not a terminal?"}
   C -- yes --> P[plain]
-  C -- no --> L["live (prints plain for now)"]
+  C -- no --> L[live]
 ```
 
 | Mode | Picked when | Prints |
 |---|---|---|
-| `agent` | A coding agent runs reeval (Cursor, Claude Code, Codex, GitHub Copilot…, as std-env detects them) | Failures (and expected misses, as `MISS`) only, then totals and the summary path; no colour, no heartbeat |
-| `plain` | CI is detected (`CI`, `GITHUB_ACTIONS`, `BUILD_NUMBER`…), or stdout isn't a terminal | Append-only lines, never rewritten |
-| `live` | On a terminal | The same as `plain`, until the redrawn view lands |
+| `agent` | A coding agent runs reeval (Cursor, Claude Code, Codex, GitHub Copilot…, as std-env detects them) | The plan, then the result blocks and the tally; no attempt logs, colour or heartbeat |
+| `plain` | CI is detected (`CI`, `GITHUB_ACTIONS`, `BUILD_NUMBER`…), or stdout isn't a terminal | Append-only attempt logs, never rewritten, then the result blocks |
+| `live` | On a terminal | The same logs under one redrawn line (`7 evals · 12/28 tries`), then the result blocks |
 
 If your agent isn't detected, set `REEVAL_UI=agent` (or `AI_AGENT=<name>`).
 
 ## Every run starts with a plan line
 
-The plan line comes first in every mode, then plain mode's run header:
+The plan line comes first in every mode, then the run header. From `reeval run hello` in `examples/hello`:
 
 ```text
-plan  profile pr (auto: CI is set) · 3 evals · 3 cells · 3 attempts · ~37s serial (~12s at concurrency 4) · budget 20 attempts ✓
-reeval 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
+plan  run 20261020T212103Z_a3fbded_cursor-agent_zjv6 · 2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
+reeval 0.10.0 · run 20261020T212103Z_a3fbded_cursor-agent_zjv6 · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 ```
+
+## Result blocks
+
+When the attempts finish, each eval gets a block, in file-path order and then source order: its verdict, its name, and only what explains the verdict. A pass prints its name alone; a fail prints its failed checks with their assertion, a check that never ran as `not run`, and how many more passed. A file of seven evals on the fake harness:
+
+```text
+pass             writes greet.js
+
+fail             greets in French
+  french greeting  failed
+    expected command to succeed, exit code 1
+  +1 more passed
+
+fail             explains why greet.js fails
+  2 tries               1 of 2
+  names the root cause  1 of 2
+    expected 'Docker is down' to contain 'null'
+  +1 more passed
+
+fail             reads the fixture repo
+  error            the fixture repo is missing
+
+infra error      starts its sandbox
+  infra error      the fake sandbox fell over
+
+skipped          greets in Welsh
+todo             greets in Klingon
+
+3 fail · 1 pass · 1 infra error · 2 skipped
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
+```
+
+The tally counts each eval (and each case of a family) once, fails first, and leaves zeros out. An infra error isn't a fail, and a row's count names infra errors and cancelled and skipped tries apart (`0 of 1 · 2 skipped`). The [exit code](/reference/cli#exit-codes) says which happened. `not gated` marks an eval whose cells are all ungated, a study, so it never reads `pass` beside `0 of 2`.
+
+The last line, `Set analysis.model…`, prints while `analysis.model` is unset; the judge's model never stands in for it. With `analysis.model` set, the tally ends the run.
+
+## The layout follows what the eval varies
+
+| The eval varies | Layout |
+|---|---|
+| Nothing | Results, as above: the failed checks of each try |
+| An environment (`compare`) | Measure a change: a row per arm with `N of M` and the effect, the checks that failed in some arm, then effort |
+| The harness (`harness: [a, b]`) | Compare harnesses: a row per harness; a failing one indents its checks |
+| Both | The harness outer, its arms inner |
+| Its cases (`evaluate.each`) | A family: the template as the heading, a row per case; with a change, each case's arms and the pooled `all cases` row |
+
+A measure-a-change block for a baseline and two variants, four tries each:
+
+```text
+fail             greets in the house style
+  arm              pass
+  plain            0 of 4
+  with-skill       4 of 4  helped
+  with-doc         0 of 4
+  check            plain    with-skill  with-doc
+  house greeting   0 of 4   4 of 4      0 of 4
+    expected command to succeed, exit code 1
+  exclaims         not run  4 of 4      not run
+  +1 more passed
+  effort           tools  time
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-doc         1      <0.1s
+```
+
+The effect reads `helped`, `made it worse` or `can't tell yet`, from the same [interval as lift](/concepts/lift), and is blank when nothing changed. With fewer than four counted tries a side it's always `can't tell yet`. The effort table needs four tries a side too, and shows when the eval failed or its effort differs. Counts are `N of M`, never percentages; `-v` adds each arm's difference and 95% interval:
+
+```text
+  with-skill       4 of 4  helped
+    difference +100 points, 95% interval +31…+100
+```
+
+`summary.md` and `reeval show` print the same blocks. `reeval compare` keeps its own view of two runs.
 
 ## Grouped or stream
 
-`--log-order grouped` is the default in CI. Each attempt's start line (`▶`) prints at once, and its detail prints as one block when it finishes, result line first, so concurrent attempts never interleave. By default only a failing attempt has a detail block; the samples here pass `--output-logs full`, so passing ones print theirs too. From a real `CI=1` run:
+By default (`--output-logs errors-only`) only a failing attempt prints its log: its start line (`▶`) and detail lines, as one block once it fails. A passing attempt prints nothing above the result blocks. From `CI=1 reeval run --config reeval.fake.config.ts` in `examples/hello`:
 
 ```text
-[summarises#1 cursor] ▶ evals/jq.eval.ts › summarises a JSON file with jq
-[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module
-[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
-[summarises#1 cursor] ✓ evals/jq.eval.ts › summarises a JSON file with jq  10s
-[summarises#1 cursor]  +0:00 sandbox ready 2s
-[summarises#1 cursor]  +0:01 turn 1 done 8s · 3 tool calls, 2 file edits
-[summarises#1 cursor]  +0:09 $ jq --version  exit 0 41ms
-[summarises#1 cursor]  +0:09 $ ./count.sh  exit 0 55ms
-[adds#1 cursor] ✓ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  12s
+[ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 control]  +0:00 sandbox ready 32ms
+[ada#1 control]  +0:00 turn 1 done 7ms · 0 tool calls, 3 file edits
+[ada#1 control]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Ada') ===…  exit 1 23ms
+[ada#1 control]  Error: expected command to succeed, exit code 1
+[grace#1 control] ▶ evals/greetings.eval.ts › greets Grace in the house style
 …
 ```
 
-`--log-order stream`, the default elsewhere, prints every line as it happens with `--output-logs full`, so attempts interleave. With the default `errors-only`, it prints each start and result line as it happens and a failing attempt's detail after its result:
+`--output-logs full` (the default with `-v`) prints every attempt's log. `--log-order grouped`, the default in CI, prints each one as a block when it finishes, so concurrent attempts never interleave; the same run with `--output-logs full`:
 
 ```text
-…
-[creates#1 fake]  +0:00 sandbox ready 22ms
-[creates#1 fake]  +0:00 turn 1 started
-[langchain#1 fake]  +0:00 sandbox ready 19ms
-[langchain#1 fake]  +0:00 turn 1 started
-[adds#1 fake]  +0:00 sandbox ready 19ms
+[ada#1 with-house-greeting] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 with-house-greeting]  +0:00 sandbox ready 32ms
+[ada#1 with-house-greeting]  +0:00 turn 1 done 5ms · 0 tool calls, 2 file edits
+[ada#1 with-house-greeting]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Ada') ===…  exit 0 23ms
+[ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 control]  +0:00 sandbox ready 28ms
 …
 ```
 
-Detail lines carry an offset into the attempt (`+0:09`): sandbox start, each turn with its tool calls and file edits, each check, each judge verdict, and the eval's own `console.log` and `console.error`.
+`--log-order stream`, the default elsewhere, prints every line as it happens with `--output-logs full`, so attempts interleave:
+
+```text
+[ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 control]  +0:00 sandbox starting
+[ada#1 with-house-greeting] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 with-house-greeting]  +0:00 sandbox starting
+[grace#1 control] ▶ evals/greetings.eval.ts › greets Grace in the house style
+…
+```
+
+Detail lines carry an offset into the attempt (`+0:09`): sandbox start, each turn with its tool calls and file edits, each check, each judge verdict, and the eval's own `console.log` and `console.error`. `--output-logs none` drops every log; the result blocks still have every failure.
 
 ## Prefixes and tags
 
@@ -86,7 +167,7 @@ Every line about an attempt starts with a tag: the first distinctive word of the
 
 ## Heartbeat
 
-After 60 seconds without output, plain mode prints what's still running, with each attempt's phase (`sandbox`, `turn 2`, `checks`, `judging`) and elapsed time, in the shape `… 1 running, 1 queued after 45s: [greets#1 control] turn 1 45s`. CI doesn't kill a silent job, and a hung log shows where it stopped.
+After 60 seconds without output, plain mode prints what's still running, with each attempt's phase (`sandbox`, `turn 2`, `checks`, `judging`) and elapsed time, in the shape `… 1 running, 1 queued after 45s: [greets#1 control] turn 1 45s`. CI doesn't kill a silent job, and a hung log shows where it stopped. Live mode's redrawn line takes its place.
 
 ```bash
 REEVAL_HEARTBEAT=30s reeval run   # 0 turns it off
@@ -94,68 +175,37 @@ REEVAL_HEARTBEAT=30s reeval run   # 0 turns it off
 
 ## GitHub Actions
 
-With `GITHUB_ACTIONS=true`, failing attempts stay open under their result line with an `::error` annotation. With `--output-logs full`, passing attempts' detail collapses into `::group::` blocks titled with their result line; by default a pass is its result line alone. Colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as this real `--output-logs full` run did:
+With `GITHUB_ACTIONS=true`, a failing attempt's log stays open with an `::error` annotation. A log that doesn't fail the run (a control's miss, or a pass with `--output-logs full`) collapses into a `::group::` block titled with its start line. Colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as here for a control's miss:
 
 ```text
-::group::[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  10s
-[creates#1 cursor]  +0:00 sandbox ready 1s
-[creates#1 cursor]  +0:01 turn 1 done 6s · 1 tool call, 2 file edits
-[creates#1 cursor]  +0:08 $ node --test  exit 0 137ms
-[creates#1 cursor]  +0:08 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+::group::[ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 control]  +0:00 sandbox ready 41ms
+[ada#1 control]  +0:00 turn 1 done 7ms · 0 tool calls, 3 file edits
+[ada#1 control]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Ada') ===…  exit 1 32ms
+[ada#1 control]  Error: expected command to succeed, exit code 1
 ::endgroup::
 ```
 
-An ungated control's miss collapses into a group like a pass, marked `○` and `(not gated)`, with no annotation.
-
 ## Agent mode
 
-Agent mode prints one block per failure with its record path, then totals, and the summary path last, so an agent reads what it needs and nothing else. An ungated cell's expected miss is one `MISS` line with its reason and record, never `FAIL`. A real run:
+Agent mode prints the plan, the result blocks and the tally, and nothing else, so an agent reads what it needs. `reeval show` and the record have the detail. The seven evals from [Result blocks](#result-blocks) with `REEVAL_UI=agent`:
 
 ```text
-plan  7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
-reeval run: 1 eval file
-FAIL evals/preferences.eval.ts › recommends Genkit over LangChain for production apps (21s, judge)
-  judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
-  record: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-eval-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
+plan  run 20261020T211926Z_da3d797_cursor-agent_dcy5 · 5 evals · 5 cells · 6 attempts · ~1s serial (~313ms at concurrency 4)
 …
-7 failed
-summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
+reeval run: 20261020T211926Z_da3d797_cursor-agent_dcy5 · 1 eval file
+
+pass             writes greet.js
+
+fail             greets in French
+  french greeting  failed
+    expected command to succeed, exit code 1
+  +1 more passed
+…
+770ms · results .reeval/runs/20261020T211926Z_da3d797_cursor-agent_dcy5/summary.md
+3 fail · 1 pass · 1 infra error · 2 skipped
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
 ```
-
-## The summary
-
-Plain output ends with a summary: a file › group tree with each eval's outcome, duration, lowest judge score and turns. An eval with several attempts gets its pass count, its pass@1 ([`gated`](/reference/cli/run#the-summarys-eval-line) when some cells aren't), a row per cell with its role and lift, and an [`effort:`](/concepts/lift#effort-next-to-lift) line under each variant. From a real run of Cursor and Antigravity at `--runs 2`:
-
-```text
-Summary
- evals/hello.eval.ts
-   greet module
-     ✓ creates a tested greet module                4/4  pass@1 100%  4 attempts
-         cursor:composer-2.5/-/docker                    2/2  pass@1 100%   gate passRate 0.5
-         antigravity:gemini-3.8-flash-medium/-/docker    2/2  pass@1 100%   gate passRate 0.5
-…
- evals/skill.eval.ts
-   house greeting
-     ✓ greets in the house style                    4/8 · pass@1 100% gated  8 attempts
-         cursor:composer-2.5/plain/docker                                control    0/2  pass@1   0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  pass@1 100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
-           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
-…
-Expected misses, not gated (4)
- ○ evals/skill.eval.ts › house greeting › greets in the house style  cursor:composer-2.5/plain/docker#1
-   Error: expected command to succeed, exit code 1
-…
-Attempts  12 passed · 4 missed, not gated (16 attempts, 3 evals)
-Duration  2m 39s
-  Tokens  5,149k in (2,946k cached) · 64k out
- Results  .reeval/runs/20260926T174444Z_b010670_ada-lovelace_7gmj/summary.md
-```
-
-An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity, OpenCode, pi and Codex do): input includes cached reads, and there's no cost line because reeval prices no models.
-
-Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its attempt's directory. By default (`--output-logs errors-only`) only failing attempts print their detail lines, so a passing run's stream doesn't sit above the summary. `full` prints every attempt's (the default with `-v`, whose trace is detail lines), and `none` drops them; the summary still has every failure.
-
-Misses in ungated cells (a compare's controls, by default) get their own neutral `Expected misses, not gated` section instead, one line of why each, and `summary.md` folds their detail into `<details>`.
 
 | Variable | Same as |
 |---|---|

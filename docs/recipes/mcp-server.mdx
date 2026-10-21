@@ -171,16 +171,21 @@ npx reeval run --config reeval.fake.config.ts with-local-docs --output-logs full
 ```
 
 ```text
-[looks#2 with-local-docs] ✓ evals/local-mcp.eval.ts › acme docs MCP › looks up the latest SDK version  152ms
-[looks#2 with-local-docs]  +0:00 sandbox ready 23ms
-[looks#2 with-local-docs]  +0:00 turn 1 done 109ms · 1 tool call, 0 file edits
+[looks#1 with-local-docs] ▶ evals/local-mcp.eval.ts › acme docs MCP › looks up the latest SDK version
 …
-Summary
- evals/local-mcp.eval.ts
-   acme docs MCP
-     ✓ looks up the latest SDK version      3/3  pass@1 100%  3 attempts
-         fake/with-local-docs/fake  variant    3/3  pass@1 100%   gate passRate 0.6
+[looks#1 with-local-docs]  +0:02 sandbox ready 2s
+[looks#1 with-local-docs]  +0:02 turn 1 started
+[looks#1 with-local-docs]  +0:02 turn 1 done 177ms · 1 tool call, 0 file edits
+…
+pass             acme docs MCP › looks up the latest SDK version
+  arm              pass
+  with-local-docs  3 of 3  can't tell yet
+
+4s · results .reeval/runs/20261020T214302Z_…/summary.md
+1 pass
 ```
+
+With the control filtered out, the variant has nothing to be measured against, so its effect reads `can't tell yet`.
 
 ## Variations
 

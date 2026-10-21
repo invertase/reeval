@@ -3,6 +3,7 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { allRuns, compareView, historyView, showRecord } from '../commands.ts'
+import { hasAnalysisModel } from '../config.ts'
 import { openHistoryDb, VIEW_NAMES } from '../history/db.ts'
 import { readRecord } from '../history/files.ts'
 import { renderSummary } from '../history/summary.ts'
@@ -232,7 +233,10 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       guard(async ({ run, format }) => {
         const record = await showRecord(config, run)
         return format === 'md'
-          ? { runId: record.runId, markdown: renderSummary(record).trimEnd() }
+          ? {
+              runId: record.runId,
+              markdown: renderSummary(record, { hint: !hasAnalysisModel(config) }).trimEnd(),
+            }
           : (record as Json)
       }),
     )

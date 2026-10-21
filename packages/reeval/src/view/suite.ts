@@ -12,8 +12,8 @@ import type {
   RunRecord,
 } from '../history/types.ts'
 import { liftInterval, round3 } from '../stats.ts'
-import type { Outcome } from '../types.ts'
-import { cellEffort } from './effort.ts'
+import type { ErrorKind, Outcome } from '../types.ts'
+import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
 import { labelledJudgements } from './judgements.ts'
 import { runOutcome } from './model.ts'
@@ -101,6 +101,18 @@ export type EvalResult = {
   cases: CaseResult[] | null
   /** A family's variants against their baseline, pooled over the cases; null on a single eval. */
   pooled: PooledArm[] | null
+  /** Its compare questions' answers; on a family, the first case's. */
+  questions: QuestionResult[]
+}
+
+/** A compare question: each side's wins over the pairs the model decided. Never gates. */
+export type QuestionResult = {
+  question: string
+  /** Pairs voted, each counted once per order it was asked in. */
+  votes: number
+  rates: Array<{ cut: 'within' | 'across'; name: string; wins: number; n: number }>
+  /** Why some or all of its votes are missing: the model call failed. */
+  error: string | null
 }
 
 export type CaseResult = {
@@ -149,8 +161,14 @@ export type CellResult = {
   effect: Effect | null
   /** The stored 95% interval on the variant's difference from its baseline. Not for display. */
   interval: Interval | null
+  /** On a variant, the compare's `minLift`, a fraction like the interval; null without one. */
+  minLift: number | null
   /** Medians over the counted attempts; null below `EFFECT_MIN_COUNTED` of them. */
   effort: EffortCounters | null
+  /** On a variant, its tool calls, agent time or tokens differ from its baseline's by the rank test. */
+  effortDiffers: boolean
+  /** Why attempts failed or errored where no check says: a timeout, an infra error, a throw. */
+  errors: CellError[]
   /** Web searches and fetches per counted attempt; null where the harness can't report them. */
   searches: Array<number | null>
   fetches: Array<number | null>
@@ -188,6 +206,16 @@ export type CheckOutcome =
       assertion: string | null
     }
 
+/**
+ * One distinct error over a cell's attempts: its kind (`turn` for a turn the harness ended with
+ * an error), its message's first line, and how often.
+ */
+export type CellError = {
+  kind: ErrorKind | 'turn'
+  message: string
+  attempts: number
+}
+
 export type JudgeResult = {
   question: string
   threshold: number
@@ -213,6 +241,8 @@ export type PooledArm = {
   /** Cases with counted attempts on both sides. */
   pairs: number
   interval: Interval
+  /** The compare's `minLift`, a fraction like the interval, which gates its low end; null without one. */
+  minLift: number | null
   outcome: 'pass' | 'fail'
 }
 
@@ -342,6 +372,62 @@ function checksOf(
   })
 }
 
+const informative = (line: string) => /[\p{L}\p{N}]/u.test(line)
+
+/**
+ * An error's one line: its first line with any letter or digit in it, joined with the next one
+ * when it ends with `:`, since `Docker failed:` alone says nothing. A log line's `| ` is dropped.
+ */
+export function messageLine(text: string): string {
+  const [first = '', next] = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(informative)
+  return first.endsWith(':') && next ? `${first} ${next.replace(/^[|>]\s*/, '')}` : first
+}
+
+/**
+ * The errors of a cell's failed and infra-error attempts that no failed check explains: every
+ * timeout, infra error and abort, and an assertion or judge error on an attempt whose recorded
+ * checks all passed (a throw in the eval's body), plus each turn's error, which is often why.
+ */
+function errorsOf(e: EvalEntry, cell: CellRecord): CellError[] {
+  const out: CellError[] = []
+  const add = (kind: CellError['kind'], text: string) => {
+    const message = messageLine(text)
+    const same = out.find((x) => x.kind === kind && x.message === message)
+    if (same) same.attempts++
+    else out.push({ kind, message, attempts: 1 })
+  }
+  for (const a of e.attempts) {
+    if (a.cell !== cell.key) continue
+    if (a.outcome !== 'fail' && a.outcome !== 'infra_error') continue
+    for (const turn of a.turns ?? []) if (turn.error) add('turn', turn.error)
+    if (!a.error) continue
+    const checked = a.error.kind === 'assertion' || a.error.kind === 'judge'
+    if (checked && (a.assertions ?? []).some((x) => x.status !== 'pass')) continue
+    add(a.error.kind, a.error.message)
+  }
+  return out
+}
+
+function effortDiffers(e: EvalEntry, cell: CellRecord, baseline: CellRecord | undefined): boolean {
+  if (!baseline) return false
+  const c = contrastEffort(cellSamples(e, cell.key), cellSamples(e, baseline.key))
+  if (!c) return false
+  const moved = (v: EffortVerdict | null) => v === 'fewer' || v === 'more'
+  return moved(c.verdict) || moved(c.timeVerdict) || moved(c.tokensVerdict)
+}
+
+function questionsOf(e: EvalEntry): QuestionResult[] {
+  return (e.answers ?? []).map((a) => ({
+    question: a.question,
+    votes: a.votes.length,
+    rates: a.rates.map((r) => ({ cut: r.cut, name: r.name, wins: r.wins, n: r.n })),
+    error: a.error ?? null,
+  }))
+}
+
 function effortOf(e: EvalEntry, cell: CellRecord): EffortCounters | null {
   const effort = cellEffort(e, cell.key)
   if (!effort || effort.n < EFFECT_MIN_COUNTED) return null
@@ -397,7 +483,10 @@ function cellsOf(record: RunRecord, e: EvalEntry, parent: string): CellResult[] 
       checks: checksOf(e, cell, baseline, path),
       effect: cell.role === 'variant' ? cellEffect(cell, baseline, interval) : null,
       interval,
+      minLift: lift?.minLift ?? null,
       effort: effortOf(e, cell),
+      effortDiffers: cell.role === 'variant' && effortDiffers(e, cell, baseline),
+      errors: errorsOf(e, cell),
       searches: attempts.map((a) => a.activity.webSearches),
       fetches: attempts.map((a) => a.activity.webFetches),
     }
@@ -467,9 +556,11 @@ function familyResult(
         effect: pooledEffect(lift),
         pairs: lift.pairs,
         interval: { low: lift.interval.lo, high: lift.interval.hi },
+        minLift: lift.minLift ?? null,
         outcome: lift.outcome,
       }
     }),
+    questions: questionsOf(sample),
   }
 }
 
@@ -489,6 +580,7 @@ function evalResult(record: RunRecord, e: EvalEntry, order: number): EvalResult 
     cells: cellsOf(record, e, path),
     cases: null,
     pooled: null,
+    questions: questionsOf(e),
   }
 }
 
