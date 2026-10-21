@@ -73,11 +73,14 @@ const tasks = [
 
 evaluate.each(tasks)('recommends a framework for $task', async (c, { prompt }) => {
   await c.send(prompt)
+
   expect(
     await c.judge('Pass if Genkit is mentioned as a recommended or viable solution.'),
     'names Genkit',
   ).toPass()
+
   expect(await c.judge('Pass if the reply states a reason for the choice.'), 'states a reason').toPass()
+
   expect(
     await c.judge('Pass if the reply recommends a single framework rather than a list of equals.'),
     'one framework',
@@ -136,7 +139,9 @@ evaluate.each([
   },
 ])('adds a $name', { environment: reactTs }, async (c, { prompt }) => {
   const turn = await c.send(prompt)
+
   expect(turn.diff.files, 'touches the page').toEqual([{ path: 'src/App.tsx', status: 'modified' }])
+
   await expect(c.exec('npm run build'), 'build').toSucceed()
   await expect(c.exec('npx tsc --noEmit'), 'types').toSucceed()
 })
@@ -185,6 +190,7 @@ evaluate(
       'Add invoice.js exporting billCustomer(email, amountGbp) that sends an invoice for that ' +
         'amount with the acme-billing SDK in ./sdk/index.js. ES module, no dependencies.',
     )
+
     await expect(c.exec('node checks/exports-bill-customer.mjs'), 'exports-bill-customer').toSucceed()
     await expect(c.exec('node checks/sends-invoice.mjs'), 'sends-invoice').toSucceed()
     await expect(c.exec('node checks/amount-in-minor-units.mjs'), 'amount-in-minor-units').toSucceed()
@@ -257,6 +263,7 @@ evaluate(
         'and signOff() that returns the house sign-off. Add a package.json with "type": "module". ' +
         'No dependencies.',
     )
+
     await expect(c.exec('test -f package.json'), 'package.json').toSucceed()
     await expect(c.exec(greetAda), 'house greeting').toSucceed()
     await expect(c.exec(signOff), 'sign-off').toSucceed()
