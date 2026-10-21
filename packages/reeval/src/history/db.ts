@@ -158,7 +158,7 @@ CREATE TABLE context_reads (
 -- Each stdio MCP server start in each attempt's turns (turn from 1): ms from spawning it to its
 -- answer to initialize, null when it never answered.
 CREATE TABLE mcp_startup (
-  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, turn INTEGER NOT NULL, server TEXT, ms INTEGER
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, turn INTEGER NOT NULL, server TEXT NOT NULL, ms INTEGER
 );
 -- Every expect / expect.soft matcher call each attempt made, in call order (seq from 1).
 CREATE TABLE assertions (
