@@ -2,7 +2,7 @@
 // gives, reading a marketplace entry, and what resolving an environment with plugins places and records.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
@@ -503,7 +503,7 @@ test('a marketplace entry’s source is a ./path, a git repository or an npm pac
           source: 'url',
           url: 'https://git.example.com/p.git',
           ref: 'main',
-          sha: 'abc1234',
+          sha: '0123456789abcdef0123456789abcdef01234567',
         },
       },
       {
@@ -530,7 +530,7 @@ test('a marketplace entry’s source is a ./path, a git repository or an npm pac
     source: 'git',
     url: 'https://git.example.com/p.git',
     repo: 'https://git.example.com/p.git',
-    ref: 'abc1234',
+    ref: '0123456789abcdef0123456789abcdef01234567',
   })
   assert.deepEqual(entry('sub').entry, {
     source: 'git',
@@ -596,6 +596,59 @@ test('a marketplace reeval can’t read, or an entry it doesn’t list or can’
   )
   assert.match(problem(listed, 'zip'), /entry "zip" has source \{"source":"url","url":""\}/)
   assert.match(problem(listed, 'private'), /names its own npm registry/)
+})
+
+test('a marketplace entry can’t reach the host: refs and urls that git would take as options, local paths, tokens, symlinks and npm specs that aren’t registry packages', () => {
+  const token = 'ghp_0123456789abcdefghij'
+  const root = tmp()
+  const dir = marketplace(join(root, 'market'), {
+    name: 'acme-tools',
+    plugins: [
+      { name: 'option', source: { source: 'url', url: '.', ref: '--upload-pack=touch pwned' } },
+      { name: 'dash-url', source: { source: 'url', url: '--upload-pack=touch pwned' } },
+      { name: 'short-sha', source: { source: 'github', repo: 'acme/p', sha: 'abc1234' } },
+      { name: 'local', source: { source: 'url', url: '/home/me/private' } },
+      { name: 'ext', source: { source: 'git-subdir', url: 'ext::sh -c id', path: 'p' } },
+      { name: 'token', source: { source: 'url', url: `https://x:${token}@github.com/a/b.git` } },
+      { name: 'token-hg', source: { source: 'hg', url: `https://x:${token}@hg.example/p` } },
+      { name: 'npm-git', source: { source: 'npm', package: 'git+ssh://git@github.com/a/b.git' } },
+      { name: 'npm-path', source: { source: 'npm', package: '../../secret' } },
+      { name: 'npm-alias', source: { source: 'npm', package: 'p', version: 'file:../x' } },
+      { name: 'linked', source: './linked' },
+      { name: 'scp', source: { source: 'url', url: 'git@github.com:acme/p.git', ref: 'v1' } },
+    ],
+  })
+  write(join(root, 'outside'), { '.claude-plugin/plugin.json': '{"name":"linked"}' })
+  symlinkSync(join(root, 'outside'), join(dir, 'linked'))
+  const problem = (name: string) => {
+    try {
+      readMarketplace(dir, 'call', 'label', name)
+    } catch (error) {
+      assert.ok(error instanceof PluginProblem)
+      return error.message
+    }
+    assert.fail(`${name}: no problem`)
+  }
+  assert.equal(
+    problem('option'),
+    'the acme-tools marketplace\'s entry "option" has ref "--upload-pack=touch pwned", which isn\'t a branch or tag',
+  )
+  assert.match(problem('dash-url'), /which reeval doesn't fetch/)
+  assert.match(problem('short-sha'), /has sha "abc1234", which isn't a full 40-character/)
+  assert.match(problem('local'), /which reeval doesn't fetch/)
+  assert.match(problem('ext'), /which reeval doesn't fetch/)
+  assert.match(problem('token'), /has a password or token in its url/)
+  for (const name of ['token', 'token-hg']) assert.ok(!problem(name).includes(token), name)
+  assert.match(problem('npm-git'), /isn't a registry package name/)
+  assert.match(problem('npm-path'), /isn't a registry package name/)
+  assert.match(problem('npm-alias'), /has npm version "file:\.\.\/x"/)
+  assert.match(problem('linked'), /leaves the marketplace through a symlink/)
+  assert.deepEqual(readMarketplace(dir, 'call', 'label', 'scp').entry, {
+    source: 'git',
+    url: 'git@github.com:acme/p.git',
+    repo: 'git@github.com:acme/p.git',
+    ref: 'v1',
+  })
 })
 
 /** A git repository at `dir`, committed, with `v1` tagged on the first commit. */
@@ -716,4 +769,22 @@ test('resolving a marketplace entry places that plugin alone and records the mar
         `${other.url} has no .claude-plugin/marketplace.json, so it isn't a Claude Code marketplace; name a plugin's own repository or package with plugin.git or plugin.npm`,
       ),
   )
+})
+
+test('a git ref that reads as an option is never passed to git as one', async () => {
+  const root = tmp()
+  const repo = gitRepo(join(root, 'repo'), { '.claude-plugin/plugin.json': '{"name":"p"}' })
+  const marker = join(root, 'pwned')
+  const env = defineEnvironment('opt', {
+    plugins: [
+      {
+        kind: 'plugin',
+        source: 'git',
+        repo: repo.url,
+        ref: `--upload-pack=touch ${marker}; git-upload-pack`,
+      },
+    ],
+  })
+  await assert.rejects(resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md'), InfraError)
+  assert.ok(!existsSync(marker), 'git ran the ref as --upload-pack')
 })

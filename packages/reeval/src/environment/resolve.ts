@@ -42,6 +42,7 @@ import type {
 import type { PreparedWorkspace } from '../workspace.ts'
 import {
   fetchesAtStart,
+  leavesSource,
   marketplaceLabel,
   type PluginContents,
   type PluginFile,
@@ -342,7 +343,7 @@ function cloneSkills(root: string, url: string, ref: string | undefined) {
       await mkdir(dir, { recursive: true })
       const what = `Cloning ${url}${ref ? ` at ${ref}` : ''}`
       await git(['init', '-q'], dir, what)
-      await git(['fetch', '-q', '--depth', '1', url, ref ?? 'HEAD'], dir, what)
+      await git(['fetch', '-q', '--depth', '1', '--end-of-options', url, ref ?? 'HEAD'], dir, what)
       await git(['-c', 'advice.detachedHead=false', 'checkout', '-q', 'FETCH_HEAD'], dir, what)
       return { dir, commit: await git(['rev-parse', 'HEAD'], dir, what) }
     })()
@@ -480,6 +481,11 @@ async function resolveEntry(
       }
     case 'git': {
       const clone = await cloneSkills(root, entry.url, entry.ref)
+      if (entry.path && leavesSource(clone.dir, entry.path)) {
+        throw new PluginProblem(
+          `the ${name} marketplace's entry "${p.name}" has path ${entry.path}, which leaves ${entry.repo} through a symlink`,
+        )
+      }
       return {
         dir: join(clone.dir, entry.path ?? ''),
         source: `${entry.repo}${entry.ref ? `#${entry.ref}` : ''}${entry.path ? `:${entry.path}` : ''}`,

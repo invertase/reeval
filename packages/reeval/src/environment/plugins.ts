@@ -1,11 +1,12 @@
 // A plugin directory as reeval reads it, in Claude Code's layout: `.claude-plugin/plugin.json` and
 // the parts beside it. Synchronous and host-only, so the plan reads a local plugin and the worker
 // reads every plugin (git and npm ones once fetched) the same way.
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, isAbsolute, join, posix, relative, sep } from 'node:path'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
 import { closest } from '../contract/shared.ts'
+import { stripCredentials } from '../redact.ts'
 import type {
   EnvironmentLayer,
   EnvVars,
@@ -117,13 +118,39 @@ const ENTRY_PARTS = [
   'outputStyles',
 ]
 
-const githubRepo = (s: string) => /^[\w.-]+\/[\w.-]+$/.test(s)
+const githubRepo = (s: string) => /^\w[\w.-]*\/[\w.-]+$/.test(s)
+
+/**
+ * A git URL an entry may name. A marketplace is someone else's file and its URL and ref reach
+ * `git fetch` on the host, so a local path, a transport such as `ext::`, or anything that could
+ * read as an option is refused.
+ */
+const gitUrl = (s: string) =>
+  /^(?:https?|ssh|git|file):\/\/\S+$/i.test(s) || /^\w[\w.-]*@[\w.-]+:[^\s-]\S*$/.test(s)
+
+const hasCredentials = (url: string) => {
+  if (!URL.canParse(url)) return false
+  const u = new URL(url)
+  return u.password !== '' || (u.username !== '' && /^https?:$/.test(u.protocol))
+}
+
+/** A registry package name: an entry's `package` may not be a path, URL or git spec. */
+const NPM_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
+const NPM_VERSION = /^[\w.^~<>=|*+][\w.^~<>=|*+ -]*$/
 
 /** A path in the marketplace's source, normalised, or undefined when it leaves it. */
 function insideRoot(path: string): string | undefined {
   const clean = posix.normalize(path).replace(/\/+$/, '')
   if (posix.isAbsolute(clean) || clean === '..' || clean.startsWith('../')) return undefined
   return clean === '.' ? '' : clean
+}
+
+/** Whether `path` in `base`, once its symlinks are followed, is outside `base`. */
+export function leavesSource(base: string, path: string): boolean {
+  const dir = join(base, path)
+  if (!existsSync(dir)) return false
+  const rel = relative(realpathSync(base), realpathSync(dir))
+  return isAbsolute(rel) || rel.split(sep)[0] === '..'
 }
 
 /**
@@ -167,9 +194,10 @@ export function readMarketplace(
     )
   }
   const source = entry.source
+  const shown = JSON.stringify(source, (_, v) => (typeof v === 'string' ? stripCredentials(v) : v))
   const unfetchable = () =>
     new PluginProblem(
-      `${what} has source ${JSON.stringify(source)}, which reeval doesn't fetch: it takes a ./path in the marketplace, or a github, url, git-subdir or npm source`,
+      `${what} has source ${shown}, which reeval doesn't fetch: it takes a ./path in the marketplace, or a github, url, git-subdir or npm source`,
     )
   if (typeof source === 'string') {
     const root = isRecord(raw.metadata) ? raw.metadata.pluginRoot : undefined
@@ -177,10 +205,25 @@ export function readMarketplace(
       source.startsWith('./') || typeof root !== 'string' ? source : `${root}/${source}`
     const path = written.startsWith('./') ? insideRoot(written) : undefined
     if (path === undefined) throw unfetchable()
+    if (leavesSource(dir, path)) {
+      throw new PluginProblem(
+        `${what} has source ${shown}, which leaves the marketplace through a symlink`,
+      )
+    }
     return { marketplace: market, entry: { source: 'path', path } }
   }
   if (!isRecord(source)) throw unfetchable()
   const str = (k: string) => (typeof source[k] === 'string' && source[k] ? source[k] : undefined)
+  if (source.sha !== undefined && !/^[0-9a-f]{40}$/.test(String(source.sha))) {
+    throw new PluginProblem(
+      `${what} has sha ${JSON.stringify(source.sha)}, which isn't a full 40-character lowercase commit SHA, as Claude Code requires`,
+    )
+  }
+  if (source.ref !== undefined && (typeof source.ref !== 'string' || source.ref.startsWith('-'))) {
+    throw new PluginProblem(
+      `${what} has ref ${JSON.stringify(source.ref)}, which isn't a branch or tag`,
+    )
+  }
   const ref = str('sha') ?? str('ref')
   const at = ref ? { ref } : {}
   switch (source.source) {
@@ -194,6 +237,12 @@ export function readMarketplace(
     case 'git-subdir': {
       const written = str('url')
       if (!written) throw unfetchable()
+      if (hasCredentials(written)) {
+        throw new PluginProblem(
+          `${what} has a password or token in its url, which reeval would record: reeval fetches git sources with your own git credentials (a credential helper, gh auth setup-git or an SSH key), so the marketplace mustn't carry one`,
+        )
+      }
+      if (!githubRepo(written) && !gitUrl(written)) throw unfetchable()
       const url = githubRepo(written) ? `https://github.com/${written}.git` : written
       const repo = githubRepo(written) ? `github:${written}` : written
       let path: string | undefined
@@ -214,7 +263,17 @@ export function readMarketplace(
           `${what} names its own npm registry, which reeval doesn't follow: set npm_config_registry on the host instead`,
         )
       }
+      if (!NPM_NAME.test(pkg)) {
+        throw new PluginProblem(
+          `${what} names npm package ${JSON.stringify(stripCredentials(pkg))}, which isn't a registry package name: reeval packs only registry packages from a marketplace`,
+        )
+      }
       const version = str('version')
+      if (version !== undefined && !NPM_VERSION.test(version)) {
+        throw new PluginProblem(
+          `${what} has npm version ${JSON.stringify(version)}, which isn't a version, range or tag such as "^2.0.0"`,
+        )
+      }
       return {
         marketplace: market,
         entry: { source: 'npm', spec: version ? `${pkg}@${version}` : pkg },
