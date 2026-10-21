@@ -223,6 +223,24 @@ describe('the insights validator', () => {
     assert.equal(right.headline?.text, `9 of ${total} results fail.`)
   })
 
+  test('canary: a headline saying "all" of one result is dropped', async () => {
+    const headline =
+      (text: string): Fake =>
+      (input) =>
+        input.call === 'headline'
+          ? { headline: { text, cites: [input.evals[0]?.id ?? ''] } }
+          : recipeInsights(input)
+    const wrong = await generate(headline('All 1 result passed, creating greet.js.'))
+    assert.equal(wrong.headline, null)
+    assert.deepEqual(
+      wrong.validation.drops?.map((d) => [d.slot, d.reason]),
+      [['headline', 'says "All 1"; say "1 result passed"']],
+    )
+    const total = Object.values(suite.tally).reduce((a, b) => a + b, 0)
+    const right = await generate(headline(`All ${total} results ran.`))
+    assert.equal(right.headline?.text, `All ${total} results ran.`)
+  })
+
   test('canary: a finding that repeats a row sentence is dropped', async () => {
     const doc = await generate(
       recipeWith(measure.path, (input, a) => {

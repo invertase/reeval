@@ -506,13 +506,22 @@ function evalMiscount(text: string, input: HeadlineInput): string | undefined {
   return undefined
 }
 
+const ALL_OF_ONE = /\b(?:all|both)\s+(?:of\s+(?:the\s+)?)?(?:1|one)\b/i
+
+/** Why a headline says "all" of a single thing ("All 1 result passed"), or undefined. */
+const allOfOne = (text: string): string | undefined =>
+  ALL_OF_ONE.test(text) ? `says "${text.match(ALL_OF_ONE)?.[0]}"; say "1 result passed"` : undefined
+
 export function validateHeadline(
   output: HeadlineOutput,
   input: HeadlineInput,
 ): Checked<Sentence | null> {
   if (!output.headline) return { value: null, dropped: [], banned: [] }
   const checked = checkSentence(output.headline, citableHeadline(input))
-  const miscounted = 'ok' in checked ? evalMiscount(checked.ok.text, input) : undefined
+  const miscounted =
+    'ok' in checked
+      ? (evalMiscount(checked.ok.text, input) ?? allOfOne(checked.ok.text))
+      : undefined
   const v: Verdict = miscounted ? { dropped: miscounted } : checked
   return tally('ok' in v ? v.ok : null, [
     { slot: 'headline', text: output.headline.text, verdict: v },
