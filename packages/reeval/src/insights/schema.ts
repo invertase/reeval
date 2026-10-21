@@ -38,10 +38,8 @@ export const insightsSchema = z.object({
   answer: sentence
     .nullable()
     .describe('The answer to the question, at most two sentences; null when the facts give none'),
-  findings: z
-    .array(sentence)
-    .max(3)
-    .describe('Only when slots.findings: up to three supporting points'),
+  // Not `.max(3)`: a fourth finding would fail the whole call; the validator drops it instead.
+  findings: z.array(sentence).describe('Only when slots.findings: up to three supporting points'),
   rows: z
     .array(sentence.extend({ row: z.string().describe('A fact id from slots.rows') }))
     .describe('At most one sentence per id in slots.rows; empty when there are none'),

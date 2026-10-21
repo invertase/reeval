@@ -6,6 +6,7 @@
 // statistics vocabulary (or a percentage under 10 tries) is `banned`: the caller asks once more,
 // and drops it if it comes back the same.
 import { unverifiedNumbers } from '../analysis/validate.ts'
+import { oneLine } from '../text.ts'
 import type { EvalInsight, Sentence } from '../view/insights.ts'
 import {
   EFFECT_WORDS,
@@ -18,6 +19,8 @@ import type { HeadlineOutput, InsightsOutput } from './schema.ts'
 
 /** The most words a sentence may have. */
 export const MAX_WORDS = 25
+/** The most findings an eval prints. */
+const MAX_FINDINGS = 3
 /** Below this many tries, a count is `N of M`, never a percentage. */
 export const PERCENT_MIN_TRIES = 10
 
@@ -43,18 +46,93 @@ export const BANNED: Array<{ word: string; pattern: RegExp }> = [
 ]
 
 const TRANSCRIPT = /^transcript:(.+)#L(\d+)$/
-const QUOTE = /["“”]([^"“”]+)["“”]/g
+/** A quoted span: double, curly or backtick quotes, or single quotes that aren't an apostrophe. */
+const QUOTE = /["“”]([^"“”]+)["“”]|‘(.+?)’(?!\w)|`([^`]+)`|(?<![\w'])'([^'\n]+?)'(?!\w)/g
 const PERCENT = /\d\s*%|\bper ?cent\b/i
-const EFFECT_PHRASES = Object.values(EFFECT_WORDS).map((w) => ({
-  word: w,
-  pattern: new RegExp(`\\b${w.replace("'", "['’]")}`, 'i'),
-}))
 /**
- * A "can't tell yet if/whether …" clause, up to the end of its sentence, a semicolon, a comma before
- * a conjunction, or an "and" that starts a new clause. It errs short: a word past it is checked.
+ * Each effect's word and the claims that say it: the word itself and the plain words for it
+ * (`helps`, `improved`, `worse`, `hurt`). A negated `help` (`didn't help`) claims no `helped`.
+ */
+const EFFECT_PHRASES = [
+  {
+    word: EFFECT_WORDS.better,
+    pattern: /(?<!(?:n['’]t|\bnot|\bnever)\s+)\b(?:help(?:s|ed|ing)?|improv(?:e|es|ed|ing))\b/gi,
+  },
+  {
+    word: EFFECT_WORDS.worse,
+    pattern:
+      /\b(?:(?:make|makes|made|making)\s+(?:it|things|them)\s+)?worse\b|\bhurt(?:s|ing)?\b/gi,
+  },
+  { word: EFFECT_WORDS.same, pattern: /\bno difference\b/gi },
+  { word: EFFECT_WORDS.unclear, pattern: /\bcan['’]t tell yet\b/gi },
+]
+/**
+ * A "can't tell yet if/whether …" clause, up to the end of its sentence, any comma, colon,
+ * semicolon, dash or bracket, a conjunction, or an "and" that starts a new clause. It errs short:
+ * a word past it is checked.
  */
 const HEDGED =
-  /\bcan['’]t tell yet (if|whether)\b.*?(?=[.;!?]|,\s*(and|but|while|though|although|whereas)\b|\s+and\s+(it|they|the|this|that|its|their|with|plain)\b|$)/gi
+  /\bcan['’]t tell yet (if|whether)\b.*?(?=[.,:;!?()–—]|\s-\s|\s+(but|while|though|although|whereas|yet|so|because)\b|\s+and\s+(it|they|the|this|that|its|their|with|plain)\b|$)/gi
+const NUMBER_WORDS = [
+  'zero',
+  'one',
+  'two',
+  'three',
+  'four',
+  'five',
+  'six',
+  'seven',
+  'eight',
+  'nine',
+  'ten',
+  'eleven',
+  'twelve',
+  'thirteen',
+  'fourteen',
+  'fifteen',
+  'sixteen',
+  'seventeen',
+  'eighteen',
+  'nineteen',
+  'twenty',
+]
+const COUNT = String.raw`(\d+|${NUMBER_WORDS.join('|')})`
+/** `N of M`, `N out of M` or `N of the M`, in digits or words. */
+const PAIR = new RegExp(
+  String.raw`(?<![\w.])${COUNT}\s+(?:out\s+)?of\s+(?:the\s+|its\s+|their\s+)?${COUNT}\b`,
+  'gi',
+)
+const FACT_PAIR = /\b(\d+) of (\d+)\b/g
+const OUTCOME_VERB = /\b(?:pass|fail|succeed|miss)\w*/gi
+const SMALL = /(?<![\w.#/:-])\d(?![\w/]|\.\d)/g
+
+const countOf = (raw: string) => {
+  const word = NUMBER_WORDS.indexOf(raw.toLowerCase())
+  return word >= 0 ? word : Number(raw)
+}
+
+/**
+ * The counts and numbers in `text` that what it cites doesn't hold. An `N of M` must be a cited
+ * fact's own count (a transcript line's text isn't a count), or its complement when the nearest
+ * verb before it is a fail (`failed 4 of 4` over `0 of 4 passed`). Any other number must be in
+ * what it cites, as `unverifiedNumbers` reads them, and a digit from 0 to 9 exactly.
+ */
+function unheldNumbers(text: string, facts: string[], all: string[]): string[] {
+  const known = new Set(facts.flatMap((f) => [...f.matchAll(FACT_PAIR)].map((m) => m[0])))
+  const out: string[] = []
+  for (const m of text.matchAll(PAIR)) {
+    const n = countOf(m[1] as string)
+    const of = countOf(m[2] as string)
+    if (known.has(`${n} of ${of}`)) continue
+    const verb = [...text.slice(0, m.index).matchAll(OUTCOME_VERB)].at(-1)?.[0] ?? ''
+    if (/^(fail|miss)/i.test(verb) && known.has(`${of - n} of ${of}`)) continue
+    out.push(m[0])
+  }
+  const rest = text.replace(PAIR, ' ')
+  const digits = new Set(all.flatMap((t) => t.match(/\d+(?:\.\d+)?/g) ?? []))
+  const small = (rest.match(SMALL) ?? []).filter((d) => !digits.has(d))
+  return [...new Set([...out, ...small, ...unverifiedNumbers(rest, all)])]
+}
 
 const normal = (s: string) =>
   s.replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().toLowerCase()
@@ -85,7 +163,8 @@ export function citableEval(
   const attempts = new Map(input.attempts.map((a) => [a.id, a]))
   const resolve = (cite: string) => {
     const fact = facts.get(cite)
-    if (fact) return flatText(fact)
+    // The path is the fact's name, not what it holds: `%2F` in it isn't a 2.
+    if (fact) return flatText({ ...fact, path: null })
     const t = TRANSCRIPT.exec(cite)
     if (!t) return null
     const [, id = '', n = ''] = t
@@ -109,10 +188,14 @@ export function citableEval(
 
 export function citableHeadline(input: HeadlineInput): Citable {
   const evals = new Map(input.evals.map((e) => [e.path, e]))
+  const { unit: _, total, ...counts } = input.tally
+  const ofTotal = Object.values(counts).map((n) => `${n} of ${total}`)
   return {
     resolve: (cite) => {
       const e = evals.get(cite)
-      return e ? flatText({ ...e, tally: input.tally, evals: input.evals.length }) : null
+      return e
+        ? flatText({ ...e, path: null, tally: input.tally, ofTotal, evals: input.evals.length })
+        : null
     },
     effects: () => [],
     vocabulary: normal(input.evals.map((e) => e.name).join('\n')),
@@ -123,7 +206,8 @@ export function citableHeadline(input: HeadlineInput): Citable {
 export type Verdict = { ok: Sentence } | { dropped: string } | { banned: string }
 
 const sentencesOf = (text: string) => text.split(/(?<=[.!?])\s+(?=\S)/).filter((s) => s.trim())
-const sameText = (text: string) => text.trim().toLowerCase()
+const sameText = (text: string) => oneLine(text).toLowerCase()
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const wordsOf = (text: string) => text.match(/\S+/g)?.length ?? 0
 
 /** The largest `of M` in the cited facts: how many tries the sentence's counts are over. */
@@ -132,15 +216,17 @@ const triesOf = (texts: string[]) =>
 
 /** One sentence against what it cites; `maxSentences` caps an answer at two. */
 export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdict {
-  const text = s.text.trim()
+  const text = oneLine(s.text)
   const cites = [...new Set(s.cites.map((x) => x.trim()).filter(Boolean))]
   if (!text) return { dropped: 'empty' }
   if (!cites.length) return { dropped: 'cites nothing' }
   const texts: string[] = []
+  const factTexts: string[] = []
   for (const cite of cites) {
     const t = c.resolve(cite)
     if (t === null) return { dropped: `cites ${cite}, which isn't a fact it was shown` }
     texts.push(t)
+    if (!TRANSCRIPT.test(cite)) factTexts.push(t)
   }
   const id = ID_IN_TEXT.exec(text)?.[0]
   if (id && !c.vocabulary.includes(normal(id)))
@@ -162,12 +248,13 @@ export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdic
     }
   }
   const haystack = normal(texts.join('\n'))
-  for (const [, quote = ''] of text.matchAll(QUOTE)) {
+  for (const m of text.matchAll(QUOTE)) {
+    const quote = m.slice(1).find((g) => g !== undefined) ?? ''
     if (!haystack.includes(normal(quote))) {
       return { dropped: `quotes "${quote}", which isn't in what it cites` }
     }
   }
-  const numbers = unverifiedNumbers(text, texts)
+  const numbers = unheldNumbers(text, factTexts, texts)
   if (numbers.length) {
     return { dropped: `has ${numbers.join(', ')}, which no cited fact has` }
   }
@@ -175,9 +262,11 @@ export function checkSentence(s: Sentence, c: Citable, maxSentences = 1): Verdic
   // "can't tell yet if it helped" states the unclear effect; the word it governs isn't a claim.
   const claims = effects.has(EFFECT_WORDS.unclear) ? text.replace(HEDGED, '') : text
   for (const e of EFFECT_PHRASES) {
-    if (e.pattern.test(e.word === EFFECT_WORDS.unclear ? text : claims) && !effects.has(e.word)) {
-      return { dropped: `says "${e.word}", but no cited fact's effect is` }
-    }
+    if (effects.has(e.word)) continue
+    const said = [...(e.word === EFFECT_WORDS.unclear ? text : claims).matchAll(e.pattern)]
+      .map((m) => m[0])
+      .find((w) => !new RegExp(`\\b${w}\\b`, 'i').test(c.vocabulary))
+    if (said) return { dropped: `says "${said}", but no cited fact's effect is` }
   }
   return { ok: { text, cites } }
 }
@@ -247,6 +336,7 @@ export function validateEvalInsights(
       .filter((t): t is string => !!t)
       .map(sameText),
   )
+  let findingsKept = 0
   const findings = output.findings.flatMap((s, i) => {
     if (!slots.findings) {
       drop(`finding ${i + 1}`, s.text, "this eval's layout has no findings")
@@ -256,8 +346,15 @@ export function validateEvalInsights(
       drop(`finding ${i + 1}`, s.text, 'repeats a sentence already shown')
       return []
     }
+    if (findingsKept === MAX_FINDINGS) {
+      drop(`finding ${i + 1}`, s.text, `is past the ${MAX_FINDINGS} findings an eval takes`)
+      return []
+    }
     const kept = keep(s, `finding ${i + 1}`)
-    if (kept) shown.add(sameText(kept.text))
+    if (kept) {
+      shown.add(sameText(kept.text))
+      findingsKept++
+    }
     return kept ? [kept] : []
   })
   const namedTools = output.namedTools.flatMap((n) => {
@@ -271,8 +368,8 @@ export function validateEvalInsights(
       drop(where, n.tools.join(', '), "isn't an attempt it was shown")
       return []
     }
-    const tools = [...new Set(n.tools.map((t) => t.trim()).filter(Boolean))].filter((t) => {
-      if (text.includes(t)) return true
+    const tools = [...new Set(n.tools.map(oneLine).filter(Boolean))].filter((t) => {
+      if (new RegExp(`(?<!\\w)${escapeRegExp(t)}(?!\\w)`).test(text)) return true
       drop(where, t, "isn't in the attempt's final message")
       return false
     })
@@ -289,29 +386,6 @@ export function validateEvalInsights(
   )
 }
 
-const NUMBER_WORDS = [
-  'zero',
-  'one',
-  'two',
-  'three',
-  'four',
-  'five',
-  'six',
-  'seven',
-  'eight',
-  'nine',
-  'ten',
-  'eleven',
-  'twelve',
-  'thirteen',
-  'fourteen',
-  'fifteen',
-  'sixteen',
-  'seventeen',
-  'eighteen',
-  'nineteen',
-  'twenty',
-]
 const EVAL_COUNT = new RegExp(
   String.raw`\b(\d+|${NUMBER_WORDS.join('|')})\s+(?:[a-z-]+\s+)?evals?\b`,
   'gi',

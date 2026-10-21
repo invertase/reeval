@@ -10,6 +10,7 @@ import type { ResolvedAnalysisModel } from '../src/analysis/model.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { generateInsights, insightEvals } from '../src/insights/generate.ts'
 import { canonicalJson, factsHash } from '../src/insights/hash.ts'
+import { type Citable, checkSentence } from '../src/insights/validate.ts'
 import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
 import { colors } from '../src/ui/colors.ts'
 import { evalBlock, render } from '../src/ui/layout.ts'
@@ -287,7 +288,7 @@ describe('the insights validator', () => {
               ...a,
               namedTools: input.attempts.map((x) => ({
                 attempt: x.id,
-                tools: ['Genkit', 'Mastra'],
+                tools: ['Genkit', 'Mastra', 'Gen'],
               })),
             }
           : a,
@@ -296,7 +297,7 @@ describe('the insights validator', () => {
     const named = insightOf(doc, choose).namedTools ?? []
     assert.equal(named.length, 6)
     for (const n of named) assert.deepEqual(n.tools, ['Genkit'])
-    assert.equal(doc.validation.dropped, 6)
+    assert.equal(doc.validation.dropped, 12, 'Mastra, and Gen, which is only part of a word')
   })
 
   test('a sentence over 25 words is dropped, and an effect word must be the cited effect', async () => {
@@ -374,6 +375,110 @@ describe('the insights validator', () => {
         text,
       )
     }
+  })
+
+  test('canary: a fourth finding is dropped, and the call that wrote it still counts', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              findings: ['one', 'two', 'three', 'four'].map((n) => ({
+                text: `Plain passed writes greet.js in 4 of 4 tries, point ${n}.`,
+                cites: [idOf(input, `${(measure.cells ?? [])[0]?.path}/checks/writes greet.js`)],
+              })),
+            }
+          : a,
+      ),
+    )
+    assert.equal(insightOf(doc, measure).findings.length, 3)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => [d.slot, d.reason]),
+      [['greets in the house style › finding 4', 'is past the 3 findings an eval takes']],
+    )
+  })
+})
+
+describe('one sentence against what it cites', () => {
+  const FACT = 'cell'
+  const LINE = 'transcript:cell#1#L3'
+  const facts: Record<string, { text: string; effect?: string }> = {
+    [FACT]: { text: 'plain\n0 of 4 tries\nexit code 1', effect: 'no difference' },
+    unclear: { text: 'with-skill\n1 of 1 tries', effect: "can't tell yet" },
+    [LINE]: { text: 'L3 text: All 4 of 4 checks passed, exit code 2' },
+  }
+  const c: Citable = {
+    resolve: (cite) => facts[cite]?.text ?? null,
+    effects: (cite) => (facts[cite]?.effect ? [facts[cite].effect as string] : []),
+    vocabulary: 'greets in the house style\nplain\nwith-skill',
+  }
+  const verdict = (text: string, cites = [FACT]) => {
+    const v = checkSentence({ text, cites }, c)
+    return 'ok' in v ? 'kept' : 'dropped' in v ? v.dropped : v.banned
+  }
+
+  test('canary: a count must be the cited fact own count, even below 6', () => {
+    assert.equal(verdict('Plain passed 0 of 4 tries.'), 'kept')
+    assert.equal(verdict('Plain failed 4 of 4 tries.'), 'kept')
+    assert.equal(verdict('Plain passed 4 of 4 tries.'), 'has 4 of 4, which no cited fact has')
+    assert.equal(verdict('Plain passed 3 of 4 tries.'), 'has 3 of 4, which no cited fact has')
+    assert.equal(
+      verdict('Plain passed four of four tries.'),
+      'has four of four, which no cited fact has',
+    )
+    assert.equal(
+      verdict('Plain passed 4 of 4 tries.', [FACT, LINE]),
+      'has 4 of 4, which no cited fact has',
+      "a transcript line's text isn't a count",
+    )
+  })
+
+  test('canary: a small number no cited fact holds is dropped', () => {
+    assert.equal(verdict('House greeting failed with exit code 1.'), 'kept')
+    assert.equal(
+      verdict('House greeting failed with exit code 2.'),
+      'has 2, which no cited fact has',
+    )
+    assert.equal(verdict('It exited with code 2.', [FACT, LINE]), 'kept')
+  })
+
+  test('canary: an effect said in other words must be the cited effect', () => {
+    for (const [text, word] of [
+      ['The skill helps the agent.', 'helps'],
+      ['The skill improved the greeting.', 'improved'],
+      ['The skill made things worse.', 'made things worse'],
+      ['The skill hurt the agent.', 'hurt'],
+    ]) {
+      assert.equal(verdict(text), `says "${word}", but no cited fact's effect is`, text)
+    }
+    assert.equal(verdict("The skill didn't help."), 'kept')
+  })
+
+  test('canary: a hedged clause ends at a comma, a dash or a conjunction', () => {
+    const hedged = (text: string) => verdict(text, ['unclear'])
+    assert.equal(hedged("We can't tell yet whether it helped or made it worse."), 'kept')
+    for (const text of [
+      "We can't tell yet if it helped – it made it worse.",
+      "We can't tell yet if it helped while plain made it worse.",
+      "We can't tell yet if it helped: it made it worse.",
+    ]) {
+      assert.equal(hedged(text), 'says "made it worse", but no cited fact\'s effect is', text)
+    }
+  })
+
+  test('canary: a quote in single, curly or backtick quotes must be in what it cites', () => {
+    for (const q of ["'exit code 1'", '‘exit code 1’', '`exit code 1`', '"exit code 1"']) {
+      assert.equal(verdict(`It ended with ${q}.`), 'kept', q)
+      const wrong = q.replace('1', '0').replace('code', 'status')
+      assert.match(verdict(`It ended with ${wrong}.`), /^quotes "exit status 0"/, wrong)
+    }
+    assert.equal(verdict("Plain's tries can't pass."), 'kept', 'apostrophes are no quotes')
+  })
+
+  test('a sentence is kept as one line, with no control characters', () => {
+    const v = checkSentence({ text: 'Plain passed 0 of 4\n\u001b[31mtries.', cites: [FACT] }, c)
+    assert.ok('ok' in v)
+    assert.equal(v.ok.text, 'Plain passed 0 of 4 [31mtries.')
   })
 })
 

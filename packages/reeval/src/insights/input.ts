@@ -167,6 +167,7 @@ export function evalFacts(e: EvalResult): InsightFact[] {
       kind: e.family ? 'family' : 'eval',
       name: e.name,
       verdict: verdictOf(e.outcome),
+      ...(e.cases ? { cases: e.cases.length } : {}),
     },
   ]
   for (const c of e.cells ?? []) out.push(...cellFacts(c))
