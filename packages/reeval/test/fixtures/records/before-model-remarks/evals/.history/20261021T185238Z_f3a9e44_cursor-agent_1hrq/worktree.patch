@@ -1,0 +1,67 @@
+diff --git a/run1.txt b/run1.txt
+new file mode 100644
+index 0000000..f34eb23
+--- /dev/null
++++ b/run1.txt
+@@ -0,0 +1,26 @@
++plan  run 20261021T185230Z_f3a9e44_cursor-agent_krgd · 2 evals · 3 cells · 7 attempts · ~2m 03s serial (~31s at concurrency 4)
++hint: 2 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
++hint: 1 compare runs 2 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
++preparing 2 sandboxes: fake, docker
++reeval run: 20261021T185230Z_f3a9e44_cursor-agent_krgd · 2 eval files
++
++fail             lands heads on the first try
++  No: only 1 of 3 passed "lands heads".
++  3 tries          1 of 3
++  lands heads      1 of 3
++    expected 2 to be 1 // Object.is equality
++
++pass             uses the marker with the marked skill
++  Yes: every try passed.
++  arm              pass
++  plain            0 of 2
++    Only 0 of 2 passed "uses the marker".
++  marked           2 of 2  can't tell yet
++  check            plain   marked
++  uses the marker  0 of 2  2 of 2
++    expected false to be true // Object.is equality
++
++1 fail; start with "lands heads on the first try".
++3s · results .reeval/runs/20261021T185230Z_f3a9e44_cursor-agent_krgd/summary.md
++1 fail · 1 pass
++recorded evals/.history/20261021T185230Z_f3a9e44_cursor-agent_krgd.json + 17 artifact files in evals/.history/20261021T185230Z_f3a9e44_cursor-agent_krgd/ (41.5 KB). Commit it with git.
+diff --git a/run2.txt b/run2.txt
+new file mode 100644
+index 0000000..d68bf7d
+--- /dev/null
++++ b/run2.txt
+@@ -0,0 +1,26 @@
++plan  run 20261021T185234Z_f3a9e44_cursor-agent_994w · 2 evals · 3 cells · 7 attempts · ~10s serial (~3s at concurrency 4)
++hint: 2 evals run more than once with the default gate, so every attempt must pass (pass^k); set gate: { passRate: 0.8 } to gate on pass@1 instead
++hint: 1 compare runs 2 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
++preparing 2 sandboxes: fake, docker
++reeval run: 20261021T185234Z_f3a9e44_cursor-agent_994w · 2 eval files
++
++fail             lands heads on the first try
++  No: only 1 of 3 passed "lands heads".
++  3 tries          1 of 3
++  lands heads      1 of 3
++    expected 2 to be 1 // Object.is equality
++
++pass             uses the marker with the marked skill
++  Yes: every try passed.
++  arm              pass
++  plain            0 of 2
++    Only 0 of 2 passed "uses the marker".
++  marked           2 of 2  can't tell yet
++  check            plain   marked
++  uses the marker  0 of 2  2 of 2
++    expected false to be true // Object.is equality
++
++1 fail; start with "lands heads on the first try".
++4s · results .reeval/runs/20261021T185234Z_f3a9e44_cursor-agent_994w/summary.md
++1 fail · 1 pass
++recorded evals/.history/20261021T185234Z_f3a9e44_cursor-agent_994w.json + 17 artifact files in evals/.history/20261021T185234Z_f3a9e44_cursor-agent_994w/ (42.9 KB). Commit it with git.
+diff --git a/run3.txt b/run3.txt
+new file mode 100644
+index 0000000..e69de29
