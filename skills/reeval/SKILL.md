@@ -32,6 +32,7 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
+| [../eval-rubric/SKILL.md](../eval-rubric/SKILL.md) | A `Remarks:` block after a run, or reviewing an eval's name, prompts and judge questions: one section per remark kind, with its fix |
 
 Use reeval's terms in code and messages: eval (`evaluate`), attempt (one run of a cell;
 `runs: n`), harness (`cursor()`, …), cell (harness × environment × sandbox), control and variant,
@@ -278,9 +279,11 @@ or `can't tell yet`, and failed checks with their messages; `-v` adds intervals.
 `1 run error` and fails the run), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
 model never stands in). With `analysis.model` set, each block gets cited sentences (insights)
 and a headline prints above the tally; they explain the facts and never change a verdict or the
-exit code. `Remarks:` after the tally names evals that need work (a flaky check, too few tries),
-with the line to fix. `summary.md` and `reeval show` print the same blocks;
-`reeval analyze <run> --insights` writes or finishes a run's insights.
+exit code. `Remarks:` after the tally names evals that need work (a flaky check, too few tries,
+a loose judge, a prompt that names the answer), with the line to fix; the eval rubric
+([../eval-rubric/SKILL.md](../eval-rubric/SKILL.md)) explains each kind. `summary.md` and
+`reeval show` print the same blocks; `reeval analyze <run> --insights` writes or finishes a run's
+insights.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP

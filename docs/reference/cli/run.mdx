@@ -258,20 +258,61 @@ Remarks:
   …
 ```
 
-After the tally and hint, a run lists what reeval noticed about the evals themselves, each with the source line to change. Remarks come from fixed thresholds over the record and the history, never a model, so they print without `analysis.model`. Only concerns print, at most three (`+N more (-v)`); `-v` adds the suggestions.
+After the tally and hint, a run lists what reeval noticed about the evals themselves, each with the source line to change. Only concerns print, at most three (`+N more (-v)`); `-v` adds the suggestions. Remarks never change the exit code.
+
+reeval's own remarks come from fixed thresholds over the record and the history, so they print without `analysis.model`:
 
 | Remark | Severity | When |
 |---|---|---|
 | `flaky-check` | concern | The cell is `flaky` in [`flaky_cells`](/reference/cli/query#views) (not from infrastructure), and the check both passed and failed in 2 of its newest 5 comparable runs, over 6 tries or more |
 | `slow-mcp-start` | concern | A stdio MCP server took 2s or more to answer `initialize`, or never did. Turns count only where the server was started: every turn on a harness that starts servers per turn, the first on one that starts them per session |
+| `no-baseline` | concern | With `analysis.model`: the classification says the eval is about a change (a skill, a doc, an MCP server), and the eval has no `compare`. Never under a profile's `limit.compare: false` |
 | `too-few-tries` | suggestion | A variant's and its baseline's pass rates differ by half or more, with fewer than 4 counted tries on a side |
 | `check-never-fails` | suggestion | A check passed every try, in every cell, this run and in the last 5 recorded runs on the default branch with 20 tries or more ([`check_streaks`](/reference/cli/query#views)); on a variant, on both sides |
 
-Each remark prints until a run prints it for that version of the eval (its sources' hashes), and again once you edit the eval; `slow-mcp-start` prints in every run that has it. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it, so `reeval run -v` shows the `+N more` and the suggestions. Only the terminal output counts; `summary.md` holds the concerns a run without `-v` prints. The history kinds need an earlier run.
+### Model remarks
 
-The default branch is `origin`'s HEAD, else a local `main` or `master`, else, when `CI` is set, `GITHUB_BASE_REF` (a GitHub Actions pull request build has neither ref; a push build of `main` or `master` checks it out locally). Without one, `check-never-fails` isn't raised. Remarks never change the exit code.
+```text
+Remarks:
+  answers kindly: The judge asks whether the answer is okay, which any reply passes.
+    fix  evals/kinds.eval.ts:16  ask 'Does the reply thank the user by name and offer one next step?'
+  adds a cache: The name says it adds a cache, but the prompt asks to remove the debug logging.
+    fix  evals/kinds.eval.ts:4  rename it to 'removes the debug logging'
+  …
+```
 
-A run writes its remarks to `.reeval/runs/<runId>/insights.json`, in the run's [insights](/reference/cli/analyze#during-a-run) when it writes them and alone (`model: "none"`) otherwise, and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them in the insights it writes.
+With `analysis.model`, each eval's [insights](/reference/cli/analyze#during-a-run) call may also raise remarks, by the eval rubric (`skills/eval-rubric/SKILL.md` in the repository and the package, its hash part of the insights prompt version). It's the same call, so `analysis.maxTokens` covers it. The model is told a remark is almost always none.
+
+| Remark | Severity | When |
+|---|---|---|
+| `name-contradicts` | concern | The name asks one thing and the checks or judge questions look at another |
+| `judge-too-loose` | concern | A judge question passed a reply that doesn't do what the eval asks |
+| `judge-leaks-answer` | concern | A judge question gives away the answer, so echoing its words passes |
+| `prompt-names-tool` | concern | A choose eval's prompt names the tool it asks about |
+| `name-no-intent` | suggestion | The name is a topic, a ticket id or "test 3" |
+| `compound-judge` | suggestion | One judge question asks two things, and failed |
+
+reeval checks every model remark in code and drops, without asking again, one whose kind isn't in this table, or that has no quote copied exactly from its cited line of the eval's file, unchanged since the run. It also drops one with no evidence from this run's facts or transcripts, no concrete fix, or a kind the run contradicts (a judge remark citing no judge check with the right result). Each dropped remark is in `insights.json`'s `validation.drops` with the reason, and `reeval analyze --insights -v` lists them.
+
+### Once per eval, and acted on
+
+Each remark prints until a run prints it: one of reeval's for that version of the eval (its sources' hashes), so an edit prints it again; a model remark while its quote is in the eval. `slow-mcp-start` prints in every run that has it. A remark the cap or a run without `-v` left out isn't spent: the next run that raises it prints it.
+
+A later run that finds a printed remark's quote gone from the eval (or, for one without a quote, the eval edited and the remark not raised again) marks it acted on (`actedOn` in `insights.json`). A rename acts on a name remark. Only the terminal output counts as printed; `summary.md` holds the concerns a run without `-v` prints.
+
+### Demotion
+
+| Acted on, over at least 10 printed of a kind | The kind |
+|---|---|
+| 20% or more | prints as its severity |
+| under 20% | a concern prints as a suggestion (`demoted: "suggestion"`) |
+| under 5% | never prints (`demoted: "hidden"`) |
+
+Each project's own runs decide, over every recorded and scratch run before this one; [`reeval query remark_outcomes`](/reference/cli/query#views) shows each kind's counts and status. `slow-mcp-start` isn't counted. A hidden kind prints nothing more, so it stays hidden until older runs leave the history.
+
+The default branch is `origin`'s HEAD, else a local `main` or `master`, else, when `CI` is set, `GITHUB_BASE_REF` (a GitHub Actions pull request build has neither ref; a push build of `main` or `master` checks it out locally). Without one, `check-never-fails` isn't raised. The history kinds need an earlier run.
+
+A run writes its remarks to `.reeval/runs/<runId>/insights.json`, in the run's [insights](/reference/cli/analyze#during-a-run) when it writes them and alone (`model: "none"`) otherwise, and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them and adds the model's.
 
 ## What it writes
 
