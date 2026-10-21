@@ -17,6 +17,9 @@ import {
 } from '../scripts/output/goldens.ts'
 import { corpusEntries } from '../scripts/schema/corpus.ts'
 import { hasAnalysisModel } from '../src/config.ts'
+import { renderSummary } from '../src/history/summary.ts'
+import type { RunRecord } from '../src/history/types.ts'
+import { fenced } from '../src/text.ts'
 import type { ResolvedConfig } from '../src/types.ts'
 import { colors, stripAnsi } from '../src/ui/colors.ts'
 import {
@@ -26,6 +29,7 @@ import {
   renderCompareMarkdown,
 } from '../src/ui/compare-layout.ts'
 import { layout, NO_MODEL_HINT, render, tallyLine } from '../src/ui/layout.ts'
+import { readableRecord } from '../src/view/record.ts'
 
 const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
 const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
@@ -362,6 +366,62 @@ describe('catch regressions (reeval compare)', () => {
     const painted = renderCompare(input, { color: true, verbose: false })
     assert.ok(painted.some((l) => l.includes('\x1b[')))
     assert.deepEqual(painted.map(stripAnsi), plain)
+  })
+})
+
+/** Each fenced code block in `md` by CommonMark's rule: a run of backticks closes on as many. */
+function codeBlocks(md: string): Array<{ fence: string; body: string[] }> {
+  const blocks: Array<{ fence: string; body: string[] }> = []
+  let open: { fence: string; body: string[] } | null = null
+  for (const line of md.split('\n')) {
+    if (!open) {
+      const m = /^(`{3,})[^`]*$/.exec(line)
+      if (m?.[1]) open = { fence: m[1], body: [] }
+    } else if (/^`+\s*$/.test(line) && line.trim().length >= open.fence.length) {
+      blocks.push(open)
+      open = null
+    } else open.body.push(line)
+  }
+  assert.equal(open, null, 'every block closes')
+  return blocks
+}
+
+describe('summary.md code blocks', () => {
+  const run = () => {
+    const file = corpusEntries()
+      .find((e) => e.name === 'with-layouts')
+      ?.runs.at(-1)?.file
+    assert.ok(file, 'with-layouts has a run')
+    return readableRecord(JSON.parse(readFileSync(file, 'utf8')) as RunRecord)
+  }
+  const failed = (r: RunRecord) => {
+    const a = r.evals.flatMap((e) => e.attempts).find((x) => x.error?.kind === 'assertion')
+    assert.ok(a?.error, 'the run has a failed check')
+    return a.error
+  }
+
+  test("a failed check's backticks get a longer fence, and the message stays in one block", () => {
+    const r = run()
+    const error = failed(r)
+    error.message = 'expected output to match\n```ts\nconst a = 1\n```\nand ```` four'
+    const blocks = codeBlocks(renderSummary(r, { hint: false }))
+    const block = blocks.find((b) => b.body.includes('```ts'))
+    assert.ok(block, 'the message is inside a block')
+    assert.equal(block.fence, '`````')
+    assert.deepEqual(block.body, error.message.split('\n'))
+  })
+
+  test('canary: ordinary output keeps three backticks', () => {
+    const md = renderSummary(run(), { hint: false })
+    const blocks = codeBlocks(md)
+    assert.ok(blocks.length > 1, 'the results and a failure message')
+    assert.deepEqual(new Set(blocks.map((b) => b.fence)), new Set(['```']))
+  })
+
+  test('fenced is three backticks, or one more than the longest run inside', () => {
+    assert.deepEqual(fenced(['plain'], 'text'), ['```text', 'plain', '```'])
+    assert.deepEqual(fenced(['a `b` ``c``']), ['```', 'a `b` ``c``', '```'])
+    assert.deepEqual(fenced(['````x'], 'json'), ['`````json', '````x', '`````'])
   })
 })
 
