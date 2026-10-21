@@ -6,15 +6,19 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import {
+  buildSteps,
+  builtPlugins,
+  droppedPaths,
   fetchesAtStart,
   PluginProblem,
+  pluginBuildId,
   pluginFiles,
   readPlugin,
 } from '../src/environment/plugins.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
 import { AGENTS, refusedPlugins } from '../src/harness/agents.ts'
-import type { PluginPart } from '../src/types.ts'
+import type { PluginBuild, PluginPart } from '../src/types.ts'
 
 const write = (root: string, files: Record<string, string>) => {
   for (const [path, content] of Object.entries(files)) {
@@ -212,19 +216,47 @@ test('npx, bunx, uvx and pipx run fetch at start: refused under a policy without
   )
   assert.deepEqual(fetchesAtStart([fetcher], null), {
     notes: [
-      `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start; install it in the image (docker({ install })) to keep it off the network`,
-      `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start; install it in the image (docker({ install })) to keep it off the network`,
+      `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start; add a build that installs it to keep it off the network`,
+      `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start; add a build that installs it to keep it off the network`,
     ],
   })
   assert.equal(
     fetchesAtStart([fetcher], []).refusal,
-    `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: install it in the image (docker({ install })), or allow the host in egress`,
+    `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: add a build that installs it, or allow the host in egress`,
   )
   assert.equal(
     fetchesAtStart([fetcher], ['registry.npmjs.org']).refusal,
-    `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start: install it in the image (docker({ install })), or allow the host in egress`,
+    `the fetcher plugin's hook "uvx ruff check" runs uvx, which fetches from pypi.org at start: add a build that installs it, or allow the host in egress`,
   )
   assert.deepEqual(fetchesAtStart([fetcher], ['registry.npmjs.org', 'pypi.org']), { notes: [] })
+})
+
+test('a build is commands and where they run, the same for each way of writing it', () => {
+  const env = defineEnvironment('e', ({ plugin }) => ({
+    plugins: [
+      plugin.npm('a@1', { build: 'make' }),
+      plugin.npm('b@1', { build: ['npm ci', 'npm run build'] }),
+      plugin.git('github:o/r', { path: 'plugins/x', build: { run: 'pnpm i', cwd: './' } }),
+    ],
+  }))
+  const builds = builtPlugins(applied(env).layers)
+  assert.deepEqual(
+    builds.map((p) => buildSteps(p.build as PluginBuild)),
+    [
+      { run: ['make'], cwd: null },
+      { run: ['npm ci', 'npm run build'], cwd: null },
+      { run: ['pnpm i'], cwd: '.' },
+    ],
+  )
+  // Preflight and the attempt name a build by its declaration, so another build is another layer.
+  const ids = builds.map(pluginBuildId)
+  assert.equal(new Set(ids).size, 3)
+  assert.deepEqual(builtPlugins(applied(env).layers).map(pluginBuildId), ids)
+})
+
+test('a built plugin keeps only the parts only names: the rest of its directory is removed', () => {
+  assert.deepEqual(droppedPaths(['skills', 'mcp']), ['agents', 'commands', 'hooks', 'rules'])
+  assert.deepEqual(droppedPaths(['agents', 'hooks', 'rules']), ['skills', 'commands', '.mcp.json'])
 })
 
 /** Runs `fn` with the agent's catalog entry loading `parts`, as its placement PR will. */

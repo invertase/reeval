@@ -1368,19 +1368,52 @@
           "type": "object",
           "properties": {
             "build": {
-              "description": "Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one.",
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
               "anyOf": [
                 {
-                  "type": "string",
-                  "pattern": "\\S"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
                 },
                 {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "pattern": "\\S"
-                  }
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
                 }
               ]
             },
@@ -1413,19 +1446,52 @@
           "type": "object",
           "properties": {
             "build": {
-              "description": "Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one.",
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
               "anyOf": [
                 {
-                  "type": "string",
-                  "pattern": "\\S"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
                 },
                 {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "pattern": "\\S"
-                  }
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
                 }
               ]
             },
@@ -1466,19 +1532,52 @@
           "type": "object",
           "properties": {
             "build": {
-              "description": "Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one.",
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
               "anyOf": [
                 {
-                  "type": "string",
-                  "pattern": "\\S"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
                 },
                 {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "pattern": "\\S"
-                  }
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
                 }
               ]
             },

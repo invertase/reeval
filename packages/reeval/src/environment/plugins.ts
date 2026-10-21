@@ -5,13 +5,16 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
+import { sha256 } from '../ids.ts'
 import type {
   EnvironmentLayer,
   EnvVars,
   McpServer,
+  PluginBuild,
   PluginPart,
   PluginRecord,
   PluginSource,
+  SandboxDescriptor,
   SecretTemplate,
   SkillSource,
 } from '../types.ts'
@@ -35,7 +38,8 @@ export const PART_PATHS: Record<PluginPart, string> = {
   rules: 'rules/',
 }
 
-const MANIFEST = '.claude-plugin/plugin.json'
+/** A plugin's manifest, relative to its directory. */
+export const PLUGIN_MANIFEST = '.claude-plugin/plugin.json'
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 /** Manifest keys that move a part from its default place, which reeval doesn't follow. */
 const CUSTOM_PATHS = ['skills', 'agents', 'commands', 'hooks', 'outputStyles', 'lspServers']
@@ -233,12 +237,12 @@ export function readPlugin(
   only?: readonly PluginPart[],
 ): PluginContents {
   if (!isDir(dir)) throw new PluginProblem(`${call} isn't a directory`)
-  const manifestPath = join(dir, MANIFEST)
-  if (!existsSync(manifestPath)) throw new PluginProblem(`${call} has no ${MANIFEST}`)
-  const manifest = readJson(manifestPath, `${call}'s ${MANIFEST}`)
+  const manifestPath = join(dir, PLUGIN_MANIFEST)
+  if (!existsSync(manifestPath)) throw new PluginProblem(`${call} has no ${PLUGIN_MANIFEST}`)
+  const manifest = readJson(manifestPath, `${call}'s ${PLUGIN_MANIFEST}`)
   if (!isRecord(manifest) || typeof manifest.name !== 'string' || !NAME.test(manifest.name)) {
     throw new PluginProblem(
-      `${call}'s ${MANIFEST} needs a name in kebab-case, e.g. "name": "review" (got ${JSON.stringify(isRecord(manifest) ? manifest.name : manifest)})`,
+      `${call}'s ${PLUGIN_MANIFEST} needs a name in kebab-case, e.g. "name": "review" (got ${JSON.stringify(isRecord(manifest) ? manifest.name : manifest)})`,
     )
   }
   const name = manifest.name
@@ -267,7 +271,7 @@ export function readPlugin(
     mcp =
       typeof from === 'string'
         ? mcpServers(readJson(join(dir, from), `the ${name} plugin's ${from}`), name, from)
-        : mcpServers(from, name, MANIFEST)
+        : mcpServers(from, name, PLUGIN_MANIFEST)
   } else if (existsSync(join(dir, '.mcp.json'))) {
     mcp = mcpServers(
       readJson(join(dir, '.mcp.json'), `the ${name} plugin's .mcp.json`),
@@ -345,7 +349,7 @@ export function pluginFiles(p: PluginContents): PluginFile[] {
       if (entry.name === '.git') continue
       const path = rel ? `${rel}/${entry.name}` : entry.name
       if (entry.isDirectory()) walk(path)
-      else if (entry.isFile() && path !== MANIFEST && !dropped.some((d) => d(path))) {
+      else if (entry.isFile() && path !== PLUGIN_MANIFEST && !dropped.some((d) => d(path))) {
         const full = join(p.dir, path)
         const executable = (statSync(full).mode & 0o100) !== 0
         out.push({
@@ -357,7 +361,7 @@ export function pluginFiles(p: PluginContents): PluginFile[] {
     }
   }
   walk('')
-  out.push({ path: MANIFEST, content: Buffer.from(p.manifest) })
+  out.push({ path: PLUGIN_MANIFEST, content: Buffer.from(p.manifest) })
   return out.sort((a, b) => (a.path < b.path ? -1 : 1))
 }
 
@@ -440,6 +444,45 @@ export function duplicateLocalPlugin(
   }
   return undefined
 }
+
+/** A plugin's build as commands and where they run: `cwd` relative to the source's root, or null for the plugin's directory. */
+export function buildSteps(build: PluginBuild): { run: string[]; cwd: string | null } {
+  if (typeof build === 'string') return { run: [build], cwd: null }
+  if (Array.isArray(build)) return { run: [...build], cwd: null }
+  const { run, cwd } = build as Exclude<PluginBuild, string | string[]>
+  return { run: typeof run === 'string' ? [run] : [...run], cwd: cwd ?? null }
+}
+
+/** The layered plugins with a build: what preflight builds into the attempt's image, in order. */
+export const builtPlugins = (layers: readonly EnvironmentLayer[]): PluginSource[] =>
+  layeredPlugins(layers).filter((p) => p.build !== undefined)
+
+/**
+ * Why a plugin's build can't run in `sandbox`, or undefined: a build runs in a Docker image
+ * layer. `name` is the plugin's, once its manifest is read; else the call names it.
+ */
+export function buildRefusal(
+  p: PluginSource,
+  sandbox: SandboxDescriptor,
+  name?: string,
+  root?: string,
+): string | undefined {
+  if (p.build === undefined || sandbox.kind === 'docker') return undefined
+  return `${name ? `plugin "${name}"` : pluginCall(p, root)} has a build, which runs in a Docker image layer: use docker()`
+}
+
+/** ` + 2 plugin builds` in an image's label, or nothing without one. */
+export const pluginBuildsLabel = (plugins: readonly unknown[] = []) =>
+  plugins.length ? ` + ${plugins.length} plugin build${plugins.length === 1 ? '' : 's'}` : ''
+
+/** Names one plugin build the same way in preflight and in the attempt that places it. */
+export const pluginBuildId = (p: PluginSource) => sha256(JSON.stringify(p)).slice(0, 16)
+
+/** The paths in a plugin's directory that hold the parts `kept` leaves out. */
+export const droppedPaths = (kept: readonly PluginPart[]): string[] =>
+  PLUGIN_PARTS.filter((p) => !kept.includes(p)).map((p) =>
+    p === 'mcp' ? '.mcp.json' : p === 'hooks' ? 'hooks' : p,
+  )
 
 /** The plugins the layers place, layered: a later layer's local plugin replaces one of its name. */
 export function layeredPlugins(layers: readonly EnvironmentLayer[]): PluginSource[] {
@@ -549,12 +592,10 @@ export function fetchesAtStart(
       if (!f) continue
       const runsIt = `${what} runs ${f.tool}, which fetches from ${f.host} at start`
       if (allowed === null) {
-        notes.push(
-          `${runsIt}; install it in the image (docker({ install })) to keep it off the network`,
-        )
+        notes.push(`${runsIt}; add a build that installs it to keep it off the network`)
       } else if (!hostAllowed(allowed, f.host)) {
         return {
-          refusal: `${runsIt}: install it in the image (docker({ install })), or allow the host in egress`,
+          refusal: `${runsIt}: add a build that installs it, or allow the host in egress`,
           notes,
         }
       }
