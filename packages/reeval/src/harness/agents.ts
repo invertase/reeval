@@ -108,6 +108,11 @@ export type Agent = Layout & {
   forModel?: (model: string, env?: NodeJS.ProcessEnv) => ModelSpecific
   /** The plugin parts reeval places for the agent; empty refuses every plugin. */
   pluginParts: readonly PluginPart[]
+  /**
+   * Set for an agent that takes plugins namespaced but names a plugin's MCP servers by their own
+   * keys, in one list with the environment's (Grok Build): it keeps one of two servers of a name.
+   */
+  pluginServersByName?: true
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -809,6 +814,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   'grok-build': {
     ...LAYOUTS['grok-build'],
     pluginParts: CLAUDE_FORMAT_PARTS,
+    pluginServersByName: true,
     name: 'Grok Build',
     factory: 'grokBuild',
     credential: 'XAI_API_KEY',
@@ -958,6 +964,17 @@ export function refusedPlugins(
         if (!secret) continue
         const rest = p.kept.filter((part) => part !== 'mcp')
         return `${name} loads the ${p.name} plugin's MCP server "${server}" itself, so reeval can't give it ${secret} from the host: use only: [${quoted(rest)}] and declare the server in mcp, where reeval fills it in`
+      }
+    }
+    if (!(agent ?? mimics)?.pluginServersByName) return undefined
+    const byName = new Map(own.mcp.map((n) => [n, `mcp.${n}`]))
+    for (const p of plugins) {
+      for (const server of Object.keys(p.mcp)) {
+        const other = byName.get(server)
+        if (other) {
+          return `${name} names the ${p.name} plugin's MCP server "${server}" by its own name, as it does ${other}, and keeps only one: rename one, or leave mcp out of the plugin with only`
+        }
+        byName.set(server, `the ${p.name} plugin's MCP server "${server}"`)
       }
     }
     return undefined

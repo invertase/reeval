@@ -100,7 +100,7 @@ grok agent --no-leader --plugin-dir /home/reeval/.reeval/plugins/review stdio
 
 reeval copies each plugin to `~/.reeval/plugins/<name>/` and starts Grok with a `--plugin-dir` for each, which Grok trusts, so its hooks and MCP servers start unprompted. `--no-leader` keeps the session in its own process, which is the one that reads the flag. Grok loads each plugin whole, namespaced: the subagent `review:reviewer`.
 
-Grok starts a plugin's MCP servers itself, under the plugin's own server names, so reeval leaves them out of `session/new`; the transcript still names a call `mcp__<server>__<tool>`. As for [Claude Code](/reference/harness/claude-code#plugins), the placed `.mcp.json` runs each through reeval's MCP timer, and a host variable can't go in it, so a plugin server that reads one is refused at plan time; declare that server in `mcp`. Grok doesn't read a plugin's `rules/`, so the plan refuses a plugin that keeps them, as for [Claude Code](/reference/harness/claude-code#plugins).
+Grok starts a plugin's MCP servers itself, under the plugin's own server names, so reeval leaves them out of `session/new`; the transcript still names a call `mcp__<server>__<tool>`. Grok keeps only one of two servers with the same name, so the plan refuses a plugin server named like one in `mcp` or in another plugin. As for [Claude Code](/reference/harness/claude-code#plugins), the placed `.mcp.json` runs each through reeval's MCP timer, and a host variable can't go in it, so a plugin server that reads one is refused at plan time; declare that server in `mcp`. Grok doesn't read a plugin's `rules/`, so the plan refuses a plugin that keeps them, as for [Claude Code](/reference/harness/claude-code#plugins).
 
 ## Errors
 

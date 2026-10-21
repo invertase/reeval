@@ -596,3 +596,38 @@ test('Claude Code’s plugin settings merge into a ~/.claude/settings.json files
   )
   assert.deepEqual(await writePluginFiles(box, LAYOUTS.cursor, placed), [])
 })
+
+test('Grok Build refuses a plugin MCP server named like another, since it keeps one; Claude Code namespaces them', () => {
+  const plugin = (name: string) =>
+    readPlugin(
+      write(tmp(), {
+        '.claude-plugin/plugin.json': JSON.stringify({ name }),
+        '.mcp.json': JSON.stringify({ mcpServers: { docs: { command: 'node' } } }),
+      }),
+      'x',
+    )
+  const [review, tidy] = [plugin('review'), plugin('tidy')]
+  assert.equal(
+    refusedPlugins({ kind: 'grok-build' } as never, [review], { skills: [], mcp: ['docs'] }),
+    `Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp.docs, and keeps only one: rename one, or leave mcp out of the plugin with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'grok-build' } as never, [review, tidy], { skills: [], mcp: [] }),
+    `Grok Build names the tidy plugin's MCP server "docs" by its own name, as it does the review plugin's MCP server "docs", and keeps only one: rename one, or leave mcp out of the plugin with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'fake', layout: 'grok-build' } as never, [review], {
+      skills: [],
+      mcp: ['docs'],
+    }),
+    `The fake agent with Grok Build's layout names the review plugin's MCP server "docs" by its own name, as it does mcp.docs, and keeps only one: rename one, or leave mcp out of the plugin with only`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'grok-build' } as never, [review], { skills: [], mcp: ['other'] }),
+    undefined,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'claude-code' } as never, [review, tidy], { skills: [], mcp: ['docs'] }),
+    undefined,
+  )
+})
