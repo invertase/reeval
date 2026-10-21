@@ -95,8 +95,10 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
   enforce a policy, so a restricted one makes its plan exit 2. For a host to reach,
   `features.test.ts` starts a listener on the host at a non-loopback address (the gateway never
   reaches loopback) that answers `reeval-egress-ok`; a row passes `hostEnv: egressEnv` to give the
-  fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). The row's
-  `record` checks the attempt's `egress` from outside.
+  fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). Beside it, a
+  DNS server answers every A query with `REEVAL_EGRESS_DNS_ANSWER` at `REEVAL_EGRESS_DNS` (address and
+  port), so whether a name resolves doesn't hang on the machine's own resolver. The row's `record`
+  checks the attempt's `egress` from outside.
 - **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
   `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
   agent's image, so a fixture under `harness/` covers what a real harness receives. List the
