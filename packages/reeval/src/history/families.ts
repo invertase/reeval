@@ -4,6 +4,7 @@
 // test); at several, a t interval over the cases' pass@1 differences, so attempts within a case
 // are never counted as independent.
 import {
+  containsZero,
   mcnemar,
   meanInterval,
   median,
@@ -78,20 +79,20 @@ function metric(pairs: Array<[number, number]>): FamilyEffortMetric {
   const differences = pairs.map(([v, c]) => v - c)
   const control = median(pairs.map(([, c]) => c)) ?? 0
   const variant = median(pairs.map(([v]) => v)) ?? 0
-  const p = signedRank(differences)
+  const test = signedRank(differences)
   const nonZero = differences.filter((d) => d !== 0).length
   const verdict =
     nonZero < PAIRED_MIN
       ? 'insufficient'
-      : p === null || p >= EFFORT_ALPHA
+      : test === null || test.p >= EFFORT_ALPHA
         ? 'noise'
-        : (median(differences) ?? 0) < 0
+        : test.sign < 0
           ? 'fewer'
           : 'more'
   return {
     pairs: pairs.length,
     ratio: control === 0 ? null : round3(variant / control),
-    p: p === null ? null : round3(p),
+    p: test === null ? null : round3(test.p),
     verdict,
   }
 }
@@ -148,12 +149,14 @@ function liftOf(
     discordant = { variantOnly: counts.variantOnly, controlOnly: counts.controlOnly }
     decided = counts.variantOnly + counts.controlOnly >= PAIRED_MIN
   } else {
-    const differences = vRates.map((r, i) => r - (cRates[i] as number))
+    const differences = pairs.map(
+      ([v, c]) => (v.pass * c.counted - c.pass * v.counted) / (v.counted * c.counted),
+    )
     const t = meanInterval(differences)
     points = t.mean
     range = interval(t.low, t.high, 't-cases', [-1, 1])
     const rank = signedRank(differences)
-    p = rank === null ? null : round3(rank)
+    p = rank === null ? null : round3(rank.p)
     decided = pairs.length >= PAIRED_MIN
   }
   const verdict = !decided
@@ -173,7 +176,7 @@ function liftOf(
     points: round3(points),
     interval: range,
     p,
-    withinNoise: range.lo < 0 && range.hi > 0,
+    withinNoise: containsZero(range.lo, range.hi),
     verdict,
     ...(minLift !== undefined ? { minLift } : {}),
     outcome: minLift !== undefined && range.lo < minLift ? 'fail' : 'pass',
