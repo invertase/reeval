@@ -212,8 +212,8 @@ reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.
 | `Cursor can't load plugins yet: leave the review plugin out of this cell` | No real harness loads plugins yet. Run the eval on the fake harness, or scope the plugin to cells that can take it. |
 | `plugin.local('plugins/bare') has no .claude-plugin/plugin.json` | Point at the plugin's root, the directory with `.claude-plugin/plugin.json`. |
 | `the review plugin has no hooks, so only: ['hooks'] matches nothing (it has skills, mcp)` | Name parts the plugin has in `only`. |
-| `plugin.local('plugins/review') has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker({ install })` | Leave `build` out. |
-| `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: install it in the image (docker({ install })), or allow the host in egress` | Install the server in the image, or add the registry to `egress`. Under `allow-all` this is a note in the plan instead. |
+| `plugin "review" has a build, which runs in a Docker image layer: use docker()` | Builds run on Docker only. Run the eval on `docker()`, or leave `build` out on `fakeSandbox()`. |
+| `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: add a build that installs it, or allow the host in egress` | Give the plugin a `build` that installs the server, or add the registry to `egress`. Under `allow-all` this is a note in the plan instead. |
 | `the review plugin's manifest sets "skills", which reeval doesn't read: keep each part in its default place (skills/, agents/, commands/, hooks/hooks.json)` | Move the part to its default directory. |
 | `environment review lists two plugins named "review", plugin.local('plugins/a') and plugin.local('plugins/b'): rename one, or leave one out` | One environment lists each plugin name once. A child environment's plugin replaces its parent's of the same name. |
 | `the review plugin's MCP server "docs" would join mcp as review:docs, which mcp already names: rename mcp["review:docs"]` | Rename the environment's own server. |
@@ -230,6 +230,8 @@ A `plugin.git`, `plugin.npm` or `plugin.marketplace` plugin is fetched when an a
 | `the acme-tools marketplace's entry "lint" has ref "--upload-pack=…", which isn't a branch or tag` | The marketplace's entry is malformed: name the plugin's own source with `plugin.git`. `sha` must be a full 40-character commit SHA. |
 | `the acme-tools marketplace's entry "lint" has a password or token in its url, which reeval would record: …` | Name the repository with `plugin.git` and fetch it with your own git credentials. |
 | `the acme-tools marketplace's entry "lint" names npm package "git+ssh://…", which isn't a registry package name: reeval packs only registry packages from a marketplace` | Name the plugin's own source with `plugin.git` or `plugin.npm`. |
+
+A plugin `build` runs in preflight, like an `install` layer: a failing command fails the attempts that use it with `Building the build of plugin.local('plugins/review') failed: build 1/2 exited 1: npm ci` (exit 3), and a `plugin.git` ref that moves between preflight and the attempt fails it with `The review plugin's ref moved during the run: …. Pin ref to a commit or tag.`
 
 ## During an attempt
 

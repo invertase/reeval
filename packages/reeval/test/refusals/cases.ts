@@ -12,6 +12,7 @@ import {
   attemptStartProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
+import { buildRefusal } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
 import {
@@ -27,8 +28,8 @@ import {
   pi,
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
-import { docker, podman } from '../../src/sandbox.ts'
-import type { EnvironmentHelpers } from '../../src/types.ts'
+import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
+import type { EnvironmentHelpers, PluginSource, SandboxDescriptor } from '../../src/types.ts'
 
 export type Case = [name: string, run: () => unknown]
 
@@ -47,6 +48,11 @@ const yamlIn = (text: string) => () =>
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
+/** What the plan says of a plugin's build in a sandbox. */
+const build = (p: PluginSource, sandbox: SandboxDescriptor, name?: string) => () => {
+  const refusal = buildRefusal(p, sandbox, name)
+  if (refusal) throw new UsageError(refusal)
+}
 const any =
   // biome-ignore lint/suspicious/noExplicitAny: refusals are about values the types refuse
     (f: (...args: any[]) => unknown, ...args: unknown[]) =>
@@ -685,6 +691,56 @@ export const CASES: Record<string, Case[]> = {
     [
       'data: plugin build empty',
       env({ plugins: [{ kind: 'plugin', source: 'npm', spec: 'pkg@1', build: [] }] }),
+    ],
+    [
+      'plugin build from the source root',
+      helpers(({ plugin }) => ({
+        plugins: [
+          plugin.git('github:o/r', { path: 'plugins/review', build: { run: 'pnpm i', cwd: '.' } }),
+        ],
+      })),
+    ],
+    [
+      'plugin build cwd outside the source',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.git('github:o/r', { build: { run: 'make', cwd: '../x' } })],
+      })),
+    ],
+    [
+      'plugin build with an unknown key',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('pkg@1', { build: { run: 'make', dir: '.' } as never })],
+      })),
+    ],
+    [
+      'plugin build without run',
+      helpers(({ plugin }) => ({
+        plugins: [plugin.npm('pkg@1', { build: { cwd: '.' } as never })],
+      })),
+    ],
+    [
+      'data: plugin build cwd absolute',
+      env({
+        plugins: [
+          { kind: 'plugin', source: 'npm', spec: 'pkg@1', build: { run: 'make', cwd: '/src' } },
+        ],
+      }),
+    ],
+    [
+      'plugin build on the fake sandbox',
+      build(
+        { kind: 'plugin', source: 'npm', spec: 'pkg@1', build: 'make' },
+        fakeSandbox(),
+        'review',
+      ),
+    ],
+    [
+      'plugin build on the fake sandbox, before its manifest is read',
+      build({ kind: 'plugin', source: 'git', repo: 'github:o/r', build: 'make' }, fakeSandbox()),
+    ],
+    [
+      'plugin build on docker',
+      build({ kind: 'plugin', source: 'npm', spec: 'pkg@1', build: 'make' }, docker(), 'review'),
     ],
     ['mcp.stdio without a command', helpers(({ mcp }) => ({ mcp: { s: mcp.stdio('') } }))],
     ['mcp not from the helper', env({ mcp: { s: { command: 'npx' } } })],

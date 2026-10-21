@@ -37,6 +37,7 @@ import type {
   HostFile,
   McpHelper,
   McpServer,
+  PluginBuild,
   PluginHelper,
   PluginPart,
   SandboxDescriptor,
@@ -522,6 +523,49 @@ function skillHelper(base: string): SkillHelper {
   }
 }
 
+/** A plugin's `build` as written, copied, or a definition error saying what it takes. */
+function pluginBuild(what: string, build: unknown): PluginBuild {
+  const commands = (v: unknown) => {
+    const list = typeof v === 'string' ? [v] : v
+    return (
+      Array.isArray(list) &&
+      list.length > 0 &&
+      list.every((c) => typeof c === 'string' && c.trim() !== '')
+    )
+  }
+  const copy = (v: string | readonly string[]) => (typeof v === 'string' ? v : [...v])
+  if (commands(build)) return copy(build as string | string[])
+  if (typeof build === 'object' && build !== null && !Array.isArray(build)) {
+    const { run, cwd, ...rest } = build as { run?: unknown; cwd?: unknown }
+    const extra = Object.keys(rest)
+    if (extra.length) {
+      throw new DefinitionError(`${what}: build takes { run, cwd }, not "${extra.join('", "')}"`)
+    }
+    if (!commands(run)) {
+      throw new DefinitionError(
+        `${what}: build.run is a shell command or a list of them (got ${JSON.stringify(run)})`,
+      )
+    }
+    const dir = typeof cwd === 'string' ? cwd.replace(/(.)\/+$/, '$1') : cwd
+    if (
+      dir !== undefined &&
+      (typeof dir !== 'string' ||
+        !dir ||
+        dir.includes('\\') ||
+        dir.startsWith('/') ||
+        (dir !== '.' && dir.split('/').some((p) => p === '..' || p === '.' || p === '')))
+    ) {
+      throw new DefinitionError(
+        `${what}: build.cwd is a directory relative to the source's root, with forward slashes and no .., or '.' for the root (got ${JSON.stringify(cwd)})`,
+      )
+    }
+    return { run: copy(run as string | string[]), ...(dir !== undefined ? { cwd: dir } : {}) }
+  }
+  throw new DefinitionError(
+    `${what}: build is a shell command, a list of them, or { run, cwd } (got ${JSON.stringify(build)})`,
+  )
+}
+
 function pluginHelper(base: string): PluginHelper {
   const common = (what: string, o: unknown, extra: readonly string[]) => {
     if (typeof o !== 'object' || o === null || Array.isArray(o)) {
@@ -548,22 +592,9 @@ function pluginHelper(base: string): PluginHelper {
         `${what}: only lists the parts to place, from ${PLUGIN_PARTS.map((p) => `'${p}'`).join(', ')}, e.g. only: ['skills', 'mcp'] (got ${JSON.stringify(only)})`,
       )
     }
-    const commands = typeof build === 'string' ? [build] : build
-    if (
-      build !== undefined &&
-      (!Array.isArray(commands) ||
-        commands.length === 0 ||
-        commands.some((c) => typeof c !== 'string' || !c.trim()))
-    ) {
-      throw new DefinitionError(
-        `${what}: build is a shell command or a list of them (got ${JSON.stringify(build)})`,
-      )
-    }
     return {
       ...(only ? { only: [...new Set(only as PluginPart[])] } : {}),
-      ...(build === undefined
-        ? {}
-        : { build: typeof build === 'string' ? build : [...(build as string[])] }),
+      ...(build === undefined ? {} : { build: pluginBuild(what, build) }),
     }
   }
   const dirPath = (what: string, path: unknown, where: string) => {

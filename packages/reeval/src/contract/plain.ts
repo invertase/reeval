@@ -251,6 +251,27 @@ export const pluginMarketplaceSchema = z
     'A Claude Code marketplace: the source that holds its `.claude-plugin/marketplace.json`.',
   )
 
+const buildCommands = z.union([nonEmpty(), z.array(nonEmpty()).min(1, 'at least one command')])
+
+export const pluginBuildSchema = z
+  .union([
+    buildCommands,
+    z.strictObject({
+      run: buildCommands.describe('The command, or the commands in order.'),
+      cwd: z
+        .string()
+        .regex(
+          /^(?:\.|(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[^\\]+)$/,
+          "a directory relative to the source's root, with forward slashes and no ..",
+        )
+        .optional()
+        .describe("Where they run, relative to the source's root; default the plugin's directory."),
+    }),
+  ])
+  .describe(
+    "Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root and with no secrets: one, a list, or `{ run, cwd }`. They run from the plugin's directory, or from `cwd`, relative to the source's root (`'.'` for the repository's or package's root).",
+  )
+
 const plugin = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fields: F) =>
   z.strictObject({
     kind: z.literal('plugin'),
@@ -261,11 +282,10 @@ const plugin = <S extends string, F extends z.core.$ZodLooseShape>(source: S, fi
       .min(1, 'at least one part')
       .optional()
       .describe('The parts to place; default every part the plugin has.'),
-    build: z
-      .union([nonEmpty(), z.array(nonEmpty()).min(1, 'at least one command')])
+    build: pluginBuildSchema
       .optional()
       .describe(
-        "Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one.",
+        'Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.',
       ),
   })
 

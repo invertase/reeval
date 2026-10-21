@@ -78,7 +78,11 @@
                         "source": "git",
                         "repo": "github:acme/agent-plugins",
                         "ref": "v1.3.0",
-                        "path": "plugins/review"
+                        "path": "plugins/review",
+                        "build": {
+                          "run": ["pnpm install --frozen-lockfile", "pnpm build"],
+                          "cwd": "."
+                        }
                       }
                     ]
                   }

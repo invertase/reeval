@@ -1013,8 +1013,8 @@ export type PluginSource = {
   kind: 'plugin'
   /** The parts to place; default every part the plugin has. */
   only?: PluginPart[]
-  /** Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one. */
-  build?: string | string[]
+  /** Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise. */
+  build?: PluginBuild
 } & (
   | {
       source: 'local'
@@ -1061,11 +1061,29 @@ export type PluginMarketplace =
       spec: string
     }
 
+/**
+ * Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root
+ * and with no secrets: one, a list, or `{ run, cwd }`. They run from the plugin's directory, or from
+ * `cwd`, relative to the source's root (`'.'` for the repository's or package's root).
+ */
+export type PluginBuild =
+  | string
+  | string[]
+  | {
+      /** The command, or the commands in order. */
+      run: string | string[]
+      /** Where they run, relative to the source's root; default the plugin's directory. */
+      cwd?: string
+    }
+
 type PluginOptions = {
   /** The parts to place, e.g. `['skills', 'mcp']`; default every part the plugin has. */
   only?: readonly PluginPart[]
-  /** Commands that build the plugin in an image layer. Not run yet: the plan refuses a build. */
-  build?: string | readonly string[]
+  /**
+   * Commands that build the plugin in a Docker image layer, e.g. `'npm ci && npm run build'`, or
+   * `{ run, cwd: '.' }` to run them from the source's root. Only the plugin's directory is placed.
+   */
+  build?: string | readonly string[] | { run: string | readonly string[]; cwd?: string }
 }
 
 export type PluginHelper = {
@@ -1947,7 +1965,7 @@ export type PluginRecord = {
   commit: string | null
   /** The hash of the files placed. */
   sha256: string
-  /** The image layer its build ran in; null without a build. */
+  /** The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build. */
   build: string | null
   /** What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules. */
   parts: {
@@ -2038,7 +2056,7 @@ export type AttemptImage = {
   /** Content-addressed image id (`sha256:…`). */
   id: string
   agentCli: string | null
-  /** The harness image `install` was baked onto: `ref` itself without `install`. */
+  /** The harness image `install` and plugin builds were baked onto: `ref` itself without either. */
   base: string
   /** The `docker({ install })` commands, in order. */
   install: string[]
@@ -2233,8 +2251,8 @@ export type AttemptMeta = {
   label: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
-  setBy: { sandbox: string; harness: string }
+  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`; with `pluginBuilds`, the environment its plugin builds come from (`environment review in evals/review.eval.ts`). */
+  setBy: { sandbox: string; harness: string; pluginBuilds?: string }
   /** How its cell's attempts decide the cell's outcome; `'none'` when they don't fail the run. */
   gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */
@@ -2253,6 +2271,8 @@ export type AttemptMeta = {
   files?: string[]
   /** Its environment's plugins, layered: a local one's name and parts, else its source. */
   plugins?: string[]
+  /** Its environment's plugins with a `build`, layered, which preflight builds into its image. */
+  pluginBuilds?: PluginSource[]
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string
