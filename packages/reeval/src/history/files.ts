@@ -351,15 +351,20 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
   // The run's insights go with it whatever the artifact level: they're its answers, not evidence.
-  // The recorded record can drop artifacts, so they're hashed against its facts.
+  // Remarks-only ones are restamped with the recorded record's facts, which can drop artifacts; a
+  // model's keep their hash, so ones written for other facts are still left out with a note.
   const insightBytes = await readFile(join(source, runId, INSIGHTS_FILE)).catch(() => null)
   let insights: RunInsights | null = null
   if (insightBytes) {
     try {
       const read = readableInsights(JSON.parse(insightBytes.toString()), INSIGHTS_FILE)
-      insights = { ...read, factsHash: factsHash(suiteResult(record)) }
-      files.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}
-`))
+      if (fromModel(read)) {
+        insights = read
+        files.set(INSIGHTS_FILE, insightBytes)
+      } else {
+        insights = { ...read, factsHash: factsHash(suiteResult(record)) }
+        files.set(INSIGHTS_FILE, Buffer.from(`${JSON.stringify(insights, null, 2)}\n`))
+      }
     } catch {}
   }
   if (level !== 'none') {

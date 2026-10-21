@@ -1390,6 +1390,39 @@ describe('reeval run writes insights at its end', () => {
     }
   })
 
+  test("canary: reeval record keeps a model's factsHash, so stale insights stay left out", async () => {
+    const p = await project('run-insights-record-stale', {
+      'reeval.config.ts': runConfig(),
+      'evals/skill.eval.ts': TOO_FEW_TRIES,
+    })
+    const recorded = async (args: string[] = []) => {
+      assert.equal((await runCli(p.dir, ['run'])).code, 0)
+      const { run } = readRun(p.dir)
+      const file = join(p.dir, '.reeval/runs', run.runId, 'insights.json')
+      return { run, file, record: () => runCli(p.dir, ['record', ...args]) }
+    }
+    for (const args of [[], ['--artifacts', 'none']]) {
+      const fresh = await recorded(args)
+      const bytes = readFileSync(fresh.file, 'utf8')
+      assert.equal((await fresh.record()).code, 0)
+      const copy = join(p.dir, HISTORY_DIR, fresh.run.runId, 'insights.json')
+      assert.equal(readFileSync(copy, 'utf8'), bytes, `copied byte for byte (${args})`)
+      const shown = await runCli(p.dir, ['show', fresh.run.runId])
+      assert.match(shown.stdout, /Yes: every try passed\./, `fresh insights print (${args})`)
+      assert.doesNotMatch(shown.stdout, /insights left out/)
+    }
+
+    const stale = await recorded()
+    const doc = JSON.parse(readFileSync(stale.file, 'utf8')) as RunInsights
+    writeFileSync(stale.file, `${JSON.stringify({ ...doc, factsHash: 'stale' }, null, 2)}\n`)
+    assert.equal((await stale.record()).code, 0)
+    const copy = join(p.dir, HISTORY_DIR, stale.run.runId, 'insights.json')
+    assert.equal(readableInsights(JSON.parse(readFileSync(copy, 'utf8'))).factsHash, 'stale')
+    const shown = await runCli(p.dir, ['show', stale.run.runId])
+    assert.match(shown.stdout, /insights left out: insights\.json was written for other facts/)
+    assert.doesNotMatch(shown.stdout, /Yes: every try passed\./)
+  })
+
   test('reeval analyze --insights keeps the remarks when it writes or finishes, and a refused one leaves the file', async () => {
     const p = await project('run-insights-remarks-analyze', {
       'reeval.config.ts': runConfig(),
