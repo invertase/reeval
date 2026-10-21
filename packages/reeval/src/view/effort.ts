@@ -113,8 +113,8 @@ export function effortVerdict(
 ): { p: number | null; verdict: EffortVerdict } {
   const test = mannWhitney(xs, ys)
   const p = test?.p ?? null
-  if (minimumP(xs.length, ys.length) >= EFFORT_ALPHA) return { p, verdict: 'insufficient' }
-  if (test === null || test.p >= EFFORT_ALPHA) return { p, verdict: 'noise' }
+  if (test === null || test.floor >= EFFORT_ALPHA) return { p, verdict: 'insufficient' }
+  if (test.p >= EFFORT_ALPHA) return { p, verdict: 'noise' }
   return { p, verdict: test.sign < 0 ? 'fewer' : 'more' }
 }
 

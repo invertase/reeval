@@ -49,7 +49,7 @@ import {
   wilson,
 } from '../src/stats.ts'
 import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
-import { effortVerdict } from '../src/view/effort.ts'
+import { EFFORT_MIN_RUNS, effortVerdict } from '../src/view/effort.ts'
 import { tempDir } from './helpers.ts'
 import {
   E2E_ARMS,
@@ -269,6 +269,24 @@ describe('the effort verdict', () => {
     assert.ok((fewer.p ?? 1) < 0.05, `p ${fewer.p}`)
     assert.equal(effortVerdict(control, variant).verdict, 'more')
     assert.equal(effortVerdict([1, 1, 1, 2, 2], [1, 1, 2, 2, 2]).verdict, 'noise')
+  })
+
+  test('whether it can be tested depends on the ties, not only the counts', () => {
+    const win = effortVerdict([1, 2, 3], [4, 4, 4, 4])
+    assert.equal(win.verdict, 'fewer', 'one extreme ordering, not two: 1/35')
+    assert.ok(Math.abs((win.p ?? 1) - 1 / 35) < 1e-9)
+    assert.equal(effortVerdict([2, 2, 2, 3], [2, 2, 3, 3]).verdict, 'insufficient', 'floor 10/70')
+    assert.equal(effortVerdict([2, 2, 2, 2], [2, 2, 2, 2]).verdict, 'insufficient')
+    const flat = effortVerdict(Array(20).fill(5), Array(20).fill(5))
+    assert.equal(flat.verdict, 'insufficient', 'the normal approximation, all tied')
+    assert.ok(!Number.isNaN(flat.p))
+    const ties = effortVerdict([...Array(19).fill(5), 6], Array(20).fill(5))
+    assert.equal(ties.verdict, 'insufficient', 'the normal approximation, nearly all tied')
+    assert.equal(effortVerdict([1, 2, 3], [4, 5, 6]).verdict, 'insufficient', 'untied 3 vs 3')
+    const four = effortVerdict([1, 2, 3, 4], [5, 6, 7, 8])
+    assert.equal(four.verdict, 'fewer')
+    assert.ok(Math.abs((four.p ?? 1) - 2 / 70) < 1e-9, 'untied 4 vs 4 is 2/70')
+    assert.equal(EFFORT_MIN_RUNS, 4)
   })
 })
 

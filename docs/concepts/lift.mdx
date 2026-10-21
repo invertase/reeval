@@ -166,9 +166,9 @@ Tokens join the table when both sides reported usage. An attempt with no usage (
 |---|---|---|
 | `fewer`, `more` | `fewer tool calls (p = 0.029)` | p is below 0.05 |
 | `noise` | `within noise` | p is 0.05 or more |
-| `insufficient` | `too few attempts to test` | Even complete separation couldn't reach p below 0.05 |
+| `insufficient` | `too few attempts to test` | No split of these values could reach p below 0.05 |
 
-The smallest p a rank test can give depends only on the attempt counts, so a verdict needs at least four attempts on each side:
+Without ties, the smallest p a rank test can give depends only on the attempt counts, so a verdict needs at least four attempts on each side. Tied values (tool calls often are) change that floor, so `2, 2, 2, 3` against `2, 2, 3, 3` is `insufficient` at four a side:
 
 | Variant vs control | Smallest possible p | Can reach a verdict |
 |---|---|---|

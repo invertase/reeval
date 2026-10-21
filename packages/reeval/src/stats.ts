@@ -73,12 +73,14 @@ const choose = (n: number, k: number) => {
  * Two-sided Mann–Whitney (Wilcoxon rank-sum) p-value for `xs` against `ys`: exact, by every split
  * of the pooled values, with mid-ranks for ties; the normal approximation with a tie correction
  * above `EXACT_LIMIT` splits. `sign` is the sign of `xs`'s rank sum minus its expectation: below 0,
- * `xs` ranks lower. Null when either side is empty.
+ * `xs` ranks lower. `floor` is the smallest p any split of these pooled values could give, so ties
+ * count: `[2, 2, 2, 3]` against `[2, 2, 3, 3]` can never go below 10/70. Null when either side is
+ * empty.
  */
 export function mannWhitney(
   xs: readonly number[],
   ys: readonly number[],
-): { p: number; sign: number } | null {
+): { p: number; sign: number; floor: number } | null {
   const n1 = xs.length
   const n2 = ys.length
   if (n1 === 0 || n2 === 0) return null
@@ -100,25 +102,43 @@ export function mannWhitney(
     for (const { v } of pooled) counts.set(v, (counts.get(v) ?? 0) + 1)
     const ties = [...counts.values()].reduce((a, t) => a + t ** 3 - t, 0)
     const variance = ((n1 * n2) / 12) * (n + 1 - ties / (n * (n - 1)))
-    if (variance <= 0) return { p: 1, sign }
-    const z = Math.max(0, observed - 0.5) / Math.sqrt(variance)
-    return { p: Math.min(1, 2 * (1 - normalCdf(z))), sign }
+    if (variance <= 0) return { p: 1, sign, floor: 1 }
+    const pOf = (d: number) =>
+      Math.min(1, 2 * (1 - normalCdf(Math.max(0, d - 0.5) / Math.sqrt(variance))))
+    // The most extreme rank sum gives `xs` the lowest n1 ranks or the highest.
+    const sorted = pooled.map(({ i }) => ranks[i] as number)
+    const sum = (rs: number[]) => rs.reduce((a, b) => a + b, 0)
+    const widest = Math.max(
+      Math.abs(sum(sorted.slice(0, n1)) - expected),
+      Math.abs(sum(sorted.slice(n - n1)) - expected),
+    )
+    return { p: pOf(observed), sign, floor: pOf(widest) }
   }
   let extreme = 0
+  let widest = 0
+  let atWidest = 0
   let total = 0
   const pick = (start: number, left: number, sum: number) => {
     if (left === 0) {
       total++
-      if (Math.abs(sum - expected) >= observed - 1e-9) extreme++
+      const d = Math.abs(sum - expected)
+      if (d >= observed - 1e-9) extreme++
+      if (d > widest + 1e-9) {
+        widest = d
+        atWidest = 1
+      } else if (d >= widest - 1e-9) atWidest++
       return
     }
     for (let i = start; i <= n - left; i++) pick(i + 1, left - 1, sum + (ranks[i] as number))
   }
   pick(0, n1, 0)
-  return { p: extreme / total, sign }
+  return { p: extreme / total, sign, floor: atWidest / total }
 }
 
-/** The smallest two-sided p an exact rank test can reach with these group sizes. */
+/**
+ * The smallest two-sided p an exact rank test can reach with these group sizes and no ties: for
+ * planning `runs` before there's data. On data, `mannWhitney`'s `floor` counts the ties.
+ */
 export const minimumP = (n1: number, n2: number) =>
   n1 === 0 || n2 === 0 ? 1 : Math.min(1, 2 / choose(n1 + n2, n1))
 
