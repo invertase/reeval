@@ -111,6 +111,11 @@ export const cases: PlanCase[] = [
     name: 'claude-code-and-grok-build',
     args: ['--config', 'reeval.claude-grok.config.ts', 'evals/namespaced.eval.ts'],
   },
+  {
+    dir: 'plugins',
+    name: 'codex-and-goose',
+    args: ['--config', 'reeval.codex-goose.config.ts', 'evals/skills-and-mcp.eval.ts'],
+  },
   { dir: 'capture', name: 'options', args: [] },
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
@@ -345,9 +350,7 @@ evaluate('uses tools', { environment: tools }, async () => {})
       ['cursor', 'composer-2.5', 'Cursor'],
       ['antigravity', 'gemini-3.8-flash-low', 'Antigravity'],
       ['opencode', 'google/gemini-3.8-flash', 'OpenCode'],
-      ['goose', 'gemini-3.8-flash', 'Goose'],
       ['pi', 'gemini-3.8-flash', 'pi'],
-      ['codex', 'gpt-5.4-mini', 'Codex'],
       ['fx', 'gpt-4.1-mini', 'fx'],
     ] as const) {
       const p = await project(`plugin-refused-${factory}`, {
@@ -418,6 +421,57 @@ evaluate('reviews', { environment: review }, async () => {})
           `${factory} ${label}`,
         )
       }
+    }
+  })
+
+  test("Codex refuses a plugin's hooks and its apps; Goose a plugin's hooks", async () => {
+    const plugin = {
+      'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
+      'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
+      'plugins/review/hooks/hooks.json': JSON.stringify({
+        hooks: { SessionStart: [{ hooks: [{ type: 'command', command: 'true' }] }] },
+      }),
+      'plugins/chat/.claude-plugin/plugin.json': '{ "name": "chat" }',
+      'plugins/chat/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
+      'plugins/chat/.app.json': '{ "apps": {} }',
+    }
+    for (const [factory, model, name, dir, refusal] of [
+      [
+        'codex',
+        'gpt-5.4-mini',
+        'Codex',
+        'review',
+        "Codex can't load the review plugin's hooks \\(hooks/hooks.json\\): use only: \\['skills'\\], or leave the plugin out of this cell",
+      ],
+      [
+        'codex',
+        'gpt-5.4-mini',
+        'Codex',
+        'chat',
+        "Codex can't load the chat plugin's apps: they need a ChatGPT login",
+      ],
+      [
+        'goose',
+        'gemini-3.8-flash',
+        'Goose',
+        'review',
+        "Goose can't load the review plugin's hooks \\(hooks/hooks.json\\): use only: \\['skills'\\], or leave the plugin out of this cell",
+      ],
+    ] as const) {
+      const p = await project(`plugin-${factory}-${dir}`, {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+`,
+        'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const review = defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('../plugins/${dir}')] }))
+evaluate('reviews', { environment: review }, async () => {})
+`,
+        ...plugin,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, `${name} ${dir}: ${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, new RegExp(`evaluate\\("reviews"\\) on ${factory}:[^:]+: ${refusal}`))
     }
   })
 

@@ -291,6 +291,60 @@ test('Claude Code and Grok Build load every part but rules, and refuse a plugin 
   )
 })
 
+test('Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugin server’s host secret', () => {
+  const whole = readPlugin(review(), 'x')
+  const kept = readPlugin(review(), 'x', ['skills'])
+  const withMcp = readPlugin(review(), 'x', ['skills', 'mcp'])
+  const own = { skills: [], mcp: [] }
+  for (const [kind, name] of [
+    ['codex', 'Codex'],
+    ['goose', 'Goose'],
+  ] as const) {
+    assert.equal(
+      refusedPlugins({ kind } as never, [whole], own),
+      `${name} can't load the review plugin's agents (agents/) and commands (commands/) and hooks (hooks/hooks.json) and rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell`,
+    )
+    assert.equal(refusedPlugins({ kind } as never, [kept], own), undefined)
+  }
+  const hooked = readPlugin(review(), 'x', ['skills', 'hooks'])
+  assert.equal(
+    refusedPlugins({ kind: 'codex' } as never, [hooked], own),
+    "Codex can't load the review plugin's hooks (hooks/hooks.json): use only: ['skills'], or leave the plugin out of this cell",
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'codex' } as never, [withMcp], own),
+    `Codex loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'goose' } as never, [withMcp], own),
+    undefined,
+    'Goose takes plugin servers in its own config, where reeval fills in secrets',
+  )
+  for (const files of [
+    { '.app.json': '{ "apps": {} }' },
+    { '.claude-plugin/plugin.json': '{ "name": "chat", "apps": "./apps.json" }' },
+  ]) {
+    const chat = readPlugin(
+      write(tmp(), {
+        '.claude-plugin/plugin.json': '{ "name": "chat" }',
+        'skills/lint/SKILL.md': skillMd('lint'),
+        ...files,
+      }),
+      'x',
+    )
+    assert.equal(chat.apps, true)
+    assert.equal(
+      refusedPlugins({ kind: 'codex' } as never, [chat], own),
+      "Codex can't load the chat plugin's apps: they need a ChatGPT login",
+    )
+    assert.equal(
+      refusedPlugins({ kind: 'fake', layout: 'codex' } as never, [chat], own),
+      "The fake agent with Codex's layout can't load the chat plugin's apps: they need a ChatGPT login",
+    )
+    assert.equal(refusedPlugins({ kind: 'goose' } as never, [chat], own), undefined)
+  }
+})
+
 test('a part the harness can’t load is refused, naming what it can', () => {
   const p = readPlugin(review(), 'x')
   loading('cursor', ['skills', 'mcp'], () => {

@@ -99,6 +99,8 @@ export type PluginContents = {
   hooks: { events: string[]; commands: string[] }
   mcp: Record<string, McpServer>
   rules: string[]
+  /** Whether it bundles ChatGPT apps (Codex's `.app.json`, or the manifest's `apps`). */
+  apps: boolean
   /** The manifest's text, without `mcpServers` when `only` leaves MCP out. */
   manifest: string
 }
@@ -314,6 +316,7 @@ export function readPlugin(
     hooks: kept.includes('hooks') ? hooks : { events: [], commands: [] },
     mcp: kept.includes('mcp') ? mcp : {},
     rules: kept.includes('rules') ? rules : [],
+    apps: manifest.apps !== undefined || existsSync(join(dir, '.app.json')),
     manifest:
       kept.includes('mcp') || manifest.mcpServers === undefined
         ? readFileSync(manifestPath, 'utf8')

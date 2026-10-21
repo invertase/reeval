@@ -77,6 +77,11 @@ export type Agent = Layout & {
    */
   expectedBlocked?: ExpectedBlocked
   /**
+   * Why it can't take a plugin that bundles ChatGPT apps, which it would otherwise load with the
+   * plugin; unset for an agent that ignores them.
+   */
+  pluginApps?: string
+  /**
    * Transcript events a turn may have had that its harness didn't report, from the turn's
    * `finish` part's `harnessMetadata`. Each turn carries these as `unreported`, so web matchers
    * refuse instead of passing silently.
@@ -680,7 +685,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   goose: {
     ...LAYOUTS.goose,
-    pluginParts: [],
+    // Plugin skills join its home skills; plugin MCP servers are extensions in its config.yaml.
+    pluginParts: ['skills', 'mcp'],
     name: 'Goose',
     factory: 'goose',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -721,7 +727,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   codex: {
     ...LAYOUTS.codex,
-    pluginParts: [],
+    // What Codex's plugin format has besides apps; it installs a plugin whole, from a marketplace.
+    pluginParts: ['skills', 'mcp'],
+    pluginApps: 'they need a ChatGPT login',
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
@@ -729,15 +737,21 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,
+    // Only with plugins on, which a session with plugins needs; it loads them all the same.
+    expectedBlocked: {
+      hosts: ['github.com', 'api.github.com', 'chatgpt.com'],
+      why: "Codex's plugin sync, which it runs on every turn once plugins are on",
+    },
     servedModel: openaiServedModel,
     mcpServers: codexMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
       (await import('@reeval/harness-codex')).createCodex({
         auth,
         ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
+        ...(plugins.length ? { plugins: plugins.map(({ name, dir }) => ({ name, dir })) } : {}),
         requireCredentialBrokering: true,
       }),
   },
@@ -849,7 +863,7 @@ const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join
 
 /**
  * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
- * load, a plugin MCP server it refuses (named `<plugin>:<server>`) or whose `<plugin>:<server>`
+ * load, apps it can't take (`pluginApps`), a plugin MCP server it refuses (named `<plugin>:<server>`) or whose `<plugin>:<server>`
  * key `mcp` already has, or, where it takes plugin items flat, a skill or MCP server whose name
  * another already has. `own` names the
  * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
@@ -879,6 +893,9 @@ export function refusedPlugins(
     const fix = can.length ? `use only: [${quoted(can)}], or leave` : 'leave'
     return `${name} can't load the ${p.name} plugin's ${what}: ${fix} the plugin out of this cell`
   }
+  const apps = (agent ?? mimics)?.pluginApps
+  const withApps = apps ? plugins.find((p) => p.apps) : undefined
+  if (withApps) return `${name} can't load the ${withApps.name} plugin's apps: ${apps}`
   const servers = Object.fromEntries(
     plugins.flatMap((p) =>
       Object.entries(p.mcp).map(([server, s]): [string, ResolvedMcpServer] => [
