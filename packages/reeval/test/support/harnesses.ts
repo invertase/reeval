@@ -7,7 +7,14 @@ import { type BakedHarness, imageFor } from '@reeval/sandbox-docker'
 import type { PluginPart } from '../../src/types.ts'
 
 /** Every plugin part, for a harness that loads them all. */
-export const EVERY_PART: readonly PluginPart[] = ['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules']
+export const EVERY_PART: readonly PluginPart[] = [
+  'skills',
+  'agents',
+  'commands',
+  'hooks',
+  'mcp',
+  'rules',
+]
 
 /** What a harness that reads Claude Code's plugin format loads: every part but rules. */
 const CLAUDE_FORMAT: readonly PluginPart[] = ['skills', 'agents', 'commands', 'hooks', 'mcp']

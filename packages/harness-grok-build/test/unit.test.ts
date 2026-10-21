@@ -77,9 +77,10 @@ test("config.toml puts every call on the run's model and turns off the extra cal
 test('grok-acp starts grok agent --no-leader stdio with a --plugin-dir for each plugin directory', () => {
   const home = mkdtempSync(join(tmpdir(), 'grok-acp-'))
   const bin = join(home, '.local/bin')
-  const launcher = /cat > "\$HOME\/\.local\/bin\/grok-acp" <<'GROK_LAUNCH'\n([\s\S]*?)GROK_LAUNCH\n/.exec(
-    GROK_INSTALL_COMMAND,
-  )?.[1]
+  const launcher =
+    /cat > "\$HOME\/\.local\/bin\/grok-acp" <<'GROK_LAUNCH'\n([\s\S]*?)GROK_LAUNCH\n/.exec(
+      GROK_INSTALL_COMMAND,
+    )?.[1]
   assert.ok(launcher, 'the install writes grok-acp')
   mkdirSync(bin, { recursive: true })
   writeFileSync(join(bin, 'grok-acp'), launcher, { mode: 0o755 })

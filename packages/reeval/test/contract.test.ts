@@ -8,9 +8,9 @@ import { execFileSync } from 'node:child_process'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import { isRuntimeState } from '../src/attempt/context.ts'
 import type { AttemptRecord, RunRecord } from '../src/history/types.ts'
 import type { PluginPart } from '../src/types.ts'
-import { isRuntimeState } from '../src/attempt/context.ts'
 import { BLOCKED_HOST, PLANTED, PLUGIN_PROOF } from './contract/evals/constants.ts'
 import { type CliRun, readRun, runCli } from './helpers.ts'
 import { containersLeft } from './support/containers.ts'
@@ -38,7 +38,7 @@ import {
 
 type Ran = { cli: CliRun; run: RunRecord; runDir: string; project: string }
 /** Returns 'n/a' when the behaviour doesn't apply to the row. */
-type Check = (ran: Ran, row: HarnessRow) => void | string | Promise<void | string>
+type Check = (ran: Ran, row: HarnessRow) => void | 'n/a' | Promise<void>
 /**
  * `canary`: whether the check includes a canary that must fail (a record-only check has none).
  * `skips`: why the row skips the behaviour (its evals weren't in its run), or undefined.
@@ -75,7 +75,9 @@ const attemptsFor = (row: HarnessRow) =>
 
 /** Why a row skips the plugin behaviours: reeval places no plugins on its harness yet. */
 const noPlugins = (row: HarnessRow) =>
-  row.plugin ? undefined : `reeval places no plugins on ${harnessOf(row)} yet (its row has no plugin)`
+  row.plugin
+    ? undefined
+    : `reeval places no plugins on ${harnessOf(row)} yet (its row has no plugin)`
 
 /** Why a row skips a plugin behaviour for a part its harness doesn't load. */
 const withoutPart = (part: PluginPart, what: string) => (row: HarnessRow) =>

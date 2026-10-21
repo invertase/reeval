@@ -55,7 +55,7 @@ export default defineConfig({
 
 Build its image once with `reeval image build` in a project whose config uses `claudeCode()`.
 
-reeval ships the adapter with one fix, which its image bakes: 1.0.160 never reports the served model, because its bridge starts the stream on the `command_lifecycle` message Claude Code sends before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.6c1cff12` names that patch.
+reeval ships the adapter with one fix, which its image bakes: 1.0.160 never reports the served model, because its bridge starts the stream on the first message, and the `command_lifecycle` message and a plugin's `SessionStart` hook messages come before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.b17cde50` names that patch.
 
 ## The key
 
@@ -90,6 +90,28 @@ The agent runs with every permission granted, inside the sandbox.
 | Rules | `CLAUDE.md` in the workspace |
 | Skills | `~/.claude/skills`, or `.claude/skills` in the workspace with `placement: 'workspace'` |
 | MCP servers | Passed to the CLI in the `.mcp.json` shape |
+| Plugins | Every part but `rules`, enabled from `~/.claude/settings.json` (below) |
+
+## Plugins
+
+```json title="~/.claude/settings.json"
+{
+  "extraKnownMarketplaces": {
+    "reeval": {
+      "source": { "source": "directory", "path": "/home/reeval/.reeval/plugins" }
+    }
+  },
+  "enabledPlugins": { "review@reeval": true }
+}
+```
+
+reeval copies each plugin to `~/.reeval/plugins/<name>/`, lists them in a `reeval` marketplace there (`.claude-plugin/marketplace.json`) and enables them in Claude Code's settings. Claude Code loads each whole, namespaced: the subagent `review:reviewer`, the MCP tool `mcp__plugin_review_docs__<tool>`.
+
+Claude Code starts a plugin's MCP servers itself, so reeval leaves them out of the config it passes. It can't fill in a host variable there, so a plugin server that reads one is refused at plan time; declare that server in `mcp`. A plugin's `rules/` aren't read by Claude Code, so the plan refuses a plugin that keeps them:
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on claude-code:claude-sonnet-5: Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell
+```
 
 ## Tokens
 

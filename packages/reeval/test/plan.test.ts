@@ -380,7 +380,7 @@ evaluate('reviews', { environment: review }, async () => {})
       'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
       'plugins/review/rules/style.md': 'Write small functions.\n',
       'plugins/review/.mcp.json': JSON.stringify({
-        mcpServers: { docs: { command: 'docs-server', env: { DOCS_TOKEN: '${DOCS_TOKEN}' } } },
+        mcpServers: { docs: { command: 'docs-server', env: { DOCS_TOKEN: `${'$'}{DOCS_TOKEN}` } } },
       }),
     }
     for (const [factory, model, id, name] of [

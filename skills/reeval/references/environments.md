@@ -92,9 +92,11 @@ Plugins: `plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] 
 `plugin.git(repo, { ref, path })` and `plugin.npm(spec)`). A plugin is Claude Code's layout:
 `.claude-plugin/plugin.json` plus `skills/`, `agents/`, `commands/`, `hooks/hooks.json`,
 `.mcp.json`, `rules/`. Its MCP servers join `mcp` as `<plugin>:<server>` (call them from the
-fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`. No
-real harness loads plugins yet: `--dry-run` exits 2 naming the harness, so use the fake harness
-or keep plugins off real cells. `build` is refused for now; a server run with `npx`/`uvx` needs
+fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`.
+Claude Code and Grok Build load every part but `rules` (narrow with `only`), namespaced
+(`review:reviewer`), and start the plugin's MCP servers themselves, so a plugin server reading a
+host variable is refused there: declare it in `mcp`. Other real harnesses refuse plugins
+(`--dry-run` exits 2 naming the harness), so keep plugins off their cells. `build` is refused for now; a server run with `npx`/`uvx` needs
 its registry in `egress`, or install it in the image.
 
 A named env is a total override: no skills, files or sandbox inherit from the config

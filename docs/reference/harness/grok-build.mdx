@@ -42,13 +42,14 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `XAI_API_KEY` (an xAI API key) |
-| Adapter | `@reeval/harness-grok-build` 0.1.0 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| Adapter | `@reeval/harness-grok-build` 0.1.1 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | Grok Build 1.0.62, from npm's `@xai-official/grok-linux-*`, checked against its sha512 |
 | Sandbox | `docker()` only |
 | Image | `reeval-sandbox:grok-build-0.1.1` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.grok/skills` in Grok's own home (below) |
 | Skills (`placement: 'workspace'`) | `.grok/skills` in the workspace |
+| Plugins | Every part but `rules`, with `--plugin-dir` (below) |
 | Egress hosts added | `api.x.ai` |
 | Tokens | The turn's, from Grok's prompt response |
 
@@ -90,6 +91,16 @@ Every call, the session's title included, is on the run's model, and Grok makes 
 Grok runs with a private home, `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home`, so its config and home skills live there, not in the sandbox user's `~/.grok`. The attempt's `context` lists them under that path.
 
 MCP servers go to Grok over ACP's `session/new`, as stdio, `http` or `sse` servers. Grok offers them to the model through its `search_tool` and `use_tool` tools; the transcript names each call `mcp__<server>__<tool>`, with the tool's own input.
+
+## Plugins
+
+```sh
+grok agent --no-leader --plugin-dir /home/reeval/.reeval/plugins/review stdio
+```
+
+reeval copies each plugin to `~/.reeval/plugins/<name>/` and starts Grok with a `--plugin-dir` for each, which Grok trusts, so its hooks and MCP servers start unprompted. `--no-leader` keeps the session in its own process, which is the one that reads the flag. Grok loads each plugin whole, namespaced: the subagent `review:reviewer`.
+
+Grok starts a plugin's MCP servers itself, under the plugin's own server names, so reeval leaves them out of `session/new`; the transcript still names a call `mcp__<server>__<tool>`. It can't fill in a host variable there, so a plugin server that reads one is refused at plan time; declare that server in `mcp`. Grok doesn't read a plugin's `rules/`, so the plan refuses a plugin that keeps them, as for [Claude Code](/reference/harness/claude-code#plugins).
 
 ## Errors
 
