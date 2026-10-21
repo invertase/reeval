@@ -429,4 +429,55 @@ test('resolving for a real harness refuses the plugin, and an http server egress
     resolveEnvironment(env, {}, root, 'e', 'AGENTS.md', 'allow-all', undefined, { allowed: [] }),
     /the review plugin's MCP server "search" is at search\.example\.com, which egress doesn't allow/,
   )
+  process.env.DOCS_TOKEN = 'docs-token'
+  process.env.SEARCH_KEY = 'search-key'
+  try {
+    const r = await resolveEnvironment(env, {}, root, 'e', 'AGENTS.md', 'deny-all', undefined, {
+      allowed: ['*.example.com'],
+    })
+    assert.deepEqual(r.record.mcp, ['review:docs', 'review:search'], 'a wildcard allows the host')
+  } finally {
+    delete process.env.DOCS_TOKEN
+    delete process.env.SEARCH_KEY
+  }
+})
+
+test('one environment listing two plugins of one name is refused, not one silently dropped', async () => {
+  const root = tmp()
+  const a = review(join(root, 'a'))
+  const b = write(join(root, 'b'), {
+    '.claude-plugin/plugin.json': '{"name":"review"}',
+    'skills/tidy/SKILL.md': skillMd('tidy'),
+  })
+  const env = defineEnvironment('both', ({ plugin }) => ({
+    plugins: [plugin.local(a), plugin.local(b)],
+  }))
+  await assert.rejects(resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md'), {
+    message: `environment both (e): environment both lists two plugins named "review", plugin.local('a') and plugin.local('b'): rename one, or leave one out`,
+  })
+})
+
+test('a variable in a plugin server’s command or args, other than CLAUDE_PLUGIN_ROOT, is refused', () => {
+  const dir = write(tmp(), {
+    '.claude-plugin/plugin.json': '{"name":"vars"}',
+    '.mcp.json': JSON.stringify({
+      docs: { command: 'node', args: [`${ref('CLAUDE_PLUGIN_ROOT')}/s.mjs`, ref('HOME')] },
+    }),
+  })
+  assert.throws(() => readPlugin(dir, 'x'), {
+    name: 'PluginProblem',
+    message: `the vars plugin's MCP server "docs": "${ref('HOME')}" in .mcp.json names a variable; reeval fills in only ${ref('CLAUDE_PLUGIN_ROOT')} in a command and its args, so pass a host variable through env, e.g. "env": { "TOKEN": "${ref('TOKEN')}" }`,
+  })
+})
+
+test('a plugin server whose <plugin>:<server> key mcp already has is refused on every placement', () => {
+  const p = readPlugin(review(), 'x', ['mcp'])
+  for (const kind of ['fake', 'claude-code'] as const) {
+    const run = () => refusedPlugins({ kind } as never, [p], { skills: [], mcp: ['review:docs'] })
+    assert.equal(
+      kind === 'fake' ? run() : loading(kind, ['mcp'], run),
+      `the review plugin's MCP server "docs" would join mcp as review:docs, which mcp already names: rename mcp["review:docs"]`,
+      kind,
+    )
+  }
 })

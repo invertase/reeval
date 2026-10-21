@@ -767,8 +767,9 @@ const quoted = (parts: readonly PluginPart[]) => parts.map((p) => `'${p}'`).join
 
 /**
  * Why a harness's agent can't take the plugins, in the agent's own words: a part it doesn't
- * load, a plugin MCP server it refuses (named `<plugin>:<server>`), or, where it takes plugin
- * items flat, a skill or MCP server whose name another already has. `own` names the
+ * load, a plugin MCP server it refuses (named `<plugin>:<server>`) or whose `<plugin>:<server>`
+ * key `mcp` already has, or, where it takes plugin items flat, a skill or MCP server whose name
+ * another already has. `own` names the
  * environment's own skills and MCP servers, and `unread` the plugins not fetched yet (git and
  * npm ones, at plan time) by their call. Undefined when it can take them.
  */
@@ -808,6 +809,14 @@ export function refusedPlugins(
     } catch (error) {
       if (error instanceof InfraError) return error.message
       throw error
+    }
+  }
+  for (const p of plugins) {
+    for (const server of Object.keys(p.mcp)) {
+      const key = pluginServerName(p.name, server)
+      if (own.mcp.includes(key)) {
+        return `the ${p.name} plugin's MCP server "${server}" would join mcp as ${key}, which mcp already names: rename mcp["${key}"]`
+      }
     }
   }
   const layout = layoutOf(harness)

@@ -8,6 +8,7 @@ import { parseDuration } from './duration.ts'
 import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
 import {
+  duplicateLocalPlugin,
   fetchesAtStart,
   layeredPlugins,
   localPlugin,
@@ -269,6 +270,8 @@ function planPlugins(
     else unread.push(call)
     labels.push(p ? `${p.name} (${p.kept.join(', ')})` : pluginSourceLabel(source, root))
   }
+  const twice = duplicateLocalPlugin(layers, root)
+  if (twice) return { refusal: twice, notes: [], labels }
   const own = {
     skills: localSkills(layers, root),
     mcp: [...new Set(layers.flatMap((l) => Object.keys(l.spec.mcp ?? {})))],
