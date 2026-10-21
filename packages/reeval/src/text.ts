@@ -15,6 +15,12 @@ export function clip(text: string, max: number): string {
   return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`
 }
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: the control characters are what it removes
+const CONTROL = /[\u0000-\u001f\u007f-\u009f]/g
+
+/** Text as one printable line: control characters, escapes included, and whitespace runs become a space. */
+export const oneLine = (text: string) => text.replace(CONTROL, ' ').replace(/\s+/g, ' ').trim()
+
 /** A failure's text keeps at most this much: its start (the reason) and its end (the output's tail). */
 export const FAILURE_CAP = 16 * 1024
 

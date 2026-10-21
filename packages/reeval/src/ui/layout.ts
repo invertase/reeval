@@ -6,7 +6,7 @@
 // remove a fact row; written for other facts, they're left out with a note.
 import { factsHash } from '../insights/hash.ts'
 import type { InsightSlots } from '../insights/input.ts'
-import { clip } from '../text.ts'
+import { clip, oneLine } from '../text.ts'
 import { formatTokens } from '../usage.ts'
 import { formatCount, formatSeconds } from '../view/effort.ts'
 import type { EvalInsight, Job, RunInsights } from '../view/insights.ts'
@@ -700,14 +700,16 @@ function familyBlock(
 /** The slots an eval's insight fills, or none without one. */
 function slotsFor(insight: EvalInsight | null): Slots {
   if (!insight) return NO_SLOTS
-  const rows = new Map((insight.rows ?? []).map((r) => [r.row, r.text]))
+  const rows = new Map((insight.rows ?? []).map((r) => [r.row, oneLine(r.text)]))
   const choose = insight.intent.job === 'choose'
   const named = (cells: CellResult[]) => {
     if (!choose) return []
     const counts = new Map<string, number>()
     for (const n of insight.namedTools ?? []) {
       if (!cells.some((cell) => n.attempt.startsWith(`${cell.path}#`))) continue
-      for (const tool of new Set(n.tools)) counts.set(tool, (counts.get(tool) ?? 0) + 1)
+      for (const tool of new Set(n.tools.map(oneLine))) {
+        counts.set(tool, (counts.get(tool) ?? 0) + 1)
+      }
     }
     return [...counts]
       .map(([tool, tries]) => ({ tool, tries }))
@@ -716,7 +718,7 @@ function slotsFor(insight: EvalInsight | null): Slots {
   return {
     row: (path) => rows.get(path) ?? null,
     named,
-    subject: choose ? (insight.intent.subject.tool ?? null) : null,
+    subject: choose && insight.intent.subject.tool ? oneLine(insight.intent.subject.tool) : null,
   }
 }
 
@@ -729,8 +731,8 @@ export function evalBlock(
 ): string[] {
   const shape = layout(insight?.intent.job ?? 'other', e.across, e.family, false)
   const slots = slotsFor(insight)
-  const answer = insight?.answer ? [`  ${insight.answer.text}`] : []
-  const findings = (insight?.findings ?? []).map((f) => `  ${f.text}`)
+  const answer = insight?.answer ? [`  ${oneLine(insight.answer.text)}`] : []
+  const findings = (insight?.findings ?? []).map((f) => `  ${oneLine(f.text)}`)
   if (shape.family) {
     const [head = '', ...rest] = familyBlock(c, e, shape.kind, verbose, slots)
     return [head, ...answer, ...rest, ...findings]
@@ -835,7 +837,7 @@ export function render(
     ...suite.errors.flatMap((error) => [c.red(`error: ${error}`), '']),
     ...blocks,
     ...(blocks.length ? [''] : []),
-    ...(fresh?.headline ? [fresh.headline.text] : []),
+    ...(fresh?.headline ? [oneLine(fresh.headline.text)] : []),
     ...insightNotes(c, suite, insights, fresh, opts.verbose),
     ...(opts.notes ?? []),
     tallyLine(c, suite.tally),

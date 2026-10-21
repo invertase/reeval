@@ -414,6 +414,15 @@ describe('insights in the layouts', () => {
     assert.equal(stale.replace(/\n.*insights left out.*/, ''), plain)
   })
 
+  test('a hand-edited sentence prints on one line, with no escape sequences', () => {
+    const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
+    assert.ok(stored.headline)
+    const edited = { ...stored, headline: { ...stored.headline, text: 'Two\nlines \u001b[2J.' } }
+    const out = render(suite, edited, { color: false, verbose: false, hint: false })
+    assert.ok(out.includes('Two lines [2J.'))
+    assert.ok(!out.some((l) => l.includes('\u001b')))
+  })
+
   test('factsHash is the canonical JSON of the facts, so key order never changes it', () => {
     assert.equal(canonicalJson({ b: 1, a: [{ d: 2, c: 3 }] }), '{"a":[{"c":3,"d":2}],"b":1}')
     const reordered = Object.fromEntries(Object.entries(suite).reverse()) as typeof suite
