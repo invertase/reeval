@@ -495,6 +495,8 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
     force: !!flags.force,
+    /** `--no-insights` turns them off for this run. */
+    insights: !flags['no-insights'],
     verbosity: verbosityOf(flags),
     configFile: configLabel(path),
     /** Named in the plan line when the project root isn't the current directory. */
@@ -645,9 +647,8 @@ async function executeRun(
     }),
   ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
-    './plan.ts'
-  )
+  const { buildPlan, checkAttemptBudget, planDocument, planInsights, planLine, planTable } =
+    await import('./plan.ts')
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let preflightStop: Error | undefined
@@ -685,6 +686,7 @@ async function executeRun(
       root: config.root,
       historyDir: config.history.dir,
       questionModel: models?.questionModelLabel(config) ?? null,
+      insights: await planInsights(config, setup.insights),
     })
     plan.runId = runId
     if (completed.size) plan.resume = { runId, completed: completed.size }
@@ -728,6 +730,12 @@ async function executeRun(
         const names = down.map((e) => engineSpec(e).name).join(' and ')
         lines.push(`images  not checked: ${names} ${down.length === 1 ? 'is' : 'are'} not running`)
       }
+    }
+    if (setup.dryRun && plan.insights) {
+      const { formatTokens } = await import('./usage.ts')
+      lines.push(
+        `insights  ${plan.insights.model} · up to ${formatTokens(plan.insights.maxTokens)} tokens · ${plan.insights.timeout} after the last attempt`,
+      )
     }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
     lines.push(...plan.hints.map((h) => `hint: ${h}`))
