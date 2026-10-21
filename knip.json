@@ -10,10 +10,10 @@
       "entry": [
         "scripts/**/*.{mjs,ts}",
         "reeval*.config.ts",
-        "evals/*/*.{eval.ts,config.ts}",
-        "evals/*/scripts/*.mjs"
+        "evals/*/*.eval.ts",
+        "evals/*/utils/scripts/*.mjs"
       ],
-      "ignore": ["evals/*/fixtures/**", "evals/*/oracle/**"],
+      "ignore": ["fixtures/**"],
       "ignoreBinaries": ["report"],
       "ignoreDependencies": ["jiti"]
     },
