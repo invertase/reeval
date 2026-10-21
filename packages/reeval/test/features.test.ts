@@ -1561,6 +1561,43 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/codex-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'codex',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.includes('~/.agents/skills/house-style/SKILL.md'), JSON.stringify(seen))
+    },
+  },
+  {
+    dir: 'harness/goose-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'goose',
+    env: 'house',
+    canary: /expected 'Loaded skills: house-style; plugins: …' not to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes(
+          '~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills/house-style/SKILL.md',
+        ),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
     dir: 'harness/antigravity-rules',
     tiers: ['fake', 'docker'],
     image: 'antigravity',
