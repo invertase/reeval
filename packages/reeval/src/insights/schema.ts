@@ -5,7 +5,7 @@
 import { z } from 'zod'
 
 /** Bumped when a prompt or output schema changes: older insights were asked differently. */
-export const INSIGHTS_PROMPT_VERSION = 'insights-v4'
+export const INSIGHTS_PROMPT_VERSION = 'insights-v5'
 
 const sentence = z.object({
   text: z.string(),

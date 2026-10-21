@@ -12,10 +12,15 @@ import type { RunRecord } from '../src/history/types.ts'
 import { admit, estimate, FIRST_ESTIMATE, ledger, reserve, settle } from '../src/insights/budget.ts'
 import { generateInsights, INSIGHT_OUTPUT_TOKENS, insightEvals } from '../src/insights/generate.ts'
 import { canonicalJson, factsHash } from '../src/insights/hash.ts'
-import { attemptTexts, evalFacts, type InsightFact, type InsightInput } from '../src/insights/input.ts'
-import { type Citable, checkSentence } from '../src/insights/validate.ts'
+import {
+  attemptTexts,
+  evalFacts,
+  type InsightFact,
+  type InsightInput,
+} from '../src/insights/input.ts'
 import { byPriority, insightTier } from '../src/insights/priority.ts'
 import { trimInput } from '../src/insights/trim.ts'
+import { type Citable, checkSentence } from '../src/insights/validate.ts'
 import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
 import { colors } from '../src/ui/colors.ts'
 import { evalBlock, render, slotsOf } from '../src/ui/layout.ts'
@@ -106,7 +111,7 @@ describe('the insights validator', () => {
   test('the recipe insights pass every check, as the with-insights entry holds them', async () => {
     const doc = await generate(recipeInsights)
     assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
-    assert.equal(doc.promptVersion, 'insights-v4')
+    assert.equal(doc.promptVersion, 'insights-v5')
     const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
     assert.deepEqual(
       sentencesOf(doc),
