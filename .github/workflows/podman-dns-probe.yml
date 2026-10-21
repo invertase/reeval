@@ -8,56 +8,10 @@ permissions:
   contents: read
 
 jobs:
-  raw:
-    name: probe (raw podman)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    steps:
-      - name: host resolver
-        run: |
-          podman info --format '{{.Version.Version}} rootless={{.Host.Security.Rootless}} {{.Host.NetworkBackend}} slirp={{.Host.Slirp4NetNS.Executable}} pasta={{.Host.Pasta.Executable}}'
-          ls -l /etc/resolv.conf; cat /etc/resolv.conf
-          echo ---; cat /run/systemd/resolve/resolv.conf || true
-          echo ---; resolvectl status || true
-          podman pull -q docker.io/library/debian:bookworm-slim
-      - name: open container alone
-        run: |
-          for i in $(seq 1 40); do
-            podman run --rm --network bridge -e I=$i debian:bookworm-slim sh -c \
-              '[ "$I" = 1 ] && cat /etc/resolv.conf; s=$(date +%s); getent hosts example.com >/dev/null; echo "alone $I dns=$? $(( $(date +%s)-s ))s"' 2>&1 | grep -v 'shared mount' || true
-          done
-      - name: open container beside a disconnected one
-        run: |
-          slirp() { pgrep -f slirp4netns | tr '\n' ' '; }
-          for i in $(seq 1 60); do
-            b=$(podman run -d --rm --network bridge debian:bookworm-slim sleep 600)
-            before=$(slirp)
-            podman network disconnect -f podman "$b" &
-            a=$(podman run -d --rm --network bridge debian:bookworm-slim sleep 600)
-            wait
-            out=$(podman exec "$a" sh -c 's=$(date +%s); getent hosts example.com >/dev/null; r=$?; echo "dns=$r $(( $(date +%s)-s ))s"; [ $r = 0 ] || cat /etc/resolv.conf | tr "\n" " "')
-            wait
-            echo "beside $i $out slirp: $before -> $(slirp)"
-            podman rm -f -t 0 "$a" "$b" >/dev/null 2>&1 &
-          done
-          wait
-      - name: open container while another starts and stops
-        run: |
-          slirp() { pgrep -f slirp4netns | tr '\n' ' '; }
-          for i in $(seq 1 40); do
-            a=$(podman run -d --rm --network bridge debian:bookworm-slim sleep 600)
-            ( for k in 1 2 3; do podman run --rm --network bridge debian:bookworm-slim true; done ) &
-            before=$(slirp)
-            out=$(podman exec "$a" sh -c 's=$(date +%s); getent hosts example.com >/dev/null; r=$?; echo "dns=$r $(( $(date +%s)-s ))s"')
-            wait
-            echo "churn $i $out slirp: $before -> $(slirp)"
-            podman rm -f -t 0 "$a" >/dev/null 2>&1
-          done
-
   fixture:
     name: probe (deny-all fixture loop)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       REEVAL_TEST_ENGINE: podman
       REEVAL_TEST_REQUIRE_PODMAN: '1'
@@ -96,7 +50,9 @@ jobs:
         working-directory: packages/reeval
         run: |
           (while true; do echo "$(date +%T) $(pgrep -f slirp4netns | tr '\n' ' ')"; sleep 1; done) > /tmp/slirp.log &
-          for i in $(seq 1 14); do
+          for i in $(seq 1 9); do
+            (cd ../sandbox-docker && pnpm test > /tmp/sd.log 2>&1) || echo "sandbox-docker $i failed"
+            echo "sd $i done $(date +%T)"
             node --test --experimental-strip-types --no-warnings --test-name-pattern='\[podman\]' test/features.test.ts > /tmp/run.log 2>&1 \
               && echo "run $i ok $(date +%T)" || { echo "run $i FAIL $(date +%T)"; grep -E "not ok|dns=|turn 1 done|took=" /tmp/run.log | head -12; }
           done
