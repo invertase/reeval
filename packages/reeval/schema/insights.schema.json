@@ -162,7 +162,7 @@
           "required": ["at", "edit"]
         },
         "id": {
-          "description": "sha256(kind, evalId, the eval's sources hash): one remark per kind per eval version.",
+          "description": "sha256(kind, evalId, the eval's sources hash, and for `slow-mcp-start` the server): one remark per kind (and server) per eval version.",
           "type": "string"
         },
         "kind": {

@@ -104,7 +104,10 @@ export type Sentence = { text: string; cites: string[] }
 
 /** A remark about the eval's quality, not about the agent. Anything that fails a gate is dropped. */
 export type Remark = {
-  /** sha256(kind, evalId, the eval's sources hash): one remark per kind per eval version. */
+  /**
+   * sha256(kind, evalId, the eval's sources hash, and for `slow-mcp-start` the server): one remark
+   * per kind (and server) per eval version.
+   */
   id: string
   evalId: string
   /** Closed set; an unknown kind is dropped. There is no general or free-form kind. */

@@ -140,7 +140,7 @@ function checkNeverFails(
         entry &&
         u.cells.every((cell) => {
           const k = cell.checks.find((x) => x.label === label)
-          if (!k || k.outcome.status !== 'ran') return false
+          if (k?.outcome.status !== 'ran') return false
           if (k.outcome.failed || k.outcome.errored || !k.outcome.passed) return false
           if (cell.vs && recordCheck(entry, cell.key, label)?.verdict !== 'both-pass') return false
           const s = history.streak(u.id, cell.key, label, ctx.comparable(entry, cell.key))
