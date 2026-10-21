@@ -31,12 +31,14 @@ import { DEFAULT_QUESTION_STATE } from '../src/compare/state.ts'
 import type { EngineEval } from '../src/engine/node.ts'
 import { TimeoutError } from '../src/errors.ts'
 import { cellOutcome, fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
+import { familiesOf } from '../src/history/families.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
 import { traceSources } from '../src/history/sources.ts'
-import type { FingerprintParts } from '../src/history/types.ts'
+import type { EvalEntry, FamilyLift, FingerprintParts } from '../src/history/types.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
 import {
+  containsZero,
   liftInterval,
   mcnemar,
   meanInterval,
@@ -58,6 +60,36 @@ import {
 
 const near = (actual: number, expected: number, what: string) =>
   assert.ok(Math.abs(actual - expected) < 5e-4, `${what}: ${actual} is not ${expected}`)
+
+/** One family case: variant passes, variant counted, control passes, control counted. */
+type FamilyCase = [number, number, number, number]
+
+/** The pooled lift of variant cell `v` over control `c` across `cases`. */
+function familyLift(cases: FamilyCase[]): FamilyLift {
+  const attempts = (cell: string, pass: number, counted: number) =>
+    Array.from({ length: counted }, (_, i) => ({
+      cell,
+      outcome: i < pass ? 'pass' : 'fail',
+      activity: { tools: 1, fileEdits: 0 },
+      timings: { agentMs: 1000 },
+    }))
+  const evals = cases.map(
+    ([vPass, vCounted, cPass, cCounted], i) =>
+      ({
+        file: 'family.eval.ts',
+        family: { id: 'family', name: 'family', case: i, cases: cases.length },
+        cells: [
+          { key: 'v', role: 'variant', harness: 'cursor', sandbox: 'docker' },
+          { key: 'c', role: 'control', harness: 'cursor', sandbox: 'docker' },
+        ],
+        attempts: [...attempts('v', vPass, vCounted), ...attempts('c', cPass, cCounted)],
+      }) as unknown as EvalEntry,
+  )
+  const [family] = familiesOf(evals, () => undefined)
+  const lift = family?.lifts[0]
+  assert.ok(lift, 'the family has a lift')
+  return lift
+}
 
 describe('Wilson interval for one pass rate', () => {
   // Reference values: Wilson score interval, 95%, as in Newcombe (1998) table I.
@@ -144,9 +176,43 @@ describe("paired lift over a pooled family's cases", () => {
 
   test("McNemar's exact p is the sign test on the discordant pairs", () => {
     near(mcnemar(12, 2), 0.0129, 'StatsDirect: 12 vs 2')
-    assert.equal(mcnemar(6, 0), 2 * 0.5 ** PAIRED_MIN, 'six discordant pairs first reach p < 0.05')
+    const six = mcnemar(6, 0)
+    assert.ok(Math.abs(six - 2 * 0.5 ** PAIRED_MIN) < 1e-12, 'six discordant pairs reach p < 0.05')
     assert.ok(mcnemar(5, 0) > 0.05)
+    assert.ok(Math.abs(mcnemar(5, 0) - 0.0625) < 1e-12)
+    assert.ok(Math.abs(mcnemar(10, 2) - 0.0386) < 1e-4)
     assert.equal(mcnemar(0, 0), 1)
+  })
+
+  test("McNemar's p stays finite from 1,024 discordant pairs", () => {
+    const even = mcnemar(512, 512)
+    assert.ok(Math.abs(even - 1) < 1e-6, `512 vs 512: ${even}`)
+    const close = mcnemar(1500, 1400)
+    assert.ok(Math.abs(close - 0.066) < 1e-3, `SciPy: 1500 vs 1400 is 0.066, not ${close}`)
+    assert.ok(Number.isFinite(mcnemar(600, 500)))
+    const lopsided = mcnemar(1100, 5)
+    assert.ok(lopsided > 0 && lopsided < 1e-300, `1100 vs 5: ${lopsided}`)
+  })
+
+  test('an interval that touches 0 contains it', () => {
+    assert.equal(containsZero(-0.5, 0.5), true)
+    assert.equal(containsZero(-0.883, 0), true)
+    assert.equal(containsZero(0, 0.2), true)
+    assert.equal(containsZero(0, 0), true)
+    assert.equal(containsZero(0.001, 0.2), false)
+    assert.equal(containsZero(-0.2, -0.001), false)
+  })
+
+  test('a family interval rounded to end at 0 is within noise', () => {
+    // Eight cases at one attempt a side: the variant wins one, the control six, one both fail.
+    const family = familyLift([
+      [1, 1, 0, 1],
+      ...Array.from({ length: 6 }, (): FamilyCase => [0, 1, 1, 1]),
+      [0, 1, 0, 1],
+    ])
+    assert.ok(family.interval.hi === 0, `rounds to end at 0: ${family.interval.hi}`)
+    assert.equal(family.verdict, 'noise')
+    assert.equal(family.withinNoise, true)
   })
 
   test('the t interval over per-case differences', () => {

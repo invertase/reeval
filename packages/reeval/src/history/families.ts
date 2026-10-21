@@ -4,6 +4,7 @@
 // test); at several, a t interval over the cases' pass@1 differences, so attempts within a case
 // are never counted as independent.
 import {
+  containsZero,
   mcnemar,
   meanInterval,
   median,
@@ -173,7 +174,7 @@ function liftOf(
     points: round3(points),
     interval: range,
     p,
-    withinNoise: range.lo < 0 && range.hi > 0,
+    withinNoise: containsZero(range.lo, range.hi),
     verdict,
     ...(minLift !== undefined ? { minLift } : {}),
     outcome: minLift !== undefined && range.lo < minLift ? 'fail' : 'pass',

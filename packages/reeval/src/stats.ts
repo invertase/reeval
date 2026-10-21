@@ -40,6 +40,9 @@ export function liftInterval(
   }
 }
 
+/** A 95% interval is within noise when it contains 0; touching 0 does not exclude it. */
+export const containsZero = (low: number, high: number) => low <= 0 && high >= 0
+
 /** Rounded to three places, as the record stores rates and points. */
 export const round3 = (x: number) => Math.round(x * 1000) / 1000
 
@@ -154,9 +157,15 @@ export function mcnemar(variantOnly: number, controlOnly: number): number {
   const n = variantOnly + controlOnly
   if (n === 0) return 1
   const low = Math.min(variantOnly, controlOnly)
-  let tail = 0
-  for (let i = 0; i <= low; i++) tail += choose(n, i) / 2 ** n
-  return Math.min(1, 2 * tail)
+  // In log space: 2 ** n overflows from n = 1024, and 2 ** -n underflows to 0 above n = 1074.
+  let logTerm = -n * Math.LN2
+  let logTail = logTerm
+  for (let i = 0; i < low; i++) {
+    logTerm += Math.log((n - i) / (i + 1))
+    const top = Math.max(logTail, logTerm)
+    logTail = top + Math.log1p(Math.exp(Math.min(logTail, logTerm) - top))
+  }
+  return Math.min(1, 2 * Math.exp(logTail))
 }
 
 /** Two-sided 95% Student t quantiles for 1 to 30 degrees of freedom. */
