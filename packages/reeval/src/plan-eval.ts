@@ -8,6 +8,8 @@ import { parseDuration } from './duration.ts'
 import { allowedHosts, unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
 import {
+  buildRefusal,
+  builtPlugins,
   duplicateLocalPlugin,
   fetchesAtStart,
   layeredPlugins,
@@ -178,7 +180,13 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
     const workspace = workspaceOf(planned.environment.layers)
     const files = filesOf(planned.environment.layers)
-    const setBy = setByOf(planned)
+    const builds = builtPlugins(planned.environment.layers)
+    const setBy = builds.length
+      ? {
+          ...setByOf(planned),
+          pluginBuilds: `environment ${planned.environment.name}${path ? ` in ${path}` : ''}`,
+        }
+      : setByOf(planned)
     const id = evalId(rankFile, [...groups, name])
     const key = attemptKey(id, planned.cell.key, planned.n)
     const done = ctx.completed?.includes(key)
@@ -201,6 +209,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       ...(workspace ? { workspace } : {}),
       ...(files.length ? { files } : {}),
       ...(pluginLabels.has(planned) ? { plugins: pluginLabels.get(planned) } : {}),
+      ...(builds.length ? { pluginBuilds: builds } : {}),
       plan: skip ? { ...plan, skip } : plan,
       ...(skip ? { skip } : {}),
       ...(family ? { family } : {}),
@@ -240,7 +249,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
 }
 
 /**
- * What the plan can tell of an attempt's plugins before any is fetched: a build (not run yet), a
+ * What the plan can tell of an attempt's plugins before any is fetched: a build outside Docker, a
  * local plugin's content, and the harness's refusal, as a refusal; the commands that fetch a
  * package at start, as notes under `allow-all`; and a label for each plugin. Git and npm plugins
  * are read when the attempt resolves its environment, which refuses them the same way.
@@ -257,15 +266,10 @@ function planPlugins(
   const labels: string[] = []
   for (const source of sources) {
     const call = pluginCall(source, root)
-    if (source.build !== undefined) {
-      return {
-        refusal: `${call} has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker({ install })`,
-        notes: [],
-        labels,
-      }
-    }
     const p = localPlugin(source, root)
     if (p instanceof PluginProblem) return { refusal: p.message, notes: [], labels }
+    const build = buildRefusal(source, planned.sandbox, p?.name, root)
+    if (build) return { refusal: build, notes: [], labels }
     if (p) read.push(p)
     else unread.push(call)
     labels.push(p ? `${p.name} (${p.kept.join(', ')})` : pluginSourceLabel(source, root))
