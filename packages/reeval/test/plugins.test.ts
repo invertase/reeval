@@ -759,17 +759,14 @@ test('only a marketplace on this machine may name a plugin at a path on it', () 
   assert.equal(localMarketplace({ source: 'npm', spec: join(dir, 'plugins.tgz') }), true)
 })
 
-/**
- * A git repository at `dir`, committed, with `v1` tagged on the first commit. Its files check out
- * byte for byte, as Windows' `core.autocrlf` would otherwise turn `\n` into `\r\n` in a clone.
- */
+/** A git repository at `dir`, committed, with `v1` tagged on the first commit. */
 const gitRepo = (dir: string, files: Record<string, string>) => {
   const g = (...args: string[]) =>
     execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
       cwd: dir,
       encoding: 'utf8',
     }).trim()
-  write(dir, { '.gitattributes': '* -text\n', ...files })
+  write(dir, files)
   g('init', '-q', '-b', 'main')
   g('add', '-A')
   g('commit', '-q', '-m', 'v1')
@@ -896,6 +893,32 @@ test('resolving a marketplace entry places that plugin alone and records the mar
     [['remote', `${other.url}#${other.head}:plugin`, 'market']],
     'a marketplace named by its directory is on this machine, and the record names it from the project',
   )
+})
+
+test('a cloned plugin is placed as committed, even where git converts line endings', async () => {
+  const root = tmp()
+  const repo = gitRepo(join(root, 'repo'), {
+    '.claude-plugin/plugin.json': '{"name":"eol"}\n',
+    'commands/lf.md': 'one\ntwo\n',
+  })
+  const config = join(root, 'gitconfig')
+  writeFileSync(config, '[core]\n\tautocrlf = true\n\teol = crlf\n')
+  const before = process.env.GIT_CONFIG_GLOBAL
+  process.env.GIT_CONFIG_GLOBAL = config
+  try {
+    const env = defineEnvironment('eol', ({ plugin }) => ({ plugins: [plugin.git(repo.url)] }))
+    const r = await resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md')
+    assert.deepEqual(
+      r.plugins[0]?.files.map((f) => [f.path, Buffer.from(f.content).toString()]),
+      [
+        ['.claude-plugin/plugin.json', '{"name":"eol"}\n'],
+        ['commands/lf.md', 'one\ntwo\n'],
+      ],
+    )
+  } finally {
+    if (before === undefined) delete process.env.GIT_CONFIG_GLOBAL
+    else process.env.GIT_CONFIG_GLOBAL = before
+  }
 })
 
 test('a git ref that reads as an option is never passed to git as one', async () => {

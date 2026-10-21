@@ -334,6 +334,9 @@ async function git(args: string[], cwd: string, what: string) {
 /** One clone per source and ref per worker process; the commit is recorded. */
 const clones = new Map<string, Promise<{ dir: string; commit: string }>>()
 
+/** A clone checks out the committed bytes, whatever the host's line-ending settings. */
+const AS_COMMITTED = ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf']
+
 function cloneSkills(root: string, url: string, ref: string | undefined) {
   const key = `${url}#${ref ?? ''}`
   let clone = clones.get(key)
@@ -350,8 +353,16 @@ function cloneSkills(root: string, url: string, ref: string | undefined) {
       await mkdir(dir, { recursive: true })
       const what = `Cloning ${url}${ref ? ` at ${ref}` : ''}`
       await git(['init', '-q'], dir, what)
-      await git(['fetch', '-q', '--depth', '1', '--end-of-options', url, ref ?? 'HEAD'], dir, what)
-      await git(['-c', 'advice.detachedHead=false', 'checkout', '-q', 'FETCH_HEAD'], dir, what)
+      await git(
+        [...AS_COMMITTED, 'fetch', '-q', '--depth', '1', '--end-of-options', url, ref ?? 'HEAD'],
+        dir,
+        what,
+      )
+      await git(
+        [...AS_COMMITTED, '-c', 'advice.detachedHead=false', 'checkout', '-q', 'FETCH_HEAD'],
+        dir,
+        what,
+      )
       return { dir, commit: await git(['rev-parse', 'HEAD'], dir, what) }
     })()
     clones.set(key, clone)
