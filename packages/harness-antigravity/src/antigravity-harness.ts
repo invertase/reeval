@@ -37,6 +37,11 @@ import {
   getAntigravityBootstrap,
 } from './antigravity-bootstrap.ts'
 import { type AntigravityEffort, buildAntigravityCommand } from './antigravity-command.ts'
+import {
+  antigravityHooks,
+  antigravityPluginInstall,
+  installedPluginDir,
+} from './antigravity-plugins.ts'
 import { AntigravityStreamTranslator } from './antigravity-stream.ts'
 import { ANTIGRAVITY_BUILTIN_TOOLS, type AntigravityBuiltinTools } from './antigravity-tools.ts'
 
@@ -65,6 +70,12 @@ export type AntigravityHarnessSettings = {
   readonly effort?: AntigravityEffort
   /** MCP servers in the CLI's `mcp_config.json` shape (`command`/`args`/`env` or `serverUrl`/`headers`). */
   readonly mcpServers?: Record<string, unknown>
+  /**
+   * Plugins in Claude Code's layout, by the name their manifest gives and their directory in the
+   * sandbox (absolute), each installed with `agy plugin install` as the session starts. The CLI
+   * loads their skills, subagents, commands (as skills), rules, MCP servers and hooks itself.
+   */
+  readonly plugins?: ReadonlyArray<{ readonly name: string; readonly dir: string }>
   /**
    * Extra keys for the CLI's `settings.json`. `enableTelemetry` defaults to false, and
    * `modelProvider` is always `gemini`.
@@ -113,6 +124,41 @@ const canBroker = (
 ): sandbox is HarnessV1NetworkSandboxSession &
   Required<Pick<HarnessV1NetworkSandboxSession, 'addRequestTransformations'>> =>
   'addRequestTransformations' in sandbox && typeof sandbox.addRequestTransformations === 'function'
+
+/**
+ * Installs one plugin, then writes its hooks where and as the CLI reads them, at the installed
+ * copy's root. Its MCP servers are the plugin's `.mcp.json` as it stands when installed.
+ */
+async function installPlugin(
+  sandbox: HarnessV1NetworkSandboxSession | SandboxSession,
+  cli: string,
+  home: string,
+  plugin: { readonly name: string; readonly dir: string },
+  abortSignal: AbortSignal | undefined,
+) {
+  const installed = installedPluginDir(home, plugin.name)
+  const proc = await sandbox.spawn({
+    command: antigravityPluginInstall(cli, plugin.dir, installed),
+    ...(abortSignal ? { abortSignal } : {}),
+  })
+  const [stdout, stderr] = await Promise.all([tail(proc.stdout), tail(proc.stderr)])
+  const { exitCode } = await proc.wait()
+  if (exitCode !== 0) {
+    throw new Error(
+      `agy plugin install ${plugin.dir} exited ${exitCode}: ${(stderr || stdout).trim()}`,
+    )
+  }
+  const hooks = await sandbox.readTextFile({
+    path: posix.join(plugin.dir, 'hooks', 'hooks.json'),
+    ...(abortSignal ? { abortSignal } : {}),
+  })
+  if (hooks === null) return
+  await sandbox.writeTextFile({
+    path: posix.join(installed, 'hooks.json'),
+    content: `${JSON.stringify(antigravityHooks(plugin.name, JSON.parse(hooks), installed), null, 2)}\n`,
+    ...(abortSignal ? { abortSignal } : {}),
+  })
+}
 
 /**
  * The Antigravity CLI (`agy`) as an AI SDK harness. It has no ACP mode, so each turn is one
@@ -176,6 +222,9 @@ async function startSession(
       ANTIGRAVITY_MCP_CONFIG_FILE,
       `${JSON.stringify({ mcpServers: settings.mcpServers }, null, 2)}\n`,
     )
+  }
+  for (const plugin of settings.plugins ?? []) {
+    await installPlugin(sandbox, cli, home, plugin, abortSignal)
   }
 
   const env: Record<string, string> = {
