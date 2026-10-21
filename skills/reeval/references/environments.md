@@ -88,6 +88,15 @@ A skill is a directory whose `SKILL.md` has YAML frontmatter
 (`name`, `description`; quote values containing `: `). Baking (`from`, `install`, `dockerfile`)
 is `sandbox: docker({ … })` on the environment.
 
+Plugins: `plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] })]` (also
+`plugin.git(repo, { ref, path })` and `plugin.npm(spec)`). A plugin is Claude Code's layout:
+`.claude-plugin/plugin.json` plus `skills/`, `agents/`, `commands/`, `hooks/hooks.json`,
+`.mcp.json`, `rules/`. Its MCP servers join `mcp` as `<plugin>:<server>` (call them from the
+fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`. No
+real harness loads plugins yet: `--dry-run` exits 2 naming the harness, so use the fake harness
+or keep plugins off real cells. `build` is refused for now; a server run with `npx`/`uvx` needs
+its registry in `egress`, or install it in the image.
+
 A named env is a total override: no skills, files or sandbox inherit from the config
 environment.
 

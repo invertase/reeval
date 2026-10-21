@@ -199,6 +199,25 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 | `Workspace git("…"): its token variable GITHUB_TOKEN isn't set. Set it in the environment or .env.local.` | Set the variable `token` names. |
 | `Workspace git("https://gitlab.invalid/acme/app#v1"): couldn't be fetched (unable to access 'https://gitlab.invalid/acme/app/': Could not resolve host: gitlab.invalid)` | The network, after two retries (its `class` is `transient`). A pinned SHA fetched before reruns from the cache offline. |
 
+## Plugins
+
+The plan reads every local plugin and checks each cell's harness can take it, so a plugin reeval can't place exits 2 before any attempt starts, naming the eval and the harness:
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.5: Cursor can't load plugins yet: leave the review plugin out of this cell
+```
+
+| Message after the prefix | Fix |
+|---|---|
+| `Cursor can't load plugins yet: leave the review plugin out of this cell` | No real harness loads plugins yet. Run the eval on the fake harness, or scope the plugin to cells that can take it. |
+| `plugin.local('plugins/bare') has no .claude-plugin/plugin.json` | Point at the plugin's root, the directory with `.claude-plugin/plugin.json`. |
+| `the review plugin has no hooks, so only: ['hooks'] matches nothing (it has skills, mcp)` | Name parts the plugin has in `only`. |
+| `plugin.local('plugins/review') has a build, which reeval doesn't run yet: leave build out, and install what the plugin needs in the image with docker({ install })` | Leave `build` out. |
+| `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: install it in the image (docker({ install })), or allow the host in egress` | Install the server in the image, or add the registry to `egress`. Under `allow-all` this is a note in the plan instead. |
+| `the review plugin's manifest sets "skills", which reeval doesn't read: keep each part in its default place (skills/, agents/, commands/, hooks/hooks.json)` | Move the part to its default directory. |
+
+A `plugin.git` or `plugin.npm` plugin is fetched when an attempt starts, so the same problems with it fail its attempts as infra errors (exit 3), prefixed by `environment <name> (<eval>)`. An http plugin MCP server whose host a restricted egress policy doesn't allow fails the same way.
+
 ## During an attempt
 
 | Message | Fix |

@@ -261,6 +261,7 @@ const RECORD_TYPES = [
   'ContextFile',
   'Cell',
   'EnvironmentRecord',
+  'PluginRecord',
   'EgressRecord',
   'AttemptImage',
   'PhaseTimings',
