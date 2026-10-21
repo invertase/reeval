@@ -90,7 +90,7 @@ export function insights(input: FakeInsightsInput): FakeInsights {
       {
         kind: off('kind') ? 'vague-name' : kind,
         text: spec.text ?? '',
-        source: { at: off('line') ? 'L1' : at, quote: spec.quote },
+        source: { at: off('line') ? `L${Number(at.slice(1)) + 1}` : at, quote: spec.quote },
         evidence: off('evidence') || !fact ? [] : [fact.id],
         fix: off('fix') ? null : { at, edit: spec.edit ?? '' },
       },

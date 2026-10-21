@@ -4,7 +4,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { RunRecord } from '../src/history/types.ts'
+import type { EvalEntry, RunRecord } from '../src/history/types.ts'
+import { sha256 } from '../src/ids.ts'
+import type { InsightInput } from '../src/insights/input.ts'
+import { gateRemarks } from '../src/insights/remarks.ts'
 import { modelRubric, rubric, rubricHash, rubricKinds } from '../src/insights/rubric.ts'
 import { insightsPromptVersion } from '../src/insights/schema.ts'
 import { defaultBranch } from '../src/remarks/index.ts'
@@ -703,7 +706,7 @@ describe('model remarks', () => {
       ['adds a cache › remark vague-name', 'is kind "vague-name", which the model can\'t raise'],
       [
         'finds the bug › remark judge-leaks-answer',
-        'quotes "off-by-one in parse()", which isn\'t on line 1 of evals/kinds.eval.ts',
+        'quotes "off-by-one in parse()", which isn\'t on line 22 of evals/kinds.eval.ts',
       ],
     ])
     const block = remarksBlock(r.stdout) ?? ''
@@ -814,5 +817,122 @@ describe('the eval rubric', () => {
     assert.match(insightsPromptVersion(), new RegExp(`-${rubricHash()}$`))
     assert.deepEqual(rubricKinds(modelRubric(MODEL_REMARK_KINDS)), [...MODEL_REMARK_KINDS])
     assert.deepEqual([...MODEL_REMARK_KINDS].sort(), [...MODEL_KINDS].sort())
+  })
+})
+
+describe('the model remark gates', () => {
+  const FILE = 'evals/a.eval.ts'
+  const BODY = [
+    "import { evaluate, expect } from 'reeval'",
+    '',
+    "evaluate('other', async (c) => {",
+    "  await c.send('Write it.')",
+    '})',
+    '',
+    "evaluate('answers kindly', async (c) => {",
+    "  await c.send('Thank the user.')",
+    "  expect(await c.judge('Is the answer okay?')).toPass()",
+    '})',
+    '',
+  ].join('\n')
+  const shown = (body: string) =>
+    body
+      .split('\n')
+      .slice(6, 10)
+      .map((l, i) => `L${i + 7} ${l}`)
+  const gate = (
+    remarks: Array<Partial<Parameters<typeof gateRemarks>[0][number]>>,
+    { body = BODY, now = body as string | null, entries = 1 } = {},
+  ) =>
+    gateRemarks(
+      remarks.map((r) => ({
+        kind: 'judge-too-loose',
+        text: 'The judge asks whether the answer is okay, which any reply passes.',
+        source: { at: 'L9', quote: 'Is the answer okay?' },
+        evidence: [],
+        fix: null,
+        ...r,
+      })),
+      {
+        input: {
+          call: 'insights',
+          eval: { path: `${FILE} › answers kindly`, name: 'answers kindly', file: FILE },
+          source: { file: FILE, lines: shown(body) },
+        } as InsightInput,
+        entries: Array.from(
+          { length: entries },
+          () => ({ sources: [{ path: FILE, sha256: sha256(body) }] }) as EvalEntry,
+        ),
+        files: new Map([[FILE, now]]),
+      },
+    )
+  const kept = (...args: Parameters<typeof gate>) => gate(...args).kept.length
+  const at = (a: string, quote = 'Is the answer okay?') => ({ source: { at: a, quote } })
+
+  test('keeps a quote verbatim on its line, by L<n>, #L<n> or source:<file>#L<n>', () => {
+    for (const a of ['L9', '#L9', `source:${FILE}#L9`]) {
+      const out = gate([at(a)])
+      assert.deepEqual(out.dropped, [], a)
+      assert.deepEqual(out.kept[0]?.source, {
+        at: `source:${FILE}#L9`,
+        quote: 'Is the answer okay?',
+      })
+    }
+    assert.equal(kept([at('L9', '  Is the answer okay?  ')]), 1, 'trailing whitespace is trimmed')
+    const crlf = BODY.replace(/\n/g, '\r\n')
+    assert.equal(kept([at('L9')], { body: crlf }), 1, 'a CRLF file')
+  })
+
+  test('canary: a kind the model may not raise is dropped', () => {
+    for (const kind of [
+      'flaky-check',
+      'no-baseline',
+      'too-few-tries',
+      'Judge-Too-Loose',
+      ' judge-too-loose',
+      '',
+    ]) {
+      assert.equal(kept([{ kind }]), 0, JSON.stringify(kind))
+    }
+  })
+
+  test('canary: a line that is not the quote’s, or not one the eval was shown, is dropped', () => {
+    for (const a of [
+      'L8',
+      'L10',
+      'L0',
+      'L-9',
+      'L9.0',
+      'L99',
+      'L',
+      'source:L9',
+      `source:${FILE}L9`,
+    ]) {
+      assert.equal(kept([at(a)]), 0, a)
+    }
+    assert.equal(kept([at('L4', "c.send('Write it.')")]), 0, "another eval's line")
+    assert.equal(kept([at('L4', 'await c.send(')]), 0, "a quote another eval's line has too")
+    for (const quote of ['', '   ', 'Is the answer okay?\n  })']) {
+      assert.equal(kept([at('L9', quote)]), 0, JSON.stringify(quote))
+    }
+    assert.equal(kept([at('L9', '})')]), 0, 'a quote shorter than three characters')
+  })
+
+  test('canary: a file that changed, is missing or isn’t the eval’s is dropped', () => {
+    assert.equal(kept([at('L9')], { now: `${BODY}// edited\n` }), 0)
+    assert.equal(kept([at('L9')], { now: null }), 0)
+    for (const path of ['evals/../evals/a.eval.ts', `/abs/${FILE}`, '../a.eval.ts', 'other.ts']) {
+      assert.equal(kept([at(`source:${path}#L9`)]), 0, path)
+    }
+  })
+
+  test('canary: one per kind, an eval the run recorded, and the sentence rules', () => {
+    const two = gate([{}, at('L9', 'answer okay')])
+    assert.equal(two.kept.length, 1)
+    assert.match(two.dropped[0]?.reason ?? '', /second judge-too-loose/)
+    assert.equal(kept([{}], { entries: 0 }), 0)
+    assert.equal(kept([{ text: Array(26).fill('word').join(' ') }]), 0)
+    assert.equal(kept([{ text: 'The judge passes any reply (F2).' }]), 0)
+    assert.equal(kept([{ text: '   ' }]), 0)
   })
 })

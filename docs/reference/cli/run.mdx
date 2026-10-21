@@ -292,7 +292,7 @@ With `analysis.model`, each eval's [insights](/reference/cli/analyze#during-a-ru
 | `name-no-intent` | suggestion | The name is a topic, a ticket id or "test 3" |
 | `compound-judge` | suggestion | One judge question asks two things, and failed |
 
-reeval checks every model remark in code and drops, without asking again, one whose kind isn't in this table, or that has no quote copied exactly from its cited line of the eval's file, unchanged since the run. Its evidence and fix are the model's as written; one with no fix prints `at` and its quoted line. Each dropped remark is in `insights.json`'s `validation.drops` with the reason, and `reeval analyze --insights -v` lists them.
+reeval checks every model remark in code and drops, without asking again, one whose kind isn't in this table, or that has no quote copied exactly from its cited line of the eval's declaration, in a file unchanged since the run. Its evidence and fix are the model's as written; one with no fix prints `at` and its quoted line. Each dropped remark is in `insights.json`'s `validation.drops` with the reason, and `reeval analyze --insights -v` lists them.
 
 ### Once per eval
 

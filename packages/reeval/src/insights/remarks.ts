@@ -1,6 +1,7 @@
 // The gates on the insight model's remarks, in code: a remark is kept only when its kind is one the
 // model may raise, its text keeps the sentence rules, and its `source` quote is verbatim on the
-// cited line of the file as the run saw it (the file's sha256 is the run's). A remark that fails
+// cited line of the file as the run saw it (the file's sha256 is the run's), a line of the eval's
+// declaration the model was shown. A remark that fails
 // a gate is dropped, never asked for again; the severity is its kind's. Its evidence and fix are
 // the model's, carried as written: a fix at no line of the file points at the quoted line.
 
@@ -27,7 +28,7 @@ export type RemarkGate = {
 }
 
 const MIN_QUOTE_CHARS = 3
-const LINE_AT = /^(?:source:(.+))?#?L(\d+)$/
+const LINE_AT = /^(?:source:(.+)#|#)?L(\d+)$/
 const words = (s: string) => s.match(/\S+/g)?.length ?? 0
 
 /** `source:<file>#L<n>`, `#L<n>` or `L<n>` (in the eval's file) as a path and a 1-based line. */
@@ -48,6 +49,8 @@ export function gateRemarks(
   const { input, entries, files } = gate
   const evalFile = input.source?.file ?? input.eval.file
   const hashes = new Map(entries.flatMap((e) => e.sources.map((s) => [s.path, s.sha256] as const)))
+  // Only the lines the model was shown: any other line of the file is another eval's.
+  const shown = new Set((input.source?.lines ?? []).map((l) => Number(/^L(\d+)/.exec(l)?.[1])))
   const kept: Candidate[] = []
   const dropped: Drop[] = []
   const seen = new Set<string>()
@@ -76,6 +79,9 @@ export function gateRemarks(
     const lines = body.split('\n')
     if (where.line < 1 || where.line > lines.length) {
       return `cites line ${where.line} of ${where.path}, which has ${lines.length}`
+    }
+    if (where.path !== evalFile || !shown.has(where.line)) {
+      return `cites line ${where.line} of ${where.path}, which isn't in the eval's declaration`
     }
     return { ...where, text: lines[where.line - 1] as string }
   }
