@@ -1015,7 +1015,7 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
 
 ## Insights
 
-`reeval analyze <run> --insights` writes `<runId>/insights.json` beside the record, once: delete it to write new ones. `reeval show` prints it with the run. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record.
+`reeval analyze <run> --insights` writes `<runId>/insights.json` beside the record, once: delete it to write new ones. `reeval show` prints it with the run, on one line a sentence. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record. One from a newer reeval, or one that isn't valid JSON (a merge conflict), is skipped with a warning and the run prints without it.
 
 ```json title="evals/.history/<runId>/insights.json (trimmed)"
 {
@@ -1060,7 +1060,7 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
 | `evals[].evalId` | The eval's or family's path: its file and name, `›` between them |
 | `evals[].intent` | The classification: `job` (`choose`, `finish` or `other`), `across`, `question`, `subject` (`tool`, `change`), `name` (`states-intent`, `no-intent` or `contradicts`) and `key`, the hash of what it read |
 | `evals[].answer` | Its answer, at most two sentences, or `null` |
-| `evals[].findings` | Sentences under a choose or finish eval that measures a change |
+| `evals[].findings` | At most three sentences under a choose or finish eval that measures a change |
 | `evals[].rows` | A sentence under each row it names (`row`, a fact path) |
 | `evals[].namedTools` | On a choose eval, the tools each attempt's final message names (`<cell path>#<n>`) |
 | `remarks` | Reserved for later remarks on the run; empty |
