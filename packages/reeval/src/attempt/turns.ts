@@ -143,6 +143,11 @@ export function turnSender(
     })
     const { raw, ...sent } = await a
       .timed('agentMs', () => Promise.race([sending, cutoff]))
+      .catch(async (error: unknown) => {
+        // The errored entry stays in the record, with the starts the turn saw.
+        if (watch) entry.mcpStartup = mcpStartupOf((await watch.end()).entries)
+        throw error
+      })
       .finally(() => {
         cancel()
         watch?.close()
