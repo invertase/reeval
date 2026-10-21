@@ -923,7 +923,7 @@ A plugin as an attempt placed it.
 </Property>
 
 <Property name="build" type="string | null">
-  The image layer its build ran in; null without a build.
+  The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.
 </Property>
 
 <Property name="parts" type="{skills: string[]; agents: string[]; commands: string[]; hooks: string[]; mcp: string[]; rules: boolean}">
@@ -959,7 +959,7 @@ The image an attempt's container started from, and how reeval made it.
 <Property name="agentCli" type="string | null"></Property>
 
 <Property name="base" type="string">
-  The harness image `install` was baked onto: `ref` itself without `install`.
+  The harness image `install` and plugin builds were baked onto: `ref` itself without either.
 </Property>
 
 <Property name="install" type="string[]">

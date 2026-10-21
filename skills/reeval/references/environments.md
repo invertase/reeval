@@ -94,8 +94,10 @@ Plugins: `plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] 
 `.mcp.json`, `rules/`. Its MCP servers join `mcp` as `<plugin>:<server>` (call them from the
 fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`. No
 real harness loads plugins yet: `--dry-run` exits 2 naming the harness, so use the fake harness
-or keep plugins off real cells. `build` is refused for now; a server run with `npx`/`uvx` needs
-its registry in `egress`, or install it in the image.
+or keep plugins off real cells. `build: 'npm ci && npm run build'` (or `{ run, cwd: '.' }` to run
+from the source's root) builds the plugin in a cached Docker image layer, as root with no
+secrets; only `path` is placed, so the output must land inside it. Docker only. A server run with
+`npx`/`uvx` needs its registry in `egress`, or a build that installs it.
 
 A named env is a total override: no skills, files or sandbox inherit from the config
 environment.
