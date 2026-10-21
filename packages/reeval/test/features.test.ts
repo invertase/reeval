@@ -1561,6 +1561,58 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/antigravity-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'antigravity',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp, r…' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.some((p) => p.includes('/.gemini/config/skills/')), JSON.stringify(seen))
+      // What the fake agent's own agy plugin install wrote, which the attempt's context lists.
+      assert.ok(
+        seen.includes('~/.gemini/config/plugins/house/mcp_config.json'),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'harness/cursor-plugin',
+    tiers: ['fake', 'docker', 'real'],
+    env: 'house',
+    canary: /expected null to be 'SAFFRON-73'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      // Unpacked before the snapshot: the diff has only what the agent wrote.
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['codeword.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '.cursor/rules/house-codeword.mdc',
+        '.cursor/agents/reviewer.md',
+        '.cursor/commands/ship.md',
+        '.cursor/hooks.json',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+      assert.ok(
+        seen.some((p) => /^~\/(.+\/)?\.agents\/skills\/house-style\/SKILL\.md$/.test(p)),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
     dir: 'harness/antigravity-rules',
     tiers: ['fake', 'docker'],
     image: 'antigravity',

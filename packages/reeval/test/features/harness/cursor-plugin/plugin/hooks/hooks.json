@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cp ${CLAUDE_PLUGIN_ROOT}/marker.txt ${CLAUDE_PLUGIN_ROOT}/hook-ran.txt"
+          }
+        ]
+      }
+    ]
+  }
+}
