@@ -346,9 +346,35 @@ const SOURCE_LINES = 80
 const NEXT_EVAL = /\bevaluate(?:\.each|\.todo|\.skip|\.only)?\s*[(<]/
 
 /**
- * The eval's declaration in its file, numbered as the file is: from the `evaluate` that names it
- * (or a family's template) up to the next eval's, at most `SOURCE_LINES`. Null when the file
- * can't be read.
+ * Where the eval named `name` is declared in a file's lines: from the `evaluate` that names it (or
+ * a family's template) up to the next eval's, at most `SOURCE_LINES`, as 0-based `[from, to)`.
+ * Null when no line names it.
+ */
+export function declarationOf(lines: string[], name: string): { from: number; to: number } | null {
+  const named = lines.findIndex((l) =>
+    [`'${name}'`, `"${name}"`, `\`${name}\``].some((q) => l.includes(q)),
+  )
+  if (named < 0) return null
+  let from = named
+  for (let i = named; i >= Math.max(0, named - 10); i--) {
+    if (NEXT_EVAL.test(lines[i] ?? '')) {
+      from = i
+      break
+    }
+  }
+  let to = Math.min(lines.length, from + SOURCE_LINES)
+  for (let i = named + 1; i < to; i++) {
+    if (NEXT_EVAL.test(lines[i] ?? '')) {
+      to = i
+      break
+    }
+  }
+  return { from, to }
+}
+
+/**
+ * The eval's declaration in its file, numbered as the file is (`declarationOf`), or the file's
+ * first `SOURCE_LINES` when no line names it. Null when the file can't be read.
  */
 export async function evalSource(
   root: string,
@@ -360,23 +386,9 @@ export async function evalSource(
   const text = await readFile(join(root, entry.file), 'utf8').catch(() => null)
   if (text === null) return null
   const lines = text.split('\n')
-  const name = entry.family?.name ?? entry.name
-  const named = lines.findIndex((l) =>
-    [`'${name}'`, `"${name}"`, `\`${name}\``].some((q) => l.includes(q)),
-  )
-  let from = Math.max(0, named)
-  for (let i = from; i >= Math.max(0, from - 10); i--) {
-    if (NEXT_EVAL.test(lines[i] ?? '')) {
-      from = i
-      break
-    }
-  }
-  let to = Math.min(lines.length, from + SOURCE_LINES)
-  for (let i = Math.max(from, named) + 1; i < to; i++) {
-    if (NEXT_EVAL.test(lines[i] ?? '')) {
-      to = i
-      break
-    }
+  const { from, to } = declarationOf(lines, entry.family?.name ?? entry.name) ?? {
+    from: 0,
+    to: Math.min(lines.length, SOURCE_LINES),
   }
   return {
     file: entry.file,

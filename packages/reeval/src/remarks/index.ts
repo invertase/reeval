@@ -14,6 +14,7 @@ import type { EvalEntry, RunRecord } from '../history/types.ts'
 import { RUN_ID } from '../ids.ts'
 import { insightsFile, readInsights } from '../insights/files.ts'
 import { factsHash } from '../insights/hash.ts'
+import { declarationOf } from '../insights/input.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { NO_MODEL, REMARK_KINDS, type Remark, type RunInsights } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
@@ -98,15 +99,29 @@ export function candidateOf(r: Remark): Candidate {
   return { ...rest, severity: REMARK_KINDS[r.kind].severity }
 }
 
+const NAME_KINDS = new Set<Remark['kind']>(['name-contradicts', 'name-no-intent'])
+
 /** `source:<file>#L<n>` → the file. */
 const fileOf = (at: string) => at.replace(/^source:/, '').replace(/#L\d+$/, '')
 
 /**
+ * Whether the quote is still in the eval's declaration, or anywhere in the file once no line
+ * names the eval (a rename): another eval in the file may share the quoted text.
+ */
+function quoteIn(text: string | null, name: string | undefined, quote: string): boolean {
+  if (text === null) return false
+  const lines = text.split('\n')
+  const at = name === undefined ? null : declarationOf(lines, name)
+  return (at ? lines.slice(at.from, at.to).join('\n') : text).includes(quote)
+}
+
+/**
  * The remarks earlier runs printed whose cited source this run finds changed: the quote is gone
- * from its file, or, for a remark without one, the eval's sources changed (its id for this run's
- * sources isn't its own) and this run doesn't raise its kind on that eval again. Only evals this
- * run ran are checked; one already acted on, or raised again by this run, isn't. `slow-mcp-start`
- * is about the environment, so no edit acts on it.
+ * from the eval's declaration (`quoteIn`), or, for a remark without one, the eval's sources
+ * changed (its id for this run's sources isn't its own) and this run doesn't raise its kind on
+ * that eval again. Only evals this run ran are checked, and a name remark's eval renamed in a file
+ * this run ran; one already acted on, or raised again by this run, isn't. `slow-mcp-start` is
+ * about the environment, so no edit acts on it.
  */
 async function actedOn(
   root: string,
@@ -143,11 +158,24 @@ async function actedOn(
     return t
   }
   const out: Remark[] = []
+  const ranFiles = new Set(record.evals.map((e) => e.file))
   for (const r of printed.values()) {
+    if (done.has(r.id) || ids.has(r.id)) continue
     const own = entries.get(r.evalId)
-    if (done.has(r.id) || ids.has(r.id) || !own?.length) continue
+    if (!own?.length) {
+      // A rename is a name remark's fix, and gives the eval a new id: the run ran its file, and
+      // the old name is gone from it.
+      const renamed =
+        NAME_KINDS.has(r.kind) &&
+        r.source?.quote &&
+        ranFiles.has(fileOf(r.source.at)) &&
+        !(await text(fileOf(r.source.at)))?.includes(r.source.quote)
+      if (renamed) out.push({ ...r, printed: false, actedOn: { run: record.runId } })
+      continue
+    }
+    const name = own[0]?.family?.name ?? own[0]?.name
     const changed = r.source?.quote
-      ? !(await text(fileOf(r.source.at)))?.includes(r.source.quote)
+      ? !quoteIn(await text(fileOf(r.source.at)), name, r.source.quote)
       : !kinds.has(`${r.kind}\0${r.evalId}`) &&
         !own.some((entry) => remarkId(r.kind, r.evalId, entry) === r.id)
     if (changed) out.push({ ...r, printed: false, actedOn: { run: record.runId } })
