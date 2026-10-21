@@ -34,13 +34,31 @@ export type AntigravityStepUpdate = {
   text_delta?: string
   duration_seconds?: number
   usage?: AntigravityUsage
-  tool_info?: {
-    name?: string
-    parameters?: Record<string, unknown>
-    output?: JSONValue
-    error?: { type?: string; message?: string }
+  tool_info?: AntigravityToolInfo
+  /** On a `subagent` step, the only report of an `invoke_subagent` call: no `tool` step comes. */
+  subagent_info?: {
+    subagents?: Array<{ type_name?: string; role?: string; initial_prompt?: string }>
   }
 }
+
+type AntigravityToolInfo = {
+  name?: string
+  parameters?: Record<string, unknown>
+  output?: JSONValue
+  error?: { type?: string; message?: string }
+}
+
+/** A `subagent` step as the tool call it reports, each subagent by the agent it ran. */
+const subagentInfo = (s: AntigravityStepUpdate): AntigravityToolInfo => ({
+  name: s.tool_name ?? 'invoke_subagent',
+  parameters: {
+    subagents: (s.subagent_info?.subagents ?? []).map((a) => ({
+      agent: a.type_name,
+      role: a.role,
+      prompt: a.initial_prompt,
+    })),
+  },
+})
 
 /** One line of `agy --output-format stream-json`. */
 export type AntigravityEvent =
@@ -280,9 +298,9 @@ export class AntigravityStreamTranslator {
     }
     this.settleReply(parts)
     if (s.step_type !== 'user_input') this.settleFailure(parts, true)
-    if (s.step_type === 'tool') {
+    if (s.step_type === 'tool' || s.step_type === 'subagent') {
       this.flushStep(parts, 'tool-calls')
-      const info = s.tool_info ?? {}
+      const info = s.step_type === 'subagent' ? subagentInfo(s) : (s.tool_info ?? {})
       const nativeName = info.name ?? s.tool_name ?? 'unknown'
       let call = this.openTools.get(index)
       if (!call) {

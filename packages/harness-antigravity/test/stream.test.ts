@@ -217,6 +217,35 @@ describe('stream translation', () => {
     }
   })
 
+  test('a subagent step is the invoke_subagent call, naming the agent it ran (CLI 1.4.2)', () => {
+    const t = new AntigravityStreamTranslator({ turn: 1 })
+    const subagent = (state: string) =>
+      step({
+        step_index: 2,
+        state,
+        step_type: 'subagent',
+        tool_name: 'invoke_subagent',
+        subagent_info: {
+          subagents: [{ type_name: 'probe-agent', role: 'Probe', initial_prompt: 'Say PONG.' }],
+        },
+      })
+    const parts = [...t.push(subagent('ACTIVE')), ...t.push(subagent('DONE'))]
+    const calls = parts.filter((p) => p.type === 'tool-call')
+    assert.equal(calls.length, 1)
+    assert.ok(calls[0]?.type === 'tool-call')
+    assert.equal(calls[0].toolName, 'invoke_subagent')
+    assert.deepEqual(JSON.parse(calls[0].input), {
+      subagents: [{ agent: 'probe-agent', role: 'Probe', prompt: 'Say PONG.' }],
+    })
+    const result = parts.find((p) => p.type === 'tool-result')
+    assert.ok(result?.type === 'tool-result')
+    assert.equal(result.isError, undefined)
+    const refused = new AntigravityStreamTranslator({ turn: 1 }).push(subagent('ERROR'))
+    const failed = refused.find((p) => p.type === 'tool-result')
+    assert.ok(failed?.type === 'tool-result')
+    assert.deepEqual([failed.result, failed.isError], ['invoke_subagent error', true])
+  })
+
   test('tools outside the catalog are dynamic; unparsable lines pass through as raw', () => {
     const t = new AntigravityStreamTranslator({ turn: 2 })
     const parts = [

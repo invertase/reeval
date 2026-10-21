@@ -103,6 +103,7 @@
   "step_update/subagent .step_update.state",
   "step_update/subagent .step_update.state=ACTIVE",
   "step_update/subagent .step_update.state=DONE",
+  "step_update/subagent .step_update.state=ERROR",
   "step_update/subagent .step_update.step_index",
   "step_update/subagent .step_update.step_type",
   "step_update/subagent .step_update.subagent_info",
