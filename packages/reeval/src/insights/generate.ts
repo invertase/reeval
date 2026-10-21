@@ -263,7 +263,7 @@ export async function generateInsights(o: InsightOptions): Promise<RunInsights> 
     call: 'headline',
     tally: {
       ...suite.tally,
-      total: Object.values(suite.tally).reduce((a, b) => a + b, 0),
+      total: Object.values(suite.tally).reduce((a, b) => a + b, 0) - suite.tally.errors,
       unit: 'results',
     },
     evals: insightEvals(suite).map((e) => ({

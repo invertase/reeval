@@ -122,10 +122,10 @@ removed  greets in French › answer: "It never greets in French."
 |---|---|
 | Citations | A sentence with no cite, or one naming a fact the eval wasn't shown; an id in the text, asked for once more (a trailing `(F2, F7)` is cut instead) |
 | Numbers and quotes | An `N of M` that isn't a cited fact's own count (the facts count passes, so after `failed` it counts failures: over `0 of 4 passed`, `failed 4 of 4` is kept and `failed 0 of 4` dropped; a transcript line's text isn't a count; on a choose eval, a count whose clause names a tool after its last outcome verb, as in `recommended Genkit in 1 of 1 tries`, must be the tries that named that tool, as its row reads), another number the cited facts don't hold, or a span in double, single, curly or backtick quotes they don't hold |
-| Effect words | `helped`, `made it worse`, `no difference` or `can't tell yet`, or a plain word for one (`helps`, `improved`, `worse`, `hurt`), that isn't the cited effect; `didn't help` claims none. One in a clause the cited `can't tell yet` governs (`can't tell yet if it helped`) isn't a claim; the clause ends at a comma, colon, semicolon, dash, bracket or conjunction |
+| Effect words | `helped`, `made it worse`, `no difference` or `can't tell yet`, or a plain word for one (`helps`, `improved`, `worse`, `hurt`), that isn't the cited effect; `didn't help` claims none, and what the run's interrupt cancelled has no effect to cite. One in a clause the cited `can't tell yet` governs (`can't tell yet if it helped`) isn't a claim; the clause ends at a comma, colon, semicolon, dash, bracket or conjunction |
 | Length | A sentence over 25 words, or an answer over two sentences |
 | Plain words | Statistics jargon (`within noise`, `interval`, `variant`, `lift`, …), asked for once more (`validation.regenerated`) |
-| Slots | A row sentence on a row the layout keeps closed, such as a passing case, or a finding past an eval's three |
+| Slots | A row sentence on a row the layout keeps closed, such as a passing or cancelled case, or a finding past an eval's three. A cancelled eval opens no findings and no row for an arm that moved |
 | Repeats | A finding that repeats the answer, a row sentence or another finding in the same eval |
 | Named tools | On a choose eval, a tool that isn't verbatim in that attempt's final message, as a whole word (`Gen` isn't in `Genkit`) |
 | Headline counts | A headline that calls a tally number a count of evals (`22 evals` on a run of 13): the tally counts results, each case of a family one |

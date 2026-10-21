@@ -237,7 +237,7 @@ export function citableEval(
 
 export function citableHeadline(input: HeadlineInput): Citable {
   const evals = new Map(input.evals.map((e) => [e.path, e]))
-  const { unit: _, total, ...counts } = input.tally
+  const { unit: _, total, errors: __, ...counts } = input.tally
   const ofTotal = Object.values(counts).map((n) => `${n} of ${total}`)
   return {
     resolve: (cite) => {

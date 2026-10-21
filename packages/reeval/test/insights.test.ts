@@ -10,10 +10,11 @@ import type { ResolvedAnalysisModel } from '../src/analysis/model.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { generateInsights, insightEvals } from '../src/insights/generate.ts'
 import { canonicalJson, factsHash } from '../src/insights/hash.ts'
+import { attemptTexts, evalFacts } from '../src/insights/input.ts'
 import { type Citable, checkSentence } from '../src/insights/validate.ts'
 import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
 import { colors } from '../src/ui/colors.ts'
-import { evalBlock, render } from '../src/ui/layout.ts'
+import { evalBlock, render, slotsOf } from '../src/ui/layout.ts'
 import type { RunInsights } from '../src/view/insights.ts'
 import { readableInsights, readableRecord } from '../src/view/record.ts'
 import { type EvalResult, suiteResult } from '../src/view/suite.ts'
@@ -28,6 +29,14 @@ assert.ok(run)
 const record = readableRecord(structuredClone(run.raw) as never) as RunRecord
 const suite = suiteResult(record)
 const runDir = join(run.file, '..', run.runId)
+/**
+ * The entry's insights.json, held to these facts: it keeps the hash of the facts the reeval that
+ * recorded it computed, which a later change to `SuiteResult` moves.
+ */
+const storedFresh = () => ({
+  ...readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8'))),
+  factsHash: factsHash(suite),
+})
 
 const evalNamed = (name: string): EvalResult => {
   const e = insightEvals(suite).find((x) => (x.template ?? x.name) === name)
@@ -544,6 +553,58 @@ describe('one sentence against what it cites', () => {
   })
 })
 
+describe('what the run interrupt cancelled', () => {
+  const ABORTED = { kind: 'aborted', message: 'The run was cancelled' } as const
+
+  test('canary: a cancelled eval opens no findings or moved row, and its facts claim no effect', () => {
+    const e = structuredClone(measure)
+    e.outcome = 'cancelled'
+    const before = slotsOf('finish', measure)
+    const slots = slotsOf('finish', e)
+    assert.ok(before.findings, 'the eval measures a change')
+    assert.equal(slots.findings, false)
+    const moved = (e.cells ?? []).filter((c) => c.effect === 'better' && c.outcome === 'pass')
+    assert.ok(moved.length, 'a passing arm that helped')
+    for (const c of moved) {
+      assert.ok(before.rows.includes(c.path))
+      assert.ok(!slots.rows.includes(c.path), c.path)
+    }
+    assert.ok(evalFacts(measure).some((f) => f.effect))
+    assert.deepEqual(
+      evalFacts(e).filter((f) => f.effect),
+      [],
+    )
+  })
+
+  test('canary: a cancelled case opens no row, and its cancelled tries are not counted', () => {
+    const e = structuredClone(choose)
+    const k = (e.cases ?? []).find((x) => x.label === 'a Python agent')
+    const cell = k?.cells[0]
+    assert.ok(k && cell?.failed)
+    assert.ok(slotsOf('choose', choose).rows.includes(k.path))
+    k.outcome = 'cancelled'
+    cell.errors.push({ ...ABORTED, attempts: 1 })
+    assert.ok(!slotsOf('choose', e).rows.includes(k.path))
+    const facts = evalFacts(e)
+    const counted = cell.passed + cell.failed - 1
+    assert.equal(facts.find((f) => f.path === cell.path)?.passed, `0 of ${counted} tries`)
+    assert.equal(facts.find((f) => f.path === cell.path)?.cancelled, 1)
+    assert.equal(facts.find((f) => f.path === k.path)?.passed, `0 of ${counted} tries`)
+  })
+
+  test("canary: a cancelled attempt's final message is not an attempt the tools are named from", () => {
+    const k = (choose.cases ?? []).find((x) => x.label === 'a chat app')
+    assert.ok(k)
+    const changed = structuredClone(record)
+    const attempt = changed.evals.find((x) => x.id === k.id)?.attempts[0]
+    assert.ok(attempt)
+    const before = attemptTexts(record, choose)
+    Object.assign(attempt, { outcome: 'fail', error: ABORTED })
+    const after = attemptTexts(changed, choose)
+    assert.equal(after.size, before.size - 1)
+  })
+})
+
 describe('insights in the layouts', () => {
   test('canary: job choose on a finish-shaped eval prints the choose layout', async () => {
     const doc = await generate(
@@ -570,7 +631,7 @@ describe('insights in the layouts', () => {
   })
 
   test('insights written for other facts are left out, with a note', () => {
-    const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
+    const stored = storedFresh()
     const opts = { color: false, verbose: false, hint: false }
     const fresh = render(suite, stored, opts).join('\n')
     const plain = render(suite, null, opts).join('\n')
@@ -582,7 +643,7 @@ describe('insights in the layouts', () => {
   })
 
   test('a hand-edited sentence prints on one line, with no escape sequences', () => {
-    const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
+    const stored = storedFresh()
     assert.ok(stored.headline)
     const edited = { ...stored, headline: { ...stored.headline, text: 'Two\nlines \u001b[2J.' } }
     const out = render(suite, edited, { color: false, verbose: false, hint: false })

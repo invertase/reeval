@@ -19,6 +19,7 @@ import type {
   EvalResult,
   SuiteResult,
 } from '../view/suite.ts'
+import { cancelledOf, countedOf } from '../view/suite.ts'
 
 /** The words an effect prints as, and the only ones a sentence may use for it. */
 export const EFFECT_WORDS: Record<Effect, string> = {
@@ -82,7 +83,8 @@ export type HeadlineInput = {
   call: 'headline'
   /**
    * Counts results, not evals: each case of a family counts one, as the tally line does, and
-   * `total` is their sum, so no count is the model's arithmetic. The eval count is `evals.length`.
+   * `total` is their sum, so no count is the model's arithmetic; `errors` (outside any eval) aren't
+   * results and stay out of it. The eval count is `evals.length`.
    */
   tally: SuiteResult['tally'] & { total: number; unit: 'results' }
   evals: Array<{ path: string; name: string; verdict: string; answer: string | null }>
@@ -97,7 +99,7 @@ const verdictOf = (o: string) => (o === 'infra_error' ? 'infra error' : o)
 
 const armOf = (c: CellResult) => c.variant ?? (c.environment === '-' ? 'baseline' : c.environment)
 
-function checkFact(k: CheckResult): InsightFact {
+function checkFact(k: CheckResult, measured: boolean): InsightFact {
   const o = k.outcome
   if (o.status === 'not run')
     return { path: k.path, kind: 'check', label: k.label, result: 'not run' }
@@ -110,12 +112,16 @@ function checkFact(k: CheckResult): InsightFact {
     ...(o.notRun ? { notRun: o.notRun } : {}),
     ...(o.errored ? { couldNotCheck: o.errored } : {}),
     ...(o.assertion ? { assertion: clip(o.assertion.trim().split('\n')[0] ?? '', 240) } : {}),
-    ...(k.effect ? { effect: EFFECT_WORDS[k.effect] } : {}),
+    ...(k.effect && measured ? { effect: EFFECT_WORDS[k.effect] } : {}),
   }
 }
 
-function cellFacts(c: CellResult): InsightFact[] {
-  const counted = c.passed + c.failed
+/**
+ * A cell's facts. Its tries leave out the attempts the run's interrupt cancelled, as its row
+ * does; under a cancelled eval or case (`measured` false) no effect is given, so none is claimed.
+ */
+function cellFacts(c: CellResult, measured: boolean): InsightFact[] {
+  const cancelled = cancelledOf(c)
   const out: InsightFact[] = [
     {
       path: c.path,
@@ -124,16 +130,17 @@ function cellFacts(c: CellResult): InsightFact[] {
       arm: armOf(c),
       sandbox: c.sandbox,
       verdict: verdictOf(c.outcome),
-      passed: `${c.passed} of ${counted} tries`,
+      passed: `${c.passed} of ${countedOf(c)} tries`,
       ...(c.infraError ? { infraErrors: c.infraError } : {}),
+      ...(cancelled ? { cancelled } : {}),
       ...(c.baseline ? { baseline: true } : {}),
-      ...(c.effect ? { effect: EFFECT_WORDS[c.effect] } : {}),
+      ...(c.effect && measured ? { effect: EFFECT_WORDS[c.effect] } : {}),
       ...(c.context.length ? { context: c.context } : {}),
       ...(c.errors.length
         ? { errors: c.errors.map((e) => `${e.kind}: ${clip(e.message, LINE_CHARS)}`) }
         : {}),
     },
-    ...c.checks.map(checkFact),
+    ...c.checks.map((k) => checkFact(k, measured)),
   ]
   if (c.effort) {
     out.push({
@@ -149,7 +156,7 @@ function cellFacts(c: CellResult): InsightFact[] {
 
 function caseFact(k: CaseResult): InsightFact {
   const passed = k.cells.reduce((n, c) => n + c.passed, 0)
-  const counted = k.cells.reduce((n, c) => n + c.passed + c.failed, 0)
+  const counted = k.cells.reduce((n, c) => n + countedOf(c), 0)
   return {
     path: k.path,
     kind: 'case',
@@ -170,17 +177,18 @@ export function evalFacts(e: EvalResult): InsightFact[] {
       ...(e.cases ? { cases: e.cases.length } : {}),
     },
   ]
-  for (const c of e.cells ?? []) out.push(...cellFacts(c))
+  const measured = e.outcome !== 'cancelled'
+  for (const c of e.cells ?? []) out.push(...cellFacts(c, measured))
   for (const k of e.cases ?? []) {
     out.push(caseFact(k))
-    for (const c of k.cells) out.push(...cellFacts(c))
+    for (const c of k.cells) out.push(...cellFacts(c, measured && k.outcome !== 'cancelled'))
   }
   for (const p of e.pooled ?? []) {
     out.push({
       path: p.path,
       kind: 'all cases',
       arm: p.key,
-      effect: EFFECT_WORDS[p.effect],
+      ...(measured ? { effect: EFFECT_WORDS[p.effect] } : {}),
       verdict: p.outcome,
       pairs: p.pairs,
     })
@@ -207,7 +215,9 @@ export function entriesOf(record: RunRecord, e: EvalResult) {
 /** An attempt's id in insights: its cell's path and its number. */
 export const attemptId = (cell: CellResult, a: Pick<AttemptRecord, 'n'>) => `${cell.path}#${a.n}`
 
-const counted = (a: AttemptRecord) => a.outcome === 'pass' || a.outcome === 'fail'
+/** A pass or a fail the agent made: not an infra error, a skip, or one the interrupt cancelled. */
+const counted = (a: AttemptRecord) =>
+  a.outcome === 'pass' || (a.outcome === 'fail' && a.error?.kind !== 'aborted')
 
 /** Each counted attempt's id and its whole final message, as the record keeps it. */
 export function attemptTexts(record: RunRecord, e: EvalResult): Map<string, string> {

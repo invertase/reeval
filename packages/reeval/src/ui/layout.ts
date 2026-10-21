@@ -24,6 +24,7 @@ import type {
   ResultOutcome,
   SuiteResult,
 } from '../view/suite.ts'
+import { cancelledOf, countedOf } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
 
 export type { Job }
@@ -51,31 +52,38 @@ export function layout(job: Job, across: Across, isFamily: boolean, isCompare: b
 }
 
 const moved = (c: CellResult) => c.effect === 'better' || c.effect === 'worse'
-const failedCell = (c: CellResult) => c.outcome === 'fail' || c.outcome === 'infra_error'
+/** A cell the agent failed, or that errored; not one whose only fails the interrupt cancelled. */
+const failedCell = (c: CellResult) =>
+  (c.outcome === 'fail' && c.failed > cancelledOf(c)) || c.outcome === 'infra_error'
 
 /**
  * The insight slots an eval's layout opens: which rows take a sentence (a failing case; an arm
  * that failed or moved; a failing harness), whether it has findings (a choose or finish eval that
  * measures a change), and whether it has named tools (a choose eval). An `other` eval takes only
- * its answer, unless it compares harnesses, which takes a sentence on any job.
+ * its answer, unless it compares harnesses, which takes a sentence on any job. What the run's
+ * interrupt cancelled opens nothing: the agent didn't fail it, and its effects aren't measured.
  */
 export function slotsOf(job: Job, e: EvalResult): InsightSlots {
   const known = job !== 'other'
+  const measured = e.outcome !== 'cancelled'
   const harnesses = e.across === 'harness' || e.across === 'both'
   const rows: string[] = []
   if (known || harnesses) {
     if (e.cases) {
-      for (const k of e.cases) if (k.outcome !== 'pass') rows.push(k.path)
+      for (const k of e.cases)
+        if (k.outcome !== 'pass' && k.outcome !== 'cancelled') rows.push(k.path)
       for (const p of e.pooled ?? []) {
-        if (p.outcome === 'fail' || p.effect === 'better' || p.effect === 'worse') rows.push(p.path)
+        const pooledMoved = measured && (p.effect === 'better' || p.effect === 'worse')
+        if (p.outcome === 'fail' || pooledMoved) rows.push(p.path)
       }
     } else if (e.across === 'harness') {
       for (const c of e.cells ?? []) if (failedCell(c)) rows.push(c.path)
     } else if (e.across === 'change' || e.across === 'both') {
-      for (const c of e.cells ?? []) if (failedCell(c) || moved(c)) rows.push(c.path)
+      for (const c of e.cells ?? []) if (failedCell(c) || (measured && moved(c))) rows.push(c.path)
     }
   }
-  return { rows, findings: known && e.across === 'change', namedTools: job === 'choose' }
+  const findings = known && e.across === 'change' && measured
+  return { rows, findings, namedTools: job === 'choose' }
 }
 
 export type RenderOptions = {
@@ -185,10 +193,8 @@ export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n ==
  * cancelled attempt is recorded as a fail, but the agent didn't fail it, so it's named apart.
  */
 function cellCount(cell: CellResult): string {
-  const cancelled = cell.errors
-    .filter((err) => err.kind === 'aborted')
-    .reduce((n, err) => n + err.attempts, 0)
-  const counted = Math.max(0, cell.passed + cell.failed - cancelled)
+  const cancelled = cancelledOf(cell)
+  const counted = countedOf(cell)
   const parts = [
     counted > 0 ? `${cell.passed} of ${counted}` : '',
     cell.infraError ? plural(cell.infraError, 'infra error') : '',
@@ -400,13 +406,13 @@ type Slots = {
 
 const NO_SLOTS: Slots = { row: () => null, named: () => [], subject: null }
 
-const countedOf = (cells: CellResult[]) => cells.reduce((n, x) => n + x.passed + x.failed, 0)
+const triesOf = (cells: CellResult[]) => cells.reduce((n, x) => n + countedOf(x), 0)
 
 /** `named`, then a row per tool with the tries that named it. */
 function namedItems(c: Colors, slots: Slots, cells: CellResult[], indent: number): Item[] {
   const named = slots.named(cells)
   if (!named.length) return []
-  const of = countedOf(cells)
+  const of = triesOf(cells)
   return [
     { indent, free: t('named', c.dim) },
     ...named.map((n) => ({ indent: indent + 2, cells: [n.tool, `${n.tries} of ${of}`] })),
@@ -418,7 +424,7 @@ function subjectTries(slots: Slots, cells: CellResult[]): string {
   if (!slots.subject) return ''
   const subject = slots.subject.toLowerCase()
   const n = slots.named(cells).find((x) => x.tool.toLowerCase() === subject)?.tries ?? 0
-  return `${n} of ${countedOf(cells)}`
+  return `${n} of ${triesOf(cells)}`
 }
 
 /** Web searches or fetches over the tries, when every try reported a number. */
@@ -650,9 +656,15 @@ function familyBlock(
     const items: Item[] = [{ indent: 2, cells: ['case', t('pass', c.dim), ...subject] }]
     for (const k of cases) {
       const passed = k.cells.reduce((n, x) => n + x.passed, 0)
-      const count = `${passed} of ${countedOf(k.cells)}`
-      const tries = slots.subject ? [subjectTries(slots, k.cells)] : []
-      items.push({ indent: 2, cells: [lead(caseWord(k), k.label), count, ...tries] })
+      const tries = triesOf(k.cells)
+      const count =
+        k.cells.length === 1 && k.cells[0]
+          ? cellCount(k.cells[0])
+          : tries
+            ? `${passed} of ${tries}`
+            : 'not run'
+      const named = slots.subject && tries ? [subjectTries(slots, k.cells)] : []
+      items.push({ indent: 2, cells: [lead(caseWord(k), k.label), count, ...named] })
       items.push(...rowLine(slots, k.path, 4))
       if (!k.cells.every(clean)) items.push(...chooseDetail(c, k.cells, 4, slots))
     }
