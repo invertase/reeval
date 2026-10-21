@@ -107,6 +107,12 @@ export type ResolvedPlugin = {
   files: PluginFile[]
   parts: PluginPart[]
   servers: string[]
+  /** The plugin as the environment declares it. */
+  declared: PluginSource
+  /** The commit a git plugin was read at. */
+  commit: string | null
+  /** A built plugin: its directory in the attempt's image and the layer's tag, copied from there instead of `files`. */
+  built?: { dir: string; tag: string }
 }
 
 /** What else resolving an environment needs: the harness (for its plugin refusals) and the hosts egress allows (null under `allow-all`). */
@@ -437,28 +443,38 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
   }
 }
 
-type FoundPlugin = { contents: PluginContents; source: string; commit: string | null }
+type FoundPlugin = {
+  contents: PluginContents
+  declared: PluginSource
+  source: string
+  commit: string | null
+}
 
-async function resolvePlugin(root: string, p: PluginSource, where: string): Promise<FoundPlugin> {
-  let dir: string
-  let commit: string | null = null
+/**
+ * A plugin's whole source on the host, fetched once per process: the repository at its commit,
+ * the unpacked package, or the local directory, with the plugin's `path` in it (`.` for the root).
+ */
+export async function pluginSourceDir(
+  root: string,
+  p: PluginSource,
+): Promise<{ context: string; path: string; commit: string | null }> {
   switch (p.source) {
     case 'local':
-      dir = p.path
-      break
+      return { context: p.path, path: '.', commit: null }
     case 'git': {
       const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
-      dir = join(clone.dir, p.path ?? '')
-      commit = clone.commit
-      break
+      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit }
     }
     case 'npm':
-      dir = join(await unpackNpm(root, p.spec), p.path ?? '')
-      break
+      return { context: await unpackNpm(root, p.spec), path: p.path ?? '.', commit: null }
   }
+}
+
+async function resolvePlugin(root: string, p: PluginSource, where: string): Promise<FoundPlugin> {
+  const { context, path, commit } = await pluginSourceDir(root, p)
   try {
-    const contents = readPlugin(dir, pluginCall(p, root), p.only)
-    return { contents, source: pluginSourceLabel(p, root), commit }
+    const contents = readPlugin(join(context, path), pluginCall(p, root), p.only)
+    return { contents, declared: p, source: pluginSourceLabel(p, root), commit }
   } catch (error) {
     if (error instanceof PluginProblem) throw new InfraError(`${where}: ${error.message}`)
     throw error
@@ -605,7 +621,7 @@ export async function resolveEnvironment(
   > = []
   const resolvedPlugins: ResolvedPlugin[] = []
   const pluginRecords: PluginRecord[] = []
-  for (const { contents: p, source, commit } of pluginList) {
+  for (const { contents: p, declared, source, commit } of pluginList) {
     const loaded = p.skills.length
       ? loadSkills(
           join(p.dir, 'skills'),
@@ -629,7 +645,7 @@ export async function resolveEnvironment(
       servers.push(key)
     }
     const files = pluginFiles(p)
-    resolvedPlugins.push({ name: p.name, files, parts: p.kept, servers })
+    resolvedPlugins.push({ name: p.name, files, parts: p.kept, servers, declared, commit })
     pluginRecords.push({
       name: p.name,
       source,
@@ -775,7 +791,13 @@ export async function resolveEnvironment(
         ? {}
         : { egress: typeof egress === 'string' ? egress : [...egress.allow].sort() }),
       ...(pluginRecords.length
-        ? { plugins: pluginRecords.map((p, i) => [p.name, p.sha256, resolvedPlugins[i]?.parts]) }
+        ? {
+            plugins: pluginRecords.map((p, i) => {
+              const r = resolvedPlugins[i]
+              const build = r?.declared.build
+              return [p.name, p.sha256, r?.parts, ...(build === undefined ? [] : [build])]
+            }),
+          }
         : {}),
       ...(workspaceRecord
         ? {

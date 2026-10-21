@@ -602,6 +602,114 @@ export async function buildInstallLayer(
   return tag
 }
 
+/** Where a plugin layer leaves each built plugin, by its build's hash. */
+export const PLUGIN_BUILDS_DIR = `${SANDBOX_ROOT}/plugin-builds`
+
+/**
+ * The sha256 of a plugin build's source as the layer gets it: every file `docker build` sends from
+ * `context` (less `.dockerignore` and `.git`), with its executable bit or symlink target.
+ */
+export function sourceTreeHash(context: string): string {
+  const hash = createHash('sha256')
+  for (const path of contextFiles(context, join(context, 'Dockerfile'))) {
+    if (path === '.git' || path.startsWith('.git/')) continue
+    const full = join(context, path)
+    const stat = lstatSync(full)
+    hash.update(`${path}\0${stat.mode & 0o111 ? 'x' : '-'}\0`)
+    hash.update(stat.isSymbolicLink() ? readlinkSync(full) : readFileSync(full))
+    hash.update('\0')
+  }
+  return hash.digest('hex')
+}
+
+/** One plugin's build: its source, where it runs and what of it is kept, hashed by {@link pluginBuildKey}. */
+export type PluginBuildSpec = {
+  /** The whole source on the host: the repository, the package or the local directory. */
+  context: string
+  /** The source's commit, or null for an npm package or a local directory. */
+  commit: string | null
+  /** {@link sourceTreeHash} of `context`. */
+  tree: string
+  /** The plugin's directory in the source, kept after the build; `.` for the root. */
+  path: string
+  /** Where the commands run, relative to the source's root. */
+  cwd: string
+  steps: InstallStep[]
+}
+
+/** The hash a plugin layer's tag and directory carry: commit, tree and build. */
+export const pluginBuildKey = (b: PluginBuildSpec) =>
+  sha256(JSON.stringify({ commit: b.commit, tree: b.tree, path: b.path, cwd: b.cwd, run: b.steps }))
+
+/** The image a plugin build makes on `parent`: the parent's id, then the build's hash. */
+export const pluginLayerTag = (parent: { id: string }, b: PluginBuildSpec) =>
+  `reeval-plugin:${parent.id.replace(/^sha256:/, '').slice(0, 12)}-${pluginBuildKey(b).slice(0, 16)}`
+
+/** Where a plugin layer leaves the plugin's directory. */
+export const pluginBuildDir = (b: PluginBuildSpec) =>
+  `${PLUGIN_BUILDS_DIR}/${pluginBuildKey(b).slice(0, 16)}`
+
+/**
+ * Builds a plugin's layer on `parent` if it's missing: the whole source, then its commands from
+ * `cwd` as root with the sandbox user's home as HOME (as an install layer runs), keeping only the
+ * plugin's directory at {@link pluginBuildDir}. Secrets and the workspace never exist here.
+ */
+export async function buildPluginLayer(
+  parent: { ref: string; id: string },
+  b: PluginBuildSpec,
+  options: { name: string; signal?: AbortSignal; output?: BuildOutput; engine?: Engine },
+): Promise<string> {
+  const { signal, engine } = options
+  const tag = pluginLayerTag(parent, b)
+  const exists = await docker(['image', 'inspect', '--format', '{{.Created}}', tag], {
+    signal,
+    engine,
+  })
+  if (exists.exitCode === 0) return tag
+  const src = '/tmp/reeval-plugin-src'
+  const script = installScript(b.steps)
+    .replace(/^cd \/\n/, `cd ${q(`${src}/${b.cwd}`)}\n`)
+    .replaceAll('reeval: install ', 'reeval: build ')
+  const encoded = Buffer.from(script).toString('base64')
+  const home = `$(getent passwd ${SANDBOX_USER} | cut -d: -f6)`
+  const dir = pluginBuildDir(b)
+  const dockerfile = [
+    `FROM ${parent.ref}`,
+    'USER root',
+    `COPY . ${src}`,
+    `RUN echo ${encoded} | base64 -d > /tmp/reeval-plugin-build.sh \\`,
+    `  && if id -u ${SANDBOX_USER} >/dev/null 2>&1; then export HOME="${home}"; fi \\`,
+    '  && bash /tmp/reeval-plugin-build.sh && rm /tmp/reeval-plugin-build.sh \\',
+    `  && mkdir -p ${dir} && cp -a ${q(`${src}/${b.path}`)}/. ${dir}/ && rm -rf ${src} ${dir}/.git \\`,
+    `  && chmod -R a+rX ${dir} \\`,
+    `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
+    `WORKDIR ${SANDBOX_ROOT}`,
+  ].join('\n')
+  const build = await docker(
+    ['build', '--progress', 'plain', ...BUILT_BY, '--tag', tag, '-f', '-', b.context],
+    { input: dockerfile, signal, engine },
+  )
+  const output = `${build.stdout.toString('utf8')}${build.stderr}`
+  options.output?.write(`${script}\n${dockerfile}\n\n${output}`)
+  if (build.exitCode !== 0) {
+    const failed = /reeval: build (\d+\/\d+) exited (\d+): (.*)/.exec(output)
+    throw buildError(
+      output,
+      {
+        stage: 'plugin',
+        ref: tag,
+        headline: `Building ${options.name}`,
+        log: options.output?.path ?? null,
+        engine,
+      },
+      () =>
+        failed ? `build ${failed[1]} exited ${failed[2]}: ${clipLine(failed[3] ?? '')}` : null,
+      (line) => !line.startsWith('reeval: build '),
+    )
+  }
+  return tag
+}
+
 /** The build arg a Dockerfile can start `FROM` to layer on reeval's sandbox image. */
 export const REEVAL_BASE_ARG = 'REEVAL_BASE'
 

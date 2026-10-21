@@ -1013,8 +1013,8 @@ export type PluginSource = {
   kind: 'plugin'
   /** The parts to place; default every part the plugin has. */
   only?: PluginPart[]
-  /** Commands that build the plugin in an image layer. reeval doesn't run builds yet, so the plan refuses one. */
-  build?: string | string[]
+  /** Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise. */
+  build?: PluginBuild
 } & (
   | {
       source: 'local'
@@ -1039,11 +1039,29 @@ export type PluginSource = {
     }
 )
 
+/**
+ * Shell commands that build a plugin in a Docker image layer, on the cell's harness image, as root
+ * and with no secrets: one, a list, or `{ run, cwd }`. They run from the plugin's directory, or from
+ * `cwd`, relative to the source's root (`'.'` for the repository's or package's root).
+ */
+export type PluginBuild =
+  | string
+  | string[]
+  | {
+      /** The command, or the commands in order. */
+      run: string | string[]
+      /** Where they run, relative to the source's root; default the plugin's directory. */
+      cwd?: string
+    }
+
 type PluginOptions = {
   /** The parts to place, e.g. `['skills', 'mcp']`; default every part the plugin has. */
   only?: readonly PluginPart[]
-  /** Commands that build the plugin in an image layer. Not run yet: the plan refuses a build. */
-  build?: string | readonly string[]
+  /**
+   * Commands that build the plugin in a Docker image layer, e.g. `'npm ci && npm run build'`, or
+   * `{ run, cwd: '.' }` to run them from the source's root. Only the plugin's directory is placed.
+   */
+  build?: string | readonly string[] | { run: string | readonly string[]; cwd?: string }
 }
 
 export type PluginHelper = {
@@ -1985,7 +2003,7 @@ export type AttemptImage = {
   /** Content-addressed image id (`sha256:…`). */
   id: string
   agentCli: string | null
-  /** The harness image `install` was baked onto: `ref` itself without `install`. */
+  /** The harness image `install` and plugin builds were baked onto: `ref` itself without either. */
   base: string
   /** The `docker({ install })` commands, in order. */
   install: string[]
@@ -2200,6 +2218,8 @@ export type AttemptMeta = {
   files?: string[]
   /** Its environment's plugins, layered: a local one's name and parts, else its source. */
   plugins?: string[]
+  /** Its environment's plugins with a `build`, layered, which preflight builds into its image. */
+  pluginBuilds?: PluginSource[]
   plan: EvalPlan
   /** Why this attempt does not run, e.g. it already completed in a resumed run. */
   skip?: string

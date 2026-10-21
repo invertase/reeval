@@ -691,7 +691,12 @@ async function executeRun(
     const targets = imageTargets(
       skipped
         .filter((p) => !p.attempt.plan.skip)
-        .map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox })),
+        .map((p) => ({
+          id: p.id,
+          harness: p.attempt.harness,
+          sandbox: p.attempt.sandbox,
+          plugins: p.attempt.pluginBuilds ?? [],
+        })),
     )
     if (setup.json && setup.dryRun) {
       const images = await Promise.all(
@@ -824,6 +829,7 @@ async function executeRun(
         label: `workspace ${o.label}`,
         sandbox: user.attempt.sandbox,
         harness: user.attempt.harness,
+        plugins: [],
         setBy: o.setBy,
         runWide: false,
       }
@@ -841,6 +847,7 @@ async function executeRun(
           .map((p) => ({
             harness: p.attempt.harness,
             sandbox: p.attempt.sandbox,
+            plugins: p.attempt.pluginBuilds ?? [],
             setBy: p.attempt.setBy,
           })),
         {

@@ -12,20 +12,31 @@ import {
   installLayerTag,
   isTransient,
   LABEL,
+  pluginBuildKey,
+  pluginLayerTag,
   REEVAL_BASE_ARG,
   resolveFrom,
 } from '@reeval/sandbox-docker'
 import type { PlannedItem } from '../engine/node.ts'
+import { buildSteps, pluginBuildId, pluginBuildsLabel, pluginCall } from '../environment/plugins.ts'
 import { sandboxId, sandboxProvider } from '../options.ts'
 import type {
   AttemptImage,
   DockerSandboxDescriptor,
   HarnessDescriptor,
+  PluginBuild,
+  PluginSource,
   RunContext,
   SandboxDescriptor,
 } from '../types.ts'
 import { prepareAll } from './preflight.ts'
-import { imageHarness, installSteps, projectPath, usesReevalBase } from './prepare.ts'
+import {
+  imageHarness,
+  installSteps,
+  pluginBuildSpec,
+  projectPath,
+  usesReevalBase,
+} from './prepare.ts'
 import type { PrepareFailure } from './provider.ts'
 import { attemptImage, createProviders, dockerKey } from './providers.ts'
 
@@ -37,10 +48,17 @@ export type ImageTarget = {
   id: string
   harness: BakedHarness
   sandbox: DockerSandboxDescriptor
+  /** The plugins with a `build`, each a layer on top. */
+  plugins: readonly PluginSource[]
   evals: number
 }
 
-export type ImageUse = { id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }
+export type ImageUse = {
+  id: string
+  harness: HarnessDescriptor
+  sandbox: SandboxDescriptor
+  plugins?: readonly PluginSource[]
+}
 
 /**
  * What `reeval image build` builds and `reeval doctor` checks: the harness and sandbox of each
@@ -67,23 +85,37 @@ export async function plannedImageUses(
     },
   })
   return planned.length
-    ? planned.map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox }))
+    ? planned.map((p) => ({
+        id: p.id,
+        harness: p.attempt.harness,
+        sandbox: p.attempt.sandbox,
+        plugins: p.attempt.pluginBuilds ?? [],
+      }))
     : run.config.harness.map((harness) => ({ id: '', harness, sandbox: run.config.sandbox }))
 }
 
-/** The distinct Docker sandbox and harness pairs, in first-use order, with how many evals use each. */
+/**
+ * The distinct Docker sandbox, harness and plugin build sets, in first-use order, with how many
+ * evals use each.
+ */
 export function imageTargets(uses: ImageUse[]) {
   const targets = new Map<string, ImageTarget & { seen: Set<string> }>()
-  for (const { id, sandbox, ...use } of uses) {
+  for (const { id, sandbox, plugins = [], ...use } of uses) {
     if (sandbox.kind !== 'docker') continue
     const harness = imageHarness(use.harness)
     // What's in the image, not the limits or user the container runs with.
     const { engine, image, from, dockerfile, install } = sandbox
-    const key = JSON.stringify({ harness, engine, image: { image, from, dockerfile, install } })
+    const key = JSON.stringify({
+      harness,
+      engine,
+      image: { image, from, dockerfile, install },
+      plugins: plugins.map(pluginBuildId),
+    })
     const target = targets.get(key) ?? {
       id: `${sandboxId(sandbox)} · ${harness}`,
       harness,
       sandbox,
+      plugins,
       evals: 0,
       seen: new Set(),
     }
@@ -93,10 +125,10 @@ export function imageTargets(uses: ImageUse[]) {
     }
     targets.set(key, target)
   }
-  // Cell ids ignore install, so tell sandboxes apart by it, then by number.
+  // Cell ids ignore install and plugin builds, so tell sandboxes apart by them, then by number.
   const labels = new Map<string, number>()
   return [...targets.values()].map(({ seen: _, ...t }) => {
-    const label = `${t.id}${t.sandbox.install?.length ? ' + install' : ''}`
+    const label = `${t.id}${t.sandbox.install?.length ? ' + install' : ''}${pluginBuildsLabel(t.plugins)}`
     const n = (labels.get(label) ?? 0) + 1
     labels.set(label, n)
     return { ...t, id: n === 1 ? label : `${label} (${n})` }
@@ -269,15 +301,50 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   if (steps.length) {
     // The tag hashes its base's image id, so it's known only once the base is built.
     const ref = parent ? installLayerTag({ id: parent }, steps) : null
-    const layer: Pick<Probe, 'status' | 'detail'> = ref
+    const layer: Probe = ref
       ? await exists(ref)
       : unanswered
-        ? { status: 'unknown', detail: unanswered }
-        : { status: 'build', detail: 'not built yet' }
+        ? { info: null, status: 'unknown', detail: unanswered }
+        : { info: null, status: 'build', detail: 'not built yet' }
+    parent = layer.info?.id ?? null
+    if (layer.status === 'unknown') unanswered ??= layer.detail
     stages.push({
       what: `install ${steps.length} command${steps.length === 1 ? '' : 's'}`,
       ref: ref ?? 'reeval-install:<base id + commands>',
       action: 'build unless cached',
+      status: layer.status,
+      detail: layer.detail,
+    })
+  }
+  for (const source of target.plugins) {
+    const { run, cwd } = buildSteps(source.build as PluginBuild)
+    const action = `build unless cached: ${run.join(' && ')}${cwd === null ? '' : ` (from ${cwd})`}`
+    const what = `plugin ${pluginCall(source, root)}`
+    // A git or npm source is fetched to hash it, which only a build does.
+    if (source.source !== 'local') {
+      parent = null
+      stages.push({
+        what,
+        ref: 'reeval-plugin:<image id>-<commit + tree + build>',
+        action,
+        status: 'unknown',
+        detail: `${pluginCall(source, root)} is fetched when reeval image build or a run builds it`,
+      })
+      continue
+    }
+    const spec = await pluginBuildSpec(root, source)
+    const ref = parent ? pluginLayerTag({ id: parent }, spec) : null
+    const layer: Probe = ref
+      ? await exists(ref)
+      : unanswered
+        ? { info: null, status: 'unknown', detail: unanswered }
+        : { info: null, status: 'build', detail: 'not built yet' }
+    parent = layer.info?.id ?? null
+    if (layer.status === 'unknown') unanswered ??= layer.detail
+    stages.push({
+      what,
+      ref: ref ?? `reeval-plugin:<image id>-${pluginBuildKey(spec).slice(0, 16)}`,
+      action,
       status: layer.status,
       detail: layer.detail,
     })
@@ -379,10 +446,11 @@ export async function buildImages(
   const providers = createProviders({ refresh: options.force ? 'force' : 'check' })
   const prepared = targets.map((t) => ({
     kind: sandboxProvider(t.sandbox),
-    key: dockerKey(t.sandbox, harnessFor(t.harness)),
+    key: dockerKey(t.sandbox, harnessFor(t.harness), t.plugins),
     label: t.id,
     sandbox: t.sandbox,
     harness: harnessFor(t.harness),
+    plugins: t.plugins,
     setBy: [],
     runWide: false,
   }))
