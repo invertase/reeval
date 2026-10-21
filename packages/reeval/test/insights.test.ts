@@ -1247,7 +1247,7 @@ evaluate('skill helps', { runs: 2, compare: { baseline: plain, variants: [marked
  * `insights` replaces its answer; `analysis` adds keys to `analysis`.
  */
 const runConfig = (
-  o: { insights?: string; analysis?: string } = {},
+  o: { insights?: string; analysis?: string; vote?: string } = {},
 ) => `import { appendFileSync } from 'node:fs'
 import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -1275,7 +1275,7 @@ export default defineConfig({
           },
         }
       }`
-      },
+      },${o.vote ? `\n      vote: ${o.vote},` : ''}
     }),
     ${o.analysis ?? ''}
   },
@@ -1653,6 +1653,61 @@ evaluate('writes ok.txt', async (c) => {
       r.stdout,
       new RegExp(`insights stopped: .*: reeval analyze ${run.runId} --insights to finish`),
     )
+  })
+
+  test('Ctrl-C after the last attempt, while compare questions settle, starts no insights and keeps the exit code', {
+    skip: noSignals,
+  }, async () => {
+    const p = await project('run-insights-sigint-settle', {
+      'reeval.config.ts': runConfig({
+        vote: `() => {
+        appendFileSync(new URL('./votes.log', import.meta.url), 'vote\\n')
+        const until = Date.now() + 300
+        while (Date.now() < until) {}
+        return 'tie'
+      }`,
+      }),
+      'evals/envs.ts': `import { defineEnvironment } from 'reeval'
+export const base = defineEnvironment('base', {})
+export const skilled = defineEnvironment('skilled', {})
+`,
+      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+import { base, skilled } from './envs.ts'
+evaluate('asks', { runs: 4, compare: { baseline: base, variants: [skilled], questions: ['Which is cleaner?', 'Which is shorter?'] } }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
+})
+`,
+    })
+    const staging = join(p.dir, '.reeval/staging')
+    const finishing = () =>
+      existsSync(staging) &&
+      readdirSync(staging).some((id) => {
+        const file = join(staging, id, 'live.json')
+        return existsSync(file) && readFileSync(file, 'utf8').includes('"phase":"finishing"')
+      })
+    let poll: ReturnType<typeof setInterval> | undefined
+    const r = await runCli(p.dir, ['run'], {
+      onOutput: (_stdout, pid) => {
+        poll = setInterval(() => {
+          if (!existsSync(join(p.dir, 'votes.log')) || !finishing()) return
+          clearInterval(poll)
+          process.kill(-pid, 'SIGINT')
+        }, 20)
+        return true
+      },
+    })
+    clearInterval(poll)
+    assert.equal(r.code, 0, `the run's own exit code, not 130\n${r.stdout}${r.stderr}`)
+    assert.deepEqual(calls(p.dir), [], 'no insight call starts')
+    assert.doesNotMatch(r.stdout + r.stderr, /insights: 1 eval/)
+    const { run } = readRun(p.dir)
+    assert.match(
+      r.stdout,
+      new RegExp(`insights skipped \\(Ctrl-C\\): reeval analyze ${run.runId} --insights to write them`),
+    )
+    assert.equal(run.status, 'complete')
+    assert.notEqual(scratchInsights(p.dir)?.model, 'fake')
   })
 
   test('reeval analyze --insights finishes a stopped document, keeping its sentences byte for byte', async () => {

@@ -397,7 +397,14 @@ async function runCommand(
   let insights: RunInsights | null = run.insights
   let insightLines: string[] = []
   const { runInsights, wantsInsights } = await import('./insights/run.ts')
-  if (!stopped && wantsInsights(ctx.config, !flags['no-insights'])) {
+  // A signal after the last attempt (while compare questions settle or the record is written)
+  // finds nothing left to cancel; it still means stop, so insights don't start.
+  const wanted = !stopped && wantsInsights(ctx.config, !flags['no-insights'])
+  if (wanted && interrupted) {
+    insightLines = [
+      `insights skipped (${stopCode === EXIT.terminated ? 'SIGTERM' : 'Ctrl-C'}): reeval analyze ${record.runId} --insights to write them`,
+    ]
+  } else if (wanted) {
     const { scratchDir } = await import('./history/files.ts')
     const stop = new AbortController()
     let stopSignal: 'SIGINT' | 'SIGTERM' = 'SIGINT'
