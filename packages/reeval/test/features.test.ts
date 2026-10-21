@@ -1625,6 +1625,12 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/cursor-plugin-build',
+    tiers: ['docker'],
+    env: 'built',
+    canary: /expected '---\\nname: reviewer\\ndescription: Rev…' to contain 'BUILT-41'/,
+  },
+  {
     dir: 'harness/antigravity-rules',
     tiers: ['fake', 'docker'],
     image: 'antigravity',
