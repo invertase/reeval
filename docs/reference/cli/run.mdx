@@ -269,7 +269,7 @@ After the tally and hint, a run lists what reeval noticed about the evals themse
 
 Each remark prints in the run that first raises it for that version of the eval (its sources' hashes), and again once you edit the eval; `slow-mcp-start` prints in every run that has it. The history kinds need an earlier run. The default branch is `origin`'s HEAD, else a local `main` or `master`; without one, `check-never-fails` isn't raised. Remarks never change the exit code.
 
-A run writes its remarks to `.reeval/runs/<runId>/insights.json` (`model: "none"`), and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them in the insights it writes.
+A run writes its remarks to `.reeval/runs/<runId>/insights.json`, in the run's [insights](/reference/cli/analyze#during-a-run) when it writes them and alone (`model: "none"`) otherwise, and `reeval record` carries the file into the history folder. `reeval show` prints them, and [`reeval analyze --insights`](/reference/cli/analyze#insights) keeps them in the insights it writes.
 
 ## What it writes
 
