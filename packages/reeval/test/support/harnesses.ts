@@ -369,7 +369,7 @@ export function reserveAttempts(row: HarnessRow, attempts: number, what: string)
     : 0
   if (spent + attempts > budget) {
     throw new Error(
-      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise REEVAL_REAL_ATTEMPT_BUDGET in real.yml if the suite grew on purpose`,
+      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise the job's REEVAL_REAL_ATTEMPT_BUDGET (contract.yml, or real.yml's smoke job) if the suite grew on purpose`,
     )
   }
   appendFileSync(ledger, `${attempts} ${what} ${row.id}\n`)
