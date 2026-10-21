@@ -109,16 +109,17 @@ function goldenRun(g: Golden) {
 }
 
 /**
- * The golden's insights: its run's insights.json, or null. A golden cut to some evals is a view of
- * the run's facts, so its insights are held to the cut suite's hash, and the headline, which
- * speaks for the whole run, is left out.
+ * The golden's insights: its run's insights.json, or null, held to the suite's hash. The corpus
+ * file keeps the hash of the facts the reeval that recorded it computed, which a later change to
+ * `SuiteResult` moves; a golden shows the layout, and the stale file has its own test. A golden
+ * cut to some evals leaves out the headline, which speaks for the whole run.
  */
 export function goldenInsights(g: Golden, suite: SuiteResult): RunInsights | null {
   if (!g.insights) return null
   const file = join(dirname(goldenRun(g).file), suite.runId, 'insights.json')
   if (!existsSync(file)) throw new Error(`Golden ${g.name}: no ${file}`)
   const insights = readableInsights(JSON.parse(readFileSync(file, 'utf8')), file)
-  return g.evals ? { ...insights, factsHash: factsHash(suite), headline: null } : insights
+  return { ...insights, factsHash: factsHash(suite), ...(g.evals ? { headline: null } : {}) }
 }
 
 /** The golden's lines: with insights there's an analysis model, so no hint. */
