@@ -244,7 +244,7 @@ async function writeUnpackedPlugins(
   const fresh = files.filter((f) => f.path !== unpack.hooks?.file)
   if (fresh.length) {
     const r = await box.exec(
-      `for p in ${fresh.map((f) => shellQuote(f.path)).join(' ')}; do [ -e "$p" ] && echo "$p"; done; true`,
+      `for p in ${fresh.map((f) => shellQuote(f.path)).join(' ')}; do { [ -e "$p" ] || [ -L "$p" ]; } && echo "$p"; done; true`,
       { signal: a.signal },
     )
     const taken = r.stdout.trim().split('\n').filter(Boolean)
