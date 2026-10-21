@@ -775,7 +775,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@reeval/harness-grok-build')).createGrokBuild({
         auth,
         model: descriptor.model,
-        ...(plugins.length ? { pluginDirs: plugins.map((p) => p.dir) } : {}),
+        ...(plugins.length
+          ? {
+              pluginDirs: plugins.map((p) => p.dir),
+              pluginMcpServers: plugins.flatMap((p) =>
+                p.servers.map((s) => s.slice(p.name.length + 1)),
+              ),
+            }
+          : {}),
         ...(descriptor.kind === 'grok-build' && descriptor.effort
           ? { effort: descriptor.effort }
           : {}),

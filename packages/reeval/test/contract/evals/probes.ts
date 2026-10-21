@@ -54,7 +54,7 @@ export const prompts = {
   pluginMcp:
     "Call the house_stamp tool of the probe plugin's stamp MCP server once, then reply with what it returned.",
   pluginHook: 'Reply with the single word OK. Do not run any tools.',
-  pluginAgent: `Delegate to the ${PLUGIN_AGENT} subagent, from the probe plugin, with your subagent tool: ask it to reply, then stop. Do not answer for it.`,
+  pluginAgent: `Run the ${PLUGIN_AGENT} subagent, from the probe plugin, once with your subagent tool, giving it the task "Say PONG." Then reply with what it said. Do not answer for it.`,
 }
 
 /**

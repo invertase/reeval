@@ -106,6 +106,11 @@ export type GrokBuildHarnessSettings = {
    * `--plugin-dir` for every session: trusted, so their hooks and MCP servers start unprompted.
    */
   readonly pluginDirs?: readonly string[]
+  /**
+   * The names of the MCP servers those plugins declare, as Grok knows them (the plugin's own key,
+   * `stamp`), so a `use_tool` call of one is named `mcp__stamp__<tool>` like a server's above.
+   */
+  readonly pluginMcpServers?: readonly string[]
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
   /**
@@ -155,7 +160,10 @@ export function createGrokBuild(
       `Grok Build auth must be an environment object with ${GROK_CREDENTIAL_ENV} (an xAI API key)`,
     )
   }
-  const mcpServers = Object.keys(settings.mcpServers ?? {})
+  const mcpServers = [
+    ...Object.keys(settings.mcpServers ?? {}),
+    ...(settings.pluginMcpServers ?? []),
+  ]
   const acp = createACP({
     version: 'v1',
     harnessId: GROK_BUILD_HARNESS_ID,
