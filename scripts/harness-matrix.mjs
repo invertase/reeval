@@ -86,10 +86,6 @@ const NOTES = [
   (h) =>
     h.agent.pluginParts.length &&
     LAYOUTS[h.kind]?.pluginPlacement === 'flat' &&
-    `A plugin's skills sit beside the eval's and its MCP servers go in as ${code('<plugin>:<server>')}, so a skill or server whose name another already has is refused at plan time.`,
-  (h) =>
-    h.agent.pluginParts.length &&
-    LAYOUTS[h.kind]?.pluginPlacement === 'flat' &&
     `A plugin's skills sit beside the eval's and its MCP servers go in as ${code(pluginServerName(h))}, so a skill or server whose name another already has is refused at plan time.`,
   (h) =>
     h.agent.pluginParts.length &&
