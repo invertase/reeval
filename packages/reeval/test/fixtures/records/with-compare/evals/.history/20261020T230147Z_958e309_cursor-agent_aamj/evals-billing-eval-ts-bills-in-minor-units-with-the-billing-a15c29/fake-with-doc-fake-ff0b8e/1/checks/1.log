@@ -1,0 +1,4 @@
+$ grep -q pence docs/billing.md
+exit 0
+--- stdout
+--- stderr

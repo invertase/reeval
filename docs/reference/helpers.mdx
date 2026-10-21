@@ -225,7 +225,7 @@ Every source takes:
 </Property>
 
 <Property name="build" type="string | string[] | { run: string | string[], cwd?: string }" optional>
-  Commands that build the plugin in its own cached Docker image layer, on the harness image, as root, with no secrets. They get the whole source and run from the plugin's `path`, or from `cwd` relative to the source's root (`'.'` for the root, for a monorepo's workspace install). For `plugin.marketplace`, the source is the marketplace itself for a `./` entry, and otherwise the entry's own repository or package. Only `path` is placed afterwards, so the build's output belongs inside it; what it leaves elsewhere is dropped. Docker only: on `fakeSandbox()` the plan refuses it. The record's `plugins[].build` is the layer's tag. See [Docker](/reference/sandbox/docker#images-and-caching).
+  Commands that build the plugin in its own cached Docker image layer, on the harness image, as root, with no secrets. They get the whole source and run from the plugin's `path`, or from `cwd` relative to the source's root (`'.'` for the root, for a monorepo's workspace install). For `plugin.marketplace`, the source is the marketplace itself for a `./` entry, and otherwise the entry's own repository or package. Only `path` is placed afterwards, so the build's output belongs inside it; what it leaves elsewhere is dropped. The source's `.git` isn't there, so a build that needs git metadata gets it another way, such as a version in its commands. Docker only: on `fakeSandbox()` the plan refuses it. The record's `plugins[].build` is the layer's tag. See [Docker](/reference/sandbox/docker#images-and-caching).
 
 ```ts
 plugin.git('github:acme/agent-plugins', {
@@ -238,7 +238,7 @@ plugin.git('github:acme/agent-plugins', {
 
 Each plugin's MCP servers join the environment's `mcp` as `<plugin>:<server>`, so egress, brokering and the record treat them like any other server. A whole `${VAR}` env value is read as `secret.fromEnv('VAR')`, and `${VAR}` in a header as `secret.template`. `${CLAUDE_PLUGIN_ROOT}` is the plugin's directory in the sandbox, `~/.reeval/plugins/<name>`, and the only variable a command or its args may name. A git or npm plugin's http server needs its host in `egress.allow` under a restricted policy; a local plugin's is an automatic host.
 
-No real harness loads plugins yet: the plan refuses a plugin on each, naming it, and the fake harness takes them. A server or hook that runs `npx`, `bunx`, `uvx` or `pipx run` fetches at start, so it's refused under an egress policy that doesn't allow the registry, and noted in the plan under `allow-all`:
+Claude Code and Grok Build load every part but `rules`, and start a plugin's MCP servers themselves, so one that reads a host variable is refused there. The plan refuses a plugin on the other real harnesses, naming it, and the fake harness takes them. A server or hook that runs `npx`, `bunx`, `uvx` or `pipx run` fetches at start, so it's refused under an egress policy that doesn't allow the registry, and noted in the plan under `allow-all`:
 
 ```text
 the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start; add a build that installs it to keep it off the network

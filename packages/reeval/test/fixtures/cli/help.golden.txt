@@ -1,13 +1,16 @@
 reeval VERSION — eval runner for coding agents
 
 Usage:
-  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
-                                eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx,
-                                grok-build or none (fake agent only); the config's harness, with a
-                                fake profile for no keys
+  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, an
+                                environment, an eval that runs in it, .gitignore entries and a
+                                package.json script; asks which agent, then checks Docker
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex, fx or
+                                grok-build: the config's harness
     -y, --yes                   Don't ask: take the defaults (--harness cursor)
-    --force                     Overwrite reeval.config.ts and the eval when they differ
+    --bare                      Only reeval.config.ts, .gitignore and package.json: no environment
+                                or eval
+    --force                     Replace a reeval.config.ts init didn't write; no other file is ever
+                                overwritten
     --dry-run                   Print what it would create or change, and write nothing
   reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
                                 images, the keys of each harness, the judge and analysis.model,
@@ -57,6 +60,7 @@ Usage:
   reeval show [run]             One run: result blocks, --md (summary.md) or --json (the record)
   reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                                 --md --json --fail-on-regression
+    -v, --verbose               Also each cell's lift and effort, base → head, and the stack changes
   reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                                 (default dir: .reeval/checkouts/<run>)
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,

@@ -1,10 +1,13 @@
 // The output goldens, test/fixtures/output/<name>.txt: each one layout, rendered from the evals it
-// names in a corpus run. test/output.test.ts holds the files to these, and `output:preview all`
-// prints them.
+// names in a corpus run, and each `reeval compare` block, from two corpus runs.
+// test/output.test.ts holds the files to these, and `output:preview all` prints them.
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RunRecord } from '../../src/history/types.ts'
+import type { CompareInput } from '../../src/ui/compare-layout.ts'
+import { type CompareRow, compare, stackChanges } from '../../src/view/compare.ts'
+import { runHeader } from '../../src/view/header.ts'
 import { readableRecord } from '../../src/view/record.ts'
 import { type EvalResult, type SuiteResult, suiteResult } from '../../src/view/suite.ts'
 import { CORPUS_DIR, corpusEntries } from '../schema/corpus.ts'
@@ -94,4 +97,86 @@ export function goldenSuite(g: Golden): SuiteResult {
   )
   if (missing.length) throw new Error(`Golden ${g.name}: no eval ${missing.join(', ')}`)
   return { ...suite, files, tally: tallyOf(files.flatMap((f) => f.evals)) }
+}
+
+export type CompareGolden = {
+  name: string
+  /** The corpus entry: its oldest run is base and its newest head, or head alone with `noBaseline`. */
+  entry: string
+  noBaseline?: boolean
+  /** The eval ids whose rows to keep; every row when unset. */
+  evals?: string[]
+  verbose?: boolean
+}
+
+const compared = (...names: string[]) => names.map((n) => `evals/${n}`)
+
+/** One per block `reeval compare` prints, from the with-compare entry (scripts/output/compare). */
+export const COMPARE_GOLDENS: CompareGolden[] = [
+  {
+    name: 'compare-regressed',
+    entry: 'with-compare',
+    evals: compared('greet.eval.ts › greets in the house style'),
+  },
+  {
+    name: 'compare-fixed',
+    entry: 'with-compare',
+    evals: compared('buttons.eval.ts › adds a double button that builds'),
+  },
+  {
+    name: 'compare-cant-compare',
+    entry: 'with-compare',
+    evals: compared('billing.eval.ts › bills in minor units with the billing doc'),
+  },
+  {
+    name: 'compare-new-and-removed',
+    entry: 'with-compare',
+    evals: compared('greet.eval.ts › greets in Spanish', 'greet.eval.ts › greets in German'),
+  },
+  {
+    name: 'compare-same-collapsed',
+    entry: 'with-compare',
+    evals: compared(
+      'buttons.eval.ts › adds a reset button that builds',
+      'buttons.eval.ts › adds a clear button that builds',
+      'greet.eval.ts › writes greet.js',
+      'greet.eval.ts › greets in French',
+    ),
+  },
+  { name: 'compare-no-baseline', entry: 'with-compare', noBaseline: true },
+  { name: 'compare', entry: 'with-compare' },
+  { name: 'compare-verbose', entry: 'with-compare', verbose: true },
+]
+
+const fromFile = (file: string) =>
+  readableRecord(JSON.parse(readFileSync(file, 'utf8')) as RunRecord, file)
+
+/** Two recorded runs as `reeval compare` reads them; head alone when `base` is null. */
+export function compareInput(base: RunRecord | null, head: RunRecord): CompareInput {
+  const headEntry = runHeader(head, true)
+  const baseEntry = base ? runHeader(base, true) : null
+  const rows = baseEntry
+    ? compare(baseEntry, headEntry)
+    : headEntry.evals.map(
+        (e): CompareRow => ({ id: e.id, base: null, head: e.outcome, status: 'added' }),
+      )
+  return {
+    base: base ? { runId: base.runId, suite: suiteResult(base) } : null,
+    head: { runId: head.runId, suite: suiteResult(head) },
+    rows,
+    changes: baseEntry ? stackChanges(baseEntry, headEntry) : [],
+  }
+}
+
+/** The golden's compare, its rows cut down to its evals. */
+export function goldenCompare(g: CompareGolden): CompareInput {
+  const entry = corpusEntries().find((e) => e.name === g.entry)
+  const [first, last] = [entry?.runs[0], entry?.runs.at(-1)]
+  if (!first || !last || first === last) throw new Error(`Corpus entry ${g.entry} needs two runs`)
+  const input = compareInput(g.noBaseline ? null : fromFile(first.file), fromFile(last.file))
+  if (!g.evals) return input
+  const keep = new Set(g.evals)
+  const missing = g.evals.filter((id) => !input.rows.some((r) => r.id === id))
+  if (missing.length) throw new Error(`Golden ${g.name}: no row ${missing.join(', ')}`)
+  return { ...input, rows: input.rows.filter((r) => keep.has(r.id)) }
 }

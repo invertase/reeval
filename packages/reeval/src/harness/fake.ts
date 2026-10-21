@@ -4,7 +4,7 @@ import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
-import { layoutOf } from './agents.ts'
+import { agentMcp, layoutOf, writePluginFiles } from './agents.ts'
 import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
@@ -15,16 +15,23 @@ const lineCount = (text: string) =>
  * real sandbox actions. Harness-placed skills are written under `~/` where its layout's adapter
  * puts them (`~/.agents/skills` by default, as Cursor's does). Plugins are already copied under
  * `~/.reeval/plugins/`; where its layout takes plugin items flat, their skills arrive in `skills`.
+ * Where it takes them namespaced, it writes its layout's plugin files (Claude Code's settings)
+ * and leaves the plugins' MCP servers to the plugins, as that agent does.
  */
 export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness => {
   let starts = 0
   return {
-    async start(sandbox, _signal, { skills, workspaceSkills, mcp, plugins }) {
+    async start(sandbox, _signal, { skills, workspaceSkills, mcp: all, plugins }) {
       if (descriptor.failWith) throw new InfraError(descriptor.failWith)
       const hangs = descriptor.startHangs
       // A start that never settles, abort or not, like an agent stuck in its bootstrap.
       if (hangs === true || starts++ < (hangs ?? 0)) return new Promise<never>(() => {})
-      const dir = `~/${layoutOf(descriptor).harnessSkillDir}`
+      const layout = layoutOf(descriptor)
+      const mcp = agentMcp(layout, all, plugins)
+      for (const path of await writePluginFiles(sandbox, layout, plugins)) {
+        debugLog('env', `plugin settings → ${path} by the fake agent`)
+      }
+      const dir = `~/${layout.harnessSkillDir}`
       for (const skill of skills) {
         for (const f of skillFiles(skill)) {
           await sandbox.writeFile(`${dir}/${skill.name}/${f.path}`, f.content)

@@ -11,19 +11,22 @@ import type { PiMcpServer } from '@reeval/harness-pi'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox-docker'
 import {
   PART_PATHS,
+  PLUGIN_DIR,
   PLUGIN_PARTS,
   type PluginContents,
   pluginServerName,
 } from '../environment/plugins.ts'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
-import { InfraError } from '../sandbox/types.ts'
+import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type {
   AgentHarnessDescriptor,
   EnvironmentLayer,
   HarnessDescriptor,
+  McpServer,
   PluginPart,
   WebEventType,
 } from '../types.ts'
+import type { PlacedPlugin } from './types.ts'
 
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
@@ -39,10 +42,20 @@ export type Layout = {
   /**
    * How the agent takes a plugin's items: `flat`, unpacked into the same lists as the
    * environment's skills and MCP servers (so names can clash), or `namespaced` under the
-   * plugin's name.
+   * plugin's name. A namespaced agent loads a plugin's MCP servers from the plugin itself.
    */
   pluginPlacement: 'flat' | 'namespaced'
+  /**
+   * Files under `~/` that make the agent load the session's plugins, written before it starts;
+   * unset for an agent pointed at them some other way (launch arguments, an install step). One
+   * marked `merge` is a JSON object whose keys are merged into the file an environment's `files`
+   * may already have put there, rather than replacing it.
+   */
+  pluginFiles?: (plugins: readonly PlacedPlugin[]) => PluginFile[]
 }
+
+/** A file a layout writes for the session's plugins. */
+export type PluginFile = { path: string; content: string; merge?: true }
 
 /** What reeval needs to know about a real agent; everything else is the same for all of them. */
 export type Agent = Layout & {
@@ -95,6 +108,11 @@ export type Agent = Layout & {
   forModel?: (model: string, env?: NodeJS.ProcessEnv) => ModelSpecific
   /** The plugin parts reeval places for the agent; empty refuses every plugin. */
   pluginParts: readonly PluginPart[]
+  /**
+   * Set for an agent that takes plugins namespaced but names a plugin's MCP servers by their own
+   * keys, in one list with the environment's (Grok Build): it keeps one of two servers of a name.
+   */
+  pluginServersByName?: true
   /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -105,6 +123,7 @@ export type Agent = Layout & {
     mcpServers?: Record<string, unknown>
     auth: Record<string, string>
     descriptor: AgentHarnessDescriptor
+    plugins: readonly PlacedPlugin[]
   }) => Promise<HarnessAgentAdapter>
 }
 
@@ -419,6 +438,100 @@ export function cursorMcpServers(
   )
 }
 
+/**
+ * What Claude Code's plugin format bundles, which Grok Build reads too: every part but rules,
+ * which neither loads from a plugin.
+ */
+const CLAUDE_FORMAT_PARTS: readonly PluginPart[] = PLUGIN_PARTS.filter((p) => p !== 'rules')
+
+/** The marketplace Claude Code's settings name for the session's plugins. */
+export const CLAUDE_PLUGIN_MARKETPLACE = 'reeval'
+
+/**
+ * Claude Code's settings for the session's plugins: a `directory` marketplace at the directory
+ * they were copied to, listing each, and each enabled as `<plugin>@reeval`. Claude Code installs
+ * and loads them as it starts, since the bridge leaves every settings source on.
+ */
+export function claudePluginFiles(plugins: readonly PlacedPlugin[]): PluginFile[] {
+  const [first] = plugins
+  if (!first) return []
+  const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`
+  const marketplace = {
+    name: CLAUDE_PLUGIN_MARKETPLACE,
+    owner: { name: 'reeval' },
+    plugins: plugins.map((p) => ({ name: p.name, source: `./${p.name}` })),
+  }
+  const settings = {
+    extraKnownMarketplaces: {
+      [CLAUDE_PLUGIN_MARKETPLACE]: {
+        source: { source: 'directory', path: first.dir.slice(0, first.dir.lastIndexOf('/')) },
+      },
+    },
+    enabledPlugins: Object.fromEntries(
+      plugins.map((p) => [`${p.name}@${CLAUDE_PLUGIN_MARKETPLACE}`, true]),
+    ),
+  }
+  return [
+    { path: `${PLUGIN_DIR}/.claude-plugin/marketplace.json`, content: json(marketplace) },
+    { path: '~/.claude/settings.json', content: json(settings), merge: true },
+  ]
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/**
+ * Writes the layout's plugin files into the sandbox and returns their paths. A `merge` file's keys
+ * go into the JSON object already at its path (an object-valued key merged one level down), so
+ * settings an environment's `files` wrote there stay.
+ */
+export async function writePluginFiles(
+  sandbox: Sandbox,
+  layout: Layout,
+  plugins: readonly PlacedPlugin[],
+): Promise<string[]> {
+  const written: string[] = []
+  for (const f of layout.pluginFiles?.(plugins) ?? []) {
+    const existing = f.merge ? await sandbox.readFile(f.path) : null
+    let content = f.content
+    if (existing?.trim()) {
+      let base: unknown
+      try {
+        base = JSON.parse(existing)
+      } catch {}
+      if (!isObject(base)) {
+        throw new InfraError(
+          `${f.path} isn't a JSON object, so reeval can't enable the session's plugins in it: write it as one in files, or leave it out`,
+        )
+      }
+      const ours = JSON.parse(f.content) as Record<string, unknown>
+      const merged: Record<string, unknown> = { ...base }
+      for (const [k, v] of Object.entries(ours)) {
+        const was = base[k]
+        merged[k] = isObject(v) && isObject(was) ? { ...was, ...v } : v
+      }
+      content = `${JSON.stringify(merged, null, 2)}\n`
+    }
+    await sandbox.writeFile(f.path, content)
+    written.push(f.path)
+  }
+  return written
+}
+
+/**
+ * The MCP servers the agent is given: all of them, less the plugins' own where it takes plugin
+ * items namespaced, since it loads those from the plugin and would otherwise start each twice.
+ */
+export function agentMcp(
+  layout: Layout,
+  mcp: Record<string, ResolvedMcpServer>,
+  plugins: readonly PlacedPlugin[],
+): Record<string, ResolvedMcpServer> {
+  if (layout.pluginPlacement !== 'namespaced') return mcp
+  const own = new Set(plugins.flatMap((p) => p.servers))
+  return Object.fromEntries(Object.entries(mcp).filter(([name]) => !own.has(name)))
+}
+
 /** Where each agent with an image reads rules and skills. */
 export const LAYOUTS: Record<BakedHarness, Layout> = {
   // The SDK loads AGENTS.md and .cursor/skills from the workspace (settingSources `project`) and
@@ -434,6 +547,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.claude/skills',
     harnessSkillDir: '.claude/skills',
     pluginPlacement: 'namespaced',
+    pluginFiles: claudePluginFiles,
   },
   // Home skills are ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli path its docs give.
   antigravity: {
@@ -527,7 +641,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   'claude-code': {
     ...LAYOUTS['claude-code'],
-    pluginParts: [],
+    pluginParts: CLAUDE_FORMAT_PARTS,
     name: 'Claude Code',
     factory: 'claudeCode',
     credential: 'ANTHROPIC_API_KEY',
@@ -699,7 +813,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
   },
   'grok-build': {
     ...LAYOUTS['grok-build'],
-    pluginParts: [],
+    pluginParts: CLAUDE_FORMAT_PARTS,
+    pluginServersByName: true,
     name: 'Grok Build',
     factory: 'grokBuild',
     credential: 'XAI_API_KEY',
@@ -708,10 +823,18 @@ export const AGENTS: Record<AgentKind, Agent> = {
     modelResponses: XAI_MODEL_RESPONSES,
     servedModel: xaiServedModel,
     mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
       (await import('@reeval/harness-grok-build')).createGrokBuild({
         auth,
         model: descriptor.model,
+        ...(plugins.length
+          ? {
+              pluginDirs: plugins.map((p) => p.dir),
+              pluginMcpServers: plugins.flatMap((p) =>
+                p.servers.map((s) => s.slice(p.name.length + 1)),
+              ),
+            }
+          : {}),
         ...(descriptor.kind === 'grok-build' && descriptor.effort
           ? { effort: descriptor.effort }
           : {}),
@@ -760,6 +883,17 @@ export function refusedMcp(
   }
 }
 
+/** The first host variable a plugin MCP server reads (`${VAR}`), as `VAR`; undefined for none. */
+function hostVariable(s: McpServer): string | undefined {
+  const values = Object.entries(s.transport === 'stdio' ? s.env : s.headers)
+  for (const [key, v] of values) {
+    if (typeof v === 'string') continue
+    if (v.kind === 'secret') return v.from ?? key
+    return /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/.exec(v.template)?.[1] ?? key
+  }
+  return undefined
+}
+
 /** A skill the environment's `skills` place, named by the call that placed it. */
 export type OwnSkill = { name: string; call: string }
 
@@ -781,8 +915,10 @@ export function refusedPlugins(
 ): string | undefined {
   if (plugins.length === 0 && unread.length === 0) return undefined
   const agent = isAgentKind(harness.kind) ? AGENTS[harness.kind] : undefined
-  const loads = agent ? agent.pluginParts : PLUGIN_PARTS
-  const name = agent?.name ?? 'The fake agent'
+  const mimics = harness.kind === 'fake' && harness.layout ? AGENTS[harness.layout] : undefined
+  const loads = (agent ?? mimics)?.pluginParts ?? PLUGIN_PARTS
+  const name =
+    agent?.name ?? (mimics ? `The fake agent with ${mimics.name}'s layout` : 'The fake agent')
   if (loads.length === 0) {
     const first = plugins[0] ? `the ${plugins[0].name} plugin` : unread[0]
     return `${name} can't load plugins yet: leave ${first} out of this cell`
@@ -820,7 +956,29 @@ export function refusedPlugins(
     }
   }
   const layout = layoutOf(harness)
-  if (layout.pluginPlacement !== 'flat') return undefined
+  if (layout.pluginPlacement === 'namespaced') {
+    for (const p of plugins) {
+      if (!p.kept.includes('mcp')) continue
+      for (const [server, s] of Object.entries(p.mcp)) {
+        const secret = hostVariable(s)
+        if (!secret) continue
+        const rest = p.kept.filter((part) => part !== 'mcp')
+        return `${name} loads the ${p.name} plugin's MCP server "${server}" itself, so reeval can't give it ${secret} from the host: use only: [${quoted(rest)}] and declare the server in mcp, where reeval fills it in`
+      }
+    }
+    if (!(agent ?? mimics)?.pluginServersByName) return undefined
+    const byName = new Map(own.mcp.map((n) => [n, `mcp.${n}`]))
+    for (const p of plugins) {
+      for (const server of Object.keys(p.mcp)) {
+        const other = byName.get(server)
+        if (other) {
+          return `${name} names the ${p.name} plugin's MCP server "${server}" by its own name, as it does ${other}, and keeps only one: rename one, or leave mcp out of the plugin with only`
+        }
+        byName.set(server, `the ${p.name} plugin's MCP server "${server}"`)
+      }
+    }
+    return undefined
+  }
   const serverOwner = new Map(own.mcp.map((n) => [n, `mcp.${n}`]))
   for (const p of plugins) {
     for (const server of Object.keys(p.mcp)) {

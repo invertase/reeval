@@ -43,6 +43,7 @@ export type Area = (typeof AREAS)[number]
 const unit = (name: string) => `reeval/test/unit.test.ts › ${name}`
 const declaration = (name: string) => `reeval/test/declaration.test.ts › ${name}`
 const options = (name: string) => `reeval/test/options.test.ts › ${name}`
+const questions = (name: string) => `reeval/test/compare-questions.test.ts › ${name}`
 const engine = (name: string) => `reeval/test/engine.test.ts › ${name}`
 const secrets = (name: string) => `reeval/test/secrets.test.ts › ${name}`
 const harness = (name: string) => `reeval/test/harness.test.ts › ${name}`
@@ -189,16 +190,16 @@ export const inventory: InventoryFeature[] = [
       'compare/questions-across',
     ],
     tests: [
-      options('--dry-run names the questions with no language model'),
-      options('an evaluation model as the judge or the analysis model exits 2'),
-      options("a question's own model needs its key"),
-      options('with a language model the run plans its questions'),
-      options('votes are recorded after the attempts'),
-      options('a question with across: environment records only environment pairs'),
-      options('compare.across sets the default factor'),
-      options('a question across overrides compare.across'),
-      options('a vote reason is recorded, shown and left out of pass or fail'),
-      options('a model error is kept on its answer'),
+      questions('--dry-run names the questions with no language model'),
+      questions('an evaluation model as the judge or the analysis model exits 2'),
+      questions("a question's own model needs its key"),
+      questions('with a language model the run plans its questions'),
+      questions('votes are recorded after the attempts'),
+      questions('a question with across: environment records only environment pairs'),
+      questions('compare.across sets the default factor'),
+      questions('a question across overrides compare.across'),
+      questions('a vote reason is recorded, shown and left out of pass or fail'),
+      questions('a model error is kept on its answer'),
       'reeval/test/results.test.ts › a vote reason is stored, capped and sampled',
       options('common mistakes'),
       'reeval/test/results.test.ts › compare question pairs',
@@ -222,7 +223,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/results.test.ts › state chooses what each side shows; output and files stay out by default',
       'reeval/test/results.test.ts › canary: state off drops a part the default shows',
       "reeval/test/results.test.ts › artifacts send each side's own capture of that name, labelled by position",
-      options("question.model cascades to every question without its own; an entry's model wins"),
+      questions("question.model cascades to every question without its own; an entry's model wins"),
       options('common mistakes'),
     ],
   },
@@ -505,9 +506,9 @@ export const inventory: InventoryFeature[] = [
     plan: ['plugins/parts', 'plugins/remote', 'plugins/fetches-at-start'],
     tests: [
       plugin('a plugin is read in Claude Code’s layout'),
-      plugin('every real harness refuses every plugin'),
+      plugin('a real harness without plugin parts refuses every plugin'),
       plugin('a child’s plugin replaces a same-named parent plugin'),
-      planTest('every real harness refuses a plugin at plan time'),
+      planTest('a real harness without plugins refuses one at plan time'),
       planTest('a plugin the plan reads and refuses exits 2'),
     ],
   },
@@ -521,6 +522,30 @@ export const inventory: InventoryFeature[] = [
       plugin('a marketplace entry’s source is a ./path, a git repository or an npm package'),
       plugin('a marketplace reeval can’t read'),
       plugin('resolving a marketplace entry places that plugin alone'),
+    ],
+  },
+  {
+    id: 'harness.plugins.namespaced',
+    area: 'Environments',
+    name: 'Plugins on Claude Code (a directory marketplace in `~/.claude/settings.json`) and Grok Build (`--plugin-dir`): every part but rules, their MCP servers left to the agent, a host secret refused',
+    fixtures: ['harness/claude-code-plugin', 'harness/grok-build-plugin'],
+    plan: ['plugins/claude-code-and-grok-build'],
+    tests: [
+      plugin('Claude Code and Grok Build load every part but rules'),
+      plugin('Claude Code enables the placed plugins from a directory marketplace'),
+      plugin('Claude Code’s plugin settings merge into a ~/.claude/settings.json'),
+      plugin('Grok Build refuses a plugin MCP server named like another'),
+      planTest('Grok Build refuses a plugin MCP server named like one in mcp'),
+      planTest("Claude Code and Grok Build refuse a plugin's rules"),
+      grokAdapter('unit', 'grok-acp starts grok agent --no-leader stdio'),
+    ],
+    real: [
+      'contract › plugin skill used',
+      'contract › plugin MCP server called',
+      'contract › plugin hook ran',
+      'contract › plugin subagent available',
+      'contract › plugin part it can’t load refused',
+      'contract › plugin hermetic: nothing undeclared loaded or contacted',
     ],
   },
   {
@@ -1631,6 +1656,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/history.test.ts › reeval run writes scratch; reeval record promotes it',
       'reeval/test/history.test.ts › an imported helper is part of the fingerprint',
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
+      'reeval/test/output.test.ts › a check not run on one side is not run',
+      'reeval/test/output.test.ts › a check not run on both sides is no change',
       'reeval/test/history.test.ts › a history file that is not a readable record is named on stderr',
       docker('two runs with the same agent context are comparable'),
     ],
@@ -1708,7 +1735,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'effort',
     area: 'Records and studio',
-    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare` and the studio',
+    name: 'Effort (tool calls, agent time, and tokens when both sides reported usage): the effort table in `reeval run` and `summary.md` from four counted tries a side, beside lift in `reeval compare -v` and the studio',
     tests: [
       analysis('the rank test is exact'),
       analysis('tokens join the rank test when both sides reported usage'),
@@ -1753,7 +1780,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       "reeval/test/results.test.ts › head to head: a pair whose two orders disagree is a split, not a win each (Ben's UX votes)",
       'reeval/test/results.test.ts › canary: two arms get no head-to-head line, and orders that agree split nothing',
-      options('three arms: head to head per pair, and pairs the order decided are splits'),
+      questions('three arms: head to head per pair, and pairs the order decided are splits'),
     ],
   },
   {

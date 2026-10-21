@@ -51,7 +51,8 @@ export type DoctorDeps = {
   /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
   nodeVersion: string
   platform: NodeJS.Platform
-  dockerState: (engine?: Engine) => Promise<DockerState>
+  /** Aborting `signal` kills `docker info` and rejects with its reason. */
+  dockerState: (engine?: Engine, signal?: AbortSignal) => Promise<DockerState>
   dockerCapacity: (engine?: Engine) => Promise<{ cpus: number; memoryBytes: number } | null>
   /** Why Podman can't confine a sandbox (too old, cgroup controllers missing), or null. */
   podmanConfinement: () => Promise<{ problem: string; fix: string } | null>
@@ -85,7 +86,7 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     runtime: runtimeInfo(),
     nodeVersion: process.versions.node,
     platform: process.platform,
-    dockerState: async (engine) => (await sandbox()).dockerState(engine),
+    dockerState: async (engine, signal) => (await sandbox()).dockerState(engine, signal),
     dockerCapacity: async (engine) => (await sandbox()).dockerCapacity(engine),
     podmanConfinement: async () =>
       (await import('./sandbox/providers.ts')).podmanConfinementProblem(),
@@ -322,6 +323,21 @@ async function checkDockerEngine(
       windowsContainers: true,
     }
   }
+  if (state === 'missing') {
+    const { DOCKER_INSTALL } = await import('./sandbox/providers.ts')
+    return {
+      checks: [
+        {
+          id: 'docker',
+          status: 'fail',
+          summary:
+            "isn't installed (no docker command on the PATH), and the config's sandboxes need it",
+          fix: DOCKER_INSTALL[deps.platform] ?? DOCKER_INSTALL.linux,
+        },
+      ],
+      running: false,
+    }
+  }
   if (state === 'down') {
     return {
       checks: [
@@ -355,6 +371,30 @@ async function checkDockerEngine(
     ],
     running: true,
   }
+}
+
+/**
+ * One line on whether Docker can run sandboxes, for the end of `reeval init`: ready, or what's
+ * wrong with its fix and then `next`. Reads only Docker's own state, never a config.
+ */
+export async function dockerReadiness(
+  deps: Pick<DoctorDeps, 'dockerState' | 'platform'>,
+  next: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const state = await deps.dockerState(undefined, signal)
+  if (state === 'running') return `Docker is running: ready for ${next}`
+  const { DOCKER_INSTALL } = await import('./sandbox/providers.ts')
+  const [what, fix] =
+    state === 'missing'
+      ? ["Docker isn't installed", DOCKER_INSTALL[deps.platform] ?? DOCKER_INSTALL.linux]
+      : state === 'windows-containers'
+        ? [
+            "Docker is running Windows containers, but reeval's sandboxes are Linux containers",
+            'switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers)',
+          ]
+        : ["Docker isn't running", DOCKER_FIX[deps.platform] ?? DOCKER_FIX.linux]
+  return `${what}: ${fix}, then run ${next}`
 }
 
 /**
@@ -843,7 +883,9 @@ export async function doctor(
     } else if (docker.checks[0]?.status === 'fail') {
       const why = docker.windowsContainers
         ? 'Docker runs Windows containers'
-        : `${docker.checks[0]?.id === 'podman' ? 'Podman' : 'Docker'} isn't running`
+        : docker.checks[0]?.summary.startsWith("isn't installed")
+          ? "Docker isn't installed"
+          : `${docker.checks[0]?.id === 'podman' ? 'Podman' : 'Docker'} isn't running`
       checks.push({ id: 'image', status: 'skip', summary: why })
     }
     const online = !!flags.online
