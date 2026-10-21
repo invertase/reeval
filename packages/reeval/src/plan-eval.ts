@@ -180,7 +180,12 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     const workspace = workspaceOf(planned.environment.layers)
     const files = filesOf(planned.environment.layers)
     const builds = builtPlugins(planned.environment.layers)
-    const setBy = setByOf(planned)
+    const setBy = builds.length
+      ? {
+          ...setByOf(planned),
+          pluginBuilds: `environment ${planned.environment.name}${path ? ` in ${path}` : ''}`,
+        }
+      : setByOf(planned)
     const id = evalId(rankFile, [...groups, name])
     const key = attemptKey(id, planned.cell.key, planned.n)
     const done = ctx.completed?.includes(key)

@@ -20,8 +20,8 @@ export type PrepareUse = {
   sandbox: SandboxDescriptor
   /** Its environment's plugins with a `build`, layered. */
   plugins?: readonly PluginSource[]
-  /** `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
-  setBy: { sandbox: string; harness: string }
+  /** `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`; `pluginBuilds` names the environment its builds come from. */
+  setBy: { sandbox: string; harness: string; pluginBuilds?: string }
 }
 
 /** One distinct environment to prepare, with every level that asked for it. */
@@ -35,7 +35,7 @@ export type PrepareTarget = {
   harness: HarnessDescriptor
   /** The plugins built into it. */
   plugins: readonly PluginSource[]
-  /** The levels that set the sandbox, in first-use order. */
+  /** The levels that set the sandbox, or the environments its plugin builds come from, in first-use order. */
   setBy: string[]
   /** Set by the config or a profile, sandbox and harness both: a failure stops the run. */
   runWide: boolean
@@ -81,7 +81,9 @@ export function prepareTargets(
       setBy: [],
       runWide: false,
     }
-    if (!target.setBy.includes(use.setBy.sandbox)) target.setBy.push(use.setBy.sandbox)
+    // A build's failure is the environment's that asked for it, not the sandbox's.
+    const by = plugins.length ? (use.setBy.pluginBuilds ?? use.setBy.sandbox) : use.setBy.sandbox
+    if (!target.setBy.includes(by)) target.setBy.push(by)
     // Plugin builds come from an environment, not from where the sandbox was set.
     target.runWide ||=
       plugins.length === 0 && runWideLevel(use.setBy.sandbox) && runWideLevel(use.setBy.harness)

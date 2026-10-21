@@ -2198,8 +2198,8 @@ export type AttemptMeta = {
   label: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
-  setBy: { sandbox: string; harness: string }
+  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`; with `pluginBuilds`, the environment its plugin builds come from (`environment review in evals/review.eval.ts`). */
+  setBy: { sandbox: string; harness: string; pluginBuilds?: string }
   /** How its cell's attempts decide the cell's outcome; `'none'` when they don't fail the run. */
   gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */

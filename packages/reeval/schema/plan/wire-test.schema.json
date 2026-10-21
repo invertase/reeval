@@ -122,10 +122,13 @@
           }
         },
         "setBy": {
-          "description": "The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group(\"net\")` or `evaluate(\"x\")`.",
+          "description": "The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group(\"net\")` or `evaluate(\"x\")`; with `pluginBuilds`, the environment its plugin builds come from (`environment review in evals/review.eval.ts`).",
           "type": "object",
           "properties": {
             "harness": {
+              "type": "string"
+            },
+            "pluginBuilds": {
               "type": "string"
             },
             "sandbox": {
