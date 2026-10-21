@@ -298,7 +298,10 @@ export type FamilyEffortMetric = {
   ratio: number | null
   /** Wilcoxon signed-rank over the per-case differences; null when every difference is 0. */
   p: number | null
-  /** `insufficient` below 6 non-zero differences, where the exact test can't reach 0.05. */
+  /**
+   * `insufficient` below 6 non-zero differences, where the exact test can't reach 0.05. `fewer`
+   * and `more` are the test's direction (which side's differences rank higher), not the median's.
+   */
   verdict: 'fewer' | 'more' | 'noise' | 'insufficient'
 }
 

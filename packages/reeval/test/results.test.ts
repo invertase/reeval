@@ -251,12 +251,37 @@ describe("paired lift over a pooled family's cases", () => {
   })
 
   test('the signed-rank p: exact, with mid-ranks, and normal above 20', () => {
-    assert.equal(signedRank([1, 2, 3, 4, 5, 6]), 2 / 64)
-    assert.equal(signedRank([-1, -2, -3, -4, -5, -6]), 2 / 64, 'two-sided')
+    assert.deepEqual(signedRank([1, 2, 3, 4, 5, 6]), { p: 2 / 64, sign: 1 })
+    assert.deepEqual(signedRank([-1, -2, -3, -4, -5, -6]), { p: 2 / 64, sign: -1 }, 'two-sided')
     assert.equal(signedRank([0, 0]), null, 'every difference zero')
-    assert.equal(signedRank([1, -1]), 1)
-    const many = signedRank(Array.from({ length: 25 }, (_, i) => i + 1)) as number
-    assert.ok(many < 0.001, `25 positive differences: ${many}`)
+    assert.deepEqual(signedRank([1, -1]), { p: 1, sign: 0 })
+    const many = signedRank(Array.from({ length: 25 }, (_, i) => i + 1))
+    assert.ok(many && many.p < 0.001 && many.sign === 1, `25 positive differences: ${many?.p}`)
+  })
+
+  test("a family's effort direction is the signed-rank test's, even when most cases tie", () => {
+    // Thirteen cases: seven use the same tool calls on both sides, six use one fewer on the
+    // variant. The median difference is 0; the six non-zero differences all say fewer.
+    const evals = Array.from({ length: 13 }, (_, i) => {
+      const attempt = (cell: string, tools: number) => ({
+        cell,
+        outcome: 'pass',
+        activity: { tools, fileEdits: 0 },
+        timings: { agentMs: 1000 },
+      })
+      return {
+        file: 'family.eval.ts',
+        family: { id: 'family', name: 'family', case: i, cases: 13 },
+        cells: [
+          { key: 'v', role: 'variant', harness: 'cursor', sandbox: 'docker' },
+          { key: 'c', role: 'control', harness: 'cursor', sandbox: 'docker' },
+        ],
+        attempts: [attempt('v', i < 6 ? 2 : 3), attempt('c', 3)],
+      } as unknown as EvalEntry
+    })
+    const tools = familiesOf(evals, () => undefined)[0]?.lifts[0]?.effort.tools
+    assert.equal(tools?.p, 0.031)
+    assert.equal(tools?.verdict, 'fewer')
   })
 })
 

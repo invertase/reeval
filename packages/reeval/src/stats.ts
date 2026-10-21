@@ -226,10 +226,12 @@ export function meanInterval(values: readonly number[]): Interval & { mean: numb
 /**
  * Two-sided Wilcoxon signed-rank p for paired differences: zeros dropped, mid-ranks for ties,
  * exact over every sign assignment up to 20 non-zero differences, else the normal approximation.
- * Null when every difference is zero. Ties are exact equality, so form each difference of two
- * rates with one division (`(a·d − c·b) / (b·d)`), never as `a/b − c/d`.
+ * `sign` is the sign of the positive differences' rank sum minus its expectation: below 0, the
+ * negative differences outrank the positive ones. Null when every difference is zero. Ties are
+ * exact equality, so form each difference of two rates with one division (`(a·d − c·b) / (b·d)`),
+ * never as `a/b − c/d`.
  */
-export function signedRank(differences: readonly number[]): number | null {
+export function signedRank(differences: readonly number[]): { p: number; sign: number } | null {
   const d = differences.filter((x) => x !== 0)
   const n = d.length
   if (n === 0) return null
@@ -243,15 +245,16 @@ export function signedRank(differences: readonly number[]): number | null {
   }
   const total = (n * (n + 1)) / 2
   const plus = d.reduce((s, v, i) => (v > 0 ? s + (ranks[i] as number) : s), 0)
+  const sign = Math.sign(plus - total / 2)
   const observed = Math.abs(plus - total / 2)
   if (n > 20) {
     const counts = new Map<number, number>()
     for (const { a } of sorted) counts.set(a, (counts.get(a) ?? 0) + 1)
     const ties = [...counts.values()].reduce((s, t) => s + t ** 3 - t, 0)
     const variance = (n * (n + 1) * (2 * n + 1)) / 24 - ties / 48
-    if (variance <= 0) return 1
+    if (variance <= 0) return { p: 1, sign }
     const z = Math.max(0, observed - 0.5) / Math.sqrt(variance)
-    return Math.min(1, 2 * (1 - normalCdf(z)))
+    return { p: Math.min(1, 2 * (1 - normalCdf(z))), sign }
   }
   let extreme = 0
   for (let mask = 0; mask < 2 ** n; mask++) {
@@ -259,7 +262,7 @@ export function signedRank(differences: readonly number[]): number | null {
     for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += ranks[i] as number
     if (Math.abs(sum - total / 2) >= observed - 1e-9) extreme++
   }
-  return extreme / 2 ** n
+  return { p: extreme / 2 ** n, sign }
 }
 
 function normalCdf(z: number): number {
