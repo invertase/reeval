@@ -5,7 +5,6 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
-import { applied, defineEnvironment } from '../src/environment.ts'
 import {
   fetchesAtStart,
   PluginProblem,
@@ -13,6 +12,7 @@ import {
   readPlugin,
 } from '../src/environment/plugins.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
+import { applied, defineEnvironment } from '../src/environment.ts'
 import { AGENTS, refusedPlugins } from '../src/harness/agents.ts'
 import type { PluginPart } from '../src/types.ts'
 
@@ -23,6 +23,9 @@ const write = (root: string, files: Record<string, string>) => {
   }
   return root
 }
+
+/** How a plugin's .mcp.json and hooks write a variable: `${NAME}`. */
+const ref = (name: string) => `\${${name}}`
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'reeval-plugins-'))
 
@@ -37,7 +40,9 @@ const review = (root = tmp(), name = 'review') => {
     'commands/review.md': 'Review the tree.\n',
     'hooks/hooks.json': JSON.stringify({
       hooks: {
-        SessionStart: [{ hooks: [{ type: 'command', command: '${CLAUDE_PLUGIN_ROOT}/start.sh' }] }],
+        SessionStart: [
+          { hooks: [{ type: 'command', command: `${ref('CLAUDE_PLUGIN_ROOT')}/start.sh` }] },
+        ],
       },
     }),
     'start.sh': '#!/bin/sh\necho started\n',
@@ -45,13 +50,13 @@ const review = (root = tmp(), name = 'review') => {
       mcpServers: {
         docs: {
           command: 'node',
-          args: ['${CLAUDE_PLUGIN_ROOT}/server.mjs'],
-          env: { DOCS_TOKEN: '${DOCS_TOKEN}', MODE: 'ci' },
+          args: [`${ref('CLAUDE_PLUGIN_ROOT')}/server.mjs`],
+          env: { DOCS_TOKEN: ref('DOCS_TOKEN'), MODE: 'ci' },
         },
         search: {
           type: 'http',
           url: 'https://search.example.com/mcp',
-          headers: { Authorization: 'Bearer ${SEARCH_KEY}' },
+          headers: { Authorization: `Bearer ${ref('SEARCH_KEY')}` },
         },
       },
     }),
@@ -70,20 +75,25 @@ test('a plugin is read in Claude Code’s layout: every part, and its MCP server
   assert.deepEqual(p.skills, [{ dir: 'lint', name: 'review-lint' }])
   assert.deepEqual(p.agents, ['reviewer'])
   assert.deepEqual(p.commands, ['review'])
-  assert.deepEqual(p.hooks, { events: ['SessionStart'], commands: ['${CLAUDE_PLUGIN_ROOT}/start.sh'] })
+  assert.deepEqual(p.hooks, {
+    events: ['SessionStart'],
+    commands: [`${ref('CLAUDE_PLUGIN_ROOT')}/start.sh`],
+  })
   assert.deepEqual(p.rules, ['style.md'])
   assert.deepEqual(p.mcp.docs, {
     kind: 'mcp',
     transport: 'stdio',
     command: 'node',
-    args: ['${CLAUDE_PLUGIN_ROOT}/server.mjs'],
+    args: [`${ref('CLAUDE_PLUGIN_ROOT')}/server.mjs`],
     env: { DOCS_TOKEN: { kind: 'secret', from: 'DOCS_TOKEN' }, MODE: 'ci' },
   })
   assert.deepEqual(p.mcp.search, {
     kind: 'mcp',
     transport: 'http',
     url: 'https://search.example.com/mcp',
-    headers: { Authorization: { kind: 'secret-template', template: 'Bearer ${SEARCH_KEY}' } },
+    headers: {
+      Authorization: { kind: 'secret-template', template: `Bearer ${ref('SEARCH_KEY')}` },
+    },
   })
 })
 
@@ -110,7 +120,13 @@ test('only keeps the parts it names, and the files it drops stay out of the sand
   const files = pluginFiles(p)
   const paths = files.map((f) => f.path)
   assert.ok(paths.includes('skills/lint/SKILL.md'))
-  for (const gone of ['.mcp.json', 'hooks/hooks.json', 'agents/reviewer.md', 'commands/review.md', 'rules/style.md']) {
+  for (const gone of [
+    '.mcp.json',
+    'hooks/hooks.json',
+    'agents/reviewer.md',
+    'commands/review.md',
+    'rules/style.md',
+  ]) {
     assert.ok(!paths.includes(gone), `${gone} is left out`)
   }
   assert.equal(files.find((f) => f.path === 'start.sh')?.executable, true, 'modes are kept')
@@ -172,7 +188,9 @@ test('a plugin reeval can’t place as written is a PluginProblem that says why'
     problem(
       write(tmp(), {
         '.claude-plugin/plugin.json': '{"name":"vars"}',
-        '.mcp.json': JSON.stringify({ docs: { command: 'node', env: { URL: 'https://${HOST}/x' } } }),
+        '.mcp.json': JSON.stringify({
+          docs: { command: 'node', env: { URL: `https://${ref('HOST')}/x` } },
+        }),
       }),
     ),
     /MCP server "docs": env\.URL in \.mcp\.json puts a variable inside a longer value/,
@@ -247,7 +265,10 @@ test('a part the harness can’t load is refused, naming what it can', () => {
       "Codex can't load the review plugin's agents (agents/) and commands (commands/) and hooks (hooks/hooks.json) and rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell",
     )
     const narrowed = readPlugin(review(), 'x', ['skills', 'mcp'])
-    assert.equal(refusedPlugins({ kind: 'codex' } as never, [narrowed], { skills: [], mcp: [] }), undefined)
+    assert.equal(
+      refusedPlugins({ kind: 'codex' } as never, [narrowed], { skills: [], mcp: [] }),
+      undefined,
+    )
     const hooksOnly = readPlugin(review(), 'x', ['hooks'])
     assert.equal(
       refusedPlugins({ kind: 'codex' } as never, [hooksOnly], { skills: [], mcp: [] }),
@@ -260,7 +281,9 @@ test('a plugin MCP server the harness refuses gets the harness’s own sentence,
   const sse = readPlugin(
     write(tmp(), {
       '.claude-plugin/plugin.json': '{"name":"review"}',
-      '.mcp.json': JSON.stringify({ events: { type: 'sse', url: 'https://events.example.com/sse' } }),
+      '.mcp.json': JSON.stringify({
+        events: { type: 'sse', url: 'https://events.example.com/sse' },
+      }),
     }),
     'x',
   )
@@ -316,25 +339,34 @@ test('resolving places each plugin, records it, and lists its skills and MCP ser
   const r = await resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md')
   assert.deepEqual(
     r.plugins.map((p) => [p.name, p.parts, p.servers]),
-    [['review', ['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'], ['review:docs', 'review:search']]],
+    [
+      [
+        'review',
+        ['skills', 'agents', 'commands', 'hooks', 'mcp', 'rules'],
+        ['review:docs', 'review:search'],
+      ],
+    ],
   )
   const [record] = r.record.plugins ?? []
-  assert.deepEqual({ ...record, sha256: typeof record?.sha256 }, {
-    name: 'review',
-    source: 'local:plugins/review',
-    marketplace: null,
-    commit: null,
-    sha256: 'string',
-    build: null,
-    parts: {
-      skills: ['review-lint'],
-      agents: ['reviewer'],
-      commands: ['review'],
-      hooks: ['SessionStart'],
-      mcp: ['docs', 'search'],
-      rules: true,
+  assert.deepEqual(
+    { ...record, sha256: typeof record?.sha256 },
+    {
+      name: 'review',
+      source: 'local:plugins/review',
+      marketplace: null,
+      commit: null,
+      sha256: 'string',
+      build: null,
+      parts: {
+        skills: ['review-lint'],
+        agents: ['reviewer'],
+        commands: ['review'],
+        hooks: ['SessionStart'],
+        mcp: ['docs', 'search'],
+        rules: true,
+      },
     },
-  })
+  )
   assert.deepEqual(
     r.record.skills.map((s) => [s.name, s.plugin]),
     [
@@ -349,7 +381,9 @@ test('resolving places each plugin, records it, and lists its skills and MCP ser
     'the fake agent takes plugin items flat, so its skills are harness skills',
   )
   const without = await resolveEnvironment(
-    applied(defineEnvironment('plain', ({ skill }) => ({ skills: [skill.local(join(root, 'skills'))] }))),
+    applied(
+      defineEnvironment('plain', ({ skill }) => ({ skills: [skill.local(join(root, 'skills'))] })),
+    ),
     {},
     root,
     'e',
@@ -366,20 +400,25 @@ test('a child’s plugin replaces a same-named parent plugin, and overrides name
     '.claude-plugin/plugin.json': '{"name":"review"}',
     'skills/tidy/SKILL.md': skillMd('tidy'),
   })
-  const parent = defineEnvironment('parent', ({ plugin }) => ({ plugins: [plugin.local(parentDir)] }))
+  const parent = defineEnvironment('parent', ({ plugin }) => ({
+    plugins: [plugin.local(parentDir)],
+  }))
   const child = parent.extend('child', ({ plugin }) => ({ plugins: [plugin.local(childDir)] }))
   const r = await resolveEnvironment(applied(child), {}, root, 'e', 'AGENTS.md')
   assert.deepEqual(r.record.overrides, ['plugins.review'])
-  assert.deepEqual(r.record.plugins?.map((p) => [p.name, p.source, p.parts.skills]), [
-    ['review', 'local:b', ['tidy']],
-  ])
+  assert.deepEqual(
+    r.record.plugins?.map((p) => [p.name, p.source, p.parts.skills]),
+    [['review', 'local:b', ['tidy']]],
+  )
   assert.deepEqual(r.record.mcp, [])
 })
 
 test('resolving for a real harness refuses the plugin, and an http server egress doesn’t allow', async () => {
   const root = tmp()
   const dir = review(join(root, 'review'))
-  const env = applied(defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local(dir)] })))
+  const env = applied(
+    defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local(dir)] })),
+  )
   await assert.rejects(
     resolveEnvironment(env, {}, root, 'e', 'AGENTS.md', 'allow-all', undefined, {
       harness: { kind: 'cursor' } as never,

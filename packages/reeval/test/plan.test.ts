@@ -104,6 +104,7 @@ export const cases: PlanCase[] = [
   { dir: 'workspace', name: 'git', args: [] },
   { dir: 'files', name: 'directory', args: [] },
   { dir: 'plugins', name: 'parts', args: ['evals/parts.eval.ts'] },
+  { dir: 'plugins', name: 'remote', args: ['evals/remote.eval.ts'] },
   { dir: 'plugins', name: 'fetches-at-start', args: ['evals/fetches.eval.ts'] },
   { dir: 'capture', name: 'options', args: [] },
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },

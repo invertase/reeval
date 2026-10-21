@@ -1,12 +1,6 @@
 import type { HarnessSkill, ResolvedMcpServer } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
-import type {
-  PluginPart,
-  TokenUsage,
-  TranscriptEvent,
-  TurnStatus,
-  WebEventType,
-} from '../types.ts'
+import type { PluginPart, TokenUsage, TranscriptEvent, TurnStatus, WebEventType } from '../types.ts'
 
 export type HarnessResult = {
   /** The agent's final message for the turn. */

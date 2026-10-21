@@ -54,7 +54,7 @@
 | `skill.inline` | ✓ 1 | — | — | — | — | — |
 | `skill.registry` | — | — | ● 1 | ● 1 | — | — |
 | `skill.npm` | — | — | ● 2 | ● 2 | — | — |
-| `plugins`: `plugin.local`, `plugin.git` and `plugin.npm` in Claude Code’s layout, `only`, layering, the refusals per harness and the record | ✓ 5 | ✓ 2 | ● 4 | ● 4 | — | — |
+| `plugins`: `plugin.local`, `plugin.git` and `plugin.npm` in Claude Code’s layout, `only`, layering, the refusals per harness and the record | ✓ 5 | ✓ 3 | ● 4 | ● 4 | — | — |
 | Skill `exclude`: the defaults and a custom list | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | `only` naming a missing skill | — | — | ● 1 | ● 1 | — | — |
 | `SKILL.md` frontmatter as YAML | ✓ 1 | — | — | — | — | — |

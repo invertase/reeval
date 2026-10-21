@@ -39,7 +39,6 @@ import type {
   McpServer,
   PluginHelper,
   PluginPart,
-  PluginSource,
   SandboxDescriptor,
   Secret,
   SecretHelper,
@@ -526,7 +525,9 @@ function skillHelper(base: string): SkillHelper {
 function pluginHelper(base: string): PluginHelper {
   const common = (what: string, o: unknown, extra: readonly string[]) => {
     if (typeof o !== 'object' || o === null || Array.isArray(o)) {
-      throw new DefinitionError(`${what}: options are { ${[...extra, 'only', 'build'].join(', ')} }`)
+      throw new DefinitionError(
+        `${what}: options are { ${[...extra, 'only', 'build'].join(', ')} }`,
+      )
     }
     const keys = ['only', 'build', ...extra]
     const unknown = Object.keys(o).filter((k) => !keys.includes(k))

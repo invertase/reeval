@@ -49,6 +49,7 @@ import {
   pluginFiles,
   pluginParts,
   pluginServerName,
+  pluginSourceLabel,
   readPlugin,
   skillCall,
 } from './plugins.ts'
@@ -440,29 +441,24 @@ type FoundPlugin = { contents: PluginContents; source: string; commit: string | 
 
 async function resolvePlugin(root: string, p: PluginSource, where: string): Promise<FoundPlugin> {
   let dir: string
-  let source: string
   let commit: string | null = null
   switch (p.source) {
     case 'local':
       dir = p.path
-      source = `local:${relative(root, p.path).split(sep).join('/') || '.'}`
       break
     case 'git': {
       const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
       dir = join(clone.dir, p.path ?? '')
-      source = `${p.repo}${p.ref ? `#${p.ref}` : ''}${p.path ? `:${p.path}` : ''}`
       commit = clone.commit
       break
     }
-    case 'npm': {
+    case 'npm':
       dir = join(await unpackNpm(root, p.spec), p.path ?? '')
-      const spec = isAbsolute(p.spec) ? relative(root, p.spec).split(sep).join('/') : p.spec
-      source = `npm:${spec}${p.path ? `:${p.path}` : ''}`
       break
-    }
   }
   try {
-    return { contents: readPlugin(dir, pluginCall(p, root), p.only), source, commit }
+    const contents = readPlugin(dir, pluginCall(p, root), p.only)
+    return { contents, source: pluginSourceLabel(p, root), commit }
   } catch (error) {
     if (error instanceof PluginProblem) throw new InfraError(`${where}: ${error.message}`)
     throw error
@@ -604,8 +600,9 @@ export async function resolveEnvironment(
     allowed,
   )
   if (fetches.refusal) throw new InfraError(`${envWhere}: ${fetches.refusal}`)
-  const pluginSkills: Array<LoadedSkill & { plugin: string; source: string; commit: string | null }> =
-    []
+  const pluginSkills: Array<
+    LoadedSkill & { plugin: string; source: string; commit: string | null }
+  > = []
   const resolvedPlugins: ResolvedPlugin[] = []
   const pluginRecords: PluginRecord[] = []
   for (const { contents: p, source, commit } of pluginList) {
