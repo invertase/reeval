@@ -65,11 +65,12 @@ export async function recordOom(
 
 /**
  * The attempt's egress policy and, when its sandbox records it, what it contacted and was refused.
- * Refused hosts the harness always tries are `expectedBlocked`, summarised in one `-v` line.
+ * Refused hosts the harness always tries (in a session like this one) are `expectedBlocked`,
+ * summarised in one `-v` line.
  */
 export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   const traffic = sandbox?.traffic?.()
-  const expected = expectedBlockedFor(a.spec.harness)
+  const expected = expectedBlockedFor(a.spec.harness, (a.env?.plugins.length ?? 0) > 0)
   const refused = traffic?.blocked ?? []
   const isExpected = (h: { host: string }) => !!expected?.hosts.includes(h.host)
   const expectedBlocked = refused.filter(isExpected)

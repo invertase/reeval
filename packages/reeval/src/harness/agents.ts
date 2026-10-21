@@ -139,7 +139,12 @@ export type ModelSpecific = Pick<Agent, 'credential' | 'endpoints' | 'servedMode
 }
 
 /** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
-export type ExpectedBlocked = { hosts: readonly string[]; why: string }
+export type ExpectedBlocked = {
+  hosts: readonly string[]
+  why: string
+  /** Tried only in a session given plugins; another session's attempt on these hosts is a real block. */
+  withPlugins?: true
+}
 
 const WEB_EVENTS: Record<string, WebEventType> = { webSearch: 'web-search', webFetch: 'web-fetch' }
 
@@ -816,10 +821,12 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,
-    // Only with plugins on, which a session with plugins needs; it loads them all the same.
+    // Only with plugins on, which a session with plugins needs; it loads them all the same. In a
+    // session without plugins these hosts are a real block.
     expectedBlocked: {
       hosts: ['github.com', 'api.github.com', 'chatgpt.com'],
       why: "Codex's plugin sync, which it runs on every turn once plugins are on",
+      withPlugins: true,
     },
     servedModel: openaiServedModel,
     mcpServers: codexMcpServers,
@@ -1083,10 +1090,17 @@ export function layoutOf(descriptor: HarnessDescriptor): Layout {
   return descriptor.layout ? LAYOUTS[descriptor.layout] : FAKE_LAYOUT
 }
 
-/** The hosts a harness's agent is known to try; a fake agent with `layout` expects that agent's. */
-export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlocked | undefined {
+/**
+ * The hosts a harness's agent is known to try in a session with or without plugins; a fake agent
+ * with `layout` expects that agent's.
+ */
+export function expectedBlockedFor(
+  descriptor: HarnessDescriptor,
+  plugins: boolean,
+): ExpectedBlocked | undefined {
   const kind = descriptor.kind === 'fake' ? descriptor.layout : descriptor.kind
-  return kind ? AGENTS[kind].expectedBlocked : undefined
+  const expected = kind ? AGENTS[kind].expectedBlocked : undefined
+  return expected?.withPlugins && !plugins ? undefined : expected
 }
 
 /**

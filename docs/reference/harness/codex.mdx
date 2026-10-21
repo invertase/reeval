@@ -132,7 +132,7 @@ With them, a turn contacts only `api.openai.com`, so `egress: 'deny-all'` needs 
 
 reeval copies each plugin to `~/.reeval/plugins/<name>/` and lists it in Codex's home marketplace. Before the first turn the adapter runs `codex plugin add review@reeval`, offline, which copies the plugin into `~/.codex/plugins/cache/reeval/` and enables it in `config.toml`. Codex loads each plugin namespaced, so its skills don't clash with yours.
 
-A session with plugins sets `features.plugins = true`, and Codex then syncs its plugin catalogue on every turn. Those calls to `github.com`, `api.github.com` and `chatgpt.com` are expected blocks under a restricted policy, recorded but not counted against the attempt.
+A session with plugins sets `features.plugins = true`, and Codex then syncs its plugin catalogue on every turn. Under a restricted policy, its calls to `github.com`, `api.github.com` and `chatgpt.com` are refused and recorded under `egress.expectedBlocked`. In a session without plugins, a refused call to those hosts is the agent's own, so it stays in `egress.blocked`.
 
 Codex starts a plugin's MCP servers itself, so reeval leaves them out of `mcp_servers`. It names them by their own keys, so the transcript names a call `mcp__docs__<tool>`, and the plan refuses a plugin server named like one in the environment's `mcp`, which Codex would drop. As for [Claude Code](/reference/harness/claude-code#plugins), the placed `.mcp.json` runs each through reeval's MCP timer, and a plugin server that reads a host secret is refused at plan time; declare that server in `mcp`. The plan refuses any part Codex doesn't load:
 

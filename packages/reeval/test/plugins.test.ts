@@ -21,6 +21,7 @@ import {
   AGENTS,
   agentMcp,
   claudePluginFiles,
+  expectedBlockedFor,
   LAYOUTS,
   refusedPlugins,
   writePluginFiles,
@@ -380,6 +381,24 @@ test('Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugi
     )
     assert.equal(refusedPlugins({ kind: 'goose' } as never, [chat], own), undefined)
   }
+})
+
+test("Codex's plugin sync hosts are expected blocks only in a session with plugins", () => {
+  const codex = { kind: 'codex', model: 'gpt-5.4-mini' } as const
+  assert.equal(
+    expectedBlockedFor(codex, false),
+    undefined,
+    'an agent of its own on github.com is a real block',
+  )
+  assert.deepEqual(expectedBlockedFor(codex, true)?.hosts, [
+    'github.com',
+    'api.github.com',
+    'chatgpt.com',
+  ])
+  assert.deepEqual(expectedBlockedFor({ kind: 'fake', layout: 'codex' } as never, false), undefined)
+  const goose = { kind: 'goose', model: 'gemini-3.8-flash' } as const
+  assert.deepEqual(expectedBlockedFor(goose, false)?.hosts, ['models.dev'])
+  assert.deepEqual(expectedBlockedFor(goose, true)?.hosts, ['models.dev'])
 })
 
 test('a part the harness can’t load is refused, naming what it can', () => {
