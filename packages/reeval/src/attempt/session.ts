@@ -235,6 +235,8 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   if (timed.log) {
     a.mcpStartup = timed.log
     debugLog('env', "stdio MCP servers start through reeval's MCP timer")
+  } else if (timed.untimed) {
+    debugLog('env', `stdio MCP servers start untimed: ${timed.untimed}`)
   }
   const harness = await createHarness(spec.harness)
   const harnessStart = performance.now()

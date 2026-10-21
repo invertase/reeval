@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { MCP_TIMER } from '@reeval/sandbox-docker'
-import { shellQuote } from '@reeval/sandbox-docker/process'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
-import { InfraError, type Sandbox } from '../sandbox/types.ts'
+import type { Sandbox } from '../sandbox/types.ts'
 import type { McpStartup } from '../types.ts'
 
 /**
@@ -22,6 +21,8 @@ type LogEntry = {
   initializedAt?: number
   timeout?: true
   exitCode?: number | null
+  closed?: true
+  unread?: true
 }
 
 /** The attempt's error when an MCP server never answered `initialize`. */
@@ -36,26 +37,27 @@ export type McpStartupLog = {
 /**
  * Puts the timer in the sandbox and runs every stdio server through it, so whichever process
  * starts a server (the agent's CLI, once a session or once a turn, or the fake agent) logs when it
- * answered. Returns the servers unchanged, and no log, when none is stdio.
+ * answered. Returns the servers unchanged, and no log, when none is stdio, or with `untimed`'s
+ * reason when the sandbox has no `node` (an `image` used as is), rather than break them.
  */
 export async function timeMcpServers(
   box: Sandbox,
   servers: Record<string, ResolvedMcpServer>,
   signal: AbortSignal,
-): Promise<{ servers: Record<string, ResolvedMcpServer>; log?: McpStartupLog }> {
+): Promise<{ servers: Record<string, ResolvedMcpServer>; log?: McpStartupLog; untimed?: string }> {
   if (!Object.values(servers).some((s) => s.transport === 'stdio')) return { servers }
+  // An absolute path, so the timer doesn't depend on the PATH the harness gives its servers.
+  const found = await box.exec('command -v node', { signal })
+  const node = found.exitCode === 0 ? found.stdout.trim().split('\n')[0] : ''
+  if (!node) return { servers, untimed: 'the sandbox has no node to run the timer' }
   await box.writeFile(TIMER, await readFile(MCP_TIMER, 'utf8'))
   await box.writeFile(LOG, '')
   const timer = `${box.workdir.replace(/[\\/][^\\/]*$/, '')}/bin/mcp-timer.cjs`
-  const r = await box.exec(`chmod +x ${shellQuote(timer)}`, { signal })
-  if (r.exitCode !== 0) {
-    throw new InfraError(`Couldn't install reeval's MCP timer at ${timer}: ${r.stderr.trim()}`)
-  }
   const wrapped = Object.fromEntries(
     Object.entries(servers).map(([name, s]): [string, ResolvedMcpServer] => [
       name,
       s.transport === 'stdio'
-        ? { ...s, command: timer, args: ['--name', name, '--', s.command, ...s.args] }
+        ? { ...s, command: node, args: [timer, '--name', name, '--', s.command, ...s.args] }
         : s,
     ]),
   )

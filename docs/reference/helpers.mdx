@@ -156,7 +156,7 @@ warning: skill.git(github:acme/skills) uses moving ref "main": results aren't co
 ## mcp
 
 <Property name="mcp.stdio(command, args?, options?)" type="McpServer">
-  A server the agent starts in the sandbox. `options.env` sets its variables, secrets included. The agent's MCP config runs it through reeval's timer (`/reeval/bin/mcp-timer.cjs` in Docker), which passes its stdio through and records each start as `turns[].mcpStartup`. A server that doesn't answer `initialize` within 60s fails the attempt.
+  A server the agent starts in the sandbox. `options.env` sets its variables, secrets included. When the sandbox has `node`, the agent's MCP config runs it through reeval's timer (`node /reeval/bin/mcp-timer.cjs` in Docker), which passes its stdio through and records each start as `turns[].mcpStartup`. A server that doesn't answer `initialize` within 60s fails the attempt.
 </Property>
 
 <Property name="mcp.http(url, options?)" type="McpServer">
