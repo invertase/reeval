@@ -72,6 +72,7 @@ import {
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
+  opencodeFrontmatter,
   opencodeVars,
   type ServedModel,
 } from '../src/harness/agents.ts'
@@ -465,6 +466,11 @@ describe('the OpenCode harness', () => {
       workspaceSkillDir: OPENCODE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: OPENCODE_HOME_SKILLS_DIR,
       pluginPlacement: 'flat',
+      pluginUnpack: {
+        agents: '.opencode/agents',
+        commands: '.opencode/commands',
+        frontmatter: opencodeFrontmatter,
+      },
     })
     assert.equal(imageHarness(h), 'opencode')
     assert.deepEqual(brokeringFor(h)?.endpoints, openCodeEndpoints('google/m'))
@@ -776,6 +782,7 @@ describe('the pi harness', () => {
       workspaceSkillDir: PI_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: PI_HOME_SKILLS_DIR,
       pluginPlacement: 'flat',
+      pluginUnpack: { commands: '.pi/prompts' },
     })
     assert.equal(imageHarness(h), 'pi')
     assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
