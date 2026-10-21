@@ -12,6 +12,7 @@ import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../envi
 import { brokeringFor, claudeMcpServers, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { Harness, HarnessSession, Treatments } from '../harness/types.ts'
+import { type PluginUnpack, unpackPlugins } from '../harness/unpack.ts'
 import { harnessId } from '../options.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
@@ -167,6 +168,43 @@ async function copyPlugins(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
 }
 
 /**
+ * Unpacks the plugins' rules, subagents, commands and hooks into the workspace where a flat agent
+ * reads them, before the snapshot, so the diff leaves them out. A file the workspace already has
+ * is an infra error, except the hooks file, whose own handlers the plugins' join.
+ */
+async function writeUnpackedPlugins(
+  a: Attempt,
+  box: Sandbox,
+  env: ResolvedEnvironment,
+  plugins: Treatments['plugins'],
+  unpack: PluginUnpack,
+) {
+  const placed = plugins.map((p) => ({
+    ...p,
+    files: env.plugins.find((r) => r.name === p.name)?.files ?? [],
+  }))
+  const hooksFile = unpack.hooks ? await box.readFile(unpack.hooks.file) : null
+  const files = unpackPlugins(placed, unpack, hooksFile)
+  const fresh = files.filter((f) => f.path !== unpack.hooks?.file)
+  if (fresh.length) {
+    const r = await box.exec(
+      `for p in ${fresh.map((f) => shellQuote(f.path)).join(' ')}; do [ -e "$p" ] && echo "$p"; done; true`,
+      { signal: a.signal },
+    )
+    const taken = r.stdout.trim().split('\n').filter(Boolean)
+    if (taken.length) {
+      throw new InfraError(
+        `The workspace already has ${taken.join(', ')}, which a plugin would replace: rename the plugin's file, or leave the plugin out of this cell`,
+      )
+    }
+  }
+  for (const f of files) {
+    await box.writeFile(f.path, f.content)
+    debugLog('env', `plugin part → ${f.path} (unpacked for the agent)`)
+  }
+}
+
+/**
  * For an agent that starts a plugin's MCP servers from the plugin itself: rewrites each placed
  * plugin's `.mcp.json` to the servers as reeval resolved them, through the MCP timer, so they're
  * timed like the environment's. A manifest that declares `mcpServers` is pointed at that file.
@@ -305,6 +343,9 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   }
   const plugins = await copyPlugins(a, box, env)
   const layout = layoutOf(spec.harness)
+  if (layout.pluginUnpack && plugins.length) {
+    await writeUnpackedPlugins(a, box, env, plugins, layout.pluginUnpack)
+  }
   for (const skill of env.skills) {
     debugLog(
       'env',
