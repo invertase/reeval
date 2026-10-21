@@ -11,7 +11,7 @@ import { author } from '../history/provenance.ts'
 import type { HistoryEntry } from '../history/types.ts'
 import { pickBaseline, RefError, resolveRun } from '../history/views.ts'
 import { fromCwd, sha256 } from '../ids.ts'
-import { clip } from '../text.ts'
+import { clip, fenced } from '../text.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { ANALYSIS_PROMPT_VERSION, type AnalysisDoc, type AnalysisScope } from '../view/analysis.ts'
 import {
@@ -98,9 +98,7 @@ export function contextMarkdown(d: Digest, head: string, base: string | null): s
     '',
     '## Digest',
     '',
-    '```json',
-    JSON.stringify(d, null, 1),
-    '```',
+    ...fenced([JSON.stringify(d, null, 1)], 'json'),
     '',
   ].join('\n')
 }

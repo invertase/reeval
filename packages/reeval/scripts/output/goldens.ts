@@ -68,8 +68,8 @@ export const GOLDENS: Golden[] = [
 
 export const OUTPUT_DIR = join(CORPUS_DIR, '..', 'output')
 
-function tallyOf(evals: EvalResult[]): SuiteResult['tally'] {
-  const tally = { pass: 0, fail: 0, infraError: 0, skipped: 0 }
+function tallyOf(evals: EvalResult[], errors: number): SuiteResult['tally'] {
+  const tally = { errors, pass: 0, fail: 0, infraError: 0, cancelled: 0, skipped: 0 }
   for (const o of evals.flatMap((e) => (e.cases ? e.cases.map((k) => k.outcome) : [e.outcome]))) {
     if (o === 'infra_error') tally.infraError++
     else tally[o]++
@@ -96,7 +96,14 @@ export function goldenSuite(g: Golden): SuiteResult {
     (id) => !files.some((f) => f.path === id || f.evals.some((e) => e.id === id)),
   )
   if (missing.length) throw new Error(`Golden ${g.name}: no eval ${missing.join(', ')}`)
-  return { ...suite, files, tally: tallyOf(files.flatMap((f) => f.evals)) }
+  return {
+    ...suite,
+    files,
+    tally: tallyOf(
+      files.flatMap((f) => f.evals),
+      suite.errors.length,
+    ),
+  }
 }
 
 export type CompareGolden = {

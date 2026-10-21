@@ -26,6 +26,7 @@ config API like any other project.
 | `before-question-state` | The corpus project's fake-harness runs from before `evals[].answers[].stateOptions`, `answers[].artifacts` and `votes[].artifacts` (what each side of a compare question shows) |
 | `before-question-input` | The corpus project's fake-harness runs from before `evals[].answers[].input` (what each compare question's model saw, per pair and order) |
 | `with-plugins` | The fake harness with one local plugin placed: `environments[].plugins` (with `marketplace: null`), a plugin skill's `skills[].plugin`, from before `plugin.marketplace` |
+| `before-run-errors` | The corpus project's fake-harness runs from before `errors` (an error outside any attempt, which fails the run) |
 | `fake-matrix` | The fake harness: a compare with lift, judges that pass and fail, a failed check, infra errors, todo and skipped evals, a budget-stopped run and a saved analysis |
 | `real-harnesses` | One tiny eval on each of the seven real harnesses in Docker (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex), with each one's transcript, tokens and served model |
 | `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/invertase/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |

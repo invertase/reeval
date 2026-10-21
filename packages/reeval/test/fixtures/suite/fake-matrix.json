@@ -3,10 +3,13 @@
     "runId": "20260927T160436Z_82137cd_cursor-agent_j7cm",
     "status": "complete",
     "outcome": "fail",
+    "errors": [],
     "tally": {
+      "errors": 0,
       "pass": 0,
       "fail": 2,
       "infraError": 2,
+      "cancelled": 0,
       "skipped": 2
     },
     "files": [
@@ -577,10 +580,13 @@
     "runId": "20260927T160437Z_59028a1_cursor-agent_13ds",
     "status": "budget",
     "outcome": "fail",
+    "errors": [],
     "tally": {
+      "errors": 0,
       "pass": 1,
       "fail": 0,
       "infraError": 0,
+      "cancelled": 0,
       "skipped": 0
     },
     "files": [

@@ -104,6 +104,7 @@ regressed        greets in the house style
 ```
 
 A check head never reached reads `not run`, not a failure. `can't compare` names what changed
-(`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. `--fail-on-regression`
-exits 1 on a regressed eval, or on a new or can't-compare eval that fails. `-v` adds each cell's
+(`changed  environment`, `evals/helpers.ts`): that flip isn't a regression. An eval Ctrl-C
+cancelled is `can't compare` with that side `cancelled`. `--fail-on-regression` exits 1 on a
+regressed eval, or on a new or can't-compare eval that fails, unless head was cancelled. `-v` adds each cell's
 lift and effort, base → head.

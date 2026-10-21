@@ -547,12 +547,42 @@ evaluate('fine', async () => {})
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /stray throw/)
-    assert.match(r.stdout, /stray rejection/)
+    assert.match(r.stdout, /^error: stray throw$/m)
+    assert.match(r.stdout, /^error: stray rejection$/m)
+    assert.match(r.stdout, /^2 run errors · 2 pass$/m)
+    const { run } = readRun(p.dir)
     assert.deepEqual(
-      readRun(p.dir).evals.map((e) => e.outcome),
+      run.evals.map((e) => e.outcome),
       ['pass', 'pass'],
     )
+    assert.deepEqual(run.errors?.sort(), ['stray rejection', 'stray throw'])
+  })
+
+  test("an error outside any attempt makes --json's outcome fail, as the exit code does", async () => {
+    const p = await project('outside-attempts', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/stray.eval.ts': `import { evaluate } from 'reeval'
+void Promise.reject(new Error('stray rejection at load'))
+evaluate('loads', async () => {})
+`,
+      'evals/fine.eval.ts': `import { evaluate } from 'reeval'
+evaluate('fine', async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--json'])
+    assert.equal(r.code, 1, r.stderr)
+    const suite = JSON.parse(r.stdout)
+    assert.equal(suite.outcome, 'fail')
+    assert.deepEqual(suite.errors, ['stray rejection at load'])
+    assert.equal(suite.tally.errors, 1)
+    const shown = await runCli(p.dir, ['show'])
+    assert.match(shown.stdout, /^error: stray rejection at load$/m)
+    assert.match(shown.stdout, /^1 run error · 2 pass$/m)
+    // The canary: without the file that throws, the same run passes and exits 0.
+    const fine = await runCli(p.dir, ['run', '--json', 'evals/fine.eval.ts'])
+    assert.equal(fine.code, 0, fine.stderr)
+    assert.equal(JSON.parse(fine.stdout).outcome, 'pass')
+    assert.deepEqual(JSON.parse(fine.stdout).errors, [])
   })
 
   test('a worker killed mid-attempt fails its attempts, names the file, and the run goes on', async () => {
@@ -1835,8 +1865,9 @@ evaluate('fine', async () => {})
       assert.equal(run.status, 'interrupted')
       assert.equal(evals[0]?.outcome, 'fail')
       assert.equal(evals[0]?.error?.kind, 'aborted')
-      assert.match(r.stdout, /^fail {13}agent eval\n {2}cancelled {8}The run was cancelled$/m)
+      assert.match(r.stdout, /^cancelled {8}agent eval\n {2}cancelled {8}The run was cancelled$/m)
       assert.match(r.stdout, /^Interrupted: attempts that hadn’t finished were cancelled$/m)
+      assert.match(r.stdout, /^1 cancelled$/m, 'a cancelled attempt is not a fail')
       assert.deepEqual(liveSandboxes(p), [])
     })
   }

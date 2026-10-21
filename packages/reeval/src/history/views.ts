@@ -8,6 +8,7 @@ import { OUTCOME_MARK, runTally, stateRows } from './summary.ts'
 import type { HistoryEntry, RunRecord } from './types.ts'
 
 export {
+  addedRow,
   type CompareRow,
   compare,
   stackChanges,

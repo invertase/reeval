@@ -34,6 +34,7 @@ import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandb
 import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { NO_MODEL_HINT } from '../src/ui/layout.ts'
+import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
@@ -2583,6 +2584,63 @@ export const features: Feature[] = [
         /^infra error {6}lands\n {2}infra error {6}setup step 1\/1 "touch ran"/,
       )
       assert.match(stdout, /\n1 fail · 1 infra error\n/)
+    },
+  },
+  {
+    dir: 'output/run-error',
+    tiers: ['fake'],
+    env: '-',
+    canary: /second try: expected 1 to be 2/,
+    args: ['--json'],
+    record: ({ run, runDir, stdout }) => {
+      const message = 'stray rejection outside the evals'
+      assert.deepEqual(run.errors, [message])
+      const suite = JSON.parse(stdout) as SuiteResult
+      assert.equal(suite.outcome, 'fail', 'the outcome the exit code is read from')
+      assert.deepEqual(suite.errors, [message])
+      assert.equal(suite.tally.errors, 1)
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(summary, new RegExp(`^error: ${message}$`, 'm'))
+      assert.match(summary, /^1 run error · 1 fail · 1 pass$/m)
+    },
+  },
+  {
+    dir: 'output/zero-counted',
+    tiers: ['fake'],
+    env: 'broken',
+    cells: ['plain', 'broken'],
+    lands: {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: /^setup step 1\/1 "touch ran" in environment broken/ },
+    },
+    landsPass: ['plain'],
+    canaryCells: ['plain', 'working'],
+    canary: /is a variant: expected 'control' to be 'variant'/,
+    canaryPass: ['working'],
+    args: ['--json'],
+    record: ({ runDir, stdout }) => {
+      const suite = JSON.parse(stdout) as SuiteResult
+      const checks = (name: string, environment: string) =>
+        suite.files
+          .flatMap((f) => f.evals)
+          .find((e) => e.name === name)
+          ?.cells?.find((c) => c.environment === environment)
+          ?.checks.map((k) => [k.label, k.outcome.status])
+      assert.deepEqual(checks('lands', 'broken'), [
+        ['runs true', 'not run'],
+        ['is the control', 'not run'],
+      ])
+      // The canary: a variant whose attempt counted reads its checks' counts.
+      assert.deepEqual(checks('canary', 'working'), [
+        ['runs true', 'ran'],
+        ['is a variant', 'ran'],
+      ])
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(
+        blockOf(summary, 'lands'),
+        /\n {2}check {12}plain {3}broken\n {2}runs true {8}1 of 1 {2}not run\n {2}is the control {3}1 of 1 {2}not run$/,
+      )
+      assert.doesNotMatch(blockOf(summary, 'canary'), /not run/)
     },
   },
   {
