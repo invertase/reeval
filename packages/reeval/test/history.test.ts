@@ -11,7 +11,16 @@ import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
 import { readableRecord } from '../src/view/record.ts'
-import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
+import {
+  baseEnv,
+  fakeConfig,
+  noSignals,
+  project,
+  readRun,
+  recordedRuns,
+  runCli,
+  tempDir,
+} from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 
 const GIT_ENV = {
@@ -779,6 +788,76 @@ evaluate('edited', async (c) => {
     const passing = await compareCode('--fail-on-regression')
     assert.match(passing.out, /^can't compare {4}edited\n(.*\n){2} {2}head {13}\S+ {2}pass$/m)
     assert.equal(passing.code, 0, passing.out)
+  })
+
+  test('reeval compare reads an eval an interrupt cancelled as cancelled, never regressed', {
+    skip: noSignals,
+  }, async () => {
+    const p = await gitProject('compare-cancelled', {})
+    const started = join(p.dir, 'slow.started')
+    mkdirSync(join(p.dir, 'evals'))
+    await writeFile(
+      join(p.dir, 'evals/a.eval.ts'),
+      `import { writeFileSync } from 'node:fs'
+import { evaluate, expect } from 'reeval'
+evaluate('flips', async (c) => {
+  await c.send('write hello.txt')
+  expect(process.env.REEVAL_TEST_BREAK ?? 'ok', 'returns ok').toBe('ok')
+})
+evaluate('slow', async (c) => {
+  if (process.env.REEVAL_TEST_SLOW) {
+    writeFileSync(${JSON.stringify(started)}, '')
+    await new Promise((_, reject) => c.signal.addEventListener('abort', () => reject(c.signal.reason)))
+  }
+  expect(1, 'finished').toBe(1)
+})
+`,
+    )
+    sh(p.dir, 'add', '-A')
+    sh(p.dir, 'commit', '-q', '-m', 'evals')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const compareCode = async (...args: string[]) => {
+      const r = await runCli(p.dir, ['compare', ...args])
+      return { code: r.code, out: r.stdout + r.stderr }
+    }
+    // One attempt at a time, so `flips` has finished by the time `slow` starts waiting.
+    const interrupted = async (env: Record<string, string>) => {
+      await rm(started, { force: true })
+      let pid = 0
+      const run = runCli(p.dir, ['run', '--concurrency', '1'], {
+        env: { REEVAL_TEST_SLOW: '1', ...env },
+        onOutput: (_, id) => {
+          pid = id
+          return true
+        },
+      })
+      while (!existsSync(started)) await new Promise((resolve) => setTimeout(resolve, 50))
+      process.kill(pid, 'SIGINT')
+      const r = await run
+      assert.equal(r.code, 130, r.stdout + r.stderr)
+    }
+
+    await interrupted({})
+    const cancelled = await compareCode('--fail-on-regression')
+    assert.match(
+      cancelled.out,
+      /^can't compare {4}slow\n {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+    )
+    assert.doesNotMatch(cancelled.out, /regressed/)
+    assert.match(cancelled.out, /^1 can't compare · 1 same$/m)
+    assert.equal(cancelled.code, 0, cancelled.out)
+    const row = JSON.parse((await compareCode('--json')).out).rows.find((r: { id: string }) =>
+      r.id.endsWith('slow'),
+    )
+    assert.deepEqual([row.status, row.head, row.cancelled], ['drift', 'fail', ['head']])
+
+    // Canary: a real pass → fail in the same interrupted head still regresses and fails the check.
+    await interrupted({ REEVAL_TEST_BREAK: '1' })
+    const regressed = await compareCode('--fail-on-regression')
+    assert.match(regressed.out, /^regressed {8}flips\n(.*\n){2} {2}returns ok {7}pass → fail$/m)
+    assert.match(regressed.out, /^can't compare {4}slow$/m)
+    assert.match(regressed.out, /^1 regressed · 1 can't compare$/m)
+    assert.equal(regressed.code, 1, regressed.out)
   })
 
   test("a turn's text is cut at 8 KB in the record; transcript.jsonl keeps it whole", async () => {

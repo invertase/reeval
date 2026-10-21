@@ -382,6 +382,33 @@ describe('catch regressions (reeval compare)', () => {
     assert.match(last, /^8 new evals \(\d fail · 1 infra error · \d pass\)$/)
   })
 
+  test('a side the interrupt cancelled reads cancelled, not fail', () => {
+    const g = compareGolden('compare')
+    const input = goldenCompare(g)
+    const [first, ...rest] = input.rows
+    assert.ok(first)
+    const row = { ...first, status: 'drift' as const, base: 'pass' as const, head: 'fail' as const }
+    input.rows = [{ ...row, cancelled: ['head'] }, ...rest]
+    const text = comparedText(g, input).join('\n')
+    assert.match(
+      text,
+      /^can't compare {4}.+\n( {2}changed .+\n)? {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+    )
+    input.rows = [row, ...rest]
+    assert.match(
+      comparedText(g, input).join('\n'),
+      /^ {2}head {13}\S+ {2}fail$/m,
+      'canary: a real fail still reads fail',
+    )
+
+    const none = goldenCompare(compareGolden('compare-no-baseline'))
+    const [added, ...others] = none.rows
+    assert.ok(added)
+    none.rows = [{ ...added, head: 'fail', cancelled: ['head'] }, ...others]
+    const last = renderCompare(none, { color: false, verbose: false }).at(-1) ?? ''
+    assert.match(last, /^8 new evals \((\d fail · )?1 cancelled · \d pass\)$/)
+  })
+
   test('colour is the only difference colour makes', () => {
     const input = goldenCompare(compareGolden('compare'))
     const plain = renderCompare(input, { color: false, verbose: false })

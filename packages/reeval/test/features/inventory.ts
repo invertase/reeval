@@ -1661,6 +1661,15 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'compare.cancelled',
+    area: 'Records and studio',
+    name: "An eval Ctrl-C cancelled reads `can't compare` with that side `cancelled` in `reeval compare`, never `regressed`, and doesn't fail `--fail-on-regression`",
+    tests: [
+      'reeval/test/history.test.ts › reeval compare reads an eval an interrupt cancelled as cancelled, never regressed',
+      'reeval/test/output.test.ts › a side the interrupt cancelled reads cancelled, not fail',
+    ],
+  },
+  {
     id: 'query',
     area: 'Records and studio',
     name: '`reeval query`',

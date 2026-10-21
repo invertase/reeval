@@ -655,6 +655,8 @@ export type HistoryCell = Pick<
   lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean }
   /** Median tool calls, agent time and tokens over the counted attempts; null when none counted. */
   effort: CellEffort | null
+  /** Of `fail`, the attempts the run's interrupt cancelled (`error.kind: 'aborted'`); unset when none. */
+  cancelled?: number
 }
 
 /**
