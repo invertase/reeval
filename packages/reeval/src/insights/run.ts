@@ -1,8 +1,9 @@
 // Insights during `reeval run`, once the record has landed and the exit code is fixed: the same
 // calls `reeval analyze --insights` makes, bounded by `analysis.maxTokens`, each eval's input and
 // output caps and each call's timeout, and run to the end unless Ctrl-C stops them. They go beside
-// the scratch run as `.reeval/runs/<run>/insights.json`, with the run's deterministic remarks,
-// and `reeval record` copies them into the history. Whatever happens here (no key, a model that fails, Ctrl-C), the run prints its facts and
+// the scratch run as `.reeval/runs/<run>/insights.json`, with the run's remarks: the deterministic
+// ones, the model's gated ones and `no-baseline`, settled and ranked together. `reeval record`
+// copies them into the history. Whatever happens here (no key, a model that fails, Ctrl-C), the run prints its facts and
 // keeps its exit code; this only ever adds a line saying why some or all have no insights.
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -11,6 +12,7 @@ import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { clip } from '../text.ts'
 import type { ResolvedConfig } from '../types.ts'
+import { markPrinted } from '../ui/remarks.ts'
 import type { RunInsights } from '../view/insights.ts'
 import { INSIGHTS_FILE } from '../view/insights.ts'
 import { suiteResult } from '../view/suite.ts'
@@ -41,6 +43,8 @@ export async function runInsights(options: {
    * written in their place keeps the remarks.
    */
   remarks?: RunInsights | null
+  /** `-v`: suggestions print too, so they're marked printed. */
+  verbose?: boolean
   /** Ctrl-C: the calls in flight stop, no more start, and what finished is written. */
   signal?: AbortSignal
   stopSignal?: () => 'SIGINT' | 'SIGTERM'
@@ -68,6 +72,7 @@ export async function runInsights(options: {
       record,
       runDir,
       model,
+      root: config.root,
       maxTokens: config.analysis.maxTokens,
       concurrency: RUN_CONCURRENCY,
       cache: classifyCache(config.root, config.history.dir),
@@ -76,7 +81,17 @@ export async function runInsights(options: {
       ...(options.onProgress ? { onProgress: options.onProgress } : {}),
       ...(options.onUsage ? { onUsage: options.onUsage } : {}),
     })
-    insights = { ...generated, remarks: options.remarks?.remarks ?? generated.remarks }
+    const earlier = options.remarks?.remarks ?? []
+    const remarks = await import('../remarks/index.ts')
+      .then(({ withModelRemarks }) => withModelRemarks(config, record, generated, earlier))
+      .then((all) => markPrinted(all, record.runId, options.verbose ?? false))
+      .catch((error) => {
+        process.stderr.write(
+          `warning: no model remarks for this run: ${(error as Error).message}\n`,
+        )
+        return earlier
+      })
+    insights = { ...generated, remarks }
   } catch (error) {
     return {
       insights: null,

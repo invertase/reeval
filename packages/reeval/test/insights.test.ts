@@ -24,6 +24,7 @@ import {
   type InsightInput,
 } from '../src/insights/input.ts'
 import { byPriority, insightTier } from '../src/insights/priority.ts'
+import { insightsPromptVersion } from '../src/insights/schema.ts'
 import { trimInput } from '../src/insights/trim.ts'
 import { type Citable, checkSentence } from '../src/insights/validate.ts'
 import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
@@ -119,7 +120,7 @@ describe('the insights validator', () => {
   test('the recipe insights pass every check, as the with-insights entry holds them', async () => {
     const doc = await generate(recipeInsights)
     assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
-    assert.equal(doc.promptVersion, 'insights-v5')
+    assert.equal(doc.promptVersion, insightsPromptVersion())
     const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
     assert.deepEqual(
       sentencesOf(doc),
@@ -1472,14 +1473,14 @@ describe('reeval run writes insights at its end', () => {
 
   test('a small analysis.maxTokens skips the lowest-priority evals; the failing one keeps its insight', async () => {
     const p = await project('run-insights-budget', {
-      'reeval.config.ts': runConfig({ analysis: 'maxTokens: 6000,' }),
+      'reeval.config.ts': runConfig({ analysis: 'maxTokens: 9000,' }),
       ...RUN_EVALS,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const doc = scratchInsights(p.dir)
     assert.ok(doc)
-    assert.equal(doc.budget?.maxTokens, 6000)
+    assert.equal(doc.budget?.maxTokens, 9000)
     assert.deepEqual(
       doc.evals.map((e) => e.evalId.replace('evals%2Ffiles.eval.ts › ', '')),
       ['writes ok.txt 1', 'writes ok.txt 2', 'writes missing.txt'],
@@ -1490,7 +1491,7 @@ describe('reeval run writes insights at its end', () => {
       [3, 4, 5, 6, 7, 8, 9].map((n) => `evals%2Ffiles.eval.ts › writes ok.txt ${n}`),
     )
     const used = doc.usage.inputTokens + doc.usage.outputTokens
-    assert.ok(used <= 6000, `the run stays within its budget: ${used}`)
+    assert.ok(used <= 9000, `the run stays within its budget: ${used}`)
     assert.ok(
       doc.evals.some((e) => e.evalId === 'evals%2Ffiles.eval.ts › writes missing.txt' && e.answer),
       'the failing eval is explained first',
@@ -1498,7 +1499,7 @@ describe('reeval run writes insights at its end', () => {
     assert.ok(!calls(p.dir).some((c) => c.startsWith('headline')), 'no headline past the budget')
     assert.match(
       r.stdout,
-      /insights skipped for 7 evals: analysis\.maxTokens \(6,000\) reached — raise it in reeval\.config\.ts, or reeval analyze \S+ --insights to finish/,
+      /insights skipped for 7 evals: analysis\.maxTokens \(9,000\) reached — raise it in reeval\.config\.ts, or reeval analyze \S+ --insights to finish/,
     )
     assert.match(r.stdout, /No: the file is missing\./)
   })
