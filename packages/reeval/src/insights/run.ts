@@ -4,10 +4,12 @@
 // the scratch run as `.reeval/runs/<run>/insights.json`, with the run's remarks: the deterministic
 // ones, the model's gated ones and `no-baseline`, settled and ranked together. `reeval record`
 // copies them into the history. Whatever happens here (no key, a model that fails, Ctrl-C), the run prints its facts and
-// keeps its exit code; this only ever adds a line saying why some or all have no insights.
+// keeps its exit code; this only ever adds a line saying why some or all have no insights. A
+// missing key is one short line naming it; `reeval analyze --insights` and `reeval doctor` give
+// the whole credential message.
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolveAnalysisModel } from '../analysis/model.ts'
+import { missingAnalysisKey, resolveAnalysisModel } from '../analysis/model.ts'
 import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { clip } from '../text.ts'
@@ -56,6 +58,13 @@ export async function runInsights(options: {
   const { config, record, runDir } = options
   const evals = insightEvals(suiteResult(record)).length
   if (!evals) return { insights: null, lines: [] }
+  const key = missingAnalysisKey(config)
+  if (key) {
+    return {
+      insights: null,
+      lines: [`insights skipped: set ${key} in .env.local, or analysis: { insights: false }`],
+    }
+  }
   let model: ReturnType<typeof resolveAnalysisModel>
   try {
     model = resolveAnalysisModel(config)
