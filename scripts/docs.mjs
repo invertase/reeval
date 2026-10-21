@@ -265,6 +265,7 @@ const RECORD_TYPES = [
   'AttemptImage',
   'PhaseTimings',
   'FileChange',
+  'McpStartup',
 ]
 
 /** One-line aliases the record uses, shown as a table of values. */

@@ -1800,10 +1800,21 @@ export type TurnRecord = Pick<
 }
 
 /**
- * One start of a stdio MCP server: `ms` from spawning it to its answer to the client's
- * `initialize`; null when it never answered (it exited first, or timed out).
+ * One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by
+ * reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per
+ * turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts
+ * them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra
+ * error naming it. `mcpStartup` is absent when the environment has no stdio MCP server.
  */
-export type McpStartup = { server: string; ms: number | null }
+export type McpStartup = {
+  /** The server's name in the environment's `mcp`. */
+  server: string
+  /**
+   * Milliseconds from spawning the server to its answer to the client's `initialize`; null when it
+   * never answered (it exited first, or timed out).
+   */
+  ms: number | null
+}
 
 /** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
 export type PhaseTimings = {
