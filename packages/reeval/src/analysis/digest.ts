@@ -849,6 +849,7 @@ export async function buildDigestKeepingDropped(
         eval: tagOf(scopeEvals.find((e) => e.id === row.id)?.key ?? row.id),
         status: row.status,
         ...(row.changes?.length ? { changes: row.changes } : {}),
+        ...(row.cancelled ? { cancelled: row.cancelled } : {}),
       })),
     })
   }

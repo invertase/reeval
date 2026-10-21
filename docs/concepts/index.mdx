@@ -47,6 +47,8 @@ The code, the CLI and these docs use the same words. Coming from Inspect, Harbor
 | transcript | `transcript.jsonl`: every message and tool call of an attempt | trajectory, trace |
 | lift | A variant's pass@1 minus its control's, with a 95% interval | treatment effect, delta, uplift |
 | effort | Measured tool calls, agent time and tokens | efficiency, cost |
+| insight | A model's sentence on an eval's result, citing its facts; never changes the verdict ([Insights](/concepts/insights)) | summary, explanation |
+| remark | A deterministic note on the eval itself, such as a flaky check, with the line to change | lint, warning |
 
 A cell passes or fails by its [gate](/concepts/lift); an eval fails when any of its gated cells fails.
 

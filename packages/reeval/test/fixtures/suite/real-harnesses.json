@@ -3,10 +3,13 @@
     "runId": "20260927T161031Z_cc7e11c_cursor-agent_a3yh",
     "status": "complete",
     "outcome": "pass",
+    "errors": [],
     "tally": {
+      "errors": 0,
       "pass": 1,
       "fail": 0,
       "infraError": 0,
+      "cancelled": 0,
       "skipped": 0
     },
     "files": [

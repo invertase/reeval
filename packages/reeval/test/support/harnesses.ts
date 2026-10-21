@@ -64,11 +64,18 @@ export type HarnessRow = {
    * (`pluginParts`), which the probe plugin's `only` is narrowed to, and where the probe plugin's
    * skill shows up in `context`. The hook and subagent evals run only where `parts` has `hooks`
    * and `agents`. Unset for a harness reeval places no plugins on yet: its plugin evals are left
-   * out, and the plugin checks skip it, saying so. `copy` is where the agent keeps a copy of the
-   * plugin of its own, when it installs one (`agy plugin install`), which the hermetic check
-   * allows beside reeval's.
+   * out, and the plugin checks skip it, saying so.
    */
-  plugin?: { parts: readonly PluginPart[]; skillContext: RegExp; copy?: string }
+  plugin?: {
+    parts: readonly PluginPart[]
+    skillContext: RegExp
+    /**
+     * What the harness places itself, which `context` lists too: its own copy of the placed
+     * plugin, what lists it, and the skills its CLI bundles. The hermetic check counts them as
+     * declared.
+     */
+    own?: RegExp
+  }
   /** What a restricted policy allows automatically for it. */
   autoHosts: string[]
   /** A host it reaches on every turn; null for the fake agent, which reaches none. */
@@ -135,7 +142,7 @@ export const harnesses: HarnessRow[] = [
     plugin: {
       parts: EVERY_PART,
       skillContext: /^~\/\.gemini\/config\/plugins\/probe\/skills\/plugin-probe\/SKILL\.md$/,
-      copy: '~/.gemini/config/plugins/probe/',
+      own: /^~\/\.gemini\/config\/plugins\/probe\//,
     },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
@@ -216,6 +223,11 @@ export const harnesses: HarnessRow[] = [
     image: 'goose',
     skillContext:
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    plugin: {
+      parts: ['skills', 'mcp'],
+      skillContext:
+        /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/plugin-probe\/SKILL\.md$/,
+    },
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: false,
@@ -250,6 +262,13 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
     image: 'codex',
     skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    // `codex plugin add` copies the plugin into Codex's cache, from its home marketplace; Codex
+    // writes its bundled skills to ~/.codex/skills/.system as it starts.
+    plugin: {
+      parts: ['skills', 'mcp'],
+      skillContext: PLACED_PLUGIN_SKILL,
+      own: /^~\/\.(codex\/plugins\/cache\/reeval\/probe\/|agents\/plugins\/marketplace\.json$|codex\/skills\/\.system\/)/,
+    },
     autoHosts: ['api.openai.com'],
     apiHost: 'api.openai.com',
     tokens: true,

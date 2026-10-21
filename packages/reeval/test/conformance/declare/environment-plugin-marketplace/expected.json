@@ -1,0 +1,53 @@
+{
+  "children": [
+    {
+      "type": "group",
+      "name": "marketplace plugins",
+      "mode": "run",
+      "options": {
+        "environment": {
+          "kind": "environment",
+          "name": "listed",
+          "layers": [
+            {
+              "name": "listed",
+              "spec": {
+                "plugins": [
+                  {
+                    "kind": "plugin",
+                    "source": "marketplace",
+                    "name": "lint",
+                    "marketplace": {
+                      "source": "git",
+                      "repo": "github:acme/agent-plugins",
+                      "ref": "v3"
+                    },
+                    "only": ["skills"]
+                  },
+                  {
+                    "kind": "plugin",
+                    "source": "marketplace",
+                    "name": "format",
+                    "marketplace": {
+                      "source": "npm",
+                      "spec": "@acme/plugins@2.0.0"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "children": [
+        {
+          "type": "eval",
+          "name": "entries read at the attempt",
+          "mode": "run",
+          "options": {},
+          "body": "b1"
+        }
+      ]
+    }
+  ]
+}

@@ -1,19 +1,23 @@
 // Plugins on the host: reading a plugin directory, what `only` keeps, the refusals each harness
-// gives, and what resolving an environment with plugins places and records.
+// gives, reading a marketplace entry, and what resolving an environment with plugins places and records.
 import assert from 'node:assert/strict'
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { ANTIGRAVITY_HOOK_EVENTS } from '@reeval/harness-antigravity'
 import {
   buildSteps,
   builtPlugins,
   droppedPaths,
   fetchesAtStart,
+  localMarketplace,
   PluginProblem,
   pluginBuildId,
   pluginFiles,
+  readMarketplace,
   readPlugin,
 } from '../src/environment/plugins.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
@@ -23,12 +27,14 @@ import {
   agentMcp,
   claudePluginFiles,
   cursorHookMatcher,
+  expectedBlockedFor,
   LAYOUTS,
   piMcpServers,
   refusedPlugins,
   writePluginFiles,
 } from '../src/harness/agents.ts'
 import { unpackPlugins } from '../src/harness/unpack.ts'
+import { InfraError } from '../src/sandbox/types.ts'
 import type { PluginBuild, PluginPart } from '../src/types.ts'
 
 const write = (root: string, files: Record<string, string>) => {
@@ -285,22 +291,17 @@ const loading = <T>(kind: keyof typeof AGENTS, parts: PluginPart[], fn: () => T)
   }
 }
 
-test('a real harness without plugin parts refuses every plugin', () => {
+test('every real harness loads some plugin parts, so a plugin it can’t read yet isn’t refused whole', () => {
   const p = readPlugin(review(), 'x')
   for (const [kind, agent] of Object.entries(AGENTS)) {
-    if (agent.pluginParts.length) continue
-    assert.equal(
-      refusedPlugins({ kind } as never, [p], { skills: [], mcp: [] }),
-      `${agent.name} can't load plugins yet: leave the review plugin out of this cell`,
-    )
+    assert.ok(agent.pluginParts.length, kind)
   }
   assert.equal(
-    refusedPlugins({ kind: 'goose' } as never, [], { skills: [], mcp: [] }, [
+    refusedPlugins({ kind: 'opencode' } as never, [], { skills: [], mcp: [] }, [
       "plugin.git('github:acme/x')",
     ]),
-    "Goose can't load plugins yet: leave plugin.git('github:acme/x') out of this cell",
+    undefined,
   )
-  assert.equal(refusedPlugins({ kind: 'goose' } as never, [], { skills: [], mcp: [] }), undefined)
   assert.equal(refusedPlugins({ kind: 'fake' }, [p], { skills: [], mcp: [] }), undefined)
 })
 
@@ -680,6 +681,125 @@ test('cursorHookMatcher maps Claude Code tool names on the tool events only', ()
   assert.equal(cursorHookMatcher('SessionStart', 'startup'), undefined)
 })
 
+test('Codex and Goose load skills and MCP; Codex refuses hooks, apps and a plugin server’s host secret', () => {
+  const whole = readPlugin(review(), 'x')
+  const kept = readPlugin(review(), 'x', ['skills'])
+  const withMcp = readPlugin(review(), 'x', ['skills', 'mcp'])
+  const own = { skills: [], mcp: [] }
+  for (const [kind, name] of [
+    ['codex', 'Codex'],
+    ['goose', 'Goose'],
+  ] as const) {
+    assert.equal(
+      refusedPlugins({ kind } as never, [whole], own),
+      `${name} can't load the review plugin's agents (agents/) and commands (commands/) and hooks (hooks/hooks.json) and rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell`,
+    )
+    assert.equal(refusedPlugins({ kind } as never, [kept], own), undefined)
+  }
+  const hooked = readPlugin(review(), 'x', ['skills', 'hooks'])
+  assert.equal(
+    refusedPlugins({ kind: 'codex' } as never, [hooked], own),
+    "Codex can't load the review plugin's hooks (hooks/hooks.json): use only: ['skills'], or leave the plugin out of this cell",
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'codex' } as never, [withMcp], own),
+    `Codex loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in`,
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'goose' } as never, [withMcp], own),
+    undefined,
+    'Goose takes plugin servers in its own config, where reeval fills in secrets',
+  )
+  assert.equal(
+    refusedPlugins({ kind: 'goose' } as never, [withMcp], { skills: [], mcp: ['Review_Docs'] }),
+    'Goose keys the Review_Docs and review:docs MCP servers both as review_docs, and keeps only one: rename one',
+  )
+  for (const files of [
+    { '.app.json': '{ "apps": {} }' },
+    { '.claude-plugin/plugin.json': '{ "name": "chat", "apps": "./apps.json" }' },
+  ]) {
+    const chat = readPlugin(
+      write(tmp(), {
+        '.claude-plugin/plugin.json': '{ "name": "chat" }',
+        'skills/lint/SKILL.md': skillMd('lint'),
+        ...files,
+      }),
+      'x',
+    )
+    assert.equal(chat.apps, true)
+    assert.equal(
+      refusedPlugins({ kind: 'codex' } as never, [chat], own),
+      "Codex can't load the chat plugin's apps: they need a ChatGPT login",
+    )
+    assert.equal(
+      refusedPlugins({ kind: 'fake', layout: 'codex' } as never, [chat], own),
+      "The fake agent with Codex's layout can't load the chat plugin's apps: they need a ChatGPT login",
+    )
+    assert.equal(refusedPlugins({ kind: 'goose' } as never, [chat], own), undefined)
+  }
+})
+
+test('Codex refuses a plugin with a manifest it reads first; a root plugin.json counts only with its schema, though Antigravity reads any', () => {
+  const own = { skills: [], mcp: [] }
+  const base = {
+    '.claude-plugin/plugin.json': '{ "name": "dual" }',
+    'skills/lint/SKILL.md': skillMd('lint'),
+  }
+  for (const [files, manifest] of [
+    [{ '.codex-plugin/plugin.json': '{ "name": "dual" }' }, '.codex-plugin/plugin.json'],
+    [
+      {
+        'plugin.json':
+          '{ "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json" }',
+      },
+      'plugin.json',
+    ],
+  ] as const) {
+    const dual = readPlugin(write(tmp(), { ...base, ...files }), 'x', ['skills'])
+    assert.deepEqual(dual.manifests, [manifest])
+    assert.equal(
+      refusedPlugins({ kind: 'codex' } as never, [dual], own),
+      `Codex reads the dual plugin's ${manifest} in place of its .claude-plugin/plugin.json, so reeval can't hold it to the parts it places: remove ${manifest} from the plugin, or leave the plugin out of this cell`,
+    )
+    assert.equal(refusedPlugins({ kind: 'goose' } as never, [dual], own), undefined)
+  }
+  for (const files of [
+    { 'plugin.json': '{ "name": "dual", "version": "1.0.0" }' },
+    { '.cursor-plugin/plugin.json': '{ "name": "dual" }' },
+  ]) {
+    const dual = readPlugin(write(tmp(), { ...base, ...files }), 'x')
+    assert.equal(refusedPlugins({ kind: 'codex' } as never, [dual], own), undefined)
+  }
+  const bare = readPlugin(
+    write(tmp(), { ...base, 'plugin.json': '{ "name": "dual", "version": "1.0.0" }' }),
+    'x',
+    ['skills'],
+  )
+  assert.match(
+    refusedPlugins({ kind: 'antigravity' } as never, [bare], own) ?? '',
+    /^Antigravity reads the dual plugin's plugin\.json in place of/,
+    'agy reads any root plugin.json',
+  )
+})
+
+test("Codex's plugin sync hosts are expected blocks only in a session with plugins", () => {
+  const codex = { kind: 'codex', model: 'gpt-5.4-mini' } as const
+  assert.equal(
+    expectedBlockedFor(codex, false),
+    undefined,
+    'an agent of its own on github.com is a real block',
+  )
+  assert.deepEqual(expectedBlockedFor(codex, true)?.hosts, [
+    'github.com',
+    'api.github.com',
+    'chatgpt.com',
+  ])
+  assert.deepEqual(expectedBlockedFor({ kind: 'fake', layout: 'codex' } as never, false), undefined)
+  const goose = { kind: 'goose', model: 'gemini-3.8-flash' } as const
+  assert.deepEqual(expectedBlockedFor(goose, false)?.hosts, ['models.dev'])
+  assert.deepEqual(expectedBlockedFor(goose, true)?.hosts, ['models.dev'])
+})
+
 test('a part the harness can’t load is refused, naming what it can', () => {
   const p = readPlugin(review(), 'x')
   loading('cursor', ['skills', 'mcp'], () => {
@@ -854,7 +974,7 @@ test('resolving for a real harness refuses the plugin, and an http server egress
     resolveEnvironment(env, {}, root, 'e', 'AGENTS.md', 'allow-all', undefined, {
       harness: { kind: 'goose' } as never,
     }),
-    /environment review \(e\): Goose can't load plugins yet: leave the review plugin out of this cell/,
+    /environment review \(e\): Goose can't load the review plugin's agents \(agents\/\) and commands \(commands\/\) and hooks \(hooks\/hooks\.json\) and rules \(rules\/\): use only: \['skills', 'mcp'\]/,
   )
   await assert.rejects(
     resolveEnvironment(env, {}, root, 'e', 'AGENTS.md', 'allow-all', undefined, { allowed: [] }),
@@ -911,6 +1031,424 @@ test('a plugin server whose <plugin>:<server> key mcp already has is refused on 
       kind,
     )
   }
+})
+
+const marketplace = (root: string, json: unknown) =>
+  write(root, { '.claude-plugin/marketplace.json': JSON.stringify(json) })
+
+test('a marketplace entry’s source is a ./path, a git repository or an npm package', () => {
+  const dir = marketplace(tmp(), {
+    name: 'acme-tools',
+    owner: { name: 'Acme' },
+    metadata: { pluginRoot: './plugins' },
+    plugins: [
+      { name: 'lint', source: './plugins/lint' },
+      { name: 'format', source: 'format' },
+      { name: 'gh', source: { source: 'github', repo: 'acme/gh-plugin', ref: 'v2' } },
+      {
+        name: 'pinned',
+        source: {
+          source: 'url',
+          url: 'https://git.example.com/p.git',
+          ref: 'main',
+          sha: '0123456789abcdef0123456789abcdef01234567',
+        },
+      },
+      {
+        name: 'sub',
+        source: { source: 'git-subdir', url: 'acme/mono', path: 'tools/sub/', ref: 'v1' },
+      },
+      { name: 'pkg', source: { source: 'npm', package: '@acme/pkg', version: '2.1.0' } },
+      { name: 'latest', source: { source: 'npm', package: '@acme/latest' } },
+    ],
+  })
+  const entry = (name: string) => readMarketplace(dir, 'call', 'github:acme/tools', name)
+  assert.deepEqual(entry('lint'), {
+    marketplace: 'acme-tools',
+    entry: { source: 'path', path: 'plugins/lint' },
+  })
+  assert.deepEqual(entry('format').entry, { source: 'path', path: 'plugins/format' })
+  assert.deepEqual(entry('gh').entry, {
+    source: 'git',
+    url: 'https://github.com/acme/gh-plugin.git',
+    repo: 'github:acme/gh-plugin',
+    ref: 'v2',
+  })
+  assert.deepEqual(entry('pinned').entry, {
+    source: 'git',
+    url: 'https://git.example.com/p.git',
+    repo: 'https://git.example.com/p.git',
+    ref: '0123456789abcdef0123456789abcdef01234567',
+  })
+  assert.deepEqual(entry('sub').entry, {
+    source: 'git',
+    url: 'https://github.com/acme/mono.git',
+    repo: 'github:acme/mono',
+    ref: 'v1',
+    path: 'tools/sub',
+  })
+  assert.deepEqual(entry('pkg').entry, { source: 'npm', spec: '@acme/pkg@2.1.0' })
+  assert.deepEqual(entry('latest').entry, { source: 'npm', spec: '@acme/latest' })
+})
+
+test('a marketplace reeval can’t read, or an entry it doesn’t list or can’t fetch, is a PluginProblem', () => {
+  const problem = (dir: string, name: string) => {
+    try {
+      readMarketplace(
+        dir,
+        "plugin.marketplace('lint@github:acme/tools')",
+        'github:acme/tools',
+        name,
+      )
+    } catch (error) {
+      assert.ok(error instanceof PluginProblem)
+      return error.message
+    }
+    assert.fail('no problem')
+  }
+  assert.equal(
+    problem(tmp(), 'lint'),
+    "plugin.marketplace('lint@github:acme/tools'): github:acme/tools has no .claude-plugin/marketplace.json, so it isn't a Claude Code marketplace; name a plugin's own repository or package with plugin.git or plugin.npm",
+  )
+  assert.match(
+    problem(marketplace(tmp(), { plugins: [] }), 'lint'),
+    /github:acme\/tools's \.claude-plugin\/marketplace\.json needs a name and a plugins list/,
+  )
+  const listed = marketplace(tmp(), {
+    name: 'acme-tools',
+    plugins: [
+      { name: 'lints', source: './lints' },
+      { name: 'format', source: './format' },
+      { name: 'escape', source: './../outside' },
+      { name: 'bare', source: 'bare' },
+      { name: 'moved', source: './moved', commands: ['./cmd'] },
+      { name: 'zip', source: { source: 'url', url: '' } },
+      { name: 'private', source: { source: 'npm', package: 'p', registry: 'https://r.example' } },
+    ],
+  })
+  assert.equal(
+    problem(listed, 'lint'),
+    'plugin.marketplace(\'lint@github:acme/tools\'): the acme-tools marketplace (github:acme/tools) has no plugin "lint" (did you mean "lints"?); it lists lints, format, escape, bare, moved, zip, private',
+  )
+  assert.match(
+    problem(listed, 'escape'),
+    /the acme-tools marketplace's entry "escape" has source "\.\/\.\.\/outside", which reeval doesn't fetch: it takes a \.\/path in the marketplace, or a github, url, git-subdir or npm source/,
+  )
+  assert.match(
+    problem(listed, 'bare'),
+    /entry "bare" has source "bare", which reeval doesn't fetch/,
+  )
+  assert.match(
+    problem(listed, 'moved'),
+    /entry "moved" sets "commands", which reeval doesn't read: keep each part in the plugin's own directory/,
+  )
+  assert.match(problem(listed, 'zip'), /entry "zip" has source \{"source":"url","url":""\}/)
+  assert.match(problem(listed, 'private'), /names its own npm registry/)
+})
+
+test('a bare entry source resolves under pluginRoot as Claude Code normalises it, and nowhere else', () => {
+  const entries = [
+    { name: 'bare', source: 'format' },
+    { name: 'nested', source: 'tools/format' },
+    { name: 'root', source: '.' },
+  ]
+  const at = (pluginRoot: unknown, name: string) => {
+    const dir = marketplace(tmp(), { name: 'm', metadata: { pluginRoot }, plugins: entries })
+    try {
+      return readMarketplace(dir, 'call', 'label', name).entry
+    } catch (error) {
+      assert.ok(error instanceof PluginProblem)
+      return 'refused'
+    }
+  }
+  assert.deepEqual(at('plugins', 'bare'), { source: 'path', path: 'plugins/format' })
+  assert.deepEqual(at('./plugins/', 'bare'), { source: 'path', path: 'plugins/format' })
+  assert.deepEqual(at('.', 'bare'), { source: 'path', path: 'format' })
+  assert.equal(at('plugins', 'nested'), 'refused')
+  assert.equal(at('../outside', 'bare'), 'refused')
+  assert.equal(at('/etc', 'bare'), 'refused')
+  assert.equal(at(undefined, 'bare'), 'refused')
+  assert.deepEqual(at(undefined, 'root'), { source: 'path', path: '' })
+})
+
+test('a marketplace entry can’t reach the host: refs and urls that git would take as options, local paths, tokens, symlinks and npm specs that aren’t registry packages', () => {
+  const token = 'ghp_0123456789abcdefghij'
+  const root = tmp()
+  const dir = marketplace(join(root, 'market'), {
+    name: 'acme-tools',
+    plugins: [
+      { name: 'option', source: { source: 'url', url: '.', ref: '--upload-pack=touch pwned' } },
+      { name: 'dash-url', source: { source: 'url', url: '--upload-pack=touch pwned' } },
+      { name: 'short-sha', source: { source: 'github', repo: 'acme/p', sha: 'abc1234' } },
+      { name: 'local', source: { source: 'url', url: '/home/me/private' } },
+      { name: 'ext', source: { source: 'git-subdir', url: 'ext::sh -c id', path: 'p' } },
+      { name: 'token', source: { source: 'url', url: `https://x:${token}@github.com/a/b.git` } },
+      { name: 'token-hg', source: { source: 'hg', url: `https://x:${token}@hg.example/p` } },
+      { name: 'npm-git', source: { source: 'npm', package: 'git+ssh://git@github.com/a/b.git' } },
+      { name: 'npm-path', source: { source: 'npm', package: '../../secret' } },
+      { name: 'npm-alias', source: { source: 'npm', package: 'p', version: 'file:../x' } },
+      { name: 'linked', source: './linked' },
+      { name: 'scp', source: { source: 'url', url: 'git@github.com:acme/p.git', ref: 'v1' } },
+    ],
+  })
+  write(join(root, 'outside'), { '.claude-plugin/plugin.json': '{"name":"linked"}' })
+  symlinkSync(join(root, 'outside'), join(dir, 'linked'), 'junction')
+  const problem = (name: string) => {
+    try {
+      readMarketplace(dir, 'call', 'label', name)
+    } catch (error) {
+      assert.ok(error instanceof PluginProblem)
+      return error.message
+    }
+    assert.fail(`${name}: no problem`)
+  }
+  assert.equal(
+    problem('option'),
+    'the acme-tools marketplace\'s entry "option" has ref "--upload-pack=touch pwned", which isn\'t a branch or tag',
+  )
+  assert.match(problem('dash-url'), /which reeval doesn't fetch/)
+  assert.match(problem('short-sha'), /has sha "abc1234", which isn't a full 40-character/)
+  assert.match(problem('local'), /a path on this machine/)
+  assert.match(problem('ext'), /which reeval doesn't fetch/)
+  assert.match(problem('token'), /has a password or token in its url/)
+  for (const name of ['token', 'token-hg']) assert.ok(!problem(name).includes(token), name)
+  assert.match(problem('npm-git'), /isn't a registry package name/)
+  assert.match(problem('npm-path'), /isn't a registry package name/)
+  assert.match(problem('npm-alias'), /has npm version "file:\.\.\/x"/)
+  assert.match(problem('linked'), /leaves the marketplace through a symlink/)
+  assert.deepEqual(readMarketplace(dir, 'call', 'label', 'scp').entry, {
+    source: 'git',
+    url: 'git@github.com:acme/p.git',
+    repo: 'git@github.com:acme/p.git',
+    ref: 'v1',
+  })
+})
+
+test('only a marketplace on this machine may name a plugin at a path on it', () => {
+  const dir = marketplace(tmp(), {
+    name: 'acme',
+    plugins: [
+      { name: 'review', source: { source: 'url', url: 'file:///srv/review' } },
+      { name: 'abs', source: { source: 'git-subdir', url: '/srv/mono', path: 'p' } },
+      { name: 'drive', source: { source: 'url', url: 'C:\\srv\\review' } },
+      { name: 'unc', source: { source: 'url', url: '\\\\host\\share\\review' } },
+      { name: 'up', source: { source: 'url', url: '../review' } },
+    ],
+  })
+  const label = 'https://git.example.com/acme/plugins.git'
+  const remote = (name: string) => {
+    try {
+      readMarketplace(dir, 'call', label, name)
+    } catch (error) {
+      assert.ok(error instanceof PluginProblem)
+      return error.message
+    }
+    assert.fail(`${name}: no problem`)
+  }
+  assert.equal(
+    remote('review'),
+    'the acme marketplace (https://git.example.com/acme/plugins.git) names its review plugin at file:///srv/review, a path on this machine: a remote marketplace may only name remote repositories or paths inside itself',
+  )
+  for (const name of ['abs', 'drive', 'unc', 'up']) {
+    assert.match(remote(name), /a path on this machine: a remote marketplace/, name)
+  }
+  assert.deepEqual(readMarketplace(dir, 'call', 'local', 'review', true).entry, {
+    source: 'git',
+    url: 'file:///srv/review',
+    repo: 'file:///srv/review',
+  })
+  assert.throws(
+    () => readMarketplace(dir, 'call', 'local', 'abs', true),
+    /which reeval doesn't fetch/,
+  )
+  const m = (repo: string) => localMarketplace({ source: 'git', repo })
+  assert.equal(m('github:acme/plugins'), false)
+  assert.equal(m('https://git.example.com/acme/plugins.git'), false)
+  assert.equal(m('git@github.com:acme/plugins.git'), false)
+  assert.equal(m(pathToFileURL(dir).href), true)
+  assert.equal(m(dir), true)
+  assert.equal(localMarketplace({ source: 'npm', spec: '@acme/plugins@2.0.0' }), false)
+  assert.equal(localMarketplace({ source: 'npm', spec: join(dir, 'plugins.tgz') }), true)
+})
+
+/** A git repository at `dir`, committed, with `v1` tagged on the first commit. */
+const gitRepo = (dir: string, files: Record<string, string>) => {
+  const g = (...args: string[]) =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+      cwd: dir,
+      encoding: 'utf8',
+    }).trim()
+  write(dir, files)
+  g('init', '-q', '-b', 'main')
+  g('add', '-A')
+  g('commit', '-q', '-m', 'v1')
+  g('tag', 'v1')
+  return { url: pathToFileURL(dir).href, head: g('rev-parse', 'HEAD'), g }
+}
+
+test('resolving a marketplace entry places that plugin alone and records the marketplace and its commit', async () => {
+  const root = tmp()
+  const other = gitRepo(join(root, 'other'), {
+    'plugin/.claude-plugin/plugin.json': '{"name":"remote"}',
+    'plugin/commands/far.md': 'Far.\n',
+  })
+  const repo = gitRepo(join(root, 'market'), {
+    '.claude-plugin/marketplace.json': JSON.stringify({
+      name: 'acme-tools',
+      plugins: [
+        { name: 'review', source: './plugins/review' },
+        { name: 'lint', source: './plugins/lint' },
+        {
+          name: 'remote',
+          source: { source: 'git-subdir', url: other.url, path: 'plugin', sha: other.head },
+        },
+      ],
+    }),
+    'plugins/review/.claude-plugin/plugin.json': '{"name":"review"}',
+    'plugins/review/agents/reviewer.md': 'Review.\n',
+    'plugins/lint/.claude-plugin/plugin.json': '{"name":"lint"}',
+    'plugins/lint/commands/lint.md': 'Lint.\n',
+  })
+  write(join(root, 'market'), { 'plugins/review/agents/reviewer.md': 'Review v2.\n' })
+  repo.g('commit', '-q', '-am', 'v2')
+  const env = defineEnvironment('market', ({ plugin }) => ({
+    plugins: [
+      plugin.marketplace(`review@${repo.url}`, { ref: 'v1' }),
+      plugin.marketplace(`remote@${repo.url}`),
+    ],
+  }))
+  const r = await resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md')
+  const v1 = repo.g('rev-parse', 'v1')
+  const head = repo.g('rev-parse', 'HEAD')
+  assert.deepEqual(
+    r.record.plugins?.map((p) => [p.name, p.source, p.commit, p.marketplace]),
+    [
+      [
+        'review',
+        `${repo.url}#v1:plugins/review`,
+        v1,
+        { name: 'acme-tools', source: `${repo.url}#v1`, commit: v1 },
+      ],
+      [
+        'remote',
+        `${other.url}#${other.head}:plugin`,
+        other.head,
+        { name: 'acme-tools', source: repo.url, commit: head },
+      ],
+    ],
+  )
+  const [review, remote] = r.plugins
+  assert.deepEqual(
+    review?.files.map((f) => [f.path, Buffer.from(f.content).toString()]),
+    [
+      ['.claude-plugin/plugin.json', '{"name":"review"}'],
+      ['agents/reviewer.md', 'Review.\n'],
+    ],
+    'the entry at v1, and none of the lint entry',
+  )
+  assert.deepEqual(
+    remote?.files.map((f) => f.path),
+    ['.claude-plugin/plugin.json', 'commands/far.md'],
+  )
+  await assert.rejects(
+    resolveEnvironment(
+      applied(
+        defineEnvironment('typo', ({ plugin }) => ({
+          plugins: [plugin.marketplace(`reviews@${repo.url}`)],
+        })),
+      ),
+      {},
+      root,
+      'e',
+      'AGENTS.md',
+    ),
+    (error: Error) => {
+      assert.ok(error instanceof InfraError)
+      assert.equal(
+        error.message,
+        `environment typo (e): plugin.marketplace('reviews@${repo.url}'): the acme-tools marketplace (${repo.url}) has no plugin "reviews" (did you mean "review"?); it lists review, lint, remote`,
+      )
+      return true
+    },
+  )
+  await assert.rejects(
+    resolveEnvironment(
+      applied(
+        defineEnvironment('bare', ({ plugin }) => ({
+          plugins: [plugin.marketplace(`far@${other.url}`)],
+        })),
+      ),
+      {},
+      root,
+      'e',
+      'AGENTS.md',
+    ),
+    (error: Error) =>
+      error instanceof InfraError &&
+      error.message.endsWith(
+        `${other.url} has no .claude-plugin/marketplace.json, so it isn't a Claude Code marketplace; name a plugin's own repository or package with plugin.git or plugin.npm`,
+      ),
+  )
+  const byPath = await resolveEnvironment(
+    applied(
+      defineEnvironment('dir', ({ plugin }) => ({
+        plugins: [plugin.marketplace(`remote@${join(root, 'market')}`)],
+      })),
+    ),
+    {},
+    root,
+    'e',
+    'AGENTS.md',
+  )
+  assert.deepEqual(
+    byPath.record.plugins?.map((p) => [p.name, p.source, p.marketplace?.source]),
+    [['remote', `${other.url}#${other.head}:plugin`, 'market']],
+    'a marketplace named by its directory is on this machine, and the record names it from the project',
+  )
+})
+
+test('a cloned plugin is placed as committed, even where git converts line endings', async () => {
+  const root = tmp()
+  const repo = gitRepo(join(root, 'repo'), {
+    '.claude-plugin/plugin.json': '{"name":"eol"}\n',
+    'commands/lf.md': 'one\ntwo\n',
+  })
+  const config = join(root, 'gitconfig')
+  writeFileSync(config, '[core]\n\tautocrlf = true\n\teol = crlf\n')
+  const before = process.env.GIT_CONFIG_GLOBAL
+  process.env.GIT_CONFIG_GLOBAL = config
+  try {
+    const env = defineEnvironment('eol', ({ plugin }) => ({ plugins: [plugin.git(repo.url)] }))
+    const r = await resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md')
+    assert.deepEqual(
+      r.plugins[0]?.files.map((f) => [f.path, Buffer.from(f.content).toString()]),
+      [
+        ['.claude-plugin/plugin.json', '{"name":"eol"}\n'],
+        ['commands/lf.md', 'one\ntwo\n'],
+      ],
+    )
+  } finally {
+    if (before === undefined) delete process.env.GIT_CONFIG_GLOBAL
+    else process.env.GIT_CONFIG_GLOBAL = before
+  }
+})
+
+test('a git ref that reads as an option is never passed to git as one', async () => {
+  const root = tmp()
+  const repo = gitRepo(join(root, 'repo'), { '.claude-plugin/plugin.json': '{"name":"p"}' })
+  const marker = join(root, 'pwned')
+  const env = defineEnvironment('opt', {
+    plugins: [
+      {
+        kind: 'plugin',
+        source: 'git',
+        repo: repo.url,
+        ref: `--upload-pack=touch ${marker}; git-upload-pack`,
+      },
+    ],
+  })
+  await assert.rejects(resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md'), InfraError)
+  assert.ok(!existsSync(marker), 'git ran the ref as --upload-pack')
 })
 
 test('Claude Code enables the placed plugins from a directory marketplace, and namespaced agents start their servers', () => {

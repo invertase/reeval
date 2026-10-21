@@ -50,6 +50,8 @@ Usage:
                                 skip completed attempts, restart in-flight ones. Without a ref, the
                                 newest resumable (Stopped staging, or an interrupted/budget scratch),
                                 not assembled latest. Ref is a run id or unique prefix
+    --no-insights               Skip insights for this run: no analysis.model calls, the blocks
+                                print their facts only (also analysis.insights: false)
   reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
     --images                    Also remove the Docker images reeval built that nothing tags any more,
                                 and the intermediate -base tags of from builds
@@ -66,8 +68,8 @@ Usage:
   reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
                                 rebuilt from the records); views: lift, effort, factor_effects,
                                 skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                                verdict_flips, check_discrimination, check_rates. No argument lists
-                                them
+                                verdict_flips, check_discrimination, check_rates, check_streaks. No
+                                argument lists them
     --run <id|last>             Bind the run id (or the last run's) to :run in the SQL; with a view
                                 or table name, only that run's rows
     --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
@@ -80,6 +82,11 @@ Usage:
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
     --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
+    --insights                  Write a run's insights instead: what each eval asks and its answer,
+                                citing the facts, into <run>/insights.json, as reeval run does at its
+                                end, or finish the evals one left unfinished; reeval show prints them.
+                                Takes --json and -v
+    -v, --verbose               With --insights, print each sentence the checks removed and why
   reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
                                 tools for why a run failed, reeval query's views and SQL,
                                 history, show, compare, transcripts and saved analyses, and runs

@@ -5,10 +5,16 @@
 // SuiteResults and compare rows; statistics print only with `verbose`.
 import type { HistoryCell, RunRecord } from '../history/types.ts'
 import { fenced } from '../text.ts'
-import type { Outcome } from '../types.ts'
 import type { CompareCell, CompareRow, CompareStatus, StackChange } from '../view/compare.ts'
 import { effortChangeLabel } from '../view/effort.ts'
-import type { CaseResult, CellResult, CheckResult, EvalResult, SuiteResult } from '../view/suite.ts'
+import type {
+  CaseResult,
+  CellResult,
+  CheckResult,
+  EvalResult,
+  ResultOutcome,
+  SuiteResult,
+} from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
 import {
   assertionOf,
@@ -69,15 +75,26 @@ const TALLY: CompareStatus[] = ['regressed', 'fixed', 'drift', 'infra', 'added',
 const paintStatus = (c: Colors, s: CompareStatus): Paint =>
   s === 'regressed' ? c.red : s === 'fixed' ? c.green : s === 'same' ? c.dim : c.yellow
 
-const OUTCOME: Record<Outcome, string> = {
+const OUTCOME: Record<ResultOutcome, string> = {
   pass: 'pass',
   fail: 'fail',
   infra_error: 'infra error',
+  cancelled: 'cancelled',
   skipped: 'skipped',
 }
 
-const paintOutcome = (c: Colors, o: Outcome): Paint =>
-  o === 'pass' ? c.green : o === 'fail' ? c.red : o === 'infra_error' ? c.yellow : c.dim
+const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
+  o === 'pass'
+    ? c.green
+    : o === 'fail'
+      ? c.red
+      : o === 'infra_error' || o === 'cancelled'
+        ? c.yellow
+        : c.dim
+
+/** One side's outcome as `reeval show` reads it: a fail the interrupt caused is `cancelled`. */
+const sideOutcome = (row: CompareRow, side: 'base' | 'head'): ResultOutcome | null =>
+  row.cancelled?.includes(side) ? 'cancelled' : row[side]
 
 /** An eval, or one case of a family, as compare rows name it: by its eval id. */
 type Unit = { file: string; result: EvalResult }
@@ -258,7 +275,12 @@ function flips(
   })
 }
 
-const idRow = (c: Colors, side: 'base' | 'head', id: string, outcome?: Outcome | null): Item => ({
+const idRow = (
+  c: Colors,
+  side: 'base' | 'head',
+  id: string,
+  outcome?: ResultOutcome | null,
+): Item => ({
   indent: 2,
   cells: [side, id, ...(outcome ? [t(OUTCOME[outcome], paintOutcome(c, outcome))] : [])],
 })
@@ -351,7 +373,10 @@ function block(
     const lines = [
       top,
       ...(changed ? table([{ indent: 2, cells: ['changed', changed] }]) : []),
-      ...table([idRow(c, 'base', baseId, row.base), idRow(c, 'head', headId, row.head)]),
+      ...table([
+        idRow(c, 'base', baseId, sideOutcome(row, 'base')),
+        idRow(c, 'head', headId, sideOutcome(row, 'head')),
+      ]),
       ...table([...cellRows(row), ...stats]),
       ...resultBody(c, head),
     ]
@@ -359,12 +384,19 @@ function block(
   }
   if (row.status === 'added') {
     return {
-      lines: [top, ...table([idRow(c, 'head', headId, row.head)]), ...resultBody(c, head)],
+      lines: [
+        top,
+        ...table([idRow(c, 'head', headId, sideOutcome(row, 'head'))]),
+        ...resultBody(c, head),
+      ],
       ids: true,
     }
   }
   if (row.status === 'removed') {
-    return { lines: [top, ...table([idRow(c, 'base', baseId, row.base)])], ids: true }
+    return {
+      lines: [top, ...table([idRow(c, 'base', baseId, sideOutcome(row, 'base'))])],
+      ids: true,
+    }
   }
   return { lines: [top, ...table(stats)], ids: false }
 }
@@ -406,8 +438,8 @@ function stackNotes(c: Colors, changes: StackChange[]): string[] {
 function noBaseline(c: Colors, input: CompareInput, opts: CompareOptions): string[] {
   const { suite, runId } = input.head
   const blocks = renderBlocks(suite, { color: opts.color, verbose: opts.verbose, hint: false })
-  const counts = (['fail', 'infra_error', 'pass', 'skipped'] as const).flatMap((o) => {
-    const n = input.rows.filter((r) => r.head === o).length
+  const counts = (['fail', 'infra_error', 'cancelled', 'pass', 'skipped'] as const).flatMap((o) => {
+    const n = input.rows.filter((r) => sideOutcome(r, 'head') === o).length
     return n ? [paintOutcome(c, o)(`${n} ${OUTCOME[o]}`)] : []
   })
   return [

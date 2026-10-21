@@ -477,11 +477,9 @@ export const behaviours: Behaviour[] = [
       const a = attempt(ran, row, 'plugin skill', 'plugged')
       // Only the probe plugin was declared: any other skill, or a plugin item outside its copies,
       // came from somewhere else (an account's plugins, a marketplace the agent fetched).
-      const copy = row.plugin?.copy
       const undeclared = a.context
         .map((c) => c.path)
-        .filter((p) => !isRuntimeState(p))
-        .filter((p) => !copy || !p.startsWith(copy))
+        .filter((p) => !isRuntimeState(p) && !row.plugin?.own?.test(p))
         .filter(
           (p) =>
             (p.endsWith('/SKILL.md') && !p.endsWith('/plugin-probe/SKILL.md')) ||

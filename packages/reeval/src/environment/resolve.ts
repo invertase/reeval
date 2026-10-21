@@ -42,6 +42,9 @@ import type {
 import type { PreparedWorkspace } from '../workspace.ts'
 import {
   fetchesAtStart,
+  leavesSource,
+  localMarketplace,
+  marketplaceLabel,
   type PluginContents,
   type PluginFile,
   PluginProblem,
@@ -50,6 +53,7 @@ import {
   pluginParts,
   pluginServerName,
   pluginSourceLabel,
+  readMarketplace,
   readPlugin,
   samePluginTwice,
   skillCall,
@@ -330,6 +334,9 @@ async function git(args: string[], cwd: string, what: string) {
 /** One clone per source and ref per worker process; the commit is recorded. */
 const clones = new Map<string, Promise<{ dir: string; commit: string }>>()
 
+/** A clone checks out the committed bytes, whatever the host's line-ending settings. */
+const AS_COMMITTED = ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf']
+
 function cloneSkills(root: string, url: string, ref: string | undefined) {
   const key = `${url}#${ref ?? ''}`
   let clone = clones.get(key)
@@ -346,8 +353,16 @@ function cloneSkills(root: string, url: string, ref: string | undefined) {
       await mkdir(dir, { recursive: true })
       const what = `Cloning ${url}${ref ? ` at ${ref}` : ''}`
       await git(['init', '-q'], dir, what)
-      await git(['fetch', '-q', '--depth', '1', url, ref ?? 'HEAD'], dir, what)
-      await git(['-c', 'advice.detachedHead=false', 'checkout', '-q', 'FETCH_HEAD'], dir, what)
+      await git(
+        [...AS_COMMITTED, 'fetch', '-q', '--depth', '1', '--end-of-options', url, ref ?? 'HEAD'],
+        dir,
+        what,
+      )
+      await git(
+        [...AS_COMMITTED, '-c', 'advice.detachedHead=false', 'checkout', '-q', 'FETCH_HEAD'],
+        dir,
+        what,
+      )
       return { dir, commit: await git(['rev-parse', 'HEAD'], dir, what) }
     })()
     clones.set(key, clone)
@@ -449,33 +464,107 @@ type FoundPlugin = {
   declared: PluginSource
   source: string
   commit: string | null
+  marketplace: PluginRecord['marketplace']
+}
+
+/** A plugin's whole source on the host, and what the record says about where it came from. */
+type SourceDir = {
+  /** The repository at its commit, the unpacked package, or the local directory. */
+  context: string
+  /** The plugin's directory in `context`, `.` for its root. */
+  path: string
+  commit: string | null
+  /** The record's `source`. */
+  source: string
+  /** The record's `marketplace`. */
+  marketplace: PluginRecord['marketplace']
+}
+
+/** A marketplace entry's source: the marketplace itself for a `./` entry, else the entry's own. */
+async function entrySourceDir(
+  root: string,
+  p: Extract<PluginSource, { source: 'marketplace' }>,
+): Promise<SourceDir> {
+  const m = p.marketplace
+  const label = marketplaceLabel(m, root)
+  const fetched =
+    m.source === 'git'
+      ? await cloneSkills(root, parseGitRepo(m.repo).url, m.ref)
+      : { dir: await unpackNpm(root, m.spec), commit: null }
+  const { marketplace: name, entry } = readMarketplace(
+    fetched.dir,
+    pluginCall(p, root),
+    label,
+    p.name,
+    localMarketplace(m),
+  )
+  const marketplace = { name, source: label, commit: fetched.commit }
+  switch (entry.source) {
+    case 'path':
+      return {
+        context: fetched.dir,
+        path: entry.path || '.',
+        commit: fetched.commit,
+        source: entry.path ? `${label}:${entry.path}` : label,
+        marketplace,
+      }
+    case 'git': {
+      const clone = await cloneSkills(root, entry.url, entry.ref)
+      if (entry.path && leavesSource(clone.dir, entry.path)) {
+        throw new PluginProblem(
+          `the ${name} marketplace's entry "${p.name}" has path ${entry.path}, which leaves ${entry.repo} through a symlink`,
+        )
+      }
+      return {
+        context: clone.dir,
+        path: entry.path ?? '.',
+        commit: clone.commit,
+        source: `${entry.repo}${entry.ref ? `#${entry.ref}` : ''}${entry.path ? `:${entry.path}` : ''}`,
+        marketplace,
+      }
+    }
+    case 'npm':
+      return {
+        context: await unpackNpm(root, entry.spec),
+        path: '.',
+        commit: null,
+        source: `npm:${entry.spec}`,
+        marketplace,
+      }
+  }
 }
 
 /**
  * A plugin's whole source on the host, fetched once per process: the repository at its commit,
  * the unpacked package, or the local directory, with the plugin's `path` in it (`.` for the root).
+ * A marketplace entry's is its marketplace's for a `./` entry, else the entry's own source.
  */
-export async function pluginSourceDir(
-  root: string,
-  p: PluginSource,
-): Promise<{ context: string; path: string; commit: string | null }> {
+export async function pluginSourceDir(root: string, p: PluginSource): Promise<SourceDir> {
+  const labelled = { source: pluginSourceLabel(p, root), marketplace: null }
   switch (p.source) {
     case 'local':
-      return { context: p.path, path: '.', commit: null }
+      return { context: p.path, path: '.', commit: null, ...labelled }
     case 'git': {
       const clone = await cloneSkills(root, parseGitRepo(p.repo).url, p.ref)
-      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit }
+      return { context: clone.dir, path: p.path ?? '.', commit: clone.commit, ...labelled }
     }
     case 'npm':
-      return { context: await unpackNpm(root, p.spec), path: p.path ?? '.', commit: null }
+      return {
+        context: await unpackNpm(root, p.spec),
+        path: p.path ?? '.',
+        commit: null,
+        ...labelled,
+      }
+    case 'marketplace':
+      return entrySourceDir(root, p)
   }
 }
 
 async function resolvePlugin(root: string, p: PluginSource, where: string): Promise<FoundPlugin> {
-  const { context, path, commit } = await pluginSourceDir(root, p)
   try {
+    const { context, path, commit, source, marketplace } = await pluginSourceDir(root, p)
     const contents = readPlugin(join(context, path), pluginCall(p, root), p.only)
-    return { contents, declared: p, source: pluginSourceLabel(p, root), commit }
+    return { contents, declared: p, source, commit, marketplace }
   } catch (error) {
     if (error instanceof PluginProblem) throw new InfraError(`${where}: ${error.message}`)
     throw error
@@ -627,7 +716,7 @@ export async function resolveEnvironment(
   > = []
   const resolvedPlugins: ResolvedPlugin[] = []
   const pluginRecords: PluginRecord[] = []
-  for (const { contents: p, declared, source, commit } of pluginList) {
+  for (const { contents: p, declared, source, commit, marketplace } of pluginList) {
     const loaded = p.skills.length
       ? loadSkills(
           join(p.dir, 'skills'),
@@ -655,7 +744,7 @@ export async function resolveEnvironment(
     pluginRecords.push({
       name: p.name,
       source,
-      marketplace: null,
+      marketplace,
       commit,
       sha256: sha256(JSON.stringify(files.map((f) => [f.path, sha256(f.content)]))),
       build: null,

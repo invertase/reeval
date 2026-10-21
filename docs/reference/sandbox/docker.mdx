@@ -121,7 +121,7 @@ docker+0ab0e263 · cursor + install · 1 eval
   + base               reeval-sandbox:cursor-0.1.5  (to build: not built yet)
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · cursor · 1 eval
-  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-9f93541e  (to build: on python:3.12-slim (a6e34c598f24))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.5-python-3-12-slim-375f4a61  (to build: on python:3.12-slim (a6e34c598f24))
 …
 docker:sqlite · cursor · 1 eval
   + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-9efec1fbf61588d3))
@@ -130,8 +130,8 @@ docker:sqlite · cursor · 1 eval
 
 | Image | Tag | Rebuilt when |
 |---|---|---|
-| reeval's sandbox image | `reeval-sandbox:<harness>-<adapter version>` | Missing, or reeval's base build context changed (its `ai.reeval.context` label); its toolchain layer is `reeval-sandbox-base:latest` |
-| `from` | `reeval-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, on the digest the tag names then (its `ai.reeval.from-digest` label, and `image.from.digest` in the record); `reeval image build` rebuilds it when the tag has moved upstream |
+| reeval's sandbox image | `reeval-sandbox:<harness>-<adapter version>` | Missing, or reeval's base build context or the way it bakes the harness changed (its `ai.reeval.context` label); its toolchain layer is `reeval-sandbox-base:latest` |
+| `from` | `reeval-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, or the way reeval bakes the harness changed (the hash has it), on the digest the tag names then (its `ai.reeval.from-digest` label, and `image.from.digest` in the record); `reeval image build` rebuilds it when the tag has moved upstream |
 | `install` | `reeval-install:<hash of base id and commands>` | The base image's id or a command changes |
 | `dockerfile` | `reeval-dockerfile:<name>-<hash>` | The Dockerfile or its context (less `.dockerignore`) changes, or, `FROM ${REEVAL_BASE}`, reeval's image is rebuilt (the hash has its id) |
 | A plugin's `build` | `reeval-plugin:<image id>-<hash of commit, source tree and build>` | The image under it, the plugin's commit, its files (less `.dockerignore` and `.git`) or its commands change |
@@ -180,6 +180,8 @@ Image builds don't count toward the eval timeout.
 | The egress gateway | root | Node, which every image reeval builds has |
 
 Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The gateway enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests.
+
+Every command reeval runs in the container, the harness's bootstrap included, starts with umask `022`. The files and directories it makes aren't group- or world-writable, whatever umask the engine gives `docker exec`: Docker 29.6 and later give 0000 under Docker-in-Docker and rootless Docker.
 
 ```bash
 # the agent's shell in docker({ from: 'dart:stable' })

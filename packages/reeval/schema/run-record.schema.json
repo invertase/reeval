@@ -2039,7 +2039,7 @@
           ]
         },
         "commit": {
-          "description": "The commit a git source resolved to; null for a local or npm one.",
+          "description": "The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one.",
           "anyOf": [
             {
               "type": "null"
@@ -2050,7 +2050,7 @@
           ]
         },
         "marketplace": {
-          "description": "The marketplace it was listed in; null when it was named directly.",
+          "description": "The marketplace it was listed in, with its `marketplace.json` name, its source as written (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved to (null for npm); null when the plugin was named directly.",
           "anyOf": [
             {
               "type": "null"
@@ -2059,7 +2059,14 @@
               "type": "object",
               "properties": {
                 "commit": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "name": {
                   "type": "string"
@@ -2121,7 +2128,7 @@
           "type": "string"
         },
         "source": {
-          "description": "Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`.",
+          "description": "Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source.",
           "type": "string"
         }
       },
@@ -2513,6 +2520,13 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/EnvironmentRecord"
+          }
+        },
+        "errors": {
+          "description": "Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.",
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         },
         "evals": {

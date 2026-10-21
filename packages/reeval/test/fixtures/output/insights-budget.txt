@@ -1,0 +1,158 @@
+                 recommends Genkit for $task
+  Not for a Python agent: 0 of 2 tries passed.
+  case                        pass    Genkit
+  pass  a chat app            2 of 2  2 of 2
+  pass  a RAG pipeline        2 of 2  2 of 2
+  fail  a Python agent        0 of 2  2 of 2
+    It also names LangChain, so "names no other framework" fails.
+    names no other framework  0 of 2
+      expected 'I would build this with Genkit. If yo…' not to contain 'LangChain'
+    named
+      Genkit                  2 of 2
+      LangChain               2 of 2
+    searches                  0
+    fetches                   0
+    +1 more passed
+
+                 adds a $name button that builds
+  Not for double: 0 of 1 tries passed.
+  pass  reset      1 of 1
+  fail  double     0 of 1
+    Only 0 of 1 passed "build".
+    build          failed
+      expected command to succeed, exit code 1
+    +1 more passed
+  pass  clear      1 of 1
+
+                 greets %s in the house style
+  Yes: all 4 cases pass.
+  pass  Ada
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  Grace
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  Linus
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  Edsger
+    arm            pass
+    plain          0 of 1
+    with-skill     1 of 1
+  pass  all cases
+    arm            pass
+    plain          0 of 4
+    with-skill     4 of 4  can't tell yet
+
+fail             greets in the house style on each agent
+  No: only 0 of 1 passed "house greeting" on terse.
+  harness           pass
+  skilled           1 of 1
+  terse             0 of 1
+    Only 0 of 1 passed "house greeting".
+    house greeting  failed
+      expected command to succeed, exit code 1
+    exclaims        not run
+    +1 more passed
+
+fail             learns the house style from the skill
+  No: only 0 of 4 passed "house greeting" with plain.
+  learner
+    arm             pass
+    plain           0 of 4
+      Only 0 of 4 passed "house greeting".
+    with-skill      4 of 4  helped
+      with-skill helped: 4 of 4 tries passed.
+    check           plain   with-skill
+    house greeting  0 of 4  4 of 4
+      expected command to succeed, exit code 1
+    effort          tools  time
+    plain           0      <0.1s
+    with-skill      0      <0.1s
+  terse
+    arm             pass
+    plain           0 of 4
+      Only 0 of 4 passed "house greeting".
+    with-skill      0 of 4
+      Only 0 of 4 passed "house greeting".
+    check           plain   with-skill
+    house greeting  0 of 4  0 of 4
+      expected command to succeed, exit code 1
+    effort          tools  time
+    plain           0      <0.1s
+    with-skill      0      <0.1s
+
+fail             greets in the house style
+  No: only 0 of 4 passed "house greeting" with plain.
+  arm              pass
+  plain            0 of 4
+    Only 0 of 4 passed "house greeting".
+  with-skill       4 of 4  helped
+    with-skill helped: 4 of 4 tries passed.
+  with-doc         0 of 4
+    Only 0 of 4 passed "house greeting".
+  check            plain    with-skill  with-doc
+  house greeting   0 of 4   4 of 4      0 of 4
+    expected command to succeed, exit code 1
+  exclaims         not run  4 of 4      not run
+  +1 more passed
+  effort           tools  time
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-doc         1      <0.1s
+  with-skill helped: 4 of 4 tries passed with it, against 0 of 4 tries on plain.
+
+fail             keeps the plain greeting
+  No: only 0 of 4 passed "says hello" with with-skill.
+  arm              pass
+  plain            4 of 4
+  with-skill       0 of 4  made it worse
+    with-skill made it worse: 0 of 4 tries passed.
+  check            plain   with-skill
+  says hello       4 of 4  0 of 4
+    expected command to succeed, exit code 1
+  effort           tools  time
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-skill made it worse: 0 of 4 tries passed with it, against 4 of 4 tries on plain.
+
+pass             greets once
+  Yes: every try passed.
+  arm              pass
+  plain            0 of 1
+    Only 0 of 1 passed "house greeting".
+  with-skill       1 of 1  can't tell yet
+  check            plain   with-skill
+  house greeting   0 of 1  1 of 1
+    expected command to succeed, exit code 1
+
+pass             writes greet.js
+  Yes: every try passed.
+
+fail             greets in French
+  No: only 0 of 1 passed "french greeting".
+  french greeting  failed
+    expected command to succeed, exit code 1
+  +1 more passed
+
+fail             explains why greet.js fails
+  No: only 1 of 2 passed "names the root cause".
+  2 tries               1 of 2
+  names the root cause  1 of 2
+    expected 'Docker is down' to contain 'null'
+  +1 more passed
+
+fail             reads the fixture repo
+  error            the fixture repo is missing
+
+infra error      starts its sandbox
+  infra error      the fake sandbox fell over
+
+skipped          greets in Welsh
+todo             greets in Klingon
+
+insights skipped for 2 evals: analysis.maxTokens (20k) reached — raise it in reeval.config.ts, or reeval analyze 20261020T231903Z_2e69951_cursor-agent_8s1m --insights to finish
+9 fail · 10 pass · 1 infra error · 2 skipped

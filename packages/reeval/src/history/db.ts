@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 12
+const DB_VERSION = 13
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -208,6 +208,11 @@ CREATE VIEW flaky_cells AS SELECT * FROM flaky_m;
 -- paths, and noise = 1 when only agent runtime state changed (not a real change).
 CREATE VIEW drift AS SELECT * FROM drift_m;
 
+-- Each check per cell, comparable fingerprint and branch over recorded runs: how many newest runs
+-- in a row it passed with no fail or error (on a variant, passed on both sides), their tries, and
+-- the run that ended the streak (null: it never failed).
+CREATE VIEW check_streaks AS SELECT * FROM check_streaks_m;
+
 -- Tool calls, agent time and tokens per cell, and a variant's against its control in the same run.
 CREATE VIEW effort AS SELECT * FROM effort_m;
 
@@ -338,6 +343,7 @@ export const VIEW_NAMES = [
   'verdict_flips',
   'check_discrimination',
   'check_rates',
+  'check_streaks',
 ]
 
 const json = (value: unknown) => JSON.stringify(value)

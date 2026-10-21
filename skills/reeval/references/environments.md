@@ -89,21 +89,25 @@ A skill is a directory whose `SKILL.md` has YAML frontmatter
 is `sandbox: docker({ … })` on the environment.
 
 Plugins: `plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] })]` (also
-`plugin.git(repo, { ref, path })` and `plugin.npm(spec)`). A plugin is Claude Code's layout:
+`plugin.git(repo, { ref, path })`, `plugin.npm(spec)` and
+`plugin.marketplace('name@github:owner/repo', { ref })` for an entry in a Claude Code
+marketplace, or `'name@npm:<spec>'`; only a marketplace in a local directory may name `file://`
+entries). A plugin is Claude Code's layout:
 `.claude-plugin/plugin.json` plus `skills/`, `agents/`, `commands/`, `hooks/hooks.json`,
 `.mcp.json`, `rules/`. Its MCP servers join `mcp` as `<plugin>:<server>` (call them from the
 fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`. Claude
 Code and Grok Build load every part but `rules` (narrow with `only`), namespaced
 (`review:reviewer`), and start the plugin's MCP servers themselves, so a plugin server reading a
 host variable is refused there: declare it in `mcp`. Antigravity loads every part with
-`agy plugin install`, and refuses such a server too. Cursor loads every part flat: rules,
-subagents, commands and hooks unpacked into the workspace's `.cursor/` (left out of the diff),
-skills into `~/.agents/skills`, so two items with one name clash. OpenCode loads skills, MCP
-servers, and subagents and commands (unpacked into `.opencode/`, frontmatter cut to
-`description`); pi skills, MCP servers (as `<plugin>_<server>`) and commands (as prompt templates
-in `.pi/prompts/`); fx skills and MCP servers only. A part a harness doesn't load, or a hook event
-it doesn't run, is refused at plan time: narrow with `only`. Other real harnesses refuse plugins
-(`--dry-run` exits 2 naming the harness), so keep plugins off their cells. `build: 'npm ci && npm run build'` (or `{ run, cwd: '.' }` to run
+`agy plugin install`, and refuses such a server too; Codex loads `skills` and `mcp` the same way
+(and refuses a plugin with ChatGPT apps). Cursor loads every part flat: rules, subagents, commands
+and hooks unpacked into the workspace's `.cursor/` (left out of the diff), skills into
+`~/.agents/skills`, so two items with one name clash; Goose takes `skills` and `mcp` beside the
+eval's own, so a clashing name is refused too. OpenCode loads skills, MCP servers, and subagents
+and commands (unpacked into `.opencode/`, frontmatter cut to `description`); pi skills, MCP servers
+(as `<plugin>_<server>`) and commands (as prompt templates in `.pi/prompts/`); fx skills and MCP
+servers only. A part a harness doesn't load, or a hook event it doesn't run, is refused at plan
+time (`--dry-run` exits 2 naming the harness): narrow with `only`. `build: 'npm ci && npm run build'` (or `{ run, cwd: '.' }` to run
 from the source's root) builds the plugin in a cached Docker image layer, as root with no
 secrets, without the source's `.git` (pass a version in its commands instead of `git describe`);
 only `path` is placed, so the output must land inside it. Docker only. Its content is fixed when the

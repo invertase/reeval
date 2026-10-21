@@ -8,6 +8,7 @@ import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
+  addedRow,
   type CompareRow,
   compare,
   formatHistory,
@@ -20,8 +21,10 @@ import {
   unreachable,
 } from './history/views.ts'
 import { fromCwd, sha256 } from './ids.ts'
+import { readInsights, runInsightsFile } from './insights/files.ts'
 import type { ResolvedConfig } from './types.ts'
 import { renderCompare, renderCompareMarkdown } from './ui/compare-layout.ts'
+import { fromModel } from './view/insights.ts'
 import { suiteResult } from './view/suite.ts'
 
 export type HistoryFlags = {
@@ -162,11 +165,18 @@ export async function showRecord(config: ResolvedConfig, ref?: string) {
 }
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
-  const run = await showRecord(ctx.config, refs[0])
-  const hint = !hasAnalysisModel(ctx.config)
-  if (ctx.flags.json) ctx.out(JSON.stringify(run, null, 2))
-  else if (ctx.flags.md) ctx.out(renderSummary(run, { hint }).trimEnd())
-  else ctx.out(formatShow(run, { hint }))
+  const { config } = ctx
+  const entry = resolveRun(await allRuns(config), refs[0])
+  const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
+  const run = await readRecord(join(dir, `${entry.runId}.json`))
+  if (ctx.flags.json) {
+    ctx.out(JSON.stringify(run, null, 2))
+    return 0
+  }
+  const insights = await readInsights(runInsightsFile(config, entry))
+  const hint = !(insights && fromModel(insights)) && !hasAnalysisModel(config)
+  if (ctx.flags.md) ctx.out(renderSummary(run, { hint, insights }).trimEnd())
+  else ctx.out(formatShow(run, { hint, insights }))
   return 0
 }
 
@@ -191,11 +201,7 @@ export async function compareView(config: ResolvedConfig, refs: string[]) {
     const candidates = entries.filter((e) => e.recorded && e.runId !== head.runId)
     base = pickBaseline(candidates, head, ancestry)
   }
-  const rows = base
-    ? compare(base, head)
-    : head.evals.map(
-        (e): CompareRow => ({ id: e.id, base: null, head: e.outcome, status: 'added' }),
-      )
+  const rows = base ? compare(base, head) : head.evals.map(addedRow)
   const flag = (e: HistoryEntry) => ({
     runId: e.runId,
     recorded: e.recorded,
@@ -239,13 +245,16 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
 
 /**
  * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new or
- * changed (can't compare) eval that fails, since nothing earlier vouches for it.
+ * changed (can't compare) eval that fails, since nothing earlier vouches for it. A head the run's
+ * interrupt cancelled didn't fail.
  */
 export const regressions = (rows: CompareRow[]) =>
   rows.filter(
     (r) =>
       r.status === 'regressed' ||
-      ((r.status === 'added' || r.status === 'drift') && r.head === 'fail'),
+      ((r.status === 'added' || r.status === 'drift') &&
+        r.head === 'fail' &&
+        !r.cancelled?.includes('head')),
   )
 
 /** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */

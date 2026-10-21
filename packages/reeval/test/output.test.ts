@@ -12,6 +12,8 @@ import {
   type CompareGolden,
   GOLDENS,
   goldenCompare,
+  goldenInsights,
+  goldenRender,
   goldenSuite,
   OUTPUT_DIR,
 } from '../scripts/output/goldens.ts'
@@ -30,6 +32,7 @@ import {
 } from '../src/ui/compare-layout.ts'
 import { layout, NO_MODEL_HINT, render, tallyLine } from '../src/ui/layout.ts'
 import { readableRecord } from '../src/view/record.ts'
+import type { SuiteTally } from '../src/view/suite.ts'
 
 const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
 const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
@@ -37,7 +40,7 @@ const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
 const rendered = (name: string) => {
   const g = GOLDENS.find((x) => x.name === name)
   assert.ok(g, name)
-  return render(goldenSuite(g), null, { color: false, verbose: !!g.verbose, hint: true })
+  return goldenRender(g)
 }
 
 const comparedText = (g: CompareGolden, input = goldenCompare(g)) =>
@@ -83,8 +86,12 @@ describe('every layout', () => {
   test('ends with the tally and the hint, and counts read N of M, never a percentage', () => {
     for (const g of GOLDENS) {
       const lines = rendered(g.name)
-      assert.equal(lines.at(-1), NO_MODEL_HINT, g.name)
-      assert.match(lines.at(-2) ?? '', /^(\d+ (fail|pass|infra errors?|skipped)( · )?)+$/, g.name)
+      if (!g.insights) assert.equal(lines.pop(), NO_MODEL_HINT, g.name)
+      assert.match(
+        lines.at(-1) ?? '',
+        /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
+        g.name,
+      )
       if (!g.verbose) assert.doesNotMatch(lines.join('\n'), /\d%|pass@1|interval/, g.name)
     }
   })
@@ -96,8 +103,35 @@ describe('every layout', () => {
     const withModel = render(goldenSuite(g), null, { color: false, verbose: false, hint: false })
     assert.equal(without.at(-1), NO_MODEL_HINT)
     assert.ok(!withModel.includes(NO_MODEL_HINT))
-    assert.match(withModel.at(-1) ?? '', /^(\d+ (fail|pass|infra errors?|skipped)( · )?)+$/)
+    assert.match(
+      withModel.at(-1) ?? '',
+      /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
+    )
     assert.deepEqual(withModel, without.slice(0, -1))
+  })
+
+  test('insights add only their sentences: every fact row prints as it does without them', () => {
+    // A choose eval's layout is its own (the subject's count on each row), so it's left out here,
+    // and so is the budget golden, whose skip line is a note, not a fact.
+    for (const g of GOLDENS.filter(
+      (x) => x.insights && x.name !== 'insights-choose' && !x.budgetSkips,
+    )) {
+      const suite = goldenSuite(g)
+      const stored = goldenInsights(g, suite)
+      assert.ok(stored, g.name)
+      const insights = { ...stored, evals: stored.evals.filter((e) => e.intent.job !== 'choose') }
+      const sentences = new Set(
+        [
+          insights.headline,
+          ...insights.evals.flatMap((e) => [e.answer, ...e.findings, ...(e.rows ?? [])]),
+        ].flatMap((s) => (s ? [s.text] : [])),
+      )
+      const filled = render(suite, insights, { color: false, verbose: false, hint: false })
+      const bare = render(suite, null, { color: false, verbose: false, hint: false })
+      const facts = filled.filter((l) => !sentences.has(l.trim()))
+      assert.ok(facts.length < filled.length, `${g.name}: some sentence prints`)
+      assert.deepEqual(facts, bare, g.name)
+    }
   })
 
   test('an analysis model is analysis.model only, never the judge', () => {
@@ -184,12 +218,26 @@ describe('every layout', () => {
 
   test('the tally puts fail first, leaves zeros out and counts infra errors and skips apart', () => {
     const c = colors(false)
-    assert.equal(tallyLine(c, { pass: 2, fail: 5, infraError: 0, skipped: 0 }), '5 fail · 2 pass')
+    const tally = (t: Partial<SuiteTally>): SuiteTally => ({
+      errors: 0,
+      pass: 0,
+      fail: 0,
+      infraError: 0,
+      cancelled: 0,
+      skipped: 0,
+      ...t,
+    })
+    assert.equal(tallyLine(c, tally({ pass: 2, fail: 5 })), '5 fail · 2 pass')
     assert.equal(
-      tallyLine(c, { pass: 1, fail: 0, infraError: 2, skipped: 1 }),
+      tallyLine(c, tally({ pass: 1, infraError: 2, skipped: 1 })),
       '1 pass · 2 infra errors · 1 skipped',
     )
-    assert.equal(tallyLine(c, { pass: 0, fail: 0, infraError: 0, skipped: 0 }), 'no evals ran')
+    assert.equal(
+      tallyLine(c, tally({ fail: 1, pass: 2, cancelled: 3 })),
+      '1 fail · 2 pass · 3 cancelled',
+    )
+    assert.equal(tallyLine(c, tally({ errors: 1, pass: 2 })), '1 run error · 2 pass')
+    assert.equal(tallyLine(c, tally({})), 'no evals ran')
   })
 
   test('render is pure, and colour is the only difference colour makes', () => {
@@ -358,6 +406,33 @@ describe('catch regressions (reeval compare)', () => {
     input.rows = [{ ...first, head: 'infra_error' }, ...rest]
     const last = comparedText(g, input).at(-1) ?? ''
     assert.match(last, /^8 new evals \(\d fail · 1 infra error · \d pass\)$/)
+  })
+
+  test('a side the interrupt cancelled reads cancelled, not fail', () => {
+    const g = compareGolden('compare')
+    const input = goldenCompare(g)
+    const [first, ...rest] = input.rows
+    assert.ok(first)
+    const row = { ...first, status: 'drift' as const, base: 'pass' as const, head: 'fail' as const }
+    input.rows = [{ ...row, cancelled: ['head'] }, ...rest]
+    const text = comparedText(g, input).join('\n')
+    assert.match(
+      text,
+      /^can't compare {4}.+\n( {2}changed .+\n)? {2}base {13}\S+ {2}pass\n {2}head {13}\S+ {2}cancelled$/m,
+    )
+    input.rows = [row, ...rest]
+    assert.match(
+      comparedText(g, input).join('\n'),
+      /^ {2}head {13}\S+ {2}fail$/m,
+      'canary: a real fail still reads fail',
+    )
+
+    const none = goldenCompare(compareGolden('compare-no-baseline'))
+    const [added, ...others] = none.rows
+    assert.ok(added)
+    none.rows = [{ ...added, head: 'fail', cancelled: ['head'] }, ...others]
+    const last = renderCompare(none, { color: false, verbose: false }).at(-1) ?? ''
+    assert.match(last, /^8 new evals \((\d fail · )?1 cancelled · \d pass\)$/)
   })
 
   test('colour is the only difference colour makes', () => {

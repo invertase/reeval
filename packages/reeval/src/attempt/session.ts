@@ -350,7 +350,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     env: env.vars,
     image: a.image,
     brokering: brokeringFor(spec.harness),
-    expectedBlocked: expectedBlockedFor(spec.harness)?.hosts,
+    expectedBlocked: expectedBlockedFor(spec.harness, env.plugins.length > 0)?.hosts,
     substitutions: env.substitutions,
     egress: spec.egress,
   })
