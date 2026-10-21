@@ -12,6 +12,8 @@ import {
   type CompareGolden,
   GOLDENS,
   goldenCompare,
+  goldenInsights,
+  goldenRender,
   goldenSuite,
   OUTPUT_DIR,
 } from '../scripts/output/goldens.ts'
@@ -38,7 +40,7 @@ const PACKAGE_DIR = fileURLToPath(new URL('..', import.meta.url))
 const rendered = (name: string) => {
   const g = GOLDENS.find((x) => x.name === name)
   assert.ok(g, name)
-  return render(goldenSuite(g), null, { color: false, verbose: !!g.verbose, hint: true })
+  return goldenRender(g)
 }
 
 const comparedText = (g: CompareGolden, input = goldenCompare(g)) =>
@@ -84,9 +86,9 @@ describe('every layout', () => {
   test('ends with the tally and the hint, and counts read N of M, never a percentage', () => {
     for (const g of GOLDENS) {
       const lines = rendered(g.name)
-      assert.equal(lines.at(-1), NO_MODEL_HINT, g.name)
+      if (!g.insights) assert.equal(lines.pop(), NO_MODEL_HINT, g.name)
       assert.match(
-        lines.at(-2) ?? '',
+        lines.at(-1) ?? '',
         /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
         g.name,
       )
@@ -106,6 +108,27 @@ describe('every layout', () => {
       /^(\d+ (run errors?|fail|pass|infra errors?|cancelled|skipped)( · )?)+$/,
     )
     assert.deepEqual(withModel, without.slice(0, -1))
+  })
+
+  test('insights add only their sentences: every fact row prints as it does without them', () => {
+    // A choose eval's layout is its own (the subject's count on each row), so it's left out here.
+    for (const g of GOLDENS.filter((x) => x.insights && x.name !== 'insights-choose')) {
+      const suite = goldenSuite(g)
+      const stored = goldenInsights(g, suite)
+      assert.ok(stored, g.name)
+      const insights = { ...stored, evals: stored.evals.filter((e) => e.intent.job !== 'choose') }
+      const sentences = new Set(
+        [
+          insights.headline,
+          ...insights.evals.flatMap((e) => [e.answer, ...e.findings, ...(e.rows ?? [])]),
+        ].flatMap((s) => (s ? [s.text] : [])),
+      )
+      const filled = render(suite, insights, { color: false, verbose: false, hint: false })
+      const bare = render(suite, null, { color: false, verbose: false, hint: false })
+      const facts = filled.filter((l) => !sentences.has(l.trim()))
+      assert.ok(facts.length < filled.length, `${g.name}: some sentence prints`)
+      assert.deepEqual(facts, bare, g.name)
+    }
   })
 
   test('an analysis model is analysis.model only, never the judge', () => {

@@ -62,6 +62,12 @@ check, so label your expects. `analysis.instructions` is the question it answers
 (`.reeval/analysis/<run>/notes/`) and caches the run's summary for `reeval analyze`: a model call
 each, off by default, and it never gates.
 
+`reeval analyze <run> --insights` writes a recorded run's `<run>/insights.json` once: each eval's
+job (`choose`, `finish` or `other`, read from its name first, so name evals for what they ask), its
+answer, and a sentence under each failing row, every one citing the facts. `reeval show` prints
+them in the blocks. Delete the file to write new ones; it never changes a verdict or exit code.
+It uses `analysis.model` only (never the judge's model) and exits 2 without it.
+
 ## Config discovery, filters and exit codes
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key

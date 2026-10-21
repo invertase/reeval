@@ -273,7 +273,8 @@ arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, 
 or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
 (`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
 `1 run error` and fails the run), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
-model never stands in). `summary.md` and `reeval show` print the same blocks.
+model never stands in). `summary.md` and `reeval show` print the same blocks;
+`reeval analyze <run> --insights` adds each eval's answer to them for `reeval show`.
 
 Every command uses the nearest `reeval.config.*` (or `reeval.yaml`) in the current directory or
 above, or `--config <path>`. Runs land in `.reeval/runs/`. All views, `analyze` and the MCP

@@ -1,0 +1,822 @@
+// Run insights: the validator's canaries (each a sentence a model could write that must not
+// print), the layouts insights fill, staleness, and `reeval analyze --insights` end to end on a
+// corpus run with the fake analysis model.
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, test } from 'node:test'
+import { insights as recipeInsights } from '../scripts/output/project/insights.ts'
+import type { ResolvedAnalysisModel } from '../src/analysis/model.ts'
+import type { RunRecord } from '../src/history/types.ts'
+import { generateInsights, insightEvals } from '../src/insights/generate.ts'
+import { canonicalJson, factsHash } from '../src/insights/hash.ts'
+import { attemptTexts, evalFacts } from '../src/insights/input.ts'
+import { type Citable, checkSentence } from '../src/insights/validate.ts'
+import type { FakeInsights, FakeInsightsInput } from '../src/types.ts'
+import { colors } from '../src/ui/colors.ts'
+import { evalBlock, render, slotsOf } from '../src/ui/layout.ts'
+import type { RunInsights } from '../src/view/insights.ts'
+import { readableInsights, readableRecord } from '../src/view/record.ts'
+import { type EvalResult, suiteResult } from '../src/view/suite.ts'
+import { runCli } from './helpers.ts'
+import { corpusEntries, HISTORY_DIR } from './support/corpus.ts'
+import { fixture } from './support/fixture.ts'
+
+const entry = corpusEntries().find((e) => e.name === 'with-insights')
+assert.ok(entry, 'the with-insights corpus entry')
+const run = entry.runs.at(-1)
+assert.ok(run)
+const record = readableRecord(structuredClone(run.raw) as never) as RunRecord
+const suite = suiteResult(record)
+const runDir = join(run.file, '..', run.runId)
+/**
+ * The entry's insights.json, held to these facts: it keeps the hash of the facts the reeval that
+ * recorded it computed, which a later change to `SuiteResult` moves.
+ */
+const storedFresh = () => ({
+  ...readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8'))),
+  factsHash: factsHash(suite),
+})
+
+const evalNamed = (name: string): EvalResult => {
+  const e = insightEvals(suite).find((x) => (x.template ?? x.name) === name)
+  assert.ok(e, name)
+  return e
+}
+const choose = evalNamed('recommends Genkit for $task')
+const measure = evalNamed('greets in the house style')
+const french = evalNamed('greets in French')
+const once = evalNamed('greets once')
+
+type Fake = (input: FakeInsightsInput) => FakeInsights
+
+/** The recipe's fake insight model, with `change` applied to one eval's calls. */
+const recipeWith =
+  (path: string, change: (input: FakeInsightsInput, answer: FakeInsights) => FakeInsights): Fake =>
+  (input) => {
+    const answer = recipeInsights(input)
+    return input.call !== 'headline' && input.eval.path === path ? change(input, answer) : answer
+  }
+
+const generate = (fake: Fake) => {
+  const model: ResolvedAnalysisModel = {
+    name: 'fake',
+    route: 'fake',
+    fake: { kind: 'fake-analysis', insights: fake },
+  }
+  return generateInsights({ record, runDir, model, maxOutputTokens: 1000, concurrency: 2 })
+}
+
+const insightOf = (doc: RunInsights, e: EvalResult) => {
+  const x = doc.evals.find((i) => i.evalId === e.path)
+  assert.ok(x, e.path)
+  return x
+}
+
+const BANNED = 'with-skill helped, well beyond the noise.'
+
+/** The short id the model is shown for a fact's path. */
+const idOf = (input: FakeInsightsInput, path: string) => {
+  const id = input.call === 'headline' ? undefined : input.facts.find((f) => f.path === path)?.id
+  assert.ok(id, path)
+  return id
+}
+
+/** An insight's sentences: what the recipe's fake writes, whatever the prompt version. */
+const sentencesOf = (doc: RunInsights) => ({
+  headline: doc.headline,
+  evals: doc.evals.map(({ evalId, answer, findings, rows, namedTools, intent }) => ({
+    evalId,
+    job: intent.job,
+    answer,
+    findings,
+    rows,
+    namedTools,
+  })),
+})
+
+describe('the insights validator', () => {
+  test('the recipe insights pass every check, as the with-insights entry holds them', async () => {
+    const doc = await generate(recipeInsights)
+    assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
+    assert.equal(doc.promptVersion, 'insights-v4')
+    const stored = readableInsights(JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8')))
+    assert.deepEqual(
+      sentencesOf(doc),
+      sentencesOf(stored),
+      'add a corpus entry if the recipe changed',
+    )
+  })
+
+  test('canary: an uncited answer is dropped', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights' && a.answer ? { ...a, answer: { ...a.answer, cites: [] } } : a,
+      ),
+    )
+    assert.equal(insightOf(doc, measure).answer, null)
+    assert.equal(doc.validation.dropped, 1)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => [d.slot, d.reason]),
+      [['greets in the house style › answer', 'cites nothing']],
+    )
+  })
+
+  test('canary: a cite to an id the model was never shown is dropped', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights' && a.answer
+          ? { ...a, answer: { ...a.answer, cites: ['F999'] } }
+          : a,
+      ),
+    )
+    assert.equal(insightOf(doc, measure).answer, null)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => d.reason),
+      ["cites F999, which isn't a fact it was shown"],
+    )
+  })
+
+  test('the model cites short ids, and insights.json keeps the fact paths', async () => {
+    let shown: FakeInsightsInput | undefined
+    const doc = await generate(
+      recipeWith(choose.path, (input, a) => {
+        if (input.call === 'insights') shown = input
+        return a
+      }),
+    )
+    assert.ok(shown && shown.call === 'insights')
+    assert.deepEqual(
+      shown.facts.map((f) => f.id),
+      shown.facts.map((_, i) => `F${i + 1}`),
+    )
+    assert.ok(shown.slots?.rows.every((r) => /^F\d+$/.test(r)))
+    assert.ok(shown.attempts.every((x, i) => x.id === `A${i + 1}` && /^F\d+$/.test(x.cell)))
+    const x = insightOf(doc, choose)
+    const paths = new Set(shown.facts.map((f) => f.path))
+    for (const s of [x.answer, ...(x.rows ?? [])])
+      for (const c of s?.cites ?? []) assert.ok(paths.has(c), c)
+    for (const r of x.rows ?? []) assert.ok(paths.has(r.row), r.row)
+    for (const n of x.namedTools ?? []) assert.match(n.attempt, /#\d+$/)
+  })
+
+  test('canary: ids never reach the text: a trailing id list is cut, an id inside is dropped', async () => {
+    const answerText = (text: string): Fake =>
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights' && a.answer ? { ...a, answer: { ...a.answer, text } } : a,
+      )
+    const trailing = await generate(answerText('Yes: every try passed (F1, F2 and A1#L3).'))
+    assert.equal(insightOf(trailing, measure).answer?.text, 'Yes: every try passed.')
+    assert.equal(trailing.validation.dropped, 0)
+    const inside = await generate(answerText('F1 says every try passed.'))
+    assert.equal(insightOf(inside, measure).answer, null)
+    assert.equal(inside.validation.regenerated, 1)
+    assert.deepEqual(
+      inside.validation.drops?.map((d) => d.reason),
+      ['names F1 in its text; ids go in cites only'],
+    )
+  })
+
+  test('canary: a headline calling the tally a count of evals is dropped', async () => {
+    const total = Object.values(suite.tally).reduce((a, b) => a + b, 0)
+    const evals = insightEvals(suite).length
+    assert.notEqual(total, evals, 'the recipe has families, so results outnumber evals')
+    const headline =
+      (text: string): Fake =>
+      (input) =>
+        input.call === 'headline'
+          ? { headline: { text, cites: [input.evals[0]?.id ?? ''] } }
+          : recipeInsights(input)
+    const wrong = await generate(headline(`Nine of ${total} evals fail.`))
+    assert.equal(wrong.headline, null)
+    assert.deepEqual(
+      wrong.validation.drops?.map((d) => [d.slot, d.reason]),
+      [
+        [
+          'headline',
+          `says ${total} evals, but the run has ${evals}; the tally counts results, not evals`,
+        ],
+      ],
+    )
+    const right = await generate(headline(`9 of ${total} results fail.`))
+    assert.equal(right.headline?.text, `9 of ${total} results fail.`)
+  })
+
+  test('canary: a finding that repeats a row sentence is dropped', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) => {
+        const row = a.rows?.[0]
+        return input.call === 'insights' && row
+          ? {
+              ...a,
+              findings: [...(a.findings ?? []), { ...row, text: ` ${row.text.toUpperCase()}` }],
+            }
+          : a
+      }),
+    )
+    const x = insightOf(doc, measure)
+    const shown = x.rows?.[0]?.text.toLowerCase()
+    assert.ok(shown)
+    assert.ok(!x.findings.some((f) => f.text.trim().toLowerCase() === shown))
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => d.reason),
+      ['repeats a sentence already shown'],
+    )
+  })
+
+  test('canary: a sentence citing a fact it was never shown is dropped', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights' && a.answer
+          ? { ...a, answer: { ...a.answer, cites: [`${measure.path}/checks/no such check`] } }
+          : a,
+      ),
+    )
+    assert.equal(insightOf(doc, measure).answer, null)
+    assert.equal(doc.validation.dropped, 1)
+  })
+
+  test('canary: a banned word is asked for once more, then dropped', async () => {
+    const withSkill = (measure.cells ?? []).find((c) => c.effect === 'better')
+    assert.ok(withSkill)
+    const banned = (fixed: boolean): Fake =>
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              rows: (a.rows ?? []).map((r) =>
+                r.row === idOf(input, withSkill.path) && !(fixed && input.retry)
+                  ? { ...r, text: BANNED }
+                  : r,
+              ),
+            }
+          : a,
+      )
+    const twice = await generate(banned(false))
+    assert.equal(twice.validation.dropped, 1)
+    assert.equal(twice.validation.regenerated, 1)
+    assert.deepEqual(
+      twice.validation.drops?.map((d) => [d.text, d.reason]),
+      [[BANNED, 'says "noise"; use plain words']],
+    )
+    assert.ok(!insightOf(twice, measure).rows?.some((r) => r.row === withSkill.path))
+    const fixed = await generate(banned(true))
+    assert.deepEqual(fixed.validation, { dropped: 0, regenerated: 1, drops: [] })
+    assert.ok(insightOf(fixed, measure).rows?.some((r) => r.row === withSkill.path))
+  })
+
+  test('canary: a sentence on a row the layout keeps closed, a passing case, is dropped', async () => {
+    const passing = (choose.cases ?? []).find((k) => k.outcome === 'pass')
+    assert.ok(passing)
+    const doc = await generate(
+      recipeWith(choose.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              rows: [
+                ...(a.rows ?? []),
+                {
+                  row: idOf(input, passing.path),
+                  text: 'It names Genkit.',
+                  cites: [idOf(input, passing.path)],
+                },
+              ],
+            }
+          : a,
+      ),
+    )
+    assert.ok(!insightOf(doc, choose).rows?.some((r) => r.row === passing.path))
+    assert.equal(doc.validation.dropped, 1)
+  })
+
+  test('canary: a named tool the final message never names is dropped', async () => {
+    const doc = await generate(
+      recipeWith(choose.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              namedTools: input.attempts.map((x) => ({
+                attempt: x.id,
+                tools: ['Genkit', 'Mastra', 'Gen'],
+              })),
+            }
+          : a,
+      ),
+    )
+    const named = insightOf(doc, choose).namedTools ?? []
+    assert.equal(named.length, 6)
+    for (const n of named) assert.deepEqual(n.tools, ['Genkit'])
+    assert.equal(doc.validation.dropped, 12, 'Mastra, and Gen, which is only part of a word')
+  })
+
+  /** The choose eval with no try naming Genkit, so its count is 0 where the case passed 2 of 2. */
+  const withoutGenkit = (answer: string) =>
+    generate(
+      recipeWith(choose.path, (input, a) => {
+        if (input.call !== 'insights') return a
+        const chat = (choose.cases ?? []).find((k) => k.label === 'a chat app')
+        assert.ok(chat)
+        return {
+          ...a,
+          answer: { text: answer, cites: [idOf(input, chat.path)] },
+          namedTools: (a.namedTools ?? []).map((n) => ({
+            ...n,
+            tools: n.tools.filter((t) => t !== 'Genkit'),
+          })),
+        }
+      }),
+    )
+
+  test('canary: a count beside a named tool is that tool count, not the cited pass count', async () => {
+    const doc = await withoutGenkit('The agent recommended Genkit in 2 of 2 tries.')
+    assert.equal(insightOf(doc, choose).answer, null)
+    assert.deepEqual(
+      doc.validation.drops.map((d) => d.reason),
+      ['has 2 of 2, which no cited fact has'],
+    )
+  })
+
+  test("a named tool's own count is kept, and a pass count after the tool's outcome verb", async () => {
+    for (const text of [
+      'The agent recommended Genkit in 0 of 2 tries.',
+      'The agent recommended LangChain in 2 of 2 tries.',
+      'Recommending Genkit passed 2 of 2 tries.',
+    ]) {
+      const doc = await withoutGenkit(text)
+      assert.equal(insightOf(doc, choose).answer?.text, text)
+      assert.deepEqual(doc.validation.drops, [], text)
+    }
+  })
+
+  test('a sentence over 25 words is dropped, and an effect word must be the cited effect', async () => {
+    const plain = (measure.cells ?? []).find((c) => c.baseline)
+    assert.ok(plain)
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              answer: {
+                text: `No: ${'very '.repeat(30)}close.`,
+                cites: [idOf(input, measure.path)],
+              },
+              rows: [
+                {
+                  row: idOf(input, plain.path),
+                  text: 'plain helped.',
+                  cites: [idOf(input, plain.path)],
+                },
+              ],
+            }
+          : a,
+      ),
+    )
+    const x = insightOf(doc, measure)
+    assert.equal(x.answer, null)
+    assert.equal(x.rows, undefined)
+    assert.equal(doc.validation.dropped, 2)
+  })
+
+  const unclearAnswer = (text: string) => {
+    const withSkill = (once.cells ?? []).find((c) => c.effect === 'unclear')
+    const plain = (once.cells ?? []).find((c) => c.baseline)
+    assert.ok(withSkill && plain)
+    return generate(
+      recipeWith(once.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              answer: { text, cites: [idOf(input, withSkill.path), idOf(input, plain.path)] },
+            }
+          : a,
+      ),
+    )
+  }
+
+  test('an effect word under "can\'t tell yet if" isn\'t a claim, so the sentence is kept', async () => {
+    const text =
+      "The agent can with-skill, passing 1 of 1 tries, but we can't tell yet if it helped over plain's 0 of 1 tries."
+    const doc = await unclearAnswer(text)
+    assert.equal(insightOf(doc, once).answer?.text, text)
+    assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
+  })
+
+  test('canary: a bare "helped" against an unclear effect is dropped', async () => {
+    const doc = await unclearAnswer('It helped, passing 1 of 1 tries.')
+    assert.equal(insightOf(doc, once).answer, null)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => [d.slot, d.reason]),
+      [['greets once › answer', 'says "helped", but no cited fact\'s effect is']],
+    )
+  })
+
+  test('canary: an effect word after the hedged clause ends is a claim, and dropped', async () => {
+    for (const text of [
+      "We can't tell yet if it helped, and it made it worse.",
+      "We can't tell yet if it helped and it made it worse.",
+    ]) {
+      const doc = await unclearAnswer(text)
+      assert.equal(insightOf(doc, once).answer, null, text)
+      assert.deepEqual(
+        doc.validation.drops?.map((d) => d.reason),
+        ['says "made it worse", but no cited fact\'s effect is'],
+        text,
+      )
+    }
+  })
+
+  test('canary: a reply that is not the schema JSON is asked for once more, not fatal', async () => {
+    const replies = new Map<string, number>()
+    const once = (bad: number) =>
+      generate((input) => {
+        if (input.call !== 'insights') return recipeInsights(input)
+        const n = (replies.get(input.eval.path) ?? 0) + 1
+        replies.set(input.eval.path, n)
+        return n <= bad ? ({ findings: 'not a list' } as never) : recipeInsights(input)
+      })
+    const doc = await once(1)
+    assert.deepEqual(doc.validation, { dropped: 0, regenerated: 0, drops: [] })
+    assert.ok(insightOf(doc, measure).answer)
+    replies.clear()
+    await assert.rejects(once(2), /No object generated/)
+  })
+
+  test('canary: a fourth finding is dropped, and the call that wrote it still counts', async () => {
+    const doc = await generate(
+      recipeWith(measure.path, (input, a) =>
+        input.call === 'insights'
+          ? {
+              ...a,
+              findings: ['one', 'two', 'three', 'four'].map((n) => ({
+                text: `Plain passed writes greet.js in 4 of 4 tries, point ${n}.`,
+                cites: [idOf(input, `${(measure.cells ?? [])[0]?.path}/checks/writes greet.js`)],
+              })),
+            }
+          : a,
+      ),
+    )
+    assert.equal(insightOf(doc, measure).findings.length, 3)
+    assert.deepEqual(
+      doc.validation.drops?.map((d) => [d.slot, d.reason]),
+      [['greets in the house style › finding 4', 'is past the 3 findings an eval takes']],
+    )
+  })
+})
+
+describe('one sentence against what it cites', () => {
+  const FACT = 'cell'
+  const LINE = 'transcript:cell#1#L3'
+  const facts: Record<string, { text: string; effect?: string }> = {
+    [FACT]: { text: 'plain\n0 of 4 tries\nexit code 1', effect: 'no difference' },
+    unclear: { text: 'with-skill\n1 of 1 tries', effect: "can't tell yet" },
+    [LINE]: { text: 'L3 text: All 4 of 4 checks passed, exit code 2' },
+  }
+  const c: Citable = {
+    resolve: (cite) => facts[cite]?.text ?? null,
+    effects: (cite) => (facts[cite]?.effect ? [facts[cite].effect as string] : []),
+    vocabulary: 'greets in the house style\nplain\nwith-skill',
+    passCounts: true,
+  }
+  const verdict = (text: string, cites = [FACT]) => {
+    const v = checkSentence({ text, cites }, c)
+    return 'ok' in v ? 'kept' : 'dropped' in v ? v.dropped : v.banned
+  }
+
+  test('canary: a count must be the cited fact own count, even below 6', () => {
+    assert.equal(verdict('Plain passed 0 of 4 tries.'), 'kept')
+    assert.equal(verdict('Plain failed 4 of 4 tries.'), 'kept')
+    assert.equal(verdict('Plain failed, with 0 of 4 tries passed.'), 'kept')
+    assert.equal(
+      verdict('Plain failed 0 of 4 tries.'),
+      'has 0 of 4, which no cited fact has',
+      'it failed all 4',
+    )
+    assert.equal(verdict('Plain passed 4 of 4 tries.'), 'has 4 of 4, which no cited fact has')
+    assert.equal(verdict('Plain passed 3 of 4 tries.'), 'has 3 of 4, which no cited fact has')
+    assert.equal(
+      verdict('Plain passed four of four tries.'),
+      'has four of four, which no cited fact has',
+    )
+    assert.equal(
+      verdict('Plain passed 4 of 4 tries.', [FACT, LINE]),
+      'has 4 of 4, which no cited fact has',
+      "a transcript line's text isn't a count",
+    )
+  })
+
+  test('canary: a small number no cited fact holds is dropped', () => {
+    assert.equal(verdict('House greeting failed with exit code 1.'), 'kept')
+    assert.equal(
+      verdict('House greeting failed with exit code 2.'),
+      'has 2, which no cited fact has',
+    )
+    assert.equal(verdict('It exited with code 2.', [FACT, LINE]), 'kept')
+  })
+
+  test('canary: an effect said in other words must be the cited effect', () => {
+    for (const [text, word] of [
+      ['The skill helps the agent.', 'helps'],
+      ['The skill improved the greeting.', 'improved'],
+      ['The skill made things worse.', 'made things worse'],
+      ['The skill hurt the agent.', 'hurt'],
+    ]) {
+      assert.equal(verdict(text), `says "${word}", but no cited fact's effect is`, text)
+    }
+    assert.equal(verdict("The skill didn't help."), 'kept')
+  })
+
+  test('canary: a hedged clause ends at a comma, a dash or a conjunction', () => {
+    const hedged = (text: string) => verdict(text, ['unclear'])
+    assert.equal(hedged("We can't tell yet whether it helped or made it worse."), 'kept')
+    for (const text of [
+      "We can't tell yet if it helped – it made it worse.",
+      "We can't tell yet if it helped while plain made it worse.",
+      "We can't tell yet if it helped: it made it worse.",
+    ]) {
+      assert.equal(hedged(text), 'says "made it worse", but no cited fact\'s effect is', text)
+    }
+  })
+
+  test('canary: a quote in single, curly or backtick quotes must be in what it cites', () => {
+    for (const q of ["'exit code 1'", '‘exit code 1’', '`exit code 1`', '"exit code 1"']) {
+      assert.equal(verdict(`It ended with ${q}.`), 'kept', q)
+      const wrong = q.replace('1', '0').replace('code', 'status')
+      assert.match(verdict(`It ended with ${wrong}.`), /^quotes "exit status 0"/, wrong)
+    }
+    assert.equal(verdict("Plain's tries can't pass."), 'kept', 'apostrophes are no quotes')
+  })
+
+  test('a sentence is kept as one line, with no control characters', () => {
+    const v = checkSentence({ text: 'Plain passed 0 of 4\n\u001b[31mtries.', cites: [FACT] }, c)
+    assert.ok('ok' in v)
+    assert.equal(v.ok.text, 'Plain passed 0 of 4 [31mtries.')
+  })
+})
+
+describe('what the run interrupt cancelled', () => {
+  const ABORTED = { kind: 'aborted', message: 'The run was cancelled' } as const
+
+  test('canary: a cancelled eval opens no findings or moved row, and its facts claim no effect', () => {
+    const e = structuredClone(measure)
+    e.outcome = 'cancelled'
+    const before = slotsOf('finish', measure)
+    const slots = slotsOf('finish', e)
+    assert.ok(before.findings, 'the eval measures a change')
+    assert.equal(slots.findings, false)
+    const moved = (e.cells ?? []).filter((c) => c.effect === 'better' && c.outcome === 'pass')
+    assert.ok(moved.length, 'a passing arm that helped')
+    for (const c of moved) {
+      assert.ok(before.rows.includes(c.path))
+      assert.ok(!slots.rows.includes(c.path), c.path)
+    }
+    assert.ok(evalFacts(measure).some((f) => f.effect))
+    assert.deepEqual(
+      evalFacts(e).filter((f) => f.effect),
+      [],
+    )
+  })
+
+  test('canary: a cancelled case opens no row, and its cancelled tries are not counted', () => {
+    const e = structuredClone(choose)
+    const k = (e.cases ?? []).find((x) => x.label === 'a Python agent')
+    const cell = k?.cells[0]
+    assert.ok(k && cell?.failed)
+    assert.ok(slotsOf('choose', choose).rows.includes(k.path))
+    k.outcome = 'cancelled'
+    cell.errors.push({ ...ABORTED, attempts: 1 })
+    assert.ok(!slotsOf('choose', e).rows.includes(k.path))
+    const facts = evalFacts(e)
+    const counted = cell.passed + cell.failed - 1
+    assert.equal(facts.find((f) => f.path === cell.path)?.passed, `0 of ${counted} tries`)
+    assert.equal(facts.find((f) => f.path === cell.path)?.cancelled, 1)
+    assert.equal(facts.find((f) => f.path === k.path)?.passed, `0 of ${counted} tries`)
+  })
+
+  test("canary: a cancelled attempt's final message is not an attempt the tools are named from", () => {
+    const k = (choose.cases ?? []).find((x) => x.label === 'a chat app')
+    assert.ok(k)
+    const changed = structuredClone(record)
+    const attempt = changed.evals.find((x) => x.id === k.id)?.attempts[0]
+    assert.ok(attempt)
+    const before = attemptTexts(record, choose)
+    Object.assign(attempt, { outcome: 'fail', error: ABORTED })
+    const after = attemptTexts(changed, choose)
+    assert.equal(after.size, before.size - 1)
+  })
+})
+
+describe('insights in the layouts', () => {
+  test('canary: job choose on a finish-shaped eval prints the choose layout', async () => {
+    const doc = await generate(
+      recipeWith(french.path, (input, a) =>
+        input.call === 'classify'
+          ? {
+              intent: {
+                job: 'choose',
+                question: 'Does it pick Genkit?',
+                subject: { tool: 'Genkit' },
+              },
+            }
+          : a,
+      ),
+    )
+    const c = colors(false)
+    const without = evalBlock(c, french, false, null)
+    const block = evalBlock(c, french, false, insightOf(doc, french))
+    assert.ok(!without.some((l) => /^ {2}Genkit +0 of 1$/.test(l)))
+    assert.ok(
+      block.some((l) => /^ {2}Genkit +0 of 1$/.test(l)),
+      `the subject's count:\n${block.join('\n')}`,
+    )
+  })
+
+  test('insights written for other facts are left out, with a note', () => {
+    const stored = storedFresh()
+    const opts = { color: false, verbose: false, hint: false }
+    const fresh = render(suite, stored, opts).join('\n')
+    const plain = render(suite, null, opts).join('\n')
+    const stale = render(suite, { ...stored, factsHash: 'sha256:other' }, opts).join('\n')
+    assert.ok(stored.headline && fresh.includes(stored.headline.text))
+    assert.ok(!stale.includes(stored.headline.text))
+    assert.match(stale, /insights left out: insights\.json was written for other facts/)
+    assert.equal(stale.replace(/\n.*insights left out.*/, ''), plain)
+  })
+
+  test('a hand-edited sentence prints on one line, with no escape sequences', () => {
+    const stored = storedFresh()
+    assert.ok(stored.headline)
+    const edited = { ...stored, headline: { ...stored.headline, text: 'Two\nlines \u001b[2J.' } }
+    const out = render(suite, edited, { color: false, verbose: false, hint: false })
+    assert.ok(out.includes('Two lines [2J.'))
+    assert.ok(!out.some((l) => l.includes('\u001b')))
+  })
+
+  test('factsHash is the canonical JSON of the facts, so key order never changes it', () => {
+    assert.equal(canonicalJson({ b: 1, a: [{ d: 2, c: 3 }] }), '{"a":[{"c":3,"d":2}],"b":1}')
+    const reordered = Object.fromEntries(Object.entries(suite).reverse()) as typeof suite
+    assert.notEqual(JSON.stringify(reordered), JSON.stringify(suite))
+    assert.equal(factsHash(reordered), factsHash(suite))
+    assert.match(factsHash(suite), /^sha256:[0-9a-f]{64}$/)
+  })
+
+  test('insights from a newer reeval are refused by name', () => {
+    const stored = JSON.parse(readFileSync(join(runDir, 'insights.json'), 'utf8'))
+    assert.throws(
+      () => readableInsights({ ...stored, schemaVersion: 2 }, 'insights.json'),
+      /insights\.json .*written by a newer reeval/,
+    )
+  })
+})
+
+const FAKE_CONFIG = `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+import { insights } from './insights.ts'
+
+export default defineConfig({
+  harness: fakeHarness(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  analysis: { model: fakeAnalysis({ insights }) },
+})
+`
+
+describe('reeval analyze --insights', () => {
+  test('writes a recorded run insights.json once, reeval show prints them, and exits 0', async () => {
+    const p = await fixture('fixtures/records/before-insights')
+    writeFileSync(join(p.dir, 'reeval.config.ts'), FAKE_CONFIG)
+    writeFileSync(
+      join(p.dir, 'insights.ts'),
+      readFileSync(new URL('../scripts/output/project/insights.ts', import.meta.url), 'utf8'),
+    )
+    const [runId] =
+      corpusEntries()
+        .find((e) => e.name === 'before-insights')
+        ?.runs.map((r) => r.runId) ?? []
+    assert.ok(runId)
+    const file = join(p.dir, HISTORY_DIR, runId, 'insights.json')
+
+    const before = await runCli(p.dir, ['show', runId])
+    assert.equal(before.code, 0, before.stderr)
+    assert.ok(!before.stdout.includes('Not for a Python agent'))
+
+    const first = await runCli(p.dir, ['analyze', runId, '--insights'])
+    assert.equal(first.code, 0, first.stdout + first.stderr)
+    assert.match(
+      first.stderr,
+      /wrote .*insights\.json: 13 evals, 0 sentences removed by the checks/,
+    )
+    assert.match(first.stdout, /Not for a Python agent: 0 of 2 tries passed\./)
+    const doc = readableInsights(JSON.parse(readFileSync(file, 'utf8')))
+    assert.equal(doc.runId, runId)
+    assert.equal(doc.model, 'fake')
+
+    const shown = await runCli(p.dir, ['show', runId])
+    assert.equal(shown.code, 0, shown.stderr)
+    assert.match(shown.stdout, /Not for a Python agent: 0 of 2 tries passed\./)
+    assert.ok(doc.headline && shown.stdout.includes(doc.headline.text))
+
+    const again = await runCli(p.dir, ['analyze', runId, '--insights'])
+    assert.notEqual(again.code, 0)
+    assert.match(again.stderr, /already exists, and insights are never rewritten/)
+    assert.deepEqual(readableInsights(JSON.parse(readFileSync(file, 'utf8'))), doc)
+
+    const flags = await runCli(p.dir, ['analyze', runId, '--insights', '--save'])
+    assert.equal(flags.code, 2)
+    assert.match(flags.stderr, /takes a run, --json and -v only, not --save/)
+
+    const scratch = await runCli(p.dir, ['run', 'greets in French'])
+    assert.ok(scratch.code === 0 || scratch.code === 1, scratch.stderr)
+    const refused = await runCli(p.dir, ['analyze', 'latest', '--insights'])
+    assert.notEqual(refused.code, 0)
+    assert.match(refused.stderr, /isn't recorded, so there's no history folder for its insights/)
+    assert.ok(existsSync(file))
+
+    writeFileSync(file, '<<<<<<< HEAD\n{')
+    const conflicted = await runCli(p.dir, ['show', runId])
+    assert.equal(conflicted.code, 0, conflicted.stderr)
+    assert.match(conflicted.stderr, /warning: skipped .*insights\.json: it isn't valid JSON/)
+    assert.equal(conflicted.stdout, before.stdout)
+  })
+
+  test('canary: with only a judge model, --insights refuses and writes nothing', async () => {
+    const p = await fixture('fixtures/records/before-insights')
+    writeFileSync(
+      join(p.dir, 'reeval.config.ts'),
+      FAKE_CONFIG.replace("import { insights } from './insights.ts'\n", '').replace(
+        'analysis: { model: fakeAnalysis({ insights }) },',
+        "judge: { model: 'google/gemini-3.8-flash' },",
+      ),
+    )
+    const r = await runCli(p.dir, ['analyze', '--insights'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /--insights needs analysis\.model, and never uses the judge's model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in .*reeval\.config\.ts/,
+    )
+    const [runId] =
+      corpusEntries()
+        .find((e) => e.name === 'before-insights')
+        ?.runs.map((x) => x.runId) ?? []
+    assert.ok(!existsSync(join(p.dir, HISTORY_DIR, runId as string, 'insights.json')))
+  })
+
+  test('a model that fails writes nothing, so it can be asked again', async () => {
+    const p = await fixture('fixtures/records/before-insights')
+    writeFileSync(
+      join(p.dir, 'reeval.config.ts'),
+      FAKE_CONFIG.replace("import { insights } from './insights.ts'\n", '').replace(
+        'fakeAnalysis({ insights })',
+        "fakeAnalysis({ insights: { error: 'quota exceeded' } })",
+      ),
+    )
+    const r = await runCli(p.dir, ['analyze', '--insights'])
+    assert.notEqual(r.code, 0)
+    assert.match(r.stderr, /quota exceeded/)
+    const [runId] =
+      corpusEntries()
+        .find((e) => e.name === 'before-insights')
+        ?.runs.map((x) => x.runId) ?? []
+    assert.ok(!existsSync(join(p.dir, HISTORY_DIR, runId as string, 'insights.json')))
+  })
+
+  test('-v prints each sentence the checks removed and why, and the file keeps them', async () => {
+    const p = await fixture('fixtures/records/before-insights')
+    writeFileSync(
+      join(p.dir, 'reeval.config.ts'),
+      FAKE_CONFIG.replace("import { insights } from './insights.ts'\n", '').replace(
+        'fakeAnalysis({ insights })',
+        `fakeAnalysis({
+    insights: (input) =>
+      input.call === 'insights' && input.eval.name === 'greets in French'
+        ? { answer: { text: 'It never greets in French.', cites: ['F999'] } }
+        : {},
+  })`,
+      ),
+    )
+    const plain = await runCli(p.dir, ['analyze', '-v'])
+    assert.equal(plain.code, 2)
+    assert.match(plain.stderr, /takes -v only with --insights/)
+    const r = await runCli(p.dir, ['analyze', '--insights', '-v'])
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(r.stderr, /1 sentence removed by the checks/)
+    assert.match(
+      r.stderr,
+      /removed {2}greets in French › answer: "It never greets in French\."\n {9}cites F999, which isn't a fact it was shown/,
+    )
+    const [runId] =
+      corpusEntries()
+        .find((e) => e.name === 'before-insights')
+        ?.runs.map((x) => x.runId) ?? []
+    const doc = readableInsights(
+      JSON.parse(readFileSync(join(p.dir, HISTORY_DIR, runId as string, 'insights.json'), 'utf8')),
+    )
+    assert.deepEqual(doc.validation.drops, [
+      {
+        slot: 'greets in French › answer',
+        text: 'It never greets in French.',
+        reason: "cites F999, which isn't a fact it was shown",
+      },
+    ])
+  })
+})

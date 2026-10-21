@@ -240,7 +240,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 </Property>
 
 <Property name="analysis" type="{ model?, agent?, instructions?, maxInputTokens?, maxOutputTokens? }">
-  Settings for `reeval analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance, placed first in the prompt as the question the analysis answers; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). `model` also answers a [compare `question`](/reference/options#compare) that names no model of its own. See [reeval analyze](/reference/cli/analyze).
+  Settings for `reeval analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model, except for `reeval analyze --insights`, which uses `analysis.model` only); `instructions` add your own guidance, placed first in the prompt as the question the analysis answers; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). `model` also answers a [compare `question`](/reference/options#compare) that names no model of its own. See [reeval analyze](/reference/cli/analyze).
 
   `agent: true` (default `false`) makes `reeval run` write a note on each eval and harness once its attempts finish, into `.reeval/analysis/<runId>/notes/`, and then a summary of the run into the `reeval analyze` cache, with the same model and caps: one call per eval and harness, and one summary, every run. With no language model it exits 2 before anything runs. See [Notes during a run](/guide/analyze#notes-during-a-run).
 </Property>

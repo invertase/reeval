@@ -568,6 +568,28 @@
       "description": "A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`.",
       "type": "object",
       "properties": {
+        "insights": {
+          "description": "What `reeval analyze --insights` gets back: fixed insights, a function of each call's input (`input.call` is `classify` or `insights`, once each per eval, or `headline` once), or `{ error }` to fail every call.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FakeInsights"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": ["error"]
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          ]
+        },
         "kind": {
           "const": "fake-analysis"
         },
@@ -775,6 +797,145 @@
       },
       "required": ["kind"],
       "additionalProperties": false
+    },
+    "FakeInsights": {
+      "description": "A fake insight answer. Each call takes its part: `intent` the classification, `answer`, `findings`, `rows` and `namedTools` the eval's sentences, `headline` the run's. Whatever's left out is empty, and the intent defaults to `job: 'other'`.",
+      "type": "object",
+      "properties": {
+        "answer": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "cites": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": ["cites", "text"]
+            }
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["cites", "text"]
+          }
+        },
+        "headline": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "cites": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": ["cites", "text"]
+            }
+          ]
+        },
+        "intent": {
+          "type": "object",
+          "properties": {
+            "confidence": {
+              "description": "`low` falls back to `job: 'other'`, as a real classification does.",
+              "enum": ["high", "low", "medium"]
+            },
+            "job": {
+              "enum": ["choose", "finish", "other"]
+            },
+            "name": {
+              "enum": ["contradicts", "no-intent", "states-intent"]
+            },
+            "question": {
+              "type": "string"
+            },
+            "subject": {
+              "type": "object",
+              "properties": {
+                "change": {
+                  "type": "string"
+                },
+                "tool": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          "required": ["job"]
+        },
+        "namedTools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attempt": {
+                "type": "string"
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["attempt", "tools"]
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "row": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["cites", "row", "text"]
+          }
+        }
+      },
+      "required": []
     },
     "FakeJudgeModel": {
       "description": "A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a function of the state the judge would see works per group, eval or call, not in the config.",

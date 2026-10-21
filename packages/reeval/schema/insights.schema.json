@@ -1,0 +1,365 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from RunInsights in src/view/insights.ts by `pnpm schema:update`; don't edit. A run's insights from reeval analyze --insights: <run>/insights.json in the history folder.",
+  "title": "RunInsights",
+  "$ref": "#/$defs/RunInsights",
+  "$defs": {
+    "Across": {
+      "description": "What an eval's cells compare: `change` when it has variants (or several environments), `harness` when it has several harnesses, `both`, or `none`.",
+      "enum": ["both", "change", "harness", "none"]
+    },
+    "EvalInsight": {
+      "type": "object",
+      "properties": {
+        "answer": {
+          "description": "The answer to `question`, at most two sentences; null when it was dropped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sentence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evalId": {
+          "description": "The eval's `SuiteResult` path; for a family, the family's.",
+          "type": "string"
+        },
+        "findings": {
+          "description": "Up to three supporting points: what moved, what broke, what the agent did.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Sentence"
+          }
+        },
+        "intent": {
+          "type": "object",
+          "properties": {
+            "across": {
+              "description": "What the cells compare. Deterministic, copied from the facts.",
+              "$ref": "#/$defs/Across"
+            },
+            "job": {
+              "description": "What one attempt is testing. Can't be read from the cell shape.",
+              "$ref": "#/$defs/Job"
+            },
+            "key": {
+              "description": "sha256 of the eval's id, sources, first attempt's prompts, judge questions, check labels, the model and the prompt version: the classification's cache key.",
+              "type": "string"
+            },
+            "name": {
+              "description": "How the eval name relates to what the eval checks.",
+              "enum": ["contradicts", "no-intent", "states-intent"]
+            },
+            "question": {
+              "description": "The eval's question in plain words: \"Do agents pick Genkit for a production AI feature?\"",
+              "type": "string"
+            },
+            "subject": {
+              "description": "The tool a choose eval asks about, and the change a measure eval makes.",
+              "type": "object",
+              "properties": {
+                "change": {
+                  "type": "string"
+                },
+                "tool": {
+                  "type": "string"
+                }
+              },
+              "required": []
+            }
+          },
+          "required": ["across", "job", "key", "name", "question", "subject"]
+        },
+        "namedTools": {
+          "description": "Per attempt (`<cell path>#<n>`), the tools the reply recommended or used, each found verbatim in that attempt's final message. Only on `choose` evals.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "attempt": {
+                "type": "string"
+              },
+              "tools": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["attempt", "tools"]
+          }
+        },
+        "rows": {
+          "description": "At most one sentence per row (a case, an arm or a harness), keyed by the row's fact path. Only rows the eval's layout opens a slot on are kept.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "row": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": ["cites", "row", "text"]
+          }
+        }
+      },
+      "required": ["answer", "evalId", "findings", "intent"]
+    },
+    "Job": {
+      "description": "What one attempt tests. Only an analysis model can tell; without one every eval is `other`.",
+      "enum": ["choose", "finish", "other"]
+    },
+    "Remark": {
+      "description": "A remark about the eval's quality, not about the agent. Anything that fails a gate is dropped.",
+      "type": "object",
+      "properties": {
+        "actedOn": {
+          "description": "Set on later runs once the cited span changed: the remark was acted on.",
+          "type": "object",
+          "properties": {
+            "run": {
+              "type": "string"
+            }
+          },
+          "required": ["run"]
+        },
+        "evalId": {
+          "type": "string"
+        },
+        "evidence": {
+          "description": "Facts from this run (or history facts) showing it mattered now.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "firstSeenRun": {
+          "description": "The run that first raised this `id`; it prints only in that run.",
+          "type": "string"
+        },
+        "fix": {
+          "description": "A concrete edit at a location.",
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "string"
+            },
+            "edit": {
+              "type": "string"
+            }
+          },
+          "required": ["at", "edit"]
+        },
+        "id": {
+          "description": "sha256(kind, evalId, the eval's sources hash): one remark per kind per eval version.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Closed set; an unknown kind is dropped. There is no general or free-form kind.",
+          "enum": [
+            "check-never-fails",
+            "compound-judge",
+            "flaky-check",
+            "judge-leaks-answer",
+            "judge-too-loose",
+            "name-contradicts",
+            "name-no-intent",
+            "no-baseline",
+            "prompt-names-tool",
+            "too-few-tries"
+          ]
+        },
+        "origin": {
+          "enum": ["deterministic", "model"]
+        },
+        "severity": {
+          "description": "Fixed by kind, never chosen by the model.",
+          "enum": ["concern", "suggestion"]
+        },
+        "source": {
+          "description": "Where the problem is: `source:<file>#L<n>` with `quote`, checked against the file.",
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            }
+          },
+          "required": ["at", "quote"]
+        },
+        "text": {
+          "description": "One plain sentence: what's wrong.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evalId",
+        "evidence",
+        "firstSeenRun",
+        "fix",
+        "id",
+        "kind",
+        "origin",
+        "severity",
+        "text"
+      ]
+    },
+    "RunInsights": {
+      "description": "A run's insights, `<history>/<run>/insights.json`. Written create-only; the record is untouched. They're for the facts they were written from: a `factsHash` that isn't the run's marks them stale.",
+      "type": "object",
+      "properties": {
+        "createdAt": {
+          "type": "string"
+        },
+        "error": {
+          "description": "Set when insights failed; the facts still print.",
+          "type": "string"
+        },
+        "evals": {
+          "description": "One per eval (a family is one), in the order the output prints them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvalInsight"
+          }
+        },
+        "factsHash": {
+          "description": "sha256 of the run's `SuiteResult` as canonical JSON: the facts the model saw.",
+          "type": "string"
+        },
+        "headline": {
+          "description": "One sentence for the whole run, citing facts; null when the model's was dropped.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Sentence"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "const": "reeval-insights"
+        },
+        "model": {
+          "description": "The analysis model, as configured (`google/gemini-3.8-flash`, or `fake`).",
+          "type": "string"
+        },
+        "promptVersion": {
+          "description": "The prompts' version: insights from another version were asked differently.",
+          "type": "string"
+        },
+        "remarks": {
+          "description": "Remarks about the evals' own quality, ranked. Empty: no kind is raised yet.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Remark"
+          }
+        },
+        "runId": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "usage": {
+          "description": "Over every call; `costUsd` is null when reeval doesn't know the model's price.",
+          "type": "object",
+          "properties": {
+            "costUsd": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "inputTokens": {
+              "type": "number"
+            },
+            "outputTokens": {
+              "type": "number"
+            }
+          },
+          "required": ["costUsd", "inputTokens", "outputTokens"]
+        },
+        "validation": {
+          "description": "What the checks dropped, and how many sentences were asked for again, so the output can say so. `drops` is each dropped sentence: its slot (`<eval> › answer`, `› row <path>`, `headline`), its text and why.",
+          "type": "object",
+          "properties": {
+            "dropped": {
+              "type": "number"
+            },
+            "drops": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  },
+                  "slot": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": ["reason", "slot", "text"]
+              }
+            },
+            "regenerated": {
+              "type": "number"
+            }
+          },
+          "required": ["dropped", "regenerated"]
+        }
+      },
+      "required": [
+        "createdAt",
+        "evals",
+        "factsHash",
+        "headline",
+        "kind",
+        "model",
+        "promptVersion",
+        "remarks",
+        "runId",
+        "schemaVersion",
+        "usage",
+        "validation"
+      ]
+    },
+    "Sentence": {
+      "description": "A plain sentence citing the facts it states: `SuiteResult` paths (`evals%2Fbilling.eval.ts › bills in pence/fake+-+fake/checks/amount`) or a transcript line (`transcript:<cell path>#<n>#L<line>`). A sentence citing nothing is dropped.",
+      "type": "object",
+      "properties": {
+        "cites": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["cites", "text"]
+    }
+  },
+  "x-schemaVersion": 1
+}

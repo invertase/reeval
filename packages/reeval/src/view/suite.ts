@@ -201,6 +201,14 @@ export type CellResult = {
   fetches: Array<number | null>
 }
 
+/** A cell's attempts the run's interrupt cancelled: recorded as fails, but not the agent's. */
+export const cancelledOf = (cell: CellResult) =>
+  cell.errors.filter((err) => err.kind === 'aborted').reduce((n, err) => n + err.attempts, 0)
+
+/** A cell's counted tries: its passes and fails, less the ones the interrupt cancelled. */
+export const countedOf = (cell: CellResult) =>
+  Math.max(0, cell.passed + cell.failed - cancelledOf(cell))
+
 export type CheckResult = {
   path: string
   label: string
