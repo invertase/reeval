@@ -106,6 +106,11 @@ export const cases: PlanCase[] = [
   { dir: 'plugins', name: 'parts', args: ['evals/parts.eval.ts'] },
   { dir: 'plugins', name: 'remote', args: ['evals/remote.eval.ts'] },
   { dir: 'plugins', name: 'fetches-at-start', args: ['evals/fetches.eval.ts'] },
+  {
+    dir: 'plugins',
+    name: 'claude-code-and-grok-build',
+    args: ['--config', 'reeval.claude-grok.config.ts', 'evals/namespaced.eval.ts'],
+  },
   { dir: 'capture', name: 'options', args: [] },
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
@@ -331,21 +336,19 @@ evaluate('uses tools', { environment: tools }, async () => {})
     )
   })
 
-  test('every real harness refuses a plugin at plan time, naming the eval, the harness and the plugin', async () => {
+  test('a real harness without plugins refuses one at plan time, naming the eval, the harness and the plugin', async () => {
     const plugin = {
       'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
       'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
     }
     for (const [factory, model, name] of [
       ['cursor', 'composer-2.5', 'Cursor'],
-      ['claudeCode', 'claude-sonnet-5', 'Claude Code'],
       ['antigravity', 'gemini-3.8-flash-low', 'Antigravity'],
       ['opencode', 'google/gemini-3.8-flash', 'OpenCode'],
       ['goose', 'gemini-3.8-flash', 'Goose'],
       ['pi', 'gemini-3.8-flash', 'pi'],
       ['codex', 'gpt-5.4-mini', 'Codex'],
       ['fx', 'gpt-4.1-mini', 'fx'],
-      ['grokBuild', 'grok-4.6', 'Grok Build'],
     ] as const) {
       const p = await project(`plugin-refused-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
@@ -364,10 +367,57 @@ evaluate('reviews', { environment: review }, async () => {})
       assert.match(
         r.stderr,
         new RegExp(
-          `evaluate\\("reviews"\\) on ${factory === 'claudeCode' ? 'claude-code' : factory === 'grokBuild' ? 'grok-build' : factory}:[^:]+: ${name} can't load plugins yet: leave the review plugin out of this cell`,
+          `evaluate\\("reviews"\\) on ${factory}:[^:]+: ${name} can't load plugins yet: leave the review plugin out of this cell`,
         ),
       )
       assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
+    }
+  })
+
+  test("Claude Code and Grok Build refuse a plugin's rules, and a plugin MCP server's host secret", async () => {
+    const plugin = {
+      'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
+      'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
+      'plugins/review/rules/style.md': 'Write small functions.\n',
+      'plugins/review/.mcp.json': JSON.stringify({
+        mcpServers: { docs: { command: 'docs-server', env: { DOCS_TOKEN: '${DOCS_TOKEN}' } } },
+      }),
+    }
+    for (const [factory, model, id, name] of [
+      ['claudeCode', 'claude-sonnet-5', 'claude-code', 'Claude Code'],
+      ['grokBuild', 'grok-4.6', 'grok-build', 'Grok Build'],
+    ] as const) {
+      for (const [label, only, refusal] of [
+        [
+          'rules',
+          '',
+          `${name} can't load the review plugin's rules \\(rules/\\): use only: \\['skills', 'mcp'\\], or leave the plugin out of this cell`,
+        ],
+        [
+          'secret',
+          "{ only: ['skills', 'mcp'] }",
+          `${name} loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: \\['skills'\\] and declare the server in mcp, where reeval fills it in`,
+        ],
+      ] as const) {
+        const p = await project(`plugin-namespaced-${factory}-${label}`, {
+          'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+`,
+          'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const review = defineEnvironment('review', ({ plugin }) => ({ plugins: [plugin.local('../plugins/review'${only ? `, ${only}` : ''})] }))
+evaluate('reviews', { environment: review }, async () => {})
+`,
+          ...plugin,
+        })
+        const r = await runCli(p.dir, ['run', '--dry-run'])
+        assert.equal(r.code, 2, `${factory} ${label}: ${r.stdout}${r.stderr}`)
+        assert.match(
+          r.stderr,
+          new RegExp(`evaluate\\("reviews"\\) on ${id}:[^:]+: ${refusal}`),
+          `${factory} ${label}`,
+        )
+      }
     }
   })
 

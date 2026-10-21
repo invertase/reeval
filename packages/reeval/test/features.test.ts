@@ -1523,6 +1523,44 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/claude-code-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'claude-code',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '~/.claude/settings.json',
+        '~/.reeval/plugins/.claude-plugin/marketplace.json',
+        '~/.reeval/plugins/house/skills/house-style/SKILL.md',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/grok-build-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'grok-build',
+    env: 'house',
+    canary: /expected 'Loaded plugins: house \(skills, mcp\)' to contain 'mcp: house:docs'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes('~/.reeval/plugins/house/skills/house-style/SKILL.md'),
+        JSON.stringify(seen),
+      )
+      assert.ok(!seen.some((p) => p.includes('/.grok/skills/house-style/')), JSON.stringify(seen))
+    },
+  },
+  {
     dir: 'harness/antigravity-rules',
     tiers: ['fake', 'docker'],
     image: 'antigravity',
