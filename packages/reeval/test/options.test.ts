@@ -55,7 +55,7 @@ group('g', { runs: 2 }, () => {
 })
 `,
     })
-    const r = await runCli(p.dir)
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts · ~/m)
     assert.match(r.stdout, /^\[writes#1 good\] ▶ evals\/m\.eval\.ts › g › writes ok\.txt$/m)
@@ -2250,7 +2250,9 @@ evaluate('greets', { compare: { baseline: plain, variants: [withSkill] } }, asyn
 })
 `,
     })
-    const r = await runCli(p.dir, ['run'], { env: { REEVAL_TEST_HOST_TOKEN: 's3cret-value-123' } })
+    const r = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+      env: { REEVAL_TEST_HOST_TOKEN: 's3cret-value-123' },
+    })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^\[greets#1 with-skill\] ▶ evals\/e\.eval\.ts › greets/m)
     assert.match(r.stdout, /^ {2}with-skill +1 of 1 {2}can't tell yet$/m)

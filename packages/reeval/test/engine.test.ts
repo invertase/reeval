@@ -86,13 +86,13 @@ describe('engine', () => {
     })
     const byPath = await runCli(p.dir, ['run', 'a.eval'])
     assert.equal(byPath.code, 0)
-    assert.match(byPath.stdout, /a\.eval\.ts › math/)
+    assert.match(byPath.stdout, /^pass +math$/m)
     assert.doesNotMatch(byPath.stdout, /named thing/)
 
     const byName = await runCli(p.dir, ['run', 'named thing'])
     assert.equal(byName.code, 0)
-    assert.match(byName.stdout, /b\.eval\.ts › named thing/)
-    assert.doesNotMatch(byName.stdout, /› math/)
+    assert.match(byName.stdout, /^pass +named thing$/m)
+    assert.doesNotMatch(byName.stdout, /^pass +math$/m)
 
     const { runId } = readRun(p.dir).run
     const none = await runCli(p.dir, ['run', 'nope'])

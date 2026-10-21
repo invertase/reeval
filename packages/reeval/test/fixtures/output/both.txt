@@ -7,8 +7,8 @@ fail             learns the house style from the skill
     house greeting  0 of 4  4 of 4
       expected command to succeed, exit code 1
     effort          tools  time
-    plain           0      0s
-    with-skill      0      0s
+    plain           0      <0.1s
+    with-skill      0      <0.1s
   terse
     arm             pass
     plain           0 of 4
@@ -17,8 +17,8 @@ fail             learns the house style from the skill
     house greeting  0 of 4  0 of 4
       expected command to succeed, exit code 1
     effort          tools  time
-    plain           0      0s
-    with-skill      0      0s
+    plain           0      <0.1s
+    with-skill      0      <0.1s
 
 1 fail
 Set analysis.model in reeval.config.ts for answers to what each eval asks.

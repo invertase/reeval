@@ -47,7 +47,13 @@ import { createStudioApp } from '../src/studio/server.ts'
 import type { EvalResult } from '../src/ui/events.ts'
 import { formatTokens } from '../src/usage.ts'
 import { type AnalysisNote, analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
-import { contrastEffort, directional, EFFORT_MIN_RUNS, effortLabel } from '../src/view/effort.ts'
+import {
+  contrastEffort,
+  directional,
+  EFFORT_MIN_RUNS,
+  effortChangeLabel,
+  effortLabel,
+} from '../src/view/effort.ts'
 import { formatUsage, parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
@@ -488,6 +494,31 @@ describe('effort next to lift', () => {
     assert.doesNotMatch(effortLabel(c), /no overlap/)
   })
 
+  test('agent times both under a tenth of a second print <0.1s and no ratio', () => {
+    const c = contrastEffort(
+      [4, 5, 5].map((tools, i) => sample(tools, { agentMs: 10 + i })),
+      [30, 40, 50].map((tools, i) => sample(tools, { agentMs: 30 + i })),
+    )
+    assert.ok(c)
+    assert.deepEqual(directional(c), ['tools', 'agentS'])
+    assert.equal(
+      effortLabel(c),
+      'tools 5 vs 40 (×0.13, no overlap), agent <0.1s vs <0.1s: too few attempts to test (n = 3 vs 3)',
+    )
+    const one = contrastEffort([sample(4, { agentMs: 20 })], [sample(30, { agentMs: 400 })])
+    assert.ok(one)
+    assert.match(effortLabel(one), /agent <0\.1s vs 0\.4s \(×0\.05\)/, 'one side over keeps it')
+    const tally = (agentMs: number) => ({ tools: { median: 4 }, agentMs: { median: agentMs } })
+    assert.equal(
+      effortChangeLabel(tally(20), tally(40)),
+      'tools 4 → 4 (×1.00) · agent <0.1s → <0.1s',
+    )
+    assert.equal(
+      effortChangeLabel(tally(20), tally(400)),
+      'tools 4 → 4 (×1.00) · agent <0.1s → 0.4s (×20.00)',
+    )
+  })
+
   test('effort needs 4 runs a cell to be testable', () => {
     assert.equal(EFFORT_MIN_RUNS, 4)
     assert.ok(minimumP(3, 3) >= 0.05)
@@ -616,6 +647,8 @@ describe('reeval CLI spec', () => {
       'reeval image build --dry-run',
       `reeval query "SELECT * FROM effort WHERE verdict = 'fewer'"`,
       'reeval run --record && reeval query effort',
+      'reeval query effort --run last',
+      `reeval query "SELECT * FROM effort WHERE run_id = :run" --run last`,
     ]
     for (const c of ok) assert.equal(checkCommand(c, tables), null, c)
     const bad: Array<[string, RegExp]> = [
@@ -623,7 +656,11 @@ describe('reeval CLI spec', () => {
       ['reeval eval fix-config --debug-judge', /reeval eval isn't a reeval command/],
       ['reeval run --eval scaffold', /--eval isn't an option of reeval run/],
       ['reeval image build --tag smoke', /--tag isn't an option of reeval image build/],
-      ['reeval query efficiency', /no view or table named efficiency/],
+      [
+        'reeval query efficiency',
+        /no view or table named efficiency \(views and tables: effort, lift\)/,
+      ],
+      ['reeval query effort --run', /--run needs a value/],
       ['reeval show latest --md --json extra', /takes at most 1 argument/],
       ['reeval run --runs', /--runs needs a value/],
       ['cat evals/x.ts', /isn't a reeval command/],
@@ -2503,8 +2540,9 @@ describe('a study: several arms, every cell ungated', () => {
       | undefined
     const vs = effort?.cells.flatMap((c) => (c.vsControl ? [c.vsControl] : [])) ?? []
     assert.equal(vs.length, 2)
-    for (const v of vs) {
+    for (const v of vs as Array<{ n: string; agentS?: string }>) {
       assert.equal(v.n, '3 vs 3')
+      assert.doesNotMatch(v.agentS ?? '', /^0 vs 0 /, 'two sub-50 ms medians have no ratio')
       assert.deepEqual(Object.keys(v.separated ?? {}).slice(0, 2), ['tools', 'agentS'])
     }
     const current = digest.attempts['r1/auth/current-skill#1']

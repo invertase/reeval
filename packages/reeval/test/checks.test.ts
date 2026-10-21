@@ -69,8 +69,9 @@ describe('named check results', () => {
       [
         ['writes ok.txt', 2, 2, 0, 'both-pass'],
         ['house style', 2, 0, 0, 'discriminates'],
-        ['toSucceed test -f ok.txt', 2, 0, 2, 'discriminates'],
+        ['toSucceed test -f ok.txt', 2, 0, 2, undefined],
       ],
+      'the control never reaches the last check, so it has no verdict',
     )
     assert.equal(
       entry?.cells.find((c) => c.role === 'control')?.checks?.[0]?.verdict,
@@ -90,13 +91,6 @@ describe('named check results', () => {
           variant_pass: 2,
           control_pass: 0,
           control_not_run: 0,
-          verdict: 'discriminates',
-        },
-        {
-          label: 'toSucceed test -f ok.txt',
-          variant_pass: 2,
-          control_pass: 0,
-          control_not_run: 2,
           verdict: 'discriminates',
         },
         {
