@@ -2863,7 +2863,7 @@
                 }
               },
               "resolvedModels": {
-                "description": "The models the harness reported serving, across every turn in the run, with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5` with no `params`); empty when it reports none.",
+                "description": "The models the harness reported serving, across every turn in the run, with the variant it resolved (`composer-2.5[fast=false]` for `composer-2.5` with no `params`); empty when it reports none.",
                 "type": "array",
                 "items": {
                   "type": "string"

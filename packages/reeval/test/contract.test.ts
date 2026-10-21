@@ -10,8 +10,8 @@ import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { isRuntimeState } from '../src/attempt/context.ts'
 import type { AttemptRecord, RunRecord } from '../src/history/types.ts'
-import type { PluginPart } from '../src/types.ts'
-import { parseTranscript } from '../src/view/model.ts'
+import type { PluginPart, TranscriptEvent } from '../src/types.ts'
+import { parseTranscript, type TranscriptLine } from '../src/view/model.ts'
 import {
   BLOCKED_HOST,
   PLANTED,
@@ -38,9 +38,17 @@ import {
   knownSignatures,
   learnSignatures,
   nativeEvents,
+  nativeToolNames,
   rawTranscripts,
   signatures,
 } from './support/stream-formats.ts'
+import {
+  catalogOf,
+  misfiled,
+  SIGNALS,
+  unmappedNativeTools,
+  unmappedTools,
+} from './support/tool-catalog.ts'
 
 type Ran = { cli: CliRun; run: RunRecord; runDir: string; project: string }
 /** Returns 'n/a' when the behaviour doesn't apply to the row. */
@@ -163,6 +171,22 @@ const withTurns = (run: RunRecord) =>
 type TurnRecord = AttemptRecord['turns'][number] & {
   usage?: { input: number; output: number; cacheRead: number } | null
   model?: string | null
+}
+
+/** The attempt's normalised transcript, from its `transcript.jsonl`. */
+const transcriptOf = (ran: Ran, a: AttemptRecord): TranscriptEvent[] => {
+  const file = a.files.transcript?.path
+  assert.ok(file, `${a.key} has no transcript`)
+  return parseTranscript(readFileSync(join(ran.runDir, file), 'utf8')).filter(
+    (l): l is TranscriptLine & TranscriptEvent => l.type !== 'prompt' && l.type !== 'turn-end',
+  )
+}
+
+/** The environment of each eval whose file and command signals are checked. */
+const envOf: Record<string, string> = {
+  'edit and run': 'notes',
+  skill: 'skilled',
+  egress: 'closed',
 }
 
 /** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
@@ -332,6 +356,36 @@ export const behaviours: Behaviour[] = [
       for (const a of withTurns(ran.run))
         for (const t of a.turns)
           assert.deepEqual(t.unreported, [], `${a.key}: ${JSON.stringify(t.unreported)}`)
+    },
+  },
+  {
+    name: "every tool call in the adapter's catalog",
+    canary: false,
+    async check(ran, row) {
+      const catalog = await catalogOf(row)
+      const unknown = withTurns(ran.run).flatMap((a) =>
+        unmappedTools(catalog, transcriptOf(ran, a)).map((t) => `${t} (in ${a.key})`),
+      )
+      const native = rawTranscripts(ran.runDir).flatMap(
+        (f) => nativeToolNames(harnessOf(row), nativeEvents(readFileSync(f, 'utf8'))) ?? [],
+      )
+      unknown.push(...unmappedNativeTools(catalog, native).map((t) => `${t} (native)`))
+      assert.deepEqual(
+        unknown,
+        [],
+        `${row.id} called tools its adapter's catalog doesn't know, so they reach the transcript under their native names: ${unknown.join(', ')}. Map them in the adapter's catalog.`,
+      )
+    },
+  },
+  {
+    name: 'file edits, reads and commands normalised',
+    canary: false,
+    async check(ran, row) {
+      const catalog = await catalogOf(row)
+      const failures = Object.keys(SIGNALS).flatMap((name) =>
+        misfiled(catalog, name, transcriptOf(ran, attempt(ran, row, name, envOf[name] ?? ''))),
+      )
+      assert.deepEqual(failures, [], failures.join('\n'))
     },
   },
   {

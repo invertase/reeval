@@ -56,7 +56,7 @@ import { malformedCredentials, missingCredentials, resolveConfig } from '../src/
 import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
-import { observed, tokenUsage } from '../src/harness/agent.ts'
+import { interactiveTools, observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
@@ -2149,6 +2149,69 @@ async function turnThrough(
     return { usage: null, served, stream, text: null }
   }
 }
+
+describe('tools that wait on a person are off', () => {
+  test("only Claude Code offers one, and it's askUserQuestions", async () => {
+    const descriptors: AgentHarnessDescriptor[] = [
+      cursor({ model: 'composer-2.5' }),
+      claudeCode({ model: 'claude-sonnet-5' }),
+      antigravity({ model: 'gemini-3.8-flash' }),
+      opencode({ model: 'google/gemini-3.8-flash' }),
+      goose({ model: 'gemini-3.8-flash' }),
+      pi({ model: 'gemini-3.8-flash' }),
+      codex({ model: 'gpt-5.5' }),
+      fx({ model: 'gpt-4.1' }),
+      grokBuild({ model: 'grok-build' }),
+    ]
+    assert.deepEqual(
+      new Set(descriptors.map((d) => d.kind)),
+      new Set(Object.keys(AGENTS)),
+      'every agent is checked',
+    )
+    const keys = Object.fromEntries(Object.values(AGENTS).map((a) => [a.credential, 'k']))
+    await withHostEnv(keys, async () => {
+      for (const descriptor of descriptors) {
+        const agent = agentFor(descriptor)
+        const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
+        assert.deepEqual(
+          interactiveTools(adapter as HarnessV1),
+          descriptor.kind === 'claude-code' ? ['askUserQuestions'] : [],
+          descriptor.kind,
+        )
+      }
+    })
+  })
+
+  test('HarnessAgent hands the adapter a deny filter for them when the session starts', async () => {
+    let filtering: unknown
+    const adapter = {
+      specificationVersion: 'harness-v1',
+      harnessId: 'scripted',
+      supportsBuiltinToolFiltering: true,
+      builtinTools: { askUserQuestions: {}, read: {} },
+      doStart: async (options: { sessionId: string; builtinToolFiltering?: unknown }) => {
+        filtering = options.builtinToolFiltering
+        return { sessionId: options.sessionId, isResume: false, doDestroy: async () => {} }
+      },
+    } as unknown as HarnessV1
+    const off = interactiveTools(adapter)
+    assert.deepEqual(off, ['askUserQuestions'])
+    const agent = new HarnessAgent({
+      harness: adapter,
+      model: 'm',
+      permissionMode: 'allow-all',
+      inactiveTools: off as never,
+    })
+    const sandboxSession = {
+      description: 'none',
+      defaultWorkingDirectory: '/reeval',
+      run: async () => ({ exitCode: 0, stdout: '/root', stderr: '' }),
+      restricted: () => sandboxSession,
+    }
+    await agent.createSession({ sandboxSession: sandboxSession as never })
+    assert.deepEqual(filtering, { mode: 'deny', toolNames: ['askUserQuestions'] })
+  })
+})
 
 describe("agy's retried model calls, through HarnessAgent and the normaliser", () => {
   /** A captured agy 1.2.11 turn through today's translator, with `edit` made to its NDJSON first. */

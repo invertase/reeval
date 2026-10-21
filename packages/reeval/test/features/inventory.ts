@@ -1558,6 +1558,21 @@ export const inventory: InventoryFeature[] = [
     real: ['contract › native stream format unchanged'],
   },
   {
+    id: 'harness.tool-catalog',
+    area: 'Harnesses',
+    name: "Every tool a CLI calls is in its adapter's catalog, and file edits, reads and commands land as those kinds",
+    tests: [
+      "reeval/test/replay.test.ts › canary: the tool calls aren't in the catalog",
+      "reeval/test/replay.test.ts › canary: the CLI's tool names aren't ones the adapter maps",
+      'reeval/test/replay.test.ts › canary: the edit and the skill read and write are not normalised',
+      'reeval/test/replay.test.ts › canary: a command that arrives as an unknown tool is not a command',
+    ],
+    real: [
+      "contract › every tool call in the adapter's catalog",
+      'contract › file edits, reads and commands normalised',
+    ],
+  },
+  {
     id: 'record.served-model',
     area: 'Harnesses',
     name: "The models a harness's API requests named on the wire (`servedModels`)",
