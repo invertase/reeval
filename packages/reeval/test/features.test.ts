@@ -1613,6 +1613,75 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/opencode-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'opencode',
+    env: 'house',
+    canary: /expected null to be 'HERON-62'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['review.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of [
+        '~/.config/opencode/skills/house-style/SKILL.md',
+        '.opencode/agents/reviewer.md',
+        '.opencode/commands/ship.md',
+      ]) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/pi-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'pi',
+    env: 'house',
+    canary: /expected null to be 'KESTREL-19'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      assert.deepEqual(
+        landed(run)?.changedFiles.map((f) => f.path),
+        ['release.txt'],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      for (const path of ['~/.pi/agent/skills/house-style/SKILL.md', '.pi/prompts/ship.md']) {
+        assert.ok(seen.includes(path), `${path} in ${JSON.stringify(seen)}`)
+      }
+    },
+  },
+  {
+    dir: 'harness/fx-plugin',
+    tiers: ['fake', 'docker'],
+    image: 'fx',
+    env: 'house',
+    canary: /expected null to be 'PLOVER-27'/,
+    record: ({ run, tier }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.plugin]),
+        [['house-style', 'house']],
+      )
+      if (tier === 'fake') return
+      const seen = (landed(run)?.context ?? []).map((c) => c.path)
+      assert.ok(
+        seen.includes(
+          '~/.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/.fx/skills/house-style/SKILL.md',
+        ),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
     dir: 'harness/antigravity-rules',
     tiers: ['fake', 'docker'],
     image: 'antigravity',

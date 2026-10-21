@@ -116,6 +116,11 @@ export const cases: PlanCase[] = [
     name: 'antigravity-and-cursor',
     args: ['--config', 'reeval.antigravity-cursor.config.ts', 'evals/every-part.eval.ts'],
   },
+  {
+    dir: 'plugins',
+    name: 'opencode-pi-and-fx',
+    args: ['--config', 'reeval.opencode-pi-fx.config.ts', 'evals/unpacked.eval.ts'],
+  },
   { dir: 'capture', name: 'options', args: [] },
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'podman', args: ['evals/podman.eval.ts'] },
@@ -347,11 +352,8 @@ evaluate('uses tools', { environment: tools }, async () => {})
       'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
     }
     for (const [factory, model, name] of [
-      ['opencode', 'google/gemini-3.8-flash', 'OpenCode'],
       ['goose', 'gemini-3.8-flash', 'Goose'],
-      ['pi', 'gemini-3.8-flash', 'pi'],
       ['codex', 'gpt-5.4-mini', 'Codex'],
-      ['fx', 'gpt-4.1-mini', 'fx'],
     ] as const) {
       const p = await project(`plugin-refused-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
@@ -455,6 +457,63 @@ evaluate('reviews', { environment: review }, async () => {})
       assert.match(
         r.stderr,
         /evaluate\("reviews"\) on grok-build:[^:]+: Grok Build names the review plugin's MCP server "docs" by its own name, as it does mcp\.docs, and keeps only one: rename one, or leave mcp out of the plugin with only/,
+      )
+    }
+  })
+
+  test('OpenCode, pi and fx refuse the plugin parts they have no place for, and pi a plugin server named like one in mcp', async () => {
+    const files = {
+      'plugins/review/.claude-plugin/plugin.json': '{ "name": "review" }',
+      'plugins/review/skills/lint/SKILL.md': '---\nname: lint\ndescription: Lints.\n---\n\nLint.\n',
+      'plugins/review/agents/reviewer.md': 'Review.\n',
+      'plugins/review/commands/ship.md': 'Ship.\n',
+      'plugins/review/rules/style.md': 'Write small functions.\n',
+      'plugins/review/.mcp.json': JSON.stringify({ mcpServers: { docs: { command: 'docs' } } }),
+    }
+    for (const [i, [factory, model, environment, refusal]] of ([
+      [
+        'opencode',
+        'google/gemini-3.8-flash',
+        "{ plugins: [plugin.local('../plugins/review')] }",
+        "OpenCode can't load the review plugin's rules \\(rules/\\): use only: \\['skills', 'agents', 'commands', 'mcp'\\], or leave the plugin out of this cell",
+      ],
+      [
+        'pi',
+        'gemini-3.8-flash',
+        "{ plugins: [plugin.local('../plugins/review')] }",
+        "pi can't load the review plugin's agents \\(agents/\\) and rules \\(rules/\\): use only: \\['skills', 'commands', 'mcp'\\], or leave the plugin out of this cell",
+      ],
+      [
+        'fx',
+        'gpt-4.1',
+        "{ plugins: [plugin.local('../plugins/review')] }",
+        "fx can't load the review plugin's agents \\(agents/\\) and commands \\(commands/\\) and rules \\(rules/\\): use only: \\['skills', 'mcp'\\], or leave the plugin out of this cell",
+      ],
+      [
+        'pi',
+        'gemini-3.8-flash',
+        "{ mcp: { review_docs: mcp.stdio('docs') }, plugins: [plugin.local('../plugins/review', { only: ['mcp'] })] }",
+        'pi names the review:docs MCP server review_docs, as it does the review_docs server, and keeps only one: rename one',
+      ],
+    ] as const).entries()) {
+      const p = await project(`plugin-unpacked-${i}-${factory}`, {
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+export default defineConfig({ harness: ${factory}({ model: '${model}' }) })
+`,
+        'evals/p.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const review = defineEnvironment('review', ({ mcp, plugin }) => (${environment}))
+evaluate('reviews', { environment: review }, async () => {})
+`,
+        ...files,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, `${factory}: ${r.stdout}${r.stderr}`)
+      assert.equal(r.stdout, '', factory)
+      assert.match(
+        r.stderr,
+        new RegExp(`evaluate\\("reviews"\\) on ${factory}:[^:]+: ${refusal}`),
+        factory,
       )
     }
   })
