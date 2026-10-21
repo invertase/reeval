@@ -1,0 +1,4 @@
+{"ts":"2026-10-21T18:27:34.796Z","atMs":0,"turn":0,"type":"prompt","text":"go"}
+{"turn":0,"ts":"2026-10-21T18:27:34.796Z","atMs":0,"type":"text","text":"Working on: go","durationMs":0}
+{"turn":0,"ts":"2026-10-21T18:27:34.796Z","atMs":0,"type":"text","text":"Done.","durationMs":0}
+{"ts":"2026-10-21T18:27:34.796Z","atMs":0,"turn":0,"type":"turn-end","status":"completed","durationMs":0}

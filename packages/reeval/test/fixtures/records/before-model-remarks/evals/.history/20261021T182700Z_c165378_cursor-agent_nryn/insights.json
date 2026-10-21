@@ -1,0 +1,98 @@
+{
+  "kind": "reeval-insights",
+  "schemaVersion": 1,
+  "runId": "20261021T182700Z_c165378_cursor-agent_nryn",
+  "model": "fake",
+  "promptVersion": "insights-v5",
+  "factsHash": "sha256:ef22da757e6c1a9379e64ccf1d28469e68dd3eb1d427bd6509abdf7ef8fa0cd8",
+  "createdAt": "2026-10-21T18:27:28.034Z",
+  "usage": {
+    "inputTokens": 4172,
+    "outputTokens": 181,
+    "costUsd": null
+  },
+  "budget": {
+    "maxTokens": 250000,
+    "skipped": []
+  },
+  "headline": {
+    "text": "1 fail; start with \"lands heads on the first try\".",
+    "cites": [
+      "evals%2Fcoin.eval.ts › lands heads on the first try"
+    ]
+  },
+  "evals": [
+    {
+      "evalId": "evals%2Fcoin.eval.ts › lands heads on the first try",
+      "intent": {
+        "job": "finish",
+        "across": "none",
+        "question": "Does the agent finish: lands heads on the first try?",
+        "subject": {},
+        "name": "states-intent",
+        "key": "061bfc230e5ed84eb0734f07de12b4955356914a466b9c2918dc00455f6a007a"
+      },
+      "answer": {
+        "text": "No: only 1 of 3 passed \"lands heads\".",
+        "cites": [
+          "evals%2Fcoin.eval.ts › lands heads on the first try/fake+fake+fake/checks/lands heads"
+        ]
+      },
+      "findings": []
+    },
+    {
+      "evalId": "evals%2Fskill.eval.ts › uses the marker with the marked skill",
+      "intent": {
+        "job": "finish",
+        "across": "change",
+        "question": "Does the agent finish: uses the marker with the marked skill?",
+        "subject": {
+          "change": "marked"
+        },
+        "name": "states-intent",
+        "key": "f28df6fc267de9e09fe844abee9ee930381941da50d2f6c5a7c781bd066fbdfa"
+      },
+      "answer": {
+        "text": "Yes: every try passed.",
+        "cites": [
+          "evals%2Fskill.eval.ts › uses the marker with the marked skill"
+        ]
+      },
+      "findings": [],
+      "rows": [
+        {
+          "text": "Only 0 of 2 passed \"uses the marker\".",
+          "cites": [
+            "evals%2Fskill.eval.ts › uses the marker with the marked skill/fake+plain+docker/checks/uses the marker"
+          ],
+          "row": "evals%2Fskill.eval.ts › uses the marker with the marked skill/fake+plain+docker"
+        }
+      ]
+    }
+  ],
+  "remarks": [
+    {
+      "id": "8835c71b3a1b90a2bb5d9f028ebd37a8ec202184e7c29743a1a68d1c43350bd4",
+      "evalId": "evals%2Fskill.eval.ts › uses the marker with the marked skill",
+      "kind": "too-few-tries",
+      "severity": "suggestion",
+      "text": "Marked passed 2 of 2 tries and plain 0 of 2: too few tries to tell whether the difference holds.",
+      "evidence": [
+        "evals%2Fskill.eval.ts › uses the marker with the marked skill/fake+marked+docker",
+        "evals%2Fskill.eval.ts › uses the marker with the marked skill/fake+plain+docker"
+      ],
+      "fix": {
+        "at": "source:evals/skill.eval.ts#L4",
+        "edit": "set runs: 4 or more, so each side counts at least 4 tries"
+      },
+      "origin": "deterministic",
+      "firstSeenRun": "20261021T182700Z_c165378_cursor-agent_nryn",
+      "printed": true
+    }
+  ],
+  "validation": {
+    "dropped": 0,
+    "regenerated": 0,
+    "drops": []
+  }
+}
