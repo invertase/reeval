@@ -45,7 +45,7 @@ evaluate(name, fn, options)
 ```
 
 <Property name="name" type="string">
-  The eval's name. Together with its file and groups it makes the eval id.
+  The eval's name. Together with its file and groups it makes the eval id. Name it after the question it answers, such as `recommends Genkit for a production AI feature` rather than `genkit test 2`: the run's insights read the name first to tell what the eval checks.
 </Property>
 
 <Property name="options" type="EvalOptions" optional>
@@ -131,8 +131,9 @@ A pooled `evaluate.each` is a family, with the id `file › …groups › name t
 | What | Where |
 |---|---|
 | One plan row, with `N cases · pooled pass rate` (or `paired lift` with `compare`) | `--dry-run`; `--json` lists every case with its `family` |
-| One summary row: the cases' marks, a pooled pass@1 per cell, and a paired lift per variant | `reeval run`, `summary.md`, the studio's run page |
-| A gate: a variant's pooled lift whose lower bound is below `minLift` fails the run | Exit 1, `Lift below minLift` |
+| One result block: a row per case under the template and, with `compare`, an `all cases` row with each arm's pooled count and each variant's paired effect | `reeval run`, `summary.md`, `reeval show` |
+| A pooled pass@1 per cell, with its interval | `reeval query families`, the studio's run page |
+| A gate: a variant's pooled lift whose lower bound is below `minLift` fails the run | Exit 1, `not by minLift N` on the `all cases` row |
 | `evals[].family` and `families[]` | The [run record](/reference/record) |
 | `family_lift` | [`reeval query`](/reference/cli/query) |
 

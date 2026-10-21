@@ -65,6 +65,7 @@ import {
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
+  claudePluginFiles,
   cursorMcpServers,
   gooseMcpServers,
   LAYOUTS,
@@ -161,6 +162,8 @@ describe('the Claude Code harness', () => {
       rulesFile: 'CLAUDE.md',
       workspaceSkillDir: '.claude/skills',
       harnessSkillDir: '.claude/skills',
+      pluginPlacement: 'namespaced',
+      pluginFiles: claudePluginFiles,
     })
     assert.equal(layoutOf(cursor({ model: 'composer-2.5' })).rulesFile, 'AGENTS.md')
     assert.equal(workspaceSkillDir(cursor({ model: 'composer-2.5' })), '.cursor/skills')
@@ -295,6 +298,7 @@ describe('the Antigravity harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: '.agents/skills',
       harnessSkillDir: '.gemini/config/skills',
+      pluginPlacement: 'namespaced',
     })
     assert.equal(imageHarness(h), 'antigravity')
   })
@@ -323,6 +327,7 @@ describe('the Antigravity harness', () => {
       rulesFile: ANTIGRAVITY_WORKSPACE_RULES_FILE,
       workspaceSkillDir: ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: ANTIGRAVITY_HOME_SKILLS_DIR,
+      pluginPlacement: 'namespaced',
     })
   })
 })
@@ -455,6 +460,7 @@ describe('the OpenCode harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: OPENCODE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: OPENCODE_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'opencode')
     assert.deepEqual(brokeringFor(h)?.endpoints, openCodeEndpoints('google/m'))
@@ -557,6 +563,7 @@ describe('the Goose harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: GOOSE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/${GOOSE_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'goose')
     assert.deepEqual(AGENTS.goose.endpoints, GOOSE_ENDPOINTS)
@@ -617,6 +624,7 @@ describe('the fx harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: FX_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/fx/implementation/home/${FX_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'fx')
   })
@@ -675,6 +683,7 @@ describe('the Grok Build harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: GROK_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home/${GROK_HOME_SKILLS_DIR}`,
+      pluginPlacement: 'namespaced',
     })
     assert.equal(imageHarness(h), 'grok-build')
     assert.deepEqual(AGENTS['grok-build'].endpoints, GROK_ENDPOINTS)
@@ -762,6 +771,7 @@ describe('the pi harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: PI_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: PI_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'pi')
     assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
@@ -845,6 +855,7 @@ describe('the Codex harness', () => {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: CODEX_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: CODEX_HOME_SKILLS_DIR,
+      pluginPlacement: 'namespaced',
     })
     assert.equal(imageHarness(h), 'codex')
     const config = resolveConfig({ harness: [h] }, '/p')
@@ -1000,6 +1011,7 @@ describe('the Cursor harness', () => {
       rulesFile: CURSOR_SDK_WORKSPACE_RULES_FILE,
       workspaceSkillDir: CURSOR_SDK_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: CURSOR_SDK_HOME_SKILLS_DIR,
+      pluginPlacement: 'flat',
     })
     assert.equal(imageHarness(h), 'cursor')
     assert.deepEqual(AGENTS.cursor.endpoints, cursorSdkEndpoints())
@@ -1127,7 +1139,7 @@ async function adapterRules(kind: AgentKind, env: Record<string, string>, model 
   return withHostEnv(env, async () => {
     const descriptor = { kind, model } as AgentHarnessDescriptor
     const agent = agentFor(descriptor)
-    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
     const { session, rules } = recordingSession()
     await assert.rejects(
       adapter.doStart({ sessionId: 's', sandboxSession: session }),
@@ -1298,6 +1310,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: antigravity({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1406,7 +1419,7 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
       const descriptor = opencode({ model: 'google/m' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1446,6 +1459,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: goose({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
@@ -1495,7 +1509,7 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ OPENAI_API_KEY: 'sk-real' }, async () => {
       const descriptor = fx({ model: 'gpt-4.1-mini' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1553,6 +1567,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: grokBuild({ model: 'm' }),
+        plugins: [],
       })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session

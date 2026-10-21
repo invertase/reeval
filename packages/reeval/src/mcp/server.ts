@@ -3,6 +3,7 @@
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { allRuns, compareView, historyView, showRecord } from '../commands.ts'
+import { hasAnalysisModel } from '../config.ts'
 import { openHistoryDb, VIEW_NAMES } from '../history/db.ts'
 import { readRecord } from '../history/files.ts'
 import { renderSummary } from '../history/summary.ts'
@@ -45,6 +46,8 @@ const VIEW_ROWS: Record<string, string> = {
     'check (expect label) per variant cell per run: its passes, failures and not-run on both sides, and whether it discriminates (both-pass and both-fail checks measure nothing)',
   check_rates:
     'check (expect label) per cell per run, control and variant alike: harness, environment, role, passes, failures, errors, not-run and rate = pass / (pass + fail), null when none',
+  check_streaks:
+    'check (expect label) per cell, comparable fingerprint and branch over recorded runs: how many newest runs in a row it passed with no fail (on a variant, on both sides), their tries, and the run that ended the streak',
 }
 
 const READ_ONLY = {
@@ -232,7 +235,10 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       guard(async ({ run, format }) => {
         const record = await showRecord(config, run)
         return format === 'md'
-          ? { runId: record.runId, markdown: renderSummary(record).trimEnd() }
+          ? {
+              runId: record.runId,
+              markdown: renderSummary(record, { hint: !hasAnalysisModel(config) }).trimEnd(),
+            }
           : (record as Json)
       }),
     )

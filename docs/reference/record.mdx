@@ -18,6 +18,7 @@ evals/.history/                            commit this
   .gitignore                               un-ignores recorded files (`*.log` and the rest)
   <runId>.json                             the record
   <runId>/summary.md                       the run as Markdown
+  <runId>/insights.json                    insights and remarks (see Insights)
   <runId>/worktree.patch                   uncommitted changes, when the run was dirty
   <runId>/<eval-slug>/questions/<n>.json   what compare question n's model was sent
   <runId>/<eval-slug>/<cell-slug>/<n>/     one directory per attempt
@@ -154,6 +155,10 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
 
 <Property name="families" type="FamilyRecord[]" optional>
   Each pooled `evaluate.each` that ran; unset when none did.
+</Property>
+
+<Property name="errors" type="string[]" optional>
+  Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.
 </Property>
 
 ### GitInfo
@@ -688,8 +693,8 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="durationMs" type="number"></Property>
 
-<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null}>">
-  `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.
+<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null; mcpStartup?: McpStartup[]}>">
+  `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
 </Property>
 
 <Property name="usage" type="TokenUsage | null">
@@ -866,9 +871,15 @@ An environment as it was applied, without secret values.
 
 <Property name="setup" type="string[]"></Property>
 
-<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]}>"></Property>
+<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]; plugin?: string}>"></Property>
 
-<Property name="mcp" type="string[]"></Property>
+<Property name="mcp" type="string[]">
+  Every MCP server, a plugin's as `<plugin>:<server>`.
+</Property>
+
+<Property name="plugins" type="PluginRecord[]" optional>
+  The plugins placed, each with what it placed; in the digest. Unset when there are none.
+</Property>
 
 <Property name="files" type="Array<{path: string; sha256: string}>"></Property>
 
@@ -890,6 +901,38 @@ An environment as it was applied, without secret values.
 
 <Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
   The git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to and the hash of the tree that was copied in, which is in the digest.
+</Property>
+
+### PluginRecord
+
+A plugin as an attempt placed it.
+
+<Property name="name" type="string">
+  The manifest's `name`.
+</Property>
+
+<Property name="source" type="string">
+  Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`.
+</Property>
+
+<Property name="marketplace" type="{name: string; source: string; commit: string} | null">
+  The marketplace it was listed in; null when it was named directly.
+</Property>
+
+<Property name="commit" type="string | null">
+  The commit a git source resolved to; null for a local or npm one.
+</Property>
+
+<Property name="sha256" type="string">
+  The hash of the files placed.
+</Property>
+
+<Property name="build" type="string | null">
+  The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.
+</Property>
+
+<Property name="parts" type="{skills: string[]; agents: string[]; commands: string[]; hooks: string[]; mcp: string[]; rules: boolean}">
+  What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.
 </Property>
 
 ### EgressRecord
@@ -921,7 +964,7 @@ The image an attempt's container started from, and how reeval made it.
 <Property name="agentCli" type="string | null"></Property>
 
 <Property name="base" type="string">
-  The harness image `install` was baked onto: `ref` itself without `install`.
+  The harness image `install` and plugin builds were baked onto: `ref` itself without either.
 </Property>
 
 <Property name="install" type="string[]">
@@ -956,7 +999,81 @@ Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` readi
 
 <Property name="status" type="'added' | 'modified' | 'deleted'"></Property>
 
+### McpStartup
+
+One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.
+
+<Property name="server" type="string">
+  The server's name in the environment's `mcp`.
+</Property>
+
+<Property name="ms" type="number | null">
+  Milliseconds from spawning the server to its answer to the client's `initialize`; null when it never answered (it exited first, timed out, or its client closed it first).
+</Property>
+
 [//]: # (/generated:record-types)
+
+## Insights
+
+`reeval run` writes `<runId>/insights.json` beside the record once its attempts finish, when `analysis.model` is set, and `reeval record` copies it; `reeval analyze <run> --insights` writes it for a run without one, and finishes one with `stopped`, `failed` or `budget.skipped` evals, replacing it whole. A complete one is written once: delete it to write new ones. `reeval show` prints it with the run, on one line a sentence. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record. One from a newer reeval, or one that isn't valid JSON (a merge conflict), is skipped with a warning and the run prints without it.
+
+A run's [remarks](/reference/cli/run#remarks) go in the same file. A run that raises remarks but writes no insights (no `analysis.model`, `--no-insights`, or insights that fail or are skipped) writes one with no model's words (`model` and `promptVersion` `"none"`, `headline` `null`, `evals` empty), and `reeval analyze --insights` replaces it, keeping its remarks. `reeval record` copies a model's file byte for byte, so one written for other facts is still left out; a remarks-only one gets the recorded record's `factsHash`.
+
+```json title="evals/.history/<runId>/insights.json (trimmed)"
+{
+  "kind": "reeval-insights",
+  "schemaVersion": 1,
+  "runId": "20261020T231903Z_2e69951_cursor-agent_8s1m",
+  "model": "fake",
+  "promptVersion": "insights-v6-9a7a2325",
+  "factsHash": "sha256:0d56643daa2ea23e32a66492facca73fc5b3a85c6051d4f8690abec7c5281a18",
+  "usage": { "inputTokens": 0, "outputTokens": 0, "costUsd": null },
+  "headline": {
+    "text": "9 fail; start with \"recommends Genkit for $task\".",
+    "cites": ["evals%2Fchoose.eval.ts › recommends Genkit for $task"]
+  },
+  "evals": [{
+    "evalId": "evals%2Fchoose.eval.ts › recommends Genkit for $task",
+    "intent": {
+      "job": "choose", "across": "none",
+      "question": "Does the agent pick Genkit?",
+      "subject": { "tool": "Genkit" },
+      "name": "states-intent", "key": "2c0c59de…"
+    },
+    "answer": {
+      "text": "Not for a Python agent: 0 of 2 tries passed.",
+      "cites": ["evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent"]
+    },
+    "findings": [],
+    "rows": [{ "row": "…/a Python agent", "text": "It also names LangChain, …", "cites": ["…"] }],
+    "namedTools": [{ "attempt": "…/a chat app/advisor+-+fake#1", "tools": ["Genkit", "LangChain"] }]
+  }],
+  "remarks": [],
+  "validation": { "dropped": 0, "regenerated": 0, "drops": [] }
+}
+```
+
+| Field | What it holds |
+|---|---|
+| `model`, `promptVersion` | The analysis model and the prompts' version that wrote it: their revision and the first 8 hex characters of the eval rubric's sha256 |
+| `factsHash` | `sha256:` of the run's facts as canonical JSON; when the facts no longer match, `reeval show` leaves the insights out with a note |
+| `usage` | Tokens over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it reports them; `costUsd` is `null`, since reeval has no prices |
+| `budget` | `maxTokens`, the `analysis.maxTokens` of the `reeval run` or `reeval analyze --insights` that wrote the file, and `skipped`, the evals it ran out before |
+| `failed` | The evals whose calls failed twice (an error, a reply cut off at the output cap, or a call past its timeout), each with `evalId` and the last `error`; they print their facts. Absent when none failed |
+| `stopped` | Set when Ctrl-C or SIGTERM stopped insights before every eval had finished: `signal` (`SIGINT` or `SIGTERM`) and `skipped`, the evals that hadn't. Absent otherwise; a stop during the headline call only leaves `headline` `null` |
+| `headline` | One sentence on the run, printed before the tally, or `null` |
+| `evals[].evalId` | The eval's or family's path: its file and name, `›` between them |
+| `evals[].intent` | The classification: `job` (`choose`, `finish` or `other`), `across`, `question`, `subject` (`tool`, `change`), `name` (`states-intent`, `no-intent` or `contradicts`) and `key`, the hash of what it read |
+| `evals[].answer` | Its answer, at most two sentences, or `null` |
+| `evals[].findings` | At most three sentences under a choose or finish eval that measures a change |
+| `evals[].rows` | A sentence under each row it names (`row`, a fact path) |
+| `evals[].namedTools` | On a choose eval, the tools each attempt's final message names (`<cell path>#<n>`) |
+| `remarks` | Each remark the run raised, including ones an earlier run printed first: `id` (one per kind and eval: for reeval's own, per eval version and, for `slow-mcp-start`, server; for a model's, per quote), `evalId`, `kind`, `severity` (`concern` or `suggestion`), `text`, `source` (a model's: `at`, `source:<file>#L<n>`, and `quote`, copied exactly from that line), `evidence` (fact paths, or `<cell path>#<n>` for an attempt), `fix` (`at`, `source:<file>#L<n>`, and `edit`; a model's `edit` is empty when it gave none, and its `at` the quoted line when it named no line), `origin` (`deterministic` or `model`), `firstSeenRun` (the first run that printed it, else this run) and `printed` (whether this run's `reeval run` output printed it; `false` when an earlier run printed it, or when the cap or a run without `-v` left it out, so a later run prints it; missing in files from an older reeval, read as printed in `firstSeenRun` only) |
+| `validation` | `dropped`, the sentences the checks dropped, and `regenerated`, those asked for again |
+| `validation.drops` | Each dropped sentence or model remark: `slot` (`<eval> › answer`, `› finding <n>`, `› row <path>`, `› named tools <attempt>`, `› remark <kind>` or `headline`), `text` and `reason`; absent in files written before it |
+| `error` | Set when writing the insights failed; `reeval show` prints it instead |
+
+Each sentence is `{ text, cites }`. A cite is a fact path (`<eval>`, `<eval>/<cell>`, `<eval>/<cell>/checks/<label>`, `<eval>/<cell>/effort`, `<family>/<case>`) or a transcript line, `transcript:<cell path>#<n>#L<line>`. Paths percent-encode `%`, `/` and `+` inside each part.
 
 ## What a record can't pin down
 

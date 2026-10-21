@@ -226,7 +226,6 @@ describe('cli', () => {
         /^reeval: --runs needs a value, e\.g\. --runs <value>\. Run reeval --help\.\n$/,
       ],
       [['run', '--runs', '0'], /^reeval: --runs must be a whole number of at least 1 \(got 0\)\n$/],
-      [['run', '--json'], /^reeval: reeval run --json only prints the plan: add --dry-run\./],
       [['clean', '--keep', 'x'], /^reeval: --keep must be a whole number \(got x\)\n$/],
       [
         ['run', '--port', '3'],

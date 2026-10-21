@@ -12,12 +12,14 @@ import {
   gitWorkspaceSchema,
   hostFileSchema,
   mcpServerSchema,
+  pluginSourceSchema,
   secretSchema,
   skillSourceSchema,
   VAR,
 } from './contract/plain.ts'
 import { closest, genericProblem, got, type Issue, refusal } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
+import { localPluginServers, PLUGIN_PARTS } from './environment/plugins.ts'
 import { isObjectLike } from './object.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -35,6 +37,9 @@ import type {
   HostFile,
   McpHelper,
   McpServer,
+  PluginBuild,
+  PluginHelper,
+  PluginPart,
   SandboxDescriptor,
   Secret,
   SecretHelper,
@@ -58,6 +63,7 @@ const SPEC_KEYS = [
   'setup',
   'skills',
   'mcp',
+  'plugins',
 ]
 /** Image fields that belong on `sandbox: docker({ … })`, not as sibling keys. */
 const SANDBOX_KEYS = ['image', 'install', 'dockerfile', 'from']
@@ -70,6 +76,7 @@ const SPEC_HINTS: Record<string, string> = {
   network: 'egress',
   networkPolicy: 'egress',
   skill: 'skills',
+  plugin: 'plugins',
   file: 'files',
   agents: 'rules',
   use: 'extend',
@@ -216,8 +223,9 @@ export type PlannedSecret = {
 export type UnbrokeredSecret = Omit<PlannedSecret, 'hosts'>
 
 /**
- * Every secret among `env` and the layers' env and MCP servers, layered as the attempt resolves
- * them: a later layer's variable or MCP server replaces an earlier one of the same name.
+ * Every secret among `env` and the layers' env and MCP servers (their local plugins' included),
+ * layered as the attempt resolves them: a later layer's variable or MCP server replaces an
+ * earlier one of the same name.
  */
 export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]): PlannedSecret[] {
   const vars: EnvVars = { ...env }
@@ -226,6 +234,7 @@ export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]
     Object.assign(vars, spec.env)
     for (const [name, server] of Object.entries(spec.mcp ?? {})) servers.set(name, server)
   }
+  for (const [name, server] of localPluginServers(layers)) servers.set(name, server)
   const out = new Map<string, PlannedSecret>()
   const add = (
     label: string,
@@ -514,6 +523,163 @@ function skillHelper(base: string): SkillHelper {
   }
 }
 
+/** A plugin's `build` as written, copied, or a definition error saying what it takes. */
+function pluginBuild(what: string, build: unknown): PluginBuild {
+  const commands = (v: unknown) => {
+    const list = typeof v === 'string' ? [v] : v
+    return (
+      Array.isArray(list) &&
+      list.length > 0 &&
+      list.every((c) => typeof c === 'string' && c.trim() !== '')
+    )
+  }
+  const copy = (v: string | readonly string[]) => (typeof v === 'string' ? v : [...v])
+  if (commands(build)) return copy(build as string | string[])
+  if (typeof build === 'object' && build !== null && !Array.isArray(build)) {
+    const { run, cwd, ...rest } = build as { run?: unknown; cwd?: unknown }
+    const extra = Object.keys(rest)
+    if (extra.length) {
+      throw new DefinitionError(`${what}: build takes { run, cwd }, not "${extra.join('", "')}"`)
+    }
+    if (!commands(run)) {
+      throw new DefinitionError(
+        `${what}: build.run is a shell command or a list of them (got ${JSON.stringify(run)})`,
+      )
+    }
+    const dir = typeof cwd === 'string' ? cwd.replace(/(.)\/+$/, '$1') : cwd
+    if (
+      dir !== undefined &&
+      (typeof dir !== 'string' ||
+        !dir ||
+        dir.includes('\\') ||
+        dir.startsWith('/') ||
+        (dir !== '.' && dir.split('/').some((p) => p === '..' || p === '.' || p === '')))
+    ) {
+      throw new DefinitionError(
+        `${what}: build.cwd is a directory relative to the source's root, with forward slashes and no .., or '.' for the root (got ${JSON.stringify(cwd)})`,
+      )
+    }
+    return { run: copy(run as string | string[]), ...(dir !== undefined ? { cwd: dir } : {}) }
+  }
+  throw new DefinitionError(
+    `${what}: build is a shell command, a list of them, or { run, cwd } (got ${JSON.stringify(build)})`,
+  )
+}
+
+function pluginHelper(base: string): PluginHelper {
+  const common = (what: string, o: unknown, extra: readonly string[]) => {
+    if (typeof o !== 'object' || o === null || Array.isArray(o)) {
+      throw new DefinitionError(
+        `${what}: options are { ${[...extra, 'only', 'build'].join(', ')} }`,
+      )
+    }
+    const keys = ['only', 'build', ...extra]
+    const unknown = Object.keys(o).filter((k) => !keys.includes(k))
+    if (unknown.length) {
+      const near = closest(unknown[0] as string, keys)
+      throw new DefinitionError(
+        `${what}: unknown option "${unknown.join('", "')}"; it takes ${keys.slice(0, -1).join(', ')} and ${keys.at(-1)}.${near ? ` Did you mean "${near}"?` : ''}`,
+      )
+    }
+    const { only, build } = o as { only?: unknown; build?: unknown }
+    if (
+      only !== undefined &&
+      (!Array.isArray(only) ||
+        only.length === 0 ||
+        only.some((p) => !PLUGIN_PARTS.includes(p as PluginPart)))
+    ) {
+      throw new DefinitionError(
+        `${what}: only lists the parts to place, from ${PLUGIN_PARTS.map((p) => `'${p}'`).join(', ')}, e.g. only: ['skills', 'mcp'] (got ${JSON.stringify(only)})`,
+      )
+    }
+    return {
+      ...(only ? { only: [...new Set(only as PluginPart[])] } : {}),
+      ...(build === undefined ? {} : { build: pluginBuild(what, build) }),
+    }
+  }
+  const dirPath = (what: string, path: unknown, where: string) => {
+    if (path === undefined) return undefined
+    const clean = typeof path === 'string' ? path.replace(/\/+$/, '') : path
+    if (
+      typeof clean !== 'string' ||
+      !clean ||
+      clean.includes('\\') ||
+      clean.startsWith('/') ||
+      clean.split('/').some((p) => p === '..' || p === '.' || p === '')
+    ) {
+      throw new DefinitionError(
+        `${what}: path is a directory in the ${where}, relative, with forward slashes and no . or .. (got ${JSON.stringify(path)})`,
+      )
+    }
+    return clean
+  }
+  return {
+    local: (path, o = {}) => {
+      const written = path instanceof URL ? path.href : path
+      if (typeof written !== 'string' || !written) {
+        throw new DefinitionError(
+          `plugin.local() needs the plugin's directory, relative to this file, e.g. plugin.local('./plugins/review') (got ${JSON.stringify(path)})`,
+        )
+      }
+      const what = `plugin.local(${JSON.stringify(written)})`
+      return {
+        kind: 'plugin',
+        source: 'local',
+        path: toPath(path, base),
+        ...common(what, o, []),
+      }
+    },
+    git: (repo, o = {}) => {
+      if (typeof repo !== 'string' || !repo.trim()) {
+        throw new DefinitionError(
+          `plugin.git() needs a repository: a URL or github:owner/repo, e.g. plugin.git('github:acme/agent-plugins', { ref: 'v1.2.0' }) (got ${JSON.stringify(repo)})`,
+        )
+      }
+      const what = `plugin.git(${JSON.stringify(repo)})`
+      const masked = credentialsIn(repo)
+      if (masked) {
+        throw new DefinitionError(
+          `plugin.git(${JSON.stringify(masked)}): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.`,
+        )
+      }
+      const options = common(what, o, ['ref', 'path'])
+      const parsed = parseGitRepo(repo)
+      const ref = (o as { ref?: unknown }).ref ?? parsed.ref
+      if (ref !== undefined && (typeof ref !== 'string' || !ref.trim() || ref.startsWith('-'))) {
+        throw new DefinitionError(
+          `${what}: ref is a branch, tag or commit SHA (got ${JSON.stringify(ref)})`,
+        )
+      }
+      const path = dirPath(what, (o as { path?: unknown }).path ?? parsed.path, 'repository')
+      return {
+        kind: 'plugin',
+        source: 'git',
+        repo,
+        ...(ref ? { ref: ref as string } : {}),
+        ...(path ? { path } : {}),
+        ...options,
+      }
+    },
+    npm: (spec, o = {}) => {
+      if (typeof spec !== 'string' || !spec.trim()) {
+        throw new DefinitionError(
+          `plugin.npm() needs a pinned package spec, e.g. plugin.npm('@acme/review-plugin@1.2.0') (got ${JSON.stringify(spec)})`,
+        )
+      }
+      const what = `plugin.npm(${JSON.stringify(spec)})`
+      const options = common(what, o, ['path'])
+      const path = dirPath(what, (o as { path?: unknown }).path, 'package')
+      return {
+        kind: 'plugin',
+        source: 'npm',
+        spec: localNpmSpec(spec, base),
+        ...(path ? { path } : {}),
+        ...options,
+      }
+    },
+  }
+}
+
 /**
  * What `directory()` leaves out unless `defaultIgnores: false`: dependency, build-output, cache
  * and editor directories, in its `glob` syntax. `build/` and `target/` are anchored to the top of
@@ -687,6 +853,7 @@ export function helpersFor(base: string): EnvironmentHelpers {
     secret: secretHelper(),
     skill: skillHelper(base),
     mcp: mcpHelper,
+    plugin: pluginHelper(base),
     file: (path) => ({ kind: 'file', path: toPath(path, base) }),
     directory: directoryHelper(base),
     git: gitHelper(base),
@@ -759,7 +926,7 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   }
   if (s.env !== undefined) checkEnv(s.env, where)
   if (s.egress !== undefined) checkEgress(s.egress, where)
-  const list = <T>(key: 'setup' | 'skills', value: T[] | undefined): T[] => {
+  const list = <T>(key: 'setup' | 'skills' | 'plugins', value: T[] | undefined): T[] => {
     if (value !== undefined && !Array.isArray(value)) {
       throw new DefinitionError(`${key} in ${where} must be a list (got ${JSON.stringify(value)})`)
     }
@@ -802,6 +969,16 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     const call = `skill.${String(skill.source)}`
     const problem = descriptorProblem(skillSourceSchema, skill, call)
     if (problem) throw new DefinitionError(`skills[${i}] in ${where}: ${problem}`)
+  }
+  for (const [i, plugin] of list('plugins', s.plugins).entries()) {
+    if (plugin?.kind !== 'plugin') {
+      throw new DefinitionError(
+        `plugins in ${where} must come from the plugin helper, e.g. plugins: [plugin.local('./plugins/review')] (got ${JSON.stringify(plugin)})`,
+      )
+    }
+    const call = `plugin.${String(plugin.source)}`
+    const problem = descriptorProblem(pluginSourceSchema, plugin, call)
+    if (problem) throw new DefinitionError(`plugins[${i}] in ${where}: ${problem}`)
   }
   for (const [name, server] of Object.entries(s.mcp ?? {})) {
     if (server?.kind !== 'mcp') {
@@ -931,9 +1108,9 @@ export function sandboxPaths(
 
 /**
  * An environment spec written as data with its host paths made absolute against `base`, as the
- * helpers resolve theirs: host files in `files` and `rules`, a local skill's `path`, a local npm
- * skill spec, a local git workspace's `url`, and the sandbox's. Only a non-empty string changes,
- * and an absolute path stays as written.
+ * helpers resolve theirs: host files in `files` and `rules`, a local skill's or plugin's `path`, a
+ * local npm skill or plugin spec, a local git workspace's `url`, and the sandbox's. Only a
+ * non-empty string changes, and an absolute path stays as written.
  */
 export function specPaths(
   value: unknown,
@@ -953,7 +1130,7 @@ export function specPaths(
   const prefix = field ? `${field}.` : ''
   if ('sandbox' in value)
     out.sandbox = sandboxPaths(value.sandbox, base, `${prefix}sandbox`, missing)
-  const { workspace, files, rules, skills } = value
+  const { workspace, files, rules, skills, plugins } = value
   if (isRecord(workspace) && isPath(workspace.url) && isLocalPath(workspace.url)) {
     out.workspace = { ...workspace, url: toPath(workspace.url, base) }
   }
@@ -962,6 +1139,7 @@ export function specPaths(
   }
   if ('rules' in value) out.rules = hostFile(rules)
   if (Array.isArray(skills)) out.skills = skills.map(skill)
+  if (Array.isArray(plugins)) out.plugins = plugins.map(skill)
   return out
 }
 

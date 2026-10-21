@@ -8,8 +8,8 @@
       "description": "`AnalysisConfig` as data: the model by name, or a fake analysis.",
       "type": "object",
       "properties": {
-        "agent": {
-          "description": "`reeval run` writes a note on each eval and harness once its attempts finish, with the analysis model (default false: one call per eval and harness, every run).",
+        "insights": {
+          "description": "`reeval run` classifies each eval and explains its result with `model` once the attempts finish (default true when `model` is set; `--no-insights` turns it off for one run).",
           "type": "boolean"
         },
         "instructions": {
@@ -28,8 +28,14 @@
           "minimum": 500,
           "maximum": 9007199254740991
         },
+        "maxTokens": {
+          "description": "Tokens (in and out) that one run's insights may use, over every classification, insight and headline call (default 250000). Past it, the evals left print without insights; the run's outcome and exit code never change.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
         "model": {
-          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one.",
+          "description": "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and compare questions fall back to the judge's when it's a language model.",
           "anyOf": [
             {
               "type": "string"
@@ -533,6 +539,13 @@
             "$ref": "#/$defs/McpServer"
           }
         },
+        "plugins": {
+          "description": "Plugins in Claude Code's layout, made by the `plugin` helper; a child's replaces its parent's plugin of the same name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PluginSource"
+          }
+        },
         "rules": {
           "description": "Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code.",
           "anyOf": [
@@ -597,24 +610,6 @@
         "kind": {
           "type": "string",
           "const": "fake-analysis"
-        },
-        "note": {
-          "description": "`analysis.agent`'s note on each eval and harness, or an error to throw.",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "object",
-              "properties": {
-                "error": {
-                  "type": "string"
-                }
-              },
-              "required": ["error"],
-              "additionalProperties": false
-            }
-          ]
         },
         "output": {
           "description": "The model's structured answer."
@@ -1410,6 +1405,262 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
+    "PluginPart": {
+      "description": "A part of a plugin, as Claude Code's layout bundles it: `skills/<name>/SKILL.md`, `agents/<name>.md`, `commands/<name>.md`, `hooks/hooks.json`, `.mcp.json` (or the manifest's `mcpServers`) or `rules/`.",
+      "type": "string",
+      "enum": ["skills", "agents", "commands", "hooks", "mcp", "rules"]
+    },
+    "PluginSource": {
+      "description": "A plugin to place for the agent, in Claude Code's layout, made by the `plugin` helper.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "A host directory with a `.claude-plugin/plugin.json`.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "local"
+            }
+          },
+          "required": ["kind", "path", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "The plugin's directory in the repository; default its root.",
+              "type": "string"
+            },
+            "ref": {
+              "description": "A branch, tag or commit SHA; unset is the remote's `HEAD`.",
+              "type": "string"
+            },
+            "repo": {
+              "description": "As written: a URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "source": {
+              "type": "string",
+              "const": "git"
+            }
+          },
+          "required": ["kind", "repo", "source"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "build": {
+              "description": "Commands that build the plugin in a Docker image layer, from its directory unless `cwd` says otherwise.",
+              "anyOf": [
+                {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "\\S"
+                    },
+                    {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "description": "Where they run, relative to the source's root; default the plugin's directory.",
+                      "type": "string",
+                      "pattern": "^(?:\\.|(?!\\/)(?!.*(?:^|\\/)\\.\\.?(?:\\/|$))[^\\\\]+)$"
+                    },
+                    "run": {
+                      "description": "The command, or the commands in order.",
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "\\S"
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "\\S"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["run"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "plugin"
+            },
+            "only": {
+              "description": "The parts to place; default every part the plugin has.",
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PluginPart"
+              }
+            },
+            "path": {
+              "description": "The plugin's directory in the package; default its root.",
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "const": "npm"
+            },
+            "spec": {
+              "description": "A pinned npm package spec.",
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "required": ["kind", "source", "spec"],
+          "additionalProperties": false
+        }
+      ]
+    },
     "ProfileData": {
       "description": "`Profile` as data: its defaults and judge as data.",
       "type": "object",
@@ -1654,7 +1905,7 @@
       "type": "object",
       "properties": {
         "analysis": {
-          "description": "`reeval analyze`, compare questions without a model, and `agent`'s notes during a run.",
+          "description": "Insights during `reeval run`, `reeval analyze`, and compare questions without a model.",
           "$ref": "#/$defs/AnalysisConfigData"
         },
         "budget": {

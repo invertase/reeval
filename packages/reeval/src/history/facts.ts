@@ -69,6 +69,11 @@ CREATE TABLE drift_m (
   run_id TEXT, prev_run_id TEXT, eval_key TEXT, cell_key TEXT, changed TEXT,
   changed_paths TEXT, noise INTEGER, real_changed TEXT
 );
+CREATE TABLE check_streaks_m (
+  eval_key TEXT, cell_key TEXT, label TEXT, fingerprint TEXT, branch TEXT, runs INTEGER,
+  fails INTEGER, streak_runs INTEGER, streak_tries INTEGER, streak_since TEXT, last_run TEXT,
+  ended_by TEXT
+);
 `
 
 const FAMILY_COLUMNS = [
@@ -91,7 +96,14 @@ const FAMILY_COLUMNS = [
   'tokens_verdict',
 ] as const
 
-export const DERIVED = ['effort_m', 'contrasts_m', 'factor_effects_m', 'flaky_m', 'drift_m']
+export const DERIVED = [
+  'effort_m',
+  'contrasts_m',
+  'factor_effects_m',
+  'flaky_m',
+  'drift_m',
+  'check_streaks_m',
+]
 
 type Cell = {
   run_id: string
@@ -818,4 +830,78 @@ export function deriveFacts(db: DatabaseSync): void {
   }
   flakyRows.sort((a, b) => String(a.first_seen).localeCompare(String(b.first_seen)))
   insertAll(db, 'flaky_m', flakyRows)
+
+  insertAll(db, 'check_streaks_m', checkStreaks(db))
+}
+
+type StreakCheck = {
+  run_id: string
+  eval_key: string
+  cell_key: string
+  label: string
+  comparable: string
+  branch: string | null
+  role: string
+  pass: number
+  fail: number
+  error: number
+  verdict: string | null
+}
+
+/**
+ * check_streaks: each check per cell, comparable fingerprint and branch, over recorded runs only:
+ * how many of its newest runs in a row it passed without a fail or an error (on a variant, only
+ * runs where its control passed it too, `both-pass`), the tries those runs counted, and the run
+ * that ended it. A run that never reached the check neither extends nor ends the streak.
+ */
+function checkStreaks(db: DatabaseSync): Row[] {
+  const checks = rowsOf<StreakCheck>(
+    db.prepare(
+      `SELECT k.run_id, k.eval_key, k.cell_key, k.label, c.comparable, r.branch, c.role, k.pass,
+        k.fail, k.error, k.verdict
+       FROM cell_checks k JOIN runs r USING (run_id)
+       JOIN cells c ON c.run_id = k.run_id AND c.eval_key = k.eval_key AND c.key = k.cell_key
+       WHERE r.recorded = 1 ORDER BY k.run_id`,
+    ),
+  )
+  const series = new Map<string, StreakCheck[]>()
+  for (const k of checks) {
+    const id = [k.eval_key, k.cell_key, k.label, k.comparable, k.branch ?? ''].join('\0')
+    series.set(id, [...(series.get(id) ?? []), k])
+  }
+  const rows: Row[] = []
+  for (const list of series.values()) {
+    const first = list[0] as StreakCheck
+    let streakRuns = 0
+    let streakTries = 0
+    let since: string | null = null
+    let endedBy: string | null = null
+    for (const k of [...list].reverse()) {
+      if (k.pass + k.fail + k.error === 0) continue
+      const clean =
+        k.fail === 0 && k.error === 0 && (k.role !== 'variant' || k.verdict === 'both-pass')
+      if (!clean) {
+        endedBy = k.run_id
+        break
+      }
+      streakRuns++
+      streakTries += k.pass
+      since = k.run_id
+    }
+    rows.push({
+      eval_key: first.eval_key,
+      cell_key: first.cell_key,
+      label: first.label,
+      fingerprint: first.comparable,
+      branch: first.branch,
+      runs: list.length,
+      fails: list.reduce((n, k) => n + k.fail, 0),
+      streak_runs: streakRuns,
+      streak_tries: streakTries,
+      streak_since: since,
+      last_run: list.at(-1)?.run_id ?? null,
+      ended_by: endedBy,
+    })
+  }
+  return rows
 }

@@ -38,6 +38,7 @@ const HOME_CONTEXT_PATHS = [
   '.fx/mcp.json',
   '.grok/skills',
   '.grok/config.toml',
+  '.reeval/plugins',
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
 const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'

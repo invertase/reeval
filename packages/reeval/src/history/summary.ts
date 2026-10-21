@@ -1,32 +1,19 @@
-import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
-import { clip, formatDuration } from '../text.ts'
-import type { CompareAnswer, Outcome } from '../types.ts'
-import { contrastsOf } from '../view/contrasts.ts'
-import { cellContrast, effortLabel } from '../view/effort.ts'
-import {
-  familyEffortLabel,
-  familyHeadLabel,
-  familyLiftLabel,
-  familyRateLabel,
-} from '../view/family.ts'
-import {
-  cellUsage,
-  checkLabels,
-  commandLine,
-  judgeRatesLabel,
-  labelledJudgements,
-  summaryJudgeRates,
-} from '../view/judgements.ts'
+import { clip, fenced, formatDuration } from '../text.ts'
+import type { Outcome } from '../types.ts'
+import { colors } from '../ui/colors.ts'
+import { render, tallyLine } from '../ui/layout.ts'
+import type { RunInsights } from '../view/insights.ts'
+import { checkLabels, commandLine, labelledJudgements } from '../view/judgements.ts'
 import {
   evalMarkOutcome,
-  formatUsage,
   harnessLabel,
   isUngatedMiss,
   languageLabel,
   runtimeLabel,
 } from '../view/model.ts'
+import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
-import type { AttemptRecord, CellRecord, CheckTally, EvalEntry, RunRecord } from './types.ts'
+import type { AttemptRecord, RunRecord } from './types.ts'
 
 export const OUTCOME_MARK: Record<Outcome, string> = {
   pass: '✓',
@@ -40,165 +27,9 @@ const LAST_MESSAGE_LIMIT = 4000
 
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
 
-export function summaryCounts(s: RunRecord['summary']): string {
-  const parts = [
-    s.pass && `${s.pass} passed`,
-    s.fail - s.notGated > 0 && `${s.fail - s.notGated} failed`,
-    s.notGated > 0 && `${s.notGated} missed, not gated`,
-    s.infraError && `${s.infraError} infra error`,
-    s.skipped && `${s.skipped} skipped`,
-  ].filter(Boolean)
-  if (parts.length === 0) return 'no evals ran'
-  const scope = s.attempts === s.evals ? '' : ` (${s.attempts} attempts, ${s.evals} evals)`
-  return `${parts.join(' · ')}${scope}`
-}
-
-const signedPoints = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
-
-/** A gate policy as written in the config: `all`, or `passRate 0.8`. */
-export const gateLabel = (gate: CellRecord['gate']) =>
-  gate === 'all' || gate === 'none' ? gate : `passRate ${gate.passRate}`
-
-/**
- * `lift +40 pts (95% −12…+72, 4/5 vs 2/5)`, and `within noise` when the interval spans 0: at a
- * few attempts per cell, a point estimate alone says far more than the attempts can.
- */
-export function liftLabel(lift: NonNullable<CellRecord['lift']>): string {
-  const { interval, variant, control } = lift
-  const range = `95% ${signedPoints(interval.lo)}…${signedPoints(interval.hi)}`
-  const counts = `${variant.pass}/${variant.counted} vs ${control.pass}/${control.counted}`
-  return `lift ${signedPoints(lift.points)} pts (${range}, ${counts})${lift.withinNoise ? ', within noise' : ''}`
-}
-
-const answered = (t: CheckTally) => t.pass + t.fail + t.notRun
-
-const VERDICT_ORDER: Record<string, number> = { discriminates: 0, mixed: 1 }
-
-/**
- * A variant cell's checks against its control's, those that tell them apart first:
- * `loads the skill 2/2 vs 0/2 · exports greet 2/2 vs 2/2 (doesn't discriminate)`. Empty
- * without a control's tally.
- */
-export function checksLabel(cell: CellRecord): string {
-  const rows = (cell.checks ?? []).flatMap((k) =>
-    k.control && k.verdict ? [{ ...k, control: k.control }] : [],
-  )
-  return rows
-    .map((k, i) => ({ k, i }))
-    .sort(
-      (a, b) =>
-        (VERDICT_ORDER[a.k.verdict ?? ''] ?? 2) - (VERDICT_ORDER[b.k.verdict ?? ''] ?? 2) ||
-        a.i - b.i,
-    )
-    .map(({ k }) => {
-      const { control } = k
-      const notRun = k.notRun + control.notRun
-      const notes = [
-        notRun ? `${notRun} not run` : '',
-        k.verdict === 'both-pass' || k.verdict === 'both-fail' ? "doesn't discriminate" : '',
-      ].filter(Boolean)
-      return `${k.label} ${k.pass}/${answered(k)} vs ${control.pass}/${answered(control)}${notes.length ? ` (${notes.join(', ')})` : ''}`
-    })
-    .join(' · ')
-}
-
-/** Every variant cell's checks that can't tell it from its control: they pass, or fail, on both. */
-export function undiscriminating(evals: EvalEntry[]) {
-  return evals.flatMap((entry) =>
-    entry.cells.flatMap((cell) =>
-      (cell.checks ?? [])
-        .filter((k) => k.verdict === 'both-pass' || k.verdict === 'both-fail')
-        .map((check) => ({ entry, cell, check })),
-    ),
-  )
-}
-
-/** `evals/s.eval.ts › greets  fake/skilled/fake  exports greet: passes on both`. */
-export const undiscriminatingLabel = ({
-  entry,
-  cell,
-  check,
-}: ReturnType<typeof undiscriminating>[number]) =>
-  `${entry.id}  ${cell.key}  ${check.label}: ${check.verdict === 'both-pass' ? 'passes' : 'fails'} on both`
-
-const rateText = (r: CompareAnswer['rates'][number]) =>
-  `${r.name} ${r.wins}/${r.n} (${Math.round((r.wins / r.n) * 100)}%)`
-
-/**
- * One compare question's answer: `"Which is cleaner?" within: with-skill 2/2 (100%), plain 0/2
- * (0%) · 2 votes, 0 ties, 0/1 pairs split by order · google/gemini-3.8-flash`, or why it has no
- * votes. Each run's pair is voted in both orders, so a pooled rate counts a split once per side.
- */
-export function answersLabel(answer: CompareAnswer): string {
-  const q = `"${clip(answer.question, 80)}"`
-  const ties = answer.votes.filter((v) => v.winner === 'tie').length
-  const cuts = (['within', 'across'] as const).flatMap((cut) => {
-    const rates = answer.rates.filter((r) => r.cut === cut)
-    return rates.length ? [`${cut}: ${rates.map(rateText).join(', ')}`] : []
-  })
-  const votes = answer.votes.length
-  const splits = splitsLabel(pairTallies(answer.votes))
-  const tally = `${votes} vote${votes === 1 ? '' : 's'}, ${ties} tie${ties === 1 ? '' : 's'}${splits ? `, ${splits}` : ''}`
-  const by = answer.resolvedModel ?? answer.model
-  const failed = answer.error !== undefined ? ` · failed: ${clip(answer.error, 200)}` : ''
-  if (votes === 0 && answer.error === undefined) {
-    return `${q} no pairs to judge: attempts that failed their checks are left out`
-  }
-  return `${q} ${[...cuts, tally, by].join(' · ')}${failed}`
-}
-
-/**
- * Each pair of arms on one harness, when an eval has two variants or more:
- * `new-skill vs current-skill: lift +100 pts (…), checks Social OAuth 3/3 vs 0/3, effort tools 14
- * vs 26 (×0.54, no overlap), …`. The harness is named when the eval has several.
- */
-export function contrastLines(e: EvalEntry): string[] {
-  const harnesses = new Set(e.cells.map((c) => c.harness)).size
-  const cellOf = new Map(e.cells.map((c) => [c.key, c]))
-  const name = (key: string) => cellOf.get(key)?.environment ?? key
-  return contrastsOf(e).map((x) => {
-    const apart = x.checks.filter((k) => k.verdict === 'discriminates')
-    const parts = [
-      x.lift ? liftLabel(x.lift) : '',
-      apart.length
-        ? `checks ${apart.map((k) => `${k.label} ${k.a.pass}/${answered(k.a)} vs ${k.b.pass}/${answered(k.b)}`).join(' · ')}`
-        : x.checks.length
-          ? 'no check tells them apart'
-          : '',
-      x.effort ? `effort ${effortLabel(x.effort)}` : '',
-    ].filter(Boolean)
-    const on = harnesses > 1 ? ` (${cellOf.get(x.a)?.harness})` : ''
-    return `${name(x.a)} vs ${name(x.b)}${on}: ${parts.join(', ')}`
-  })
-}
-
-/** `fake/-/fake 0/2 (control, not gated) · fake/with-skill/fake 2/2 (lift +100 pts …)`. */
-export function cellCounts(e: EvalEntry): string {
-  return e.cells
-    .map((c) => {
-      const notes = [
-        c.role === 'control' && e.cells.some((x) => x.role === 'variant') ? 'control' : '',
-        c.gate === 'none' ? 'not gated' : '',
-        c.gate !== 'all' && c.gate !== 'none' ? `gate ${gateLabel(c.gate)}` : '',
-        c.lift ? liftLabel(c.lift) : '',
-        ...[checksLabel(c)].flatMap((checks) => (checks ? [`checks ${checks}`] : [])),
-        ...[cellContrast(e, c.key)].flatMap((effort) =>
-          effort ? [`effort ${effortLabel(effort)}`] : [],
-        ),
-        ...[judgeRatesLabel(summaryJudgeRates(e, c))].filter(Boolean),
-        ...[formatUsage(cellUsage(e, c.key))].filter((u): u is string => Boolean(u)),
-        c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
-      ].filter(Boolean)
-      return `${c.key} ${c.pass}/${c.pass + c.fail}${notes.length ? ` (${notes.join(', ')})` : ''}`
-    })
-    .join(' · ')
-}
-
-function judgeCell(e: EvalEntry): string {
-  const judgements = e.attempts.flatMap((a) => a.judgements)
-  if (judgements.length === 0) return ''
-  return judgements.map((j) => `${j.verdict} ${j.score.toFixed(2)}/${j.threshold}`).join(', ')
-}
+/** `5 fail · 2 pass`, with the run's status when it didn't complete. */
+export const runTally = (run: RunRecord) =>
+  `${tallyLine(colors(false), suiteResult(run).tally)}${run.status === 'complete' ? '' : ` · ${run.status === 'budget' ? 'budget reached' : run.status}`}`
 
 const short = (hash: string) => hash.replace(/^sha256:/, '').slice(0, 12)
 
@@ -279,36 +110,30 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
   return rows
 }
 
-/** Each pooled `evaluate.each`: its cases, and its pooled rates or lifts. */
-function familySection(run: RunRecord): string[] {
-  if (!run.families?.length) return []
-  const lines = ['## Families', '', '| | Family | Pooled |', '|---|---|---|']
-  for (const f of run.families) {
-    const pooled = f.lifts.length
-      ? f.lifts.map((l) => {
-          const gate = l.minLift === undefined ? '' : ` (minLift ${Math.round(l.minLift * 100)})`
-          const effort = familyEffortLabel(l)
-          return `${l.variant} ${familyLiftLabel(l)}${gate}${effort ? `; effort ${effort}` : ''}`
-        })
-      : f.rates.map((r) => `${r.cell} ${familyRateLabel(r)}`)
-    lines.push(
-      `| ${OUTCOME_MARK[f.outcome]} | ${cell(`${f.id} (${familyHeadLabel(f)})`)} | ${cell(pooled.join(' · '))} |`,
-    )
-  }
-  lines.push('')
-  return lines
-}
-
 /** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
-export function renderSummary(run: RunRecord): string {
+export function renderSummary(
+  run: RunRecord,
+  opts: { hint: boolean; insights?: RunInsights | null },
+): string {
   const lines = [
     `# reeval run ${run.runId}`,
     '',
-    `${summaryCounts(run.summary)}${run.status === 'complete' ? '' : ` · **${run.status === 'budget' ? 'budget reached' : run.status}**`} · started ${run.startedAt} (${formatDuration(run.durationMs)})`,
+    `${runTally(run)} · started ${run.startedAt} (${formatDuration(run.durationMs)})`,
     '',
     `Plan: ${run.profile ? `profile ${run.profile.name} (${run.profile.reason}) · ` : ''}${run.plan.evals} evals · ${run.plan.cells} cells · ${run.plan.attempts} attempts${run.budget ? ` · budget ${[run.budget.attempts !== undefined ? `${run.budget.attempts} attempts` : '', run.budget.duration ?? ''].filter(Boolean).join(', ')}` : ''}`,
     '',
     ...run.plan.sandboxWarnings.map((w) => `> **Warning:** ${w.message}\n`),
+    '## Results',
+    '',
+    ...fenced(
+      render(suiteResult(run), opts.insights ?? null, {
+        color: false,
+        verbose: false,
+        hint: opts.hint,
+      }),
+      'text',
+    ),
+    '',
     '## State',
     '',
     '| | |',
@@ -318,25 +143,8 @@ export function renderSummary(run: RunRecord): string {
     ...warnings(run).map((w) => `> **Warning:** ${w}\n`),
     `Record: [${run.runId}.json](../${run.runId}.json) · artifacts: ${run.artifacts}`,
     '',
-    ...familySection(run),
-    '## Evals',
-    '',
-    '| | Eval | Time or cells | Judge |',
-    '|---|---|---|---|',
+    '## Attempts',
   ]
-  for (const e of run.evals) {
-    const a = e.attempts[0]
-    const time = e.todo
-      ? 'todo'
-      : e.attempts.length > 1
-        ? cellCounts(e)
-        : a
-          ? formatDuration(a.durationMs)
-          : ''
-    lines.push(
-      `| ${OUTCOME_MARK[evalMarkOutcome(e)]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`,
-    )
-  }
   // Failures first, but passes get the same detail: why something passed matters too. Expected
   // misses (ungated cells) come after the passes, collapsed: they fail neither the eval nor the run.
   const rank = (o: Outcome) => (o === 'fail' || o === 'infra_error' ? 0 : o === 'pass' ? 1 : 2)
@@ -344,22 +152,13 @@ export function renderSummary(run: RunRecord): string {
     if (e.outcome === 'skipped') continue
     lines.push('', `### ${OUTCOME_MARK[evalMarkOutcome(e)]} ${e.id}`, '')
     const multi = e.attempts.length > 1
-    if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
-    const contrasts = contrastLines(e)
-    if (contrasts.length) {
-      lines.push('Contrasts (each pair of arms, same harness):', '')
-      for (const line of contrasts) lines.push(`- ${cell(line)}`)
-      lines.push('')
+    const inputs = (e.answers ?? []).filter((a) => a.input)
+    for (const a of inputs) {
+      lines.push(
+        `- Question: ${cell(`"${clip(a.question, 80)}"`)} · [what the model saw](${a.input?.path})`,
+      )
     }
-    if (e.answers?.length) {
-      for (const a of e.answers) {
-        const input = a.input ? ` · [what the model saw](${a.input.path})` : ''
-        lines.push(`- Question: ${cell(answersLabel(a))}${input}`)
-        for (const line of headToHeadLines(a.votes)) lines.push(`  - ${cell(line)}`)
-        for (const reason of sampleReasons(a.votes)) lines.push(`  - ${cell(reason)}`)
-      }
-      lines.push('')
-    }
+    if (inputs.length) lines.push('')
     const attemptRank = (a: AttemptRecord) => (isUngatedMiss(e, a) ? 3 : rank(a.outcome))
     for (const a of [...e.attempts].sort((x, y) => attemptRank(x) - attemptRank(y))) {
       if (a.outcome === 'skipped') continue
@@ -384,14 +183,7 @@ export const repeatsVerdict = (a: Pick<AttemptRecord, 'error' | 'judgements'>) =
 
 function attemptDetail(lines: string[], a: AttemptRecord): void {
   if (a.error && !repeatsVerdict(a)) {
-    lines.push(
-      `**${a.error.kind}**`,
-      '',
-      '```',
-      a.error.message.split('\n').slice(0, 20).join('\n'),
-      '```',
-      '',
-    )
+    lines.push(`**${a.error.kind}**`, '', ...fenced(a.error.message.split('\n').slice(0, 20)), '')
   }
   for (const turn of a.turns) {
     lines.push(

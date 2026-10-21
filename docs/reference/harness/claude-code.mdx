@@ -47,7 +47,7 @@ export default defineConfig({
 | Credential | `ANTHROPIC_API_KEY` |
 | Adapter | `@ai-sdk/harness-claude-code` 1.0.160, with a fix reeval patches in (below) |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:claude-code-1.0.160-patch.907f9184` |
+| Image | `reeval-sandbox:claude-code-1.0.160-patch.b17cde50` |
 | Rules file | `CLAUDE.md` |
 | Skills (default placement) | `~/.claude/skills` |
 | Skills (`placement: 'workspace'`) | `.claude/skills` in the workspace |
@@ -55,7 +55,7 @@ export default defineConfig({
 
 Build its image once with `reeval image build` in a project whose config uses `claudeCode()`.
 
-reeval ships the adapter with one fix, which its image bakes: 1.0.160 never reports the served model, because its bridge starts the stream on the `command_lifecycle` message Claude Code sends before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.6c1cff12` names that patch.
+reeval ships the adapter with one fix, which its image bakes: 1.0.160 never reports the served model, because its bridge starts the stream on the first message, and the `command_lifecycle` message and a plugin's `SessionStart` hook messages come before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.b17cde50` names that patch.
 
 ## The key
 
@@ -90,6 +90,30 @@ The agent runs with every permission granted, inside the sandbox.
 | Rules | `CLAUDE.md` in the workspace |
 | Skills | `~/.claude/skills`, or `.claude/skills` in the workspace with `placement: 'workspace'` |
 | MCP servers | Passed to the CLI in the `.mcp.json` shape |
+| Plugins | Every part but `rules`, enabled from `~/.claude/settings.json` (below) |
+
+## Plugins
+
+```json title="~/.claude/settings.json"
+{
+  "extraKnownMarketplaces": {
+    "reeval": {
+      "source": { "source": "directory", "path": "/home/reeval/.reeval/plugins" }
+    }
+  },
+  "enabledPlugins": { "review@reeval": true }
+}
+```
+
+reeval copies each plugin to `~/.reeval/plugins/<name>/`, lists them in a `reeval` marketplace there (`.claude-plugin/marketplace.json`) and enables them in Claude Code's settings. When the environment's `files` already write `~/.claude/settings.json`, reeval merges these keys into it. Claude Code loads each whole, namespaced: the subagent `review:reviewer`, the MCP tool `mcp__plugin_review_docs__<tool>`.
+
+Claude Code starts a plugin's MCP servers itself, so reeval leaves them out of the config it passes. reeval rewrites the placed plugin's `.mcp.json` to run each through its MCP timer, so each start is in `turns[].mcpStartup` as `<plugin>:<server>`. That file can't hold a host secret, so a plugin server that reads one is refused at plan time; declare that server in `mcp`.
+
+A plugin's `rules/` aren't read by Claude Code, so the plan refuses a plugin that keeps them:
+
+```text
+reeval: evals/review.eval.ts: evaluate("reviews the diff") on claude-code:claude-sonnet-5: Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell
+```
 
 ## Tokens
 
@@ -100,7 +124,7 @@ The agent runs with every permission granted, inside the sandbox.
 | Cache creation | `cacheWrite` |
 | Output tokens | `output` |
 
-The summary totals them on its `Tokens` line, and the record keeps them per turn, per attempt and for the run. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+The line under the result blocks totals them, and the record keeps them per turn, per attempt and for the run. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
 ## Errors
 
@@ -110,15 +134,17 @@ The summary totals them on its `Tokens` line, and the record keeps them per turn
 | No key when the attempt starts | `ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate. Set it in the environment or .env.local.` |
 | A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox: set sandbox: docker() …` |
 | The CLI doesn't start | `Claude Code harness failed to start: …` |
+| `files` write `~/.claude/settings.json` as something other than a JSON object, with plugins | `~/.claude/settings.json isn't a JSON object, so reeval can't enable the session's plugins in it: write it as one in files, or leave it out` |
 
-A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the failure and `summary.md` show the API's message, without `-v`:
+A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the eval's result block and `summary.md` show the API's message, without `-v`. Scripted on the fake harness, the same failure prints:
 
 ```text
-[creates#1 claude-code]  +0:01 turn 1 error: Credit balance is too low to access the Anthropic API 1s · 0 tool calls, 0 file edits
+[creates#1 fake]  +0:00 turn 1 error: Credit balance is too low to access the Anthropic API 0ms · 0 tool calls, 0 file edits
 …
- ✗ evals/hello.eval.ts › greet module › creates a tested greet module
-   Error: expected file greet.js to exist
-   turn 1 error: Credit balance is too low to access the Anthropic API
+fail             greet module › creates a tested greet module
+  toHaveFile greet.js  failed
+    expected file greet.js to exist
+  turn error           Credit balance is too low to access the Anthropic API
 ```
 
 ## Related

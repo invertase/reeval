@@ -1,11 +1,11 @@
 ---
 title: Quickstart
-description: Write and run your first eval in two minutes, with no API keys or Docker.
+description: Scaffold a project, then run your first eval on a real agent in Docker.
 ---
 
-`reeval init` sets up a project with one eval and a real agent configured. The eval passes on reeval's fake agent first, which needs no keys, Docker or network.
+`reeval init` sets up a project with a real agent configured, one environment and an eval that runs in it. Then you build the agent's sandbox image, add its key and run.
 
-**Before you begin:** Node {{ node }} or later, on Linux, macOS or Windows. On Windows the fake agent's commands run in [Git for Windows](https://git-scm.com/download/win)' `sh`.
+**Before you begin:** Node {{ node }} or later and [Docker](https://docs.docker.com/get-docker/), on Linux, macOS or Windows (Docker Desktop with Linux containers), and a key for the agent you pick.
 
 <Steps>
   <Step title="Scaffold the project">
@@ -13,17 +13,25 @@ description: Write and run your first eval in two minutes, with no API keys or D
     npx {{ pkg }} init
     ```
 
-    It asks which agent to configure. Press Enter for Cursor, or pick Claude Code, Antigravity, OpenCode, Goose, pi, Codex, fx, Grok Build or none:
+    It asks which agent to configure. Press Enter for Cursor, or pick Claude Code, Antigravity, OpenCode, Goose, pi, Codex, fx or Grok Build. It ends by checking Docker:
 
     ```text
     reeval init · .
-      create    reeval.config.ts       harness cursor:composer-2.5; profiles fake, pr, nightly
-      create    evals/greet.eval.ts  one eval, passes on the fake agent
-      create    .gitignore         node_modules/, .reeval/, .env*
-      create    package.json       script eval, devDependency {{ pkg }}
+      create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
+      create    evals/environments.ts  environment greeter: a package.json and rules
+      create    evals/greet.eval.ts    one eval, in greeter
+      create    .gitignore             node_modules/, .reeval/, .env*
+      create    package.json           script eval, devDependency {{ pkg }}
+      create    tsconfig.json          for editors and tsc: the evals' .ts imports, no emit
+    Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
+    Next:
+      npm install
+      npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
+      npx reeval run          the eval on Cursor, with CURSOR_API_KEY in .env.local
+    Docker is running: ready for npx reeval image build
     ```
 
-    In a script, pass `--harness <name>` or `--yes`. It never overwrites a file that differs without `--force`: see [reeval init](/reference/cli/init).
+    The config also sets `analysis.model`, the model that writes [insights](/concepts/insights): a sentence under each eval's result. In a script, pass `--harness <name>` or `--yes`; `--bare` writes only the config. In an existing project it only adds files and merges into `package.json` and `.gitignore`: see [reeval init](/reference/cli/init).
   </Step>
   <Step title="Install">
     ```bash
@@ -38,16 +46,31 @@ description: Write and run your first eval in two minutes, with no API keys or D
     pnpm add -D {{ pkg }} --config.minimum-release-age=0
     ```
   </Step>
-  <Step title="Read the eval">
-    reeval finds `evals/**/*.eval.ts` by default.
+  <Step title="Read the environment and the eval">
+    The environment is what every attempt starts in:
+
+    ```ts title="evals/environments.ts"
+    import { defineEnvironment } from '{{ pkg }}'
+
+    /** What every attempt of greet.eval.ts starts in, before the agent's first turn. */
+    export const greeter = defineEnvironment('greeter', {
+      // Written into the workspace.
+      files: { 'package.json': '{ "type": "module" }\n' },
+      // The project's rules: AGENTS.md, or CLAUDE.md for Claude Code.
+      rules: 'Write ES modules with named exports. Add no dependencies.\n',
+    })
+    ```
+
+    The eval imports it and runs in it. reeval finds `evals/**/*.eval.ts` by default:
 
     ```ts title="evals/greet.eval.ts"
     import { evaluate, expect } from '{{ pkg }}'
+    import { greeter } from './environments.ts'
 
     const greetsAda = `node -e "import('./greet.js').then((m) =>
       process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
 
-    evaluate('creates greet.js', async (c) => {
+    evaluate('creates greet.js', { environment: greeter }, async (c) => {
       const turn = await c.send(
         'Create greet.js, an ES module exporting greet(name) that returns ' +
           '"Hello, <name>!". No dependencies.',
@@ -60,67 +83,48 @@ description: Write and run your first eval in two minutes, with no API keys or D
 
     `c.send` runs an agent turn. `c.exec` runs a command in the sandbox, and `toSucceed` checks its exit code.
   </Step>
-  <Step title="Run it on the fake agent">
-    The `fake` profile in `reeval.config.ts` swaps in a fake agent that writes `greet.js`, and a fake sandbox:
+  <Step title="Check the plan">
+    `--dry-run` needs no keys and runs nothing:
 
     ```bash
-    npx reeval run --profile fake
+    npx reeval run --dry-run
     ```
 
     ```text
-    plan  profile fake (--profile) · 1 eval · 1 cell · 1 attempt · ~1s serial
-    reeval 0.0.1 · 1 eval file · harness fake · …
-    [creates#1 fake] ▶ evals/greet.eval.ts › creates greet.js
-    [creates#1 fake]  +0:00 turn 1 done 1ms · 0 tool calls, 1 file edit
-    [creates#1 fake]  +0:00 $ node -e "import('./greet.js').then((m) =>…  exit 0 19ms
-    [creates#1 fake] ✓ evals/greet.eval.ts › creates greet.js  56ms
-
-    Summary
-     evals/greet.eval.ts
-       ✓ creates greet.js     56ms  1 turn
-
-       Evals  1 passed (1)
-    Duration  721ms
+    plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+    eval                                    harnesses  variants  runs  attempts  notes
+    evals/greet.eval.ts › creates greet.js  1          —         1     1
+    images  1 sandbox image: 1 to build
+      + docker · cursor  to build: base, not built yet
+    insights  google/gemini-3.8-flash · up to 250k tokens
     ```
+  </Step>
+  <Step title="Build, add your key and run">
+    ```bash
+    npx reeval image build
+    printf 'CURSOR_API_KEY=...\nGOOGLE_GENERATIVE_AI_API_KEY=...\n' > .env.local
+    npx reeval doctor
+    npx reeval run
+    ```
+
+    ```text
+    plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+    preparing 1 sandbox: docker
+    reeval run: … · 1 eval file
+
+    pass             creates greet.js
+      Yes, the agent passed 1 of 1 tries creating greet.js.
+
+    All 1 result passed, successfully creating greet.js.
+    17s · 72k in (31k cached) · 383 out · results .reeval/runs/…/summary.md
+    1 pass
+    ```
+
+    `reeval doctor` names anything missing, such as Docker not running or an unset key, with its fix. The Google key is for insights only: without it the run passes or fails the same, and prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }` above the tally.
   </Step>
 </Steps>
 
 Your first eval passes. reeval saved the run under `.reeval/runs/`, which `reeval init` gitignored with `.env*`.
-
-## Switch to a real agent
-
-Without a profile, `reeval run` uses the agent you picked, in Docker. The eval doesn't change:
-
-```ts title="reeval.config.ts"
-export default defineConfig({
-  include: ['evals/**/*.eval.ts'],
-  harness: cursor({ model: 'composer-2.5' }), // needs CURSOR_API_KEY
-  …
-})
-```
-
-Check what will run first. `--dry-run` needs no keys or Docker:
-
-```bash
-npx reeval run --dry-run
-```
-
-```text
-plan  1 eval · 1 cell · 1 attempt · ~3m 00s serial
-eval                                  harnesses  variants  runs  attempts  notes
-evals/greet.eval.ts › creates greet.js  1          —         1     1
-```
-
-Then build the sandbox image once, add your key, check the setup and run:
-
-```bash
-npx reeval image build
-printf 'CURSOR_API_KEY=...\n' > .env.local
-npx reeval doctor
-npx reeval run
-```
-
-`reeval doctor` names anything missing, such as Docker not running or an unset key, with its fix.
 
 <Warning>
   `reeval run` reads `.env.local` and `.env` from the config's directory, not the current one. Keep them next to `reeval.config.ts`.
