@@ -105,7 +105,9 @@ describe('createAntigravity', () => {
     const sandbox = fakeSandbox({})
     const claude = {
       hooks: {
-        SessionStart: [{ hooks: [{ type: 'command', command: '${CLAUDE_PLUGIN_ROOT}/start.sh' }] }],
+        SessionStart: [
+          { hooks: [{ type: 'command', command: `${'$'}{CLAUDE_PLUGIN_ROOT}/start.sh` }] },
+        ],
       },
     }
     sandbox.files.set('/root/.reeval/plugins/house/hooks/hooks.json', JSON.stringify(claude))

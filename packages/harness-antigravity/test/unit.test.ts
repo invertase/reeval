@@ -248,7 +248,7 @@ describe('plugins', () => {
     const claude = {
       hooks: {
         SessionStart: [
-          { hooks: [{ type: 'command', command: '${CLAUDE_PLUGIN_ROOT}/a.sh', timeout: 5 }] },
+          { hooks: [{ type: 'command', command: `${'$'}{CLAUDE_PLUGIN_ROOT}/a.sh`, timeout: 5 }] },
           { hooks: [{ command: 'b' }] },
         ],
         PreToolUse: [

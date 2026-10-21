@@ -40,10 +40,6 @@ export type UnpackedPlugin = {
   files: readonly PluginFile[]
 }
 
-/** The Claude Code hook events an unpacking names, for refusals; undefined when it takes no hooks. */
-export const unpackedHookEvents = (unpack: PluginUnpack | undefined) =>
-  unpack?.hooks ? Object.keys(unpack.hooks.events) : undefined
-
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v)
 
