@@ -15,7 +15,7 @@ import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
 import { isCompletedAttempt, previousAttempt } from '../resume.ts'
-import { liftInterval, round3 } from '../stats.ts'
+import { containsZero, liftInterval, round3 } from '../stats.ts'
 import type {
   Cell,
   CellGate,
@@ -774,7 +774,7 @@ function liftOf(control: CellRecord, variant: CellRecord, pooled: boolean): Lift
     variant: v,
     points: round3(points),
     interval: { lo: round3(low), hi: round3(high), level: 0.95, method: 'newcombe-wilson' },
-    withinNoise: low < 0 && high > 0,
+    withinNoise: containsZero(low, high),
     ...(minLift !== undefined ? { minLift } : {}),
   }
 }

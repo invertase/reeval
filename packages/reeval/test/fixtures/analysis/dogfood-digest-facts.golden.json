@@ -602,7 +602,7 @@
     "passVerdict": "noise",
     "toolCalls": "×1.01",
     "toolsP": 1,
-    "effortVerdict": "noise",
+    "effortVerdict": "insufficient",
     "separated": false
   },
   {
