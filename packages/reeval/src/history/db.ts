@@ -880,9 +880,12 @@ export type SyncResult = { runs: number; added: number; removed: number; rebuilt
  * Brings the projection up to date with the record files: recorded runs in `historyDir` win over
  * the same run's scratch copy in `.reeval/runs`. Only new, changed or removed files are touched.
  */
-async function sync(db: DatabaseSync, root: string, historyDir: string): Promise<SyncResult> {
-  const rebuilt = !current(db)
-  if (rebuilt) freshSchema(db)
+async function sync(
+  db: DatabaseSync,
+  root: string,
+  historyDir: string,
+  rebuild: boolean,
+): Promise<SyncResult> {
   const wanted = new Map<string, { path: string; recorded: boolean }>()
   for (const [dir, recorded] of [
     [historyDir, true],
@@ -894,18 +897,24 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
       wanted.set(runId, { path: join(dir, name), recorded })
     }
   }
-  const known = new Map(
-    rowsOf<{
-      run_id: string
-      path: string
-      size: number
-      mtime_ms: number
-    }>(db.prepare('SELECT run_id, path, size, mtime_ms FROM files')).map((r) => [r.run_id, r]),
-  )
+  let rebuilt = false
   let added = 0
   let removed = 0
-  db.exec('BEGIN')
+  // IMMEDIATE takes the write lock before the first read, so a second process syncing the same
+  // database waits for this one and then sees its rows, instead of inserting the same runs.
+  db.exec('BEGIN IMMEDIATE')
   try {
+    if (rebuild) db.exec('DROP TABLE IF EXISTS meta')
+    rebuilt = !current(db)
+    if (rebuilt) freshSchema(db)
+    const known = new Map(
+      rowsOf<{
+        run_id: string
+        path: string
+        size: number
+        mtime_ms: number
+      }>(db.prepare('SELECT run_id, path, size, mtime_ms FROM files')).map((r) => [r.run_id, r]),
+    )
     for (const runId of known.keys()) {
       if (!wanted.has(runId)) {
         removeRun(db, runId)
@@ -964,8 +973,7 @@ export async function openHistoryDb(
   let synced: SyncResult
   try {
     writer.exec('PRAGMA busy_timeout = 5000')
-    if (options.rebuild) writer.exec('DROP TABLE IF EXISTS meta')
-    synced = await sync(writer, root, historyDir)
+    synced = await sync(writer, root, historyDir, options.rebuild ?? false)
   } finally {
     writer.close()
   }
