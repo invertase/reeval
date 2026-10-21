@@ -43,6 +43,7 @@ import type { PreparedWorkspace } from '../workspace.ts'
 import {
   fetchesAtStart,
   leavesSource,
+  localMarketplace,
   marketplaceLabel,
   type PluginContents,
   type PluginFile,
@@ -484,6 +485,7 @@ async function entrySourceDir(
     pluginCall(p, root),
     label,
     p.name,
+    localMarketplace(m),
   )
   const marketplace = { name, source: label, commit: fetched.commit }
   switch (entry.source) {

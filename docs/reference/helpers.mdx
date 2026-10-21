@@ -193,7 +193,7 @@ A plugin is a directory in Claude Code's layout: `.claude-plugin/plugin.json` wi
 </Property>
 
 <Property name="plugin.marketplace('name@source', options?)" type="PluginSource">
-  The entry `name` in a Claude Code marketplace: a git repository (a URL or `github:owner/repo`, at `ref`) or an npm package (`npm:<spec>`) whose root holds `.claude-plugin/marketplace.json`. The marketplace and the entry's own source are fetched on the host when an attempt starts, with the same clone and `npm pack` caches as `plugin.git` and `plugin.npm`. The record keeps the marketplace's name, source and commit, and the entry's own source and commit.
+  The entry `name` in a Claude Code marketplace: a git repository (a URL, `github:owner/repo` or a local directory, at `ref`) or an npm package (`npm:<spec>`) whose root holds `.claude-plugin/marketplace.json`. The marketplace and the entry's own source are fetched on the host when an attempt starts, with the same clone and `npm pack` caches as `plugin.git` and `plugin.npm`. The record keeps the marketplace's name, source and commit, and the entry's own source and commit.
 </Property>
 
 An entry's `source` is one of the forms Claude Code's marketplaces use:
@@ -202,9 +202,15 @@ An entry's `source` is one of the forms Claude Code's marketplaces use:
 |---|---|
 | `"./plugins/lint"`, `"."`, or a bare name such as `"lint"` under `metadata.pluginRoot` | A directory in the marketplace's own repository or package, which may not leave it |
 | `{ "source": "github", "repo": "owner/repo", "ref"?, "sha"? }` | `plugin.git('github:owner/repo')`, at `sha` (a full 40-character commit SHA) or else `ref` |
-| `{ "source": "url", "url", "ref"?, "sha"? }` | `plugin.git(url)`, for an `https://`, `ssh://`, `git://`, `file://` or `git@host:path` URL without a token |
+| `{ "source": "url", "url", "ref"?, "sha"? }` | `plugin.git(url)`, for an `https://`, `ssh://`, `git://` or `git@host:path` URL without a token, or a `file://` URL from a local marketplace |
 | `{ "source": "git-subdir", "url", "path", "ref"?, "sha"? }` | `plugin.git(url, { path })`; `url` may be `owner/repo` |
 | `{ "source": "npm", "package", "version"? }` | `plugin.npm('package@version')`, for a registry package name; a custom `registry` is refused |
+
+A marketplace in a local directory, a `file://` repository or a local tarball may name a `file://` repository. A remote one, fetched from a git host or the registry, may name only remote repositories and paths inside itself, so its `file://` URLs and host paths are refused:
+
+```text
+the acme marketplace (https://git.example.com/acme/plugins.git) names its review plugin at file:///srv/review, a path on this machine: a remote marketplace may only name remote repositories or paths inside itself
+```
 
 Only Claude Code's marketplace format is read: a Cursor listing goes in as `plugin.git` on the repository it points at. An entry that sets its parts' paths (`skills`, `commands`, `mcpServers` and so on) is refused, as a manifest that moves a part is. A source without `.claude-plugin/marketplace.json`, or an entry the marketplace doesn't list, fails the attempt as an infra error:
 

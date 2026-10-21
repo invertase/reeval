@@ -12,7 +12,7 @@ import {
   attemptStartProblem,
 } from '../../src/contract/attempt.ts'
 import { declarationProblem } from '../../src/contract/declaration.ts'
-import { buildRefusal } from '../../src/environment/plugins.ts'
+import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
 import {
@@ -64,6 +64,20 @@ export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
 writeFileSync(join(DIR, 'a.txt'), 'a')
 writeFileSync(join(DIR, 'Dockerfile'), 'FROM debian:bookworm-slim\n')
 mkdirSync(join(DIR, 'empty'))
+
+/** A marketplace whose review entry is a `file:` URL on this machine. */
+const hostEntry = () => {
+  const dir = join(DIR, 'host-market')
+  mkdirSync(join(dir, '.claude-plugin'), { recursive: true })
+  writeFileSync(
+    join(dir, '.claude-plugin', 'marketplace.json'),
+    JSON.stringify({
+      name: 'acme',
+      plugins: [{ name: 'review', source: { source: 'url', url: 'file:///srv/review' } }],
+    }),
+  )
+  return dir
+}
 
 /** What `declareTree` checks before it declares anything. */
 const tree = (children: unknown) => () => {
@@ -650,6 +664,15 @@ export const CASES: Record<string, Case[]> = {
           plugin.marketplace('format@npm:@acme/plugins@2.0.0'),
         ],
       })),
+    ],
+    [
+      'marketplace entry on this machine, from a remote marketplace',
+      () =>
+        readMarketplace(hostEntry(), 'call', 'https://git.example.com/acme/plugins.git', 'review'),
+    ],
+    [
+      'marketplace entry on this machine, from a local marketplace',
+      () => readMarketplace(hostEntry(), 'call', 'market', 'review', true),
     ],
     ['plugins not from the helper', env({ plugins: ['./plugins/review'] })],
     ['plugins not a list', env({ plugins: 'x' })],

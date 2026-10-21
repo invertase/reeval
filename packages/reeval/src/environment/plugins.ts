@@ -2,7 +2,7 @@
 // the parts beside it. Synchronous and host-only, so the plan reads a local plugin and the worker
 // reads every plugin (git and npm ones once fetched) the same way.
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
-import { basename, isAbsolute, join, posix, relative, sep } from 'node:path'
+import { basename, isAbsolute, join, posix, relative, sep, win32 } from 'node:path'
 import { hostAllowed } from '@reeval/sandbox-docker'
 import { parse as parseYaml } from 'yaml'
 import { closest } from '../contract/shared.ts'
@@ -72,16 +72,32 @@ export function pluginCall(p: PluginSource, root?: string): string {
         ? p.repo
         : p.source === 'npm'
           ? p.spec
-          : `${p.name}@${p.marketplace.source === 'git' ? p.marketplace.repo : `npm:${npmLabel(p.marketplace.spec, root)}`}`
+          : `${p.name}@${p.marketplace.source === 'git' ? npmLabel(p.marketplace.repo, root) : `npm:${npmLabel(p.marketplace.spec, root)}`}`
   return `plugin.${p.source}('${arg}')`
 }
 
 const npmLabel = (spec: string, root?: string) => (isAbsolute(spec) ? relativeTo(root, spec) : spec)
 
+/**
+ * Whether a marketplace is on this machine (a local directory, `file:` URL, tarball or folder),
+ * so its entries may name other paths on it.
+ */
+export function localMarketplace(m: PluginMarketplace): boolean {
+  const at = m.source === 'git' ? m.repo : m.spec
+  return isAbsolute(at) || /^file:/i.test(at)
+}
+
+/** A url an entry writes that names this machine: a `file:` URL, or an absolute or relative path. */
+const onHost = (url: string) =>
+  /^file:/i.test(url) ||
+  posix.isAbsolute(url) ||
+  win32.isAbsolute(url) ||
+  /^\.\.?(?:[\\/]|$)/.test(url)
+
 /** A marketplace as the record writes it: `github:acme/agent-plugins#v3` or `npm:@acme/plugins@2.0.0`. */
 export function marketplaceLabel(m: PluginMarketplace, root?: string): string {
   return m.source === 'git'
-    ? `${m.repo}${m.ref ? `#${m.ref}` : ''}`
+    ? `${npmLabel(m.repo, root)}${m.ref ? `#${m.ref}` : ''}`
     : `npm:${npmLabel(m.spec, root)}`
 }
 
@@ -175,12 +191,14 @@ export function leavesSource(base: string, path: string): boolean {
  * Reads the marketplace at `dir` (its `.claude-plugin/marketplace.json`, in Claude Code's format)
  * and finds the entry `name`: the marketplace's own name and where the entry's plugin is. Throws a
  * `PluginProblem` for a source without one, an entry it doesn't list, or an entry reeval can't fetch.
+ * Only a `local` marketplace's entries may name a path on this machine.
  */
 export function readMarketplace(
   dir: string,
   call: string,
   label: string,
   name: string,
+  local = false,
 ): { marketplace: string; entry: MarketplaceEntry } {
   const file = join(dir, MARKETPLACE)
   if (!existsSync(file)) {
@@ -262,6 +280,11 @@ export function readMarketplace(
       if (hasCredentials(written)) {
         throw new PluginProblem(
           `${what} has a password or token in its url, which reeval would record: reeval fetches git sources with your own git credentials (a credential helper, gh auth setup-git or an SSH key), so the marketplace mustn't carry one`,
+        )
+      }
+      if (onHost(written) && !local) {
+        throw new PluginProblem(
+          `the ${market} marketplace (${label}) names its ${name} plugin at ${stripCredentials(written)}, a path on this machine: a remote marketplace may only name remote repositories or paths inside itself`,
         )
       }
       if (!githubRepo(written) && !gitUrl(written)) throw unfetchable()

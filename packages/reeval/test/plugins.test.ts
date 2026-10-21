@@ -12,6 +12,7 @@ import {
   builtPlugins,
   droppedPaths,
   fetchesAtStart,
+  localMarketplace,
   PluginProblem,
   pluginBuildId,
   pluginFiles,
@@ -695,7 +696,7 @@ test('a marketplace entry can’t reach the host: refs and urls that git would t
   )
   assert.match(problem('dash-url'), /which reeval doesn't fetch/)
   assert.match(problem('short-sha'), /has sha "abc1234", which isn't a full 40-character/)
-  assert.match(problem('local'), /which reeval doesn't fetch/)
+  assert.match(problem('local'), /a path on this machine/)
   assert.match(problem('ext'), /which reeval doesn't fetch/)
   assert.match(problem('token'), /has a password or token in its url/)
   for (const name of ['token', 'token-hg']) assert.ok(!problem(name).includes(token), name)
@@ -709,6 +710,53 @@ test('a marketplace entry can’t reach the host: refs and urls that git would t
     repo: 'git@github.com:acme/p.git',
     ref: 'v1',
   })
+})
+
+test('only a marketplace on this machine may name a plugin at a path on it', () => {
+  const dir = marketplace(tmp(), {
+    name: 'acme',
+    plugins: [
+      { name: 'review', source: { source: 'url', url: 'file:///srv/review' } },
+      { name: 'abs', source: { source: 'git-subdir', url: '/srv/mono', path: 'p' } },
+      { name: 'drive', source: { source: 'url', url: 'C:\\srv\\review' } },
+      { name: 'unc', source: { source: 'url', url: '\\\\host\\share\\review' } },
+      { name: 'up', source: { source: 'url', url: '../review' } },
+    ],
+  })
+  const label = 'https://git.example.com/acme/plugins.git'
+  const remote = (name: string) => {
+    try {
+      readMarketplace(dir, 'call', label, name)
+    } catch (error) {
+      assert.ok(error instanceof PluginProblem)
+      return error.message
+    }
+    assert.fail(`${name}: no problem`)
+  }
+  assert.equal(
+    remote('review'),
+    'the acme marketplace (https://git.example.com/acme/plugins.git) names its review plugin at file:///srv/review, a path on this machine: a remote marketplace may only name remote repositories or paths inside itself',
+  )
+  for (const name of ['abs', 'drive', 'unc', 'up']) {
+    assert.match(remote(name), /a path on this machine: a remote marketplace/, name)
+  }
+  assert.deepEqual(readMarketplace(dir, 'call', 'local', 'review', true).entry, {
+    source: 'git',
+    url: 'file:///srv/review',
+    repo: 'file:///srv/review',
+  })
+  assert.throws(
+    () => readMarketplace(dir, 'call', 'local', 'abs', true),
+    /which reeval doesn't fetch/,
+  )
+  const m = (repo: string) => localMarketplace({ source: 'git', repo })
+  assert.equal(m('github:acme/plugins'), false)
+  assert.equal(m('https://git.example.com/acme/plugins.git'), false)
+  assert.equal(m('git@github.com:acme/plugins.git'), false)
+  assert.equal(m(pathToFileURL(dir).href), true)
+  assert.equal(m(dir), true)
+  assert.equal(localMarketplace({ source: 'npm', spec: '@acme/plugins@2.0.0' }), false)
+  assert.equal(localMarketplace({ source: 'npm', spec: join(dir, 'plugins.tgz') }), true)
 })
 
 /**
@@ -831,6 +879,22 @@ test('resolving a marketplace entry places that plugin alone and records the mar
       error.message.endsWith(
         `${other.url} has no .claude-plugin/marketplace.json, so it isn't a Claude Code marketplace; name a plugin's own repository or package with plugin.git or plugin.npm`,
       ),
+  )
+  const byPath = await resolveEnvironment(
+    applied(
+      defineEnvironment('dir', ({ plugin }) => ({
+        plugins: [plugin.marketplace(`remote@${join(root, 'market')}`)],
+      })),
+    ),
+    {},
+    root,
+    'e',
+    'AGENTS.md',
+  )
+  assert.deepEqual(
+    byPath.record.plugins?.map((p) => [p.name, p.source, p.marketplace?.source]),
+    [['remote', `${other.url}#${other.head}:plugin`, 'market']],
+    'a marketplace named by its directory is on this machine, and the record names it from the project',
   )
 })
 

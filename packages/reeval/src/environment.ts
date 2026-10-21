@@ -731,7 +731,11 @@ function pluginHelper(base: string): PluginHelper {
         kind: 'plugin',
         source: 'marketplace',
         name,
-        marketplace: { source: 'git', repo: from, ...(ref ? { ref: ref as string } : {}) },
+        marketplace: {
+          source: 'git',
+          repo: isLocalPath(from) ? toPath(from, base) : from,
+          ...(ref ? { ref: ref as string } : {}),
+        },
         ...options,
       }
     },
@@ -1201,6 +1205,9 @@ export function specPaths(
     out.plugins = plugins.map((v) => {
       if (!isRecord(v) || v.source !== 'marketplace') return skill(v)
       const m = v.marketplace
+      if (isRecord(m) && m.source === 'git' && isPath(m.repo) && isLocalPath(m.repo)) {
+        return { ...v, marketplace: { ...m, repo: toPath(m.repo, base) } }
+      }
       return isRecord(m) && m.source === 'npm' && isPath(m.spec)
         ? { ...v, marketplace: { ...m, spec: localNpmSpec(m.spec, base) } }
         : v

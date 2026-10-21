@@ -61,6 +61,8 @@
   "plugin.marketplace option with a typo": "DefinitionError: plugin.marketplace(\"lint@github:acme/tools\"): unknown option \"path\"; it takes only, build and ref.",
   "plugin.marketplace with credentials": "DefinitionError: plugin.marketplace(\"lint@https://***:***@github.com/acme/tools\"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials; remove it from the URL.",
   "plugin.marketplace good": null,
+  "marketplace entry on this machine, from a remote marketplace": "PluginProblem: the acme marketplace (https://git.example.com/acme/plugins.git) names its review plugin at file:///srv/review, a path on this machine: a remote marketplace may only name remote repositories or paths inside itself",
+  "marketplace entry on this machine, from a local marketplace": null,
   "plugins not from the helper": "DefinitionError: plugins in defineEnvironment(\"e\") must come from the plugin helper, e.g. plugins: [plugin.local('./plugins/review')] (got \"./plugins/review\")",
   "plugins not a list": "DefinitionError: plugins in defineEnvironment(\"e\") must be a list (got \"x\")",
   "plugin good": null,

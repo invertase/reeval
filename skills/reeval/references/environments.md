@@ -91,7 +91,8 @@ is `sandbox: docker({ … })` on the environment.
 Plugins: `plugins: [plugin.local('../plugins/review', { only: ['skills', 'mcp'] })]` (also
 `plugin.git(repo, { ref, path })`, `plugin.npm(spec)` and
 `plugin.marketplace('name@github:owner/repo', { ref })` for an entry in a Claude Code
-marketplace, or `'name@npm:<spec>'`). A plugin is Claude Code's layout:
+marketplace, or `'name@npm:<spec>'`; only a marketplace in a local directory may name `file://`
+entries). A plugin is Claude Code's layout:
 `.claude-plugin/plugin.json` plus `skills/`, `agents/`, `commands/`, `hooks/hooks.json`,
 `.mcp.json`, `rules/`. Its MCP servers join `mcp` as `<plugin>:<server>` (call them from the
 fake agent as `{ mcp: 'review:docs/<tool>' }`), and it lands in `~/.reeval/plugins/<name>/`. No
