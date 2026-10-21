@@ -2,9 +2,10 @@
 # `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code).
 # A missing secret fails the rows that need it, naming the variable: asked for, the real tier never
 # skips. One run at a time.
-#   contract (pinned)    the harness contract, the real-tier fixtures, the @cursor/sdk shape check
-#                        and the CLI end to end, on the pinned agent versions
-#   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy, @cursor/sdk,
+#   contract (pinned)    the harness contract, the real-tier fixtures, the @cursor/sdk shape check,
+#                        the CLI end to end and the over-remarking canary (a well-written eval
+#                        gets no remarks from a real analysis model), on the pinned agent versions
+#   contract (latest)    the version-drift leg: the same but the e2e and the canary, on the newest agy, @cursor/sdk,
 #                        OpenCode, Goose and pi, and the newest OpenCode's providers re-probed
 #   real agents (Cursor) examples/hello's smoke profile, then its compare questions on a real
 #                        model (test/questions-real.test.ts)

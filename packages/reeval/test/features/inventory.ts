@@ -22,7 +22,8 @@ export type InventoryFeature = {
   /**
    * Checks in the real-agent suites: `contract › <behaviour>` (a behaviour in contract.test.ts,
    * on every real harness), `e2e › <the test's title, or a part of it>` (e2e-real.test.ts) or
-   * `questions › <title>` (questions-real.test.ts, a real model answering compare questions).
+   * `questions › <title>` (questions-real.test.ts, a real model answering compare questions) or
+   * `remarks › <title>` (remarks-real.test.ts, a real analysis model on a well-written eval).
    */
   real?: string[]
   /** Why nothing covers it yet. Only for features with no fixture, plan case or test. */
@@ -1867,6 +1868,49 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'reeval/test/remarks.test.ts › slow-mcp-start: 2000 ms or no answer on a recorded turn, not 1999 ms',
       'reeval/test/remarks.test.ts › slow-mcp-start prints in every run, at 2000 ms, and for a server that never answers',
+    ],
+  },
+  {
+    id: 'remarks.model',
+    area: 'CLI and runner',
+    name: 'Model remarks from the per-eval insights call, by the eval rubric (`skills/eval-rubric`): kinds `name-contradicts`, `name-no-intent`, `judge-too-loose`, `judge-leaks-answer`, `prompt-names-tool` and `compound-judge`, each kept only with a verbatim quote on its cited line of the file as the run saw it, evidence from this run and a concrete fix; the exit code never changes',
+    tests: [
+      'reeval/test/remarks.test.ts › each kind passes its gates, prints once with its fix, and never changes the exit code',
+      'reeval/test/remarks.test.ts › without -v, concerns print up to the cap and suggestions wait',
+      'reeval/test/remarks.test.ts › canary: an unknown kind, no evidence, a quote not on its line and no fix are each dropped',
+      'reeval/test/remarks.test.ts › canary: a remark whose quoted file changed since the run is dropped',
+      'reeval/test/remarks.test.ts › has one section per remark kind, and none for anything else',
+      'reeval/test/remarks.test.ts › ships beside dist as the repository has it, and its hash is in the prompt version',
+    ],
+    real: ['remarks › a well-written eval on a real analysis model gets no remarks'],
+  },
+  {
+    id: 'remarks.acted-on',
+    area: 'CLI and runner',
+    name: 'A printed remark is marked `actedOn` by the next run that finds its quote gone from the eval (or, without a quote, the eval edited and the remark not raised again); a rename acts on a name remark',
+    tests: [
+      'reeval/test/remarks.test.ts › an edit to the quoted source marks the remark acted on; an edit elsewhere prints nothing',
+    ],
+  },
+  {
+    id: 'remarks.outcomes',
+    area: 'CLI and runner',
+    name: 'Remark demotion by outcome (`reeval query remark_outcomes`): a kind acted on under 20% of at least 10 printed remarks prints as a suggestion, under 5% not at all',
+    tests: [
+      'reeval/test/remarks.test.ts › a concern acted on under 20% of 10 printed is demoted, under 5% hidden',
+      'reeval/test/remarks.test.ts › canary: 20% acted on, or 9 printed, keeps the kind',
+      'reeval/test/remarks.test.ts › canary: a remark never printed, and slow-mcp-start, count for nothing',
+      'reeval/test/remarks.test.ts › a demoted kind prints as a suggestion, a hidden one not at all',
+      'reeval/test/remarks.test.ts › canary: 2 of 10 acted on keeps a new remark a concern',
+    ],
+  },
+  {
+    id: 'remarks.no-baseline',
+    area: 'CLI and runner',
+    name: "Remark `no-baseline`: the classification names a change (`subject.change`) the eval doesn't compare; never under a profile's `limit.compare: false`",
+    tests: [
+      'reeval/test/remarks.test.ts › raised when the classification names a change and nothing compares it',
+      'reeval/test/remarks.test.ts › canary: a compare, a profile with limit.compare: false, or no change raises none',
     ],
   },
   {
