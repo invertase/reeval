@@ -98,9 +98,9 @@ fail             greets in the house style
   exclaims         not run  4 of 4      not run
   +1 more passed
   effort           tools  time
-  plain            1      0s
-  with-skill       1      0s
-  with-doc         1      0s
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-doc         1      <0.1s
 ```
 
 The effect reads `helped`, `made it worse` or `can't tell yet`, from the same [interval as lift](/concepts/lift), and is blank when nothing changed. With fewer than four counted tries a side it's always `can't tell yet`. The effort table needs four tries a side too, and shows when the eval failed or its effort differs. Counts are `N of M`, never percentages; `-v` adds each arm's difference and 95% interval:
@@ -114,22 +114,31 @@ The effect reads `helped`, `made it worse` or `can't tell yet`, from the same [i
 
 ## Grouped or stream
 
-`--log-order grouped` is the default in CI. Each attempt's log prints as one block when it finishes, under its start line (`▶`), so concurrent attempts never interleave. From `CI=1 reeval run --config reeval.fake.config.ts` in `examples/hello`:
+By default (`--output-logs errors-only`) only a failing attempt prints its log: its start line (`▶`) and detail lines, as one block once it fails. A passing attempt prints nothing above the result blocks. From `CI=1 reeval run --config reeval.fake.config.ts` in `examples/hello`:
 
 ```text
-[grace#1 with-house-greeting] ▶ evals/greetings.eval.ts › greets Grace in the house style
-[grace#1 with-house-greeting]  +0:00 sandbox ready 61ms
-[grace#1 with-house-greeting]  +0:00 turn 1 done 17ms · 0 tool calls, 2 file edits
-[grace#1 with-house-greeting]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Grace') ===…  exit 0 21ms
+[ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 control]  +0:00 sandbox ready 32ms
+[ada#1 control]  +0:00 turn 1 done 7ms · 0 tool calls, 3 file edits
+[ada#1 control]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Ada') ===…  exit 1 23ms
+[ada#1 control]  Error: expected command to succeed, exit code 1
 [grace#1 control] ▶ evals/greetings.eval.ts › greets Grace in the house style
-[grace#1 control]  +0:00 sandbox ready 54ms
-[grace#1 control]  +0:00 turn 1 done 12ms · 0 tool calls, 3 file edits
-[grace#1 control]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Grace') ===…  exit 1 34ms
-[grace#1 control]  Error: expected command to succeed, exit code 1
 …
 ```
 
-`--log-order stream`, the default elsewhere, prints every line as it happens, so attempts interleave:
+`--output-logs full` (the default with `-v`) prints every attempt's log. `--log-order grouped`, the default in CI, prints each one as a block when it finishes, so concurrent attempts never interleave; the same run with `--output-logs full`:
+
+```text
+[ada#1 with-house-greeting] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 with-house-greeting]  +0:00 sandbox ready 32ms
+[ada#1 with-house-greeting]  +0:00 turn 1 done 5ms · 0 tool calls, 2 file edits
+[ada#1 with-house-greeting]  +0:00 $ node -e "import('./greet.js').then((m) => process.exit(m.greet('Ada') ===…  exit 0 23ms
+[ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style
+[ada#1 control]  +0:00 sandbox ready 28ms
+…
+```
+
+`--log-order stream`, the default elsewhere, prints every line as it happens with `--output-logs full`, so attempts interleave:
 
 ```text
 [ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style
@@ -140,7 +149,7 @@ The effect reads `helped`, `made it worse` or `can't tell yet`, from the same [i
 …
 ```
 
-Detail lines carry an offset into the attempt (`+0:09`): sandbox start, each turn with its tool calls and file edits, each check, each judge verdict, and the eval's own `console.log` and `console.error`. `--output-logs errors-only` keeps the logs of failing attempts only, and `none` drops them; the result blocks still have every failure.
+Detail lines carry an offset into the attempt (`+0:09`): sandbox start, each turn with its tool calls and file edits, each check, each judge verdict, and the eval's own `console.log` and `console.error`. `--output-logs none` drops every log; the result blocks still have every failure.
 
 ## Prefixes and tags
 
@@ -166,7 +175,7 @@ REEVAL_HEARTBEAT=30s reeval run   # 0 turns it off
 
 ## GitHub Actions
 
-With `GITHUB_ACTIONS=true`, each attempt's log collapses into a `::group::` block titled with its start line, colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as here:
+With `GITHUB_ACTIONS=true`, a failing attempt's log stays open with an `::error` annotation. A log that doesn't fail the run (a control's miss, or a pass with `--output-logs full`) collapses into a `::group::` block titled with its start line. Colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as here for a control's miss:
 
 ```text
 ::group::[ada#1 control] ▶ evals/greetings.eval.ts › greets Ada in the house style

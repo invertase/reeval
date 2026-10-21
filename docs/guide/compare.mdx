@@ -64,7 +64,7 @@ description: The house style for greetings in this organisation. Use when writin
 ## Run it
 
 ```bash
-npx reeval run skill --runs 2 --log-order grouped
+npx reeval run skill --runs 2 --log-order grouped --output-logs full
 ```
 
 ```text
@@ -223,9 +223,9 @@ The studio shows the same cells, roles, lift and effort for every run (here with
 
 ```text
   effort           tools  time
-  plain            1      0s
-  with-skill       1      0s
-  with-doc         1      0s
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-doc         1      <0.1s
 ```
 
 From four counted tries a side, a measure-a-change block ends with each arm's median tool calls and agent time, then tokens when every arm reported usage. It shows when the eval failed or an arm's effort differs from its baseline's by a rank test, so a skill that passes like the control but in a third of the tool calls still stands out. Below four a side the test can't reach significance, and the table stays out; in the run above, the control's 55 tool calls against the skill's 3 are in the logs and in `reeval query effort`. [Effort](/concepts/lift#effort-next-to-lift) has the details.
@@ -259,7 +259,7 @@ pass             house greeting › greets in the house style
 
 A labelled judge (`expect.soft(await c.judge(q), 'Social OAuth').toPass()`) is one of these checks, and its label replaces the question everywhere it's shown.
 
-Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early the later checks never run: they read `not run` in the control's column, never `0 of 2`. The same verdicts are in `reeval query`'s `check_discrimination` view:
+Use `expect.soft` for independent requirements. A hard failure ends the attempt, so on a control that misses early the later checks never run: they read `not run` in the control's column, never `0 of 2`, and have no verdict, since the control never answered them. The same verdicts are in `reeval query`'s `check_discrimination` view:
 
 ```bash
 npx reeval query "SELECT label, variant_pass, control_pass, verdict

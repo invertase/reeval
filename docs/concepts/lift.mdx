@@ -151,9 +151,9 @@ fail             greets in the house style
   with-doc         0 of 4
 …
   effort           tools  time
-  plain            1      0s
-  with-skill       1      0s
-  with-doc         1      0s
+  plain            1      <0.1s
+  with-skill       1      <0.1s
+  with-doc         1      <0.1s
 ```
 
 The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure; agent time and tokens get their own verdicts in `reeval query effort`. Effort never fails a run.
