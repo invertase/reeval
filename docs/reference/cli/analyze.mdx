@@ -131,7 +131,7 @@ removed  greets in French › answer: "It never greets in French."
 | Named tools | On a choose eval, a tool that isn't verbatim in that attempt's final message, as a whole word (`Gen` isn't in `Genkit`) |
 | Headline counts | A headline that calls a tally number a count of evals (`22 evals` on a run of 13): the tally counts results, each case of a family one |
 
-What the model writes never changes a verdict or the exit code. A reply that isn't the schema's JSON is asked for once more; a model call that still fails writes nothing, so the command can run again.
+What the model writes never changes a verdict or the exit code. A reply that isn't the schema's JSON is a failed call, so its eval is tried once more, then prints its facts and is listed in `failed`. When every eval fails, nothing is written, so the command can run again.
 
 A complete file is never rewritten: delete it to write new insights. A file with unfinished evals, after Ctrl-C, calls that failed twice or a spent budget, is finished instead (below). When the run's facts no longer hash to its `factsHash`, `reeval show` leaves the insights out with a note. See [the insights file](/reference/record#insights) for its fields.
 
@@ -190,7 +190,7 @@ All 16 results passed across greeting styles, module creation, and framework rec
 16 pass
 ```
 
-When `insights.json` lists evals in `stopped`, `failed` or `budget.skipped`, `reeval analyze <run> --insights` asks about only those. It keeps every sentence already written as it was, asks for the headline if there's none, adds the new calls to `usage` and clears the lists it filled. It replaces the file whole, through a temporary file and a rename.
+When `insights.json` lists evals in `stopped`, `failed` or `budget.skipped`, `reeval analyze <run> --insights` asks about only those. It keeps every sentence already written as it was, asks for the headline if there's none, adds the new calls to `usage` and clears the lists it filled. Its calls get a fresh `analysis.maxTokens`, so a run the budget ran out on can be finished. It replaces the file whole, through a temporary file and a rename.
 
 It needs the same facts, model and prompt version the file was written with, and refuses otherwise: delete the file to write new insights. A file with none of those lists is complete and refused as before.
 
