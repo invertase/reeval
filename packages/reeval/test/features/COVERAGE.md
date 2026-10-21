@@ -55,7 +55,7 @@
 | `skill.registry` | — | — | ● 1 | ● 1 | — | — |
 | `skill.npm` | — | — | ● 2 | ● 2 | — | — |
 | `plugins`: `plugin.local`, `plugin.git` and `plugin.npm` in Claude Code’s layout, `only`, layering, the refusals per harness and the record | ✓ 5 | ✓ 3 | ● 4 | ● 4 | — | — |
-| `plugin.marketplace`: an entry in a Claude Code marketplace on git or npm, its own source resolved, and the marketplace in the record | ✓ 3 | ✓ 1 | ● 1 | ● 1 | — | — |
+| `plugin.marketplace`: an entry in a Claude Code marketplace on git or npm, its own source resolved, and the marketplace in the record | ✓ 3 | ✓ 2 | ● 1 | ● 2 | — | — |
 | Plugin `build`: a cached image layer per built plugin, listed by `--dry-run` and `reeval image build`, refused on the fake sandbox | ✓ 3 | ✓ 1 | — | ● 1 | — | — |
 | Skill `exclude`: the defaults and a custom list | ✓ 2 | — | ● 2 | ● 2 | — | — |
 | `only` naming a missing skill | — | — | ● 1 | ● 1 | — | — |

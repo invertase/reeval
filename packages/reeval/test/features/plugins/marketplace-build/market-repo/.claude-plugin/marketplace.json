@@ -1,0 +1,12 @@
+{
+  "name": "acme-tools",
+  "owner": { "name": "Acme" },
+  "plugins": [
+    { "name": "other", "source": "./plugins/other", "description": "Another entry" },
+    {
+      "name": "built",
+      "source": "./plugins/built",
+      "description": "A plugin built from the marketplace's root"
+    }
+  ]
+}
