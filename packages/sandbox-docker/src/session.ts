@@ -15,7 +15,14 @@ import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
 import { type Engine, engineEnv, engineSpec } from './engine.ts'
-import { BRIDGE_PORT, LABEL, SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_USER } from './image.ts'
+import {
+  BRIDGE_PORT,
+  LABEL,
+  SANDBOX_HOME,
+  SANDBOX_ROOT,
+  SANDBOX_STATE,
+  SANDBOX_USER,
+} from './image.ts'
 import { shellQuote as q } from './process.ts'
 import { traceDocker } from './trace.ts'
 
@@ -71,6 +78,23 @@ export function memorySwap(limits: Pick<SandboxLimits, 'memory' | 'swap'>): stri
 /** What `root` adds back: what `apt-get` (and its `_apt` sandbox) and `dpkg` need as root. */
 export const ROOT_CAPABILITIES = ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETUID', 'SETGID'] as const
 
+/**
+ * Every container's capabilities, for {@link DockerSession.runPrivileged}'s root execs: reading
+ * and owning any file. The container's own process is root, and each exec names its user: an
+ * exec as {@link SANDBOX_USER} holds none of them, and `no-new-privileges` keeps it from gaining
+ * them. Podman gives a container's non-root user its added capabilities as ambient ones, which is
+ * why the container itself isn't {@link SANDBOX_USER}.
+ */
+export const PRIVILEGED_CAPABILITIES = [
+  'CHOWN',
+  'DAC_OVERRIDE',
+  'DAC_READ_SEARCH',
+  'FOWNER',
+] as const
+
+/** The user each of the sandbox's own execs runs as. */
+const execUser = (options: Pick<SessionOptions, 'root'>) => (options.root ? '0:0' : SANDBOX_USER)
+
 export type SessionOptions = {
   image: string
   labels?: Record<string, string>
@@ -85,7 +109,10 @@ export type SessionOptions = {
    * none. For evals that install packages at run time.
    */
   root?: boolean
-  /** Capabilities to add back (`NET_RAW`, …); every other one is dropped. */
+  /**
+   * Capabilities to add back (`NET_RAW`, …) on top of {@link PRIVILEGED_CAPABILITIES}; every
+   * other one is dropped.
+   */
   capabilities?: readonly string[]
   /** Each unset one is {@link DEFAULT_LIMITS}'. */
   limits?: Partial<SandboxLimits>
@@ -109,15 +136,20 @@ async function cpuLimit(cpus: number, engine: Engine = 'docker'): Promise<string
 }
 
 /**
- * The `docker run` flags that confine the container: its user, capabilities and limits, and on
- * Podman the bridge network and Docker's seccomp profile.
+ * The `docker run` flags that confine the container: its capabilities and limits, and on Podman
+ * the bridge network and Docker's seccomp profile. Its own process is root's `sleep`; every exec
+ * names its user.
  */
 export async function confinementArgs(options: SessionOptions): Promise<string[]> {
   const limits = { ...DEFAULT_LIMITS, ...options.limits }
-  const caps = [...(options.root ? ROOT_CAPABILITIES : []), ...(options.capabilities ?? [])]
+  const caps = [
+    ...PRIVILEGED_CAPABILITIES,
+    ...(options.root ? ROOT_CAPABILITIES : []),
+    ...(options.capabilities ?? []),
+  ]
   return [
     '--user',
-    options.root ? '0:0' : SANDBOX_USER,
+    '0:0',
     '--cap-drop',
     'ALL',
     ...[...new Set(caps)].flatMap((c) => ['--cap-add', c]),
@@ -152,14 +184,15 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
   /** Processes the kernel killed at the memory limit so far; `null` when Docker can't say. */
   oomKills(): Promise<number | null>
   /**
-   * Runs `/bin/sh -c command` as root with every capability (`exec --privileged`), so it reads
-   * files the sandbox user keeps to itself and writes where that user can't look. For the
-   * caller's own fixed commands only: it runs nothing from a directory the sandbox user can
-   * write, and gets none of the gateway's variables.
+   * Runs `/bin/sh -c command` as root with {@link PRIVILEGED_CAPABILITIES}, under the
+   * container's seccomp and AppArmor profiles, so it reads files the sandbox user keeps to
+   * itself and writes where that user can't look. For the caller's own fixed commands only: it
+   * runs in {@link SANDBOX_STATE}, root's own directory, with only the system's binaries on its
+   * PATH and none of the gateway's variables, so a command that works on the workspace names
+   * its path.
    */
   runPrivileged(o: {
     command: string
-    workingDirectory?: string
     abortSignal?: AbortSignal
   }): Promise<{ exitCode: number; stdout: string; stderr: string }>
 }
@@ -183,10 +216,16 @@ const EXEC_UMASK = 'umask 022'
  * `memory.events` and v1's `memory.oom_control` both have an `oom_kill` line. Without either,
  * Docker's `OOMKilled` says only whether there was one.
  */
-export async function oomKills(id: string, engine?: Engine): Promise<number | null> {
+export async function oomKills(
+  id: string,
+  engine?: Engine,
+  user: string = SANDBOX_USER,
+): Promise<number | null> {
   const events = await docker(
     [
       'exec',
+      '--user',
+      user,
       id,
       'sh',
       '-c',
@@ -252,15 +291,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     ],
     { signal, env, engine },
   ).catch((error) => {
-    const sweep = () => sweepLabelDetached(`${LABEL.session}=${nonce}`, undefined, engine)
-    if (signal?.aborted) sweep()
-    // Docker says "unable to find user", Podman "no matching entries in passwd file".
-    if (/unable to find user|no matching entries in passwd/i.test((error as Error).message)) {
-      sweep()
-      throw new Error(
-        `${options.image} has no ${SANDBOX_USER} user to run the sandbox as. Images reeval builds have one: rebuild it (reeval image build), or start from reeval's image or ${spec.fn}({ from }). An eval that needs root at run time can opt in with ${spec.fn}({ root: true }).`,
-      )
-    }
+    if (signal?.aborted) sweepLabelDetached(`${LABEL.session}=${nonce}`, undefined, engine)
     throw error
   })
   let gateway: Gateway | undefined
@@ -274,17 +305,29 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     await remove()
     throw signal.reason
   }
-  if (!spec.createsWorkdir) {
+  const NO_USER = 'reeval:no-sandbox-user'
+  const setup = [
+    EXEC_UMASK,
+    ...(options.root
+      ? []
+      : [`{ id -u ${SANDBOX_USER} >/dev/null 2>&1 || { echo ${NO_USER}; exit 1; }; }`]),
     // Podman's `run --workdir` refuses a directory the image doesn't have; Docker makes it.
-    const made = await docker(
-      ['exec', '--user', '0:0', id, 'sh', '-c', `${EXEC_UMASK} && mkdir -p ${SANDBOX_ROOT}`],
-      { engine, signal },
-    ).catch((error) => ({ exitCode: 1, stderr: (error as Error).message }))
-    if (made.exitCode !== 0) {
-      await remove()
-      if (signal?.aborted) throw signal.reason
-      throw new Error(`Couldn't create ${SANDBOX_ROOT} in the container: ${made.stderr.trim()}`)
+    ...(spec.createsWorkdir ? [] : [`mkdir -p ${SANDBOX_ROOT}`]),
+    `mkdir -p ${SANDBOX_STATE} && chown 0:0 ${SANDBOX_STATE} && chmod 700 ${SANDBOX_STATE}`,
+  ]
+  const made = await docker(['exec', '--user', '0:0', id, '/bin/sh', '-c', setup.join(' && ')], {
+    engine,
+    signal,
+  }).catch((error) => ({ exitCode: 1, stdout: Buffer.alloc(0), stderr: (error as Error).message }))
+  if (made.exitCode !== 0) {
+    await remove()
+    if (signal?.aborted) throw signal.reason
+    if (made.stdout.toString('utf8').includes(NO_USER)) {
+      throw new Error(
+        `${options.image} has no ${SANDBOX_USER} user to run the sandbox as. Images reeval builds have one: rebuild it (reeval image build), or start from reeval's image or ${spec.fn}({ from }). An eval that needs root at run time can opt in with ${spec.fn}({ root: true }).`,
+      )
     }
+    throw new Error(`Couldn't set up the container: ${made.stderr.trim()}`)
   }
 
   const egressOptions = options.egress === true ? {} : options.egress || undefined
@@ -328,6 +371,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   }
   const envFor = (env?: Record<string, string>) => (gateway ? { ...gateway.env, ...env } : env)
 
+  const user = ['--user', execUser(options)]
   let execs = 0
   const execArgs = (
     command: string,
@@ -337,6 +381,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   ) => [
     'exec',
     '--interactive',
+    ...user,
     '--workdir',
     cwd ? posix.resolve(SANDBOX_ROOT, cwd) : SANDBOX_ROOT,
     '--env',
@@ -353,12 +398,13 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
    * Killing the host's `docker exec` client doesn't stop the command in the container, so kill
    * every process there that inherited this exec's marker: the command and all it started.
    */
-  const killExec = (marker: string) =>
+  const killExec = (marker: string, asRoot = false) =>
     docker(
       [
         'exec',
+        ...(asRoot ? ['--user', '0:0', '--env', `PATH=${SYSTEM_PATH}`] : user),
         id,
-        'sh',
+        '/bin/sh',
         '-c',
         `for e in /proc/[0-9]*/environ; do grep -qsxzF ${q(`${EXEC_MARKER}=${marker}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done; true`,
       ],
@@ -388,11 +434,10 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     const marker = nextMarker()
     const args = [
       'exec',
-      '--privileged',
       '--user',
       '0:0',
       '--workdir',
-      o.workingDirectory ? posix.resolve(SANDBOX_ROOT, o.workingDirectory) : SANDBOX_ROOT,
+      SANDBOX_STATE,
       '--env',
       `${EXEC_MARKER}=${marker}`,
       '--env',
@@ -406,16 +451,16 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       const r = await docker(args, { signal: o.abortSignal, engine })
       return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
     } catch (error) {
-      if (o.abortSignal?.aborted) await killExec(marker)
+      if (o.abortSignal?.aborted) await killExec(marker, true)
       throw error
     }
   }
 
   const readBinaryFile = async (o: { path: string; abortSignal?: AbortSignal }) => {
-    const r = await docker(['exec', id, 'cat', '--', posix.resolve(SANDBOX_ROOT, o.path)], {
-      signal: o.abortSignal,
-      engine,
-    })
+    const r = await docker(
+      ['exec', ...user, id, 'cat', '--', posix.resolve(SANDBOX_ROOT, o.path)],
+      { signal: o.abortSignal, engine },
+    )
     return r.exitCode === 0 ? new Uint8Array(r.stdout) : null
   }
 
@@ -429,17 +474,20 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     // Given a stdin that is at EOF before it attaches, `docker exec --interactive` now and then
     // never passes the EOF on, and `cat` waits forever: an empty file is made without stdin.
     if (o.content.byteLength === 0) {
-      await dockerOk(['exec', id, 'sh', '-c', `${make} && : > ${q(path)}`], {
+      await dockerOk(['exec', ...user, id, 'sh', '-c', `${make} && : > ${q(path)}`], {
         signal: o.abortSignal,
         engine,
       })
       return
     }
-    await dockerOk(['exec', '--interactive', id, 'sh', '-c', `${make} && cat > ${q(path)}`], {
-      input: Buffer.from(o.content),
-      signal: o.abortSignal,
-      engine,
-    })
+    await dockerOk(
+      ['exec', '--interactive', ...user, id, 'sh', '-c', `${make} && cat > ${q(path)}`],
+      {
+        input: Buffer.from(o.content),
+        signal: o.abortSignal,
+        engine,
+      },
+    )
   }
 
   const brokering: Partial<HarnessV1NetworkSandboxSession> = gateway
@@ -476,7 +524,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     },
     ...brokering,
     ...substituting,
-    oomKills: () => oomKills(id, engine),
+    oomKills: () => oomKills(id, engine, execUser(options)),
     run,
     runPrivileged,
     async spawn(o) {

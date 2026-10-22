@@ -204,7 +204,7 @@ The agent runs code you didn't write, so each container is locked down without a
 |---|---|
 | Your keys | The harness's API key and brokered secrets never enter the container. The agent sees a placeholder, and the egress gateway on your machine swaps in the real value on the way out, only to that secret's hosts. See [credential brokering](/concepts/credential-brokering) |
 | The network | Under a restricted [egress policy](/guide/secrets-and-egress) the container is detached from every Docker network, so the gateway is its only way out. The agent can't edit routes or firewall rules, and the gateway's process runs as root, so the agent can't stop or replace it |
-| Privileges | The agent, setup steps and `c.exec` checks run as `reeval` (uid 10001, home `/home/reeval`), not root. Every Linux capability is dropped and `no-new-privileges` is set. Image builds (`install`, your Dockerfile, `from`) still run as root |
+| Privileges | The agent, setup steps and `c.exec` checks run as `reeval` (uid 10001, home `/home/reeval`), not root. That user holds no Linux capabilities and `no-new-privileges` is set. Image builds (`install`, your Dockerfile, `from`) still run as root |
 | Resources | A runaway agent or fork bomb hits the container's limits, not your machine (below) |
 
 | Limit | Default | Option |

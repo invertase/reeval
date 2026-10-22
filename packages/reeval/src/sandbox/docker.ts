@@ -179,15 +179,8 @@ export async function createDockerSandbox(
   // A root container's agent is root too, and could swap the binaries a privileged exec runs.
   const execOwn: Sandbox['execOwn'] = async (command, opts) =>
     root
-      ? network.run({ command, workingDirectory: workdir, abortSignal: opts?.signal })
-      : network.runPrivileged({ command, workingDirectory: workdir, abortSignal: opts?.signal })
-  const state = await execOwn(
-    `mkdir -p ${SANDBOX_STATE} && chown 0:0 ${SANDBOX_STATE} && chmod 700 ${SANDBOX_STATE}`,
-  )
-  if (state.exitCode !== 0) {
-    await Promise.resolve(network.destroy()).catch(() => {})
-    throw new InfraError(`Couldn't create ${SANDBOX_STATE} in the sandbox: ${state.stderr.trim()}`)
-  }
+      ? network.run({ command, workingDirectory: SANDBOX_STATE, abortSignal: opts?.signal })
+      : network.runPrivileged({ command, abortSignal: opts?.signal })
 
   return {
     workdir,

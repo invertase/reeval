@@ -148,7 +148,10 @@ const tools = defineEnvironment('tools', ({ secret }) => ({
   setup: [{ run: 'sleep 6 && printf %s "$CHECK_ONLY" > /tmp/check-only', timeout: '30s' }],
 }))
 evaluate('layered', { environment: tools.extend('layered', { sandbox: docker({ install: ${JSON.stringify(install)} }) }), timeout: '5s' }, async (c) => {
-  await c.send('x')
+  const turn = await c.send('x')
+  const agentEnv = turn.transcript.flatMap((e) => (e.type === 'tool' && e.tool === 'shell' ? [e.output] : [])).join('')
+  expect(agentEnv.split('\\n')).toContain('DB_URL')
+  expect(agentEnv.split('\\n')).not.toContain('CHECK_ONLY')
   expect((await c.exec('cat /opt/reeval-layer')).stdout).toBe('layer\\n')
   expect((await c.exec('cat /opt/reeval-cwd')).stdout).toBe('/\\n')
   expect((await c.exec('cat /opt/reeval-workspace')).stdout).toBe('0\\n')
@@ -157,13 +160,11 @@ evaluate('layered', { environment: tools.extend('layered', { sandbox: docker({ i
   expect((await c.exec('cat ~/.config/reeval/hint.txt')).stdout).toBe('from home')
   await c.exec('cat /opt/reeval-built')
   expect((await c.exec('cat /tmp/check-only')).stdout).toBe('postgres://u:pw-long-enough@db')
-  const pid1 = (await c.exec("tr '\\\\0' '\\\\n' < /proc/1/environ")).stdout
-  expect(pid1).toContain('DB_URL=')
-  expect(pid1).not.toContain('CHECK_ONLY')
 })
 `
       const p = await project('docker-env', {
-        'reeval.config.ts': config('{}'),
+        // The agent's own environment: the container's, without the checks' variables.
+        'reeval.config.ts': config(`{ script: [[{ exec: 'env | cut -d= -f1' }]] }`),
         'evals/d.eval.ts': eval_,
       })
       const env = { REEVAL_TEST_DB_URL: 'postgres://u:pw-long-enough@db' }
