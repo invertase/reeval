@@ -272,7 +272,35 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
 </Property>
 
 <Property name="question.state" type="QuestionStateOptions" optional>
-  The keys of `judge.state` without `contents`, which reeval refuses. `task` and `diff` default to `true`, `output`, `files`, `transcript`, and `checks` to `false`, and `turns` to `'all'`. A transcript names harness tools, so a harness pair is not blind.
+  The keys of `judge.state` without `contents`, which reeval refuses because the workspaces are gone. An unset key keeps its default.
+</Property>
+
+<Property name="question.state.task" type="boolean" optional>
+  The prompts the attempt was sent, once for both sides when they match. The default is `true`.
+</Property>
+
+<Property name="question.state.output" type="boolean" optional>
+  The final message. The default is `false`.
+</Property>
+
+<Property name="question.state.files" type="boolean" optional>
+  `status path` lines for the changed files, under the patterns in `diff`. The default is `false`.
+</Property>
+
+<Property name="question.state.diff" type="boolean | string[]" optional>
+  The diff from the start of the evaluation. A list is gitignore-style patterns over workspace paths. The last matching pattern wins, and `!` excludes. The default is `true`.
+</Property>
+
+<Property name="question.state.transcript" type="boolean | 'tools' | 'full'" optional>
+  The transcript as text lines. `true` is messages and tool calls with tool output clipped, `'tools'` is tool calls only, and `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses is not blind. The default is `false`.
+</Property>
+
+<Property name="question.state.turns" type="'last' | 'all'" optional>
+  `'all'` is every turn, and `'last'` is the last turn. The default is `'all'`.
+</Property>
+
+<Property name="question.state.checks" type="boolean | string[]" optional>
+  `c.exec` results. A list names the commands to show, as passed to `c.exec`. The default is `false`.
 </Property>
 
 <Property name="question.artifacts" type="true | string[]" optional>
