@@ -10,11 +10,11 @@ import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: cursor({ model: 'composer-2.5', params: { fast: 'true' } }),
+  harness: cursor({ model: 'composer-2.5' }),
 })
 ```
 
-With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`.
+With no `harness` in the config, reeval uses that harness.
 
 ## Options
 
@@ -91,10 +91,10 @@ A request carrying the placeholder anywhere else gets a 403, and the attempt pri
 
 ## Tokens and transcripts
 
-Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=true]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The line under the result blocks totals the tokens. From `reeval run hello` in `examples/hello`:
+Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=false]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The line under the result blocks totals the tokens. From `reeval run hello` in `examples/hello`:
 
 ```text
-17s · 132k in (49k cached) · 1,489 out · results .reeval/runs/…/summary.md
+23s · 137k in (63k cached) · 819 out · results .reeval/runs/…/summary.md
 ```
 
 See [Transcripts](/reference/transcript#tokens-and-the-served-model).
