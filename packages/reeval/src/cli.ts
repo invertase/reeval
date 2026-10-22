@@ -24,12 +24,12 @@ import {
 import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
-import { environmentSandbox, workspaceLabel } from './environment.ts'
+import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
-import { harnessId, sandboxId } from './options.ts'
+import { harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
@@ -507,9 +507,7 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
   }
   const sandboxes = [
     environmentSandbox(config.environment, config.sandbox),
-    ...(profile?.defaults.environment
-      ? [environmentSandbox(profile.defaults.environment, config.sandbox)]
-      : []),
+    ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
     // Sized from the Docker (or Podman) VM when it answers, as a real run is, so --dry-run shows
@@ -944,7 +942,10 @@ async function executeRun(
           version,
           files,
           harness: (plan?.harnesses ?? config.harness.map(harnessId)).join(', '),
-          sandbox: sandboxId(config.sandbox),
+          sandbox: plannedSandboxes(
+            plan?.sandboxes ?? [],
+            profileSandbox(config, profile?.defaults),
+          ),
           concurrency,
           runId,
         })

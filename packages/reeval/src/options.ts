@@ -149,6 +149,15 @@ export function sandboxId(s: SandboxDescriptor): string {
   return image ? `${engine}:${sanitize(image)}${install}` : `${engine}${install}`
 }
 
+/** The planned attempts' sandboxes by id, once each, or `fallback`'s when none is planned. */
+export function plannedSandboxes(
+  planned: SandboxDescriptor[],
+  fallback: SandboxDescriptor,
+): string {
+  const ids = new Set(planned.map(sandboxId))
+  return ids.size ? [...ids].join(', ') : sandboxId(fallback)
+}
+
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
   `${harness}/${environment}/${sandbox}`
 
