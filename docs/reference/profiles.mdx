@@ -1,0 +1,175 @@
+---
+title: "Profiles reference"
+description: "Look up each profile key and how reeval chooses a profile."
+---
+
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Profiles)
+[//]: # (owns: PROFILE_KEYS: defaults, limit, judge, budget, record and tags; LIMIT_KEYS: runs, compare and harness; how a profile is chosen: --profile, REEVAL_PROFILE and defaultProfile)
+[//]: # (excludes: task walkthrough -> /evals/profiles)
+[//]: # (excludes: option keys inside defaults -> /reference/options)
+[//]: # (excludes: the pin option -> /reference/options#pin)
+[//]: # (excludes: the option cascade table -> /reference/options#the-cascade)
+[//]: # (excludes: judge fields -> /reference/options#judge)
+[//]: # (excludes: tags on a group or evaluation -> /reference/options#tags)
+[//]: # (excludes: the profile field on the config callback -> /reference/config#profile)
+[//]: # (excludes: the --profile flag text and the reeval record command -> /reference/cli)
+[//]: # (inbound: /evals/profiles, /reference/options, /reference/config, /reference/api)
+[//]: # (outbound: /evals/profiles, /reference/options, /reference/options#the-cascade, /reference/options#pin, /reference/options#judge, /reference/options#tags, /reference/config#profile, /reference/cli#reeval-run, /reference/cli#reeval-record)
+
+## `profiles`
+
+`profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, and `tags`. reeval exits with code 2 for an unknown key or a value of the wrong shape.
+
+A profile object sets every key.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  profiles: {
+    nightly: {
+      defaults: { runs: 3 },
+      limit: { runs: 1, compare: false },
+      judge: { threshold: 0.9 },
+      budget: { attempts: 80, duration: '2h' },
+      record: 'always',
+      tags: ['nightly'],
+    },
+  },
+})
+```
+
+<Property name="profiles" type="Record<string, Profile>" optional>
+  Named profile objects.
+</Property>
+
+reeval applies the `reeval.config.ts` file, then `defaults`, then each group, outermost first, then the evaluation, then `limit`. `defaults.judge` wins over the profile `judge` in that `defaults` step. `--runs` then replaces `runs`.
+
+For more information about the per-key cascade, see [The cascade](/reference/options#the-cascade).
+
+For more information about sizing a run with a profile, see [Size runs with profiles](/evals/profiles).
+
+## `defaults`
+
+`defaults` applies before groups and the evaluation. A later `harness` can replace or edit `defaults.harness`; the plan notes `harness set by the eval` whenever a group or evaluation sets `harness`.
+
+<Property name="defaults" type="ProfileDefaults" optional>
+  `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `capture`, `question`, and `timeout`.
+</Property>
+
+For more information about those keys, see [Options reference](/reference/options).
+
+## `limit`
+
+`limit` narrows `runs`, `compare`, and `harness` after the evaluation. `pin` names keys that stay as resolved. reeval unions `pin` from each group, outermost first, then the evaluation.
+
+<Property name="limit" type="ProfileLimit" optional>
+  The plan notes a cut, as in `runs 3 → 1 (profile nightly)`. It notes protected keys that `limit` also sets, as in `pinned: compare, runs`.
+</Property>
+
+For more information about `pin`, see [Options reference](/reference/options#pin).
+
+### `runs`
+
+<Property name="runs" type="number" optional>
+  A whole number of at least 1. reeval lowers `runs` only when the resolved value is higher. `--runs` replaces `runs` after the cap, including when `pin` lists `runs`.
+</Property>
+
+### `compare`
+
+<Property name="compare" type="false | { maxVariants: number }" optional>
+  `false` drops the variants and runs the control. `{ maxVariants: n }` keeps the first `n` variants. `n` is a whole number of at least 0.
+</Property>
+
+`limit.compare` applies when the evaluation sets `compare`. The plan notes `compare off (profile nightly)` or `variants 4 → 1 (profile nightly)`. With no variants left and questions set, it notes `questions off (profile nightly)`.
+
+### `harness`
+
+<Property name="harness" type="string[]" optional>
+  Harness ids to keep. A default id includes `[effort=<value>]` whenever `effort` is set. reeval skips an evaluation left with none.
+</Property>
+
+The plan notes `harnesses 2 → 1 (profile nightly)`. A miss notes `skipped: no harness left: profile nightly allows none`, with the allowed ids in place of `none`.
+
+reeval exits with code 2 for anything but a list of id strings. Descriptors belong on `defaults.harness`.
+
+## `judge`
+
+`defaults.judge` wins field by field over the profile `judge`, and that result wins over the config `judge`. `state` merges key by key. Each group merges over that result, outermost first, and then the evaluation does.
+
+<Property name="judge" type="ConfigJudgeOptions" optional>
+  The same fields as `defaults.judge`.
+</Property>
+
+For more information about judge fields, see [Options reference](/reference/options#judge).
+
+## `budget`
+
+`budget` merges key by key over the config `budget`. A set key replaces the config value. An omitted key keeps it.
+
+<Property name="budget" type="{ attempts?: number, duration?: Duration }" optional>
+  reeval exits with code 2 for `usd`, `tokens`, or any other key.
+</Property>
+
+### `attempts`
+
+<Property name="attempts" type="number" optional>
+  A whole number of at least 1. reeval exits with code 2 before the run starts when the plan is over the cap, unless `--force` is set. The plan line shows the cap, as in `budget 5 attempts ✗`.
+</Property>
+
+### `duration`
+
+<Property name="duration" type="Duration" optional>
+  Greater than zero. A number is milliseconds, and a number plus `ms`, `s`, `m`, or `h` is that unit.
+</Property>
+
+The plan line appends the duration, as in `budget 5 attempts ✗, 2h`.
+
+The timer starts when the first attempt starts. At the cap, running attempts finish and queued attempts are skipped. The record status is `budget`, and the run fails.
+
+## `record`
+
+`record` replaces the config `record`. An omitted `record` keeps the config value, whose default is `ci`.
+
+<Property name="record" type="'manual' | 'ci' | 'always'" optional>
+  `manual` does not copy the run when `reeval run` ends. `ci` copies it when `CI` is set to anything but `false`. `always` copies it.
+</Property>
+
+reeval exits with code 2 for any other `record` value.
+
+`--record` copies the run when `reeval run` ends. An interrupted run is not copied. A run that stops with status `budget` is copied.
+
+For more information about copying a run later, see [reeval record](/reference/cli#reeval-record).
+
+## `tags`
+
+`tags` selects evaluations. Every profile filter must hold, and every `--tag` flag must hold.
+
+<Property name="tags" type="string[]" optional>
+  A name includes that tag. A leading `!` excludes it, as in `!slow`. reeval omits an evaluation that fails a filter.
+</Property>
+
+reeval exits with code 2 when `tags` is not a list of strings.
+
+For more information about tags on a group or evaluation, see [Options reference](/reference/options#tags).
+
+## `defaultProfile`
+
+`reeval run` and `reeval image build` read `--profile`, then `REEVAL_PROFILE`, then `defaultProfile`.
+
+<Property name="defaultProfile" type="{ ci?: string, local?: string }" optional>
+  `ci` applies when `CI` is set to anything but `false`. `local` applies when `CI` is unset or `false`. An unset matching field selects no profile.
+</Property>
+
+A `defaultProfile` name that is not a profile exits with code 2 when the config loads.
+
+An unknown `--profile` or `REEVAL_PROFILE` name exits with code 2. The message lists the names in `profiles`, or says that the `reeval.config.ts` file defines none.
+
+The plan line includes the reason, as in `profile nightly (--profile)`, `REEVAL_PROFILE`, `auto: CI is set`, or `default`. With no profile, that segment is absent.
+
+The `profile` field on the config callback is the `--profile` or `REEVAL_PROFILE` name. `defaultProfile` leaves that field unset.
+
+For more information about the `profile` field, see [Configuration reference](/reference/config#profile).
+
+For more information about the `--profile` flag, see [reeval run](/reference/cli#reeval-run).
