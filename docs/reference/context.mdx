@@ -213,7 +213,7 @@ const verdict = await c.judge('Does the test read like a specification?', {
   Sends the foreground `c.exec()` results so far, or only the listed commands (default `false`).
 </Property>
 
-A field on the call replaces the cascaded field, and `state` merges key by key. The `Verdict` echoes the `threshold`, `question`, and `model` the call used, and has these fields:
+A field on the call replaces the cascaded field, and `state` merges key by key. A `Verdict` has these fields:
 
 <Property name="verdict" type="'pass' | 'fail'" required>
   `pass` when `score` is at least `threshold`.
@@ -221,6 +221,18 @@ A field on the call replaces the cascaded field, and `state` merges key by key. 
 
 <Property name="score" type="number" required>
   The judge's probability that the answer is yes, from 0 to 1.
+</Property>
+
+<Property name="threshold" type="number" required>
+  The threshold this call used.
+</Property>
+
+<Property name="question" type="string" required>
+  The question this call asked.
+</Property>
+
+<Property name="model" type="string" required>
+  The model id the call asked for.
 </Property>
 
 <Property name="resolvedModel" type="string" optional>
@@ -231,7 +243,13 @@ A field on the call replaces the cascaded field, and `state` merges key by key. 
   The captures sent, each with `name`, `path`, `sha256`, `bytes`, and `mediaType`.
 </Property>
 
-A `JudgeFailure` has `verdict` `'error'`, `score` `null`, and the provider's message in `error`. For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judges](/evals/judges).
+A `JudgeFailure` has `verdict` `'error'` and `score` `null`.
+
+<Property name="error" type="string" required>
+  The provider's message on a `JudgeFailure`, after any retries.
+</Property>
+
+For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judges](/evals/judges).
 
 ## `c.readFile()`
 
@@ -364,7 +382,7 @@ const changed = turn.diff.files.map((file) => file.path)
 </Property>
 
 <Property name="transcript" type="TranscriptEvent[]" required>
-  The normalised `text`, `reasoning`, `file-edit`, `web-search`, `web-fetch`, `tool`, `error`, and `retry` events, each with `ts` and `atMs`.
+  Normalised events, one per message or tool call merged with its result. Each has `ts` (ISO 8601) and `atMs` (milliseconds from the start of the turn).
 </Property>
 
 <Property name="usage" type="TokenUsage | null" required>
@@ -383,4 +401,142 @@ const changed = turn.diff.files.map((file) => file.path)
   Workspace changes from the start of the evaluation, each file with a `path` and a `status` of `added`, `modified`, or `deleted`.
 </Property>
 
-`turn.exec(command)` and `turn.readFile(path)` run in the sandbox as `c.exec()` and `c.readFile()` do. For more information about transcripts, see [Debugging](/results/debugging#read-a-transcript). For more information about the matchers, see [Matchers](/reference/matchers).
+<Property name="exec" type="(command: string) => Promise<ExecResult>" required>
+  Runs a foreground command in the sandbox, as `c.exec()` does, and returns `exitCode`, `stdout`, and `stderr`. It does not take `{ background: true }`.
+</Property>
+
+<Property name="readFile" type="(path: string) => Promise<string | null>" required>
+  Reads a sandbox file, as `c.readFile()` does, and returns the text or `null`.
+</Property>
+
+### `text` and `reasoning`
+
+<Property name="text" type="string" required>
+  The message or the reasoning block.
+</Property>
+
+<Property name="durationMs" type="number | null" required>
+  Wall time until the harness reported the end, or `null` when it reported none.
+</Property>
+
+### `file-edit`
+
+<Property name="path" type="string" required>
+  The workspace path.
+</Property>
+
+<Property name="kind" type="'create' | 'modify' | 'delete'" required>
+  Whether the edit created, changed, or deleted the file.
+</Property>
+
+<Property name="added" type="number | null" required>
+  Lines added, or `null` when the harness did not send the content.
+</Property>
+
+<Property name="removed" type="number | null" required>
+  Lines removed, or `null` when the harness did not send the content.
+</Property>
+
+<Property name="toolCallId" type="string" required>
+  The tool call this edit belongs to.
+</Property>
+
+<Property name="durationMs" type="number | null" required>
+  Wall time until the result, or `null` when the harness did not report the end.
+</Property>
+
+<Property name="stalled" type="boolean" optional>
+  `true` when a shell-like tool or an edit ran for at least two minutes.
+</Property>
+
+### `web-search`
+
+<Property name="query" type="string" required>
+  The search query.
+</Property>
+
+<Property name="references" type="number | null" required>
+  How many sources the harness reports, or `null` when it reports none.
+</Property>
+
+<Property name="ok" type="boolean" optional>
+  Whether the search succeeded. Absent means it did.
+</Property>
+
+<Property name="toolCallId" type="string" required>
+  The tool call this search belongs to.
+</Property>
+
+<Property name="durationMs" type="number | null" required>
+  Wall time until the result, or `null` when the harness did not report the end.
+</Property>
+
+<Property name="stalled" type="boolean" optional>
+  `true` when a shell-like tool or an edit ran for at least two minutes.
+</Property>
+
+### `web-fetch`
+
+<Property name="url" type="string" required>
+  The fetched URL.
+</Property>
+
+<Property name="ok" type="boolean" required>
+  Whether the fetch succeeded.
+</Property>
+
+<Property name="toolCallId" type="string" required>
+  The tool call this fetch belongs to.
+</Property>
+
+<Property name="durationMs" type="number | null" required>
+  Wall time until the result, or `null` when the harness did not report the end.
+</Property>
+
+<Property name="stalled" type="boolean" optional>
+  `true` when a shell-like tool or an edit ran for at least two minutes.
+</Property>
+
+### `tool`
+
+<Property name="tool" type="string" required>
+  The tool name.
+</Property>
+
+<Property name="input" type="unknown" required>
+  The input the harness reported.
+</Property>
+
+<Property name="output" type="unknown" required>
+  The output the harness reported.
+</Property>
+
+<Property name="ok" type="boolean" required>
+  Whether the call succeeded.
+</Property>
+
+<Property name="toolCallId" type="string" required>
+  The tool call.
+</Property>
+
+<Property name="durationMs" type="number | null" required>
+  Wall time until the result, or `null` when the harness did not report the end.
+</Property>
+
+<Property name="stalled" type="boolean" optional>
+  `true` when a shell-like tool or an edit ran for at least two minutes.
+</Property>
+
+### `error`
+
+<Property name="message" type="string" required>
+  The failure recorded on the turn. This event has no `durationMs`.
+</Property>
+
+### `retry`
+
+<Property name="message" type="string" required>
+  A step that failed while the turn went on, such as a model call the harness retried. This event has no `durationMs`.
+</Property>
+
+For more information about transcripts, see [Debugging](/results/debugging#read-a-transcript). For more information about the matchers, see [Matchers](/reference/matchers).
