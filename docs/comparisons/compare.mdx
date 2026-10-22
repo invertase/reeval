@@ -1,0 +1,127 @@
+---
+title: "Compare setups"
+description: "See whether a skill, doc, or MCP server changes what your harness does."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Compare)
+[//]: # (owns: compare.baseline and compare.variants with one control and one variant; runs: 2 on a first compare, and that it reads can't tell yet below four attempts a side; reading the result: both passing means the harness already does it, and only the variants are gated by default, compare.gate 'variants'; a control that still holds the rules file, or a doc that repeats them, measures nothing; below that, more variants, compare.gate, compare.minLift and compare.harness; after the gating sections, Ask which did better: compare.questions, the question option, blinded pairwise judging in both orders, counted as wins, ties and splits, the question_pairs view, and that questions never gate or change an outcome)
+[//]: # (excludes: how the effect is reached -> /core-concepts#compare)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: building the variant with extendEnvironment -> /environments)
+[//]: # (excludes: the complete compare option reference -> /reference/options#compare)
+[//]: # (excludes: question option table -> /reference/options#question)
+[//]: # (excludes: how the interval and the effect words are reached -> /comparisons/statistics)
+[//]: # (inbound: /, /quickstart, /core-concepts, /comparisons/statistics, /environments/skills, /harnesses, /recipes/skill-comparison, /recipes/docs-comparison, /recipes/mcp-comparison, /recipes/agent-comparison, /reference/glossary, /evals/evaluate, /evals/servers, /results/regressions)
+[//]: # (outbound: /reference/options#compare, /core-concepts#compare, /results/output, /comparisons/statistics, /environments, /reference/options#question, /reference/query, /quickstart, /environments/rules, /reference/options#gate, /harnesses)
+
+A compare runs one evaluation on a control without your change and on a variant with it. Both get the same prompt and checks. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a compare appears in a run, see [Core concepts](/core-concepts#compare).
+
+This page uses the control `plain` and the variant `with-shoehorn`, which adds Matt Pocock's `migrate-to-shoehorn` skill. For more information about building the control and variant, see [Quick start](/quickstart) or [Environments](/environments).
+
+## Run the compare
+
+In the `evals/shoehorn.eval.ts` file, name the control in `compare.baseline` and the variants in `compare.variants`:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain, withShoehorn } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { runs: 2, compare: { baseline: plain, variants: [withShoehorn] } },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses fromPartial').toHaveFile(
+      'src/user.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+  },
+)
+```
+
+The prompt doesn't name shoehorn, so the check passes only when the skill leads the harness to call `fromPartial`. `runs: 2` gives each cell two attempts. Run the evaluation:
+
+```bash
+npx reeval run shoehorn
+```
+
+## Read the result
+
+The run prints one block for the evaluation. Your counts can differ, and the block uses this format ([Output](/results/output)):
+
+```text
+pass             tests build only the request fields they read
+  arm               pass
+  plain             0 of 2
+  with-shoehorn     2 of 2  can't tell yet
+  check             plain   with-shoehorn
+  uses fromPartial  0 of 2  2 of 2
+    expected src/user.test.ts to match /fromPartial(<\w+>)?\(/
+```
+
+The `arm` column lists the control and the variant. The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the control too, or `'none'` to gate neither.
+
+The effect reads `can't tell yet` even at 2 of 2 against 0 of 2. Below four counted attempts a side, reeval doesn't call `helped` or `made it worse`. Set `runs: 4` so reeval can report an effect ([Statistics](/comparisons/statistics)).
+
+If the control and the variant both pass, the harness already does what the skill teaches, and this task can't show the change. A control that includes the change measures nothing either. A rules file or a doc that repeats the skill gives both cells the same instructions.
+
+## Add more variants
+
+In the `evals/shoehorn.eval.ts` file, add each extra environment to `compare.variants`. Here `withRules` is `plain` with a rules file that names shoehorn ([Rules](/environments/rules)):
+
+```ts title="evals/shoehorn.eval.ts"
+import { plain, withRules, withShoehorn } from './environments.ts'
+// ...
+runs: 4,
+compare: { baseline: plain, variants: [withShoehorn, withRules] },
+```
+
+Each variant gets its own row and effect. reeval gates each variant separately. With `runs` above 1, a variant passes only when every attempt passes, so `with-rules` at 3 of 4 can read `helped` and still fail the evaluation. To gate on a pass rate instead, set [`gate`](/reference/options#gate) to `{ passRate: 0.75 }`.
+
+## Gate on lift
+
+In the `evals/shoehorn.eval.ts` file, set `compare.minLift` to the smallest lift you accept, from -1 to 1:
+
+```ts title="evals/shoehorn.eval.ts"
+compare: { baseline: plain, variants: [withShoehorn], minLift: 0.25 },
+```
+
+A variant whose lift may be below 25 points fails and prints `not by minLift 25`, even when it `helped`.
+
+## Compare harnesses
+
+In the `evals/shoehorn.eval.ts` file, import the harnesses and list them in `harness`. This example lists two harnesses, and any harness works ([Harnesses](/harnesses)):
+
+```ts title="evals/shoehorn.eval.ts"
+import { claudeCode, cursor } from '{{ pkg }}/harness'
+// ...
+harness: [
+  cursor({ model: 'composer-2.5' }),
+  claudeCode({ model: 'claude-sonnet-5' }),
+],
+```
+
+Each harness reads its API key from the `.env.local` file. reeval measures each variant against the control on the same harness. To limit a variant to certain harnesses, list their IDs in `compare.harness`.
+
+## Ask which did better
+
+A compare question asks a language model which of two attempts did better. The compare leaves out attempts that failed their checks, so the question needs a check both sides can pass. In the `evals/shoehorn.eval.ts` file, add the question and replace the check with one both sides can pass:
+
+```ts title="evals/shoehorn.eval.ts"
+compare: {
+  baseline: plain,
+  variants: [withShoehorn],
+  questions: ['Which test reads more like a specification?'],
+},
+// ...
+await expect(c, 'test file').toHaveFile('src/user.test.ts')
+```
+
+After the run, the block prints each side's wins as `won W of N`. reeval asks about each pair in both orders with the sides unlabelled. `npx reeval query question_pairs` lists the wins, ties, and splits ([Query views](/reference/query)). For more information about the model that answers a question, see [`question`](/reference/options#question).
+
+Questions never gate. They don't change an outcome or the exit code.
+
+## Next steps
+
+For more information about every compare key, see [the `compare` option](/reference/options#compare).
