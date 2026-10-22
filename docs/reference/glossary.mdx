@@ -1,0 +1,73 @@
+---
+title: "Glossary of terms"
+description: "Look up what each core noun in reeval means."
+---
+
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Glossary)
+[//]: # (purpose: one lookup for the words the docs use: what each core noun means)
+[//]: # (owns: a one- or two-sentence definition of each core noun)
+[//]: # (source: PUBLIC_TERMS.md in the docs product store: section 1, Core concepts; its per-symbol tables and distinct terms for shared words stay off this page, owned by the other Reference pages)
+[//]: # (terms: settled naming, agreed by Ben: prose says control and variant, the config key is still baseline, and arm is the terminal column only; verdict compounds are judge verdict, family verdict, effort verdict and check verdict; the judge's model is the evaluation model, as the error string says; a Remark belongs to Evaluation and insights to Analysis; runs means attempts per cell; the history tool inside reeval mcp is titled Run history, and the server reeval run history, as src/mcp/server.ts says; code renames are out of scope)
+[//]: # (excludes: the longer definition of each core noun -> /core-concepts)
+[//]: # (excludes: every option key -> /reference/options)
+[//]: # (excludes: every command -> /reference/cli)
+[//]: # (excludes: excluded terms such as fx, fake* helpers, plugins and reeval override -> not documented)
+[//]: # (inbound: /core-concepts)
+[//]: # (outbound: /results/analysis, /core-concepts#attempt, /core-concepts#cell, /evals/checks, /comparisons/compare, /environments, /evals/evaluate, /harnesses, /evals/profiles, /history, /evals/running, /sandboxes, /results/debugging#read-a-transcript, /evals/turns)
+
+## Analysis
+
+An analysis is what a language model writes about a run, including insights on what the harness did. `reeval analyze` writes the analysis from the run's digest. For more information about analysis, see [Analysis](/results/analysis).
+
+## Attempt
+
+An attempt is one execution of a cell in a fresh sandbox, and its outcome is pass, fail, infra error, or skipped. For more information about an attempt, see [Core concepts](/core-concepts#attempt).
+
+## Cell
+
+A cell is one harness, one environment, and one sandbox of an evaluation. In a compare, the control and each variant are separate cells. For more information about a cell, see [Core concepts](/core-concepts#cell).
+
+## Check
+
+A check is a named assertion on what an attempt produced, from `expect`, `c.exec`, or `c.judge`. For more information about checks, see [Checks](/evals/checks).
+
+## Compare
+
+A compare runs its control and each variant as separate cells; `compare.baseline` optionally names the control's environment. It measures a variant against the control only when the cells share a harness and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a compare, see [Compare](/comparisons/compare).
+
+## Environment
+
+An environment is what the harness receives in an attempt, such as skills, MCP servers, rules, files, setup steps, variables, and secrets. For more information about an environment, see [Define an environment](/environments).
+
+## Evaluation
+
+An evaluation is one task for the harness and the checks on its result, declared with `evaluate()` or as one case of `evaluate.each()` in a `*.eval.ts` file. The evaluation fails when a cell that counts towards it fails. For more information about an evaluation, see [Write an evaluation](/evals/evaluate).
+
+## Harness
+
+A harness is a coding agent harness that carries out an evaluation's task in a sandbox. For more information about a harness, see [Choose a harness](/harnesses).
+
+## Profile
+
+A profile is a named preset that sizes a run, and the run's record stores the profile that sized it. For more information about a profile, see [Profiles](/evals/profiles).
+
+## Record
+
+A record is the saved JSON of a run. reeval writes a scratch copy in the `.reeval/runs/` directory, and recording copies that JSON into the history folder. For more information about a record, see [Recording](/history).
+
+## Run
+
+A run is one `reeval run` command and every attempt that command starts, and reeval saves them as one record. For more information about a run, see [Running](/evals/running).
+
+## Sandbox
+
+A sandbox is the container an attempt runs in, and every request that leaves it goes through that attempt's egress gateway. For more information about a sandbox, see [Choose a sandbox](/sandboxes).
+
+## Transcript
+
+A transcript records every message and tool call of an attempt as one JSON object per line in the `transcript.jsonl` file. For more information about a transcript, see [Read a transcript](/results/debugging#read-a-transcript).
+
+## Turn
+
+A turn is the harness's reply to one `c.send()` call. The turn holds the final message, transcript events, token usage, the served model, and the workspace diff. For more information about a turn, see [Turns](/evals/turns).
