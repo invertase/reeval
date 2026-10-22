@@ -94,7 +94,7 @@ import {
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 import type { AgentHarnessDescriptor, TranscriptEvent } from '../src/types.ts'
-import { promptTokens } from '../src/usage.ts'
+import { promptTokens, sumUsage } from '../src/usage.ts'
 import { formatUsage } from '../src/view/model.ts'
 
 describe('the Claude Code harness', () => {
@@ -2374,6 +2374,35 @@ describe('token usage and the served model, from any harness', () => {
       reasoning: 30,
     })
     assert.equal(served, 'gemini-3.8-flash-low')
+  })
+
+  test("Antigravity: a three-turn attempt counts each turn's own calls once", async () => {
+    // A real agy 1.4.4 conversation, one process per turn, each resuming the first. The Gemini
+    // API's usageMetadata for its eight model calls sums to 66021 uncached prompt tokens,
+    // 254217 cached and 413 output: what agy's last result reports as its running total.
+    const turns = await Promise.all(
+      [1, 2, 3].map(async (n) => {
+        const t = new AntigravityStreamTranslator({
+          turn: n,
+          conversationId: n === 1 ? undefined : '950c7d99-14bd-4d1b-844f-43bbb7c6fc18',
+        })
+        const ndjson = readFileSync(
+          new URL(
+            `../../harness-antigravity/test/fixtures/three-turns-${n}.ndjson`,
+            import.meta.url,
+          ),
+          'utf8',
+        )
+        return (await turnThrough(ndjson.split('\n').flatMap((l) => t.push(l)))).usage
+      }),
+    )
+    assert.deepEqual(sumUsage(turns), {
+      input: 66021,
+      output: 413,
+      cacheRead: 254217,
+      cacheWrite: 0,
+      reasoning: 0,
+    })
   })
 
   test('Cursor: the SDK input holds the cache reads, so uncached input is what is left', async () => {
