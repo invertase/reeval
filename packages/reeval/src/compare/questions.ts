@@ -330,7 +330,6 @@ async function ask(
       : await providerModel({ name: model, route: judgeRoute(model).kind }),
     ...questionRequest(input),
     output: Output.object({ schema: voteSchema, name: 'vote' }),
-    temperature: 0,
     maxOutputTokens,
     maxRetries: 3,
     ...(signal ? { abortSignal: signal } : {}),
