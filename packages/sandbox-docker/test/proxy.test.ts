@@ -494,6 +494,161 @@ describe('egress proxy', () => {
   })
 })
 
+/** An absolute-form `https://` request sent to the proxy without CONNECT, as Puppeteer 19 does. */
+function absolute(
+  gw: Gw,
+  url: string,
+  options: { method?: string; headers?: Record<string, string>; body?: string } = {},
+) {
+  return new Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }>(
+    (resolve, reject) => {
+      const req = http.request(
+        {
+          host: '127.0.0.1',
+          port: gw.port,
+          method: options.method ?? 'GET',
+          path: url,
+          headers: options.headers,
+        },
+        (res) => {
+          let body = ''
+          res.on('data', (d) => {
+            body += d
+          })
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, body, headers: res.headers }))
+        },
+      )
+      req.once('error', reject)
+      req.end(options.body)
+    },
+  )
+}
+
+describe('absolute-form https requests through the proxy', () => {
+  const SECRET = 'AIza-real-secret-value-0123456789abcdef'
+  const HOLDER = `reeval_secret_${'Q'.repeat(32)}`
+  let h1: { port: number; close(): void }
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+  })
+  after(() => h1.close())
+
+  test('an allowed host is fetched over TLS and recorded like a decrypted request', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(
+      { mode: 'custom', allowedHosts: [HOST] },
+      { onEvent: (e) => events.push(e) },
+      true,
+    )
+    try {
+      seen.length = 0
+      const r = await absolute(gw, `https://${HOST}:${h1.port}/echo?x=1`, {
+        method: 'POST',
+        body: 'hello',
+      })
+      assert.equal(r.status, 200)
+      const echo = JSON.parse(r.body) as { path: string; body: string; headers: object }
+      assert.equal(echo.path, '/echo?x=1')
+      assert.equal(echo.body, 'hello')
+      assert.equal(seen[0]?.headers.host, `${HOST}:${h1.port}`, "the URL's authority, not Host")
+      for (let i = 0; i < 100 && !events.some((e) => e.type === 'request'); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+      const request = events.find((e) => e.type === 'request')
+      assert.deepEqual(
+        request?.type === 'request' && [
+          request.method,
+          request.url,
+          request.via,
+          request.allowed,
+          request.status,
+          request.sent,
+        ],
+        ['POST', `https://${HOST}/echo`, 'decrypted', true, 200, 5],
+      )
+      assert.deepEqual(
+        gw.proxy.traffic().contacted.map((h) => [h.host, h.port, h.connections]),
+        [[HOST, h1.port, 1]],
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a host the policy refuses gets its 403, and nothing goes upstream', async () => {
+    const gw = await startProxy({ mode: 'custom', allowedHosts: [OTHER] })
+    try {
+      seen.length = 0
+      const r = await absolute(gw, `https://${HOST}:${h1.port}/echo`)
+      assert.equal(r.status, 403)
+      assert.match(r.body, /blocked by the reeval egress policy: .* isn't in the allowlist/)
+      assert.equal(seen.length, 0)
+      assert.deepEqual(
+        gw.proxy.traffic().blocked.map((h) => [h.host, h.port]),
+        [[HOST, h1.port]],
+      )
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('brokered: the credential header is set and secrets are swapped, then scrubbed back', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.addTransformations([rule(0)])
+      gw.proxy.setSubstitutions([
+        {
+          name: 'GEMINI_API_KEY',
+          placeholder: HOLDER,
+          value: SECRET,
+          hosts: [HOST],
+          in: ['header'],
+        },
+      ])
+      seen.length = 0
+      const keyed = await absolute(gw, `https://${HOST}:${h1.port}/auth/exchange_user_api_key`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: '{}',
+      })
+      assert.equal(keyed.status, 200)
+      assert.equal(seen[0]?.headers.authorization, `Bearer ${REAL}`)
+      const echoed = await absolute(gw, `https://${HOST}:${h1.port}/echo`, {
+        headers: { 'x-goog-api-key': HOLDER },
+      })
+      assert.equal(seen[1]?.headers['x-goog-api-key'], SECRET)
+      assert.doesNotMatch(echoed.body, new RegExp(SECRET), 'the response is scrubbed')
+      assert.match(echoed.body, new RegExp(HOLDER))
+      assert.doesNotMatch(gw.lines.join('\n'), new RegExp(`${REAL}|${SECRET}`))
+    } finally {
+      gw.close()
+    }
+  })
+
+  test("an unlisted brokered endpoint is refused, as over CONNECT, and a scheme it can't speak is a 400", async () => {
+    const gw = await startProxy(
+      { mode: 'allow-all' },
+      { endpoints: [{ host: HOST, path: { exact: '/v1/messages' }, method: ['POST'] }] },
+    )
+    try {
+      gw.proxy.addTransformations([rule(0)])
+      seen.length = 0
+      const r = await absolute(gw, `https://${HOST}:${h1.port}/auth/exchange_user_api_key`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+      })
+      assert.equal(r.status, 403)
+      assert.match(r.body, /isn't one of the endpoints reeval brokers it for/)
+      assert.equal(seen.length, 0)
+      const ftp = await absolute(gw, `ftp://${HOST}/file`)
+      assert.equal(ftp.status, 400)
+      assert.match(ftp.body, /expected an http:\/\/ or https:\/\/ URL, not ftp:/)
+    } finally {
+      gw.close()
+    }
+  })
+})
+
 describe('brokered endpoints through the proxy', () => {
   // A host-wide rule, like the Claude Code adapter's, narrowed by the endpoint list.
   const hostWide: RequestTransformation = {

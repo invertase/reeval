@@ -618,6 +618,36 @@ describe('egress policy in Docker', {
     assert.equal(seen.length, 1, 'nothing else reached the upstream')
   })
 
+  test('absolute-form https (GET https://… without CONNECT): allowed, keyed and refused like CONNECT', async () => {
+    const s = await open(custom)
+    await s.addRequestTransformations?.([cursorRule])
+    // As Puppeteer 19's browser download sends it to an http:// HTTPS_PROXY.
+    const absolute = (url: string, auth = '') =>
+      sh(
+        s,
+        `node -e 'const p = new URL(process.env.HTTPS_PROXY); const a = process.argv[1]; require("http").request({ host: p.hostname, port: p.port, method: a ? "POST" : "GET", path: process.argv[2], headers: a ? { authorization: a } : {} }, (r) => { let b = ""; r.on("data", (d) => (b += d)); r.on("end", () => console.log(r.statusCode, b.trim())) }).end()' "$AUTH" "$URL"`,
+        { AUTH: auth, URL: url },
+      )
+    seen.length = 0
+    const ok = await absolute(`https://upstream.test:${upstream.port}/abs`)
+    assert.match(ok.stdout, /^200 /, ok.stderr)
+    const keyed = await absolute(
+      `https://upstream.test:${upstream.port}/auth/exchange_user_api_key`,
+      `Bearer ${PLACEHOLDER}`,
+    )
+    assert.match(keyed.stdout, /^200 /, keyed.stderr)
+    assert.deepEqual(
+      seen.map((r) => [r.path, r.authorization]),
+      [
+        ['/abs', undefined],
+        ['/auth/exchange_user_api_key', `Bearer ${REAL}`],
+      ],
+    )
+    const other = await absolute(`https://other.test:${upstream.port}/`)
+    assert.match(other.stdout, /^403 blocked by the reeval egress policy: .*isn't in the allowlist/)
+    assert.equal(seen.length, 2, 'the refused request never reached the upstream')
+  })
+
   test('no direct route: custom and deny-all, at start and after a switch', async () => {
     const s = await open(allowAll)
     // Twin: under allow-all the same direct connect reaches the host listener.

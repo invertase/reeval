@@ -432,8 +432,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     })
   })
 
-  // Absolute-URL requests: plain HTTP through the proxy. Never given credentials or substitutions,
-  // so a placeholder sent over plain HTTP goes out as the placeholder.
+  // Absolute-URL requests. An `https://` one is sent upstream over TLS by the gateway, as a
+  // decrypted CONNECT request is, with the same policy, credentials and substitutions. A plain
+  // `http://` one is never given credentials or substitutions, so a placeholder sent over plain
+  // HTTP goes out as the placeholder.
   front.on('request', (req: http.IncomingMessage, res: http.ServerResponse) => {
     let url: URL
     try {
@@ -441,28 +443,38 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     } catch {
       return res.writeHead(400).end('reeval egress gateway: expected an absolute URL\n')
     }
-    if (url.protocol !== 'http:')
-      return res.writeHead(400).end('reeval egress gateway: http only\n')
-    const { host, port } = parseAuthority(url.host, 80)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:')
+      return res
+        .writeHead(400)
+        .end(`reeval egress gateway: expected an http:// or https:// URL, not ${url.protocol}\n`)
+    const secure = url.protocol === 'https:'
+    const { host, port } = parseAuthority(url.host, secure ? 443 : 80)
+    const shown = secure ? `https://${host}` : `http://${host}:${port}`
     const done = requestEvent(res, {
       method: req.method ?? 'GET',
-      url: `http://${host}:${port}${url.pathname}`,
+      url: `${shown}${url.pathname}`,
       host,
       port,
-      via: 'http',
+      via: secure ? 'decrypted' : 'http',
       requestHeaders: plainHeaders(req.headers),
     })
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
-        log(`reeval:egress ${req.method} http://${host}:${port} denied (${verdict.reason})`)
+        log(`reeval:egress ${req.method} ${shown} denied (${verdict.reason})`)
         block(req.socket, host, port, verdict.reason)
         done.refuse(verdict.reason)
         return res
           .writeHead(verdict.status)
           .end(`blocked by the reeval egress policy: ${verdict.reason}\n`)
       }
-      log(`reeval:egress ${req.method} http://${host}:${port}${url.pathname}`)
       contact(req.socket, host, port)
+      if (secure) {
+        // The request line's authority wins over Host (RFC 9112 §3.2.2): clients send the proxy's.
+        const headers = { ...req.headers, host: url.host }
+        const target = { host, port, address: verdict.address }
+        return void onDecrypted(target, req, res, url.pathname + url.search, headers, done)
+      }
+      log(`reeval:egress ${req.method} http://${host}:${port}${url.pathname}`)
       const upstream = http.request({
         host: verdict.address,
         port,
@@ -724,22 +736,27 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     target: Target,
     req: http.IncomingMessage | http2.Http2ServerRequest,
     res: Response,
+    asked = req.url ?? '/',
+    sent: IncomingHttpHeaders = req.headers,
+    tracker?: RequestTracker,
   ) {
     const method = req.method ?? 'GET'
-    const url = `https://${target.host}${pathOnly(req.url ?? '/')}`
-    const t = requestEvent(res, {
-      method,
-      url,
-      host: target.host,
-      port: target.port,
-      via: 'decrypted',
-      requestHeaders: plainHeaders(req.headers),
-    })
+    const url = `https://${target.host}${pathOnly(asked)}`
+    const t =
+      tracker ??
+      requestEvent(res, {
+        method,
+        url,
+        host: target.host,
+        port: target.port,
+        via: 'decrypted',
+        requestHeaders: plainHeaders(req.headers),
+      })
     const { headers, path, own, names, credentials, refused, exchange, readsModel } = transformed(
       target,
       method,
-      req.url ?? '/',
-      req.headers,
+      asked,
+      sent,
       req.httpVersion,
     )
     t.set({ substituted: names, credentials })
