@@ -7,6 +7,7 @@ import { after, describe, test } from 'node:test'
 import { PROXY_PORT } from '../src/egress/gateway.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import type { DockerSession } from '../src/session.ts'
+import { type DockerCommand, onDockerCommand } from '../src/trace.ts'
 import { CLI, createSession, REQUIRE_ENGINE } from './engine.ts'
 
 const dockerReady = (() => {
@@ -218,6 +219,40 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
       `${command} is still running in the container after the abort`,
       async () => (await processes(s, command)) === '',
     )
+  })
+
+  test('an empty file write attaches no stdin, and empties the file; a non-empty one pipes it', async () => {
+    const s = await open()
+    // `docker exec -i` can lose the EOF of a stdin that's empty, a few times in a thousand on a
+    // loaded host, and leave `cat` waiting forever: an empty write must not attach one.
+    const execs: DockerCommand[] = []
+    onDockerCommand((c) => c.args[0] === 'exec' && execs.push(c))
+    try {
+      await s.writeTextFile({ path: 'filled.txt', content: 'full' })
+      assert.equal(await s.readTextFile({ path: 'filled.txt' }), 'full')
+      const filled = execs.splice(0)
+      assert.ok(
+        filled.some((c) => c.args.includes('--interactive') && c.stdin === 4),
+        JSON.stringify(filled),
+      )
+      await s.writeTextFile({ path: 'filled.txt', content: '' })
+      await Promise.all(
+        Array.from({ length: 50 }, (_, i) =>
+          s.writeTextFile({ path: `empty/${i}.txt`, content: '' }),
+        ),
+      )
+      const empty = execs.splice(0)
+      assert.equal(empty.length, 51)
+      assert.deepEqual(
+        empty.filter((c) => c.args.includes('--interactive')),
+        [],
+      )
+    } finally {
+      onDockerCommand(undefined)
+    }
+    assert.equal(await s.readTextFile({ path: 'filled.txt' }), '')
+    const sizes = await s.run({ command: 'find empty -type f -size 0 | wc -l' })
+    assert.equal(sizes.stdout.trim(), '50')
   })
 
   test('the process check sees a running command (twin: it can fail)', async () => {
