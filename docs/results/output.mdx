@@ -1,0 +1,144 @@
+---
+title: "Read the results summary"
+description: "Interpret a run's results summary."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Output)
+[//]: # (owns: outcome words; effect words; check and effort tables; insights lines; what Remarks lines mean; reeval show, with --md and --json)
+[//]: # (excludes: terminal layout names and remark kind ids -> not documented)
+[//]: # (excludes: why the words mean what they mean -> /core-concepts#check and /core-concepts#compare)
+[//]: # (excludes: what insights and Remarks are -> /core-concepts#analysis)
+[//]: # (excludes: analysis setup -> /results/analysis)
+[//]: # (excludes: the job summary in CI -> /recipes/ci-gate)
+[//]: # (inbound: /, /quickstart, /evals/running, /comparisons/compare, /comparisons/statistics, /results/analysis, /recipes/skill-comparison, /recipes/docs-comparison, /recipes/mcp-comparison, /recipes/recommendation, /recipes/agent-comparison, /history, /recipes/ci-gate)
+[//]: # (outbound: /core-concepts#check, /core-concepts#compare, /core-concepts#analysis, /results/analysis, /results/debugging, /comparisons/statistics, /reference/cli#reeval-show, /recipes/ci-gate)
+
+`reeval run` ends with one block per evaluation, then a tally of the run.
+
+## Read the outcomes
+
+The outcome word is `pass`, `fail`, `infra error`, `cancelled`, `skipped`, `todo`, or `not gated`. `not gated` replaces `pass` on the block when no cell is gated. The tally counts that block as `pass`. A `todo` block counts as `skipped`.
+
+A `fail` block lists each check that failed or did not run. For more information about what a check decides, see [Check](/core-concepts#check).
+
+On one attempt, a failed check prints `failed`. Several attempts add a tries row. Passed checks print as `+N more passed`. For more information about the trace of a failed check, see [Debug a failing attempt](/results/debugging).
+
+A failed evaluation prints like this:
+
+```text
+fail             streams with Vercel AI SDK
+  uses streamText  failed
+    expected command to succeed, exit code 1
+  +1 more passed
+```
+
+The tally omits zeros, as in `2 fail · 1 pass · 1 infra error`. A failure outside any evaluation counts as a `run error`. With no analysis model, this line follows the tally:
+
+```text
+Set analysis.model in reeval.config.ts for answers to what each eval asks.
+```
+
+For more information about setting that model, see [Analyse a run with reeval analyze](/results/analysis).
+
+## Read a comparison
+
+Rows for the control and each variant print under `arm`, `harness`, or `sandbox`. The `pass` column is passed attempts out of counted attempts. The effect word is `helped`, `made it worse`, or `can't tell yet`. Equal pass rates, with at least four counted attempts a side, print no effect word. For more information about how reeval chooses an effect word, see [Compare](/core-concepts#compare).
+
+Here `plain` is the control and `ai-sdk` is the variant:
+
+```text
+fail             streams with Vercel AI SDK
+  arm              pass
+  plain            0 of 4
+  ai-sdk           4 of 4  helped
+```
+
+When the variant does not reach `compare.minLift`, the row includes `not by minLift 25`. To print the interval under the variant, pass `-v`:
+
+```text
+    difference +100 points, 95% interval +31…+100
+```
+
+For more information about that interval, see [How reeval decides a change helped](/comparisons/statistics).
+
+For the control and each variant, a compare question prints `won 3 of 4`. The outcome word does not change.
+
+## Read the check and effort tables
+
+The `check` table has one column per cell and lists checks that failed or did not run in some cell. Passed checks print as `+N more passed`. `couldn't check` means the check raised an error.
+
+The checks in a comparison look like this:
+
+```text
+  check            plain   ai-sdk
+  uses streamText  0 of 4  4 of 4
+    expected command to succeed, exit code 1
+  +1 more passed
+```
+
+The `effort` table lists `tools` and `time`, plus `tokens` when a cell reported them. Each number is the median. The `effort` table prints when there are at least four counted attempts and either effort differs between cells or the evaluation failed.
+
+The effort rows look like this:
+
+```text
+  effort           tools  time  tokens
+  plain            12     21s   18k
+  ai-sdk           5      9.0s  7,000
+```
+
+## Read insights and Remarks
+
+An analysis model adds an answer under the name, a sentence under a row, a finding after the tables, and a headline before the tally:
+
+```text
+fail             streams with Vercel AI SDK
+  No: only 0 of 4 passed "uses streamText" with plain.
+  plain            0 of 4
+    Only 0 of 4 passed "uses streamText".
+  ai-sdk helped: 4 of 4 tries passed, against 0 of 4 on plain.
+1 fail; start with "streams with Vercel AI SDK".
+```
+
+The outcome word stays the checks' result. For more information about what insights and Remarks are, see [Analysis](/core-concepts#analysis).
+
+After the tally, `Remarks:` names concerns about the evaluations. A `fix` or `at` line names the file location. At most three concerns print, then `+1 more (-v)`. To print the rest and any suggestion, pass `-v`. A concern prints on the run that first raises it. A slow server start prints on every run where it happens.
+
+A remark looks like this:
+
+```text
+Remarks:
+  looks it up: MCP server docs took 2s to start on each of 2 turns.
+    fix  evals/docs.eval.ts:5  install what docs needs in the image
+  +1 more (-v)
+```
+
+## Show one run
+
+`reeval show` prints the most recent run, with the same blocks as `reeval run`:
+
+```bash
+npx reeval show
+```
+
+To print one run, pass its id:
+
+```bash
+npx reeval show <run-id>
+```
+
+To print that run's `summary.md` file, pass `--md`:
+
+```bash
+npx reeval show <run-id> --md
+```
+
+To print the record as JSON, pass `--json`:
+
+```bash
+npx reeval show --json
+```
+
+For more information about the job summary in a pull request, see [Fail a pull request when results regress](/recipes/ci-gate).
+
+For more information about every `reeval show` flag, see [the `reeval show` command](/reference/cli#reeval-show).
