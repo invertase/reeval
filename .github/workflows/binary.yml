@@ -103,9 +103,14 @@ jobs:
           - { target: darwin-x64, os: macos-15-intel }
           - { target: windows-x64, os: windows-2025, ext: .exe }
     steps:
+      # Only what the smoke test reads; the full tree has paths past Windows' 260 characters.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          sparse-checkout: |
+            scripts
+            examples/hello
+            packages/reeval/test/features/egress/blocked-host-recorded
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.compile.outputs.artifact }}
