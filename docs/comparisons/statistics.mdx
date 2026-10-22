@@ -1,0 +1,81 @@
+---
+title: "How statistics work"
+description: "Understand when reeval can tell whether a change helped."
+---
+
+[//]: # (quadrant: Explanation)
+[//]: # (sidebar: Statistics)
+[//]: # (owns: pass rates with the Wilson score interval; lift with Newcombe's hybrid score interval for two independent rates; the effect words: helped or made it worse when the 95% interval excludes zero, can't tell yet inside it or below 4 counted attempts a side; pooled cases as pairs, computed on every reeval run: the pooled lift is called by its 95% interval, Newcombe's paired interval at one attempt per case or a t interval over the cases at several, and it needs at least 6 discordant pairs at one attempt per case, or at least 6 cases at several, before a call; the McNemar or Wilcoxon p is reported but decides nothing; effort: the exact Mann-Whitney rank-sum test at p below 0.05, the only place p below 0.05 applies, on tool calls, time and tokens, with medians and quartiles, and the smallest p a runs count can reach; compare questions as blinded pairwise judging in both orders, counted as wins, ties and splits, with no test, never changing an outcome; flaky cells: mixed outcomes over at least 6 attempts pooled across comparable runs, a threshold rather than a test; every threshold is a constant, PAIRED_MIN, EFFECT_MIN_COUNTED, EFFORT_ALPHA and Z, with no public knob)
+[//]: # (source: packages/reeval/src/stats.ts)
+[//]: # (source: packages/reeval/src/view/suite.ts)
+[//]: # (source: packages/reeval/src/view/contrasts.ts)
+[//]: # (source: packages/reeval/src/view/judgements.ts)
+[//]: # (source: packages/reeval/src/view/effort.ts)
+[//]: # (source: packages/reeval/src/history/families.ts)
+[//]: # (source: packages/reeval/src/history/facts.ts)
+[//]: # (source: packages/reeval/src/compare/pairs.ts)
+[//]: # (source: packages/reeval/src/history/db.ts)
+[//]: # (excludes: setting up a comparison -> /comparisons/compare)
+[//]: # (excludes: reading the printed words -> /results/output)
+[//]: # (excludes: the views that expose these numbers -> /reference/query)
+[//]: # (excludes: remark kind ids -> not documented)
+[//]: # (inbound: /, /core-concepts, /comparisons/compare, /results/output, /quickstart, /evals/cases)
+[//]: # (outbound: /comparisons/compare, /comparisons/compare#ask-which-did-better, /evals/cases, /results/output, /reference/query, /core-concepts#compare)
+
+The thresholds on this page are fixed; you can't configure them.
+
+For more information about the run model, see [Core concepts](/core-concepts#compare). For more information about configuring a comparison, see [Compare setups](/comparisons/compare).
+
+## Pass rates and the Wilson interval
+
+`pass@1` is passes divided by counted attempts, which include only passes and failures. A 95% Wilson score interval stays between 0 and 1, including with all passes, all failures, or no counted attempts.
+
+## Lift and Newcombe's interval
+
+Lift is the variant's pass rate minus the control's, between -1 and 1. Newcombe's hybrid score interval at 95% combines the two Wilson intervals and treats the sides as independent. Zero on or between the ends does not separate the rates.
+
+## Variant outcomes
+
+`helped` means a low end above zero, `made it worse` means a high end below zero, and `can't tell yet` means zero inside the interval or fewer than four counted attempts on a side. Equal rates print no effect word. A check uses the same rule.
+
+For more information about the printed effect words, see [Read the results summary](/results/output).
+
+## Four-attempt minimum
+
+Below four counted attempts on either side, the word is `can't tell yet`. This includes two of two against zero of two, even though its interval excludes zero. At four a side, the word follows the interval.
+
+## Cases as pairs
+
+reeval pools every case from one evaluation into a family of pairs on each run. Attempts inside a case are not independent.
+
+For more information about declaring cases, see [Cases](/evals/cases).
+
+One attempt per side uses Newcombe's paired interval and needs six discordant pairs, where only one side passed. Several attempts per case use a t interval over the pass-rate differences and need six paired cases. Six is the first count whose exact test can reach a p below 0.05.
+
+The 95% interval calls `helped`, `made it worse`, or `can't tell yet`, and below six the result is insufficient. The reported McNemar or Wilcoxon p decides nothing.
+
+## Effort and the Mann-Whitney test
+
+Effort compares tool calls, agent time, and tokens by median and quartiles. An exact two-sided Mann-Whitney rank-sum test calls `fewer` when the variant ranks lower and `more` when it ranks higher, at a p below 0.05. Only effort lets a p below 0.05 decide.
+
+Counts that cannot reach a p below 0.05 are `insufficient`, and counts that can, but do not, are `noise`. With no ties, four against four can reach 2/70, and three against three can reach 2/20. Ties raise that floor. reeval omits the token comparison when either side has no token samples.
+
+## Compare questions as pairwise judging
+
+A compare question is blinded pairwise judging of which unlabelled attempt did better, in both orders.
+
+For more information about adding a compare question, see [Ask which did better](/comparisons/compare#ask-which-did-better).
+
+The same side in both orders, or a tie and a named side, is a win. No named side is a tie. Opposite sides are a split.
+
+No test changes the outcome or the exit code.
+
+## Flaky cells
+
+A cell is flaky when comparable runs, pooled, include a pass and a fail over at least six counted attempts. Comparable runs share sources, harness, environment, and image. Changes to an agent CLI's runtime files do not make runs incomparable. Six is a threshold, not a test, and a shorter pool is not flaky.
+
+For more information about flaky cells and question pairs, see [Query views](/reference/query).
+
+## Next
+
+For more information about the results summary, see [Read the results summary](/results/output).
