@@ -1,0 +1,122 @@
+---
+title: "Track results over time"
+description: "Follow an evaluation's outcomes and flaky cells across recorded runs."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Track results)
+[//]: # (owns: the end-to-end trend: a recording profile, the history folder committed with the evaluations, reeval history, and the eval_trend and flaky_cells views)
+[//]: # (excludes: the record and history options -> /history)
+[//]: # (excludes: writing your own SQL -> /history/queries)
+[//]: # (excludes: every view's columns -> /reference/query)
+[//]: # (excludes: when a pooled cell counts as flaky -> /comparisons/statistics#flaky-cells)
+[//]: # (excludes: diffing two runs -> /results/regressions)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar, /history, /history/queries, /recipes/ci-gate)
+[//]: # (outbound: /evals/profiles, /history, /history/queries#browse-history, /history/queries#write-your-own-sql, /reference/cli#reeval-history, /reference/query#views, /comparisons/statistics#flaky-cells, /results/regressions)
+
+You follow each evaluation's outcomes across the runs you keep in Git, and you find cells that both passed and failed. For more information about the `record` and `history` options, see [Recording](/history).
+
+<Steps>
+<Step title="Add a recording profile">
+
+In the `reeval.config.ts` file, add a profile named `track`. Leave every other key in the `reeval.config.ts` file in place.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  profiles: {
+    track: {
+      record: 'always',
+    },
+  },
+})
+```
+
+A run that uses the `track` profile is copied into the history folder when its status is `complete` or `budget`. Evaluations that fail still leave the run `complete`. An interrupted run stays in the `.reeval/runs` directory.
+
+With the default include patterns, the history folder is the `evals/.history` directory. For more information about profiles, see [Profiles](/evals/profiles).
+
+</Step>
+<Step title="Run the profile">
+
+Run your evaluations with the `track` profile:
+
+```bash
+npx reeval run --profile track
+```
+
+The final output line confirms the copied record:
+
+```text
+recorded evals/.history/<run-id>.json + <n> artifact files …
+```
+
+</Step>
+<Step title="Stage the history folder">
+
+Stage the `evals/.history` directory:
+
+```bash
+git add evals/.history
+```
+
+</Step>
+<Step title="Commit the history folder">
+
+Commit the history folder beside your evaluations:
+
+```bash
+git commit -m "Record the evaluation run"
+```
+
+</Step>
+<Step title="List recorded runs">
+
+List up to the 20 newest recorded runs, oldest to newest:
+
+```bash
+npx reeval history
+```
+
+For more information about the strips, see [Browse history](/history/queries#browse-history). For more information about the flags, see [`reeval history`](/reference/cli#reeval-history).
+
+</Step>
+<Step title="Read the evaluation trend">
+
+Read each evaluation's outcome on each run:
+
+```bash
+npx reeval query eval_trend
+```
+
+Each row is one evaluation on one run, with its outcome and its pass rate, `pass_at_1`. The outcome is `pass`, `fail`, `infra_error`, or `skipped`.
+
+A run in the history folder has `recorded` set to 1. A run that exists only in the `.reeval/runs` directory has `recorded` set to 0. For more information about choosing columns, see [Write your own SQL](/history/queries#write-your-own-sql).
+
+</Step>
+<Step title="Find flaky cells">
+
+Find cells that both passed and failed:
+
+```bash
+npx reeval query flaky_cells
+```
+
+The `flaky_cells` view prints one row per cell and comparable fingerprint that both passed and failed, or `(no rows)`. The view reads the same runs as the `eval_trend` view. `verdict` is `flaky` or `insufficient`.
+
+reeval sets `cause` to the first match in the order `infra`, `judge`, `check`, and `agent`. `infra` means the pooled cells include an infrastructure error. `judge` means a failing attempt has a failing judgement whose score is at most 0.1 from its threshold.
+
+`check` means the same change both passed and failed its checks. `agent` means none of the earlier causes matched.
+
+For more information about when a cell is flaky, see [Flaky cells](/comparisons/statistics#flaky-cells). For more information about the columns, see [Query views](/reference/query#views).
+
+</Step>
+</Steps>
+
+Repeat the run and the commit so each later run is in the trend.
+
+## Next
+
+For more information about diffing two runs, see [Find run regressions](/results/regressions).
