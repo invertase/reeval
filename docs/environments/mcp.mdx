@@ -1,0 +1,70 @@
+---
+title: "Connect MCP servers"
+description: "Let your agent call tools exposed by MCP servers."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: MCP servers)
+[//]: # (owns: stdio servers with mcp.stdio; toHaveCalledMcp usage)
+[//]: # (excludes: which harness supports which transport -> /harnesses#compare-harness-support)
+[//]: # (excludes: the reeval mcp history server -> /reference/mcp-tools)
+[//]: # (excludes: mcp.http, mcp.sse and header secrets -> /reference/environment#mcpstdio)
+[//]: # (excludes: helper signatures -> /reference/environment#mcpstdio)
+[//]: # (inbound: /environments, /environments/secrets, /reference/harness/cursor, /reference/harness/claude-code, /reference/harness/codex, /reference/harness/antigravity, /reference/harness/opencode, /reference/harness/goose, /reference/harness/pi, /reference/harness/grok-build, /recipes/mcp-comparison)
+[//]: # (outbound: /reference/environment#mcpstdio, /reference/matchers#tohavecalledmcp, /reference/mcp-tools, /sandboxes/toolchains#add-install-layers, /evals/evaluate)
+
+You set `mcp` on an environment to give the agent servers it can call during an attempt. For more information about the history server `reeval mcp` serves, see [History MCP server reference](/reference/mcp-tools).
+
+## Add a stdio server
+
+`mcp.stdio` runs a command in the sandbox. The command must use MCP over stdin and stdout. The key in `mcp` is the server name.
+
+In the `evals/environments.ts` file, add a stdio server:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const withDocs = defineEnvironment('with-docs', ({ mcp }) => ({
+  mcp: {
+    docs: mcp.stdio('npx', [
+      '-y',
+      '@modelcontextprotocol/server-filesystem',
+      '/reeval/workspace',
+    ]),
+  },
+}))
+```
+
+The `/reeval/workspace` directory is the attempt's workspace. This server may read that directory. `npx` downloads the package when the sandbox does not have it.
+
+For more information about connecting a server by URL with `mcp.http` or `mcp.sse`, see [Environment helpers](/reference/environment#mcpstdio).
+
+## Check the agent called the server
+
+`toHaveCalledMcp` passes when the transcript has a call named `mcp__<server>__<tool>`. Pass the server name, the tool name the server advertises, and `c` or the turn that `c.send` returns.
+
+In the body of an evaluation that runs in `withDocs`, send the task and check the call:
+
+```ts title="evals/docs.eval.ts"
+    const turn = await c.send(
+      'Call list_directory on the docs server for /reeval/workspace.',
+    )
+    expect(turn, 'listed the directory').toHaveCalledMcp(
+      'docs',
+      'list_directory',
+    )
+```
+
+The transcript names that call `mcp__docs__list_directory`. The second argument to `expect` is the label in the result. For more information about setting up the evaluation, see [Write an evaluation](/evals/evaluate).
+
+To match the tool input, pass a string, a regular expression, or an object as the third argument. For more information about the arguments, see [the `toHaveCalledMcp` matcher](/reference/matchers#tohavecalledmcp).
+
+## Troubleshooting
+
+Match the message to a fix:
+
+| Symptom | Check | Next action |
+|---|---|---|
+| `MCP server docs didn't answer initialize within 60s` | The stdio command never answered `initialize`. The attempt stops. | Run the command in the sandbox and read why it exits. |
+| `MCP server docs took 4s to start.` | A stdio server took at least 2 seconds to answer `initialize`. | Install the package in the image. For more information about install layers, see [Add install layers](/sandboxes/toolchains#add-install-layers). |
+| `expected MCP calls matching docs/list_directory, got none` | The transcript has no matching MCP call. | Pass the server name from `mcp` and the tool name the server advertises. |
