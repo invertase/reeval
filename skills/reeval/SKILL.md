@@ -42,8 +42,8 @@ lift (variant pass@1 − control pass@1, 95% interval), gate, checks and judge, 
 
 ## Workflow
 
-Setting reeval up for someone (new to reeval, or "set up reeval here")? Follow the quick-start
-skill, [../quick-start/SKILL.md](../quick-start/SKILL.md), first: it asks what to evaluate and
+Setting reeval up for someone (new to reeval, or "set up reeval here")? Follow the setup
+skill, [../setup/SKILL.md](../setup/SKILL.md), first: it asks what to evaluate and
 writes the first evals. This section is the reference it builds on.
 
 ```bash

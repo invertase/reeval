@@ -56,11 +56,11 @@ evals/skill/scripts/vendor.mjs` packs it, renders the docs and extracts the pre-
 `evals/skill/reeval.oracle.config.ts` runs a fake agent that applies a known-good answer to each
 task, so every check must pass there.
 
-## quick-start: can an agent set reeval up for someone?
+## setup: can an agent set reeval up for someone?
 
-[`evals/quick-start/`](./quick-start) asks the agent to "set up reeval here", in two turns: the
+[`evals/setup/`](./setup) asks the agent to "set up reeval here", in two turns: the
 first should end with a question about what to evaluate, the second answers it. The control has
-the reeval skill; the variant adds [`skills/quick-start/`](../skills/quick-start).
+the reeval skill; the variant adds [`skills/setup/`](../skills/setup).
 
 | Target | Starts from | Checks beyond the shared ones |
 |---|---|---|
@@ -79,8 +79,8 @@ files of its own, then 2, 2 and 1 of 1, with a `GEMINI.md` compare in the real r
 
 ```bash
 node evals/skill/scripts/vendor.mjs                     # packs this checkout's reeval
-pnpm reeval run evals/quick-start                       # Cursor, with CURSOR_API_KEY
-cd evals/quick-start
+pnpm reeval run evals/setup                       # Cursor, with CURSOR_API_KEY
+cd evals/setup
 pnpm reeval run --config reeval.oracle.config.ts                  # 4 passed
 pnpm reeval run --config reeval.oracle.config.ts --profile canary # every attempt fails
 pnpm reeval run --config reeval.claude.config.ts                  # Claude Code

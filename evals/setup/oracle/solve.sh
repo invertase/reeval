@@ -1,5 +1,5 @@
 set -e
-# The oracle's second turn: what the quick-start skill asks for, in each target.
+# The oracle's second turn: what the setup skill asks for, in each target.
 if [ ! -f reeval.config.ts ]; then
   [ -f package.json ] || npm init -y >/dev/null
   if [ -f pnpm-lock.yaml ]; then pnpm add -D ~/reeval.tgz >/dev/null; else PUPPETEER_SKIP_DOWNLOAD=1 npm i -D ~/reeval.tgz --no-audit --no-fund --loglevel=error; fi

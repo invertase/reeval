@@ -1,4 +1,4 @@
-# Quick-start templates
+# Setup templates
 
 Copy the one that fits, then change the task, the checks and the names. Each is a whole eval:
 `evals/environments.ts` plus one `evals/*.eval.ts`. Rerun `npx reeval run --dry-run` after every

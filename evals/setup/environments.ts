@@ -55,15 +55,15 @@ function start(target: Target): Environment {
 
 /**
  * Each target twice: the control has the reeval skill, which teaches the API; the variant adds
- * the quick-start skill on top, which is what it should add.
+ * the setup skill on top, which is what it should add.
  */
 export function arms(target: Target) {
   const base = start(target)
   const control = base.extendEnvironment(`${target}-reeval-skill`, ({ skill }) => ({
     skills: [skill.local('../../skills/reeval')],
   }))
-  const variant = base.extendEnvironment(`${target}-quick-start`, ({ skill }) => ({
-    skills: [skill.local('../../skills/reeval'), skill.local('../../skills/quick-start')],
+  const variant = base.extendEnvironment(`${target}-setup`, ({ skill }) => ({
+    skills: [skill.local('../../skills/reeval'), skill.local('../../skills/setup')],
   }))
   return { baseline: control, variants: [variant] }
 }

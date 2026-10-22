@@ -1,5 +1,5 @@
 ---
-name: quick-start
+name: setup
 description: >
   Read this first, before the reeval skill, whenever you're asked to set up, install, add,
   try or get started with reeval (the eval runner for coding agents), in a project or an empty
@@ -9,7 +9,7 @@ description: >
   explains the results.
 ---
 
-# reeval quick start
+# Set up reeval
 
 Your job is the user's first good run: a few small evals that pass `--dry-run`, the keys and
 Docker sorted, and a short explanation of what the evals show. Small and readable beats complete.

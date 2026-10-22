@@ -1,4 +1,4 @@
-// The quick-start topic's oracle: a fake agent that asks first, then sets reeval up the way the
+// The setup topic's oracle: a fake agent that asks first, then sets reeval up the way the
 // skill says (oracle/solve.sh), so every check must pass. `--profile canary` is a fake agent that
 // sets up without asking and forces init, so the asking, doctor and overwrite checks must fail.
 // In real Docker (`reeval image build --config …`), after `node evals/skill/scripts/vendor.mjs`.

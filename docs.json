@@ -239,11 +239,6 @@
         { "title": "Environment variables", "href": "/reference/env-vars" },
         { "title": "Errors", "href": "/reference/errors" }
       ]
-    },
-    {
-      "group": "Agent skills",
-      "tab": "reference",
-      "pages": [{ "title": "Agent skills", "href": "/reference/agent-skills" }]
     }
   ]
 }

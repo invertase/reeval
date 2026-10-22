@@ -289,7 +289,6 @@ and judge input. `reeval studio` adds a Debug tab for attempts with local debug 
 | Learning reeval, from a first eval to CI | The Guide in [`docs/`](./docs), a [docs.page](https://use.docs.page) site (`npx @docs.page/cli preview`) |
 | How it works, and complete solutions | The docs' Concepts and Recipes |
 | Every option, command, flag, exit code and file format | The docs' Reference |
-| Coding agents setting reeval up | The quick-start skill, [`skills/quick-start/SKILL.md`](./skills/quick-start/SKILL.md) |
 | Coding agents writing evals | The reeval skill, [`skills/reeval/SKILL.md`](./skills/reeval/SKILL.md) |
 | Developing this repo | [AGENTS.md](./AGENTS.md) |
 
