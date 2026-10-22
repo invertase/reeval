@@ -647,6 +647,29 @@ describe('absolute-form https requests through the proxy', () => {
       gw.close()
     }
   })
+
+  test('an IPv6 literal goes upstream with its Host in brackets', async () => {
+    const leaf = issueServerCertificate(upstreamCa, '::1')
+    const v6 = https.createServer(
+      { key: leaf.key.export({ type: 'pkcs8', format: 'pem' }), cert: leaf.cert },
+      (req, res) => {
+        record('::1', req)
+        res.end('ok')
+      },
+    )
+    await new Promise<void>((r) => v6.listen(0, '::1', r))
+    const gw = await startProxy()
+    try {
+      seen.length = 0
+      const { port } = v6.address() as net.AddressInfo
+      const r = await absolute(gw, `https://[::1]:${port}/v6`)
+      assert.equal(r.status, 200)
+      assert.equal(seen[0]?.headers.host, `[::1]:${port}`)
+    } finally {
+      gw.close()
+      v6.close()
+    }
+  })
 })
 
 describe('brokered endpoints through the proxy', () => {
@@ -1230,6 +1253,31 @@ describe('brokered secrets through the proxy', () => {
         headers: { authorization: HOLDER },
       })
       assert.equal(ok.status, 200)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('an absolute-form request target on a decrypted connection is refused (domain fronting)', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub({ in: ['header', 'query'] })])
+      seen.length = 0
+      // The upstream routes by the request target's authority, not Host (RFC 9112 §3.2.2).
+      const r = await viaProxy(gw, HOST, h1.port, {
+        path: `https://${OTHER}/echo?key=${HOLDER}`,
+        headers: { authorization: HOLDER },
+      })
+      assert.equal(r.status, 400)
+      assert.match(r.body, /expected a path/)
+      assert.equal(seen.length, 0, 'nothing reached the upstream')
+      // Twin: the same request with a path goes through, keyed.
+      const ok = await viaProxy(gw, HOST, h1.port, {
+        path: `/echo?key=${HOLDER}`,
+        headers: { authorization: HOLDER },
+      })
+      assert.equal(ok.status, 200)
+      assert.equal(seen[0]?.path, `/echo?key=${SECRET}`)
     } finally {
       gw.close()
     }

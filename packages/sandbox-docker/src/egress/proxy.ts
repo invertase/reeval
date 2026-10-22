@@ -191,6 +191,12 @@ function parseAuthority(authority: string, defaultPort: number): { host: string;
   return { host: (m?.[1] ?? authority).toLowerCase(), port: Number(m?.[2] ?? defaultPort) }
 }
 
+/** `host` or `host:port` for a Host header or URL, IPv6 in brackets. */
+const authorityOf = (host: string, port: number) => {
+  const name = net.isIPv6(host) ? `[${host}]` : host
+  return port === 443 ? name : `${name}:${port}`
+}
+
 const pathOnly = (path: string) => path.split('?')[0]
 
 function reply(socket: Duplex, status: number, reason: string) {
@@ -530,6 +536,19 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     /** Whether its response names the model that served it. */
     readsModel?: boolean
   } {
+    // An absolute-form target names its own host, which the upstream honours over Host.
+    if (!path.startsWith('/') && !(method === 'OPTIONS' && path === '*')) {
+      const reason = `reeval egress gateway: expected a path in the request line on a connection to ${target.host}, not an absolute URL.`
+      log(`reeval:egress ${method} https://${target.host} refused (absolute-form target)`)
+      return {
+        headers: {},
+        path,
+        own: [],
+        names: [],
+        credentials: [],
+        refused: { status: 400, reason },
+      }
+    }
     const named = String(headers[':authority'] ?? headers.host ?? '')
     const asked = parseAuthority(named, target.port).host
     if (named && asked !== target.host) {
@@ -770,7 +789,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     delete headers.upgrade
     delete headers.connection
     const body = requestBody(req as Readable, headers, own, t)
-    const authority = target.port === 443 ? target.host : `${target.host}:${target.port}`
+    const authority = authorityOf(target.host, target.port)
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null
     if (!session) {
       const upstream = https.request({
@@ -923,7 +942,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           socket.destroy()
           return resolve(null)
         }
-        const session = http2.connect(`https://${key}`, { createConnection: () => socket })
+        const session = http2.connect(`https://${authorityOf(target.host, target.port)}`, {
+          createConnection: () => socket,
+        })
         session.on('error', () => {})
         session.once('close', () => sessions.get(key) === session && sessions.delete(key))
         session.once('goaway', () => sessions.get(key) === session && sessions.delete(key))
