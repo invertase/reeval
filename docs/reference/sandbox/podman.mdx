@@ -1,0 +1,53 @@
+---
+title: "Run with Podman"
+description: "Run each attempt in one Podman container on your machine."
+---
+
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Podman)
+[//]: # (owns: podman; Podman host requirements)
+[//]: # (excludes: shared options -> /reference/sandbox/docker)
+[//]: # (excludes: choosing a sandbox -> /sandboxes)
+[//]: # (inbound: /sandboxes, /reference/sandbox/docker)
+[//]: # (outbound: /reference/sandbox/docker, /sandboxes)
+
+## The `podman()` function
+
+`podman()` returns a sandbox that the `podman` CLI starts in one container on your machine. `{{ pkg }}/sandbox` exports the function. The `sandbox` option accepts its return value:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { podman } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  sandbox: podman({ memory: '8g', cpus: 4 }),
+})
+```
+
+`podman()` takes the same options as `docker()`: the image recipes, the resource limits, `id`, `maxConcurrent`, `root`, and `capabilities`. Every option is optional. For more information about each option, see [Docker sandbox](/reference/sandbox/docker). For more information about where the `sandbox` option is accepted, see [Choose a sandbox](/sandboxes).
+
+The cell key's last segment defaults to `podman`, or `podman:<image>` when `image` or `from` names another image, plus a hash of `install`. The sandbox's images, egress gateway, and records are the Docker sandbox's.
+
+## Host requirements
+
+`podman()` needs a Podman that answers `podman info` as your user. `reeval doctor` reports it on a `podman` line, with the machine's CPUs and memory and the concurrency reeval derives from them. Before a run, reeval checks the same requirements and exits with code 2 when one fails, naming the fix.
+
+- **Podman {{ podman }} or later.** `podman()` needs its rootless bridge network.
+- **On macOS and Windows, a running machine.** reeval reaches it through the machine's API socket or named pipe, unless `CONTAINER_HOST` or `CONTAINER_CONNECTION` names another host. The machine needs at least 4 GB of memory for the default `memory` limit; `reeval doctor` warns below that.
+- **Rootless, the `cpu`, `memory`, and `pids` cgroup controllers.** Your user account's cgroup must delegate them. A systemd drop-in for the `user@.service` unit with `Delegate=cpu cpuset io memory pids` delegates them, after a new login.
+
+Podman keeps its own image store. `reeval image build` builds the sandbox images into it, `reeval doctor` reports a missing image as missing in Podman, and `reeval clean --images` prunes reeval's images from each engine that answers.
+
+## Differences from Docker
+
+Each difference is in what the host runs, not in the options, the egress policies, or the record.
+
+| Point | `docker()` | `podman()` |
+| :--- | :--- | :--- |
+| Container CLI | `docker`, against its daemon | `podman`, rootless or as root |
+| Network | Docker's default bridge | Podman's `bridge` network, so a restricted `egress` policy leaves no route out |
+| Seccomp | Docker uses its default profile | reeval passes Docker's default profile as a file, so Podman refuses the same syscalls |
+| `from` and Dockerfile `FROM` names | A short name resolves on Docker Hub | A short name Podman can't resolve needs its registry, such as `docker.io/library/python:3.12-slim` |
+| Image digests for `from` | Through `docker buildx` | Through `skopeo` when present, or `podman manifest inspect` |
+| Local image names | Docker lists tagged names unchanged | Podman prefixes local names with `localhost/`; reeval strips the prefix when it lists them |
+| Cell key segment | `docker` | `podman` |
