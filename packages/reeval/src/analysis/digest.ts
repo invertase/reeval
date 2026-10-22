@@ -7,10 +7,11 @@ import { commandSummary } from '../cli-spec.ts'
 import { headToHeadLines, pairTallies, sampleReasons, splitsLabel } from '../compare/pairs.ts'
 import { DEFAULT_QUESTION_STATE, questionShows } from '../compare/state.ts'
 import type { HistoryDb } from '../history/db.ts'
-import { FLAKY_MIN_ATTEMPTS, LIFT_MIN_COUNTED } from '../history/facts.ts'
+import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
 import { TOOL_CLASSES } from '../history/tool-class.ts'
 import type { AttemptRecord, CheckTally, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
+import { EFFECT_MIN_COUNTED } from '../stats.ts'
 import { clip } from '../text.ts'
 import { formatTokens } from '../usage.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
@@ -102,8 +103,8 @@ export type DigestInput = {
 }
 
 export const RULES = [
-  `Lift (variant pass@1 minus control pass@1) is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
-  'When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
+  `Lift (variant pass@1 minus control pass@1) is insufficient (not measured, never a results line) when either side has fewer than ${EFFECT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
+  `When sources or the eval fingerprint differ across the compared runs, the pass@1 difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the ${EFFECT_MIN_COUNTED}-attempt floor still applies then.`,
   `Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when no split of the attempts' values can reach it (2 vs 2 cannot, and ties raise the floor) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree. Effort's separated (given from ${DIRECTIONAL_MIN} vs ${DIRECTIONAL_MIN}) says, per metric, that the two sides' ranges do not overlap: every attempt on one side beat every attempt on the other. insufficient with separated true is a directional signal: report the ratio, the n and "no overlap, not significant" as directional, never as an effect. separated false is no direction at all.`,
   "A family fact is one pooled evaluate.each: its cases are paired samples of one suite, so its lift (Newcombe paired interval and McNemar at one attempt a case, a t interval over cases otherwise) is the result for those cases; their own pass-rate facts carry no lift. insufficient (fewer than 6 discordant pairs or 6 cases) is not measured. A family's minLift gates the pooled lower bound.",
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
@@ -133,7 +134,7 @@ function digestLift(
   lo: number,
   hi: number,
 ): string {
-  return Math.min(variantCounted, controlCounted) < LIFT_MIN_COUNTED
+  return Math.min(variantCounted, controlCounted) < EFFECT_MIN_COUNTED
     ? `not enough attempts for lift (${variantCounted} vs ${controlCounted})`
     : liftText(points, lo, hi)
 }
@@ -143,7 +144,7 @@ function digestLiftVerdict(
   controlCounted: number,
   withinNoise: boolean,
 ): 'insufficient' | 'within noise' | 'effect' {
-  if (Math.min(variantCounted, controlCounted) < LIFT_MIN_COUNTED) return 'insufficient'
+  if (Math.min(variantCounted, controlCounted) < EFFECT_MIN_COUNTED) return 'insufficient'
   return withinNoise ? 'within noise' : 'effect'
 }
 
