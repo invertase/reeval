@@ -172,7 +172,7 @@ check(
   outcome(runBin) !== undefined &&
     runBin.status === runNode.status &&
     outcome(runBin) === outcome(runNode),
-  outcome(runBin) ?? why(runBin),
+  outcome(runBin) ?? (runBin.stdout + runBin.stderr).trim().slice(-600),
 )
 const query = compiled(hello, ['query', 'effort', '--json'])
 check('reeval query (node:sqlite)', query.status === 0, why(query))
