@@ -327,10 +327,12 @@ async function ask(
   const result = await generateText({
     model: isFake(model)
       ? fakeAnswer(model, input.blind)
-      : await providerModel({ name: model, route: judgeRoute(model).kind }),
+      : await providerModel({
+          name: model,
+          route: judgeRoute(model, process.env, 'compare question model').kind,
+        }),
     ...questionRequest(input),
     output: Output.object({ schema: voteSchema, name: 'vote' }),
-    temperature: 0,
     maxOutputTokens,
     maxRetries: 3,
     ...(signal ? { abortSignal: signal } : {}),

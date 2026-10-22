@@ -42,9 +42,8 @@ does not layer, inherit or extend. Share setup first (the example is in SKILL.md
 - **Lift** is variant pass@1 minus control pass@1, with a 95% interval. The result block
   prints it as an effect word after the variant's count: `helped`, `made it worse`, or `can't
   tell yet` below four tries a side or when the interval crosses 0; `-v` adds the difference
-  and interval. `reeval analyze`
-  treats fewer than two counted attempts a side as `insufficient` (not measured), never a
-  results line. When the eval's sources changed across the compared runs, that pass@1
+  and interval. `reeval query factor_effects` and `reeval analyze` use the same four: below
+  it the lift is `insufficient` (not measured), never a results line. When the eval's sources changed across the compared runs, that pass@1
   difference is `not comparable: the eval changed`, not an effect, and mixed counts such as
   `6/10 vs 8/9` are not a results line.
 - `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower

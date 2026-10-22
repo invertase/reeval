@@ -3,14 +3,14 @@ import { join } from 'node:path'
 import type { AskedCall, AskedQuestion } from '../compare/questions.ts'
 import { resolveQuestionState } from '../compare/state.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
-import { environmentSandbox, NO_ENVIRONMENT } from '../environment.ts'
+import { NO_ENVIRONMENT, profileSandbox } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
 import { harnessEffort, resolvedEffortOf, servedEffortOf } from '../harness/effort.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import { mergeJudge, resolveStateOptions } from '../judge/state-options.ts'
-import { harnessId, profileJudge, sandboxId } from '../options.ts'
+import { harnessId, plannedSandboxes, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
@@ -1047,8 +1047,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
               harness: ids(profile.defaults.harness),
               environment: profile.defaults.environment?.name,
               sandbox:
-                profile.defaults.environment &&
-                sandboxId(environmentSandbox(profile.defaults.environment, config.sandbox)),
+                (profile.defaults.environment || profile.defaults.sandbox) &&
+                sandboxId(profileSandbox(config, profile.defaults)),
               runs: profile.defaults.runs,
               timeout: profile.defaults.timeout,
               env: profile.defaults.env && Object.keys(profile.defaults.env).sort(),
@@ -1066,7 +1066,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
-      sandbox: sandboxId(config.sandbox),
+      sandbox: plannedSandboxes(input.plan.sandboxes, profileSandbox(config, profile?.defaults)),
       environment: config.environment?.name ?? null,
       runs: config.runs,
       judgeModel,

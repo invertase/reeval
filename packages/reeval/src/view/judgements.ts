@@ -7,16 +7,10 @@ import type {
   JudgementRecord,
   Lift,
 } from '../history/types.ts'
-import { containsZero, liftInterval, round3 } from '../stats.ts'
+import { containsZero, EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
 import { clip } from '../text.ts'
 import type { TokenUsage } from '../types.ts'
 import { sumUsage } from '../usage.ts'
-
-/**
- * Fewest counted attempts on each side for a lift that can exclude 0 (2/2 vs 0/2).
- * Same floor as analyse's insufficient lift.
- */
-export const LIFT_MIN_COUNTED = 2
 
 /** Show each key until this many; then the minimum score plus a count. */
 const COLLAPSE_AFTER = 2
@@ -165,7 +159,7 @@ function liftForKey(
   variant: { pass: number; counted: number },
   control: { pass: number; counted: number } | undefined,
 ): JudgeKeyRate['lift'] {
-  if (!control || variant.counted < LIFT_MIN_COUNTED || control.counted < LIFT_MIN_COUNTED) {
+  if (!control || variant.counted < EFFECT_MIN_COUNTED || control.counted < EFFECT_MIN_COUNTED) {
     return null
   }
   const { points, low, high } = liftInterval(

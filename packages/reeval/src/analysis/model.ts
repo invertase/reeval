@@ -3,7 +3,13 @@
 import { generateText, type LanguageModel, Output } from 'ai'
 import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
-import { checkModelString, isFakeJudge, judgeCredentials, judgeRoute } from '../judge/index.ts'
+import {
+  checkModelString,
+  isFakeJudge,
+  judgeCredentials,
+  judgeRoute,
+  modelKeyOptions,
+} from '../judge/index.ts'
 import type { FakeAnalysisModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
@@ -76,17 +82,29 @@ export function questionModel(
 }
 
 /**
- * The variable `analysis.model` is missing when it's a provider model with no credential set: its
- * provider's own key, else the AI Gateway's. Null when one is set, or for any other model.
+ * Why `analysis.model`'s calls would fail for want of a usable key: none of the keys that would
+ * work for its provider is set, or the one reeval would send has whitespace or a line break in it.
+ * Null when a usable key is set, or for any other model. `brief` names the first two keys only,
+ * for the line a run ends with; the plan's warning has them all.
  */
-export function missingAnalysisKey(
+export function analysisKeyProblem(
   config: ResolvedConfig,
   env: NodeJS.ProcessEnv = process.env,
+  brief = false,
 ): string | null {
   const model = analysisModelOf(config)
   if (typeof model !== 'string' || isEvaluationModel(model) || checkModelString(model)) return null
   const keys = judgeCredentials(model)
-  return keys.some((k) => env[k]) ? null : (keys[0] ?? null)
+  if (!keys.some((k) => env[k])) {
+    if (brief) return `set ${keys[0]} or ${keys[1]}, or analysis: { insights: false }`
+    return `set ${modelKeyOptions(model)} for analysis.model, "${model}", in .env.local, or analysis: { insights: false }`
+  }
+  try {
+    judgeRoute(model, env, 'analysis model')
+    return null
+  } catch (error) {
+    return (error as Error).message
+  }
 }
 
 /** Checks the model and its credentials before any work; throws a UsageError (exit 2). */
@@ -99,10 +117,11 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
     )
   }
   try {
-    return { name: model, route: judgeRoute(model).kind }
+    return { name: model, route: judgeRoute(model, process.env, 'analysis model').kind }
   } catch (error) {
-    const message = (error as Error).message.replace('judge model', 'analysis model')
-    throw new UsageError(`${message} Or run reeval analyze --context, which needs no key.`)
+    throw new UsageError(
+      `${(error as Error).message} Or run reeval analyze --context, which needs no key.`,
+    )
   }
 }
 
@@ -170,11 +189,16 @@ export async function providerModel(model: ResolvedAnalysisModel): Promise<Langu
   if (model.route === 'gateway') return model.name
   const provider = model.name.slice(0, model.name.indexOf('/'))
   const id = model.name.slice(provider.length + 1)
-  if (provider === 'google') {
-    const { google } = await import('@ai-sdk/google')
-    return google(id)
+  switch (provider) {
+    case 'anthropic':
+      return (await import('@ai-sdk/anthropic')).anthropic(id)
+    case 'google':
+      return (await import('@ai-sdk/google')).google(id)
+    case 'openai':
+      return (await import('@ai-sdk/openai')).openai(id)
+    default:
+      return model.name
   }
-  return model.name
 }
 
 export type ModelAnswer = {
@@ -196,7 +220,6 @@ export async function callAnalysisModel(
     system: SYSTEM_PROMPT,
     prompt,
     output: Output.object({ schema: analysisSchema, name: 'analysis' }),
-    temperature: 0.2,
     maxOutputTokens,
     maxRetries: 3,
   })

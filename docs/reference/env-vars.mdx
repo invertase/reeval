@@ -15,16 +15,16 @@ TYPESAFE_AI_API_KEY=...
 | Variable | Used for |
 |---|---|
 | `CURSOR_API_KEY` | `cursor()`. Stays on the host: the sandbox sees a placeholder, swapped for the key only on Cursor's endpoints. |
-| `ANTHROPIC_API_KEY` | `claudeCode()`, the same way. Its adapter never reads `AI_GATEWAY_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` or a Claude subscription. |
+| `ANTHROPIC_API_KEY` | `claudeCode()`, the same way. Its adapter never reads `AI_GATEWAY_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` or a Claude subscription. Also `anthropic/*` judges, analysis models and compare-question models, directly. |
 | `GEMINI_API_KEY` | `antigravity()`: a Gemini API key, the same way. |
-| `TYPESAFE_AI_API_KEY` | `typesafe-ai/*` judges, such as Jev, directly |
-| `OPENAI_API_KEY` | `codex()`, and `fx()` on a bare OpenAI id: an OpenAI API key, brokered the same way. |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | `opencode()`, `goose()` and `pi()`: a Gemini API key, brokered the same way. Also `google/*` judges, directly. |
+| `TYPESAFE_AI_API_KEY` | `typesafe-ai/*` judges, such as Jev, directly. |
+| `OPENAI_API_KEY` | `codex()`, and `fx()` on a bare OpenAI id: an OpenAI API key, brokered the same way. Also `openai/*` judges, analysis models and compare-question models, directly. |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | `opencode()`, `goose()` and `pi()`: a Gemini API key, brokered the same way. Also `google/*` judges, analysis models and compare-question models, directly. |
 | `XAI_API_KEY` | `grokBuild()`: an xAI API key, brokered the same way. |
-| `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN` | Any `provider/model` judge whose own key isn't set, through the Vercel AI Gateway. `AI_GATEWAY_API_KEY` is also `fx()`'s key on a gateway id, brokered the same way. |
+| `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN` | Any `provider/model` judge, analysis model or compare-question model whose provider's own key isn't set, through the Vercel AI Gateway. A direct key wins over these when both are set; prefixes other than `anthropic/`, `google/`, `openai/` and `typesafe-ai/` have only this route. `AI_GATEWAY_API_KEY` is also `fx()`'s key on a gateway id, brokered the same way. |
 | Any name in `secret.fromEnv('NAME')` | Read on the host and passed into the sandbox (or brokered, or to checks only), redacted everywhere |
 
-A credential with whitespace or a line break in it (a key copied from a wrapped terminal line) stops the run with exit 2, naming the variable and the character.
+A credential with whitespace or a line break in it (a key copied from a wrapped terminal line) stops the run with exit 2, naming the variable and the character. For `analysis.model`'s key it's a plan warning instead, since insights never stop a run.
 
 ## reeval settings
 

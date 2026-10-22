@@ -56,13 +56,15 @@ flowchart LR
   D -- yes --> P["provider's AI SDK package"]
   D -- no --> G{"AI Gateway key set?"}
   G -- yes --> W["Vercel AI Gateway"]
-  G -- no --> E["the judge call fails, naming both"]
+  G -- no --> E["the run stops before it starts, naming both"]
 ```
 
 | `model` | With its own key | Otherwise |
 |---|---|---|
 | `'typesafe-ai/jev-1.14.0'` (recommended) | `TYPESAFE_AI_API_KEY` | The AI Gateway |
 | `'google/gemini-3.8-flash'` | `GOOGLE_GENERATIVE_AI_API_KEY` | The AI Gateway |
+| `'anthropic/…'` | `ANTHROPIC_API_KEY` | The AI Gateway |
+| `'openai/…'` | `OPENAI_API_KEY` | The AI Gateway |
 | Any other `provider/model` | — | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
 | An evaluation model object | Used as is, per group, eval or call only | — |
 | `fakeJudge({ score })` | A fixed score, no model call | — |

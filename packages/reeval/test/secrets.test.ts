@@ -406,6 +406,18 @@ describe('redacting encoded forms', () => {
   })
 })
 
+test("masks every direct model provider's key by its value, whatever its shape", () => {
+  const env = {
+    ANTHROPIC_API_KEY: 'anthr0pic-test-value-4f9a',
+    OPENAI_API_KEY: 'open4i-test-value-7c2e',
+    GOOGLE_GENERATIVE_AI_API_KEY: 'g00gle-test-value-1b3d',
+    TYPESAFE_AI_API_KEY: 'typ3safe-test-value-8e5f',
+  }
+  for (const [name, value] of Object.entries(env)) {
+    assert.equal(redactSecrets(`${name}=${value}`, env), `${name}=[REDACTED]`)
+  }
+})
+
 describe('redacting fragments of a secret', () => {
   const key = 'crsr_7f3Kq9ZpL2mXw8Rt4VbN6yHc1JdS'
   const env = { CURSOR_API_KEY: key }

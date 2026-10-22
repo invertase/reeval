@@ -685,7 +685,7 @@ evaluate('judged', async (c) => {
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
     assert.match(
       missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "google\/gemini-3\.8-flash"\./,
     )
     const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
       env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
@@ -695,6 +695,57 @@ evaluate('judged', async (c) => {
       malformed.stderr,
       /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
     )
+  })
+
+  const judgeKeyCases: Array<[string, string, RegExp]> = [
+    [
+      'anthropic/claude-sonnet-5',
+      'ANTHROPIC_API_KEY',
+      /Missing credentials: ANTHROPIC_API_KEY \(to call Anthropic directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "anthropic\/claude-sonnet-5"\. Set them in the environment or \.env\.local\./,
+    ],
+    [
+      'openai/gpt-6-luna',
+      'OPENAI_API_KEY',
+      /Missing credentials: OPENAI_API_KEY \(to call OpenAI directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "openai\/gpt-6-luna"\./,
+    ],
+    [
+      'mistral/mistral-large',
+      'AI_GATEWAY_API_KEY',
+      /Missing credentials: AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway, the only route for mistral\/\* models; reeval calls anthropic\/\*, google\/\*, openai\/\*, typesafe-ai\/\* directly\) for the judge model, "mistral\/mistral-large"\./,
+    ],
+  ]
+  test('a judge model without its key exits 2 naming the keys that work, before any attempt', async () => {
+    const noKeys = {
+      ANTHROPIC_API_KEY: '',
+      OPENAI_API_KEY: '',
+      AI_GATEWAY_API_KEY: '',
+      VERCEL_OIDC_TOKEN: '',
+    }
+    for (const [model, key, message] of judgeKeyCases) {
+      const p = await project('judge-key', {
+        'reeval.config.ts': fakeConfig({
+          extra: `profiles: { real: { judge: { model: '${model}' } } },`,
+        }),
+        'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('judged', async (c) => {
+  await c.send('x')
+  expect(await c.judge('Did it?')).toPass()
+})
+`,
+      })
+      const missing = await runCli(p.dir, ['run', '--profile', 'real'], { env: noKeys })
+      assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+      assert.match(missing.stderr, message)
+      if (key === 'AI_GATEWAY_API_KEY') continue
+      const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
+        env: { ...noKeys, [key]: 'sk-test\nrest' },
+      })
+      assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+      assert.match(
+        malformed.stderr,
+        new RegExp(`Credentials with whitespace or a line break in them: ${key} \\(character 8\\)`),
+      )
+    }
   })
 
   test('a profile name typo exits 2 and lists the profiles', async () => {
@@ -796,6 +847,13 @@ describe('common mistakes', { concurrency: 4 }, () => {
       'a compare baseline that is not an environment',
       `evaluate('e', { compare: { baseline: 'a' as never, variants: [a] } }, async () => {})`,
       /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got "a"\)\. .* Leave it out to use the eval's environment as the control\./,
+    ],
+    [
+      'compare arms whose refs come from unset variables',
+      `const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_BASE }) }))
+const head = base.extendEnvironment('head', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_HEAD }) }))
+evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})`,
+      /compare in evaluate\("e"\) runs head and base on the same tree: past what they share, each sets only workspace, and both are git\("\.\."\) with no ref \(the repository HEAD\)\. A ref read from an unset variable is undefined, so check the variables the arms take their refs from, and give each arm its own ref\./,
     ],
     [
       'a variant that is the environment a compare without a baseline runs as its control',
@@ -1326,6 +1384,22 @@ ${body}
       assert.match(r.stderr, message)
     })
   }
+
+  test('compare arms on one workspace that differ in something else plan', async () => {
+    const p = await project('same-workspace-arms', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..') }))
+const skilled = base.extendEnvironment('skilled', ({ git }) => ({ workspace: git('..'), files: { 'SKILL.md': 'x' } }))
+const ruled = defineEnvironment('ruled', ({ git }) => ({ workspace: git('..'), rules: 'Be brief.' }))
+const bare = defineEnvironment('bare', ({ git }) => ({ workspace: git('..') }))
+evaluate('extends', { compare: { baseline: base, variants: [skilled] } }, async () => {})
+evaluate('apart', { compare: { baseline: ruled, variants: [bare] } }, async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+  })
 
   const configCases: Array<[string, string, RegExp]> = [
     [

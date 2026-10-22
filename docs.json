@@ -139,6 +139,7 @@
       "pages": [
         { "title": "Evals without Docker or keys", "href": "/recipes/fake-harness" },
         { "title": "PR gate in GitHub Actions", "href": "/recipes/github-pr-gate" },
+        { "title": "Lift of a pull request", "href": "/recipes/pr-lift" },
         { "title": "Nightly matrix and Pages", "href": "/recipes/nightly-pages" },
         { "title": "Query history from your agent", "href": "/recipes/agent-mcp" }
       ]

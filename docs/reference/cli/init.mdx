@@ -94,10 +94,10 @@ evaluate('creates greet.js', { environment: greeter }, async (c) => {
   analysis: { model: 'google/gemini-3.8-flash' },
 ```
 
-Whichever agent you pick, the config sets `analysis.model` to `google/gemini-3.8-flash`, which writes the run's [insights](/concepts/insights). It's called with `GOOGLE_GENERATIVE_AI_API_KEY`, or through the Vercel AI Gateway with `AI_GATEWAY_API_KEY`. Without either, a run passes or fails on its checks as before and prints one line above the tally:
+Whichever agent you pick, the config sets `analysis.model` to `google/gemini-3.8-flash`, which writes the run's [insights](/concepts/insights). It's called with `GOOGLE_GENERATIVE_AI_API_KEY`, or through the Vercel AI Gateway with `AI_GATEWAY_API_KEY`. Without either, the plan warns that insights will be skipped, naming every key that works, and the run passes or fails on its checks as before and prints one line above the tally:
 
 ```text
-insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }
+insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY, or analysis: { insights: false }
 ```
 
 `analysis: { insights: false }` or `--no-insights` turns them off; `reeval doctor` names both keys.

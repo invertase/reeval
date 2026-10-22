@@ -523,6 +523,10 @@ export type RunRecord = {
     sandboxWarnings: SandboxWarning[]
   }
   budget: { attempts?: number; duration?: string | number } | null
+  /**
+   * The run's settings. `sandbox` is the id of each sandbox the planned attempts ran on, after the
+   * profile's defaults, joined with `, `.
+   */
   config: {
     sandbox: string
     environment: string | null

@@ -79,9 +79,11 @@
     "test:replay": "node --test --experimental-strip-types --no-warnings test/replay.test.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.83",
     "@ai-sdk/google": "4.0.100",
     "@ai-sdk/harness": "1.0.156",
     "@ai-sdk/harness-acp": "1.0.95",
+    "@ai-sdk/openai": "4.0.97",
     "@ai-sdk/provider": "4.0.30",
     "@ai-sdk/provider-utils": "5.0.63",
     "@ai-sdk/typesafe-ai": "3.0.22",

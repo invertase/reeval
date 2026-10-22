@@ -4,7 +4,7 @@
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { isRuntimeState } from '../attempt/context.ts'
-import { containsZero, liftInterval, median, round3, wilson } from '../stats.ts'
+import { containsZero, EFFECT_MIN_COUNTED, liftInterval, median, round3, wilson } from '../stats.ts'
 import { checkVerdict, contrastPairs } from '../view/contrasts.ts'
 import {
   contrastEffort,
@@ -19,11 +19,6 @@ import type { CheckTally } from './types.ts'
 
 /** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
 export const FLAKY_MIN_ATTEMPTS = 6
-/**
- * Counted attempts a side before pass-rate lift can exclude 0. Below this the verdict is
- * `insufficient` (not measured). See the table in `docs/concepts/lift.mdx`.
- */
-export const LIFT_MIN_COUNTED = 2
 /** A failing verdict this close to its threshold points at the judge, not the agent. */
 export const JUDGE_MARGIN = 0.1
 
@@ -187,7 +182,7 @@ function passCols(v: Side, c: Side): Row {
     hi: round3(lift.high),
     within_noise: noise ? 1 : 0,
     pass_verdict:
-      Math.min(v.counted, c.counted) < LIFT_MIN_COUNTED
+      Math.min(v.counted, c.counted) < EFFECT_MIN_COUNTED
         ? 'insufficient'
         : noise
           ? 'noise'

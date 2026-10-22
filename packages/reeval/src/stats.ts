@@ -148,6 +148,15 @@ export const minimumP = (n1: number, n2: number) =>
  */
 export const PAIRED_MIN = 6
 
+/**
+ * Counted attempts a side before a pass-rate lift can be called: below it, every view says
+ * `insufficient` (`can't tell yet`, `unclear`), whatever the interval. A product floor that keeps
+ * `reeval run`, `reeval query`, the judge-key lift and `reeval analyze` agreeing, not one that
+ * makes the stated 95% exact: at 4 a side, a 4/4 against 0/4 split happens by chance about 7% of
+ * the time when nothing changed.
+ */
+export const EFFECT_MIN_COUNTED = 4
+
 /** Binary pairs over cases: both pass, only the variant, only the control, neither. */
 export type PairCounts = { both: number; variantOnly: number; controlOnly: number; neither: number }
 

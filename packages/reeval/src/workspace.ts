@@ -4,14 +4,14 @@
 // sandbox never sees the repository, its remote or the credentials that fetched it.
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { join, posix } from 'node:path'
+import { isAbsolute, join, posix } from 'node:path'
 import { RETRY_DELAYS } from '@reeval/sandbox-docker'
 import { workspaceLabel } from './environment.ts'
 import { git } from './git.ts'
 import { sha256 } from './ids.ts'
 import { registerSecret } from './redact.ts'
 import { PrepareError, type PrepareFailure } from './sandbox/provider.ts'
-import type { GitWorkspace } from './types.ts'
+import type { Cell, GitWorkspace } from './types.ts'
 
 /** What an attempt copies in: the commit the ref resolved to, its tree, and the tarball of it. */
 export type PreparedWorkspace = { commit: string; tree: string; tar: string }
@@ -126,13 +126,21 @@ async function prepareOne(
         await sleep(delays[i] ?? 0)
         continue
       }
-      throw fetchError(failure, r.stderr, w, what)
+      throw fetchError(failure, r.stderr, w, what, failure === 'ref' && (await isShallow(w.url)))
     }
   }
 
   let commit: string | undefined
   if (w.ref && FULL_SHA.test(w.ref)) {
-    const known = await gitIn(dir, ['rev-parse', '--verify', '-q', `${w.ref}^{commit}`])
+    // Only what the cache holds: a lazy fetch of a commit from a shallow local clone retries for a minute.
+    const known = await gitIn(
+      dir,
+      ['rev-parse', '--verify', '-q', `${w.ref}^{commit}`],
+      undefined,
+      {
+        GIT_NO_LAZY_FETCH: '1',
+      },
+    )
     if (known.code === 0) commit = known.text
   }
   if (!commit) {
@@ -225,7 +233,20 @@ async function treeAt(dir: string, commit: string, w: GitWorkspace, what: string
   )
 }
 
-function fetchError(failure: Failure, stderr: string, w: GitWorkspace, what: string) {
+/** A local repository that is a shallow clone, such as a CI checkout at its default depth. */
+async function isShallow(url: string) {
+  if (!isAbsolute(url)) return false
+  const r = await gitIn(url, ['rev-parse', '--is-shallow-repository'])
+  return r.code === 0 && r.text === 'true'
+}
+
+function fetchError(
+  failure: Failure,
+  stderr: string,
+  w: GitWorkspace,
+  what: string,
+  shallow = false,
+) {
   const line = firstLine(stderr)
   switch (failure) {
     case 'ref': {
@@ -233,8 +254,11 @@ function fetchError(failure: Failure, stderr: string, w: GitWorkspace, what: str
         w.ref && /^[0-9a-f]{7,39}$/.test(w.ref)
           ? ' Give a commit as its full 40-character SHA.'
           : ''
+      const depth = shallow
+        ? ` ${w.repo} is a shallow clone, so it may not have that ref: fetch it (git fetch origin ${w.ref ?? 'HEAD'}) or clone the full history (fetch-depth: 0 in actions/checkout).`
+        : ''
       return new WorkspaceError(
-        `${what}: the repository has no ref "${w.ref ?? 'HEAD'}" (a branch, tag or commit SHA).${short}`,
+        `${what}: the repository has no ref "${w.ref ?? 'HEAD'}" (a branch, tag or commit SHA).${short}${depth}`,
         true,
       )
     }
@@ -348,6 +372,38 @@ export async function prepareWorkspaces(
   )
   writeFileSync(file, JSON.stringify(doc))
   return outcomes
+}
+
+type ArmUse = {
+  id: string
+  attempt: { cell: Cell; workspace?: GitWorkspace }
+}
+
+/**
+ * Compare arms whose workspaces are different repositories, refs or paths that resolved to the
+ * same tree, one line per arm: such a compare can't see a change to the tree.
+ */
+export function sameTreeArms(uses: ArmUse[], outcomes: WorkspaceOutcome[]): string[] {
+  const trees = new Map<string, string>()
+  for (const o of outcomes) if (o.ok) trees.set(workspaceKey(o.workspace), o.prepared.tree)
+  const controls = new Map<string, { name: string; workspace: GitWorkspace }>()
+  for (const { id, attempt: a } of uses) {
+    if (a.cell.role !== 'control' || !a.workspace) continue
+    controls.set(`${id}\0${a.cell.harness}`, { name: a.cell.environment, workspace: a.workspace })
+  }
+  const out = new Set<string>()
+  for (const { id, attempt: a } of uses) {
+    const control = controls.get(`${id}\0${a.cell.harness}`)
+    if (a.cell.role !== 'variant' || !a.workspace || !control) continue
+    const [mine, theirs] = [workspaceKey(a.workspace), workspaceKey(control.workspace)]
+    const tree = trees.get(mine)
+    if (mine === theirs || !tree || tree !== trees.get(theirs)) continue
+    const label = (w: GitWorkspace) => `git(${JSON.stringify(workspaceLabel(w))})`
+    out.add(
+      `warning: compare in ${id}: ${a.cell.environment} and ${control.name} start from the same tree (${tree.slice(0, 12)}): ${label(a.workspace)} and ${label(control.workspace)} resolve to it, so the lift can't show a change to the workspace. Check the refs the arms read.`,
+    )
+  }
+  return [...out]
 }
 
 export const removePreparedWorkspaces = (root: string, runId: string) =>

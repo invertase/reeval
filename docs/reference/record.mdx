@@ -139,7 +139,9 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
 
 <Property name="budget" type="{attempts?: number; duration?: string | number} | null"></Property>
 
-<Property name="config" type="{sandbox: string; environment: string | null; runs: number; judgeModel: string | null; threshold: number; timeoutMs: number; concurrency: number; configHash: string}"></Property>
+<Property name="config" type="{sandbox: string; environment: string | null; runs: number; judgeModel: string | null; threshold: number; timeoutMs: number; concurrency: number; configHash: string}">
+  The run's settings. `sandbox` is the id of each sandbox the planned attempts ran on, after the profile's defaults, joined with `, `.
+</Property>
 
 <Property name="cost" type="Cost"></Property>
 

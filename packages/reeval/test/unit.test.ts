@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { test } from 'node:test'
+import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { shellQuote } from '@reeval/sandbox-docker/process'
@@ -542,7 +542,9 @@ test('judge model strings need a provider, and credentials follow the provider',
     ...gateway,
   ])
   assert.deepEqual(judgeCredentials('typesafe-ai/jev-1.14.0'), ['TYPESAFE_AI_API_KEY', ...gateway])
-  assert.deepEqual(judgeCredentials('openai/gpt-x'), gateway)
+  assert.deepEqual(judgeCredentials('anthropic/claude-x'), ['ANTHROPIC_API_KEY', ...gateway])
+  assert.deepEqual(judgeCredentials('openai/gpt-x'), ['OPENAI_API_KEY', ...gateway])
+  assert.deepEqual(judgeCredentials('mistral/large'), gateway)
   assert.deepEqual(judgeCredentials({ kind: 'fake-judge', score: 1 }), [])
   assert.throws(
     () => resolveConfig({ judge: { model: 'gemini-3.8-flash' } }, '/p'),
@@ -554,7 +556,7 @@ test('judge model strings need a provider, and credentials follow the provider',
 test('missingCredentials names the judge key for the configured provider', () => {
   const config = resolveConfig({ judge: { model: 'typesafe-ai/jev-1.14.0' } }, '/p')
   assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k' }), [
-    'TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN',
+    'TYPESAFE_AI_API_KEY (to call TypeSafe AI directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for the judge model, "typesafe-ai/jev-1.14.0"',
   ])
   assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k', AI_GATEWAY_API_KEY: 'g' }), [])
   assert.deepEqual(
@@ -581,8 +583,10 @@ test("the credential checks ask for the key of the judge the run uses, the profi
     '/p',
   )
   const env = { CURSOR_API_KEY: 'k' }
-  const google = 'GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'
-  const typesafe = 'TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'
+  const google =
+    'GOOGLE_GENERATIVE_AI_API_KEY (to call Google directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for the judge model, "google/gemini-2.5-flash"'
+  const typesafe =
+    'TYPESAFE_AI_API_KEY (to call TypeSafe AI directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for the judge model, "typesafe-ai/jev-1.14.0"'
   const profile = (name: string) => selectProfile(config, name, {})
   assert.deepEqual(missingCredentials(config, env), [google])
   assert.deepEqual(
@@ -630,15 +634,95 @@ test('judge strings use the provider package when its key is set, else the AI Ga
     judgeRoute('google/gemini-3.8-flash', { GOOGLE_GENERATIVE_AI_API_KEY: 'k' }).kind,
     'direct',
   )
-  assert.deepEqual(judgeRoute('openai/gpt-x', { VERCEL_OIDC_TOKEN: 'o' }), { kind: 'gateway' })
+  assert.deepEqual(judgeRoute('mistral/large', { VERCEL_OIDC_TOKEN: 'o' }), { kind: 'gateway' })
   assert.throws(
     () => judgeRoute(jev, {}),
-    /No credentials for judge model "typesafe-ai\/jev-1\.14\.0"\. Set TYPESAFE_AI_API_KEY to call @ai-sdk\/typesafe-ai directly, or AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\) to go through the Vercel AI Gateway, in the environment or \.env\.local\./,
+    /^Error: No credentials for judge model "typesafe-ai\/jev-1\.14\.0" \(provider "typesafe-ai"\)\. Set TYPESAFE_AI_API_KEY \(to call TypeSafe AI directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\), in the environment or \.env\.local\.$/,
   )
   assert.throws(
-    () => judgeRoute('openai/gpt-x', {}),
-    /Set AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\)/,
+    () => judgeRoute('mistral/large', {}, 'analysis model'),
+    /^Error: No credentials for analysis model "mistral\/large" \(provider "mistral"\)\. Set AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway, the only route for mistral\/\* models; reeval calls anthropic\/\*, google\/\*, openai\/\*, typesafe-ai\/\* directly\), in the environment or \.env\.local\.$/,
   )
+})
+
+describe('each provider prefix with each combination of keys', () => {
+  const gateway = { kind: 'gateway' }
+  const direct = (provider: string, pkg: string) => ({ kind: 'direct', provider, pkg })
+  const providers: Array<[string, string, string, string]> = [
+    ['anthropic/claude-sonnet-5', 'anthropic', 'ANTHROPIC_API_KEY', 'Anthropic'],
+    ['openai/gpt-6-luna', 'openai', 'OPENAI_API_KEY', 'OpenAI'],
+    ['google/gemini-3.8-flash', 'google', 'GOOGLE_GENERATIVE_AI_API_KEY', 'Google'],
+    ['typesafe-ai/jev-1.14.0', 'typesafe-ai', 'TYPESAFE_AI_API_KEY', 'TypeSafe AI'],
+  ]
+  for (const [model, provider, key, name] of providers) {
+    test(model, () => {
+      const pkg = `@ai-sdk/${provider}`
+      assert.deepEqual(judgeRoute(model, { [key]: 'k' }), direct(provider, pkg), 'direct key')
+      assert.deepEqual(
+        judgeRoute(model, { [key]: 'k', AI_GATEWAY_API_KEY: 'g' }),
+        direct(provider, pkg),
+        'the direct key wins over the Gateway',
+      )
+      assert.deepEqual(judgeRoute(model, { AI_GATEWAY_API_KEY: 'g' }), gateway, 'Gateway key')
+      assert.deepEqual(judgeRoute(model, { VERCEL_OIDC_TOKEN: 'o' }), gateway, 'OIDC token')
+      assert.deepEqual(
+        judgeRoute(model, { [key]: '', AI_GATEWAY_API_KEY: 'g' }),
+        gateway,
+        'an empty direct key is unset',
+      )
+      const none = (() => {
+        try {
+          judgeRoute(model, {})
+        } catch (error) {
+          return (error as Error).message
+        }
+      })()
+      assert.ok(
+        none?.startsWith(
+          `No credentials for judge model "${model}" (provider "${provider}"). Set ${key} (to call ${name} directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway)`,
+        ),
+        none,
+      )
+      assert.doesNotMatch(none ?? '', /only route/)
+      assert.throws(
+        () => judgeRoute(model, { [key]: 'sk-ant\nrest', AI_GATEWAY_API_KEY: 'g' }),
+        new RegExp(
+          `^Error: ${key} for judge model "${model.replaceAll('.', '\\.')}" has whitespace or a line break in it at character 7\\.`,
+        ),
+        'a malformed direct key is refused, not passed over for the Gateway',
+      )
+      assert.throws(
+        () => judgeRoute(model, { AI_GATEWAY_API_KEY: 'g g' }),
+        /AI_GATEWAY_API_KEY for judge model .* at character 2/,
+      )
+    })
+  }
+  test('analysis.model names the keys for its prefix, briefly for the closing line', async () => {
+    const { analysisKeyProblem } = await import('../src/analysis/model.ts')
+    const config = (model: string) => resolveConfig({ analysis: { model } }, '/p')
+    const anthropic = config('anthropic/claude-sonnet-5')
+    assert.equal(analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a' }), null)
+    assert.equal(analysisKeyProblem(anthropic, { AI_GATEWAY_API_KEY: 'g' }), null)
+    assert.equal(
+      analysisKeyProblem(anthropic, {}),
+      'set ANTHROPIC_API_KEY (to call Anthropic directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for analysis.model, "anthropic/claude-sonnet-5", in .env.local, or analysis: { insights: false }',
+    )
+    assert.equal(
+      analysisKeyProblem(config('openai/gpt-6-luna'), {}, true),
+      'set OPENAI_API_KEY or AI_GATEWAY_API_KEY, or analysis: { insights: false }',
+    )
+    assert.match(
+      analysisKeyProblem(anthropic, { ANTHROPIC_API_KEY: 'a\nb' }) ?? '',
+      /^ANTHROPIC_API_KEY for analysis model "anthropic\/claude-sonnet-5" has whitespace or a line break in it at character 2\./,
+    )
+  })
+
+  test('any other prefix goes through the Gateway only', () => {
+    for (const env of [{}, { ANTHROPIC_API_KEY: 'a', OPENAI_API_KEY: 'o' }]) {
+      assert.throws(() => judgeRoute('mistral/large', env), /the only route for mistral\/\* models/)
+    }
+    assert.deepEqual(judgeRoute('mistral/large', { AI_GATEWAY_API_KEY: 'g' }), gateway)
+  })
 })
 
 test('huge single outputs keep their head and tail, with a marker and hash', () => {

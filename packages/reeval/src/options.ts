@@ -22,6 +22,7 @@ import {
   isEnvironment,
   isMovingRef,
   plannedSecrets,
+  sameWorkspaceOnly,
   sandboxOf,
   type UnbrokeredSecret,
   unbrokeredSecrets,
@@ -147,6 +148,15 @@ export function sandboxId(s: SandboxDescriptor): string {
   }
   const image = s.image ?? s.from
   return image ? `${engine}:${sanitize(image)}${install}` : `${engine}${install}`
+}
+
+/** The planned attempts' sandboxes by id, once each, or `fallback`'s when none is planned. */
+export function plannedSandboxes(
+  planned: SandboxDescriptor[],
+  fallback: SandboxDescriptor,
+): string {
+  const ids = new Set(planned.map(sandboxId))
+  return ids.size ? [...ids].join(', ') : sandboxId(fallback)
 }
 
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
@@ -651,6 +661,14 @@ export function cascade(
           : out.compare.from === 'environment'
             ? `compare in ${where} lists ${v.name}, which is the control: compare has no baseline, so the eval's environment is. List only the other environments.`
             : `compare in ${where} lists ${v.name}, which is the baseline. List only the other environments.`,
+      )
+    }
+    const control = out.compare?.baseline
+    const shared = control && sameWorkspaceOnly(control, v)
+    if (control && shared) {
+      const at = shared.ref ? `at ref "${shared.ref}"` : 'with no ref (the repository HEAD)'
+      throw new UsageError(
+        `compare in ${where} runs ${v.name} and ${control.name} on the same tree: past what they share, each sets only workspace, and both are git("${shared.repo}") ${at}${shared.path ? `, path "${shared.path}"` : ''}. A ref read from an unset variable is undefined, so check the variables the arms take their refs from, and give each arm its own ref.`,
       )
     }
   }
