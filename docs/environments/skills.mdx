@@ -1,0 +1,63 @@
+---
+title: "Give the agent skills"
+description: "Verify that an agent uses a skill during an attempt."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Skills)
+[//]: # (owns: skills; skill.local, skill.git, skill.npm, skill.registry and skill.inline; placement; the default skill excludes; toHaveCalledSkill usage)
+[//]: # (excludes: DEFAULT_SKILL_EXCLUDE as an import -> not documented)
+[//]: # (excludes: plugins -> not documented)
+[//]: # (excludes: measuring whether a skill helped -> /comparisons/compare)
+[//]: # (excludes: helper signatures -> /reference/environment#skilllocal)
+[//]: # (inbound: /quickstart, /environments, /reference/harness/cursor, /reference/harness/claude-code, /reference/harness/codex, /reference/harness/antigravity, /reference/harness/opencode, /reference/harness/goose, /reference/harness/pi, /reference/harness/grok-build, /recipes/skill-comparison)
+[//]: # (outbound: /reference/environment#skilllocal, /reference/matchers#tohavecalledskill, /comparisons/compare)
+
+You place a skill on an environment so the harness can load it during an attempt. Each entry in `skills` comes from the `skill` helper. For more information about measuring whether a skill helped, see [Compare setups](/comparisons/compare).
+
+## Add a skill
+
+A skill directory holds a `SKILL.md` file. The frontmatter `name` is kebab-case, and `description` is required. When the frontmatter omits `name`, reeval uses the directory name. A `name` other than kebab-case, or a missing `description`, fails the attempt. Quote a frontmatter value that contains `": "`.
+
+The repository is `github:owner/repo`, an `https://` URL, an SSH URL, or a GitHub `/tree/<ref>/<path>` URL. In the `evals/environments.ts` file, place Matt Pocock's `migrate-to-shoehorn` skill:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const withShoehorn = defineEnvironment(
+  'with-shoehorn',
+  ({ skill }) => ({
+    skills: [
+      skill.git('github:mattpocock/skills', {
+        ref: '5beb35b040e3de97e54fa9e386d7e42d15c295c2',
+        path: 'skills/misc',
+        only: ['migrate-to-shoehorn'],
+      }),
+    ],
+  }),
+)
+```
+
+In the `evals/shoehorn.eval.ts` file, import `withShoehorn` from the `./environments.ts` file. Set the evaluation's `environment` option to `withShoehorn`.
+
+Pin `ref` to a commit.
+
+Pass `path` as the directory to read. It can be one skill directory or a directory whose immediate subdirectories are skills. Without `path`, reeval reads the `skills/` directory when the repository has that directory and no root `SKILL.md` file. Otherwise reeval reads the repository root.
+
+`only` keeps the listed skill names. When `only` names a skill that is absent, the attempt fails and the message lists the skills that are there.
+
+reeval leaves out the `/evals/` directory, the `.history/` directory, and `*.eval.ts` files. reeval always leaves the `.git` directory out. Pass `exclude` to replace that list. To keep those paths out, repeat the three patterns in `exclude`.
+
+For more information about other skill sources and placement, see [Environment helpers](/reference/environment#skilllocal).
+
+## Check the agent used the skill
+
+`toHaveCalledSkill` fails the attempt when the agent never loads that skill. It passes when a tool named `skill`, `Skill`, or `load_skill` loads the name, or when the agent reads a file under `skills/<name>/`.
+
+To check every turn of the attempt, pass `c` after the final `c.send()` call. To check one turn, pass the turn returned by `c.send()`. Import `expect` from `{{ pkg }}`. In the `evals/shoehorn.eval.ts` file, require the skill call:
+
+```ts title="evals/shoehorn.eval.ts"
+expect(c).toHaveCalledSkill('migrate-to-shoehorn')
+```
+
+For more information about this matcher, see [toHaveCalledSkill](/reference/matchers#tohavecalledskill).
