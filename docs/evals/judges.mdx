@@ -1,0 +1,115 @@
+---
+title: "Score agent work"
+description: "Score the harness's work with a yes or no question."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Judges)
+[//]: # (owns: c.judge; the judge option; toPass; the default evaluation model and threshold; TYPESAFE_AI_API_KEY)
+[//]: # (excludes: RECOMMENDED_JUDGE_MODEL and DEFAULT_THRESHOLD as imports -> not documented)
+[//]: # (excludes: fakeJudge and every fake* helper -> not documented)
+[//]: # (excludes: judging captures -> /evals/servers#judge-a-capture)
+[//]: # (excludes: judge option table -> /reference/options#judge)
+[//]: # (inbound: /evals/checks, /recipes/recommendation, /recipes/sdk, /recipes/app-check, /core-concepts, /evals/servers)
+[//]: # (outbound: /reference/options#judge, /reference/context#cjudge, /evals/servers#judge-a-capture, /core-concepts#check, /quickstart, /evals/checks, /reference/env-vars#provider-keys)
+
+You ask `c.judge()` a yes or no question about the harness's work. `toPass()` passes when the score is at least the threshold. For more information about how that verdict becomes an outcome, see [Core concepts](/core-concepts#check).
+
+This page uses the `plain` environment from [Quick start](/quickstart). For more information about checks on a file or a command, see [Checks](/evals/checks).
+
+## Ask the judge a question
+
+Ask a yes or no question about the quality of the result. In the `evals/shoehorn.eval.ts` file, score the test the harness writes:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { environment: plain },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    expect(
+      await c.judge('Does the test read like a specification?'),
+    ).toPass()
+  },
+)
+```
+
+Call `c.send()` before `c.judge()`, which grades the latest turn. To grade a command's output, pass `{ on: out.stdout }` where `out` is the result of `c.exec()`. To grade an earlier turn, pass the turn `c.send()` returned.
+
+## Choose what the judge sees
+
+By default `c.judge()` sends the prompt, the final message, the changed files, and the diff. The diff leaves out dependencies, build output, lockfiles, and minified files. Tool calls stay out of the input.
+
+To show a file whole, set `state.contents`. In the `evals/shoehorn.eval.ts` file, send the test file:
+
+```ts title="evals/shoehorn.eval.ts"
+    expect(
+      await c.judge('Does the test read like a specification?', {
+        state: { contents: ['src/user.test.ts'] },
+      }),
+    ).toPass()
+```
+
+A missing `src/user.test.ts` file is sent as `null`, and a file in `contents` leaves the diff. Set `state.transcript` to `'tools'` to add the turn's tool calls. Setting `contents` leaves the other `state` keys unchanged.
+
+For more information about every `state` key, see [the `judge` option](/reference/options#judge).
+
+For more information about sending a screenshot, see [Apps](/evals/servers#judge-a-capture).
+
+## Set the model and threshold
+
+In the `reeval.config.ts` file, set `judge.model` to the evaluation model `typesafe-ai/jev-1.14.0`. Its score is the probability that the answer is yes, from 0 to 1. A score of `0.8` or higher is a `pass`, and `0.8` is the default threshold.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  judge: { model: 'typesafe-ai/jev-1.14.0' },
+})
+```
+
+In the `.env.local` file next to the `reeval.config.ts` file, add `TYPESAFE_AI_API_KEY`:
+
+```bash title=".env.local"
+TYPESAFE_AI_API_KEY=replace-with-your-key
+```
+
+For more information about other model prefixes, see [Environment variables](/reference/env-vars#provider-keys).
+
+A `model`, `threshold`, or `state` key on the call overrides that field from the config. In the `evals/shoehorn.eval.ts` file, raise the threshold:
+
+```ts title="evals/shoehorn.eval.ts"
+    expect(
+      await c.judge('Does the test read like a specification?', {
+        threshold: 0.9,
+        state: { contents: ['src/user.test.ts'] },
+      }),
+    ).toPass()
+```
+
+With no `judge.model`, `c.judge()` throws an error that names the `reeval.config.ts` file.
+
+## Verify the verdict
+
+Run the evaluation:
+
+```bash
+npx reeval run shoehorn
+```
+
+During the run, reeval prints a `judge` line in this format, and your score can differ:
+
+```text
+judge  pass 0.92 (≥ 0.8)  Does the test read like a specification?
+```
+
+A `pass` means the score is at least the threshold. The threshold defaults to `0.8`. A lower score prints `fail`, and `toPass()` fails the check.
+
+When the model call fails, `c.judge()` returns `{ verdict: 'error', score: null }`. Later checks still run, and the attempt fails after the body finishes.
+
+## Reference
+
+For more information about every argument `c.judge()` takes, see [Attempt context](/reference/context#cjudge).
