@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a16552-5bb9-72f1-a22f-039ede6d699e"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll run `echo third`, then check line 300 of `notes.md`."}}
+{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"echo third && sed -n '300p' notes.md\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"echo third && sed -n '300p' notes.md\"","aggregated_output":"third\nLine 300: the quick brown fox number 300 jumps over lazy dog 2100 and records value 20.\n","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"The value on line 300 is **20**."}}
+{"type":"turn.completed","usage":{"input_tokens":159437,"cached_input_tokens":132442,"cache_write_input_tokens":26974,"output_tokens":540,"reasoning_output_tokens":146}}

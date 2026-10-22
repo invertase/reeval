@@ -199,3 +199,64 @@ test('a sandbox that brokers gets a placeholder, swapped for the key on the Open
   )
   assert.doesNotMatch(writes[0]?.content ?? '', /sk-real/)
 })
+
+test("a session counts each turn's tokens once, its running total kept in the resume state", async () => {
+  const fixture = (n: number) =>
+    readFileSync(new URL(`./fixtures/three-turns-${n}.ndjson`, import.meta.url), 'utf8')
+  const stream = (text: string) =>
+    new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(text))
+        c.close()
+      },
+    })
+  const harness = createCodex({ auth: { [CODEX_CREDENTIAL_ENV]: 'sk-k' } })
+  const sandboxSession = (turns: number[]) => ({
+    run: async () => ({ exitCode: 0, stdout: '/home/reeval', stderr: '' }),
+    writeTextFile: async () => {},
+    readTextFile: async () => null,
+    spawn: async () => ({
+      stdout: stream(fixture(turns.shift() ?? 0)),
+      stderr: stream(''),
+      wait: async () => ({ exitCode: 0 }),
+      kill: async () => {},
+    }),
+  })
+  const input = async (session: Awaited<ReturnType<typeof harness.doStart>>) => {
+    const parts: Array<{ type: string; totalUsage?: { inputTokens: { total?: number } } }> = []
+    const control = await session.doPromptTurn({
+      prompt: 'p',
+      skills: [],
+      tools: [],
+      emit: (p: never) => parts.push(p),
+    } as never)
+    await control.done
+    return parts.find((p) => p.type === 'finish')?.totalUsage?.inputTokens.total
+  }
+  const first = await harness.doStart({
+    sessionId: 's1',
+    sessionWorkDir: '/reeval/workspace',
+    sandboxSession: sandboxSession([1, 2]),
+  } as never)
+  // OpenAI's input_tokens for each turn's calls; Codex reports 52174, 105616, 159437.
+  assert.equal(await input(first), 52174)
+  assert.equal(await input(first), 53442)
+  const state = await first.doDetach()
+  assert.deepEqual(state.data, {
+    threadId: '01a16552-5bb9-72f1-a22f-039ede6d699e',
+    usage: {
+      input_tokens: 105616,
+      cached_input_tokens: 78803,
+      cache_write_input_tokens: 26798,
+      output_tokens: 441,
+      reasoning_output_tokens: 146,
+    },
+  })
+  const resumed = await harness.doStart({
+    sessionId: 's1',
+    sessionWorkDir: '/reeval/workspace',
+    sandboxSession: sandboxSession([3]),
+    resumeFrom: state,
+  } as never)
+  assert.equal(await input(resumed), 53821)
+})

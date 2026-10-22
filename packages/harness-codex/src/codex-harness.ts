@@ -28,7 +28,7 @@ import {
 import type { Experimental_SandboxSession as SandboxSession } from '@ai-sdk/provider-utils'
 import { z } from 'zod'
 import { CODEX_BIN_DIR, CODEX_BOOTSTRAP_DIR, getCodexBootstrap } from './codex-bootstrap.ts'
-import { CodexStreamTranslator } from './codex-stream.ts'
+import { CodexStreamTranslator, type CodexUsage } from './codex-stream.ts'
 import { CODEX_BUILTIN_TOOLS, type CodexBuiltinTools } from './codex-tools.ts'
 
 export const CODEX_HARNESS_ID = 'codex'
@@ -96,7 +96,20 @@ export type CodexHarnessSettings = {
   readonly effort?: string
 }
 
-const lifecycleData = z.object({ threadId: z.string().optional() })
+const count = z.number().optional()
+const lifecycleData = z.object({
+  threadId: z.string().optional(),
+  /** The thread's running total after its last completed turn, which the next turn's is less. */
+  usage: z
+    .object({
+      input_tokens: count,
+      cached_input_tokens: count,
+      cache_write_input_tokens: count,
+      output_tokens: count,
+      reasoning_output_tokens: count,
+    })
+    .optional(),
+})
 
 const unsupported = (what: string) =>
   new HarnessCapabilityUnsupportedError({
@@ -306,6 +319,7 @@ async function startSession(
   }
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   let threadId = resumed.success ? resumed.data.threadId : undefined
+  let threadUsage: CodexUsage | undefined = resumed.success ? resumed.data.usage : undefined
   const env = { [CODEX_CREDENTIAL_ENV]: sandboxKey }
   let turns = 0
   let running: { kill(): PromiseLike<void> } | undefined
@@ -315,7 +329,10 @@ async function startSession(
     type: 'resume-session',
     harnessId: CODEX_HARNESS_ID,
     specificationVersion: 'harness-v1',
-    data: threadId ? { threadId } : {},
+    data: {
+      ...(threadId ? { threadId } : {}),
+      ...(threadId && threadUsage ? { usage: threadUsage } : {}),
+    },
   })
   const stop = async () => {
     ended = true
@@ -357,7 +374,7 @@ async function startSession(
         model: turn.model,
         threadId,
       })
-      const translator = new CodexStreamTranslator({ workDir: sessionWorkDir })
+      const translator = new CodexStreamTranslator({ workDir: sessionWorkDir, threadUsage })
       const emit = (parts: HarnessV1StreamPart[]) => {
         for (const part of parts) turn.emit(part)
       }
@@ -375,6 +392,7 @@ async function startSession(
         try {
           for await (const line of lines(proc.stdout)) emit(translator.push(line))
           threadId = translator.threadId ?? threadId
+          threadUsage = translator.threadUsage
           const { exitCode } = await proc.wait()
           emit(
             translator.end({

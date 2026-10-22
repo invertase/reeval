@@ -136,6 +136,57 @@ test("usage: input includes the cached tokens, output the reasoning ones, as Cod
   )
 })
 
+test("a real three-turn thread: each turn's tokens are OpenAI's for that turn's calls (codex 0.163.0)", () => {
+  // The Responses API's usage for each turn's model calls, summed:
+  // [input_tokens, cached_tokens, cache_write_tokens, output_tokens, reasoning_tokens].
+  // Codex's turn.completed reports the thread's running total (turn 3: 159437 input).
+  const OPENAI = [
+    [10387 + 15189 + 26598, 0 + 10384 + 15186, 10384 + 4802 + 11409, 116 + 184 + 15, 24 + 97],
+    [26641 + 26801, 26595 + 26638, 43 + 160, 111 + 15, 25],
+    [26844 + 26977, 26798 + 26841, 43 + 133, 84 + 15, 0],
+  ]
+  let threadUsage: ReturnType<typeof translate>['t']['threadUsage']
+  const turns = [1, 2, 3].map((n) => {
+    const t = new CodexStreamTranslator({ workDir: '/reeval/workspace', threadUsage })
+    const parts = fixture(`three-turns-${n}.ndjson`).flatMap((l) => t.push(l))
+    threadUsage = t.threadUsage
+    const u = finish(parts)?.totalUsage
+    const step = parts.find((p) => p.type === 'finish-step')
+    assert.deepEqual(step?.type === 'finish-step' && step.usage, u)
+    return [
+      u?.inputTokens.total,
+      u?.inputTokens.cacheRead,
+      u?.inputTokens.cacheWrite,
+      u?.outputTokens.total,
+      u?.outputTokens.reasoning,
+    ]
+  })
+  assert.deepEqual(turns, OPENAI)
+})
+
+test("a thread whose running total restarted: a count that went down is the turn's own", () => {
+  const t = new CodexStreamTranslator({
+    workDir: '/reeval/workspace',
+    threadUsage: { input_tokens: 5000, cached_input_tokens: 4000, output_tokens: 90 },
+  })
+  const parts = t.push(
+    JSON.stringify({
+      type: 'turn.completed',
+      usage: { input_tokens: 300, cached_input_tokens: 4100, output_tokens: 40 },
+    }),
+  )
+  const u = finish(parts)?.totalUsage
+  assert.deepEqual(
+    [u?.inputTokens.total, u?.inputTokens.cacheRead, u?.outputTokens.total],
+    [300, 100, 40],
+  )
+  assert.deepEqual(t.threadUsage, {
+    input_tokens: 300,
+    cached_input_tokens: 4100,
+    output_tokens: 40,
+  })
+})
+
 test('a real web turn: the page Codex opened is a web fetch of its URL, known when the item completes', () => {
   const { parts } = translate('web.ndjson')
   const calls = parts.flatMap((p) =>
