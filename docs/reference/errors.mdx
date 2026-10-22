@@ -143,13 +143,13 @@ See [Profiles and budgets](/reference/profiles).
 
 | Message | Fix |
 |---|---|
-| `Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.` | Set the harness key and a judge key, in the shell or `.env.local`. |
+| `Missing credentials: CURSOR_API_KEY; TYPESAFE_AI_API_KEY (to call TypeSafe AI directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for the judge model, "typesafe-ai/jev-1.14.0". Set them in the environment or .env.local.` | Set the harness key and a judge key, in the shell or `.env.local`. |
 | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). A key copied from a wrapped terminal line picks these up; set it again as one line.` | Set the key again as one line. |
 | `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` | Set the host variable, or mark the secret `optional: true`. |
 | `warning: SENTRY_DSN is in the sandbox as its real value. …` | Add `hosts` to broker it, or accept the warning. `secrets: { unbrokered: 'error' }` makes it an error. |
 | `warning: the egress gateway refused POST https://…: it carries CURSOR_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for` | The harness CLI called an endpoint reeval doesn't broker. Check for a CLI update and report it. |
 | `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local. …` | The harness's API refused its key (an HTTP 401, or Google's "API key not valid"). The named variable is the one to fix; the provider's own message follows. |
-| `No credentials for judge model "…". …` | Set the provider's key or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges). |
+| `No credentials for judge model "…" (provider "…"). Set …` | Set the provider's own key (`ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY` or `TYPESAFE_AI_API_KEY`), or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges#providers-and-keys). |
 | `compare.questions "Which is cleaner?" (evals/q.eval.ts › asks) needs a language model to answer it. …` | Set `analysis.model`, give the question its own `model`, or set `question: { model }` on its group or eval. A judge that's an evaluation model can't answer it; `--dry-run` still plans. |
 
 ## Docker and images

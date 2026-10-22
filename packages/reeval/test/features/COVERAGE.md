@@ -146,7 +146,7 @@
 | Feature | unit | plan | fake | docker | podman | real |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 4 | — | — | — | — | — |
-| Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time | ✓ 6 | ✓ 2 | — | — | — | — |
+| Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time | ✓ 7 | ✓ 2 | — | — | — | — |
 | What the judge is given: `judge.state` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff | ✓ 8 | — | ● 9 | — | — | — |
 | `c.judge({ artifacts })` sends captures as AI SDK file parts (`true` sends every one); JSON-only calls stay an object | ✓ 3 | — | ● 2 | ● 2 | — | — |
 | A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `state` keys that were on, largest first; reeval sends what `state` selects, uncut | ✓ 4 | — | — | — | — | — |

@@ -1608,6 +1608,9 @@ export const inventory: InventoryFeature[] = [
     name: "Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time",
     tests: [
       unit('each provider prefix with each combination of keys'),
+      engine(
+        "anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's",
+      ),
       unit('judge strings use the provider package when its key is set, else the AI Gateway'),
       questions("a question's own model needs its key, and a malformed one exits 2"),
       options(
