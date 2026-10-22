@@ -9,7 +9,7 @@
 // the whole credential message.
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { missingAnalysisKey, resolveAnalysisModel } from '../analysis/model.ts'
+import { analysisKeyProblem, resolveAnalysisModel } from '../analysis/model.ts'
 import { renderSummary } from '../history/summary.ts'
 import type { RunRecord } from '../history/types.ts'
 import { clip } from '../text.ts'
@@ -58,13 +58,8 @@ export async function runInsights(options: {
   const { config, record, runDir } = options
   const evals = insightEvals(suiteResult(record)).length
   if (!evals) return { insights: null, lines: [] }
-  const key = missingAnalysisKey(config)
-  if (key) {
-    return {
-      insights: null,
-      lines: [`insights skipped: set ${key} in .env.local, or analysis: { insights: false }`],
-    }
-  }
+  const problem = analysisKeyProblem(config, process.env, true)
+  if (problem) return { insights: null, lines: [`insights skipped: ${problem}`] }
   let model: ReturnType<typeof resolveAnalysisModel>
   try {
     model = resolveAnalysisModel(config)

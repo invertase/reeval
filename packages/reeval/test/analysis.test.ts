@@ -1597,7 +1597,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
       ],
       [
         "analysis: { model: 'google/gemini-3.8-flash' },",
-        /No credentials for analysis model "google\/gemini-3\.8-flash"\. Set GOOGLE_GENERATIVE_AI_API_KEY.*--context, which needs no key/,
+        /No credentials for analysis model "google\/gemini-3\.8-flash" \(provider "google"\)\. Set GOOGLE_GENERATIVE_AI_API_KEY.*--context, which needs no key/,
       ],
       [
         "analysis: { model: 'gemini' },",

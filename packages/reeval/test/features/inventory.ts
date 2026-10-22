@@ -1602,6 +1602,22 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'judge.providers',
+    area: 'Judges and matchers',
+    plan: ['insights/anthropic-no-key', 'insights/anthropic-key'],
+    name: "Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time",
+    tests: [
+      unit('each provider prefix with each combination of keys'),
+      unit('judge strings use the provider package when its key is set, else the AI Gateway'),
+      questions("a question's own model needs its key, and a malformed one exits 2"),
+      options(
+        'a judge model without its key exits 2 naming the keys that work, before any attempt',
+      ),
+      secrets("masks every direct model provider's key by its value, whatever its shape"),
+      'reeval/test/doctor.test.ts › analysis: an anthropic/* or openai/* model takes its own key, which wins over the Gateway',
+    ],
+  },
+  {
     id: 'judge.scope',
     area: 'Judges and matchers',
     name: 'What the judge is given: `judge.state` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff',

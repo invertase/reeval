@@ -3,6 +3,10 @@ export const REDACTED = '[REDACTED]'
 
 export const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i
 
+/** Where a value has its first whitespace or control character, from 1; 0 when it has none. */
+export const badCharacterAt = (value: string) =>
+  [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
+
 /** Well-known credential shapes, masked even when they aren't in this process's environment. */
 const TOKEN_PATTERNS: Array<{ rule: string; pattern: RegExp }> = [
   { rule: 'Google API key', pattern: /AIza[0-9A-Za-z_-]{35}/g },

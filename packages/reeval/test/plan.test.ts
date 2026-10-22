@@ -44,6 +44,17 @@ export const cases: PlanCase[] = [
   { dir: 'compare', name: 'questions-model', args: ['evals/questions-model.eval.ts'] },
   { dir: 'insights', name: 'insights', args: [] },
   { dir: 'insights', name: 'no-insights', args: ['--no-insights'] },
+  {
+    dir: 'insights',
+    name: 'anthropic-no-key',
+    args: ['--config', 'reeval.anthropic.config.ts'],
+  },
+  {
+    dir: 'insights',
+    name: 'anthropic-key',
+    args: ['--config', 'reeval.anthropic.config.ts'],
+    env: { ANTHROPIC_API_KEY: 'sk-ant-test-key' },
+  },
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },

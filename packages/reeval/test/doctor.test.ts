@@ -554,7 +554,10 @@ evaluate('a', async () => {})
     )
     const missing = await checkJudge(google, deps(), false, '.env.local')
     assert.equal(missing[0]?.status, 'fail')
-    assert.match(missing[0]?.summary ?? '', /GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY/)
+    assert.match(
+      missing[0]?.summary ?? '',
+      /^GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for google\/gemini-3\.8-flash: not set$/,
+    )
     const gateway = await checkJudge(
       google,
       deps({ env: { AI_GATEWAY_API_KEY: SECRET } }),
@@ -587,7 +590,11 @@ evaluate('a', async () => {})
     assert.deepEqual(statuses(unset), ['warn'])
     assert.match(
       unset[0]?.summary ?? '',
-      /^GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY.* for google\/gemini-3\.8-flash \(analysis\.model\): not set$/,
+      /^GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY.* for google\/gemini-3\.8-flash \(analysis\.model\): not set$/,
+    )
+    assert.equal(
+      unset[0]?.fix,
+      'add GOOGLE_GENERATIVE_AI_API_KEY=... to .env.local, or AI_GATEWAY_API_KEY=... to go through the Vercel AI Gateway',
     )
     const set = await checkAnalysis(
       model,
@@ -597,6 +604,50 @@ evaluate('a', async () => {})
     )
     assert.deepEqual(statuses(set), ['ok'])
     noSecret(set)
+  })
+
+  test('analysis: an anthropic/* or openai/* model takes its own key, which wins over the Gateway', async () => {
+    for (const [model, key] of [
+      ['anthropic/claude-sonnet-5', 'ANTHROPIC_API_KEY'],
+      ['openai/gpt-6-luna', 'OPENAI_API_KEY'],
+    ] as const) {
+      const config = await configOf(
+        `analysis-${key.toLowerCase()}`,
+        `{ harness: fakeHarness(), analysis: { model: '${model}' } }`,
+      )
+      const direct = await checkAnalysis(
+        config,
+        deps({ env: { [key]: SECRET } }),
+        false,
+        '.env.local',
+      )
+      assert.deepEqual(statuses(direct), ['ok'])
+      assert.equal(direct[0]?.summary, `${key} for ${model} (analysis.model): set`)
+      const both = await checkAnalysis(
+        config,
+        deps({ env: { [key]: SECRET, AI_GATEWAY_API_KEY: SECRET } }),
+        false,
+        '.env.local',
+      )
+      assert.equal(
+        both[0]?.summary,
+        `${key} for ${model} (analysis.model): set (${key} wins over AI_GATEWAY_API_KEY)`,
+      )
+      const unset = await checkAnalysis(config, deps(), false, '.env.local')
+      assert.match(
+        unset[0]?.summary ?? '',
+        new RegExp(`^${key} \\(to call \\w+ directly\\) or AI_GATEWAY_API_KEY`),
+      )
+      assert.doesNotMatch(unset[0]?.summary ?? '', /only route/)
+      const bad = await checkAnalysis(
+        config,
+        deps({ env: { [key]: 'sk\nx' } }),
+        false,
+        '.env.local',
+      )
+      assert.equal(bad[0]?.status, 'fail')
+      assert.match(bad[0]?.summary ?? '', /whitespace or a line break in it at character 3/)
+    }
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {
