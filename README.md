@@ -130,6 +130,137 @@ You need Node 22.13 or later and, for real runs, a running Docker.
 `reeval doctor` checks Docker for your platform and names the fix. CI runs every tier on Linux and
 everything but the Docker tier on Windows and macOS.
 
+## Quick start
+
+In about a minute you'll run an eval on a fake agent with nothing configured. Ten minutes
+and one API key later you'll have the same task run with and without a skill, on a real
+agent, and a report saying whether the skill helped.
+
+> Using a coding agent? Paste: "Install reeval, run `npx reeval doctor --json`, then follow
+> the Quick start in node_modules/reeval/README.md."
+
+### 1. Run an eval (no Docker, no keys)
+
+```bash
+npx reeval init --harness none -y && npm install && npx reeval run
+```
+
+```text
+reeval init · .
+  create    reeval.config.ts     the fake agent; profiles pr, nightly
+  create    evals/greet.eval.ts  one eval, passes on the fake agent
+  create    .gitignore           node_modules/, .reeval/, .env*
+  create    package.json         script eval, devDependency reeval
+…
+plan  run 20261022T083651Z_… · 1 eval · 1 cell · 1 attempt · ~1s serial
+reeval 0.11.0 · run 20261022T083651Z_… · harness fake · sandbox fake · concurrency 1
+
+pass             creates greet.js
+
+2s · results .reeval/runs/20261022T083651Z_…/summary.md
+1 pass
+```
+
+The fake agent writes the file `evals/greet.eval.ts` asks for, and the eval's two checks
+(the file exists, `node -e` returns the right greeting) pass. That's the whole loop: a
+prompt, an agent, checks. Open `evals/greet.eval.ts` to see the ten lines it took.
+
+### 2. Check your machine
+
+```bash
+npx reeval doctor
+```
+
+<!-- capture: doctor output on a machine with Docker and no key -->
+Doctor checks Node, Docker and its memory, the sandbox image, and each harness's key, and
+prints one fix per problem. Fix what it flags before step 3; a real run with a missing key
+fails after the sandbox is built, not before.
+
+### 3. Point it at a real agent
+
+Put a key in `.env` (git ignores it; doctor warns if it doesn't) and switch the config:
+
+```ts
+// reeval.config.ts
+import { defineConfig } from 'reeval'
+import { claudeCode } from 'reeval/harness'   // or cursor, codex, antigravity, …
+
+export default defineConfig({
+  include: ['evals/**/*.eval.ts'],
+  harness: claudeCode({ model: 'claude-sonnet-5' }),
+  timeout: '15m',
+})
+```
+
+The sandbox is now Docker. The key stays on your host: the container gets a placeholder
+and reeval's gateway swaps the real key in only on requests to that provider.
+
+### 4. Compare with and without a skill
+
+A skill the model can't guess, so the comparison has something to show:
+
+```markdown
+<!-- skills/house-greeting/SKILL.md -->
+---
+name: house-greeting
+description: How this codebase greets people
+---
+Greetings in this codebase always start with "Ahoy, " not "Hello, ".
+```
+
+```ts
+// evals/skill.eval.ts
+import { defineEnvironment, evaluate, expect, group } from 'reeval'
+
+const plain = defineEnvironment('plain', {})
+const withHouseGreeting = plain.extendEnvironment('with-house-greeting', ({ skill }) => ({
+  skills: [skill.local('../skills/house-greeting')],
+}))
+
+const greetsAda = `node -e "import('./greet.js').then((m) =>
+  process.exit(m.greet('Ada') === 'Ahoy, Ada!' ? 0 : 1))"`
+
+group('house greeting', { compare: { baseline: plain, variants: [withHouseGreeting] } }, () => {
+  evaluate('greets in the house style', async (c) => {
+    await c.send('Create greet.js exporting greet(name) that greets the person in our house style.')
+    await expect(c.exec(greetsAda)).toSucceed()
+  })
+})
+```
+
+```bash
+npx reeval run skill --runs 2      # ~1 min, 4 agent attempts
+```
+
+```text
+pass             house greeting › greets in the house style
+  arm                  pass
+  plain                0 of 2
+  with-house-greeting  2 of 2  can't tell yet
+  check                plain   with-house-greeting
+  house greeting       0 of 2  2 of 2
+    expected command to succeed, exit code 1
+```
+
+Read the last column before the pass counts. Two attempts per arm can't separate a real
+effect from luck, so `compare` says "can't tell yet" even at 0 of 2 against 2 of 2. Run
+`--runs 10` before you draw a conclusion, and check that the agent opened the skill at all:
+
+```bash
+npx reeval query lift       # each variant against its control, with the interval
+npx reeval query effort     # tool calls, agent time and tokens per arm
+npx reeval studio           # transcripts, diffs and whether the skill was read, on :4984
+```
+
+A skill the agent never opens can't help. Effort usually moves before pass rate does.
+
+### Next
+
+- Point `defineEnvironment` at your own repo: `workspace: git('github:you/repo', { ref })`
+- Swap the skill for a rules file or an MCP server: the same `extendEnvironment`
+- Run it on every PR: profiles, `--record`, and `reeval compare --fail-on-regression`
+- What lift and "can't tell yet" mean: *link to the explanation page*
+
 ## A minimal eval
 
 ```ts
