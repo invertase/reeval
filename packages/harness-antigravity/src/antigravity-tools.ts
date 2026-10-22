@@ -96,6 +96,11 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   call_mcp_tool: native('call_mcp_tool', 'Call MCP Tool'),
   generate_image: native('generate_image', 'Generate Image'),
   invoke_subagent: native('invoke_subagent', 'Invoke Subagent'),
+  manage_subagents: native('manage_subagents', 'Manage Subagents'),
+  // What it waits on a subagent with: `schedule` prompts it again after `DurationSeconds`.
+  schedule: native('schedule', 'Schedule'),
+  wait: native('wait', 'Wait'),
+  wait_5_seconds: native('wait_5_seconds', 'Wait 5 Seconds'),
   browser_subagent: native('browser_subagent', 'Browser Subagent'),
   notebook_edit: native('notebook_edit', 'Edit Notebook', 'edit'),
   ask_question: native('ask_question', 'Ask Question'),
@@ -177,15 +182,20 @@ export function projectToolCall(
     case 'read_url_content':
       return common('webFetch', { url: str(p.Url) ?? str(p.url) ?? '' })
     // A `tool` step's call, in the shape the translator gives a `subagent` step's: the CLI reports
-    // the same call either way.
-    case 'invoke_subagent':
-      if (!Array.isArray(p.Subagents)) break
+    // the same call either way. Its parameters list the `Subagents`, or name the one it runs.
+    case 'invoke_subagent': {
+      const subagents = Array.isArray(p.Subagents)
+        ? (p.Subagents as Array<Record<string, unknown> | null>)
+        : str(p.TypeName)
+          ? [p]
+          : undefined
+      if (!subagents) break
       return {
         toolName: 'invoke_subagent',
         nativeName,
         input: {
           ...p,
-          subagents: p.Subagents.map((a: Record<string, unknown> | null) => ({
+          subagents: subagents.map((a) => ({
             agent: str(a?.TypeName),
             role: str(a?.Role),
             prompt: str(a?.Prompt),
@@ -193,6 +203,7 @@ export function projectToolCall(
         },
         dynamic: false,
       }
+    }
   }
   const key = BY_NATIVE_NAME.get(nativeName)
   return key

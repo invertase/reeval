@@ -45,8 +45,8 @@ const searchResults = (text: string) =>
  * - A call it couldn't name (`acp_tool_<id>`) is named from OpenCode's first `tool_call` update,
  *   whose `name` or title is the tool's name: `shell` (its later titles are the command),
  *   `patch` (an `edit`), or `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
- *   `harness-acp` can pass `tool_call.name` through as `<server>_<tool>`; that is remapped
- *   the same way.
+ *   `harness-acp` can pass `tool_call.name` through instead (`patch`, `<server>_<tool>`); that
+ *   is remapped the same way.
  * - The `finish` part's usage is left as `@ai-sdk/harness-acp` mapped it from
  *   `PromptResponse.usage` (the whole turn). `usage_update.used` is the last step's
  *   context size, so it is not used here.
@@ -74,9 +74,9 @@ export class OpenCodeStreamTranslator {
         const name = this.nameFor(this.titles.get(id))
         if (name) out = { ...out, toolName: name }
       } else {
-        // harness-acp passes `<server>_<tool>` through.
+        // harness-acp passes `tool_call.name` through: `patch`, or `<server>_<tool>`.
         const name = this.nameFor(part.toolName)
-        if (name?.startsWith('mcp__')) out = { ...out, toolName: name }
+        if (name) out = { ...out, toolName: name }
       }
     }
     if (part.type !== 'tool-result') return [out]

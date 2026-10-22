@@ -49,6 +49,14 @@ export const GROK_BUILD_BUILTIN_TOOLS = {
     ...tool({ inputSchema: z.looseObject({ target_directory: z.string() }) }),
     toolUseKind: 'readonly',
   },
+  // Finds an MCP server's tool, by name and description, before `use_tool` calls it.
+  search_tool: {
+    ...tool({ inputSchema: z.looseObject({ query: z.string() }) }),
+    toolUseKind: 'readonly',
+  },
+  spawn_subagent: tool({
+    inputSchema: z.looseObject({ prompt: z.string(), subagent_type: z.string().optional() }),
+  }),
 } as const satisfies Record<string, BuiltinTool>
 
 export type GrokBuildBuiltinTools = typeof GROK_BUILD_BUILTIN_TOOLS

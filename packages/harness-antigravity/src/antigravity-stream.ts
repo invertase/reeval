@@ -35,7 +35,10 @@ export type AntigravityStepUpdate = {
   duration_seconds?: number
   usage?: AntigravityUsage
   tool_info?: AntigravityToolInfo
-  /** On a `subagent` step, the only report of an `invoke_subagent` call: no `tool` step comes. */
+  /**
+   * On a `subagent` step, the report of an `invoke_subagent` call, which a `tool` step for the
+   * same index may have opened.
+   */
   subagent_info?: {
     subagents?: Array<{ type_name?: string; role?: string; initial_prompt?: string }>
   }
