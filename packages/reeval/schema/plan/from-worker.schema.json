@@ -449,7 +449,7 @@
         "from": {
           "description": "A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.",
           "type": "string",
-          "pattern": "\\S"
+          "pattern": "^\\S+$"
         },
         "id": {
           "description": "Cell id; defaults to `docker` (`podman`), or `docker:<image>` for other images, plus an install hash.",

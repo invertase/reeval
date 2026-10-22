@@ -11,7 +11,6 @@ import {
   engineSpec,
   imageInfo,
   LABEL,
-  type NetworkPolicy,
   SANDBOX_HOME,
   SANDBOX_ROOT,
   SANDBOX_STATE,
@@ -20,8 +19,8 @@ import {
 } from '@reeval/sandbox-docker'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
-import { allowedHosts, egressLabel } from '../egress.ts'
-import type { DockerSandboxDescriptor, PlannedEgress } from '../types.ts'
+import { egressLabel, gatewayPolicy } from '../egress.ts'
+import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
@@ -46,13 +45,6 @@ export async function removeRunContainers(
 export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandboxSession }
 
 export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in s
-
-/** `deny-all` when a restricted policy allows no host at all, else an allowlist. */
-function networkPolicy(egress: PlannedEgress): NetworkPolicy {
-  const hosts = allowedHosts(egress)
-  if (hosts === null) return { mode: 'allow-all' }
-  return hosts.length ? { mode: 'custom', allowedHosts: hosts } : { mode: 'deny-all' }
-}
 
 /**
  * The gateway's events as debug lines: one per request, with DNS decisions and headers traced.
@@ -105,7 +97,7 @@ export async function createDockerSandbox(
     ...new Set([...(brokering ? [brokering.credential] : []), ...substitutions.map((s) => s.name)]),
   ]
   const debug = attemptDebug()
-  const policy = networkPolicy(options.egress)
+  const policy = gatewayPolicy(options.egress)
   const served: string[] = []
   const servedModel = brokering?.servedModel
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])

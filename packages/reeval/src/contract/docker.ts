@@ -47,7 +47,9 @@ const fields = {
   image: nonEmpty()
     .optional()
     .describe('An image that already has the harness baked in, used as is.'),
-  from: nonEmpty()
+  from: z
+    .string()
+    .regex(/^\S+$/, 'one word')
     .optional()
     .describe(
       'A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached.',
@@ -187,7 +189,8 @@ const DOCKER_HINTS: Record<string, string> = {
 const FIELD: Record<string, (value: unknown) => string> = {
   id: (v) => `docker({ id }) must be a non-empty string (got ${got(v)})`,
   image: (v) => `docker({ image }) must be a non-empty string (got ${got(v)})`,
-  from: (v) => `docker({ from }) must be a non-empty string (got ${got(v)})`,
+  from: (v) =>
+    `docker({ from }) takes an image reference with no spaces or line breaks, e.g. from: 'python:3.12-slim' (got ${got(v)})`,
   root: (v) => `docker({ root }) is true or false (got ${got(v)})`,
   capabilities: (v) =>
     `docker({ capabilities }) takes Linux capability names, e.g. capabilities: ['NET_RAW'] (got ${got(v)})`,
