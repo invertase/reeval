@@ -4,7 +4,7 @@ evals/unpacked.eval.ts › pi loads the plugin        pi:gemini-3.8-flash/pi/doc
 evals/unpacked.eval.ts › fx loads the plugin        fx:gpt-4.1/fx/docker                       control  gated  ×1  plugins review (skills, mcp)
 excluded: —
 image docker · opencode · 1 evals
-  base  reeval-sandbox:opencode-0.2.8  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:opencode-0.2.9  (reeval's image: built when missing or when its base changed)
 image docker · pi · 1 evals
   base  reeval-sandbox:pi-0.2.7  (reeval's image: built when missing or when its base changed)
 image docker · fx · 1 evals
