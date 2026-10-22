@@ -23,6 +23,7 @@ on:
       - packages/reeval/src/jiti.ts
       - packages/reeval/src/engine/pool.ts
       - packages/reeval/src/engine/worker-entry.ts
+      - packages/reeval/src/studio/index.ts
       - packages/reeval/tsdown.config.mjs
 
 permissions:
