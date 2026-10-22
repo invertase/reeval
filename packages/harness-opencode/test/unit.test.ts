@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import {
   createOpenCode,
@@ -17,15 +19,17 @@ import { OPENCODE_BUILTIN_TOOLS } from '../src/opencode-tools.ts'
 import { VERSION } from '../src/version.ts'
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+const require = createRequire(import.meta.url)
 
 test("VERSION is package.json's", () => {
   assert.equal(VERSION, pkg.version)
 })
 
 test('the install, its lockfile and its allowed build pin one @opencode/cli release', () => {
-  assert.deepEqual(JSON.parse(OPENCODE_PACKAGE_JSON).dependencies, {
-    '@opencode/cli': OPENCODE_CLI_VERSION,
-  })
+  assert.equal(
+    JSON.parse(OPENCODE_PACKAGE_JSON).dependencies['@opencode/cli'],
+    OPENCODE_CLI_VERSION,
+  )
   assert.match(OPENCODE_PNPM_LOCK, new RegExp(`^  '@opencode/cli@${OPENCODE_CLI_VERSION}':$`, 'm'))
   assert.match(
     OPENCODE_PNPM_LOCK,
@@ -37,6 +41,29 @@ test('the install, its lockfile and its allowed build pin one @opencode/cli rele
     ),
   )
   assert.doesNotMatch(OPENCODE_PNPM_LOCK, /opencode-ai/)
+})
+
+test("the install is the whole bridge install: harness-acp's bridge dependencies, locked", () => {
+  const bridge = JSON.parse(
+    readFileSync(
+      join(
+        dirname(require.resolve('@ai-sdk/harness-acp/package.json')),
+        'dist/bridge/package.json',
+      ),
+      'utf8',
+    ),
+  ).dependencies as Record<string, string>
+  assert.deepEqual(JSON.parse(OPENCODE_PACKAGE_JSON).dependencies, {
+    ...bridge,
+    '@opencode/cli': OPENCODE_CLI_VERSION,
+  })
+  for (const [name, version] of Object.entries(bridge)) {
+    assert.match(
+      OPENCODE_PNPM_LOCK,
+      new RegExp(`^ {6}'?${name}'?:\\n {8}specifier: ${version}\\n`, 'm'),
+      name,
+    )
+  }
 })
 
 test('the musl builds are left out of the install, and only those', () => {

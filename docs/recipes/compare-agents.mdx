@@ -41,7 +41,7 @@ Every harness needs a `model`. `params` sets Cursor's model parameters; `fast: '
 | Harness | Id (in cell keys and filters) | Key in `.env.local` | Sandbox image |
 |---|---|---|---|
 | `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `reeval-sandbox:cursor-0.1.6` |
-| `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `reeval-sandbox:claude-code-1.0.160-patch.b17cde50` |
+| `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `reeval-sandbox:claude-code-1.0.163-patch.7791e5a1` |
 | `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `reeval-sandbox:antigravity-0.1.9` |
 
 Each key stays on the host and is swapped in by the egress gateway only on that agent's API endpoints (see [Credential brokering](/concepts/credential-brokering)).

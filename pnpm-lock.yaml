@@ -7,9 +7,9 @@ settings:
 pnpmfileChecksum: sha256-tz2V/eHX+Q8WGNFcAFXFn2GNH3+HQJF86vVSLAPPwqA=
 
 patchedDependencies:
-  '@ai-sdk/harness-claude-code@1.0.160':
-    hash: b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514
-    path: patches/@ai-sdk__harness-claude-code@1.0.160.patch
+  '@ai-sdk/harness-claude-code@1.0.163':
+    hash: 7791e5a14a29b7fbc4ae4ad71dd557a137c50a3909496afd46de4f9d6264c29f
+    path: patches/@ai-sdk__harness-claude-code@1.0.163.patch
 
 importers:
 
@@ -55,14 +55,14 @@ importers:
   packages/harness-antigravity:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -70,14 +70,14 @@ importers:
   packages/harness-codex:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -85,14 +85,14 @@ importers:
   packages/harness-cursor-sdk:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -100,17 +100,17 @@ importers:
   packages/harness-fx:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/harness-acp':
-        specifier: 1.0.95
-        version: 1.0.95(zod@4.6.7)
+        specifier: 1.0.98
+        version: 1.0.98(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -118,17 +118,17 @@ importers:
   packages/harness-goose:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/harness-acp':
-        specifier: 1.0.95
-        version: 1.0.95(zod@4.6.7)
+        specifier: 1.0.98
+        version: 1.0.98(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -136,17 +136,17 @@ importers:
   packages/harness-grok-build:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/harness-acp':
-        specifier: 1.0.95
-        version: 1.0.95(zod@4.6.7)
+        specifier: 1.0.98
+        version: 1.0.98(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -154,17 +154,17 @@ importers:
   packages/harness-opencode:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/harness-acp':
-        specifier: 1.0.95
-        version: 1.0.95(zod@4.6.7)
+        specifier: 1.0.98
+        version: 1.0.98(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -172,14 +172,14 @@ importers:
   packages/harness-pi:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -187,23 +187,23 @@ importers:
   packages/reeval:
     dependencies:
       '@ai-sdk/google':
-        specifier: 4.0.100
-        version: 4.0.100(zod@4.6.7)
+        specifier: 4.0.102
+        version: 4.0.102(zod@4.6.7)
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/harness-acp':
-        specifier: 1.0.95
-        version: 1.0.95(zod@4.6.7)
+        specifier: 1.0.98
+        version: 1.0.98(zod@4.6.7)
       '@ai-sdk/provider':
-        specifier: 4.0.30
-        version: 4.0.30
+        specifier: 4.0.31
+        version: 4.0.31
       '@ai-sdk/provider-utils':
-        specifier: 5.0.63
-        version: 5.0.63(zod@4.6.7)
+        specifier: 5.0.65
+        version: 5.0.65(zod@4.6.7)
       '@ai-sdk/typesafe-ai':
-        specifier: 3.0.22
-        version: 3.0.22(zod@4.6.7)
+        specifier: 3.0.24
+        version: 3.0.24(zod@4.6.7)
       '@hono/node-server':
         specifier: 2.1.5
         version: 2.1.5(hono@4.13.13)
@@ -217,8 +217,8 @@ importers:
         specifier: 5.0.5
         version: 5.0.5
       ai:
-        specifier: 7.0.145
-        version: 7.0.145(zod@4.6.7)
+        specifier: 7.0.148
+        version: 7.0.148(zod@4.6.7)
       commander:
         specifier: 15.0.0
         version: 15.0.0
@@ -251,8 +251,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@ai-sdk/harness-claude-code':
-        specifier: 1.0.160
-        version: 1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)
+        specifier: 1.0.163
+        version: 1.0.163(patch_hash=7791e5a14a29b7fbc4ae4ad71dd557a137c50a3909496afd46de4f9d6264c29f)(zod@4.6.7)
       '@modelcontextprotocol/client':
         specifier: 2.3.1
         version: 2.3.1
@@ -275,7 +275,7 @@ importers:
         specifier: workspace:0.1.1
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.9
+        specifier: workspace:0.2.10
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.7
@@ -298,11 +298,11 @@ importers:
   packages/sandbox-docker:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.156
-        version: 1.0.156(ws@8.22.0)(zod@4.6.7)
+        specifier: 1.0.159
+        version: 1.0.159(ws@8.22.0)(zod@4.6.7)
       '@ai-sdk/harness-claude-code':
-        specifier: 1.0.160
-        version: 1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)
+        specifier: 1.0.163
+        version: 1.0.163(patch_hash=7791e5a14a29b7fbc4ae4ad71dd557a137c50a3909496afd46de4f9d6264c29f)(zod@4.6.7)
       '@reeval/harness-antigravity':
         specifier: workspace:0.1.9
         version: link:../harness-antigravity
@@ -322,7 +322,7 @@ importers:
         specifier: workspace:0.1.1
         version: link:../harness-grok-build
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.9
+        specifier: workspace:0.2.10
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.7
@@ -393,32 +393,32 @@ importers:
 
 packages:
 
-  '@ai-sdk/gateway@4.0.118':
-    resolution: {integrity: sha512-n3s1wl8uqqCtFiIWX0jCV+jem6WhUWrC6oZ/C2t3WR/2PdsPOryb8m4BPQO04wYRgLJSKiy2zlz/Le2AnjYs8A==}
+  '@ai-sdk/gateway@4.0.121':
+    resolution: {integrity: sha512-cPNXvQ4B5OkmVAm98Dxe1fHdMthyqqqAG0HJx3D92NUa9FpcvkNxdAqiuZdeAhNAodFb9lBrslzzzEwxuVS53A==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/google@4.0.100':
-    resolution: {integrity: sha512-kHmVbcMtuF891tT9GFxZODwF6SGqBCpLqBi/rBdkexj466lPX68DZVjqmsrvC6+g4yIrreuAkJiT1/wXV21jcg==}
+  '@ai-sdk/google@4.0.102':
+    resolution: {integrity: sha512-xbiBNOPcHDnxIGPhPAdHAhf1EAw7KuwMAP4/urT7mYBEwoIfEfFr7hVm2c0HQwrtL0hokw6WtpkolBec92vt1A==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/harness-acp@1.0.95':
-    resolution: {integrity: sha512-vA9DRntHZjCEfMWTVBUPxBdkJYbqhmzbGhEqjtynpMx43pjAl/IdJsniwkZv1UnSJaumM7l3Zwo0qMe0qWA7Fw==}
+  '@ai-sdk/harness-acp@1.0.98':
+    resolution: {integrity: sha512-R1ugoWesuzPti+v394NqE3Kknla449D+OeQxsyJD3PD6iG8Wi4QRp9A7o5HCluv4em+ClU9qBpqtuRS+xc/zcQ==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/harness-claude-code@1.0.160':
-    resolution: {integrity: sha512-YrQgWSc94KwUDREPydRq1Qdr/Wsh2WBNGT3oiEM/UHnFxVbXPFUcLN7DpiNhlgXnvM/7IcT4SsYAn2MeXJ1rsA==}
+  '@ai-sdk/harness-claude-code@1.0.163':
+    resolution: {integrity: sha512-3B7pSWVIoNU8prJRyYzQzfxpH6IYmdPDajdugD1mxSU/opAV4gIKr5mPQSTX6xvoU6AGolQ1GMXFpyJwMDgp3Q==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/harness@1.0.156':
-    resolution: {integrity: sha512-MFHxxoIQsVIUJx6LHtDMSIGHo40uCHeA0yms25xtOkatI41nIE2WuovmRtQFwPJNVbvA5T9hwwv9oprnWu1e/Q==}
+  '@ai-sdk/harness@1.0.159':
+    resolution: {integrity: sha512-wOa+IzY6RTr4gbM3Nl98kANiSh1NVtwWtI7mFArMQxy0sNc5EF1kf11a8zQsdsOPYdCBLV6MMAGo9ubPAk54fw==}
     engines: {node: '>=22'}
     peerDependencies:
       ws: ^8.21.0
@@ -427,18 +427,18 @@ packages:
       ws:
         optional: true
 
-  '@ai-sdk/provider-utils@5.0.63':
-    resolution: {integrity: sha512-98Wg18IAdEIwlyon2dCvrDfLNitjwshP+EVFmwnA6+APFf7rj5nGci/B7P5qfX0ea0x9gq6ZMRQJ6Qw22mVHqg==}
+  '@ai-sdk/provider-utils@5.0.65':
+    resolution: {integrity: sha512-LCugcsP8oWmdeI3BASf4Fuo1wiC6Qx0YrefFssl7n12s+LV4DNi5RdwWQrtrB4oek3GGNQRN/h/NSwVZM2eHKw==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/provider@4.0.30':
-    resolution: {integrity: sha512-SWrYVA0pJBNIee3eHnjr9gop0n/JELHJlYksLC4/O1QIuoAxWJbI2z3pA3Q5f0fKNAfk1sS8dtAr5ppsOdcLgA==}
+  '@ai-sdk/provider@4.0.31':
+    resolution: {integrity: sha512-3wJnwVTFg8SwOyoZCv+ov7Re2GB+7IQnU5a5MYJACrtiWDDUHgqTBeeesq2MB2ddgojzL8hgWleltwpAgtUqfg==}
     engines: {node: '>=22'}
 
-  '@ai-sdk/typesafe-ai@3.0.22':
-    resolution: {integrity: sha512-mnCt7qYG6Lc9zqsEMo/EbUblniHrnKyJxm3DEQTZ/ehU9VY+8LHhjc4G5xbGFtebAtrAeInzLC1t2HVQZ3nb6Q==}
+  '@ai-sdk/typesafe-ai@3.0.24':
+    resolution: {integrity: sha512-5hHwKOXq9skAOM5b/2+GX+iJOeC6g0la76vbvE7SdhfqVvUI7u3hqAU99BcJVZ9tEOPhneY/jR7UClgMzC736Q==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2136,8 +2136,8 @@ packages:
   '@yuku-toolchain/types@0.19.0':
     resolution: {integrity: sha512-tFkNbsP4WXX9UMUC5syJGdK9dPMLK0PPaIuXCcCYH75sZ8MrebfBZ2XvCILRTw8AgLivSSCfDa4R67iYBDa4Kg==}
 
-  ai@7.0.145:
-    resolution: {integrity: sha512-rHbewywvYYRd18A/EkJvZJyxg5AH+vGvxASKSGL5T24U4qKzVhPTubxLJRYEtI05Yih9bAUV9cob4jRyIdSkSA==}
+  ai@7.0.148:
+    resolution: {integrity: sha512-FPgfIAhz/FrlzcvqTN7pGGibahR5rD19NXZWX9WQ1tskTic+CN+jxvubpreyq8uN1maIEHPwvZmil/3IYN8FIw==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -3035,66 +3035,66 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/gateway@4.0.118(zod@4.6.7)':
+  '@ai-sdk/gateway@4.0.121(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/provider': 4.0.30
-      '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
+      '@ai-sdk/provider': 4.0.31
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.7)
       '@vercel/oidc': 3.2.0
       zod: 4.6.7
 
-  '@ai-sdk/google@4.0.100(zod@4.6.7)':
+  '@ai-sdk/google@4.0.102(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/provider': 4.0.30
-      '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
+      '@ai-sdk/provider': 4.0.31
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.7)
       zod: 4.6.7
 
-  '@ai-sdk/harness-acp@1.0.95(zod@4.6.7)':
+  '@ai-sdk/harness-acp@1.0.98(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/harness': 1.0.156(ws@8.22.0)(zod@4.6.7)
-      '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
+      '@ai-sdk/harness': 1.0.159(ws@8.22.0)(zod@4.6.7)
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.7)
       ws: 8.22.0
       zod: 4.6.7
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@ai-sdk/harness-claude-code@1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)':
+  '@ai-sdk/harness-claude-code@1.0.163(patch_hash=7791e5a14a29b7fbc4ae4ad71dd557a137c50a3909496afd46de4f9d6264c29f)(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/harness': 1.0.156(ws@8.22.0)(zod@4.6.7)
-      '@ai-sdk/provider': 4.0.30
-      '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
+      '@ai-sdk/harness': 1.0.159(ws@8.22.0)(zod@4.6.7)
+      '@ai-sdk/provider': 4.0.31
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.7)
       ws: 8.22.0
       zod: 4.6.7
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@ai-sdk/harness@1.0.156(ws@8.22.0)(zod@4.6.7)':
+  '@ai-sdk/harness@1.0.159(ws@8.22.0)(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/provider': 4.0.30
-      '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
-      ai: 7.0.145(zod@4.6.7)
+      '@ai-sdk/provider': 4.0.31
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.7)
+      ai: 7.0.148(zod@4.6.7)
       zod: 4.6.7
     optionalDependencies:
       ws: 8.22.0
 
-  '@ai-sdk/provider-utils@5.0.63(zod@4.6.7)':
+  '@ai-sdk/provider-utils@5.0.65(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/provider': 4.0.30
+      '@ai-sdk/provider': 4.0.31
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.1
       undici: 7.29.1
       zod: 4.6.7
 
-  '@ai-sdk/provider@4.0.30':
+  '@ai-sdk/provider@4.0.31':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/typesafe-ai@3.0.22(zod@4.6.7)':
+  '@ai-sdk/typesafe-ai@3.0.24(zod@4.6.7)':
     dependencies:
-      '@ai-sdk/provider': 4.0.30
-      '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
+      '@ai-sdk/provider': 4.0.31
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.7)
       zod: 4.6.7
 
   '@bcoe/v8-coverage@1.0.2': {}
@@ -4493,11 +4493,11 @@ snapshots:
 
   '@yuku-toolchain/types@0.19.0': {}
 
-  ai@7.0.145(zod@4.6.7):
+  ai@7.0.148(zod@4.6.7):
     dependencies:
-      '@ai-sdk/gateway': 4.0.118(zod@4.6.7)
-      '@ai-sdk/provider': 4.0.30
-      '@ai-sdk/provider-utils': 5.0.63(zod@4.6.7)
+      '@ai-sdk/gateway': 4.0.121(zod@4.6.7)
+      '@ai-sdk/provider': 4.0.31
+      '@ai-sdk/provider-utils': 5.0.65(zod@4.6.7)
       zod: 4.6.7
 
   ansi-regex@6.3.0: {}
