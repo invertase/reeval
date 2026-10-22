@@ -97,6 +97,10 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   generate_image: native('generate_image', 'Generate Image'),
   invoke_subagent: native('invoke_subagent', 'Invoke Subagent'),
   manage_subagents: native('manage_subagents', 'Manage Subagents'),
+  // What it waits on a subagent with: `schedule` prompts it again after `DurationSeconds`.
+  schedule: native('schedule', 'Schedule'),
+  wait: native('wait', 'Wait'),
+  wait_5_seconds: native('wait_5_seconds', 'Wait 5 Seconds'),
   browser_subagent: native('browser_subagent', 'Browser Subagent'),
   notebook_edit: native('notebook_edit', 'Edit Notebook', 'edit'),
   ask_question: native('ask_question', 'Ask Question'),

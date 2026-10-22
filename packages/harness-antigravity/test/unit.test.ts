@@ -211,6 +211,13 @@ describe('tools', () => {
     })
   })
 
+  test('the tools it waits on a subagent with are in the catalog (CLI 1.4.3)', () => {
+    const p = { DurationSeconds: 2, Prompt: 'Check if subagent has finished or replied.' }
+    assert.equal(projectToolCall('schedule', p).dynamic, false)
+    assert.equal(projectToolCall('wait', {}).dynamic, false)
+    assert.equal(projectToolCall('wait_5_seconds', {}).dynamic, false)
+  })
+
   test('an MCP call is named mcp__<server>__<tool>, like the other harnesses (CLI 1.2.11)', () => {
     const p = { Arguments: { n: 1 }, ServerName: 'stamp', ToolName: 'house_stamp' }
     assert.deepEqual(projectToolCall('call_mcp_tool', p), {
