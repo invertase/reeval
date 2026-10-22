@@ -112,6 +112,13 @@ describe('git workspaces', { concurrency: false }, () => {
         `no ref "${first}" \\(a branch, tag or commit SHA\\)\\. \\.\\./shallow is a shallow clone, so it may not have that ref: fetch it \\(git fetch origin ${first}\\) or clone the full history \\(fetch-depth: 0 in actions/checkout\\)\\.`,
       ),
     )
+    // The commit the clone has, by SHA into an empty cache: git's lazy fetch of it from a shallow
+    // clone retries for about 45s, so this bounds the time well under that.
+    const started = Date.now()
+    const tip = git(join(p.dir, 'shallow'), 'rev-parse', 'HEAD')
+    const ok = await runCli(p.dir, ['run'], { env: { REPO: 'shallow', PIN: tip } })
+    assert.equal(ok.code, 0, ok.stdout + ok.stderr)
+    assert.ok(Date.now() - started < 30_000, `took ${Date.now() - started}ms`)
     // Canary: the full repository's missing ref gets no shallow hint.
     const full = await runCli(p.dir, ['run'], { env: { REPO: 'repo', PIN: 'v9' } })
     assert.match(full.stdout + full.stderr, /no ref "v9"/)

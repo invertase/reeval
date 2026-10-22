@@ -132,7 +132,15 @@ async function prepareOne(
 
   let commit: string | undefined
   if (w.ref && FULL_SHA.test(w.ref)) {
-    const known = await gitIn(dir, ['rev-parse', '--verify', '-q', `${w.ref}^{commit}`])
+    // Only what the cache holds: a lazy fetch of a commit from a shallow local clone retries for a minute.
+    const known = await gitIn(
+      dir,
+      ['rev-parse', '--verify', '-q', `${w.ref}^{commit}`],
+      undefined,
+      {
+        GIT_NO_LAZY_FETCH: '1',
+      },
+    )
     if (known.code === 0) commit = known.text
   }
   if (!commit) {
