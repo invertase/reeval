@@ -1,0 +1,408 @@
+---
+title: "Options reference"
+description: "Look up each option key, where reeval accepts it, and how values cascade."
+---
+
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Options)
+[//]: # (owns: every CONFIG_KEYS and EVAL_OPTION_KEYS entry as a Property; the option-keys table; the cascade order)
+[//]: # (excludes: when to override an option in a group or evaluation -> /evals/groups)
+[//]: # (excludes: profile keys -> /reference/profiles)
+[//]: # (excludes: task walkthroughs -> the How-To page a key links to)
+[//]: # (inbound: /, /core-concepts, /evals/evaluate, /evals/groups, /evals/judges, /evals/servers, /evals/profiles, /comparisons/compare, /environments, /environments/secrets, /environments/egress, /sandboxes, /harnesses, /results/analysis, /reference/config, /reference/profiles, /reference/api, /reference/context, /reference/environment, /reference/env-vars, /reference/glossary, /recipes/skill-comparison, /recipes/agent-comparison, /recipes/app-check, /recipes/docs-comparison, /recipes/mcp-comparison)
+[//]: # (outbound: /evals/groups#see-how-options-cascade, /harnesses#run-several-harnesses, /sandboxes, /environments, /comparisons/compare, /environments/egress, /evals/judges, /evals/servers#set-the-viewport-and-browser, /comparisons/compare#ask-which-did-better, /reference/profiles, /environments/secrets#broker-a-secret-to-a-host, /results/analysis#set-an-analysis-model)
+
+## Where each option is accepted
+
+The table shows where reeval accepts each key.
+
+[//]: # (generated:option-keys)
+
+| Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
+|---|---|---|---|---|
+| [`include`](#include) | ✓ |  |  |  |
+| [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
+| [`sandbox`](#sandbox) | ✓ | ✓ | ✓ |  |
+| [`environment`](#environment) | ✓ | ✓ | ✓ |  |
+| [`runs`](#runs) | ✓ | ✓ | ✓ | ✓ |
+| [`gate`](#gate) | ✓ | ✓ | ✓ |  |
+| [`env`](#env) | ✓ | ✓ | ✓ |  |
+| [`egress`](#egress) | ✓ | ✓ | ✓ |  |
+| [`judge`](#judge) | ✓ | ✓ | ✓ |  |
+| [`capture`](#capture) | ✓ | ✓ | ✓ |  |
+| [`question`](#question) | ✓ | ✓ | ✓ |  |
+| [`timeout`](#timeout) | ✓ | ✓ | ✓ |  |
+| [`concurrency`](#concurrency) | ✓ |  |  |  |
+| [`record`](#record) | ✓ |  |  |  |
+| [`history`](#history) | ✓ |  |  |  |
+| [`budget`](#budget) | ✓ |  |  |  |
+| [`profiles`](#profiles) | ✓ |  |  |  |
+| [`defaultProfile`](#defaultprofile) | ✓ |  |  |  |
+| [`secrets`](#secrets) | ✓ |  |  |  |
+| [`debug`](#debug) | ✓ |  |  |  |
+| [`analysis`](#analysis) | ✓ |  |  |  |
+| [`compare`](#compare) |  |  | ✓ | ✓ |
+| [`tags`](#tags) |  |  | ✓ |  |
+| [`pin`](#pin) |  |  | ✓ |  |
+
+[//]: # (/generated:option-keys)
+
+## The cascade
+
+reeval applies the `reeval.config.ts` file, then the selected profile's `defaults`, then each enclosing `group()`, outermost first, then the `evaluate()` call. A profile `limit` then narrows `runs`, `compare`, and `harness`, except the keys in `pin`.
+
+A later level replaces most keys, `compare` whole. `env` merges by name, `judge` and `question` field by field with `state` key by key, `capture` shallowly, and `tags` and `pin` keep every value.
+
+For more information about overriding an option, see [Group evaluations](/evals/groups#see-how-options-cascade).
+
+## `include`
+
+`include` lists the glob patterns for evaluation files, relative to the `reeval.config.ts` file's directory.
+
+<Property name="include" type="string[]" optional>
+  The default is `evals/**/*.eval.ts` and `evals/**/*.eval.py`.
+</Property>
+
+## `harness`
+
+`harness` names the agents that run an evaluation, one cell each.
+
+<Property name="harness" type="HarnessOption | string[]" optional>
+  The config and profile defaults accept a descriptor or list, which replaces inherited harnesses. Groups and evaluations also accept `{ add }`, `{ only }`, or, in TypeScript, a function of the inherited list. A profile `limit` lists allowed ids. reeval refuses `add` beside `only`, an empty resolved list, an unknown `only` id, and repeated ids among the resolved descriptors.
+</Property>
+
+The default is:
+
+```ts
+harness: cursor({ model: 'composer-2.5' })
+```
+
+For more information about harness forms, see [Choose a harness](/harnesses#run-several-harnesses).
+
+## `sandbox`
+
+`sandbox` is where an attempt runs when its environment names none.
+
+<Property name="sandbox" type="SandboxDescriptor" optional>
+  A descriptor from a sandbox factory, with `maxConcurrent` a whole number of at least 1. The default is `docker()`. An empty control in a comparison without a baseline or environment uses the first variant's sandbox when that variant sets one.
+</Property>
+
+For more information about sandbox factories, see [Choose a sandbox](/sandboxes).
+
+## `environment`
+
+`environment` is what an evaluation runs in, and the control of a `compare` without `compare.baseline`.
+
+<Property name="environment" type="Environment" optional>
+  One environment from `defineEnvironment()`. reeval refuses a list, and `environment` beside `compare.baseline`.
+</Property>
+
+For more information about environments, see [Define an environment](/environments).
+
+## `compare`
+
+`compare` runs the control and each variant with the same prompt and checks.
+
+<Property name="compare" type="CompareOptions | false | { maxVariants: number }" optional>
+  A group or an evaluation refuses `false`. On a profile `limit`, `false` drops the variants and `{ maxVariants }` keeps the first that many, where `maxVariants` is a whole number of at least 0.
+</Property>
+
+<Property name="compare.baseline" type="Environment" optional>
+  The control. Without it, the cascaded `environment`, or an empty environment named `baseline`.
+</Property>
+
+<Property name="compare.variants" type="Environment[]" required>
+  A non-empty list. reeval refuses two variants with one name, or one named like the control.
+</Property>
+
+<Property name="compare.gate" type="'variants' | 'all' | 'none'" optional>
+  `'variants'` (the default) gates the variants only, `'all'` every cell, and `'none'` no cell.
+</Property>
+
+<Property name="compare.minLift" type="number" optional>
+  Lift from -1 to 1; a variant cell fails when its lift interval's lower end is below it.
+</Property>
+
+<Property name="compare.harness" type="Array<string | HarnessDescriptor>" optional>
+  The harnesses to compare on; the others run the control only. reeval refuses an id the evaluation does not run.
+</Property>
+
+<Property name="compare.questions" type="CompareQuestion[]" optional>
+  A non-empty list of unique questions, as strings or objects with `question`, `model`, `across`, `state`, and `artifacts`. They annotate the comparison with win rates and never change pass, fail, or the exit code.
+</Property>
+
+<Property name="compare.across" type="'environment' | 'harness' | Array<'environment' | 'harness'>" optional>
+  The factor a question without its own `across` varies; omitted, or both, asks both pair kinds. A list must be non-empty and contain each factor once.
+</Property>
+
+For more information about comparisons, see [Compare setups](/comparisons/compare).
+
+## `runs`
+
+`runs` is the number of attempts in each cell.
+
+<Property name="runs" type="number" optional>
+  A whole number of at least 1, and 1 by default. `--runs` replaces it after a profile `limit`, pinned or not.
+</Property>
+
+## `gate`
+
+`gate` is how a cell's attempts decide its outcome.
+
+<Property name="gate" type="'all' | { passRate: number }" optional>
+  `'all'` (the default) passes when every counted outcome is `pass`. `{ passRate }` passes when at least that share of `pass` and `fail` outcomes passes, above 0 and at most 1. When no outcome counts, the cell takes its worst attempt outcome.
+</Property>
+
+## `env`
+
+`env` is the variables and secrets the sandbox gets.
+
+<Property name="env" type="Record<string, string | Secret>" optional>
+  Names use letters, digits, and `_`, not starting with a digit. A value is a string or a secret; reeval refuses a literal string under a secret-looking name.
+</Property>
+
+## `egress`
+
+`egress` is where the sandbox may connect. An environment accepts it too.
+
+<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }" optional>
+  `'allow-all'` (the default) allows every host, `'deny-all'` blocks all but the automatic hosts, and `{ allow }` adds hosts to them. A group or an evaluation overrides the environment, which overrides the inherited policy.
+</Property>
+
+For more information about the automatic hosts, see [Egress](/environments/egress).
+
+## `judge`
+
+`judge` is the defaults for `c.judge()`.
+
+<Property name="judge" type="JudgeOptions" optional>
+  A profile's `judge` applies under its `defaults.judge`. reeval refuses `on` and `artifacts` here.
+</Property>
+
+<Property name="judge.model" type="string | JudgeModel" optional>
+  A `'provider/model'` string, or a model object outside the `reeval.config.ts` file.
+</Property>
+
+<Property name="judge.threshold" type="number" optional>
+  The minimum passing score, from 0 to 1. The default is 0.8.
+</Property>
+
+<Property name="judge.providerOptions" type="Record<string, Record<string, JSONValue>>" optional>
+  Provider settings, keyed by provider.
+</Property>
+
+<Property name="judge.maxConcurrent" type="number" optional>
+  The maximum judge calls to this model's provider at once across the run, a whole number of at least 1.
+</Property>
+
+<Property name="judge.state" type="JudgeStateOptions" optional>
+  What the judge is given beside the question.
+</Property>
+
+<Property name="judge.state.task" type="boolean" optional>
+  The graded turn's prompt. The default is `true`.
+</Property>
+
+<Property name="judge.state.output" type="boolean" optional>
+  The final message, or the value of `on`. The default is `true`.
+</Property>
+
+<Property name="judge.state.files" type="boolean" optional>
+  `status path` lines for the changed files. The default is `true`.
+</Property>
+
+<Property name="judge.state.diff" type="boolean | string[]" optional>
+  The diff from the start of the evaluation, or a non-empty list of gitignore-style patterns over workspace paths. The last matching pattern wins, and `!` excludes. The default is `true`.
+</Property>
+
+<Property name="judge.state.contents" type="string[]" optional>
+  Whole workspace files, as paths or patterns, left out of the diff. The default is none.
+</Property>
+
+<Property name="judge.state.transcript" type="boolean | 'tools' | 'full'" optional>
+  The transcript has three enabled modes: `true` clips tool output, `'tools'` is tool calls only, and `'full'` is everything. The default is `false`.
+</Property>
+
+<Property name="judge.state.turns" type="'last' | 'all'" optional>
+  `'last'` is the graded turn, and `'all'` every turn up to it. The default is `'last'`.
+</Property>
+
+<Property name="judge.state.checks" type="boolean | string[]" optional>
+  `c.exec` results, or a list of the commands to show. The default is `false`.
+</Property>
+
+For more information about judging, see [Score agent work](/evals/judges).
+
+## `capture`
+
+`capture` is the defaults for `c.capture()`.
+
+<Property name="capture" type="CaptureOptions" optional>
+  reeval refuses `instructions`, `wait`, `name`, and `path` here.
+</Property>
+
+<Property name="capture.viewport" type="{ width: number, height: number } | 'full-page'" optional>
+  Whole numbers above 0, or `'full-page'`. The default is 1280 by 720.
+</Property>
+
+<Property name="capture.timeout" type="Duration" optional>
+  How long to poll before failing, above zero. The default is `'60s'`.
+</Property>
+
+<Property name="capture.browser" type="boolean" optional>
+  `false` refuses the host browser, and `c.capture()` throws.
+</Property>
+
+<Property name="capture.model" type="string" optional>
+  The `'provider/model'` string behind `instructions`, or `analysis.model`, then a judge language model. reeval refuses an evaluation model.
+</Property>
+
+For more information about screenshots, see [Check an app](/evals/servers#set-the-viewport-and-browser).
+
+## `question`
+
+`question` is the defaults for every compare question.
+
+<Property name="question" type="QuestionOptions" optional>
+  reeval refuses a question showing nothing but `turns` and no `artifacts`.
+</Property>
+
+<Property name="question.model" type="string" optional>
+  A `'provider/model'` string, below a question's own `model` and above `analysis.model`, then a judge language model. reeval refuses an evaluation model.
+</Property>
+
+<Property name="question.state" type="QuestionStateOptions" optional>
+  The keys of `judge.state` without `contents`, which reeval refuses. `task` and `diff` default to `true`, `output`, `files`, `transcript`, and `checks` to `false`, and `turns` to `'all'`. A transcript names harness tools, so a harness pair is not blind.
+</Property>
+
+<Property name="question.artifacts" type="true | string[]" optional>
+  Each side's captures as `true` or a non-empty list of non-empty capture names, below a question's own `artifacts`. The default is none.
+</Property>
+
+For more information about compare questions, see [Compare setups](/comparisons/compare#ask-which-did-better).
+
+## `timeout`
+
+`timeout` is the limit on one attempt.
+
+<Property name="timeout" type="Duration" optional>
+  Milliseconds, or a number with `ms`, `s`, `m`, or `h`, above zero. The default is `'15m'`.
+</Property>
+
+## `tags`
+
+`tags` labels an evaluation for `--tag` and a profile's `tags`.
+
+<Property name="tags" type="string[]" optional>
+  Labels from each group and the evaluation, without duplicates. A filter is a label, or `!` and a label to exclude; every filter has to match.
+</Property>
+
+## `pin`
+
+`pin` lists the keys a profile `limit` does not narrow.
+
+<Property name="pin" type="Array<'harness' | 'runs' | 'compare'>" optional>
+  Any of `harness`, `runs`, and `compare`, kept from enclosing groups. reeval refuses any other entry.
+</Property>
+
+## `concurrency`
+
+`concurrency` is the most attempts that run in parallel.
+
+<Property name="concurrency" type="number" optional>
+  A whole number of at least 1, below `--concurrency` and `REEVAL_CONCURRENCY`. The default is at least 1 and otherwise the smallest of 8, the CPU count, and the whole gigabytes of memory.
+</Property>
+
+## `record`
+
+`record` is when a run is copied into the history directory.
+
+<Property name="record" type="'manual' | 'ci' | 'always'" optional>
+  `'manual'` copies on `reeval record`, `'ci'` (the default) when `CI` is set and is not `false`, and `'always'` every run except an interrupted one; a duration-budget-stopped run is recorded. A profile's `record` replaces it.
+</Property>
+
+## `history`
+
+`history` is the history directory and which evaluations keep artefacts there.
+
+<Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }" optional>
+  `dir` defaults to the `.history` directory under the directory the `include` patterns share. `artifacts` is `'all'` (the default), `'failures'`, or `'none'`; `'failures'` keeps every attempt's artefacts for an evaluation whose outcome is `fail` or `infra_error`.
+</Property>
+
+## `budget`
+
+`budget` caps a run.
+
+<Property name="budget" type="{ attempts?: number, duration?: Duration }" optional>
+  `attempts` refuses a plan over the cap, unless `--force` is set, and must be a whole number of at least 1. From the first attempt's start, `duration` stops queued attempts from starting but lets running attempts finish. A profile's `budget` merges over the config value. reeval refuses `usd` and `tokens`.
+</Property>
+
+## `profiles`
+
+`profiles` holds the named profiles.
+
+<Property name="profiles" type="Record<string, Profile>" optional>
+  Each name maps to an object with `defaults`, `limit`, `judge`, `budget`, `record`, and `tags`.
+</Property>
+
+For more information about each profile key, see [Profiles reference](/reference/profiles).
+
+## `defaultProfile`
+
+`defaultProfile` names the profile when neither `--profile` nor `REEVAL_PROFILE` names one.
+
+<Property name="defaultProfile" type="{ ci?: string, local?: string }" optional>
+  `ci` applies when `CI` is set and is not `false`, and `local` otherwise. reeval refuses a name missing from `profiles`.
+</Property>
+
+## `secrets`
+
+`secrets` is what reeval does with a secret that has no `hosts`.
+
+<Property name="secrets" type="{ unbrokered?: 'warn' | 'error' }" optional>
+  `'warn'` (the default) warns when an attempt would receive the real value. `'error'` fails the plan.
+</Property>
+
+For more information about brokering a secret, see [Secrets](/environments/secrets#broker-a-secret-to-a-host).
+
+## `debug`
+
+`debug` is the local debug data in the `.reeval/debug` directory.
+
+<Property name="debug" type="{ keep?: number, traceBufferMb?: number }" optional>
+  `keep` is how many runs to keep, a whole number of at least 1 and 20 by default. `traceBufferMb` is the megabytes of raw trace each attempt buffers, above 0 and 8 by default.
+</Property>
+
+## `analysis`
+
+`analysis` is the language model for insights, `reeval analyze`, and compare questions.
+
+<Property name="analysis" type="AnalysisConfig" optional>
+  The model, insights, token caps, and prompt text.
+</Property>
+
+<Property name="analysis.model" type="string" optional>
+  A `'provider/model'` string; reeval refuses an evaluation model. `reeval analyze` and compare questions fall back to a judge language model.
+</Property>
+
+<Property name="analysis.insights" type="boolean" optional>
+  Whether `reeval run` explains each result when `model` is set. The default is `true`; `--no-insights` turns it off.
+</Property>
+
+<Property name="analysis.maxTokens" type="number" optional>
+  Tokens one run's insights may use, a whole number of at least 1. The default is 250000; evaluations past it print without one.
+</Property>
+
+<Property name="analysis.instructions" type="string" optional>
+  Text added to the prompt.
+</Property>
+
+<Property name="analysis.maxInputTokens" type="number" optional>
+  The digest's cap, a whole number of at least 1000. The default is 20000; evidence is dropped to fit.
+</Property>
+
+<Property name="analysis.maxOutputTokens" type="number" optional>
+  The most tokens in an answer, a whole number of at least 500. The default is 8000.
+</Property>
+
+For more information about analysis, see [Analyse a run](/results/analysis#set-an-analysis-model).
