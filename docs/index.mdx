@@ -1,0 +1,84 @@
+---
+title: "How reeval works"
+description: "See how coding agents use a developer tool and whether a change helps."
+---
+
+[//]: # (quadrant: Explanation)
+[//]: # (sidebar: Overview)
+[//]: # (owns: what reeval is and the tagline, from positioning; an evaluation and a compare in two sentences; one compare sample with the Vercel AI SDK's ai-sdk skill as the variant, a labelled check, runs: 4, and the helped block; the What reeval supports table, with a link into each sidebar group; one recipe link for each kind of tool the tagline names)
+[//]: # (excludes: install steps and the first run -> /quickstart)
+[//]: # (excludes: each noun's definition -> /core-concepts)
+[//]: # (excludes: building the control and variant -> /environments)
+[//]: # (excludes: how the effect is reached -> /comparisons/statistics)
+[//]: # (excludes: option tables -> /reference/options)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /core-concepts, /comparisons/statistics, /evals/evaluate, /comparisons/compare, /environments, /harnesses, /sandboxes, /evals/running, /results/output, /recipes/sdk, /recipes/cli, /recipes/mcp-comparison, /recipes/docs-comparison, /reference/cli, /reference/options, /quickstart)
+
+reeval is an evaluation runner for SDKs, CLIs, MCP servers, and docs. It evaluates how coding agents discover and use them, across harnesses and across changes such as adding a skill.
+
+## What reeval does
+
+An evaluation gives a harness a task in a sandbox, then checks what the agent did. A compare runs the same evaluation on a control and on a variant with one change. reeval reports whether the change `helped`, `made it worse`, or `can't tell yet`. For more information about each term, see [Core concepts](/core-concepts).
+
+This example measures the Vercel AI SDK's own skill. The control is a project with the `ai` package installed. The variant adds the `ai-sdk` skill from the `vercel/ai` repository. The skill tells agents to build on `ToolLoopAgent` instead of a hand-written tool loop. The evaluation declares the control, the variant, and the compare in one file:
+
+```ts title="evals/agent.eval.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+
+const plain = defineEnvironment('plain', { setup: ['npm install ai zod'] })
+
+const withAiSdk = plain.extendEnvironment('with-ai-sdk', ({ skill }) => ({
+  skills: [
+    skill.git('github:vercel/ai', {
+      ref: 'c82eac3ff341f01276f514cec9224da2e2a5bb93',
+      path: 'skills/use-ai-sdk',
+    }),
+  ],
+}))
+
+evaluate(
+  'the weather agent loops on its tool',
+  { runs: 4, compare: { baseline: plain, variants: [withAiSdk] } },
+  async (c) => {
+    await c.send('Add a weather agent with a getWeather tool to src/agent.ts.')
+    await expect(c, 'uses ToolLoopAgent').toHaveFile(
+      'src/agent.ts',
+      /ToolLoopAgent/,
+    )
+  },
+)
+```
+
+The prompt doesn't name `ToolLoopAgent`, so the labelled check passes only when the harness uses the skill. When the variant passes all four attempts and the control passes none, the run prints this block:
+
+```text
+pass             the weather agent loops on its tool
+  arm                 pass
+  plain               0 of 4
+  with-ai-sdk         4 of 4  helped
+  check               plain   with-ai-sdk
+  uses ToolLoopAgent  0 of 4  4 of 4
+```
+
+The `arm` column lists the control and the variant. The variant passed `uses ToolLoopAgent` in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. A real run's counts can differ. For more information about how reeval reaches the effect, see [Statistics](/comparisons/statistics).
+
+## What reeval supports
+
+This table lists what reeval supports, and each area links to its section:
+
+| Area | What reeval supports |
+|---|---|
+| [Evaluations](/evals/evaluate) | TypeScript files beside the tool they test, with checks on files, commands, and tool calls, and a judge for what checks can't read |
+| [Compare](/comparisons/compare) | A control and one or more variants, with an effect for each variant |
+| [Environments](/environments) | Skills, MCP servers, rules, files, setup commands, and secrets for the harness |
+| [Harnesses](/harnesses) | Coding agents, each on the model and effort you set |
+| [Sandboxes](/sandboxes) | A fresh container for each attempt, with API keys kept on the host |
+| [Runs](/evals/running) | A plan before any attempt starts, profiles that size a run, and records you commit beside the code |
+| [Results](/results/output) | The outcome, transcript, and analysis of each run, and queries across recorded runs |
+
+Each kind of tool reeval evaluates has a recipe: [Test an SDK](/recipes/sdk), [Test a CLI](/recipes/cli), [Measure MCP servers](/recipes/mcp-comparison), and [Measure your docs](/recipes/docs-comparison). For more information about commands and options, see the [CLI reference](/reference/cli) and [Options](/reference/options).
+
+## Next steps
+
+To install reeval and run a first compare, see [Quick start](/quickstart).
