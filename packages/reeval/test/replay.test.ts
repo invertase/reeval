@@ -704,6 +704,21 @@ describe("replay: the Cursor runner's format holds every failure it can report",
   })
 })
 
+describe("replay: Antigravity's cached turn (agy 1.4.4)", () => {
+  // One turn whose later steps read most of their prompt from Gemini's implicit cache. The
+  // harness package's stream test holds its tokens to the Gemini API's own counts.
+  const events = packageCapture('harness-antigravity', 'cached-steps.ndjson')
+
+  test('its steps read from the cache, and it is not a format change', () => {
+    const reads = events.flatMap((e) => {
+      const usage = (e.step_update as { usage?: { cache_read_tokens?: number } } | undefined)?.usage
+      return usage?.cache_read_tokens ? [usage.cache_read_tokens] : []
+    })
+    assert.ok(reads.length >= 5, `${reads.length} cached steps`)
+    assert.deepEqual(unknownSignatures('antigravity', events), [])
+  })
+})
+
 describe("replay: Antigravity's format holds every failure agy reports", () => {
   // agy 1.2.11 against a Gemini endpoint that refused each call (400, 429, 503), or dropped the
   // stream after the first chunk: one error_message step per try, then an ERROR result.
