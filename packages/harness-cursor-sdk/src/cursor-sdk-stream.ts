@@ -6,8 +6,9 @@ import { projectToolCall, projectToolResult } from './cursor-sdk-tools.ts'
 /**
  * The SDK's `TokenUsage`. `inputTokens` already contains `cacheReadTokens` (Cursor's usage export
  * lists the same turn as uncached input plus cache read, and the SDK's `inputTokens` is their sum),
- * so `totalTokens`, which adds the cache reads again, is not used. Cache writes are separate from
- * `inputTokens`. `reasoningTokens` is part of `outputTokens`.
+ * so `totalTokens`, which adds the cache reads again, is not used. Cache writes are taken to be
+ * separate from `inputTokens` and added to the total, unverified: every turn checked against the
+ * export wrote none. `reasoningTokens` is part of `outputTokens`.
  */
 export type CursorSdkUsage = {
   inputTokens?: number
