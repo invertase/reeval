@@ -157,7 +157,12 @@ answers `reeval query` and `reeval studio build`, and, with Docker, runs an egre
 `src/root.ts` finds those files at the root of Bun's virtual filesystem, and `ownDir` copies a
 directory that must be real (Docker's build context, the studio app, jiti's Babel) to
 `~/.cache/reeval/<dir>-<content hash>` (`XDG_CACHE_HOME`, or the platform's cache directory).
-Run it after changing how reeval finds its files, starts processes or loads TypeScript; CI doesn't.
+Run it after changing how reeval finds its files, starts processes or loads TypeScript.
+`--target bun-<os>-<arch>` (with `--outfile`) cross-compiles another platform's binary without
+checking it. `binary.yml` (manual dispatch, `workflow_call`, and PRs that touch the compile path)
+cross-compiles every target on one Linux runner with Bun pinned, smoke-tests each on its own OS
+with `scripts/binary-smoke.mjs` (nothing installed; Docker on linux-x64, Alpine for musl) and
+uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact.
 
 **The build.** [tsdown](https://tsdown.dev) bundles `reeval`
 (`packages/reeval/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The

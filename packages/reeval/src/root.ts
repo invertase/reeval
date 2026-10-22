@@ -26,7 +26,7 @@ const HERE = import.meta.url
  * Its own files are embedded in it, in a package's layout, at the root of Bun's virtual
  * filesystem, beside the bundled code.
  */
-export const COMPILED = /^file:\/\/\/(?:\$bunfs|[A-Za-z]:\/~BUN)\//.test(HERE)
+export const COMPILED = /^(?:\/\$bunfs|[A-Za-z]:[\\/]~BUN)[\\/]/.test(fileURLToPath(HERE))
 
 export const PACKAGE_DIR = fileURLToPath(new URL(COMPILED ? './' : '../', HERE))
 export const DIST_DIR = join(PACKAGE_DIR, 'dist')
