@@ -7,6 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { classifyGitError } from '../src/workspace.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 import { gitHttpServer } from './support/git-http.ts'
@@ -94,6 +95,62 @@ describe('git workspaces', { concurrency: false }, () => {
       `workspace: git('../repo', { ref: 'abc1234' })`,
       /no ref "abc1234".*Give a commit as its full 40-character SHA\./,
     )
+  })
+
+  test('a commit a shallow local clone lacks says to fetch it or clone the full history', async () => {
+    const p = await withEval("workspace: git('../' + process.env.REPO, { ref: process.env.PIN })")
+    git(p.repo, 'commit', '-q', '--allow-empty', '-m', 'v2')
+    const first = git(p.repo, 'rev-parse', 'v1')
+    execFileSync('git', ['clone', '-q', '--depth', '1', pathToFileURL(p.repo).href, 'shallow'], {
+      cwd: p.dir,
+    })
+    const r = await runCli(p.dir, ['run'], { env: { REPO: 'shallow', PIN: first } })
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    assert.match(
+      r.stdout + r.stderr,
+      new RegExp(
+        `no ref "${first}" \\(a branch, tag or commit SHA\\)\\. \\.\\./shallow is a shallow clone, so it may not have that ref: fetch it \\(git fetch origin ${first}\\) or clone the full history \\(fetch-depth: 0 in actions/checkout\\)\\.`,
+      ),
+    )
+    // Canary: the full repository's missing ref gets no shallow hint.
+    const full = await runCli(p.dir, ['run'], { env: { REPO: 'repo', PIN: 'v9' } })
+    assert.match(full.stdout + full.stderr, /no ref "v9"/)
+    assert.doesNotMatch(full.stdout + full.stderr, /shallow clone/)
+  })
+
+  test('compare arms on different refs of the same tree get a warning', async () => {
+    const p = await project('workspace-same-tree', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/w.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const base = defineEnvironment('base', ({ git }) => ({
+  sandbox: fakeSandbox(),
+  workspace: git('../repo', { ref: process.env.BASE_REF }),
+}))
+const head = base.extendEnvironment('head', ({ git }) => ({
+  workspace: git('../repo', { ref: process.env.HEAD_REF }),
+}))
+evaluate('lift', { compare: { baseline: base, variants: [head] } }, async (c) => {
+  await c.exec('true')
+})
+`,
+    })
+    const repo = makeRepo(p.dir)
+    const v1 = git(repo, 'rev-parse', 'v1')
+    const same = await runCli(p.dir, ['run'], { env: { BASE_REF: v1, HEAD_REF: 'v1' } })
+    assert.equal(same.code, 0, same.stdout + same.stderr)
+    assert.match(
+      same.stdout,
+      new RegExp(
+        `warning: compare in evals/w\\.eval\\.ts › lift: head and base start from the same tree \\([0-9a-f]{12}\\): git\\("\\.\\./repo#v1"\\) and git\\("\\.\\./repo#${v1}"\\) resolve to it, so the lift can't show a change to the workspace\\. Check the refs the arms read\\.`,
+      ),
+    )
+    // Canary: a head that changed the tree gets no warning.
+    writeFileSync(join(repo, 'README.md'), '# app, changed\n')
+    git(repo, 'commit', '-q', '-am', 'v2')
+    const changed = await runCli(p.dir, ['run'], { env: { BASE_REF: v1, HEAD_REF: 'main' } })
+    assert.equal(changed.code, 0, changed.stdout + changed.stderr)
+    assert.doesNotMatch(changed.stdout, /same tree/)
   })
 
   test('a missing subdirectory names what is there', async () => {
