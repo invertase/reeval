@@ -47,9 +47,9 @@ export default defineConfig({
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
 | Adapter | `@reeval/harness-opencode` 0.2.8 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | `@opencode/cli` 2.0.32 |
+| CLI | `@opencode/cli` 2.1.2 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:opencode-0.2.8` |
+| Image | `reeval-sandbox:opencode-0.2.9` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
@@ -251,7 +251,7 @@ Items are flat, not namespaced, so two plugins' subagents or commands with the s
 
 ## Supported providers
 
-Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.1.2 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
@@ -268,7 +268,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | ai& | `aiand/…` | `AIAND_API_KEY` | `Authorization: Bearer` | `api.aiand.com` |
 | AI/ML API | `aimlapi/…` | `AIMLAPI_API_KEY` | `Authorization: Bearer` | `api.aimlapi.com` |
 | ainetcafe | `ainetcafe/…` | `AINETCAFE_API_KEY` | `Authorization: Bearer` | `microquickjs.com` |
-| Aixy | `aixy/…` | `AIXY_API_KEY` | `x-api-key`, `Authorization: Bearer` | `api.aixy-gateway.com` |
+| Aixy | `aixy/…` | `AIXY_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.aixy-gateway.com` |
 | AKI.IO | `aki-io/…` | `AKI_IO_API_KEY` | `Authorization: Bearer` | `aki.io` |
 | Alibaba | `alibaba/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope-intl.aliyuncs.com` |
 | Alibaba (China) | `alibaba-cn/…` | `DASHSCOPE_API_KEY` | `Authorization: Bearer` | `dashscope.aliyuncs.com` |
@@ -297,9 +297,9 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | ClinePass | `cline-pass/…` | `CLINE_API_KEY` | `Authorization: Bearer` | `api.cline.bot` |
 | CloudFerro Sherlock | `cloudferro-sherlock/…` | `CLOUDFERRO_SHERLOCK_API_KEY` | `Authorization: Bearer` | `api-sherlock.cloudferro.com` |
 | Cohere | `cohere/…` | `COHERE_API_KEY` | `Authorization: Bearer` | `api.cohere.ai`, `api.cohere.com` |
+| CommandCode | `commandcode/…` | `CMD_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.commandcode.ai` |
 | CoralBricks | `coralbricks/…` | `CORAL_API_KEY` | `Authorization: Bearer` | `inference.coralbricks.ai` |
 | Cortecs | `cortecs/…` | `CORTECS_API_KEY` | `Authorization: Bearer` | `api.cortecs.ai` |
-| CrofAI | `crof/…` | `CROF_API_KEY` | `Authorization: Bearer` | `crof.ai` |
 | CrossModel | `crossmodel/…` | `CROSSMODEL_API_KEY` | `Authorization: Bearer` | `api.crossmodel.ai` |
 | Crusoe | `crusoe/…` | `CRUSOE_API_KEY` | `Authorization: Bearer` | `api.inference.crusoecloud.com` |
 | DaoXE | `daoxe/…` | `DAOXE_API_KEY` | `Authorization: Bearer` | `daoxe.com` |
@@ -348,6 +348,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | Kosmik Compute | `kosmik/…` | `KOSMIK_API_KEY` | `Authorization: Bearer` | `api.koscompute.com` |
 | KUAE Cloud Coding Plan | `kuae-cloud-coding-plan/…` | `KUAE_API_KEY` | `Authorization: Bearer` | `coding-plan-endpoint.kuaecloud.net` |
 | Lilac | `lilac/…` | `LILAC_API_KEY` | `Authorization: Bearer` | `api.getlilac.com` |
+| Liquid Inference | `liquid/…` | `LIQUID_API_KEY` | `Authorization: Bearer` | `router.inference.ai.exchange` |
 | Llama | `llama/…` | `LLAMA_API_KEY` | `Authorization: Bearer` | `api.llama.com` |
 | DevPass (LLM Gateway) | `llmgateway/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
 | LLM Gateway | `llmgateway-providers/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
@@ -382,7 +383,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | Novita AI | `novita-ai/…` | `NOVITA_API_KEY` | `Authorization: Bearer` | `api.novita.ai` |
 | Nvidia | `nvidia/…` | `NVIDIA_API_KEY` | `Authorization: Bearer` | `integrate.api.nvidia.com` |
 | OCI Generative AI | `oci/…` | `OCI_GENAI_API_KEY` | `Authorization: Bearer` | `inference.generativeai.us-chicago-1.oci.oraclecloud.com` |
-| Ofox | `ofox/…` | `OFOX_API_KEY` | `x-goog-api-key`, `x-api-key`, `Authorization: Bearer` | `api.ofox.ai` |
+| Ofox | `ofox/…` | `OFOX_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `api.ofox.ai` |
 | Ollama Cloud | `ollama-cloud/…` | `OLLAMA_API_KEY` | `Authorization: Bearer` | `ollama.com` |
 | OpenAI | `openai/…` | `OPENAI_API_KEY` | `Authorization: Bearer` | `api.openai.com` |
 | OpenCode Console | `opencode/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-goog-api-key`, `x-api-key` | `opencode.ai` |
@@ -401,6 +402,7 @@ Every provider OpenCode 2.0.32 knows whose key it sends in a header on known hos
 | Prime Inference | `prime/…` | `PRIME_API_KEY` | `Authorization: Bearer` | `api.pinference.ai` |
 | QiHang | `qihang-ai/…` | `QIHANG_API_KEY` | `Authorization: Bearer` | `api.qhaigc.net` |
 | Qiniu | `qiniu-ai/…` | `QINIU_API_KEY` | `Authorization: Bearer` | `api.qnaigc.com` |
+| Reflection | `reflection/…` | `REFLECTION_API_KEY` | `Authorization: Bearer` | `api.reflection.ai` |
 | Regolo AI | `regolo-ai/…` | `REGOLO_API_KEY` | `Authorization: Bearer` | `api.regolo.ai` |
 | Requesty | `requesty/…` | `REQUESTY_API_KEY` | `Authorization: Bearer` | `router.requesty.ai` |
 | routing.run | `routing-run/…` | `ROUTING_RUN_API_KEY` | `Authorization: Bearer` | `api.routing.run` |

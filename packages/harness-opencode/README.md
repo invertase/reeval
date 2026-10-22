@@ -28,7 +28,7 @@ its table.
 
 ## Providers
 
-`opencode-provider-table.ts` lists every provider OpenCode 2.0.32 knows: the ones whose key it
+`opencode-provider-table.ts` lists every provider OpenCode 2.1.2 knows: the ones whose key it
 sends in a header on known hosts, each with the variable it reads, the headers and the requests it
 sends the key on, and the others with the reason a gateway can't broker them (per-account hosts,
 SigV4, service accounts, subscriptions, local servers, provider packages it installs from npm).
@@ -61,7 +61,7 @@ would generate differs from this one.
 
 ## How it works
 
-- **Bootstrap.** Installs `@opencode/cli` 2.0.32 from a pinned lockfile, letting pnpm run only its
+- **Bootstrap.** Installs `@opencode/cli` 2.1.2 from a pinned lockfile, letting pnpm run only its
   postinstall (which links the platform binary). The musl builds are left out: the package marks
   none with a libc, so pnpm would otherwise install all four Linux builds.
 - **Model.** `<provider>/<model>`, set as the ACP session's `model` config option each turn:
