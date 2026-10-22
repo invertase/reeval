@@ -65,20 +65,6 @@ function Filters({ hasScratch }: { hasScratch: boolean }) {
   const navigate = useNavigate({ from: '/' })
   const set = (patch: Partial<typeof search>) =>
     navigate({ search: (s) => ({ ...s, ...patch }), replace: true })
-  const Seg = ({ value, label }: { value: typeof search.status; label: string }) => (
-    <button
-      type="button"
-      onClick={() => set({ status: value })}
-      className={cn(
-        'rounded-md px-3 py-1 text-sm transition-colors',
-        search.status === value
-          ? 'bg-background text-foreground shadow-sm'
-          : 'text-muted-foreground hover:text-foreground',
-      )}
-    >
-      {label}
-    </button>
-  )
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
       <div className="relative sm:w-80">
@@ -92,9 +78,27 @@ function Filters({ hasScratch }: { hasScratch: boolean }) {
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg bg-muted p-0.5">
-          <Seg value={undefined} label="All" />
-          <Seg value="failed" label="Failing" />
-          <Seg value="passed" label="Passing" />
+          {(
+            [
+              [undefined, 'All'],
+              ['failed', 'Failing'],
+              ['passed', 'Passing'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => set({ status: value })}
+              className={cn(
+                'rounded-md px-3 py-1 text-sm transition-colors',
+                search.status === value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
         {hasScratch ? (
           <div className="inline-flex rounded-lg bg-muted p-0.5">
