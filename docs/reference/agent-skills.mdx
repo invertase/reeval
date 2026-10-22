@@ -26,7 +26,7 @@ Ask your agent to "set up reeval here". It works in this order:
 | Look | Finds a `reeval.config.*`, `evals/`, the package manager, the project's skills and which keys `.env.local` names (never their values) |
 | Agree | In a project, says what it found and proposes evals, then waits for your yes. In an empty directory, asks what you want to evaluate and researches it |
 | Install | `npm i -D {{ pkg }}` with your package manager, then `reeval init --bare --harness <name>`. Where it finds a config it skips init, and it never passes `--force` |
-| Write | One to three evals in `evals/`: a skill with and without, when the project has one; deterministic checks first; a `canary` profile when a check is a pattern it wrote |
+| Write | One to three evals in `evals/`: a skill with and without, when the project has one, or its rules file (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) on a task in the real repo; deterministic checks first; `canary` and `oracle` profiles when a check is a pattern it wrote |
 | Check | `reeval run --dry-run`, then `reeval doctor`, and tells you each missing key as the `.env.local` line to add |
 | Hand over | What it added, what's missing, the command to run, and how to read the result block |
 

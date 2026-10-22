@@ -33,7 +33,8 @@ ls -a; ls reeval.config.* reeval.yaml evals 2>/dev/null
 grep -n '"reeval"' package.json 2>/dev/null
 ls pnpm-lock.yaml yarn.lock bun.lock package-lock.json 2>/dev/null   # the package manager
 find . -name SKILL.md -not -path '*/node_modules/*' | head -20       # the project's skills
-ls AGENTS.md CLAUDE.md .mcp.json .cursor/mcp.json docs 2>/dev/null
+ls AGENTS.md CLAUDE.md GEMINI.md .cursor/rules .github/copilot-instructions.md 2>/dev/null  # rules
+ls CONTRIBUTING.md .mcp.json .cursor/mcp.json docs 2>/dev/null
 grep -o '^[A-Z_]*=' .env.local .env 2>/dev/null                      # key names only
 ```
 
@@ -55,7 +56,8 @@ question, with nothing installed or written yet: end your turn there and wait fo
 **In a project,** say in two or three sentences what you found and what you propose, then ask
 and stop. For example: "This repo has two skills. I'd set up reeval with one eval that runs Cursor
 on a billing task with and without `acme-billing`, to show what the skill changes. Shall I set
-up evals for this project?"
+up evals for this project?" With no skills, propose the rules file or a task in the code
+instead.
 
 **In an empty directory, or when the user says no,** ask what they want to evaluate (an SDK, an
 API, a library, docs or a skill they're writing, a kind of task) and stop. When they answer,
@@ -95,22 +97,37 @@ Pick the low-hanging fruit, in this order:
    workspace, the variant the same plus the skill; the task is one the skill's own rules decide.
    This is the eval that shows lift. Template A in
    [references/templates.md](references/templates.md).
-2. **The project is a library, SDK or API:** the agent uses it for a small task, checked by
-   running the result. Template B.
-3. **An empty directory:** the researched subject, a compare of a short skill or doc you write
+2. **No skills, but agent rules** (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursor/rules`): a
+   compare of the rules file, with and without, on a small task in the real repo. Template D.
+3. **Any other codebase (an app, a CLI, a library):** a small task in the real repo, checked by
+   its typecheck, its tests or a hidden test. Template B.
+4. **An empty directory:** the researched subject, a compare of a short skill or doc you write
    from the research (`skills/<subject>/SKILL.md`) against none, or a single eval. Template C.
+
+Work in the user's code, not a copy you make up: seed the repo with `directory('..')` rather
+than stub files, which hand the agent the convention you meant to test. Don't write a skill or
+rules from what you already know to compare against: your checks would restate what you wrote,
+so the compare measures nothing. Write one only from research (step 2, Template C).
 
 Each eval:
 
-- **Check rules only the skill teaches.** Read the skill and pick two or three of its most
-  specific rules that one task touches: a house convention, a helper or file it names, a
-  version-specific API, a non-obvious default. Ask of each: would a strong agent do this
-  unprompted? If yes (index a foreign key, deny public access, validate input), both arms pass
-  it; pick another. One labelled check per rule, so the check table shows which ones the skill
-  changed.
+- **Check rules only the skill teaches.** Read the skill (or rules file) and pick two or three
+  of its most specific rules that one task touches: a house convention, a helper or file it
+  names, a version-specific API, a non-obvious default. Ask of each: would a strong agent do
+  this unprompted? If yes (index a foreign key, deny public access, validate input), both arms
+  pass it; pick another. In a real repo, the agent copies what the code around the change
+  already shows (the error class, the logger), so prefer rules the code can't show: a changelog
+  entry, where tests go, a file to register in. Grep the repo for each rule: one that
+  `CONTRIBUTING.md` or the docs repeat reaches the control too, so leave those files out of
+  the control as well, or pick another rule. Check that the task triggers each rule: a rule for
+  user-facing changes needs a user-facing task. One labelled check per rule, so the check
+  table shows which ones the skill changed.
 - **One task, one prompt, that doesn't name the answer.** Ask for the outcome in the user's
   words ("an invoices table with its total"), never the rule the check looks for ("store the
-  total in cents"). Reread the prompt: if it restates the rule, the control passes too.
+  total in cents"), and not in the rule's terms either ("a user-visible fix" hints at the
+  changelog). Reread the prompt: if it restates the rule, the control passes too. Name the
+  file the task is about (`src/projectId.ts`) so a check can read it, but not the files a rule
+  decides (where the test goes): check those with a glob or the one path the rule allows.
 - **Deterministic checks first:** a file's content, a command's exit code, a script that imports
   the agent's code. Label each requirement with `expect.soft(x, 'label')`. Add a judge
   (`c.judge`) only for what no check can see, and then add `judge:` to the config.

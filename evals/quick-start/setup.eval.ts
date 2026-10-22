@@ -92,6 +92,27 @@ group('sets up reeval', () => {
     },
   )
 
+  evaluate(
+    'in a CLI repo without skills, with evals of its code',
+    target('firebase-tools'),
+    async (c) => {
+      const first = await c.send(`Set up reeval here.${INSTALL}`)
+      asksFirst(first, await evalList(c))
+      const last = await c.send('Yes, go ahead.')
+      await setUp(c, [], { evals: [1, 3] })
+      const sources = (await c.exec('cat evals/*.ts 2>/dev/null')).stdout
+      expect.soft(sources, 'checks by running something').toMatch(/\.exec\(/)
+      expect.soft(sources, 'works in the real repo').toMatch(/directory\(\s*['"]\.\.['"]/)
+      expect.soft(sources, 'keeps .env out of the sandbox').toMatch(/!\.env/)
+      expect.soft(sources, 'compares GEMINI.md').toMatch(/rules:\s*file\(\s*['"][./]*GEMINI\.md/)
+      expect.soft(sources, 'leaves GEMINI.md out of the control').toMatch(/!GEMINI\.md/)
+      expect
+        .soft(c, 'leaves the code and docs alone')
+        .not.toHaveChanged(['src/**', 'README.md', 'GEMINI.md', 'scripts/**'])
+      expect.soft(last.text, 'names the harness key').toMatch(HARNESS_KEY)
+    },
+  )
+
   evaluate('in an empty directory, after researching the subject', target('empty'), async (c) => {
     const first = await c.send(`Set up reeval here.${INSTALL}`)
     asksFirst(first, await evalList(c))

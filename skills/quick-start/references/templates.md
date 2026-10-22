@@ -135,6 +135,62 @@ evaluate('adds a slugify helper that passes a hidden test', { environment: repo 
   A toolchain other than Node goes in `sandbox: docker({ from: 'python:3.12-slim' })` on the
   environment.
 - Choose a task the size of a small PR. A task the repo's tests can't see needs a hidden test.
+- A big repo's whole suite can take minutes an attempt: check with its typecheck and the one
+  spec the task touches.
+- An install script that downloads a browser (puppeteer, Playwright) can fail in the sandbox.
+  `npm ci --ignore-scripts` skips it, and the typecheck and most tests still run.
+
+## D. A rules file, with and without
+
+The repo has no skills, but it has agent rules (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`). The
+control works in the repo without them; the variant gets the same file back as `rules`, which
+reeval writes where its agent reads them. `acme-cli`'s `AGENTS.md` says that each user-facing
+change adds a line to `CHANGELOG.md`, and that each module's test sits beside it as
+`*.test.ts`. Neither shows in the code around a change.
+
+```ts
+// evals/environments.ts
+import { defineEnvironment } from 'reeval'
+
+/** This repository without its agent rules, keys, runs or the evals themselves. */
+export const repo = defineEnvironment('repo', ({ directory }) => ({
+  files: directory('..', { glob: ['!.env*', '!.reeval/', '!evals/', '!AGENTS.md'] }),
+  setup: [{ run: 'npm ci --no-audit --no-fund --ignore-scripts', timeout: '10m' }],
+}))
+
+/** The same repository with its AGENTS.md. */
+export const withRules = repo.extendEnvironment('with-agents-md', ({ file }) => ({
+  rules: file('../AGENTS.md'),
+}))
+```
+
+```ts
+// evals/deploy-region.eval.ts
+import { evaluate, expect } from 'reeval'
+import { repo, withRules } from './environments.ts'
+
+evaluate(
+  'follows AGENTS.md on a user-facing CLI change',
+  { compare: { baseline: repo, variants: [withRules] }, runs: 2 },
+  async (c) => {
+    await c.send('`acme deploy` should stop with a clear error when no region is set.')
+    expect.soft(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
+    expect.soft(c, 'a test beside the code').toHaveChanged('src/**/*.test.ts')
+    await expect.soft(c.exec('npx tsc --noEmit'), 'compiles').toSucceed()
+  },
+)
+```
+
+- Leave out every rules file the agent might read (`!AGENTS.md`, `!CLAUDE.md`, `!GEMINI.md`),
+  and any doc that repeats the rules you check (`!CONTRIBUTING.md`): a control that still
+  finds them isn't a control.
+- A mature repo's conventions show in its code, so both arms often pass. That's the answer to
+  "does the rules file change anything here?", and the eval stays useful as a regression check
+  across models and harnesses.
+- The prompt asks for the change, never for a changelog line or a test: that's what the rules
+  file should add.
+- `toHaveChanged` reads the attempt's diff, so it needs no oracle; a `compiles` check needs
+  none either.
 
 ## C. A subject you researched
 

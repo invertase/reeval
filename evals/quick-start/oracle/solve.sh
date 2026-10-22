@@ -2,7 +2,7 @@ set -e
 # The oracle's second turn: what the quick-start skill asks for, in each target.
 if [ ! -f reeval.config.ts ]; then
   [ -f package.json ] || npm init -y >/dev/null
-  if [ -f pnpm-lock.yaml ]; then pnpm add -D ~/reeval.tgz >/dev/null; else npm i -D ~/reeval.tgz --no-audit --no-fund --loglevel=error; fi
+  if [ -f pnpm-lock.yaml ]; then pnpm add -D ~/reeval.tgz >/dev/null; else PUPPETEER_SKIP_DOWNLOAD=1 npm i -D ~/reeval.tgz --no-audit --no-fund --loglevel=error; fi
   npx reeval init --bare --harness cursor
 fi
 mkdir -p evals
@@ -34,6 +34,26 @@ evaluate('locks down Firestore rules with the rules skill', { compare: { baselin
   await c.send('Write firestore.rules so each user can read and write only their own users/{uid} document.')
   const rules = (await c.readFile('firestore.rules')) ?? ''
   expect.soft(rules, 'checks request.auth.uid').toMatch(/request\.auth\.uid\s*==\s*uid/)
+})
+EOF
+elif [ -f GEMINI.md ]; then
+  cat > evals/environments.ts <<'EOF'
+import { defineEnvironment } from 'reeval'
+export const repo = defineEnvironment('firebase-tools', ({ directory }) => ({
+  files: directory('..', { glob: ['!.env*', '!.reeval/', '!evals/', '!GEMINI.md'] }),
+  setup: [{ run: 'npm ci --no-audit --no-fund --ignore-scripts', timeout: '10m' }],
+}))
+export const withRules = repo.extendEnvironment('with-gemini-md', ({ file }) => ({
+  rules: file('../GEMINI.md'),
+}))
+EOF
+  cat > evals/projects-list.eval.ts <<'EOF'
+import { evaluate, expect } from 'reeval'
+import { repo, withRules } from './environments.ts'
+evaluate('follows GEMINI.md on a user-facing CLI change', { compare: { baseline: repo, variants: [withRules] }, runs: 2 }, async (c) => {
+  await c.send('`firebase projects:list` should say how to create a project when the account has none.')
+  expect.soft(c, 'a CHANGELOG.md entry').toHaveChanged('CHANGELOG.md')
+  await expect.soft(c.exec('npx tsc --noEmit -p tsconfig.json'), 'compiles').toSucceed()
 })
 EOF
 else

@@ -17,14 +17,25 @@ const FIREBASE = {
   ref: '92eed24c0976a79a66d5b8038e9eda8b441ef92d',
 }
 
-/** A starting directory: a repo with skills and no reeval, the same with reeval set up, or nothing. */
-export type Target = 'supabase' | 'firebase-set-up' | 'empty'
+/** A CLI codebase with no skills: the commit before its first `.agent/skills/`. */
+const FIREBASE_TOOLS = {
+  repo: 'https://github.com/firebase/firebase-tools',
+  ref: '26b7b83b56ebef4cb7f15ac2c27b89b204cb2a34',
+}
+
+/**
+ * A starting directory: a repo with skills and no reeval, the same with reeval set up, a CLI
+ * repo with no skills, or nothing.
+ */
+export type Target = 'supabase' | 'firebase-set-up' | 'firebase-tools' | 'empty'
 
 function start(target: Target): Environment {
   return defineEnvironment(target, ({ file, git }) => {
     const files = Object.fromEntries(Object.entries(tarball).map(([to, from]) => [to, file(from)]))
     if (target === 'supabase')
       return { workspace: git(SUPABASE.repo, { ref: SUPABASE.ref, init: true }), files }
+    if (target === 'firebase-tools')
+      return { workspace: git(FIREBASE_TOOLS.repo, { ref: FIREBASE_TOOLS.ref, init: true }), files }
     if (target === 'firebase-set-up') {
       return {
         workspace: git(FIREBASE.repo, { ref: FIREBASE.ref, init: true }),
