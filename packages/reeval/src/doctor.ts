@@ -18,7 +18,7 @@ import {
 import { unenforceable } from './egress.ts'
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
-import { environmentSandbox } from './environment.ts'
+import { environmentSandbox, profileSandbox } from './environment.ts'
 import { credentialOf } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
@@ -182,13 +182,10 @@ export function configuredUses(config: ResolvedConfig) {
   for (const [name, profile] of Object.entries(config.profiles)) {
     const harnesses = profile.defaults?.harness
       ? [profile.defaults.harness].flat()
-      : profile.defaults?.environment
+      : profile.defaults?.environment || profile.defaults?.sandbox
         ? config.harness
         : []
-    const sandbox = environmentSandbox(
-      profile.defaults?.environment ?? config.environment,
-      config.sandbox,
-    )
+    const sandbox = profileSandbox(config, profile.defaults)
     for (const harness of harnesses) uses.push({ harness, sandbox, profile: name })
   }
   return uses

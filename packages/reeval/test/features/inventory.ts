@@ -272,6 +272,7 @@ export const inventory: InventoryFeature[] = [
       unit('selectProfile: --profile, then REEVAL_PROFILE'),
       unit('cascade: profile defaults sit under evals'),
       options('a profile name typo exits 2'),
+      history("a profile's defaults.sandbox is the sandbox the run header and the record name"),
     ],
   },
   {

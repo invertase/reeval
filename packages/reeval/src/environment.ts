@@ -40,6 +40,7 @@ import type {
   PluginBuild,
   PluginHelper,
   PluginPart,
+  ProfileDefaults,
   SandboxDescriptor,
   Secret,
   SecretHelper,
@@ -1330,6 +1331,19 @@ export const environmentSandbox = (
   env: Pick<Environment, 'layers'> | undefined,
   fallback: SandboxDescriptor,
 ): SandboxDescriptor => sandboxOf(env?.layers ?? [], fallback)
+
+/**
+ * The sandbox an eval naming none runs on: the environment's (the profile's, else the config's),
+ * else the profile's `defaults.sandbox`, else the config's.
+ */
+export const profileSandbox = (
+  config: { environment?: Environment; sandbox: SandboxDescriptor },
+  defaults: Pick<ProfileDefaults, 'environment' | 'sandbox'> | undefined,
+): SandboxDescriptor =>
+  environmentSandbox(
+    defaults?.environment ?? config.environment,
+    defaults?.sandbox ?? config.sandbox,
+  )
 
 function checkSandbox(value: unknown, where: string): asserts value is SandboxDescriptor {
   const kind = isObjectLike(value) ? value.kind : undefined

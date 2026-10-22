@@ -2431,6 +2431,7 @@
           ]
         },
         "config": {
+          "description": "The run's settings. `sandbox` is the id of each sandbox the planned attempts ran on, after the profile's defaults, joined with `, `.",
           "type": "object",
           "properties": {
             "concurrency": {

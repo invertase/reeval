@@ -208,6 +208,15 @@ describe('reeval doctor checks', () => {
       (await checkDocker(profiled, deps({ dockerState: down }))).checks[0]?.status,
       'fail',
     )
+    const defaulted = await configOf(
+      'profile-default-sandbox',
+      `{ harness: fakeHarness(), sandbox: fakeSandbox(), profiles: { real: { defaults: { sandbox: docker() } } } }`,
+    )
+    assert.equal(
+      (await checkDocker(defaulted, deps({ dockerState: down }))).checks[0]?.status,
+      'fail',
+      "a profile's defaults.sandbox counts too",
+    )
   })
 
   test('podman: down, too old, missing cgroup controllers, and running beside Docker', async () => {

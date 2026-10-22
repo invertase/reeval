@@ -494,6 +494,28 @@ describe('recording runs into evals/.history', () => {
     )
   })
 
+  test("a profile's defaults.sandbox is the sandbox the run header and the record name", async () => {
+    const p = await project('record-profile-sandbox', {
+      'evals/agent.eval.ts': agent(),
+      'reeval.config.ts': fakeConfig({
+        harness: harness(),
+        extra: 'profiles: { fake: { defaults: { sandbox } } },',
+      })
+        .replace(
+          "import { fakeSandbox } from 'reeval/sandbox'",
+          "import { docker, fakeSandbox } from 'reeval/sandbox'",
+        )
+        .replace('  sandbox,\n', '  sandbox: docker(),\n'),
+    })
+    const r = await runCli(p.dir, ['run', '--profile', 'fake', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, / · harness fake · sandbox fake · /)
+    const { run } = readRun(p.dir)
+    assert.equal(run.evals[0]?.cells[0]?.sandbox, 'fake', 'the cell ran on the fake sandbox')
+    assert.equal(run.config.sandbox, 'fake')
+    assert.equal(run.profile?.defaults.sandbox, 'fake')
+  })
+
   test("the config's judge.state is in the record and the fingerprint; its defaults change neither", async () => {
     const run = async (name: string, judge: string) => {
       const p = await project(name, {
