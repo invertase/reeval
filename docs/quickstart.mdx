@@ -1,9 +1,9 @@
 ---
 title: Quickstart
-description: Scaffold a project, then run your first eval on a real agent in Docker.
+description: Scaffold a project, run your first eval on a real agent in Docker, then the same task with and without a skill.
 ---
 
-`reeval init` sets up a project with a real agent configured, one environment and an eval that runs in it. Then you build the agent's sandbox image, add its key and run.
+`reeval init` sets up a project with a real agent configured, one environment and an eval that runs in it. Then you build the agent's sandbox image, add its key and run, and finish by running the same task with and without a skill.
 
 **Before you begin:** Node {{ node }} or later and [Docker](https://docs.docker.com/get-docker/), on Linux, macOS or Windows (Docker Desktop with Linux containers), and a key for the agent you pick.
 
@@ -126,6 +126,75 @@ description: Scaffold a project, then run your first eval on a real agent in Doc
 
     `reeval doctor` names anything missing, such as Docker not running or an unset key, with its fix. The Google key is for insights only: without it the run passes or fails the same, and prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }` above the tally.
   </Step>
+  <Step title="Compare with and without a skill">
+    A skill teaches something the agent can't guess, so the comparison has something to show:
+
+    ```markdown title="skills/house-greeting/SKILL.md"
+    ---
+    name: house-greeting
+    description: How this codebase greets people. Use when writing any greeting.
+    ---
+
+    Greetings in this codebase start with "Ahoy, ", never "Hello, ": `Ahoy, Ada!`.
+    ```
+
+    `greeter` is the control. The variant is the same environment plus the skill, and `compare` runs both, with the same prompt and the same check:
+
+    ```ts title="evals/skill.eval.ts"
+    import { evaluate, expect, group } from '{{ pkg }}'
+    import { greeter } from './environments.ts'
+
+    const withHouseGreeting = greeter.extendEnvironment(
+      'with-house-greeting',
+      ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }),
+    )
+
+    const greetsAda = `node -e "import('./greet.js').then((m) =>
+      process.exit(m.greet('Ada') === 'Ahoy, Ada!' ? 0 : 1))"`
+
+    group(
+      'house greeting',
+      { compare: { baseline: greeter, variants: [withHouseGreeting] } },
+      () => {
+        evaluate('greets in the house style', async (c) => {
+          await c.send(
+            'Create greet.js exporting greet(name) that greets the person ' +
+              'in our house style.',
+          )
+          await expect(c.exec(greetsAda), 'house greeting').toSucceed()
+        })
+      },
+    )
+    ```
+
+    ```bash
+    npx reeval run skill --runs 2    # 2 cells, 4 attempts
+    ```
+
+    ```text
+    pass             house greeting › greets in the house style
+      Yes, greet.js greets in the house style with with-house-greeting, passing 2 of 2 tries, whereas greeter failed 2 of 2 tries.
+      arm                  pass
+      greeter              0 of 2
+        Greeter failed 2 of 2 tries when the house greeting check failed with exit code 1.
+      with-house-greeting  2 of 2  can't tell yet
+      check                greeter  with-house-greeting
+      house greeting       0 of 2   2 of 2
+        expected command to succeed, exit code 1
+      …
+    3m 27s · 12,176k in (5,972k cached) · 17k out · results .reeval/runs/…/summary.md
+    1 pass
+    ```
+
+    Read the last column before the counts. Two attempts an arm can't separate a real effect from luck, so `compare` says `can't tell yet` even at 0 of 2 against 2 of 2. Raise `--runs` before you draw a conclusion, and check that the agent opened the skill at all: a skill it never reads can't help.
+
+    ```bash
+    npx reeval query lift          # each variant against its control, with the interval
+    npx reeval query skill_reads   # which attempts opened the skill
+    npx reeval query effort        # tool calls, agent time and tokens per arm
+    npx reeval studio              # transcripts, diffs and checks, on :4984
+    ```
+  </Step>
 </Steps>
 
 Your first eval passes. reeval saved the run under `.reeval/runs/`, which `reeval init` gitignored with `.env*`.
@@ -136,11 +205,14 @@ Your first eval passes. reeval saved the run under `.reeval/runs/`, which `reeva
 
 ## Next
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
   <Card title="Your first real run" icon="play" href="/guide/first-real-run">
     What happens in Docker, and how your key stays out of the sandbox.
   </Card>
   <Card title="Compare and lift" icon="chart-line" href="/guide/compare">
-    Run with and without a skill and read the lift.
+    Gates, `minLift`, which checks made the difference, and effort.
+  </Card>
+  <Card title="Lift" icon="scale-balanced" href="/concepts/lift">
+    What the interval means, and why `can't tell yet` is the honest answer at two runs.
   </Card>
 </CardGroup>
