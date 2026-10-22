@@ -109,7 +109,7 @@
 | Image build failures: the headline first, ENOSPC and exit 137 named, transient errors retried | ✓ 7 | — | — | — | — | — |
 | `reeval clean --images`, and no `-base` tag or replaced image left behind | ✓ 2 | — | — | — | — | — |
 | `reeval image build` (every image, every failure, exit 3, `--force`) and its `--dry-run` | ✓ 2 | — | — | — | — | — |
-| `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 6 | ● 3 | ● 2 |
+| `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 5 | ✓ 2 | — | ● 6 | ● 3 | ● 2 |
 | The harness's key never enters the container | ✓ 3 | — | — | — | — | ● 2 |
 | Ports: through the tunnel, or published without the gateway | ✓ 2 | — | — | — | — | — |
 | No container or sandbox left after a failure, timeout or abort | ✓ 2 | — | — | — | — | ◐ 2 (2 without a canary) |

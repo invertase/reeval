@@ -105,7 +105,9 @@ flowchart LR
 | `'allow-all'` | Keeps its network; only proxy-aware clients (curl, npm, pip, git, Node, the agents) show up in the record |
 | Any policy | Can't reach the host's loopback or link-local addresses (cloud metadata) |
 
-The allowlist is checked by name at `CONNECT`, before any DNS lookup. A name a `*.` pattern matches that resolves to a private address is refused. An HTTPS tunnel to an allowed host isn't inspected, so the TLS inside could name another host on the same CDN.
+The allowlist is checked by name at `CONNECT`, before any DNS lookup. A client that sends `GET https://host/…` to the proxy instead (Puppeteer's browser download does) gets the same check, and the gateway opens the TLS connection to the host for it.
+
+A name a `*.` pattern matches that resolves to a private address is refused. An HTTPS tunnel to an allowed host isn't inspected, so the TLS inside could name another host on the same CDN.
 
 ## What's recorded
 

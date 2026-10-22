@@ -1172,6 +1172,8 @@ export const inventory: InventoryFeature[] = [
     tests: [
       sandboxDocker('docker', 'allowlist: a listed host gets 200'),
       sandboxDocker('docker', 'no direct route: custom and deny-all'),
+      sandboxDocker('docker', 'absolute-form https (GET https://… without CONNECT)'),
+      sandboxDocker('proxy', 'absolute-form https requests through the proxy'),
       sandboxDocker('unit', 'deny list: every always-denied form'),
     ],
     real: ['contract › deny-all plus auto hosts works, a blocked host refused and recorded'],
