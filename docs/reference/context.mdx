@@ -1,0 +1,386 @@
+---
+title: "Attempt context reference"
+description: "Look up every method and field of c and of the turn it returns."
+---
+
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Attempt context)
+[//]: # (owns: c.send; c.exec; c.serve; c.capture; c.judge; c.readFile; c.writeFile; c.turns; c.signal; c.attempt; Turn)
+[//]: # (excludes: matchers -> /reference/matchers)
+[//]: # (excludes: walkthroughs -> /evals/turns, /evals/checks, /evals/judges and /evals/servers)
+[//]: # (excludes: the judge and capture option keys -> /reference/options#judge and /reference/options#capture)
+[//]: # (excludes: environment helpers -> /reference/environment)
+[//]: # (excludes: the run record -> /reference/record)
+[//]: # (excludes: reading transcripts -> /results/debugging)
+[//]: # (excludes: fake* helpers and scripted capture drivers -> not documented)
+[//]: # (inbound: /evals/turns, /evals/checks, /evals/judges, /evals/servers, /reference/api, /reference/matchers, /reference/options, /recipes/skill-comparison)
+[//]: # (outbound: /reference/matchers, /reference/options#judge, /reference/options#capture, /evals/turns, /evals/checks, /evals/judges, /evals/servers, /reference/record, /results/debugging)
+
+`c` is the attempt context the evaluation body receives, for one cell and one run. The sandbox and the harness session start on the first call that needs them.
+
+## `c.send()`
+
+`c.send(prompt)` sends the next prompt on the attempt's harness session and returns the finished `Turn`.
+
+```ts
+const turn = await c.send('Add a Vitest test for getUserId.')
+```
+
+<Property name="prompt" type="string" required>
+  The prompt for this turn.
+</Property>
+
+For more information about the returned turn's fields, see [`Turn`](#turn). For more information about reading turns, see [Turns](/evals/turns).
+
+## `c.exec()`
+
+`c.exec(command, options?)` runs a shell command in the workspace, with the variables and secrets the environment gives to checks.
+
+```ts
+const result = await c.exec('npm test')
+const worker = await c.exec('npm run worker', { background: true })
+```
+
+<Property name="command" type="string" required>
+  The shell command, run in the workspace directory.
+</Property>
+
+<Property name="options.background" type="boolean" optional>
+  `true` returns a `BackgroundHandle` without waiting (default `false`, an `ExecResult` after exit).
+</Property>
+
+The `ExecResult` has these fields:
+
+<Property name="exitCode" type="number" required>
+  The exit code.
+</Property>
+
+<Property name="stdout" type="string" required>
+  The standard output.
+</Property>
+
+<Property name="stderr" type="string" required>
+  The standard error.
+</Property>
+
+The `BackgroundHandle` has this method:
+
+<Property name="kill" type="() => Promise<void>" required>
+  Stops the process and its children, as the end of the attempt does.
+</Property>
+
+For more information about asserting on a command, see [Checks](/evals/checks).
+
+## `c.serve()`
+
+`c.serve(command, port?)` starts a command in the background with `PORT` set and returns a `ServeHandle`.
+
+```ts
+const app = await c.serve('npm start')
+```
+
+<Property name="command" type="string" required>
+  The shell command, whose `PORT` variable is the port below.
+</Property>
+
+<Property name="port" type="number" optional>
+  The container port to give the command, or a free port reeval allocates when omitted.
+</Property>
+
+The `ServeHandle` has `kill()`, as a `BackgroundHandle` does, and this field:
+
+<Property name="port" type="number" required>
+  The port passed in or allocated.
+</Property>
+
+The call returns when the process starts, not when it listens.
+
+## `c.capture()`
+
+`c.capture(target, options?)` opens a path on a sandbox port in a host browser, saves a PNG, and returns a `Capture`.
+
+```ts
+const shot = await c.capture(app, { path: '/login', wait: 'idle' })
+```
+
+<Property name="target" type="number | ServeHandle" required>
+  A container port from 1 to 65535, or the handle `c.serve()` returned.
+</Property>
+
+<Property name="options.name" type="string" optional>
+  The capture name, matching `[a-z0-9_-]+` and unique in the attempt (default: a lowercase slug of the path before its query or fragment, or `root` when that slug is empty).
+</Property>
+
+<Property name="options.path" type="string" optional>
+  The path on the app (default `/`).
+</Property>
+
+<Property name="options.viewport" type="{ width: number; height: number } | 'full-page'" optional>
+  The window and PNG size in CSS pixels, or `'full-page'`, replacing the cascaded `viewport`.
+</Property>
+
+<Property name="options.timeout" type="Duration" optional>
+  How long reeval waits for the port and the page, replacing the cascaded `timeout` (default `'60s'`).
+</Property>
+
+<Property name="options.wait" type="'load' | 'idle' | { ms: number }" optional>
+  The load event (default), Chromium's `networkAlmostIdle` (at most two requests in flight for 500 ms), or a fixed wait.
+</Property>
+
+<Property name="options.instructions" type="Array<string | { wait: Wait }>" optional>
+  Goal strings and `{ wait }` pauses a vision model drives on the tab first.
+</Property>
+
+<Property name="options.model" type="string" optional>
+  The `'provider/model'` vision model for `instructions`, replacing the cascaded `capture.model`.
+</Property>
+
+The `Capture` echoes the resolved `name`, `port`, `path`, and `viewport`, and has this field:
+
+<Property name="file" type="{ path: string; sha256: string; bytes: number }" required>
+  The PNG's `artifacts/<name>.png` path under the attempt directory, digest, and size.
+</Property>
+
+For more information about the cascaded defaults, see [the `capture` option](/reference/options#capture). For more information about serving and capturing an app, see [Apps](/evals/servers).
+
+## `c.judge()`
+
+`c.judge(question, options?)` asks a yes or no question about the last turn and returns a `Verdict`, or a `JudgeFailure` when the provider fails.
+
+```ts
+const verdict = await c.judge('Does the test read like a specification?', {
+  state: { contents: ['src/user.test.ts'] },
+})
+```
+
+<Property name="question" type="string" required>
+  A non-empty yes or no question.
+</Property>
+
+<Property name="options.on" type="Turn | JSONValue" optional>
+  A turn this attempt sent, graded instead of the last, or any other value, graded as the output.
+</Property>
+
+<Property name="options.artifacts" type="true | Array<Capture | string>" optional>
+  Captures sent as PNG file parts, by handle or name, or `true` for all so far.
+</Property>
+
+<Property name="options.model" type="string | JudgeModel" optional>
+  The `'provider/model'` string or model object for this call, replacing the cascaded model.
+</Property>
+
+<Property name="options.threshold" type="number" optional>
+  The minimum score for `pass`, from 0 to 1 (default `0.8`).
+</Property>
+
+<Property name="options.providerOptions" type="Record<string, Record<string, JSONValue>>" optional>
+  Provider settings for the call, keyed by provider.
+</Property>
+
+<Property name="options.maxConcurrent" type="number" optional>
+  The most judge calls to this provider at a time, across the run.
+</Property>
+
+<Property name="options.state.task" type="boolean" optional>
+  Sends the graded turn's prompt (default `true`).
+</Property>
+
+<Property name="options.state.output" type="boolean" optional>
+  Sends the graded turn's final message, or the value of `on` (default `true`).
+</Property>
+
+<Property name="options.state.files" type="boolean" optional>
+  Sends a `status path` line for each changed file kept by any `state.diff` patterns (default `true`).
+</Property>
+
+<Property name="options.state.diff" type="boolean | string[]" optional>
+  Sends the diff, or only the paths the gitignore-style patterns keep (default `true`).
+</Property>
+
+<Property name="options.state.contents" type="string[]" optional>
+  Sends these files whole, by path or pattern, and drops them from the diff.
+</Property>
+
+<Property name="options.state.transcript" type="boolean | 'tools' | 'full'" optional>
+  Sends the graded turn's transcript clipped, as tool calls only, or in full (default `false`).
+</Property>
+
+<Property name="options.state.turns" type="'last' | 'all'" optional>
+  `'all'` sends every turn up to the graded one (default `'last'`).
+</Property>
+
+<Property name="options.state.checks" type="boolean | string[]" optional>
+  Sends the foreground `c.exec()` results so far, or only the listed commands (default `false`).
+</Property>
+
+A field on the call replaces the cascaded field, and `state` merges key by key. The `Verdict` echoes the `threshold`, `question`, and `model` the call used, and has these fields:
+
+<Property name="verdict" type="'pass' | 'fail'" required>
+  `pass` when `score` is at least `threshold`.
+</Property>
+
+<Property name="score" type="number" required>
+  The judge's probability that the answer is yes, from 0 to 1.
+</Property>
+
+<Property name="resolvedModel" type="string" optional>
+  The model id the provider reports, when it reports one.
+</Property>
+
+<Property name="artifacts" type="JudgeArtifactRef[]" optional>
+  The captures sent, each with `name`, `path`, `sha256`, `bytes`, and `mediaType`.
+</Property>
+
+A `JudgeFailure` has `verdict` `'error'`, `score` `null`, and the provider's message in `error`. For more information about the cascaded defaults, see [the `judge` option](/reference/options#judge). For more information about scoring, see [Judges](/evals/judges).
+
+## `c.readFile()`
+
+`c.readFile(path)` returns the text of a file in the sandbox, or `null` when there is no such file.
+
+```ts
+const source = await c.readFile('src/user.test.ts')
+```
+
+<Property name="path" type="string" required>
+  A workspace-relative path, or `~/` and a path under the sandbox home directory.
+</Property>
+
+## `c.writeFile()`
+
+`c.writeFile(path, contents)` writes a file into the sandbox and creates its directories.
+
+```ts
+await c.writeFile('src/note.ts', 'export const hint = "Cover getUserId."\n')
+```
+
+<Property name="path" type="string" required>
+  A workspace-relative path, or `~/` and a path under the sandbox home directory, never `.`, absolute, or under `..`.
+</Property>
+
+<Property name="contents" type="string | Uint8Array" required>
+  The file contents, as text or bytes.
+</Property>
+
+A workspace file this call wrote stays out of `diff` until something changes it.
+
+## `c.turns`
+
+`c.turns` lists every turn `c.send()` has returned, oldest first.
+
+```ts
+const first = c.turns[0]
+```
+
+<Property name="turns" type="readonly Turn[]" required>
+  The frozen `Turn` objects `c.send()` returned, empty before the first.
+</Property>
+
+## `c.signal`
+
+`c.signal` aborts when the evaluation times out or the run is cancelled.
+
+```ts
+const response = await fetch(url, { signal: c.signal })
+```
+
+<Property name="signal" type="AbortSignal" required>
+  Aborted on timeout or Ctrl-C.
+</Property>
+
+## `c.attempt`
+
+`c.attempt` names this attempt's cell and run number.
+
+```ts
+const { role, variant } = c.attempt.cell
+```
+
+<Property name="id" type="string" required>
+  `cell.key`, `#`, and `n`.
+</Property>
+
+<Property name="cell" type="Cell" required>
+  The cell object below, not a string.
+</Property>
+
+<Property name="n" type="number" required>
+  The run number inside the cell, from 1.
+</Property>
+
+The `Cell` has these fields:
+
+<Property name="key" type="string" required>
+  The harness id, the environment name, and the sandbox id, joined with `/`.
+</Property>
+
+<Property name="harness" type="string" required>
+  The harness id, `<kind>:<model>` by default, with `[effort=<value>]` appended whenever `effort` is set.
+</Property>
+
+<Property name="environment" type="string" required>
+  The environment's own name, also on a variant cell, or `-` when the attempt has none.
+</Property>
+
+<Property name="sandbox" type="string" required>
+  The sandbox id, from its `id` option, or from its engine, image or Dockerfile, and `install` hash.
+</Property>
+
+<Property name="role" type="'control' | 'variant'" required>
+  `control` for the baseline or any cell outside a comparison, or `variant`.
+</Property>
+
+<Property name="variant" type="string" optional>
+  The variant's name, on a variant cell.
+</Property>
+
+For more information about the same cell on the saved run, see [Run record](/reference/record).
+
+## `Turn`
+
+A `Turn` is the frozen value `c.send()` returns.
+
+```ts
+const changed = turn.diff.files.map((file) => file.path)
+```
+
+<Property name="prompt" type="string" required>
+  The prompt passed to `c.send()`.
+</Property>
+
+<Property name="text" type="string" required>
+  The harness's final message for the turn.
+</Property>
+
+<Property name="status" type="'completed' | 'aborted' | 'error'" required>
+  How the turn ended.
+</Property>
+
+<Property name="startedAt" type="string" required>
+  When the turn started, as an ISO 8601 string.
+</Property>
+
+<Property name="durationMs" type="number" required>
+  The turn's length in milliseconds.
+</Property>
+
+<Property name="transcript" type="TranscriptEvent[]" required>
+  The normalised `text`, `reasoning`, `file-edit`, `web-search`, `web-fetch`, `tool`, `error`, and `retry` events, each with `ts` and `atMs`.
+</Property>
+
+<Property name="usage" type="TokenUsage | null" required>
+  `input`, `output`, `cacheRead`, `cacheWrite`, and `reasoning` tokens, or `null` when the harness reports none.
+</Property>
+
+<Property name="model" type="string | null" required>
+  The model the harness says served the turn, or `null` when it reports none.
+</Property>
+
+<Property name="unreported" type="Array<'web-search' | 'web-fetch'>" required>
+  Event types the harness could not report, which `toHaveSearched()` and `toHaveFetched()` refuse.
+</Property>
+
+<Property name="diff" type="{ patch: string; files: FileChange[] }" required>
+  Workspace changes from the start of the evaluation, each file with a `path` and a `status` of `added`, `modified`, or `deleted`.
+</Property>
+
+`turn.exec(command)` and `turn.readFile(path)` run in the sandbox as `c.exec()` and `c.readFile()` do. For more information about transcripts, see [Debugging](/results/debugging#read-a-transcript). For more information about the matchers, see [Matchers](/reference/matchers).
