@@ -1,0 +1,96 @@
+---
+title: "Fail a pull request"
+description: "Fail a pull request when an evaluation regresses."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Gate pull requests)
+[//]: # (owns: the end-to-end pull-request gate: a profile that keeps the variant, compare.gate and minLift so the run exits 1, the summary that reeval show --md prints, and the regression check)
+[//]: # (excludes: the workflow file and the API key -> /evals/ci)
+[//]: # (excludes: record mode ci and the history commit in the job -> /evals/ci)
+[//]: # (excludes: profile keys -> /reference/profiles)
+[//]: # (excludes: exit codes -> /reference/cli#exit-codes)
+[//]: # (excludes: browsing history -> /history/queries#browse-history)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /evals/profiles, /comparisons/compare, /reference/cli#exit-codes, /evals/ci, /results/output#show-one-run, /results/regressions, /recipes/results-over-time)
+
+Fail a pull request when a variant misses the minimum lift, or when an evaluation regresses.
+
+<Steps>
+<Step title="Size the profile">
+
+Add a `pr` profile to the `reeval.config.ts` file. A run uses it when `CI` is set to anything other than `false` and you omit `--profile`.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  defaultProfile: { ci: 'pr' },
+  profiles: {
+    pr: {
+      budget: { attempts: 20 },
+    },
+  },
+})
+```
+
+`budget.attempts` caps the plan. The profile sets no `limit`, so the variant still runs. For more information about profiles, see [Profiles](/evals/profiles).
+
+</Step>
+<Step title="Require a minimum lift">
+
+Set `compare.gate` and `compare.minLift` in the `evals/shoehorn.eval.ts` file.
+
+```ts title="evals/shoehorn.eval.ts"
+-  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
++  {
++    runs: 4,
++    compare: {
++      baseline: plain,
++      variants: [withShoehorn],
++      gate: 'variants',
++      minLift: 0.25,
++    },
++  },
+```
+
+`compare.minLift` is the smallest lift you accept, from -1 to 1. `compare.gate` at `'variants'` is the default, so a variant's failure fails the evaluation. A control that fails its checks does not fail the run, so `reeval run` can exit 0.
+
+For more information about the comparison and the other `compare.gate` values, see [Compare setups](/comparisons/compare).
+
+With `compare.gate` at `'variants'`, the variant fails when the low end of its lift interval is below `0.25`. The variant's row adds `not by minLift 25`. The effect can still read `helped`.
+
+`reeval run` exits 1, and the job fails. For more information about exit codes, see [Exit codes](/reference/cli#exit-codes).
+
+</Step>
+<Step title="Add the workflow">
+
+Add the workflow that runs the `pr` profile. For more information about the workflow file and the API key, see [CI](/evals/ci).
+
+</Step>
+<Step title="Print the summary">
+
+Print the summary the job shows.
+
+```bash
+npx reeval show --md
+```
+
+The `reeval run` command appends that summary to the job summary. For more information about the command, see [Show one run](/results/output#show-one-run).
+
+</Step>
+<Step title="Fail on a regression">
+
+Run the regression check in the job after the run is recorded.
+
+```bash
+npx reeval compare --fail-on-regression
+```
+
+`reeval compare --fail-on-regression` exits 1 when an evaluation `regressed`. For more information about the other results that exit 1, see [Find run regressions](/results/regressions).
+
+</Step>
+</Steps>
+
+For more information about tracking recorded runs, see [Track results over time](/recipes/results-over-time).
