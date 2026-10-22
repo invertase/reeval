@@ -100,6 +100,7 @@ export async function startGateway(
   })
   child.stdin.on('error', () => {})
   let closed = false
+  let started = false
   const mux = createMux({
     Duplex,
     parity: 0,
@@ -110,7 +111,18 @@ export async function startGateway(
       if (port === PROXY_PORT) proxy.handle(stream)
       else stream.destroy()
     },
-    onReady: () => ready.resolve(),
+    onReady: () => {
+      started = true
+      ready.resolve()
+    },
+    // The forwarder runs as root, so only a root sandbox could forge its output: a frame that
+    // breaks the protocol stops the gateway rather than the worker. Before READY it's a forwarder
+    // that never started (a shell's "node: not found"), which its exit or the timeout reports.
+    onError: (message) => {
+      if (!started) return
+      stop(`the forwarder's output broke the protocol: ${message}`)
+      child.kill('SIGKILL')
+    },
   })
   const ready = {} as { promise: Promise<void>; resolve(): void; reject(error: unknown): void }
   ready.promise = new Promise<void>((resolve, reject) => Object.assign(ready, { resolve, reject }))
@@ -119,18 +131,20 @@ export async function startGateway(
   const listeners = new Map<number, Promise<net.Server>>()
   const tunnels = new Set<net.Socket>()
   let stopped: string | undefined
-  child.once('close', (code) => {
+  /** Stops on its own: nothing reaches the container any more, so connections are refused. */
+  const stop = (reason: string) => {
     const asked = closed
     closed = true
     mux.destroy()
-    const reason = `the forwarder exited (${code}): ${stderr.trim().slice(-500)}`.replace(/: $/, '')
     ready.reject(new Error(reason))
     if (asked) return
-    // Nothing reaches the container any more: refuse connections instead of letting them hang.
     stopped = reason
     for (const socket of tunnels) socket.destroy()
     for (const l of listeners.values()) void l.then((s) => s.close())
-  })
+  }
+  child.once('close', (code) =>
+    stop(`the forwarder exited (${code}): ${stderr.trim().slice(-500)}`.replace(/: $/, '')),
+  )
   const timer = setTimeout(
     () => ready.reject(new Error(`the forwarder didn't start within ${READY_TIMEOUT_MS / 1000}s`)),
     READY_TIMEOUT_MS,

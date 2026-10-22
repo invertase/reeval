@@ -144,11 +144,31 @@ const BOOTSTRAPS: Record<
 const profilePathScript = () =>
   readFileSync(join(DOCKER_CONTEXT, 'reeval-path.sh')).toString('base64')
 
+/** `from` as it goes after `FROM`: one word, so it can't add a stage name or another instruction. */
+function imageReference(from: string): string {
+  if (!/^\S+$/.test(from)) {
+    throw new Error(
+      `docker({ from }) is an image reference without spaces or line breaks (got ${JSON.stringify(from)})`,
+    )
+  }
+  return from
+}
+
+/**
+ * A CLI's `--version` output as a label value in `docker commit --change`: its first line, without
+ * quotes, backslashes or anything else that could end the value and add an instruction.
+ */
+export const versionLabel = (output: string) =>
+  (output.split(/\r?\n/)[0] ?? '')
+    .replace(/[^\w .+:/()@,~-]/g, '')
+    .trim()
+    .slice(0, 100) || 'unknown'
+
 /**
  * Adds what the harness bridge needs to a Debian or Ubuntu based toolchain image: Node (copied
  * from the official image, so the base's own toolchain is untouched), pnpm, git, curl and bash.
  */
-const toolchainDockerfile = (from: string) => `FROM ${from}
+const toolchainDockerfile = (from: string) => `FROM ${imageReference(from)}
 SHELL ["/bin/sh", "-c"]
 RUN command -v apt-get >/dev/null || { echo "reeval needs a Debian or Ubuntu based image (glibc and apt-get)" >&2; exit 1; } \\
   && apt-get update \\
@@ -525,7 +545,7 @@ async function bake(
       `The harness bootstrap did not install ${bootstrap.cli}:\n${tail(version.stderr)}`,
     )
   }
-  return version.stdout.trim() || 'unknown'
+  return versionLabel(version.stdout.trim())
 }
 
 /** One `docker({ install })` command, killed after `timeoutMs` when set. */

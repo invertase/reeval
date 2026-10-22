@@ -19,13 +19,19 @@ export type MuxOptions = {
   parity: 0 | 1
   onOpen(stream: MuxStream, port: number): void
   onReady?(): void
+  /**
+   * Called once when the peer sends a frame that breaks the protocol. Every stream is torn down
+   * first, and later bytes are ignored: the pipe is no longer in step.
+   */
+  onError?(message: string): void
   /** Bytes a stream may have in flight before the receiver grants more. */
   window?: number
 }
 
 /**
  * Many TCP streams over one byte pipe (a `docker exec` stdio), with per-stream credit so a slow
- * reader only stalls its own stream. Frames are `type u8, id u32, length u32, payload`.
+ * reader only stalls its own stream. Frames are `type u8, id u32, length u32, payload`, and a
+ * payload is at most 64 KiB.
  *
  * Must stay self-contained, with no imports or references to module scope: the forwarder runs
  * this function's source inside the container.
@@ -48,9 +54,19 @@ export function createMux(options: MuxOptions): Mux {
     remoteEnded: boolean
     reset: boolean
   }
+  /** The payload length each type must have, or its range. */
+  const LENGTHS: Record<number, [string, number, number]> = {
+    [OPEN]: ['OPEN', 2, 2],
+    [DATA]: ['DATA', 0, maxPayload],
+    [FIN]: ['FIN', 0, 0],
+    [RST]: ['RST', 0, 0],
+    [WINDOW]: ['WINDOW', 4, 4],
+    [READY]: ['READY', 0, 0],
+  }
   const streams = new Map<number, State>()
   let nextId = options.parity === 0 ? 2 : 1
   let pending: Buffer = Buffer.alloc(0)
+  let broken = false
 
   const frame = (type: number, id: number, payload: Buffer = Buffer.alloc(0)) => {
     const header = Buffer.alloc(9)
@@ -108,6 +124,31 @@ export function createMux(options: MuxOptions): Mux {
     return stream
   }
 
+  /** Why a frame's header breaks the protocol, or null. */
+  const malformed = (type: number, id: number, length: number): string | null => {
+    const expected = LENGTHS[type]
+    if (!expected) return `a frame of unknown type ${type}`
+    const [name, min, max] = expected
+    if (length > maxPayload) return `a frame too large (${length} bytes)`
+    if (length < min || length > max) {
+      return `a malformed ${name} frame (${length} bytes, not ${min === max ? min : `0 to ${max}`} bytes)`
+    }
+    if (type === OPEN && (id % 2 === options.parity || streams.has(id))) {
+      return `an OPEN frame for stream ${id}, which this side allocates or has open`
+    }
+    return null
+  }
+
+  const fail = (message: string) => {
+    broken = true
+    pending = Buffer.alloc(0)
+    for (const state of [...streams.values()]) {
+      state.reset = true
+      state.stream.destroy()
+    }
+    options.onError?.(`the peer sent ${message}`)
+  }
+
   const handle = (type: number, id: number, payload: Buffer) => {
     if (type === READY) return options.onReady?.()
     if (type === OPEN) return options.onOpen(create(id), payload.readUInt16BE(0))
@@ -137,15 +178,22 @@ export function createMux(options: MuxOptions): Mux {
 
   return {
     receive(chunk) {
+      if (broken) return
       pending = pending.length ? Buffer.concat([pending, chunk]) : chunk
-      while (pending.length >= 9) {
-        const length = pending.readUInt32BE(5)
-        if (pending.length < 9 + length) break
-        const type = pending.readUInt8(0)
-        const id = pending.readUInt32BE(1)
-        const payload = pending.subarray(9, 9 + length)
-        pending = pending.subarray(9 + length)
-        handle(type, id, payload)
+      try {
+        while (pending.length >= 9) {
+          const type = pending.readUInt8(0)
+          const id = pending.readUInt32BE(1)
+          const length = pending.readUInt32BE(5)
+          const problem = malformed(type, id, length)
+          if (problem) return fail(problem)
+          if (pending.length < 9 + length) break
+          const payload = pending.subarray(9, 9 + length)
+          pending = pending.subarray(9 + length)
+          handle(type, id, payload)
+        }
+      } catch (error) {
+        fail(`a frame it couldn't handle: ${(error as Error).message}`)
       }
     },
     open(port) {
@@ -211,6 +259,10 @@ export function forwarderMain(
     send: (f) => io.output.write(f),
     onOpen(stream, port) {
       linkStreams(io.net.connect({ port, host: '127.0.0.1', allowHalfOpen: true }), stream)
+    },
+    onError(message) {
+      io.error(`reeval egress forwarder: ${message}`)
+      io.exit(1)
     },
   })
   io.input.on('data', (chunk: Buffer) => mux.receive(chunk))
