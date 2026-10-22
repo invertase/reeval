@@ -259,10 +259,10 @@ export type JudgeState =
   | JudgeJsonState
   | Array<{ type: 'json'; value: JudgeJsonState } | JudgeFilePart>
 
-/** A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`. */
+/** A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file. */
 export type JudgeArtifactRef = {
   name: string
-  /** `artifacts/<name>.png` under the attempt directory. */
+  /** The `artifacts/<name>.png` path under the attempt directory. */
   path: string
   sha256: string
   bytes: number
@@ -2174,9 +2174,9 @@ export type TurnRecord = Pick<
 
 /**
  * One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by
- * reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per
- * turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts
- * them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra
+ * reeval's MCP timer, which every stdio server runs through. An agent CLI that starts one process
+ * per turn starts its servers on every turn; a CLI that keeps a session starts them on the first
+ * turn only. A server that doesn't answer within 60s fails the attempt as an infra
  * error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the
  * environment has no stdio MCP server, or the sandbox has no `node` to run the timer.
  */
@@ -2190,7 +2190,7 @@ export type McpStartup = {
   ms: number | null
 }
 
-/** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
+/** The duration of each evaluation phase, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
 export type PhaseTimings = {
   setupMs: number
   agentMs: number
@@ -2202,16 +2202,28 @@ export type PhaseTimings = {
 export type CellRole = 'control' | 'variant'
 
 /**
- * One cell of an eval: a harness, an environment (`-` when none is set) and that environment's
- * image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline`
- * (or the cascaded environment, or an empty `baseline`) and each variant is that environment on
- * its own, including its sandbox.
+ * A cell of an evaluation combines a harness, an environment (`-` when none is set), and that
+ * environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded
+ * environment, or an empty `baseline`) and each variant is that environment on its own,
+ * including its sandbox.
  */
 export type Cell = {
+  /** The harness id, the environment name, and the sandbox id, joined with `/`. */
   key: string
+  /**
+   * The harness id: `id` when set, otherwise `<kind>:<model>` (`<kind>` alone without a model),
+   * with `[effort=<value>]` appended whenever `effort` is set.
+   */
   harness: string
-  /** The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix). */
+  /** The environment's own name, also on a variant cell (`with-skill`, with no prefix). */
   environment: string
+  /**
+   * The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with
+   * the engine (`docker` by default). It adds `:` and the sanitised final component of `image` or
+   * `from`, or for `dockerfile` the sanitised filename (the parent directory name when that
+   * filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an
+   * eight-character hash.
+   */
   sandbox: string
   role: CellRole
   /** The variant's name, for variant cells. */
@@ -2252,9 +2264,9 @@ export type EnvironmentRecord = {
   name: string
   /** The previous `extendEnvironment` layer's name, else null. */
   parent: string | null
-  /** Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`. */
+  /** Keys a later layer replaced, for example `env.KEY`, `skills.typescript`, `mcp.docs`, or `rules`. */
   overrides: string[]
-  /** Covers every field but the rules file's path; secret names are included, values never are. The image is the sandbox's. */
+  /** Covers every field but the rules file's path; secret names are included; values never are. The image is the sandbox's. */
   digest: string
   setup: string[]
   skills: Array<{
@@ -2268,7 +2280,7 @@ export type EnvironmentRecord = {
     /** The plugin the skill came with; unset for a skill from `skills`. */
     plugin?: string
   }>
-  /** Every MCP server, a plugin's as `<plugin>:<server>`. */
+  /** The names of the MCP servers the agent was given. */
   mcp: string[]
   /** The plugins placed, each with what it placed; in the digest. Unset when there are none. */
   plugins?: PluginRecord[]
@@ -2282,9 +2294,9 @@ export type EnvironmentRecord = {
   /** The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`. */
   egress: EgressPolicy
   /**
-   * The git repository the workspace started as: the repo as written (a local one relative to the
-   * project root), the ref and path asked for (null when unset), the commit the ref resolved to
-   * and the hash of the tree that was copied in, which is in the digest.
+   * This records the Git repository the workspace started as: the repo as written (a local one
+   * relative to the project root), the ref and path asked for (null when unset), the commit the
+   * ref resolved to, and the hash of the tree that was copied in, which is in the digest.
    */
   workspace?: {
     source: string
@@ -2302,8 +2314,8 @@ export type EnvironmentRecord = {
  * and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox
  * can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between
  * the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the
- * harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands
- * out.
+ * harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains
+ * only unexpected refusals.
  */
 export type EgressRecord = {
   policy: EgressPolicy
@@ -2332,7 +2344,7 @@ export type AttemptImage = {
   /** Content-addressed image id (`sha256:…`). */
   id: string
   agentCli: string | null
-  /** The harness image `install` and plugin builds were baked onto: `ref` itself without either. */
+  /** The harness image the `install` layers were baked onto: `ref` itself without any. */
   base: string
   /** The `docker({ install })` commands, in order. */
   install: string[]
@@ -2371,8 +2383,8 @@ export type StartRetry = {
 /** One `expect` or `expect.soft` matcher call an attempt made. */
 export type AssertionRecord = {
   /**
-   * `expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or
-   * the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.
+   * `label` is the supplied `expect` label. Without one, it is the matcher plus its first
+   * argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes.
    */
   label: string
   /** The eval gave the label. */
@@ -2510,16 +2522,20 @@ export type EvalPlan = {
 }
 
 /**
- * A sandbox with more privilege than the default `reeval` user: `docker({ root: true })`, or
- * `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.
+ * A `SandboxWarning` describes a sandbox with more privilege than the default `reeval` user:
+ * `docker({ root: true })` or `docker({ capabilities })`. One per level that set such a sandbox,
+ * however many evaluations inherit it.
  */
 export type SandboxWarning = {
   kind: 'root' | 'capabilities'
   /** Which level set the sandbox. */
   level: 'config' | 'profile' | 'group' | 'eval'
-  /** That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`. */
+  /**
+   * The value is the level as reeval names it: the `reeval.config.ts` file, `profiles.pr.defaults`,
+   * `group("net")`, or `evaluate("installs deps")`.
+   */
   where: string
-  /** The eval file that sets it, for a group or eval; null for the config or a profile. */
+  /** The evaluation file that sets it, for a group or evaluation; null for the config or a profile. */
   file: string | null
   /** The capabilities added back, for `capabilities`. */
   capabilities?: string[]

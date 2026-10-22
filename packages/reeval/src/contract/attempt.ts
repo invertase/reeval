@@ -224,7 +224,7 @@ export const assertionRecordSchema = z
     label: z
       .string()
       .describe(
-        "`expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.",
+        '`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes.',
       ),
     labelled: z.boolean().describe('The eval gave the label.'),
     matcher: z.string().describe('`toHaveFile`, `not.toBe`, `resolves.toBe`, `poll.toBe`.'),
@@ -265,12 +265,14 @@ export const captureSchema = z
 export const judgeArtifactRefSchema = z
   .strictObject({
     name: z.string(),
-    path: z.string().describe('`artifacts/<name>.png` under the attempt directory.'),
+    path: z.string().describe('The `artifacts/<name>.png` path under the attempt directory.'),
     sha256: z.string(),
     bytes: z.number(),
     mediaType: z.literal('image/png'),
   })
-  .describe('A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.')
+  .describe(
+    'A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file.',
+  )
 
 const verdictFields = {
   threshold: z.number(),
@@ -742,19 +744,29 @@ export const cellRoleSchema = z.enum(['control', 'variant'])
 
 export const cellSchema = z
   .strictObject({
-    key: z.string(),
-    harness: z.string(),
+    key: z
+      .string()
+      .describe('The harness id, the environment name, and the sandbox id, joined with `/`.'),
+    harness: z
+      .string()
+      .describe(
+        'The harness id: `id` when set, otherwise `<kind>:<model>` (`<kind>` alone without a model), with `[effort=<value>]` appended whenever `effort` is set.',
+      ),
     environment: z
       .string()
       .describe(
-        "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
+        "The environment's own name, also on a variant cell (`with-skill`, with no prefix).",
       ),
-    sandbox: z.string(),
+    sandbox: z
+      .string()
+      .describe(
+        'The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitised final component of `image` or `from`, or for `dockerfile` the sanitised filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.',
+      ),
     role: cellRoleSchema,
     variant: z.string().optional().describe("The variant's name, for variant cells."),
   })
   .describe(
-    "One cell of an eval: a harness, an environment (`-` when none is set) and that environment's image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
+    "A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
   )
 
 export const attemptStartSchema = z
