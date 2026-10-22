@@ -63,6 +63,13 @@ jobs:
         run: bash scripts/drift/latest-images.sh
       # The Python SDK's real-tier fixture runs its eval with `uv sync` and `uv run` on the host.
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       # One suite at a time, one real row at a time; no retries: a failure is reported as it is.
       - name: harness contract${{ inputs.versions == 'pinned' && ' and e2e CLI scenarios' || '' }}
         working-directory: packages/reeval
