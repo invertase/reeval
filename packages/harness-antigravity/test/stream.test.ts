@@ -340,6 +340,51 @@ describe('stream translation', () => {
   })
 })
 
+describe("cache reads in a real turn (agy 1.4.4, gemini-3.8-flash-low, Gemini's implicit cache)", () => {
+  // Each model call's usageMetadata as the Gemini API sent it, recorded beside the capture:
+  // [promptTokenCount, cachedContentTokenCount, candidatesTokenCount]. promptTokenCount
+  // includes the cached tokens; agy's input_tokens is what is left of it.
+  const GEMINI = [
+    [6763, 0, 24],
+    [24449, 0, 45],
+    [35323, 24470, 31],
+    [50396, 35347, 40],
+    [50515, 48341, 40],
+    [50634, 48460, 40],
+    [50753, 48580, 40],
+    [50872, 48699, 40],
+    [50991, 48818, 40],
+    [51110, 48938, 36],
+  ]
+  const { parts } = translate(fixture('cached-steps.ndjson'))
+  const usages = parts.flatMap((p) => (p.type === 'finish-step' ? [p.usage] : []))
+
+  test("each step's tokens are what Gemini counted for its call", () => {
+    assert.deepEqual(
+      usages.map((u) => [u.inputTokens.total, u.inputTokens.cacheRead, u.outputTokens.total]),
+      GEMINI,
+    )
+    for (const [i, u] of usages.entries()) {
+      const [prompt = 0, cached = 0] = GEMINI[i] ?? []
+      assert.equal(u.inputTokens.noCache, prompt - cached)
+    }
+  })
+
+  test("the turn's total is its steps' sum, the cache reads counted once", () => {
+    const total = parts.at(-1)?.type === 'finish' ? parts.at(-1) : undefined
+    assert.ok(total?.type === 'finish')
+    const sum = (f: (row: number[]) => number) => GEMINI.reduce((n, row) => n + f(row), 0)
+    assert.deepEqual(
+      [
+        total.totalUsage.inputTokens.total,
+        total.totalUsage.inputTokens.cacheRead,
+        total.totalUsage.outputTokens.total,
+      ],
+      [sum(([p = 0]) => p), sum(([, c = 0]) => c), sum(([, , o = 0]) => o)],
+    )
+  })
+})
+
 describe("a provider's failure (agy 1.2.11, a Gemini endpoint refusing every call)", () => {
   const failed = (file: string) => {
     const { parts } = translate(fixture(file), { exitCode: 3 })
