@@ -68,8 +68,8 @@ describe('stream translation', () => {
     if (finish?.type !== 'finish') return
     assert.deepEqual(finish.finishReason, { unified: 'stop', raw: 'finished' })
     assert.deepEqual(finish.totalUsage.inputTokens, {
-      total: 34668 + 29164,
-      noCache: 34668,
+      total: 34668,
+      noCache: 34668 - 29164,
       cacheRead: 29164,
       cacheWrite: 0,
     })
@@ -292,13 +292,13 @@ describe('stream translation', () => {
     ])
   })
 
-  test('toUsage: input total adds the cache; reasoning is part of output', () => {
+  test('toUsage: inputTokens already holds the cache reads; cache writes are added; reasoning is part of output', () => {
     const usage = toUsage({
-      inputTokens: 10,
+      inputTokens: 110,
       outputTokens: 7,
       cacheReadTokens: 100,
       cacheWriteTokens: 3,
-      totalTokens: 120,
+      totalTokens: 220,
       reasoningTokens: 2,
     })
     assert.deepEqual(usage.inputTokens, { total: 113, noCache: 10, cacheRead: 100, cacheWrite: 3 })

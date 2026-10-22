@@ -250,6 +250,26 @@ const renamedTool: Record<string, [string, string]> = {
   codex: ['"type":"command_execution"', '"type":"shell_call"'],
 }
 
+type Count = number | undefined
+/**
+ * A finish part's tokens. Captured parts carry the AI SDK's numbers (`inputTokens` and its
+ * `inputTokenDetails`); the translator's, `{ total, noCache, cacheRead, cacheWrite }`.
+ */
+const tokensOf = (usage: unknown) => {
+  const u = (usage ?? {}) as Record<string, unknown>
+  const input = u.inputTokens as Count | { total?: Count; [k: string]: Count }
+  const output = u.outputTokens as Count | { total?: Count }
+  const details = (u.inputTokenDetails ?? {}) as Record<string, Count>
+  const split = typeof input === 'object' ? input : undefined
+  return {
+    input: typeof input === 'object' ? input.total : input,
+    noCache: split ? split.noCache : details.noCacheTokens,
+    cacheRead: split ? split.cacheRead : details.cacheReadTokens,
+    cacheWrite: split ? split.cacheWrite : details.cacheWriteTokens,
+    output: typeof output === 'object' ? output.total : output,
+  }
+}
+
 /** Each harness's translator, fresh for one turn: the native events go back through it. */
 const translators: Record<string, () => { push(line: string): HarnessV1StreamPart[] }> = {
   antigravity: () => new AntigravityStreamTranslator({ turn: 1 }),
@@ -268,7 +288,7 @@ for (const harness of Object.keys(translators))
         parts.push(...t.push(JSON.stringify(e)))
       return parts.filter((p) => p.type !== 'raw')
     }
-    /** What must match between the captured parts and today's: tool calls, text and token totals. */
+    /** What must match between the captured parts and today's: tool calls, text and tokens. */
     const essence = (parts: Array<{ type: string; [k: string]: unknown }>) => ({
       calls: parts
         .filter((p) => p.type === 'tool-call')
@@ -281,15 +301,21 @@ for (const harness of Object.keys(translators))
         .filter((p) => p.type === 'text-delta')
         .map((p) => p.delta ?? p.text)
         .join(''),
-      // Captured parts carry the AI SDK's numbers; the translator's, `{ total }`.
-      tokens: (() => {
-        const u = parts.find((p) => p.type === 'finish')?.totalUsage as
-          | Record<string, number | { total?: number } | undefined>
-          | undefined
-        const n = (v: number | { total?: number } | undefined) =>
-          typeof v === 'number' ? v : v?.total
-        return [n(u?.inputTokens), n(u?.outputTokens)]
-      })(),
+      tokens: tokensOf(parts.find((p) => p.type === 'finish')?.totalUsage),
+    })
+
+    test('twin: the same totals split another way between uncached input and cache reads', () => {
+      const lines = parse(read(harness, 'edit-and-run.raw.jsonl'))
+      const swapped = lines.map(({ part }) => {
+        const u = part.type === 'finish' ? (part.totalUsage as Record<string, unknown>) : undefined
+        const d = u?.inputTokenDetails as Record<string, number | undefined> | undefined
+        if (!u || !d) return part
+        const split = { noCacheTokens: d.cacheReadTokens, cacheReadTokens: d.noCacheTokens }
+        return { ...part, totalUsage: { ...u, inputTokenDetails: { ...d, ...split } } }
+      })
+      const today = essence(retranslate(lines) as never).tokens
+      assert.equal(essence(swapped).tokens.input, today.input)
+      assert.notDeepEqual(essence(swapped).tokens, today)
     })
 
     for (const file of readdirSync(join(root, harness)).filter((f) => f.endsWith('.jsonl'))) {
@@ -297,7 +323,7 @@ for (const harness of Object.keys(translators))
         const lines = parse(read(harness, file))
         const captured = essence(lines.map((l) => l.part))
         assert.ok(
-          captured.calls.length > 0 && captured.tokens[0],
+          captured.calls.length > 0 && captured.tokens.input,
           'the capture has calls and tokens',
         )
         assert.deepEqual(essence(retranslate(lines) as never), captured)
