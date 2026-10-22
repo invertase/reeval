@@ -1092,7 +1092,7 @@ export const features: Feature[] = [
     tiers: ['docker', 'podman'],
     env: 'plain',
     canaryEnv: 'rooted',
-    canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+    canary: /expected '0 00000000000000cf \/ 0' to be '10001 0000000000000000 \/ 10001'/,
   },
   {
     // Docker and Podman only: every exec goes through engine/umask-0000, which starts it at
