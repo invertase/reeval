@@ -64,6 +64,10 @@ type Behaviour = {
   skips?: (row: HarnessRow) => string | undefined
 }
 
+/** A path into a plugin store in a transcript line's JSON: a Cursor or Claude plugin, or a cache. */
+const PLUGIN_FILE =
+  /[^\s"'\\]*(?:\.cursor\/plugins\/|\.claude\/plugins\/|plugins\/cache\/)[^\s"'\\]*/g
+
 const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => name.test(e.name))
 
 /**
@@ -549,9 +553,11 @@ export const behaviours: Behaviour[] = [
           l.type === 'tool' && /mcp/i.test(l.tool) && !/stamp/.test(l.tool) ? [l.tool] : [],
         )
         assert.deepEqual(mcpTools, [], `${name}: MCP tools beyond the probe plugin's stamp server`)
-        const elsewhere = lines
-          .map((l) => JSON.stringify(l))
-          .filter((l) => /\.cursor\/plugins\/|\.claude\/plugins\/|plugins\/cache\//.test(l))
+        const elsewhere = lines.flatMap((l) =>
+          [...JSON.stringify(l).matchAll(PLUGIN_FILE)]
+            .map(([p]) => p.replace(/^\/(home\/[^/]+|root)\//, '~/'))
+            .filter((p) => !row.plugin?.own?.test(p)),
+        )
         assert.deepEqual(elsewhere, [], `${name}: another plugin's files in the transcript`)
       }
       const egress = a.egress

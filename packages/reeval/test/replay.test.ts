@@ -390,6 +390,22 @@ describe('replay: the OpenCode adapter, from the captured parts', () => {
     )
   })
 
+  test('a patch call harness-acp names `patch` is an edit too (OpenCode 2.0.32)', () => {
+    const named = parse(
+      readFileSync(join(testDir, 'fixtures', 'opencode-gpt-patch-named.raw.jsonl'), 'utf8'),
+    )
+    const captured = names(named.map((l) => l.part))
+    assert.ok(captured.includes('patch'), JSON.stringify(captured))
+    const t = new OpenCodeStreamTranslator()
+    const lines = named.map((l) => ({ ...l, part: t.push(l.part)[0] as Line['part'] }))
+    const out = names(lines.map((l) => l.part))
+    assert.ok(out.includes('edit') && !out.includes('patch'), JSON.stringify(out))
+    assert.deepEqual(
+      edits(events(lines)).map((e) => [e.path, e.kind, e.added, e.removed]),
+      [['notes.txt', 'modify', 1, 1]],
+    )
+  })
+
   test('twin: without its first update, the patch call keeps the generic name', () => {
     const t = new OpenCodeStreamTranslator()
     const lines = gptPatch()

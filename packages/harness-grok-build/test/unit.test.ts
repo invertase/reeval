@@ -13,6 +13,7 @@ import {
   GROK_PLUGIN_DIRS_ENV,
   grokConfig,
 } from '../src/grok-build-harness.ts'
+import { GROK_BUILD_BUILTIN_TOOLS } from '../src/grok-build-tools.ts'
 import { VERSION } from '../src/version.ts'
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -126,4 +127,10 @@ test("effort is the config's default_reasoning_effort", () => {
     grokConfig({ model: 'grok-4.6', effort: 'high' }).content,
     /\ndefault_reasoning_effort = "high"\n/,
   )
+})
+
+test('the catalog names the tools Grok calls by its own names (CLI 1.0.62)', () => {
+  for (const name of ['search_tool', 'spawn_subagent'])
+    assert.ok(name in GROK_BUILD_BUILTIN_TOOLS, `${name} is in the catalog`)
+  assert.equal(GROK_BUILD_BUILTIN_TOOLS.search_tool.toolUseKind, 'readonly')
 })
