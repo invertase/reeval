@@ -61,6 +61,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash scripts/drift/latest-images.sh
+      # The Python SDK's real-tier fixture runs its eval with `uv sync` and `uv run` on the host.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       # One suite at a time, one real row at a time; no retries: a failure is reported as it is.
       - name: harness contract${{ inputs.versions == 'pinned' && ' and e2e CLI scenarios' || '' }}
         working-directory: packages/reeval
