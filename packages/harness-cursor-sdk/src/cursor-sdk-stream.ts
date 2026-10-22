@@ -4,8 +4,10 @@ import { CURSOR_SDK_RECOVERED_TOOLS } from './cursor-sdk-bootstrap.ts'
 import { projectToolCall, projectToolResult } from './cursor-sdk-tools.ts'
 
 /**
- * The SDK's `TokenUsage`. `inputTokens` excludes cache reads and writes: `totalTokens` is
- * input + output + cache read + cache write. `reasoningTokens` is part of `outputTokens`.
+ * The SDK's `TokenUsage`. `inputTokens` already contains `cacheReadTokens` (Cursor's usage export
+ * lists the same turn as uncached input plus cache read, and the SDK's `inputTokens` is their sum),
+ * so `totalTokens`, which adds the cache reads again, is not used. Cache writes are separate from
+ * `inputTokens`. `reasoningTokens` is part of `outputTokens`.
  */
 export type CursorSdkUsage = {
   inputTokens?: number
@@ -79,14 +81,15 @@ export function toUsage(usage: CursorSdkUsage | undefined): Usage {
       outputTokens: { total: undefined, text: undefined, reasoning: undefined },
     }
   }
-  const noCache = usage.inputTokens
+  const read = usage.inputTokens
   const cacheRead = usage.cacheReadTokens
   const cacheWrite = usage.cacheWriteTokens
   const output = usage.outputTokens
   const reasoning = usage.reasoningTokens
+  const noCache = read === undefined ? undefined : Math.max(read - (cacheRead ?? 0), 0)
   return {
     inputTokens: {
-      total: noCache === undefined ? undefined : noCache + (cacheRead ?? 0) + (cacheWrite ?? 0),
+      total: read === undefined ? undefined : read + (cacheWrite ?? 0),
       noCache,
       cacheRead,
       cacheWrite,

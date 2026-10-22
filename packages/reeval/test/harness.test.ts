@@ -2375,9 +2375,9 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(served, 'gemini-3.8-flash-low')
   })
 
-  test('Cursor: uncached input, cache reads and writes as the SDK splits them', async () => {
+  test('Cursor: the SDK input holds the cache reads, so uncached input is what is left', async () => {
     const sdk = cursorUsage({
-      inputTokens: 15564,
+      inputTokens: 15564 + 10464,
       outputTokens: 117,
       cacheReadTokens: 10464,
       cacheWriteTokens: 12,
