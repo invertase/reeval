@@ -27,7 +27,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseArgs } from 'node:util'
+import { parseArgs, stripVTControlCharacters } from 'node:util'
 
 const { values: args } = parseArgs({
   options: {
@@ -136,7 +136,7 @@ const compiled = (cwd, args, env) =>
   sh(join(alone, exe), args, { cwd, env: { ...process.env, XDG_CACHE_HOME: cache, ...env } })
 /** The last line that says how the run went, e.g. `16 pass` or `1 fail · 1 pass`. */
 const outcome = (r) =>
-  (r.stdout + r.stderr)
+  stripVTControlCharacters(r.stdout + r.stderr)
     .split('\n')
     .filter((l) => /^\d+ (pass|fail)/.test(l.trim()))
     .at(-1)

@@ -11,7 +11,7 @@ import { chmodSync, cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseArgs } from 'node:util'
+import { parseArgs, stripVTControlCharacters } from 'node:util'
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -57,7 +57,7 @@ function reeval(cwd, args, env = {}) {
 }
 /** The last line that says how the run went, e.g. `16 pass` or `1 fail · 1 pass`. */
 const outcome = (r) =>
-  r.out
+  stripVTControlCharacters(r.out)
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => /^\d+ (pass|fail)/.test(l))
