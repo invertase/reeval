@@ -1,0 +1,64 @@
+---
+title: "Browse studio runs"
+description: "Browse run history and runs in progress in a local web app."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Studio)
+[//]: # (owns: reeval studio; reeval studio build)
+[//]: # (excludes: reeval/view helpers -> not documented)
+[//]: # (excludes: every flag -> /reference/cli#reeval-studio)
+[//]: # (excludes: what the debug trace holds -> /results/debugging)
+[//]: # (inbound: /results/debugging)
+[//]: # (outbound: /reference/cli#reeval-studio, /reference/cli#reeval-studio-build, /history, /results/debugging)
+
+The studio is a local web app over the same run history the `reeval history` command lists. It shows every recorded run, each run's evaluations, cells, and attempts, and each attempt's transcript, diff, checks, and judge inputs. For more information about recording runs, see [Recording](/history).
+
+## Open the studio
+
+The `reeval studio` command serves the studio on `127.0.0.1` and reads the history directory from your `reeval.config.ts` file, plus the unrecorded runs in the `.reeval/runs` directory. Open it in your browser:
+
+```bash
+npx reeval studio --open
+```
+
+The command prints the address and keeps running until you press `Ctrl-C`:
+
+```text
+reeval studio · my-app · .history/
+  http://127.0.0.1:4984/?token=…
+Ctrl-C to stop.
+```
+
+The address carries a session token, and the studio refuses a request without it, so open the printed address rather than typing the port.
+
+The runs list opens first. A run opens to its evaluations, each cell's pass counts and, with `compare`, each variant's effect against the control. An attempt has **Transcript**, **Diff**, **Checks**, **Judge**, and **State** tabs, and a **Debug** tab when the attempt has a trace in the `.reeval/debug` directory. For more information about debug traces, see [Debugging](/results/debugging).
+
+## Watch a run live
+
+While the studio is open, a `reeval run` in the same project appears at the top of the runs list as soon as it starts. In a second terminal, start a run:
+
+```bash
+npx reeval run
+```
+
+The run shows a **Running** badge with the attempts finished so far, and each attempt's transcript grows as the harness works. When the run writes its record, the studio moves it into the history and keeps its address. A run whose process exits before it writes the record, or that produces no activity for fifteen seconds, shows **Stopped**.
+
+## Export a static site
+
+The `reeval studio build` command writes the studio and your history as a static site, so a team can read runs without reeval installed. Build the site:
+
+```bash
+npx reeval studio build
+```
+
+The command names the output folder and what it holds:
+
+```text
+built studio-dist/: 12 runs, 348 files, 9.4 MB
+Serve it from any static host. Anyone who can open it can read every included file.
+```
+
+The site uses relative addresses and hash routing, so it works from any host and any subpath. It has no live runs and no **Debug** tab. The `studio-dist` directory must be empty or a previous studio build.
+
+For more information about every flag of `reeval studio` and `reeval studio build`, see [CLI](/reference/cli#reeval-studio) and [`reeval studio build`](/reference/cli#reeval-studio-build).
