@@ -1,0 +1,94 @@
+---
+title: "Test an SDK"
+description: "See whether an agent can build a working app with your SDK."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Test an SDK)
+[//]: # (owns: the end-to-end SDK build: a starter workspace, setup commands, a brokered API key and checks on what the agent built)
+[//]: # (excludes: starting from a repository -> /environments/workspaces)
+[//]: # (excludes: setup commands -> /environments/setup)
+[//]: # (excludes: brokering the key -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: which hosts the sandbox reaches -> /environments/egress)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /environments/workspaces, /environments/setup, /environments/secrets#keep-api-keys-on-the-host, /environments/egress, /evals/checks, /evals/judges, /results/output#read-the-outcomes, /reference/harness/cursor)
+
+An SDK test starts the harness in a starter app, gives the harness the SDK's API key, and checks the app the harness builds.
+
+<Steps>
+<Step title="Write the evaluation">
+
+Create the `evals/sdk.eval.ts` file with the starter, the `setup` command, the API key, and the checks. The sample uses Vercel AI SDK.
+
+```ts title="evals/sdk.eval.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+
+const starter = defineEnvironment('ai-sdk', ({ git, secret }) => ({
+  workspace: git('github:vercel/ai', {
+    ref: 'ai@6.0.0', path: 'examples/express',
+  }),
+  setup: ['npm install'],
+  env: {
+    OPENAI_API_KEY: secret.fromEnv('OPENAI_API_KEY', {
+      hosts: secret.hosts.openai,
+    }),
+  },
+}))
+
+evaluate('adds a weather tool with AI SDK', {
+  environment: starter,
+  harness: cursor({ model: 'composer-2.5' }),
+}, async (c) => {
+  await c.send(
+    'Add src/weather.ts that exports an AI SDK tool() and does not call it.',
+  )
+  await expect(c, 'uses a tool').toHaveFile('src/weather.ts', /tool\(/)
+  await expect(c.exec('npx tsx src/weather.ts'), 'loads').toSucceed()
+})
+```
+
+For more information about the starter repository, see [Start from a repository](/environments/workspaces). For more information about the `setup` command, see [Run setup commands](/environments/setup).
+
+The `uses a tool` check requires `tool(` in the `src/weather.ts` file. The `loads` check runs that file and passes when the process exits with code 0. For more information about file and command checks, see [Check an attempt](/evals/checks).
+
+</Step>
+<Step title="Set the API key">
+
+Put the API key in the `.env.local` file next to the `reeval.config.ts` file.
+
+```bash title=".env.local"
+OPENAI_API_KEY=replace-with-your-key
+```
+
+`secret.fromEnv('OPENAI_API_KEY')` reads that variable. For more information about keeping the key on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host). For more information about which hosts the sandbox reaches, see [Control sandbox egress](/environments/egress).
+
+</Step>
+<Step title="Run the evaluation">
+
+From the directory that contains the `reeval.config.ts` file, run the `evals/sdk.eval.ts` file. The `sdk` filter matches the file path.
+
+```bash
+npx reeval run sdk
+```
+
+The run needs an API key for your harness. For more information about that key, see [the harness reference](/reference/harness/cursor).
+
+</Step>
+<Step title="Read the outcome">
+
+Read the block for the `adds a weather tool with AI SDK` evaluation. When both checks pass, the block is one line.
+
+```text
+pass             adds a weather tool with AI SDK
+```
+
+For more information about outcome words, see [Read the outcomes](/results/output#read-the-outcomes).
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about a question a file check and a command check can't answer, see [Score agent work](/evals/judges).
