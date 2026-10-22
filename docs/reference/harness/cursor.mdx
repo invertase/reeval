@@ -1,0 +1,102 @@
+---
+title: "Cursor harness"
+description: "Look up options, the key, and recorded events for the Cursor harness."
+---
+
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Cursor)
+[//]: # (owns: cursor factory options; CURSOR_API_KEY; params)
+[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: /harnesses)
+[//]: # (outbound: /harnesses, /harnesses/models, /environments/rules, /environments/skills, /environments/mcp, /environments/secrets#keep-api-keys-on-the-host, /reference/env-vars, /sandboxes, /reference/matchers#tohavesearched, /reference/record)
+
+## cursor
+
+`cursor()` is one harness factory. It reports each turn's tokens. For more information about supported sandboxes, see [Sandboxes](/sandboxes).
+
+`cursor()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: cursor({
+    model: 'composer-2.5',
+    params: { fast: 'true' },
+  }),
+})
+```
+
+`model` is required. The other fields are optional.
+
+<Property name="model" type="string" required>
+  A model id `Cursor.models.list()` returns for the key. reeval refuses a missing `model` at plan time with exit code 2.
+</Property>
+
+<Property name="params" type="Record<string, string>" optional>
+  Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalogue, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
+</Property>
+
+<Property name="effort" type="string" optional>
+  Reasoning effort, mapped onto the catalogue parameter this model names, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`.
+</Property>
+
+<Property name="id" type="string" optional>
+  Cell id. Defaults to `cursor` followed by the model, such as `cursor:<model>`. With `effort` set to `high`, the id is `cursor:<model>[effort=high]`. The id uses letters, digits, and `._:@+-=[]`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Cursor attempts that run at the same time, across the run. A whole number of at least 1.
+</Property>
+
+<Property name="startTimeout" type="Duration" optional>
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
+</Property>
+
+Every harness factory takes `model`, `effort`, `id`, `maxConcurrent`, and `startTimeout`. `params` belongs to `cursor()`. With no `harness` option, reeval uses `cursor()` with its default model.
+
+For more information about choosing a harness, see [Choose a harness](/harnesses).
+
+For more information about model ids, effort values, and served models, see [Models and providers for each harness](/harnesses/models).
+
+## Credential
+
+`cursor()` reads `CURSOR_API_KEY` from the host. reeval exchanges that key for `accessToken` and `refreshToken` at `api2.cursor.sh`, on `POST /auth/exchange_user_api_key`. Requests to `cursor.sh` and `*.cursor.sh` carry those tokens.
+
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
+
+For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
+
+## Rules and skills
+
+The Cursor harness reads rules from the `AGENTS.md` file in the workspace. The Cursor harness reads skills from the `.cursor/skills` directory in the workspace and from the `~/.agents/skills` directory in the home directory.
+
+For more information about writing rules, see [Add project rules](/environments/rules).
+
+For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## MCP servers
+
+The Cursor harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `url` and `headers`.
+
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
+
+## Recorded usage and model
+
+The Cursor harness records tokens on each turn's `usage`. `input` excludes cache reads and writes, so the prompt total is `input` plus `cacheRead` plus `cacheWrite`. `reasoning` is part of `output`.
+
+`usage` is null when the harness reports no tokens. Each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
+
+For more information about the record fields, see [Run record reference](/reference/record).
+
+## Web events
+
+The Cursor harness records `web-search` and `web-fetch` events. The Cursor SDK's stream leaves web search and web fetch calls out. reeval recovers those calls from the stored conversation.
+
+A turn reeval cannot recover lists `web-search` and `web-fetch` on `unreported`. `toHaveSearched()` and `toHaveFetched()` refuse that turn.
+
+For more information about those matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
