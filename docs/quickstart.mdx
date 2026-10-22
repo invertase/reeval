@@ -1,0 +1,160 @@
+---
+title: "Quick start"
+description: "Install reeval and see whether a change helped your coding agent."
+---
+
+[//]: # (quadrant: Tutorial)
+[//]: # (sidebar: Quickstart)
+[//]: # (owns: Node requirement; the setup skill as one alternative sentence; package install with npm; Docker with Linux containers as the example sandbox; reeval init --harness; the harness key in .env.local; building the sandbox image as one step; reeval doctor; the golden path from install to a variant that helped: the migrate-to-shoehorn skill, a control and a variant, a labelled check, runs: 4, and the helped result)
+[//]: # (terms: runs and --runs mean attempts per cell)
+[//]: # (excludes: project defaults, config discovery and the config helpers -> /reference/config)
+[//]: # (excludes: every reeval init flag -> /reference/cli#reeval-init)
+[//]: # (excludes: every environment variable -> /reference/env-vars)
+[//]: # (excludes: other harnesses -> /harnesses)
+[//]: # (excludes: Podman, and Docker on macOS and Windows -> /sandboxes)
+[//]: # (excludes: image builds -> /sandboxes/toolchains)
+[//]: # (excludes: every doctor flag and the first-run problems -> /reference/cli#reeval-doctor)
+[//]: # (excludes: insights and the analysis model -> /results/analysis)
+[//]: # (excludes: compare options, gates and gate: { passRate } -> /comparisons/compare)
+[//]: # (excludes: how the effect is reached and why four attempts -> /comparisons/statistics)
+[//]: # (excludes: troubleshooting -> not on a Tutorial)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: /, /reference/config, /comparisons/compare, /evals/evaluate, /evals/cases, /evals/judges, /results/analysis, /harnesses)
+[//]: # (outbound: /reference/config, /comparisons/compare, /comparisons/compare#read-the-result, /comparisons/compare#add-more-variants, /core-concepts, /core-concepts#compare, /environments/skills, /results/output, /results/analysis#set-an-analysis-model, /evals/running, /sandboxes, /reference/cli#reeval-doctor, /reference/cli#reeval-init, /reference/env-vars, /comparisons/statistics, /comparisons/statistics#why-four-attempts-a-side, /harnesses, /sandboxes/toolchains, /environments/secrets)
+
+reeval runs a coding agent in a sandbox and checks the outcome. Here you run the same harness as a control without the skill and a variant with the skill, then see whether the skill helped.
+
+To have a coding agent follow these steps, use the [setup skill](https://github.com/invertase/reeval/tree/main/skills/setup).
+
+## Before you begin
+
+This example uses Docker with Linux containers for its sandbox. You need these:
+
+| You need | For |
+|---|---|
+| Node {{ node }} or later | reeval's CLI |
+| Docker with Linux containers | the sandbox |
+| An API key for your agent harness | the harness |
+
+For more information about other harnesses and their keys, see [Harnesses](/harnesses).
+
+For more information about Podman or Docker on macOS or Windows, see [Sandboxes](/sandboxes).
+
+## 1. Set up reeval
+
+Install reeval in your project:
+
+```bash
+npm install -D {{ pkg }}
+```
+
+Create a project for your harness:
+
+```bash
+npx reeval init --harness cursor
+```
+
+The command writes the `reeval.config.ts` and `evals/environments.ts` files and names the key your harness needs:
+
+```text
+  npx reeval run          the eval on Cursor, with CURSOR_API_KEY in .env.local
+```
+
+Add the key to the `.env.local` file next to the `reeval.config.ts` file:
+
+```bash title=".env.local"
+CURSOR_API_KEY=replace-with-your-key
+```
+
+Build the image your harness runs in:
+
+```bash
+npx reeval image build
+```
+
+For more information about image builds, see [Toolchains](/sandboxes/toolchains).
+
+Check Node, Docker, the image, and your key with the `reeval doctor` command:
+
+```bash
+npx reeval doctor
+```
+
+The output ends with this line when the machine is ready:
+
+```text
+No problems.
+```
+
+## 2. Write the evaluation
+
+The variant adds Matt Pocock's `migrate-to-shoehorn` skill. Add the control and the variant to the end of the `evals/environments.ts` file:
+
+```ts title="evals/environments.ts"
+export const plain = defineEnvironment('plain', {
+  files: {
+    'src/user.ts': `import type { Request } from 'express'
+export const getUserId = (req: Request) => req.params.id
+`,
+  },
+})
+
+export const withShoehorn = plain.extendEnvironment(
+  'with-shoehorn',
+  ({ skill }) => ({
+    skills: [
+      skill.git('github:mattpocock/skills', {
+        ref: '5beb35b040e3de97e54fa9e386d7e42d15c295c2',
+        path: 'skills/misc',
+        only: ['migrate-to-shoehorn'],
+      }),
+    ],
+  }),
+)
+```
+
+The prompt doesn't name shoehorn, so the labelled check passes only when the harness uses the skill. Create the evaluation:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain, withShoehorn } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses shoehorn').toHaveFile(
+      'src/user.test.ts',
+      /shoehorn/,
+    )
+  },
+)
+```
+
+For more information about why this evaluation uses four attempts, see [Statistics](/comparisons/statistics#why-four-attempts-a-side).
+
+## 3. Run the compare
+
+Run the eight attempts:
+
+```bash
+npx reeval run shoehorn
+```
+
+For this example on `composer-2.5`, reeval's output code renders the result instead of copying a terminal capture:
+
+```text
+pass             tests build only the request fields they read
+  arm              pass
+  plain            0 of 4
+  with-shoehorn    4 of 4  helped
+  check            plain   with-shoehorn
+  uses shoehorn    0 of 4  4 of 4
+```
+
+The variant passed `uses shoehorn` in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. Your counts can differ.
+
+## Next steps
+
+For more information about adding variants or gates, see [Compare](/comparisons/compare).
