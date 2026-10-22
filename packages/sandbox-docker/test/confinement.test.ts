@@ -1,6 +1,7 @@
-// What confines a sandbox container: the unprivileged user, no capabilities, no-new-privileges,
-// and memory, CPU and process limits; and that, as that user, the agent can't get around or
-// reconfigure the egress gateway. Each probe has a twin that must see the opposite, so it can fail.
+// What confines a sandbox container: the unprivileged user, no capabilities it can use,
+// no-new-privileges, and memory, CPU and process limits; root's privileged execs, confined by
+// seccomp and AppArmor; and that, as that user, the agent can't get around or reconfigure the
+// egress gateway. Each probe has a twin that must see the opposite, so it can fail.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import http from 'node:http'
@@ -9,8 +10,19 @@ import { after, before, describe, test } from 'node:test'
 import { buildInstallLayer } from '../src/build-image.ts'
 import { dockerCapacity, imageInfo } from '../src/docker-cli.ts'
 import { CA_BUNDLE, CA_PATH, PROXY_PORT } from '../src/egress/gateway.ts'
-import { DEFAULT_IMAGE, SANDBOX_HOME, SANDBOX_USER } from '../src/image.ts'
-import { DEFAULT_LIMITS, type DockerSession, type SessionOptions } from '../src/session.ts'
+import {
+  DEFAULT_IMAGE,
+  SANDBOX_HOME,
+  SANDBOX_ROOT,
+  SANDBOX_STATE,
+  SANDBOX_USER,
+} from '../src/image.ts'
+import {
+  DEFAULT_LIMITS,
+  type DockerSession,
+  PRIVILEGED_CAPABILITIES,
+  type SessionOptions,
+} from '../src/session.ts'
 import { CLI, createSession, ENGINE, REQUIRE_ENGINE } from './engine.ts'
 
 const dockerReady =
@@ -28,8 +40,18 @@ const dockerReady =
 const NET_TOOLS_IMAGE = `reeval-test-net-tools:${DEFAULT_IMAGE.split(':')[1]}`
 
 /** Capability bits, from linux/capability.h. */
-const CAP = { CHOWN: 0, DAC_OVERRIDE: 1, FOWNER: 3, SETGID: 6, SETUID: 7, NET_RAW: 13 } as const
+const CAP = {
+  CHOWN: 0,
+  DAC_OVERRIDE: 1,
+  DAC_READ_SEARCH: 2,
+  FOWNER: 3,
+  SETGID: 6,
+  SETUID: 7,
+  NET_RAW: 13,
+} as const
 const mask = (...bits: number[]) => bits.reduce((m, b) => m | (1n << BigInt(b)), 0n)
+/** Every container's bounding set: what runPrivileged's root execs hold. */
+const PRIVILEGED = mask(...PRIVILEGED_CAPABILITIES.map((c) => CAP[c]))
 
 /** The shell's capability sets and no_new_privs flag, from /proc/self/status. */
 async function privileges(s: DockerSession) {
@@ -99,9 +121,58 @@ describe('sandbox confinement in Docker', {
     // Twin: the sandbox user's own PATH finds the planted git.
     assert.equal((await s.run({ command: 'git --version' })).stdout.trim(), 'planted')
     const r = await s.runPrivileged({
-      command: 'echo "$(id -u) $(cat private.txt) $(git --version | cut -d" " -f1-2)"',
+      command: `echo "$(id -u) $(pwd) $(cat ${SANDBOX_ROOT}/private.txt) $(git --version | cut -d" " -f1-2)"`,
     })
-    assert.equal(r.stdout.trim(), '0 mine git version')
+    assert.equal(r.stdout.trim(), `0 ${SANDBOX_STATE} mine git version`, r.stderr)
+    assert.equal(
+      (await s.run({ command: `stat -c '%u %a' ${SANDBOX_STATE}` })).stdout.trim(),
+      '0 700',
+    )
+  })
+
+  test('runPrivileged is root with only the privileged capabilities, under seccomp and AppArmor', async () => {
+    const s = await open()
+    const status = (await s.runPrivileged({ command: 'cat /proc/self/status' })).stdout
+    const field = (name: string) => new RegExp(`^${name}:\\s+(\\S+)$`, 'm').exec(status)?.[1]
+    assert.equal(BigInt(`0x${field('CapEff')}`), PRIVILEGED)
+    assert.equal(BigInt(`0x${field('CapBnd')}`), PRIVILEGED)
+    assert.equal(field('NoNewPrivs'), '1')
+    assert.equal(field('Seccomp'), '2', 'a seccomp filter applies')
+    // Twin: the sandbox user's own commands run under the same AppArmor profile, whichever the
+    // host has (`exec --privileged` is `unconfined`).
+    const profile = 'cat /proc/self/attr/current 2>/dev/null || echo none'
+    assert.equal(
+      (await s.runPrivileged({ command: profile })).stdout,
+      (await s.run({ command: profile })).stdout,
+    )
+  })
+
+  test("the sandbox user can't use the privileged capabilities, even through a setuid binary", async () => {
+    const s = await open()
+    await s.run({ command: 'echo mine > mine.txt' })
+    const made = await s.runPrivileged({
+      command: `mkdir -m 700 /root-only && echo secret > /root-only/secret && chmod 600 /root-only/secret && cp /bin/cat /usr/local/bin/rootcat && chmod 4755 /usr/local/bin/rootcat`,
+    })
+    assert.equal(made.exitCode, 0, made.stderr)
+    for (const command of [
+      'cat /root-only/secret',
+      'ls /root-only',
+      'rootcat /root-only/secret',
+      `chown 0:0 ${SANDBOX_ROOT}/mine.txt`,
+      'chown 10001 /usr/local/bin/rootcat',
+      'chmod 777 /usr/local/bin/rootcat',
+      'touch /etc/reeval-test',
+      `ls ${SANDBOX_STATE}`,
+    ]) {
+      const r = await s.run({ command })
+      assert.notEqual(r.exitCode, 0, `${command} succeeded as the sandbox user`)
+      assert.match(r.stderr, /not permitted|Permission denied/i, command)
+    }
+    // Twin: the same reads and chown as root through runPrivileged succeed.
+    const r = await s.runPrivileged({
+      command: `cat /root-only/secret && chown 0:0 ${SANDBOX_ROOT}/mine.txt && stat -c %u ${SANDBOX_ROOT}/mine.txt`,
+    })
+    assert.equal(r.stdout, 'secret\n0\n', r.stderr)
   })
 
   test('no capabilities, and no-new-privileges; root: true adds back only what apt-get needs', async () => {
@@ -109,16 +180,17 @@ describe('sandbox confinement in Docker', {
     const p = await privileges(s)
     assert.deepEqual(
       [p.effective, p.permitted, p.bounding, p.ambient, p.noNewPrivs],
-      [0n, 0n, 0n, 0n, '1'],
+      [0n, 0n, PRIVILEGED, 0n, '1'],
     )
     assert.equal((await s.run({ command: 'test -e /var/run/docker.sock' })).exitCode, 1)
 
     // Twins: an added capability shows up in the same probe, and root gets exactly its set.
     const raw = await privileges(await open({ capabilities: ['NET_RAW'] }))
-    assert.equal(raw.bounding, mask(CAP.NET_RAW))
+    assert.equal(raw.bounding, PRIVILEGED | mask(CAP.NET_RAW))
     const r = await open({ root: true })
     const rp = await privileges(r)
-    const rootSet = mask(CAP.CHOWN, CAP.DAC_OVERRIDE, CAP.FOWNER, CAP.SETGID, CAP.SETUID)
+    const rootSet =
+      PRIVILEGED | mask(CAP.CHOWN, CAP.DAC_OVERRIDE, CAP.FOWNER, CAP.SETGID, CAP.SETUID)
     assert.equal(rp.effective, rootSet)
     assert.equal(rp.bounding, rootSet)
     assert.equal(rp.noNewPrivs, '1')

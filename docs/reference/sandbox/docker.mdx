@@ -84,7 +84,7 @@ These set what the container runs with, not what's in its image, so changing the
 </Property>
 
 <Property name="capabilities" type="string[]" optional>
-  Linux capabilities to add back, such as `['NET_RAW']`. Every other one is dropped. Default none. Every run that uses it prints a `warning:` line.
+  Linux capabilities to add back, such as `['NET_RAW']`. Every other one is dropped, except the four reeval's own root commands need (see [Inside the container](#inside-the-container)). Default none. Every run that uses it prints a `warning:` line.
 </Property>
 
 ## Privilege warnings
@@ -176,9 +176,11 @@ Image builds don't count toward the eval timeout.
 
 | Runs | As | With |
 |---|---|---|
-| The agent, setup steps and checks | `reeval` (uid 10001, home `/home/reeval`, where `~/` paths go) | Every capability dropped, `no-new-privileges` and the limits above |
+| The agent, setup steps and checks | `reeval` (uid 10001, home `/home/reeval`, where `~/` paths go) | No capabilities, `no-new-privileges` and the limits above |
 | The egress gateway | root | Node, which every image reeval builds has |
-| reeval's workspace snapshot (the diff) | root, `docker exec --privileged` | `git` and `/bin/sh` from the system's `PATH`, never `~/.local/bin` |
+| reeval's workspace snapshot (the diff) | root, in `/var/lib/reeval` | `CHOWN`, `DAC_OVERRIDE`, `DAC_READ_SEARCH` and `FOWNER`, the container's seccomp and AppArmor profiles, and `git` and `/bin/sh` from the system's `PATH`, never `~/.local/bin` |
+
+Every container drops every capability but `CHOWN`, `DAC_OVERRIDE`, `DAC_READ_SEARCH` and `FOWNER`, which only root's processes hold: with `no-new-privileges`, the `reeval` user can't gain them, setuid binaries included.
 
 Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The gateway enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests.
 

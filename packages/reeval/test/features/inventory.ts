@@ -931,6 +931,10 @@ export const inventory: InventoryFeature[] = [
         'confinement',
         "runPrivileged reads what the sandbox user keeps to itself, and runs none of that user's binaries",
       ),
+      sandboxDocker(
+        'confinement',
+        'runPrivileged is root with only the privileged capabilities, under seccomp and AppArmor',
+      ),
     ],
   },
 
@@ -999,6 +1003,10 @@ export const inventory: InventoryFeature[] = [
       sandboxDocker(
         'confinement',
         'no capabilities, and no-new-privileges; root: true adds back only what apt-get needs',
+      ),
+      sandboxDocker(
+        'confinement',
+        "the sandbox user can't use the privileged capabilities, even through a setuid binary",
       ),
       sandboxDocker('confinement', 'install layers put ~ in the sandbox user’s home, owned by it'),
       sandboxDocker(

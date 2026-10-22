@@ -90,12 +90,12 @@
 
 | Feature | unit | plan | fake | docker | podman | real |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
-| The diff's snapshot: no pre-seed content the agent can reach, unreadable in Docker | ✓ 2 | — | ● 2 | ● 3 | ● 1 | — |
+| The diff's snapshot: no pre-seed content the agent can reach, unreadable in Docker | ✓ 3 | — | ● 2 | ● 3 | ● 1 | — |
 | Docker: run, diff, and removal, on timeout too | ✓ 3 | — | — | — | — | — |
 | Sandbox `exec`, `readFile`, `writeFile` and `~/`, fake and Docker | ✓ 2 | — | — | — | — | — |
 | `docker({ install })` layers | ✓ 3 | ✓ 1 | — | — | — | — |
 | `docker({ dockerfile })` and `REEVAL_BASE` | ✓ 3 | ✓ 1 | — | ● 8 | — | — |
-| Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })` | ✓ 7 | — | — | ● 3 | ● 3 | — |
+| Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })` | ✓ 8 | — | — | ● 3 | ● 3 | — |
 | `podman({ … })`: `docker()`'s sandbox on rootless Podman, on the bridge network with Docker's seccomp profile | ✓ 3 | ✓ 1 | — | ● 1 | ● 2 | — |
 | Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them | ✓ 4 | ✓ 2 | — | — | — | — |
 | Login shells keep the image's `PATH` (`/etc/profile.d/00-reeval-path.sh`) | — | — | — | ● 2 | — | — |

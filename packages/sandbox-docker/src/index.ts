@@ -113,6 +113,7 @@ export {
   dockerSandboxProvider,
   type EgressOptions,
   type EgressStatus,
+  PRIVILEGED_CAPABILITIES,
   ROOT_CAPABILITIES,
   type SandboxLimits,
   type SessionOptions,

@@ -17,8 +17,9 @@ export interface Sandbox {
   /** `cwd` is relative to the workspace; `env` adds variables for this command only. */
   exec(command: string, opts?: ExecOptions): Promise<ExecResult>
   /**
-   * Runs one of reeval's own commands in the workspace, able to read every file in it and to
-   * write {@link stateDir}. Without the eval's per-command variables or the gateway's.
+   * Runs one of reeval's own commands, able to read every file in the workspace and to write
+   * {@link stateDir}. In Docker it runs in {@link stateDir}, not the workspace, so a command
+   * names {@link workdir} itself. Without the eval's per-command variables or the gateway's.
    */
   execOwn(command: string, opts?: { signal?: AbortSignal }): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
