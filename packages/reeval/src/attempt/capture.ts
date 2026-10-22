@@ -244,7 +244,7 @@ async function shot(
       use: resolved.use,
       remaining,
       loadModel: async (name) => {
-        const route = judgeRoute(name)
+        const route = judgeRoute(name, process.env, 'capture model')
         return providerModel({
           name,
           route: route.kind === 'direct' ? 'direct' : 'gateway',

@@ -74,7 +74,13 @@ registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com,
 
 ## Addresses that are always refused
 
-Whatever the policy, the gateway refuses loopback and link-local addresses (`127.0.0.0/8`, `169.254.0.0/16`, `0.0.0.0/8`, `::`, `::1`, `fe80::/10`). A `*.` pattern never matches a host that resolves to a private address (`10.0.0.0/8`, `100.64.0.0/10`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`): list that host by name.
+```ts
+egress: { allow: ['db.internal', '10.0.0.5'] } // a private host: its name and its address
+```
+
+Whatever the policy, the gateway refuses loopback and link-local addresses (`127.0.0.0/8`, `169.254.0.0/16`, `0.0.0.0/8`, `::`, `::1`, `fe80::/10`). It also refuses private and reserved addresses unless an allowlist names the address itself: `10.0.0.0/8`, `100.64.0.0/10`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`, multicast (`224.0.0.0/4`, `ff00::/8`) and `255.255.255.255`. A NAT64 address (`64:ff9b::/96`) is checked by the IPv4 address inside it too.
+
+To reach a private host by name, list both its name and its address. A `*.` pattern never matches a host that resolves to a private address, even when the address is listed. The allowlist is checked before any DNS lookup, so a name it doesn't list is never resolved.
 
 | Refusal reason | When |
 |---|---|
@@ -82,7 +88,13 @@ Whatever the policy, the gateway refuses loopback and link-local addresses (`127
 | `<host> isn't in the allowlist` | An allowlist that doesn't match |
 | `can't resolve …` | DNS failed (a 502) |
 | `… is a loopback or link-local address` | Always refused |
+| `… is a private or reserved address, which allow-all doesn't reach; list the address in an allowlist to reach it` | `'allow-all'` reaching a private or reserved address |
+| `… is a private or reserved address; list the address itself in the allowlist to reach it` | An allowlist that doesn't name the private or reserved address |
 | `… resolves to a private address, which a *. pattern doesn't allow; list the host itself` | A wildcard reaching a private address |
+
+<Warning>
+  An allowlist with `DEFAULT_EGRESS_ALLOW` still reaches GitHub, npm and PyPI, where the agent could push or publish data. Under `'allow-all'` the container keeps its own network for now, so a client that ignores the proxy bypasses the gateway and these refusals.
+</Warning>
 
 ## The plan line
 

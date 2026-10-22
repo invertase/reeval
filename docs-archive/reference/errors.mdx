@@ -81,6 +81,7 @@ See [reeval doctor](/reference/cli/doctor) for every check.
 | `compare.baseline in evaluate("e") must be an environment from defineEnvironment (got "a"). …` | Set `baseline` to an environment, or leave it out to make the eval's environment the control. Variants are not layered on it. |
 | `compare in evaluate("g › e") lists a, which is the control: compare has no baseline, so the eval's environment is. …` | Drop that variant: without a `baseline`, the cascaded `environment` is already the control. |
 | `compare in evaluate("e") lists a variant named baseline, the name of the empty control …` | Rename the variant, or set `compare.baseline`. |
+| `compare in evaluate("e") runs head and base on the same tree: past what they share, each sets only workspace, and both are git("..") with no ref (the repository HEAD). …` | The two arms can only run the same code. A `ref` read from an unset variable is `undefined`: set the variable, or give each arm its own ref. See [Lift of a pull request](/recipes/pr-lift). |
 | `Unknown compare option "strategy" in evaluate("e")` | Drop `strategy`. Share setup with `extendEnvironment` before `compare`. |
 | `environment and compare.baseline can't both be set in evaluate("e")` | Drop `environment`, or drop `baseline` to make `environment` the control. A parent `environment` can stay beside a child's `baseline`, and isn't applied. |
 | `compare: false can't be set in evaluate("e")` | Omit `compare`, or pass `{ baseline, variants }`. A profile uses `limit.compare: false`. |
@@ -143,13 +144,13 @@ See [Profiles and budgets](/reference/profiles).
 
 | Message | Fix |
 |---|---|
-| `Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.` | Set the harness key and a judge key, in the shell or `.env.local`. |
+| `Missing credentials: CURSOR_API_KEY; TYPESAFE_AI_API_KEY (to call TypeSafe AI directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for the judge model, "typesafe-ai/jev-1.14.0". Set them in the environment or .env.local.` | Set the harness key and a judge key, in the shell or `.env.local`. |
 | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). A key copied from a wrapped terminal line picks these up; set it again as one line.` | Set the key again as one line. |
 | `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` | Set the host variable, or mark the secret `optional: true`. |
 | `warning: SENTRY_DSN is in the sandbox as its real value. …` | Add `hosts` to broker it, or accept the warning. `secrets: { unbrokered: 'error' }` makes it an error. |
 | `warning: the egress gateway refused POST https://…: it carries CURSOR_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for` | The harness CLI called an endpoint reeval doesn't broker. Check for a CLI update and report it. |
 | `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local. …` | The harness's API refused its key (an HTTP 401, or Google's "API key not valid"). The named variable is the one to fix; the provider's own message follows. |
-| `No credentials for judge model "…". …` | Set the provider's key or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges). |
+| `No credentials for judge model "…" (provider "…"). Set …` | Set the provider's own key (`ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY` or `TYPESAFE_AI_API_KEY`), or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges#providers-and-keys). |
 | `compare.questions "Which is cleaner?" (evals/q.eval.ts › asks) needs a language model to answer it. …` | Set `analysis.model`, give the question its own `model`, or set `question: { model }` on its group or eval. A judge that's an evaluation model can't answer it; `--dry-run` still plans. |
 
 ## Docker and images
@@ -193,7 +194,8 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 
 | Message | Fix |
 |---|---|
-| `Workspace git("https://github.com/vitejs/vite#v99.0.0:…"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).` | Check the ref. A commit needs its full 40-character SHA; an abbreviated one gets that hint. |
+| `Workspace git("https://github.com/vitejs/vite#v99.0.0:…"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).` | Check the ref. A commit needs its full 40-character SHA; an abbreviated one gets that hint. A local repository that's a shallow clone gets `… is a shallow clone, so it may not have that ref: fetch it (git fetch origin …) or clone the full history (fetch-depth: 0 in actions/checkout).` |
+| `warning: compare in evals/pr.eval.ts › lift: head and base start from the same tree (4ea35bfc6bef): git("..#v2") and git("..#e55bf01…") resolve to it, so the lift can't show a change to the workspace. …` | Two arms' different refs or paths resolved to one tree, so the run measures no change to the code. Check the refs the arms read; the run still goes ahead. |
 | `Workspace git("…#v6.0.0:packages/create-vite/template-react-tsx") at v6.0.0 (commit 814120f) has no directory "packages/create-vite/template-react-tsx"; packages/create-vite/ has: …, template-lit-ts/, …` | Pick one of the listed directories. A file gets `is a file, not a directory`. |
 | `Workspace git("https://github.com/acme/no-such-repo#v1"): couldn't fetch it (remote: Repository not found.). Check the URL; a private repository also needs this machine's git credentials.` | Check the URL, or give this machine access to the repository. |
 | `Workspace git("…"): isn't readable with this machine's git credentials, or doesn't exist (could not read Username for 'https://github.com': terminal prompts disabled). …` | reeval never prompts. Give `git()` a `token`, or run `gh auth setup-git`, configure a credential helper or load an SSH key on the host; the sandbox never gets them. With a `token`, this means the token was refused. |

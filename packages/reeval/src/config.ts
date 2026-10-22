@@ -26,10 +26,16 @@ import {
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
 import { reevalJiti } from './jiti.ts'
-import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
+import {
+  checkModelString,
+  DEFAULT_THRESHOLD,
+  judgeCredentials,
+  modelKeyOptions,
+} from './judge/index.ts'
 import { defaultIncludeGlobs } from './language-runner/adapter.ts'
 import { isObjectLike } from './object.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
+import { badCharacterAt } from './redact.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {
@@ -771,12 +777,16 @@ export function missingCredentials(
   const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
   for (const key of keys) if (!env[key]) missing.push(key)
   const judge = runJudgeModel(config, options.profile)
-  const models = [...(judge !== undefined ? [judge] : []), ...(options.questionModels ?? [])]
-  for (const model of models) {
-    const modelKeys = judgeCredentials(model)
-    const alternatives = modelKeys.join(' or ')
-    if (modelKeys.length && !modelKeys.some((k) => env[k]) && !missing.includes(alternatives)) {
-      missing.push(alternatives)
+  const models = [
+    ...(judge !== undefined ? [{ model: judge, what: 'the judge model' }] : []),
+    ...(options.questionModels ?? []).map((model) => ({ model, what: 'compare questions' })),
+  ]
+  const named = new Set<string>()
+  for (const { model, what } of models) {
+    if (typeof model !== 'string' || named.has(model)) continue
+    named.add(model)
+    if (!judgeCredentials(model).some((k) => env[k])) {
+      missing.push(`${modelKeyOptions(model)} for ${what}, "${model}"`)
     }
   }
   const vars = { ...config.env, ...options.profile?.defaults.env }
@@ -785,10 +795,6 @@ export function missingCredentials(
   }
   return missing
 }
-
-/** Where a value has its first whitespace or control character, from 1; 0 when it has none. */
-export const badCharacterAt = (value: string) =>
-  [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
 
 /**
  * Keys the run sends in request headers (the agents' credentials, the run's judge's and the

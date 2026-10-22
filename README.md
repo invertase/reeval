@@ -1,302 +1,158 @@
+```
+                                    ██
+ ▄▄ ▄▄▄  ▄▄▄▄   ▄▄▄▄  ▄▄  ▄▄  ▄▄▄▄  ██
+ ███▀▀▀ ██▄▄██ ██▄▄██ ██  ██  ▄▄▄██ ██
+ ██     ██   ▄ ██   ▄  ████  ██  ██ ██
+ ██      ▀▀▀▀   ▀▀▀▀    ▀▀    ▀▀▀▀▀ ▀▀
+
+ Evaluation runner for SDKs, CLIs, MCP servers, and docs.
+
+ # Get started using the `/setup` skill:
+ npx skills add invertase/reeval --skill setup
+
+ # Or install manually:
+ npm i -D reeval && npx reeval init
+```
+
+> [!IMPORTANT]
+> **Work in Progress**: reeval is under active development. Expect breaking changes between minor version releases.
+
 # reeval
 
-**Find out whether your skill, docs or MCP server makes coding agents better, on real agents.**
+reeval is an open-source evaluation runner for developer tools. It gives a real coding agent a task in a fresh sandbox, then checks the result with assertions on files, commands, and the transcript, and with an LLM judge where an assertion can't decide. Run the same task with and without a skill, doc, or MCP server, and reeval reports whether the change helped.
+
+Evals are TypeScript files in `evals/`, next to the tool they test. Each run writes a JSON record, and recorded runs commit to Git, so `reeval compare` can diff a pull request's run against the last recorded one and fail the job when an eval regresses.
+
+## Features
+
+Cursor ⋅ Claude Code ⋅ Codex ⋅ Antigravity ⋅ OpenCode ⋅ Goose ⋅ pi ⋅ Grok Build
+
+- **Real agents**: each harness runs the agent itself, with its own tools, skills, and rules, as it works on a developer's machine ([harnesses](docs/guide/harnesses.mdx)).
+- **Keys stay on the host**: each attempt starts in a fresh sandbox that holds only a placeholder key. reeval's egress gateway swaps in the real key on requests to that provider and nowhere else ([secrets and egress](docs/guide/secrets-and-egress.mdx)).
+- **Compare a change**: one eval runs a baseline and its variants with the same prompt and checks, then prints whether each variant helped, made it worse, or can't tell yet ([compare](docs/guide/compare.mdx)).
+- **Pinned environments**: an environment starts from a workspace, such as a git repository at a fixed ref, then adds files, setup steps, rules, skills, and MCP servers, so every attempt starts from the same state ([environments](docs/guide/environments.mdx)).
+- **History in Git**: recorded runs sit beside the code. `reeval query` reads them with SQL, and `reeval studio` shows each attempt's transcript, diff, and checks ([history](docs/guide/history.mdx)).
+
+## Install
+
+```bash
+npm i -D reeval
+```
+
+reeval runs on Node.js 22.13 or later. Real runs also need a sandbox runtime (Docker or Podman) and an API keys for the agents. `npx reeval doctor` checks both and names the fix for anything missing.
+
+## Quick start
+
+Scaffold a config and one eval, then check that reeval loads them:
+
+```bash
+npx reeval init --yes     # reeval.config.ts on Cursor, and evals/greet.eval.ts
+npx reeval run --dry-run  # smoke check: plans the run, no keys or sandbox
+```
+
+```text
+plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+eval                                    harnesses  variants  runs  attempts  notes
+evals/greet.eval.ts › creates greet.js  1          —         1     1
+…
+```
+
+Then build the agent's sandbox image, add its key, and run it for real:
+
+```bash
+npx reeval image build
+echo 'CURSOR_API_KEY=…' >> .env.local
+npx reeval run
+```
+
+Without `--yes`, `init` asks which agent to configure. The starter eval only proves the setup works; the next section is what reeval is for.
+
+## Measure whether a skill helps
+
+The Vercel AI SDK deprecates `generateObject` in favour of `Output.object`, and agents trained on older code still reach for the old call. This eval measures whether a skill shipped with the SDK fixes that. It runs the same task in two arms, four attempts each: `plain` has no skill, and `with-skill` adds the one in `skills/ai-sdk`.
 
 ```ts
-// evals/api.eval.ts, from examples/hello
-import { defineEnvironment, evaluate, expect } from 'reeval'
-import { claudeCode, codex, cursor } from 'reeval/harness'
-import { appFiles, probeUsers } from './api/app.ts'
+// evals/ai-sdk.eval.ts
+import { defineEnvironment, evaluate, expect } from 'reeval';
 
-// create-next-app's API template at a tag. No baseline, so it's the control.
-const nextApi = defineEnvironment('nextjs-api', ({ git }) => ({
-  workspace: git('github:vercel/next.js', {
-    ref: 'v16.3.7',
-    path: 'packages/create-next-app/templates/app-api/ts',
-  }),
-  files: appFiles, // package.json, and lib/users.ts to list
-  setup: ['mv gitignore .gitignore', 'npm install --no-audit --no-fund'],
-}))
+const plain = defineEnvironment('plain', {});
 
-const withSkill = nextApi.extendEnvironment('with-api-conventions', ({ skill }) => ({
-  skills: [
-    skill.git('github:invertase/reeval', {
-      ref: '052108cae3ca4c9d1bad1e6b527d76bdf11fd4cc',
-      path: 'examples/hello/skills',
-      only: ['api-conventions'],
-    }),
-  ],
-}))
+const withSkill = plain.extendEnvironment('with-skill', ({ skill }) => ({
+  skills: [skill.local('../skills/ai-sdk')],
+}));
 
 evaluate(
-  'how well the api-conventions skill influences the output',
-  {
-    environment: nextApi,
-    harness: [
-      cursor({ model: 'composer-2.5' }),
-      claudeCode({ model: 'claude-sonnet-5' }),
-      codex({ model: 'gpt-5.6-luna' }),
-    ],
-    runs: 3,
-    timeout: '20m',
-    compare: {
-      variants: [withSkill],
-      questions: ['Which endpoint follows our API conventions?'],
-    },
-  },
+  'triages a GitHub issue with the AI SDK',
+  { runs: 4, compare: { baseline: plain, variants: [withSkill] } },
   async (c) => {
-    await c.send(
-      'Add a paginated GET /api/users endpoint (app/api/users/route.ts) ' +
-        'over lib/users.ts, with tests that npm test runs.',
-    )
-    // The route exists and pages by cursor.
-    await expect(c).toHaveFile('app/api/users/route.ts', /cursor/i)
-    // It builds, types included.
-    await expect(c.exec('npm run build')).toSucceed()
-    // The agent's own tests pass.
-    await expect(c.exec('npm test')).toSucceed()
-    // The built route pages as { data, nextCursor } and rejects a bad cursor.
-    await expect(c.exec(probeUsers)).toSucceed()
-    // A judge for what the checks can't read: do the tests cover it?
-    const covered = 'Do the tests follow nextCursor to the end and check invalid_cursor?'
-    expect(await c.judge(covered)).toPass()
+    await c.send(`
+      Add triage.ts: triageIssue(title, body) uses the ai package to
+      return a typed { labels, priority, duplicateOf }.
+    `);
+
+    await expect(c, 'writes triage.ts').toHaveFile('triage.ts');
+    await expect(c, 'uses Output.object').toHaveFile('triage.ts', /Output\.object/);
   },
-)
-```
-
-- **Real agents in sandboxes.** Cursor, Claude Code, Codex, Antigravity, OpenCode, Goose, pi, fx
-  and Grok Build each work in a fresh local Docker container. Their API keys stay on the host: the sandbox gets
-  a placeholder, and reeval's egress gateway swaps in the key only on requests to that provider.
-- **Any environment.** Start from a git repository at a pinned ref, then add files, setup steps,
-  rules, skills, MCP servers and secrets, on reeval's image or your own `from` or Dockerfile.
-- **The whole matrix.** Each harness × environment is a cell with its own runs, all planned
-  before anything starts (`reeval run --dry-run`), with profiles that size a run for a PR or a
-  nightly.
-- **Checks and judges.** Deterministic checks on files, commands and the transcript decide pass
-  or fail; an LLM judge answers what they can't.
-- **Compare, questions and analysis.** `compare` says whether each variant helped over the
-  control, made it worse or can't tell yet (`-v` adds the 95% interval), and its effort;
-  `questions` asks a model which attempt did better, pair by pair and blind; with `analysis.model`
-  set, each eval's result gets sentences that answer what it asks, each checked against the run's
-  facts; `reeval analyze` writes a checked reading of a run.
-- **Results in your repo.** Every run is a JSON record you can commit, diff with `reeval compare`,
-  query with SQL (`reeval query`) and browse in `reeval studio`.
-
-A real run of the eval, one attempt per cell: no control paged by cursor, and with the skill
-all three agents passed every check.
-
-```text
-$ reeval run evals/api.eval.ts --runs 1
-…
-pass             how well the api-conventions skill influences the output
-  cursor:composer-2.5
-    arm                                            pass
-    nextjs-api                                     0 of 1
-    with-api-conventions                           1 of 1  can't tell yet
-    check                                          nextjs-api  with-api-conventions
-    toHaveFile app/api/users/route.ts              0 of 1      1 of 1
-      expected app/api/users/route.ts to match /cursor/i
-    toSucceed npm run build                        not run     1 of 1
-    toSucceed npm test                             not run     1 of 1
-    toSucceed cat > /tmp/probe-users.mjs <<'EOF'…  not run     1 of 1
-    toPass Do the tests follow nextCursor to the…  not run     1 of 1
-  claude-code:claude-sonnet-5
-    arm                                            pass
-    nextjs-api                                     0 of 1
-    with-api-conventions                           1 of 1  can't tell yet
-    …
-  codex:gpt-5.6-luna
-    arm                                            pass
-    nextjs-api                                     0 of 1
-    with-api-conventions                           1 of 1  can't tell yet
-    …
-  question  Which endpoint follows our API conventions?
-    claude-code:claude-sonnet-5  won 2 of 2
-    cursor:composer-2.5          won 1 of 4
-    codex:gpt-5.6-luna           won 1 of 2
-…
-```
-
-```bash
-npm i -D reeval   # the CLI is `reeval`, or `re` for short
-```
-
-You need Node 22.13 or later and, for real runs, a running Docker.
-
-| Platform | Fake agent and sandbox | Real runs (Docker sandbox) |
-|---|---|---|
-| Linux | ✓ | ✓ Docker Engine or Docker Desktop |
-| macOS | ✓ | ✓ Docker Desktop, OrbStack or Colima |
-| Windows | ✓ with [Git for Windows](https://git-scm.com/download/win) (its `sh`) | ✓ Docker Desktop on the WSL 2 backend, running Linux containers |
-
-`reeval doctor` checks Docker for your platform and names the fix. CI runs every tier on Linux and
-everything but the Docker tier on Windows and macOS.
-
-## A minimal eval
-
-```ts
-// evals/hello.eval.ts
-import { evaluate, expect, group } from 'reeval'
-
-group('greet module', () => {
-  evaluate('creates a tested greet module', async (c) => {
-    const turn = await c.send(
-      'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
-        'and greet.test.js that tests it with node:test. No dependencies.',
-    )
-
-    await expect(turn).toHaveFile('greet.js')
-    await expect(c.exec('node --test')).toSucceed()
-    const honest = "Does the agent's final message describe what it changed?"
-    expect(await c.judge(honest)).toPass()
-  })
-})
-```
-
-```ts
-// reeval.config.ts
-import { defineConfig } from 'reeval'
-import { cursor } from 'reeval/harness'
-
-export default defineConfig({
-  include: ['evals/**/*.eval.ts'],
-  // or claudeCode, codex, antigravity, opencode, goose, pi, fx, grokBuild, or a
-  // list of harnesses: each is its own cell
-  harness: cursor({ model: 'composer-2.5' }),
-  // optional; pin the version
-  judge: { model: 'typesafe-ai/jev-1.14.0', threshold: 0.8 },
-  timeout: '15m',
-  profiles: {
-    pr: { limit: { runs: 1, compare: false }, budget: { attempts: 20 } },
-    nightly: { defaults: { runs: 3 }, record: 'always' },
-  },
-  defaultProfile: { ci: 'pr' },
-})
-```
-
-## Compare with a skill
-
-Give the agent a skill and check that it helps. `plain` is the baseline. The variant is
-that environment plus the skill, and compare runs the two apart, with the same prompt and
-the same checks:
-
-```ts
-// evals/skill.eval.ts (trimmed from examples/hello)
-import { defineEnvironment, evaluate, expect, group } from 'reeval'
-
-const plain = defineEnvironment('plain', {})
-const withHouseGreeting = plain.extendEnvironment(
-  'with-house-greeting',
-  ({ skill }) => ({
-    skills: [skill.local('../skills/house-greeting')],
-  }),
-)
-
-group(
-  'house greeting',
-  { compare: { baseline: plain, variants: [withHouseGreeting] } },
-  () => {
-    evaluate('greets in the house style', async (c) => {
-      await c.send(
-        'Create greet.js exporting greet(name) that greets the person ' +
-          'in our house style.',
-      )
-      await expect(c.exec(greetAda)).toSucceed() // passes only for "Ahoy, Ada!"
-    })
-  },
-)
+);
 ```
 
 ```text
-$ reeval run skill --runs 2
-plan  run 20261020T213308Z_… · 1 eval · 2 cells · 4 attempts · ~52s serial (~13s at concurrency 4)
+$ npx reeval run evals/ai-sdk.eval.ts
 …
-pass             house greeting › greets in the house style
-  arm                  pass
-  plain                0 of 2
-  with-house-greeting  2 of 2  can't tell yet
-  check                plain   with-house-greeting
-  house greeting       0 of 2  2 of 2
-    expected command to succeed, exit code 1
-  +2 more passed
+pass             triages a GitHub issue with the AI SDK
+  arm                 pass
+  plain               0 of 4
+  with-skill          4 of 4  helped
+  check               plain   with-skill
+  uses Output.object  0 of 4  4 of 4
+    expected triage.ts to match /Output\.object/
+  +1 more passed
 …
+1 pass
 ```
 
-## Run it
+Without the skill, no attempt used `Output.object`; with it, all four did. `helped` means the 95% interval of the difference sits above zero (`-v` prints it), and `made it worse` that it sits below. When the interval spans zero, or an arm has too few attempts, reeval prints `can't tell yet`. `+1 more passed` folds the checks that every arm passed.
 
-```text
-$ CI=1 reeval run hello --output-logs full
-plan  run 20261020T220141Z_… · profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~25s serial (~13s at concurrency 4) · budget 20 attempts ✓
-reeval 0.10.0 · run 20261020T220141Z_… · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
-[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module
-[creates#1 cursor]  +0:00 sandbox ready 2s
-[creates#1 cursor]  +0:01 turn 1 done 6s · 2 tool calls, 2 file edits
-[creates#1 cursor]  +0:08 $ node --test  exit 0 210ms
-[creates#1 cursor]  +0:08 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
-[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
-[adds#1 cursor]  +0:00 sandbox ready 2s
-[adds#1 cursor]  +0:01 turn 1 done 7s · 1 tool call, 1 file edit
-[adds#1 cursor]  +0:09 turn 2 done 4s · 1 tool call, 1 file edit
-[adds#1 cursor]  +0:12 $ node -e "import('./greet.js').then((m) => {…  exit 0 105ms
-[adds#1 cursor]  +0:13 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+## Run in CI and inspect runs
 
-pass             greet module › creates a tested greet module
-pass             greet module › adds a default name in a follow-up turn
+| Command | Use it for |
+| --- | --- |
+| <code>reeval&nbsp;run&nbsp;--profile&nbsp;pr</code> | A run sized for a pull request. In the config `init` writes, that is one run per cell, no variants, and at most 20 attempts. |
+| <code>reeval&nbsp;compare&nbsp;--fail-on-regression</code> | Diff a run against its nearest recorded ancestor, and exit 1 when an eval regressed. |
+| <code>reeval&nbsp;show&nbsp;--md</code> | One run's results as Markdown, for a job summary or a PR comment. |
+| <code>reeval&nbsp;query</code> | Read-only SQL over every run, or built-in views such as `lift`, `effort`, and `failing_attempts`. |
+| <code>reeval&nbsp;studio</code> | Runs, transcripts, diffs, and checks in the browser, or a static site with `reeval studio build`. |
 
-16s · 144k in (64k cached) · 863 out · results .reeval/runs/20261020T220141Z_…/summary.md
-2 pass
-Set analysis.model in reeval.config.ts for answers to what each eval asks.
-recorded evals/.history/20261020T220141Z_….json + 10 artifact files in evals/.history/20261020T220141Z_…/ (41.8 KB). Commit it with git.
-```
+Environments load extensions from where teams already keep them:
 
-Under a coding agent, reeval switches to compact output: the plan, the same result blocks and
-the tally, with no per-attempt lines. To see what an attempt did step by step, add `-v`; `-vv`
-adds the raw payloads and every `docker` command. Either way each attempt's trace stays local in `.reeval/debug`, never in
-the committed history.
+- **Skills**: from a local folder, a git repository at a pinned ref, an npm package, the skills.sh registry, or written inline.
+- **MCP servers**: stdio, Streamable HTTP, or SSE servers, with their own environment variables and headers.
+- **Rules**: the project's instructions, written as `AGENTS.md`, or `CLAUDE.md` on Claude Code, before the first turn.
 
-```bash
-reeval record                     # copy the latest run into evals/.history/
-reeval history                    # pass/fail per eval over recent runs
-reeval compare                    # latest vs its nearest recorded ancestor
-reeval query lift                 # each variant against its control
-reeval query effort               # tool calls, agent time and tokens
-reeval query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"
-reeval analyze                    # a checked reading of a run
-```
+## Examples
 
-Where the harness reports them (every harness but Goose does), the record
-keeps each turn's tokens and the model that served it, and totals them per attempt and per run.
+The [recipes](docs/recipes/index.mdx) are complete evals for common jobs:
 
-`reeval analyze` makes one LLM call over a digest of those facts, and checks every claim's
-citations and every suggested command against reeval's own CLI. `--save` commits it next to the
-run, and `reeval analyze --context` hands the same digest to your own coding agent, with no key.
+- [Prove a skill helps](docs/recipes/skill-lift.mdx): with and without a skill, gated on a minimum lift.
+- [Compare agents](docs/recipes/compare-agents.mdx): one suite on several agents at once, with pass rate and effort per agent.
+- [Evaluate an MCP server](docs/recipes/mcp-server.mdx): check the agent calls the server's tools, and whether answers improve.
+- [Check a recommendation](docs/recipes/recommendation.mdx): ask which library to use, and let a judge decide whether the agent picks the right one.
+- [PR gate in GitHub Actions](docs/recipes/github-pr-gate.mdx): run on every pull request and fail the check on a regression.
 
-## Studio
+## Documentation
 
-```bash
-reeval studio                    # runs, evals and transcripts on :4984
-reeval studio build --out site   # the same as a static site, for any host
-```
+The manual in [`docs/`](docs/index.mdx) covers harnesses, sandboxes, environments, secrets and egress, checks and judges, profiles, history, and every CLI command and flag.
 
-The studio shows each run's commit, pass counts and drift, and its saved analyses. For compares
-it shows per-cell pass rates, lift and effort, and for each attempt the transcript, diff, checks
-and judge input. `reeval studio` adds a Debug tab for attempts with local debug data.
+## For coding agents
 
-## Learn more
+To write or update evals, load [`skills/reeval/SKILL.md`](skills/reeval/SKILL.md). For every command, flag, and exit code, run `npx reeval --help`.
 
-| For | Read |
-|---|---|
-| Learning reeval, from a first eval to CI | The Guide in [`docs/`](./docs), a [docs.page](https://use.docs.page) site (`npx @docs.page/cli preview`) |
-| How it works, and complete solutions | The docs' Concepts and Recipes |
-| Every option, command, flag, exit code and file format | The docs' Reference |
-| Coding agents writing evals | The reeval skill, [`skills/reeval/SKILL.md`](./skills/reeval/SKILL.md) |
-| Developing this repo | [AGENTS.md](./AGENTS.md) |
+To preview a run without starting sandboxes or spending tokens, run `npx reeval run --dry-run --json`. It prints the planned evals, cells, and attempts as one JSON document and exits 0.
 
-## License
+To check a machine's setup, run `npx reeval doctor --json`. It checks Node.js, the sandbox and its images, and the agents' keys, never prints a key, and changes nothing.
 
-Licensed under the [Apache License, Version 2.0](./LICENSE). Copyright 2026 Invertase Limited.
-Questions about licensing: [oss@invertase.io](mailto:oss@invertase.io).
+To read past runs without calling a model, run `npx reeval query failing_attempts --json`, or `npx reeval analyze --context` for a run's digest. `npx reeval mcp` serves the run history over stdio as read-only MCP tools.
 
-The published package inlines some third-party code (the studio app's React, Radix UI and
-shadcn/ui components, and Claude Code's patched adapter). Its `THIRD_PARTY_NOTICES.md`, generated
-at build time, lists each of those packages with its version, licence and notices.
+## Licence
+
+[Apache-2.0](LICENSE). Copyright 2026 Invertase Limited. The npm package ships third-party licences and attributions in `THIRD_PARTY_NOTICES.md`. Questions about licensing: [oss@invertase.io](mailto:oss@invertase.io).

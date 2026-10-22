@@ -157,7 +157,12 @@ answers `reeval query` and `reeval studio build`, and, with Docker, runs an egre
 `src/root.ts` finds those files at the root of Bun's virtual filesystem, and `ownDir` copies a
 directory that must be real (Docker's build context, the studio app, jiti's Babel) to
 `~/.cache/reeval/<dir>-<content hash>` (`XDG_CACHE_HOME`, or the platform's cache directory).
-Run it after changing how reeval finds its files, starts processes or loads TypeScript; CI doesn't.
+Run it after changing how reeval finds its files, starts processes or loads TypeScript.
+`--target bun-<os>-<arch>` (with `--outfile`) cross-compiles another platform's binary without
+checking it. `binary.yml` (manual dispatch, `workflow_call`, and PRs that touch the compile path)
+cross-compiles every target on one Linux runner with Bun pinned, smoke-tests each on its own OS
+with `scripts/binary-smoke.mjs` (nothing installed; Docker on linux-x64, Alpine for musl) and
+uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact.
 
 **The build.** [tsdown](https://tsdown.dev) bundles `reeval`
 (`packages/reeval/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
@@ -322,6 +327,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 | `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
 | `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `windows (unit 1/6 … 6/6, tiers, packed)`, `macos (unit, tiers, packed)` in parallel, and `unit and plan (node 22.13, 1/4 … 4/4)` except on ordinary `main` pushes |
 | `ci-full.yml` | On a PR labelled `ci:full`: `ci.yml`, unscoped, as `full / …` |
+| `cache-cleanup.yml` | After each `ci` run on `main`: deletes stale and non-`main` entries from the caches CI writes |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
 | `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi, Codex, fx and Grok Build into the images (Claude Code stays pinned), then, whatever the contract did, checks whether the newest Claude Code adapter still needs reeval's patch (`scripts/drift/claude-code-patch.mjs`) and re-runs the OpenCode provider probe against the newest `@opencode/cli` (`scripts/drift/opencode-providers.mjs`), both key-free; any change to a CLI's output format, the stored conversation, behaviour or the OpenCode provider table fails it, the last with a diff; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`REEVAL_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
@@ -341,7 +347,11 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   before cloning: recorded runs' paths pass 260 characters.
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
   every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
-  versions and the build context.
+  versions and the build context, as a registry's storage that they pull from on the runner.
+- **Caches are written from `main` only** (the pnpm store, uv and the sandbox images); PRs and
+  the merge queue restore main's. `cache-cleanup.yml` runs after each `ci` run on `main` and
+  deletes every entry but main's latest in each of those families, so the repo stays under its
+  10 GB cache.
 - **Coverage** (nightly, `workflow_dispatch` and release; off PRs, the queue and ordinary `main`
   pushes): the `unit` (newest Node), `features`, `docker` and `studio` jobs run their tests with
   `NODE_V8_COVERAGE` and upload it; the `coverage` job merges it, uploads the HTML report
@@ -496,7 +506,7 @@ pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # t
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.6`, `claude-code-1.0.160-patch.b17cde50`,
-   `antigravity-0.1.10`, `opencode-0.2.9`, `goose-0.1.3`, `pi-0.2.7`, `codex-0.1.7`, `fx-0.1.0`, `grok-build-0.1.1`), so
+   `antigravity-0.1.10`, `opencode-0.2.9`, `goose-0.1.3`, `pi-0.2.7`, `codex-0.1.7`, `fx-0.1.0`, `grok-build-0.1.2`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 

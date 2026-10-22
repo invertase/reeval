@@ -1,4 +1,5 @@
 import type { JudgeRetry } from '../history/types.ts'
+import { badCharacterAt } from '../redact.ts'
 import type { FakeJudgeModel, JudgeModel, JudgeOptions, JudgeState, Verdict } from '../types.ts'
 import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
 
@@ -10,10 +11,15 @@ export const DEFAULT_THRESHOLD = 0.8
 
 const GATEWAY_KEYS = ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']
 
-/** Providers reeval calls directly, through their own AI SDK package, when their key is set. */
-export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string }> = {
-  google: { key: 'GOOGLE_GENERATIVE_AI_API_KEY', pkg: '@ai-sdk/google' },
-  'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai' },
+/**
+ * Providers reeval calls directly, through their own AI SDK package, when their key is set. The
+ * direct key wins over a Gateway credential; any other prefix goes through the AI Gateway.
+ */
+export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string; name: string }> = {
+  anthropic: { key: 'ANTHROPIC_API_KEY', pkg: '@ai-sdk/anthropic', name: 'Anthropic' },
+  google: { key: 'GOOGLE_GENERATIVE_AI_API_KEY', pkg: '@ai-sdk/google', name: 'Google' },
+  openai: { key: 'OPENAI_API_KEY', pkg: '@ai-sdk/openai', name: 'OpenAI' },
+  'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai', name: 'TypeSafe AI' },
 }
 
 export type JudgeRoute = { kind: 'direct'; provider: string; pkg: string } | { kind: 'gateway' }
@@ -45,7 +51,10 @@ export function checkModelString(
 
 const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 
-/** Environment variables the judge model needs, as alternatives: any one of them is enough. */
+/**
+ * Environment variables a model needs, as alternatives in the order reeval prefers them: its
+ * provider's own key, then the Gateway's. Any one of them is enough.
+ */
 export function judgeCredentials(model: string | FakeJudgeModel): string[] {
   if (isFakeJudge(model)) return []
   const direct = DIRECT_PROVIDERS[providerOf(model)]
@@ -53,18 +62,51 @@ export function judgeCredentials(model: string | FakeJudgeModel): string[] {
 }
 
 /**
- * A known provider's own package when its key is set, else the Vercel AI Gateway when a
- * Gateway credential is set. Throws, naming both, when neither is.
+ * The keys that would work for a model, each with its route: `ANTHROPIC_API_KEY (to call
+ * Anthropic directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI
+ * Gateway)`. A prefix with no direct route says the Gateway is its only one.
  */
-export function judgeRoute(model: string, env: NodeJS.ProcessEnv = process.env): JudgeRoute {
+export function modelKeyOptions(model: string): string {
+  const prefix = providerOf(model)
+  const direct = DIRECT_PROVIDERS[prefix]
+  const gateway = GATEWAY_KEYS.join(' or ')
+  if (direct) {
+    return `${direct.key} (to call ${direct.name} directly) or ${gateway} (to go through the Vercel AI Gateway)`
+  }
+  return `${gateway} (to go through the Vercel AI Gateway, the only route for ${prefix}/* models; reeval calls ${Object.keys(
+    DIRECT_PROVIDERS,
+  )
+    .map((p) => `${p}/*`)
+    .join(', ')} directly)`
+}
+
+/**
+ * The provider's own package when its key is set, else the Vercel AI Gateway when a Gateway
+ * credential is set. Throws, naming the model, its prefix and every key that would work, when
+ * neither is, or when the key it would send has whitespace or a line break in it.
+ */
+export function judgeRoute(
+  model: string,
+  env: NodeJS.ProcessEnv = process.env,
+  what = 'judge model',
+): JudgeRoute {
   const provider = providerOf(model)
   const direct = DIRECT_PROVIDERS[provider]
-  if (direct && env[direct.key]) return { kind: 'direct', provider, pkg: direct.pkg }
-  if (GATEWAY_KEYS.some((k) => env[k])) return { kind: 'gateway' }
-  const options = direct
-    ? `Set ${direct.key} to call ${direct.pkg} directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway, in the environment or .env.local.`
-    : 'Set AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway, in the environment or .env.local.'
-  throw new Error(`No credentials for judge model "${model}". ${options}`)
+  const key = judgeCredentials(model).find((k) => env[k])
+  if (key === undefined) {
+    throw new Error(
+      `No credentials for ${what} "${model}" (provider "${provider}"). Set ${modelKeyOptions(model)}, in the environment or .env.local.`,
+    )
+  }
+  const at = badCharacterAt(env[key] as string)
+  if (at) {
+    throw new Error(
+      `${key} for ${what} "${model}" has whitespace or a line break in it at character ${at}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
+    )
+  }
+  return direct && key === direct.key
+    ? { kind: 'direct', provider, pkg: direct.pkg }
+    : { kind: 'gateway' }
 }
 
 /** A verdict plus the transient failures retried on the way to it. */

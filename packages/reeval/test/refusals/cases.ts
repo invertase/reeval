@@ -189,6 +189,8 @@ export const CASES: Record<string, Case[]> = {
     ['an empty id', any(docker, { id: '' })],
     ['an image that is not a string', any(docker, { image: 3 })],
     ['an empty from', any(docker, { from: ' ' })],
+    ['a from with a line break', any(docker, { from: 'node:24\nRUN id' })],
+    ['a from with a space', any(docker, { from: 'node:24 AS tools' })],
     ['secrets on the sandbox', any(docker, { env: {} })],
     ['environment on the sandbox', any(docker, { environment: {} })],
     ['an unknown key and a bad value', any(docker, { cpus: 0, mem: '1g' })],

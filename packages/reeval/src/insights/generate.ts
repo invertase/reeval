@@ -215,7 +215,6 @@ async function ask<S extends z.ZodType>(
       system,
       prompt: JSON.stringify(input),
       output: Output.object({ schema, name: call }),
-      temperature: 0.2,
       maxOutputTokens,
       maxRetries: 3,
       abortSignal: signal,

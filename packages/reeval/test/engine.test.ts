@@ -1323,6 +1323,53 @@ evaluate('agent eval', async (c) => {
     }
   })
 
+  test("anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's", async () => {
+    const seen: Array<{ url: string; headers: Record<string, unknown> }> = []
+    const server = createServer((req, res) => {
+      seen.push({ url: req.url ?? '', headers: req.headers })
+      res.statusCode = 401
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ error: { type: 'authentication_error', message: 'test key' } }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address() as AddressInfo
+    const base = `http://127.0.0.1:${port}/v1`
+    try {
+      for (const [model, env, header] of [
+        [
+          'anthropic/claude-sonnet-5',
+          { ANTHROPIC_API_KEY: 'reeval-direct-key', ANTHROPIC_BASE_URL: base },
+          'x-api-key',
+        ],
+        [
+          'openai/gpt-6-luna',
+          { OPENAI_API_KEY: 'reeval-direct-key', OPENAI_BASE_URL: base },
+          'authorization',
+        ],
+      ] as const) {
+        seen.length = 0
+        const p = await project('judge-direct', {
+          'reeval.config.ts': fakeConfig(),
+          'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('agent eval', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('Is it done?', { model: '${model}' })).toPass()
+})
+`,
+        })
+        const r = await runCli(p.dir, ['run'], {
+          env: { ...env, AI_GATEWAY_API_KEY: 'reeval-gateway-key' },
+        })
+        assert.equal(r.code, 1, r.stdout + r.stderr)
+        assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge', model)
+        assert.equal(seen.length, 1, `${model} reached the provider's own endpoint once`)
+        assert.match(String(seen[0]?.headers[header]), /reeval-direct-key/, model)
+      }
+    } finally {
+      server.close()
+    }
+  })
+
   test('a judge call retries a transient provider error and records it', async () => {
     const p = await project('judge-retry', {
       'reeval.config.ts': fakeConfig(),
@@ -1828,6 +1875,48 @@ evaluate('fine', async () => {})
     assert.equal(e?.error?.kind, 'timeout')
     assert.deepEqual(liveSandboxes(p), [])
   })
+
+  for (const [why, stop] of [
+    ['its deadline passes', { deadlineMs: 10_000 }],
+    ['its test is cancelled', { abortOnTurn: true }],
+  ] as const) {
+    test(`runCli stops a stuck run when ${why}: SIGTERM, then nothing is left`, {
+      skip: noSignals,
+    }, async () => {
+      const p = await project('stuck', {
+        'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 600_000 }' }),
+        'evals/agent.eval.ts': agentEval('', `{ timeout: '15m' }`),
+      })
+      const abort = new AbortController()
+      let pid = 0
+      const error = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+        deadlineMs: 'deadlineMs' in stop ? stop.deadlineMs : undefined,
+        signal: abort.signal,
+        graceMs: 15_000,
+        onOutput: (stdout, child) => {
+          pid = child
+          if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
+          if ('abortOnTurn' in stop) abort.abort()
+          return true
+        },
+      }).then(
+        () => assert.fail('the stuck run finished'),
+        (e: Error) => e,
+      )
+      assert.match(
+        error.message,
+        'deadlineMs' in stop
+          ? /^reeval run --output-logs full was stopped because it was still running after 10000ms; it exited \(exit 143\)/
+          : /^reeval run --output-logs full was stopped because the test was cancelled .*; it exited \(exit 143\)/,
+      )
+      // The canary: the agent was mid-turn, with a sandbox, when it was stopped.
+      assert.match(error.message, /turn 1 started/)
+      assert.match(error.message, /Cancelling: stopping agents and destroying sandboxes/)
+      assert.throws(() => process.kill(-pid, 0), { code: 'ESRCH' }, 'its process group is gone')
+      assert.deepEqual(liveSandboxes(p), [])
+      assert.equal(readRun(p.dir).run.status, 'interrupted')
+    })
+  }
 
   for (const [target, signal, code] of [
     [

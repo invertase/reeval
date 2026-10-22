@@ -180,7 +180,12 @@ describe('egress gateway in Docker', {
       KEY: PLACEHOLDER,
     })
     assert.equal(swapped.exitCode, 0, swapped.stderr)
-    assert.equal(JSON.parse(swapped.stdout).authorization, `Bearer ${REAL}`)
+    assert.equal(seen[0]?.authorization, `Bearer ${REAL}`)
+    assert.equal(
+      JSON.parse(swapped.stdout).authorization,
+      `Bearer ${PLACEHOLDER}`,
+      'the echo comes back scrubbed',
+    )
     const other = await sh(s, `curl -sS -H "Authorization: Bearer $KEY" ${url}`, {
       KEY: PLACEHOLDER,
     })
@@ -618,6 +623,36 @@ describe('egress policy in Docker', {
     assert.equal(seen.length, 1, 'nothing else reached the upstream')
   })
 
+  test('absolute-form https (GET https://… without CONNECT): allowed, keyed and refused like CONNECT', async () => {
+    const s = await open(custom)
+    await s.addRequestTransformations?.([cursorRule])
+    // As Puppeteer 19's browser download sends it to an http:// HTTPS_PROXY.
+    const absolute = (url: string, auth = '') =>
+      sh(
+        s,
+        `node -e 'const p = new URL(process.env.HTTPS_PROXY); const a = process.argv[1]; require("http").request({ host: p.hostname, port: p.port, method: a ? "POST" : "GET", path: process.argv[2], headers: a ? { authorization: a } : {} }, (r) => { let b = ""; r.on("data", (d) => (b += d)); r.on("end", () => console.log(r.statusCode, b.trim())) }).end()' "$AUTH" "$URL"`,
+        { AUTH: auth, URL: url },
+      )
+    seen.length = 0
+    const ok = await absolute(`https://upstream.test:${upstream.port}/abs`)
+    assert.match(ok.stdout, /^200 /, ok.stderr)
+    const keyed = await absolute(
+      `https://upstream.test:${upstream.port}/auth/exchange_user_api_key`,
+      `Bearer ${PLACEHOLDER}`,
+    )
+    assert.match(keyed.stdout, /^200 /, keyed.stderr)
+    assert.deepEqual(
+      seen.map((r) => [r.path, r.authorization]),
+      [
+        ['/abs', undefined],
+        ['/auth/exchange_user_api_key', `Bearer ${REAL}`],
+      ],
+    )
+    const other = await absolute(`https://other.test:${upstream.port}/`)
+    assert.match(other.stdout, /^403 blocked by the reeval egress policy: .*isn't in the allowlist/)
+    assert.equal(seen.length, 2, 'the refused request never reached the upstream')
+  })
+
   test('no direct route: custom and deny-all, at start and after a switch', async () => {
     const s = await open(allowAll)
     // Twin: under allow-all the same direct connect reaches the host listener.
@@ -715,6 +750,35 @@ describe('egress policy in Docker', {
         await server.kill().catch(() => {})
       }
     }
+  })
+
+  test("allow-all: the gateway refuses the Docker host's bridge address, a private one", async () => {
+    const s = await open(allowAll)
+    const hits = listener.hits
+    const proxied = await sh(
+      s,
+      `curl -sS --max-time 5 -w ' %{http_code}' http://${hostAddress}:${listener.port}/`,
+    )
+    assert.match(proxied.stdout, /private or reserved address[\s\S]* 403$/, proxied.stderr)
+    assert.equal(listener.hits, hits, 'the host listener saw nothing through the gateway')
+    // Twin: a public address goes through the same gateway (refused upstream or not, not by it).
+    const pub = await sh(s, 'curl -sS --max-time 5 -o /dev/null -w "%{http_code}" http://1.1.1.1/')
+    assert.notEqual(pub.stdout, '403', pub.stderr)
+  })
+
+  test('a malformed frame from the forwarder stops the gateway with a reason, not the worker', async () => {
+    const s = await open(custom)
+    // As root, as only a root sandbox could: an OPEN frame with no port on the forwarder's stdout.
+    const forged = asRoot(
+      s,
+      `pid=$(pgrep -f '[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}' | head -1); printf '\\001\\000\\000\\000\\001\\000\\000\\000\\000' > /proc/$pid/fd/1`,
+    )
+    assert.equal(forged.status, 0, forged.stderr)
+    await retry(async () => assert.equal(s.egress?.active, false))
+    assert.match(s.egress?.active === false ? s.egress.reason : '', /broke the protocol.*OPEN/)
+    const r = await sh(s, `curl -sS --max-time 2 https://upstream.test:${upstream.port}/`)
+    assert.notEqual(r.exitCode, 0, 'nothing goes out once the gateway stopped')
+    await expectNoDirectRoute(s, 'after the gateway stopped')
   })
 
   test('forwarder death: later requests fail fast with a reason; still no direct route', async () => {

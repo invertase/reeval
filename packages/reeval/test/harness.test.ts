@@ -94,6 +94,7 @@ import {
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 import type { AgentHarnessDescriptor, TranscriptEvent } from '../src/types.ts'
+import { promptTokens, sumUsage } from '../src/usage.ts'
 import { formatUsage } from '../src/view/model.ts'
 
 describe('the Claude Code harness', () => {
@@ -2375,9 +2376,38 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(served, 'gemini-3.8-flash-low')
   })
 
-  test('Cursor: uncached input, cache reads and writes as the SDK splits them', async () => {
+  test("Antigravity: a three-turn attempt counts each turn's own calls once", async () => {
+    // A real agy 1.4.4 conversation, one process per turn, each resuming the first. The Gemini
+    // API's usageMetadata for its eight model calls sums to 66021 uncached prompt tokens,
+    // 254217 cached and 413 output: what agy's last result reports as its running total.
+    const turns = await Promise.all(
+      [1, 2, 3].map(async (n) => {
+        const t = new AntigravityStreamTranslator({
+          turn: n,
+          conversationId: n === 1 ? undefined : '950c7d99-14bd-4d1b-844f-43bbb7c6fc18',
+        })
+        const ndjson = readFileSync(
+          new URL(
+            `../../harness-antigravity/test/fixtures/three-turns-${n}.ndjson`,
+            import.meta.url,
+          ),
+          'utf8',
+        )
+        return (await turnThrough(ndjson.split('\n').flatMap((l) => t.push(l)))).usage
+      }),
+    )
+    assert.deepEqual(sumUsage(turns), {
+      input: 66021,
+      output: 413,
+      cacheRead: 254217,
+      cacheWrite: 0,
+      reasoning: 0,
+    })
+  })
+
+  test('Cursor: the SDK input holds the cache reads, so uncached input is what is left', async () => {
     const sdk = cursorUsage({
-      inputTokens: 15564,
+      inputTokens: 15564 + 10464,
       outputTokens: 117,
       cacheReadTokens: 10464,
       cacheWriteTokens: 12,
@@ -2392,6 +2422,32 @@ describe('token usage and the served model, from any harness', () => {
       reasoning: null,
     })
     assert.equal(served, 'composer-2.5[fast=false]')
+  })
+
+  test("Cursor: a turn's tokens are what Cursor's usage export billed for it", async () => {
+    // Three composer-2.5[fast=false] attempts on @cursor/sdk 1.0.40: each row of Cursor's usage
+    // export (uncached input, cache read, output, total) next to the SDK's usage for that run.
+    // The SDK's totalTokens counts the cache reads twice, so it isn't the billed total.
+    const rows = [
+      { noCache: 45192, cacheRead: 900877, output: 8350, billed: 954419, sdkInput: 946069 },
+      { noCache: 73902, cacheRead: 747700, output: 7584, billed: 829186, sdkInput: 821602 },
+      { noCache: 5250, cacheRead: 151095, output: 5057, billed: 161402, sdkInput: 156345 },
+    ]
+    for (const row of rows) {
+      const sdk = cursorUsage({
+        inputTokens: row.sdkInput,
+        outputTokens: row.output,
+        cacheReadTokens: row.cacheRead,
+        cacheWriteTokens: 0,
+        totalTokens: row.sdkInput + row.output + row.cacheRead,
+      })
+      const { usage } = await turnThrough(finishWith(sdk))
+      assert.ok(usage)
+      assert.equal(usage.input, row.noCache)
+      assert.equal(usage.cacheRead, row.cacheRead)
+      assert.equal(usage.output, row.output)
+      assert.equal(promptTokens(usage) + usage.output, row.billed)
+    }
   })
 
   test('Claude Code: the API usage its bridge maps, cache creation as cache writes', async () => {

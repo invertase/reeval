@@ -7,7 +7,6 @@ import { dirname, join, resolve } from 'node:path'
 import type { DockerState, Engine } from '@reeval/sandbox-docker'
 import type { Flags } from './cli-spec.ts'
 import {
-  badCharacterAt,
   configFilesPhrase,
   configLabel,
   configPathFor,
@@ -19,7 +18,7 @@ import {
 import { unenforceable } from './egress.ts'
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
-import { environmentSandbox } from './environment.ts'
+import { environmentSandbox, profileSandbox } from './environment.ts'
 import { credentialOf } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
@@ -27,11 +26,12 @@ import { fromCwd, newRunId, relativeFile } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import {
   judgeCredentials,
+  modelKeyOptions,
   RECOMMENDED_ANALYSIS_MODEL,
   RECOMMENDED_JUDGE_MODEL,
 } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
-import { redactSecrets, SECRET_NAME } from './redact.ts'
+import { badCharacterAt, redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { ImageTarget, ImageUse } from './sandbox/images.ts'
 import type { EgressPolicy, HarnessDescriptor, ResolvedConfig, SandboxDescriptor } from './types.ts'
@@ -182,13 +182,10 @@ export function configuredUses(config: ResolvedConfig) {
   for (const [name, profile] of Object.entries(config.profiles)) {
     const harnesses = profile.defaults?.harness
       ? [profile.defaults.harness].flat()
-      : profile.defaults?.environment
+      : profile.defaults?.environment || profile.defaults?.sandbox
         ? config.harness
         : []
-    const sandbox = environmentSandbox(
-      profile.defaults?.environment ?? config.environment,
-      config.sandbox,
-    )
+    const sandbox = profileSandbox(config, profile.defaults)
     for (const harness of harnesses) uses.push({ harness, sandbox, profile: name })
   }
   return uses
@@ -543,15 +540,18 @@ async function keyCheck(
   deps: DoctorDeps,
   online: boolean,
   envFile: string,
+  model?: string,
 ): Promise<Check> {
   const name = names.find((n) => deps.env[n])
   if (!name) {
-    const which = names.join(' or ')
     return {
       id,
       status: required ? 'fail' : 'warn',
-      summary: `${which} for ${who}: not set`,
-      fix: `add ${names[0]}=... to ${envFile}`,
+      summary: `${model ? modelKeyOptions(model) : names.join(' or ')} for ${who}: not set`,
+      fix:
+        model && names.length > 2
+          ? `add ${names[0]}=... to ${envFile}, or ${names[1]}=... to go through the Vercel AI Gateway`
+          : `add ${names[0]}=... to ${envFile}`,
     }
   }
   const value = deps.env[name] as string
@@ -564,12 +564,14 @@ async function keyCheck(
       fix: `set ${name} again as one line in ${envFile}`,
     }
   }
-  if (!online) return { id, status: 'ok', summary: `${name} for ${who}: set` }
+  const shadowed = names.slice(names.indexOf(name) + 1).find((n) => deps.env[n])
+  const wins = model && shadowed ? ` (${name} wins over ${shadowed})` : ''
+  if (!online) return { id, status: 'ok', summary: `${name} for ${who}: set${wins}` }
   const probed = await probeKey(name, value, deps.fetch)
   return {
     id,
     status: probed.status,
-    summary: `${name} for ${who}: ${probed.summary}`,
+    summary: `${name} for ${who}: ${probed.summary}${wins}`,
     ...(probed.status === 'fail' ? { fix: `set a valid ${name} in ${envFile}` } : {}),
   }
 }
@@ -649,7 +651,7 @@ export async function checkJudge(
       const keys = judgeCredentials(model)
       if (!keys.length)
         return { id: 'judge', status: 'ok', summary: `${who} needs no key` } as Check
-      return keyCheck('judge', keys, who, !profile, deps, online, envFile)
+      return keyCheck('judge', keys, who, !profile, deps, online, envFile, model as string)
     }),
   )
 }
@@ -708,7 +710,7 @@ export async function checkAnalysis(
   const keys = judgeCredentials(model)
   const who = `${model} (analysis.model)`
   if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: `${who} needs no key` }]
-  return [await keyCheck('analysis', keys, who, false, deps, online, envFile)]
+  return [await keyCheck('analysis', keys, who, false, deps, online, envFile, model)]
 }
 
 // ---- Egress and git ------------------------------------------------------------------------

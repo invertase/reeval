@@ -55,7 +55,7 @@ Written from an attempt's first gateway request, so only in the Docker sandbox. 
 ```
 
 <Property name="via" type="'tunnel' | 'decrypted' | 'http'">
-  `decrypted` for hosts the gateway opens to substitute a credential; `tunnel` for HTTPS passed through end to end (only the host is visible); `http` for plain HTTP.
+  `decrypted` for hosts the gateway opens to substitute a credential, and for a `GET https://…` sent to the proxy without `CONNECT`, which the gateway sends on over TLS itself; `tunnel` for HTTPS passed through end to end (only the host is visible); `http` for plain HTTP.
 </Property>
 
 <Property name="allowed" type="boolean">

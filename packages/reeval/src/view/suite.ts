@@ -11,7 +11,7 @@ import type {
   FamilyRecord,
   RunRecord,
 } from '../history/types.ts'
-import { liftInterval, round3 } from '../stats.ts'
+import { EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
 import type { ErrorKind, Outcome } from '../types.ts'
 import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
@@ -31,8 +31,7 @@ export type Effect = 'better' | 'worse' | 'same' | 'unclear'
  */
 export type Across = 'none' | 'change' | 'harness' | 'both'
 
-/** The fewest counted attempts a side for an effect to be anything but `unclear`. */
-export const EFFECT_MIN_COUNTED = 4
+export { EFFECT_MIN_COUNTED }
 
 /**
  * One finished run's facts. Every node has a `path`, a stable id to cite it by, and `paths`

@@ -272,6 +272,7 @@ export const inventory: InventoryFeature[] = [
       unit('selectProfile: --profile, then REEVAL_PROFILE'),
       unit('cascade: profile defaults sit under evals'),
       options('a profile name typo exits 2'),
+      history("a profile's defaults.sandbox is the sandbox the run header and the record name"),
     ],
   },
   {
@@ -451,6 +452,8 @@ export const inventory: InventoryFeature[] = [
       workspace('a missing subdirectory names what is there'),
       workspace('a pinned SHA reruns offline from the cache, with the same commit and tree'),
       workspace("the agent's diff starts from the repository, and a variant's workspace overrides"),
+      workspace('a commit a shallow local clone lacks says to fetch it or clone the full history'),
+      workspace('compare arms on different refs of the same tree get a warning'),
       options('common mistakes'),
     ],
   },
@@ -928,6 +931,10 @@ export const inventory: InventoryFeature[] = [
         'confinement',
         "runPrivileged reads what the sandbox user keeps to itself, and runs none of that user's binaries",
       ),
+      sandboxDocker(
+        'confinement',
+        'runPrivileged is root with only the privileged capabilities, under seccomp and AppArmor',
+      ),
     ],
   },
 
@@ -996,6 +1003,10 @@ export const inventory: InventoryFeature[] = [
       sandboxDocker(
         'confinement',
         'no capabilities, and no-new-privileges; root: true adds back only what apt-get needs',
+      ),
+      sandboxDocker(
+        'confinement',
+        "the sandbox user can't use the privileged capabilities, even through a setuid binary",
       ),
       sandboxDocker('confinement', 'install layers put ~ in the sandbox user’s home, owned by it'),
       sandboxDocker(
@@ -1172,6 +1183,8 @@ export const inventory: InventoryFeature[] = [
     tests: [
       sandboxDocker('docker', 'allowlist: a listed host gets 200'),
       sandboxDocker('docker', 'no direct route: custom and deny-all'),
+      sandboxDocker('docker', 'absolute-form https (GET https://… without CONNECT)'),
+      sandboxDocker('proxy', 'absolute-form https requests through the proxy'),
       sandboxDocker('unit', 'deny list: every always-denied form'),
     ],
     real: ['contract › deny-all plus auto hosts works, a blocked host refused and recorded'],
@@ -1599,6 +1612,25 @@ export const inventory: InventoryFeature[] = [
         'c.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
       ),
       unit('judge calls retry transient provider errors'),
+    ],
+  },
+  {
+    id: 'judge.providers',
+    area: 'Judges and matchers',
+    plan: ['insights/anthropic-no-key', 'insights/anthropic-key'],
+    name: "Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time",
+    tests: [
+      unit('each provider prefix with each combination of keys'),
+      engine(
+        "anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's",
+      ),
+      unit('judge strings use the provider package when its key is set, else the AI Gateway'),
+      questions("a question's own model needs its key, and a malformed one exits 2"),
+      options(
+        'a judge model without its key exits 2 naming the keys that work, before any attempt',
+      ),
+      secrets("masks every direct model provider's key by its value, whatever its shape"),
+      'reeval/test/doctor.test.ts › analysis: an anthropic/* or openai/* model takes its own key, which wins over the Gateway',
     ],
   },
   {
@@ -2081,7 +2113,8 @@ export const inventory: InventoryFeature[] = [
       analysis('a changed eval is not comparable, not an effect'),
       analysis('a changed eval has no mixed 6/10 vs 8/9 result line'),
       analysis('--vs none analyses this run only'),
-      analysis('two counted attempts can still be an effect'),
+      analysis('every view gives the same verdict'),
+      analysis('every view reads one minimum of counted attempts'),
       analysis('claims with invented citations or quotes are dropped'),
       analysis('a rejected verify is dropped'),
       analysis('an anomaly that quotes a judge score the record does not have is dropped'),

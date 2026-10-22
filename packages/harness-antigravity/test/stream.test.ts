@@ -340,6 +340,94 @@ describe('stream translation', () => {
   })
 })
 
+describe("cache reads in a real turn (agy 1.4.4, gemini-3.8-flash-low, Gemini's implicit cache)", () => {
+  // Each model call's usageMetadata as the Gemini API sent it, recorded beside the capture:
+  // [promptTokenCount, cachedContentTokenCount, candidatesTokenCount]. promptTokenCount
+  // includes the cached tokens; agy's input_tokens is what is left of it.
+  const GEMINI = [
+    [6763, 0, 24],
+    [24449, 0, 45],
+    [35323, 24470, 31],
+    [50396, 35347, 40],
+    [50515, 48341, 40],
+    [50634, 48460, 40],
+    [50753, 48580, 40],
+    [50872, 48699, 40],
+    [50991, 48818, 40],
+    [51110, 48938, 36],
+  ]
+  const { parts } = translate(fixture('cached-steps.ndjson'))
+  const usages = parts.flatMap((p) => (p.type === 'finish-step' ? [p.usage] : []))
+
+  test("each step's tokens are what Gemini counted for its call", () => {
+    assert.deepEqual(
+      usages.map((u) => [u.inputTokens.total, u.inputTokens.cacheRead, u.outputTokens.total]),
+      GEMINI,
+    )
+    for (const [i, u] of usages.entries()) {
+      const [prompt = 0, cached = 0] = GEMINI[i] ?? []
+      assert.equal(u.inputTokens.noCache, prompt - cached)
+    }
+  })
+
+  test("the turn's total is its steps' sum, the cache reads counted once", () => {
+    const total = parts.at(-1)?.type === 'finish' ? parts.at(-1) : undefined
+    assert.ok(total?.type === 'finish')
+    const sum = (f: (row: number[]) => number) => GEMINI.reduce((n, row) => n + f(row), 0)
+    assert.deepEqual(
+      [
+        total.totalUsage.inputTokens.total,
+        total.totalUsage.inputTokens.cacheRead,
+        total.totalUsage.outputTokens.total,
+      ],
+      [sum(([p = 0]) => p), sum(([, c = 0]) => c), sum(([, , o = 0]) => o)],
+    )
+  })
+})
+
+describe('a conversation over three turns (agy 1.4.4, gemini-3.8-flash-low)', () => {
+  const CONVERSATION = '950c7d99-14bd-4d1b-844f-43bbb7c6fc18'
+  /** One process per turn, as the harness runs them: turns after the first resume the conversation. */
+  const turn = (n: number, ndjson: string) => {
+    const t = new AntigravityStreamTranslator({
+      turn: n,
+      conversationId: n === 1 ? undefined : CONVERSATION,
+    })
+    const parts = ndjson.split('\n').flatMap((l) => t.push(l))
+    const finish = parts.at(-2)
+    assert.ok(finish?.type === 'finish')
+    return finish.totalUsage
+  }
+  const counts = (u: ReturnType<typeof toUsage>) => [
+    u.inputTokens.total,
+    u.inputTokens.cacheRead,
+    u.outputTokens.total,
+  ]
+
+  test("each turn's tokens are what Gemini counted for that turn's calls", () => {
+    // The usageMetadata of each turn's model calls, summed, as the Gemini API sent it:
+    // [promptTokenCount, cachedContentTokenCount, candidatesTokenCount]. agy's result reports
+    // the conversation's running total instead (turn 3: 66021 uncached, 254217 cached).
+    const GEMINI = [
+      [6692 + 24378 + 35252 + 50338, 24400 + 35276, 24 + 45 + 44 + 76],
+      [50634 + 50746, 48282 + 48579, 35 + 77],
+      [51043 + 51155, 48691 + 48989, 35 + 77],
+    ]
+    const turns = [1, 2, 3].map((n) => turn(n, fixture(`three-turns-${n}.ndjson`)))
+    assert.deepEqual(turns.map(counts), GEMINI)
+  })
+
+  test("a resumed turn that reported no step's tokens doesn't count the earlier turns", () => {
+    // Every call refused, after two turns: the result's usage is still the running total.
+    const refused = fixture('provider-503.ndjson').replace(
+      '"usage":{"input_tokens":0,"output_tokens":0,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":0}',
+      '"usage":{"input_tokens":61503,"output_tokens":301,"cache_read_tokens":156537}',
+    )
+    assert.ok(refused.includes('"input_tokens":61503'))
+    assert.deepEqual(counts(turn(3, refused)), [undefined, undefined, undefined])
+  })
+})
+
 describe("a provider's failure (agy 1.2.11, a Gemini endpoint refusing every call)", () => {
   const failed = (file: string) => {
     const { parts } = translate(fixture(file), { exitCode: 3 })

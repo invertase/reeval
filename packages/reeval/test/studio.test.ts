@@ -27,7 +27,6 @@ import {
   evalTree,
   failedJudgeLabels,
   judgeLabel,
-  LIFT_MIN_COUNTED,
   manifestPath,
   parseDataPath,
   parseTranscript,
@@ -427,7 +426,7 @@ describe('view-models over a real history', () => {
       ]),
       [
         [null, [['Did it write…', 2, 2, null]]],
-        [null, [['Did it write…', 2, 2, 0]]],
+        [null, [['Did it write…', 2, 2, null]]],
       ],
     )
   })
@@ -484,7 +483,6 @@ describe('view-models over a real history', () => {
     const first = entry.attempts.find((a) => a.id === 'fake/plain/fake#1')
     const skillOne = entry.attempts.find((a) => a.id === 'fake/skill/fake#1')
     assert.ok(first && skillOne)
-    assert.equal(LIFT_MIN_COUNTED, 2)
     assert.equal(judgeLabel('login?'), 'login')
     assert.equal(judgeLabel('Does this change implement email sign-in?'), 'Does this change…')
     assert.equal(collapsedJudgeLabel(first.judgements), 'fail 0.20/0.80 · fail 0.10/0.80')
@@ -492,18 +490,32 @@ describe('view-models over a real history', () => {
       collapsedJudgeLabel([...first.judgements, j('extra', 'fail', 0.05, '2:extra')]),
       'fail 0.05/0.80 · 3 judges',
     )
-    assert.deepEqual(
-      cellJudgeRates(entry, 'fake/skill/fake').map((r) => [
+    const keyLifts = (e: RunRecord['evals'][number]) =>
+      cellJudgeRates(e, 'fake/skill/fake').map((r) => [
         r.label,
         r.pass,
         r.counted,
         r.lift && Math.round(r.lift.points * 100),
-      ]),
-      [
-        ['login', 2, 2, 50],
-        ['checkout', 0, 2, 0],
+      ])
+    // 2 against 2 is below EFFECT_MIN_COUNTED, so no key's lift is measured.
+    assert.deepEqual(keyLifts(entry), [
+      ['login', 2, 2, null],
+      ['checkout', 0, 2, null],
+    ])
+    const four = {
+      ...entry,
+      attempts: [
+        ...entry.attempts,
+        attempt('fake/plain/fake', 3, 'fail', 'fail', null),
+        attempt('fake/plain/fake', 4, 'fail', 'fail', null),
+        attempt('fake/skill/fake', 3, 'pass', 'pass', null),
+        attempt('fake/skill/fake', 4, 'pass', 'pass', null),
       ],
-    )
+    }
+    assert.deepEqual(keyLifts(four), [
+      ['login', 4, 4, 75],
+      ['checkout', 0, 4, 0],
+    ])
     const thin = {
       ...entry,
       attempts: [first, skillOne],
@@ -521,8 +533,8 @@ describe('view-models over a real history', () => {
     })
     assert.deepEqual(cellUsage(entry, 'fake/skill/fake'), tokens)
     const rows = cellRows({
-      ...entry,
-      attempts: entry.attempts.map((a) => ({
+      ...four,
+      attempts: four.attempts.map((a) => ({
         ...a,
         activity: {
           tools: 1,
@@ -536,7 +548,7 @@ describe('view-models over a real history', () => {
         timings: { setupMs: 0, agentMs: 100, diffMs: 0, checksMs: 0, judgeMs: 0 },
       })),
     })
-    assert.equal(rows[1]?.judgeRates[0]?.lift?.points, 0.5)
+    assert.equal(rows[1]?.judgeRates[0]?.lift?.points, 0.75)
     assert.equal(rows[0]?.usage?.input, 100)
   })
 

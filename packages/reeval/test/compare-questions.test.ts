@@ -23,7 +23,13 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
 `,
   })
   const OK = `fakeHarness({ files: { 'ok.txt': 'yes' } })`
-  const noKeys = { GOOGLE_GENERATIVE_AI_API_KEY: '', AI_GATEWAY_API_KEY: '', VERCEL_OIDC_TOKEN: '' }
+  const noKeys = {
+    ANTHROPIC_API_KEY: '',
+    GOOGLE_GENERATIVE_AI_API_KEY: '',
+    OPENAI_API_KEY: '',
+    AI_GATEWAY_API_KEY: '',
+    VERCEL_OIDC_TOKEN: '',
+  }
 
   test('--dry-run names the questions with no language model; reeval run exits 2 before any attempt', async () => {
     const p = await project('questions-no-model', {
@@ -96,7 +102,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
     assert.match(
       missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for compare questions, "google\/gemini-3\.8-flash"\./,
     )
     const malformed = await runCli(p.dir, ['run'], {
       env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
@@ -129,7 +135,10 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     )
     const missing = await runCli(p.dir, ['run'], { env: noKeys })
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
-    assert.match(missing.stderr, /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY/)
+    assert.match(
+      missing.stderr,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY/,
+    )
   })
 
   test('with a language model the run plans its questions and the outcome is the checks', async () => {

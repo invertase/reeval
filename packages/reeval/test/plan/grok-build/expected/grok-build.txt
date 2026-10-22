@@ -8,8 +8,8 @@ excluded: —
 image docker · cursor · 1 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · grok-build · 2 evals
-  base  reeval-sandbox:grok-build-0.1.1  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:grok-build-0.1.2  (reeval's image: built when missing or when its base changed)
 image docker:python:3.12-slim · cursor · 1 evals
   from python:3.12-slim  reeval-sandbox:cursor-0.1.6-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image docker:python:3.12-slim · grok-build · 1 evals
-  from python:3.12-slim  reeval-sandbox:grok-build-0.1.1-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:grok-build-0.1.2-python-3-12-slim-375f4a61  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

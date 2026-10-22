@@ -24,12 +24,12 @@ import {
 import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
-import { environmentSandbox, workspaceLabel } from './environment.ts'
+import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
-import { harnessId, sandboxId } from './options.ts'
+import { harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
@@ -507,9 +507,7 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
   }
   const sandboxes = [
     environmentSandbox(config.environment, config.sandbox),
-    ...(profile?.defaults.environment
-      ? [environmentSandbox(profile.defaults.environment, config.sandbox)]
-      : []),
+    ...(profile ? [profileSandbox(config, profile.defaults)] : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
     // Sized from the Docker (or Podman) VM when it answers, as a real run is, so --dry-run shows
@@ -725,6 +723,11 @@ async function executeRun(
       insights: await planInsights(config, setup.insights),
     })
     plan.runId = runId
+    if (plan.insights) {
+      const { analysisKeyProblem } = await import('./analysis/model.ts')
+      const problem = analysisKeyProblem(config)
+      if (problem) plan.warnings.push(`insights will be skipped: ${problem}`)
+    }
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]
     const { imageStages, imageTargets } = await import('./sandbox/images.ts')
@@ -804,7 +807,7 @@ async function executeRun(
     })
     if (missing.length) {
       throw new UsageError(
-        `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
+        `Missing credentials: ${missing.join('; ')}. Set them in the environment or .env.local.`,
       )
     }
     const malformed = malformedCredentials(config, process.env, {
@@ -835,7 +838,7 @@ async function executeRun(
         },
       })
     }
-    const { prepareWorkspaces, workspaceKey } = await import('./workspace.ts')
+    const { prepareWorkspaces, sameTreeArms, workspaceKey } = await import('./workspace.ts')
     const live = skipped.filter((p) => !p.attempt.plan.skip)
     const outcomes = await prepareWorkspaces(
       live.flatMap(({ attempt: a }) =>
@@ -872,6 +875,9 @@ async function executeRun(
         state: 'failed',
         outcome: { target, ok: false, failure: o.failure, ms: 0 },
       })
+    }
+    for (const text of sameTreeArms(live, outcomes)) {
+      renderer.onEvent({ type: 'notice', at: Date.now(), level: 'warn', text })
     }
     try {
       sandboxVersions = await preflight(
@@ -939,7 +945,10 @@ async function executeRun(
           version,
           files,
           harness: (plan?.harnesses ?? config.harness.map(harnessId)).join(', '),
-          sandbox: sandboxId(config.sandbox),
+          sandbox: plannedSandboxes(
+            plan?.sandboxes ?? [],
+            profileSandbox(config, profile?.defaults),
+          ),
           concurrency,
           runId,
         })

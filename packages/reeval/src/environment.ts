@@ -40,6 +40,7 @@ import type {
   PluginBuild,
   PluginHelper,
   PluginPart,
+  ProfileDefaults,
   SandboxDescriptor,
   Secret,
   SecretHelper,
@@ -332,6 +333,26 @@ export const workspaceLabel = (w: Pick<GitWorkspace, 'repo' | 'ref' | 'path'>) =
 /** The workspace an attempt starts as: the last layer that sets one. */
 export const workspaceOf = (layers: readonly EnvironmentLayer[]): GitWorkspace | undefined =>
   layers.findLast((l) => l.spec.workspace)?.spec.workspace
+
+/**
+ * The workspace two environments both start from when, past the layers they share, each sets only
+ * `workspace` and it's the same repository, ref and path: two arms that can only run the same tree.
+ */
+export function sameWorkspaceOnly(
+  a: Pick<Environment, 'layers'>,
+  b: Pick<Environment, 'layers'>,
+): GitWorkspace | undefined {
+  const same = (x?: EnvironmentLayer, y?: EnvironmentLayer) =>
+    !!x && !!y && x.name === y.name && JSON.stringify(x.spec) === JSON.stringify(y.spec)
+  let shared = 0
+  while (same(a.layers[shared], b.layers[shared])) shared++
+  const own = [...a.layers.slice(shared), ...b.layers.slice(shared)]
+  const onlyWorkspace = (l: EnvironmentLayer) =>
+    Object.entries(l.spec).every(([k, v]) => k === 'workspace' || v === undefined)
+  if (!own.some((l) => l.spec.workspace) || !own.every(onlyWorkspace)) return undefined
+  const [x, y] = [workspaceOf(a.layers), workspaceOf(b.layers)]
+  return x && y && x.url === y.url && x.ref === y.ref && x.path === y.path ? x : undefined
+}
 
 /** The paths the layers' `files` write, sorted. */
 export const filesOf = (layers: readonly EnvironmentLayer[]): string[] =>
@@ -1330,6 +1351,19 @@ export const environmentSandbox = (
   env: Pick<Environment, 'layers'> | undefined,
   fallback: SandboxDescriptor,
 ): SandboxDescriptor => sandboxOf(env?.layers ?? [], fallback)
+
+/**
+ * The sandbox an eval naming none runs on: the environment's (the profile's, else the config's),
+ * else the profile's `defaults.sandbox`, else the config's.
+ */
+export const profileSandbox = (
+  config: { environment?: Environment; sandbox: SandboxDescriptor },
+  defaults: Pick<ProfileDefaults, 'environment' | 'sandbox'> | undefined,
+): SandboxDescriptor =>
+  environmentSandbox(
+    defaults?.environment ?? config.environment,
+    defaults?.sandbox ?? config.sandbox,
+  )
 
 function checkSandbox(value: unknown, where: string): asserts value is SandboxDescriptor {
   const kind = isObjectLike(value) ? value.kind : undefined

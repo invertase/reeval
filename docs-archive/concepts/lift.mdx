@@ -78,7 +78,7 @@ The Wilson interval stays sensible at 0/n and n/n, which is where small evals us
 
 Lift gates; the win rates of a [compare question](/guide/questions) only annotate, and never change a cell's outcome.
 
-Each judge key also has its own pass rate on the cell (`login 4/5 · checkout 0/5`) in the studio. A key's lift shows only when both sides have at least two counted attempts, the floor at which an all-or-nothing split can exclude 0.
+Each judge key also has its own pass rate on the cell (`login 4/5 · checkout 0/5`) in the studio. A key's lift shows only when both sides have at least four counted attempts, the same floor as the arm's effect.
 
 ## Why two runs is usually noise
 
@@ -95,7 +95,7 @@ The interval is wide when attempts are few. These are reeval's own intervals for
 | 10/10 | 5/10 | +50 | +12…+76 | no |
 | 20/20 | 10/20 | +50 | +24…+70 | no |
 
-At two runs per cell only an all-or-nothing difference clears noise, and reeval still says `can't tell yet` there: two tries a side is too few to call. The same eval at `--runs 2 -v`:
+At two runs per cell only an all-or-nothing difference clears noise, and reeval still says `can't tell yet` there: two tries a side is too few to call. Every view uses the same floor of four counted attempts a side, so `reeval query factor_effects`, `contrasts`, a judge key's lift and `reeval analyze` say `insufficient` where the run says `can't tell yet`. The same eval at `--runs 2 -v`:
 
 ```text
 pass             house greeting › greets in the house style
@@ -105,6 +105,8 @@ pass             house greeting › greets in the house style
     difference +100 points, 95% interval +7…+100
 …
 ```
+
+Four a side keeps the views agreeing; it doesn't make the stated 95% exact. Below about ten attempts a side, an `effect` can be a false positive more often than 1 time in 20: at 4 against 4, a 4/4 against 0/4 split happens by chance about 7% of the time when nothing changed.
 
 Lift only measures pass@1. A skill can also show up as fewer tool calls or less time, which the [effort table](#effort-next-to-lift) reports.
 
@@ -192,13 +194,13 @@ reeval query "SELECT eval_key, tools_median, separated FROM effort WHERE role = 
 
 ```text
 eval_key                                                    factor       tier        points  lo      hi     pass_verdict  effort_verdict
-evals/skill.eval.ts › house greeting › greets in the house…   environment  controlled  1       0.07    1      effect        insufficient
+evals/skill.eval.ts › house greeting › greets in the house…   environment  controlled  1       0.07    1      insufficient  insufficient
 …
 evals/skill.eval.ts › house greeting › greets in the house…   environment  pooled      1       0.307   1      effect        fewer
 ·                                                           harness      pooled      0       -0.436  0.436  noise         insufficient
 ```
 
-`reeval query factor_effects` contrasts one factor at a time (`environment`, `harness` or `model`), with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. Pooling is how two runs at a time add up to a verdict: each run's skill contrast is `insufficient` on effort, and the pooled one isn't.
+`reeval query factor_effects` contrasts one factor at a time (`environment`, `harness` or `model`), with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. Pooling is how two runs at a time add up to a verdict: each run's skill contrast is `insufficient` on pass rate and effort, and the pooled one isn't.
 
 | `tier` | The contrast |
 |---|---|

@@ -1,9 +1,11 @@
 // Egress policies as the plan sees them: which one an attempt runs under, the hosts a restricted
 // one allows on its own, and whether its sandbox can enforce it.
+import { isIP } from 'node:net'
 import {
   DOCKER_EGRESS,
   type EgressCapabilities,
   HARNESS_HOSTS,
+  type NetworkPolicy,
   PACKAGE_HOSTS,
 } from '@reeval/sandbox-docker'
 import { localPluginServers } from './environment/plugins.ts'
@@ -86,6 +88,19 @@ export function plannedEgress(
 export function allowedHosts({ policy, auto }: PlannedEgress): string[] | null {
   if (!isRestricted(policy)) return null
   return [...new Set([...(policy === 'deny-all' ? [] : policy.allow), ...auto])]
+}
+
+/**
+ * The policy the Docker sandbox's gateway enforces: `deny-all` when a restricted policy allows no
+ * host at all, else an allowlist. A listed IP address is an allowed range too, since the gateway
+ * reaches a private address only through one.
+ */
+export function gatewayPolicy(planned: PlannedEgress): NetworkPolicy {
+  const hosts = allowedHosts(planned)
+  if (hosts === null) return { mode: 'allow-all' }
+  if (!hosts.length) return { mode: 'deny-all' }
+  const cidrs = hosts.filter((h) => isIP(h)).map((h) => `${h}/${isIP(h) === 6 ? 128 : 32}`)
+  return { mode: 'custom', allowedHosts: hosts, ...(cidrs.length ? { allowedCIDRs: cidrs } : {}) }
 }
 
 /** What enforcing the policy takes: nothing, turning egress off, or a host allowlist. */

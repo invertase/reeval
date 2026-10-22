@@ -123,62 +123,87 @@ export function scrubHeaders(subs: readonly Substitution[], headers: Headers): H
   )
 }
 
+type Pairs = Array<[Buffer, Buffer]>
+
+const bufferPairs = (pairs: ReadonlyArray<readonly [string, string]>): Pairs =>
+  pairs
+    .filter(([from]) => from.length > 0)
+    .map(([from, to]) => [Buffer.from(from), Buffer.from(to)])
+
 /**
- * Replaces byte strings in a stream, including across chunk boundaries: it holds back the
- * longest `from` less one byte, so a match split between chunks is still found.
+ * Replaces every whole match in `data` (original bytes only: output is never re-scanned), and
+ * returns where the unscanned tail starts: `data.length` when `final`, else the start of the
+ * shortest tail that could begin a match, so only bytes a later chunk might complete are held.
+ */
+function scan(
+  pairs: Pairs,
+  data: Buffer,
+  final: boolean,
+): { out: Buffer; rest: number; count: number } {
+  const parts: Buffer[] = []
+  let pos = 0
+  let count = 0
+  for (;;) {
+    let best = -1
+    let pair: [Buffer, Buffer] | undefined
+    for (const p of pairs) {
+      const i = data.indexOf(p[0], pos)
+      if (i !== -1 && (best === -1 || i < best)) {
+        best = i
+        pair = p
+      }
+    }
+    if (best === -1 || !pair) break
+    parts.push(data.subarray(pos, best), pair[1])
+    pos = best + pair[0].length
+    count++
+  }
+  let rest = data.length
+  if (!final) {
+    const hold = Math.max(0, ...pairs.map(([from]) => from.length - 1))
+    for (let i = Math.max(pos, data.length - hold); i < data.length; i++) {
+      const tail = data.subarray(i)
+      if (pairs.some(([from]) => from.subarray(0, tail.length).equals(tail))) {
+        rest = i
+        break
+      }
+    }
+  }
+  parts.push(data.subarray(pos, rest))
+  return { out: Buffer.concat(parts), rest, count }
+}
+
+/** `data` with every `from` replaced by its `to`, in one pass. */
+export const replaceAll = (data: Buffer, pairs: ReadonlyArray<readonly [string, string]>) =>
+  scan(bufferPairs(pairs), data, true).out
+
+/**
+ * Replaces byte strings in a stream, including across chunk boundaries: it holds back a chunk's
+ * tail while it could be the start of a match, so a match split between chunks is still found.
  */
 export class ReplaceStream extends Transform {
-  #pairs: Array<[Buffer, Buffer]>
-  #hold: number
+  #pairs: Pairs
   #tail = Buffer.alloc(0)
   /** How many replacements were made. */
   count = 0
 
   constructor(pairs: ReadonlyArray<readonly [string, string]>) {
     super()
-    this.#pairs = pairs
-      .filter(([from]) => from.length > 0)
-      .map(([from, to]) => [Buffer.from(from), Buffer.from(to)])
-    this.#hold = Math.max(0, ...this.#pairs.map(([from]) => from.length - 1))
-  }
-
-  /**
-   * Replaces every whole match in `data` (original bytes only: output is never re-scanned), and
-   * returns where the unscanned tail starts, which is `data.length` when `final`.
-   */
-  #scan(data: Buffer, final: boolean): { out: Buffer; rest: number } {
-    const parts: Buffer[] = []
-    let pos = 0
-    for (;;) {
-      let best = -1
-      let pair: [Buffer, Buffer] | undefined
-      for (const p of this.#pairs) {
-        const i = data.indexOf(p[0], pos)
-        if (i !== -1 && (best === -1 || i < best)) {
-          best = i
-          pair = p
-        }
-      }
-      if (best === -1 || !pair) break
-      parts.push(data.subarray(pos, best), pair[1])
-      pos = best + pair[0].length
-      this.count++
-    }
-    const rest = final ? data.length : Math.max(pos, data.length - this.#hold)
-    parts.push(data.subarray(pos, rest))
-    return { out: Buffer.concat(parts), rest }
+    this.#pairs = bufferPairs(pairs)
   }
 
   override _transform(chunk: Buffer, _enc: BufferEncoding, done: TransformCallback): void {
     const data = Buffer.concat([this.#tail, chunk])
-    const { out, rest } = this.#scan(data, false)
+    const { out, rest, count } = scan(this.#pairs, data, false)
+    this.count += count
     this.#tail = Buffer.from(data.subarray(rest))
     if (out.length) this.push(out)
     done()
   }
 
   override _flush(done: TransformCallback): void {
-    const { out } = this.#scan(this.#tail, true)
+    const { out, count } = scan(this.#pairs, this.#tail, true)
+    this.count += count
     if (out.length) this.push(out)
     done()
   }

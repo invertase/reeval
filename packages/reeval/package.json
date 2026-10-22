@@ -79,9 +79,11 @@
     "test:replay": "node --test --experimental-strip-types --no-warnings test/replay.test.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.83",
     "@ai-sdk/google": "4.0.100",
     "@ai-sdk/harness": "1.0.156",
     "@ai-sdk/harness-acp": "1.0.95",
+    "@ai-sdk/openai": "4.0.97",
     "@ai-sdk/provider": "4.0.30",
     "@ai-sdk/provider-utils": "5.0.63",
     "@ai-sdk/typesafe-ai": "3.0.22",
@@ -109,7 +111,7 @@
     "@reeval/harness-cursor-sdk": "workspace:0.1.6",
     "@reeval/harness-fx": "workspace:0.1.0",
     "@reeval/harness-goose": "workspace:0.1.3",
-    "@reeval/harness-grok-build": "workspace:0.1.1",
+    "@reeval/harness-grok-build": "workspace:0.1.2",
     "@reeval/harness-opencode": "workspace:0.2.9",
     "@reeval/harness-pi": "workspace:0.2.7",
     "@reeval/sandbox-docker": "workspace:*",

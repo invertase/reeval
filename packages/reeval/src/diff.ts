@@ -14,7 +14,8 @@ const GIT =
 // can't make reeval's privileged git run its code through a planted `~/.gitconfig` (an fsmonitor,
 // a `filter.*.clean`, a diff `textconv`) or weaken it with `safe.directory`. Hooks are off too.
 const snapshotEnv = (sandbox: Sandbox) =>
-  `export GIT_DIR=${shellQuote(`${sandbox.stateDir}/workspace.git`)} GIT_WORK_TREE="$PWD"` +
+  `export GIT_DIR=${shellQuote(`${sandbox.stateDir}/workspace.git`)}` +
+  ` GIT_WORK_TREE=${shellQuote(sandbox.workdir)}` +
   ' GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null'
 
 /** Points HEAD at a commit of `$tree` with no parent, then drops every object nothing reaches. */

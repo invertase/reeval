@@ -1,7 +1,7 @@
 name: Sandbox images
 description: >
   Loads reeval's sandbox image for every baked harness (Cursor's, Claude Code's, Antigravity's, OpenCode's, Goose's, pi's, Codex's, fx's, Grok Build's) from
-  the Actions cache, or builds them and caches them as one zstd tarball. Needs pnpm build first.
+  the Actions cache, or builds them (and, on main, caches them). Needs pnpm build first.
 runs:
   using: composite
   steps:
@@ -15,22 +15,48 @@ runs:
         echo "Sandbox images: $images"
     # The tag pins each adapter, whose bootstrap pins the CLI, but @ai-sdk/harness does the
     # baking, so the key is the adapters, the files that pin and install each CLI, the pnpm
-    # patches to them, sandbox-docker's pin of @ai-sdk/harness and the build context. `actions/cache` saves the
-    # tarball when the job ends.
+    # patches to them, sandbox-docker's pin of @ai-sdk/harness and the build context. Only main
+    # saves it (below): a PR that changes the key rebuilds instead of saving its own ~900 MB copy.
     - id: cache
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/reeval-sandbox-images.tar.zst
-        key: reeval-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'pnpm-workspace.yaml', 'patches/**', 'packages/harness-antigravity/package.json', 'packages/harness-antigravity/src/antigravity-bootstrap.ts', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-pi/src/pi-bootstrap.ts', 'packages/harness-codex/package.json', 'packages/harness-codex/src/codex-bootstrap.ts', 'packages/harness-grok-build/package.json', 'packages/harness-grok-build/src/grok-build-harness.ts', 'packages/harness-fx/package.json', 'packages/harness-fx/src/fx-harness.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
-    - if: steps.cache.outputs.cache-hit == 'true'
-      shell: bash
-      run: zstd -dc "$RUNNER_TEMP/reeval-sandbox-images.tar.zst" | docker load
-    - if: steps.cache.outputs.cache-hit != 'true'
-      shell: bash
+        path: ${{ runner.temp }}/reeval-sandbox-registry
+        key: reeval-sandbox-registry-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'pnpm-workspace.yaml', 'patches/**', 'packages/harness-antigravity/package.json', 'packages/harness-antigravity/src/antigravity-bootstrap.ts', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-pi/src/pi-bootstrap.ts', 'packages/harness-codex/package.json', 'packages/harness-codex/src/codex-bootstrap.ts', 'packages/harness-grok-build/package.json', 'packages/harness-grok-build/src/grok-build-harness.ts', 'packages/harness-fx/package.json', 'packages/harness-fx/src/fx-harness.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
+    # The cache holds a registry's storage, served from the runner for the length of this step:
+    # `docker pull` unpacks layers in parallel where `docker load` unpacks one at a time, so the
+    # nine images take about 22 s against about 40 s from a `docker save` tarball. Only the
+    # reeval-sandbox:* tags are left behind.
+    - shell: bash
       env:
         IMAGES: ${{ steps.images.outputs.list }}
+        HIT: ${{ steps.cache.outputs.cache-hit }}
+        SAVE: ${{ github.ref == 'refs/heads/main' }}
+        REGISTRY_IMAGE: registry:2@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
       run: |
-        node --input-type=module -e "
-          import { BAKED_HARNESSES, buildImage } from './packages/sandbox-docker/dist/index.js'
-          for (const harness of BAKED_HARNESSES) await buildImage(console.log, { harness })"
-        docker save $IMAGES | zstd -T0 -3 -q -f -o "$RUNNER_TEMP/reeval-sandbox-images.tar.zst"
+        set -euo pipefail
+        if [ "$HIT" != true ]; then
+          node --input-type=module -e "
+            import { BAKED_HARNESSES, buildImage } from './packages/sandbox-docker/dist/index.js'
+            for (const harness of BAKED_HARNESSES) await buildImage(console.log, { harness })"
+          [ "$SAVE" = true ] || exit 0
+        fi
+        registry=localhost:5000
+        docker run -d --name reeval-registry -p 5000:5000 \
+          -v "$RUNNER_TEMP/reeval-sandbox-registry:/var/lib/registry" "$REGISTRY_IMAGE" >/dev/null
+        timeout 30 sh -c "until curl -fs http://$registry/v2/ >/dev/null; do sleep 0.2; done"
+        each() {
+          local pids=() pid
+          for image in $IMAGES; do "$@" "$image" & pids+=($!); done
+          for pid in "${pids[@]}"; do wait "$pid"; done
+        }
+        pull() { docker pull -q "$registry/$1" >/dev/null && docker tag "$registry/$1" "$1" && docker rmi -f "$registry/$1" >/dev/null; }
+        push() { docker tag "$1" "$registry/$1" && docker push -q "$registry/$1" >/dev/null && docker rmi -f "$registry/$1" >/dev/null; }
+        if [ "$HIT" = true ]; then each pull; else each push; fi
+        docker rm -f reeval-registry >/dev/null
+        docker rmi "$REGISTRY_IMAGE" >/dev/null
+        docker images reeval-sandbox
+    - if: steps.cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/reeval-sandbox-registry
+        key: ${{ steps.cache.outputs.cache-primary-key }}

@@ -11,7 +11,6 @@ import {
   engineSpec,
   imageInfo,
   LABEL,
-  type NetworkPolicy,
   SANDBOX_HOME,
   SANDBOX_ROOT,
   SANDBOX_STATE,
@@ -20,8 +19,8 @@ import {
 } from '@reeval/sandbox-docker'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
-import { allowedHosts, egressLabel } from '../egress.ts'
-import type { DockerSandboxDescriptor, PlannedEgress } from '../types.ts'
+import { egressLabel, gatewayPolicy } from '../egress.ts'
+import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
@@ -46,13 +45,6 @@ export async function removeRunContainers(
 export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandboxSession }
 
 export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in s
-
-/** `deny-all` when a restricted policy allows no host at all, else an allowlist. */
-function networkPolicy(egress: PlannedEgress): NetworkPolicy {
-  const hosts = allowedHosts(egress)
-  if (hosts === null) return { mode: 'allow-all' }
-  return hosts.length ? { mode: 'custom', allowedHosts: hosts } : { mode: 'deny-all' }
-}
 
 /**
  * The gateway's events as debug lines: one per request, with DNS decisions and headers traced.
@@ -105,7 +97,7 @@ export async function createDockerSandbox(
     ...new Set([...(brokering ? [brokering.credential] : []), ...substitutions.map((s) => s.name)]),
   ]
   const debug = attemptDebug()
-  const policy = networkPolicy(options.egress)
+  const policy = gatewayPolicy(options.egress)
   const served: string[] = []
   const servedModel = brokering?.servedModel
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
@@ -187,15 +179,8 @@ export async function createDockerSandbox(
   // A root container's agent is root too, and could swap the binaries a privileged exec runs.
   const execOwn: Sandbox['execOwn'] = async (command, opts) =>
     root
-      ? network.run({ command, workingDirectory: workdir, abortSignal: opts?.signal })
-      : network.runPrivileged({ command, workingDirectory: workdir, abortSignal: opts?.signal })
-  const state = await execOwn(
-    `mkdir -p ${SANDBOX_STATE} && chown 0:0 ${SANDBOX_STATE} && chmod 700 ${SANDBOX_STATE}`,
-  )
-  if (state.exitCode !== 0) {
-    await Promise.resolve(network.destroy()).catch(() => {})
-    throw new InfraError(`Couldn't create ${SANDBOX_STATE} in the sandbox: ${state.stderr.trim()}`)
-  }
+      ? network.run({ command, workingDirectory: SANDBOX_STATE, abortSignal: opts?.signal })
+      : network.runPrivileged({ command, abortSignal: opts?.signal })
 
   return {
     workdir,

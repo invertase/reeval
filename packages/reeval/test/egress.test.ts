@@ -8,6 +8,7 @@ import {
   DEFAULT_EGRESS_ALLOW,
   egressLabel,
   egressNeeds,
+  gatewayPolicy,
   plannedEgress,
   SANDBOX_EGRESS,
   unenforceable,
@@ -117,6 +118,22 @@ describe('automatic hosts', () => {
       auto: [],
     })
     assert.equal(allowedHosts({ policy: 'allow-all', auto: [] }), null)
+  })
+
+  test("the gateway's policy: listed IP addresses are its allowed ranges too", () => {
+    const auto = ['api2.cursor.sh']
+    assert.deepEqual(gatewayPolicy({ policy: { allow: ['10.1.2.3', 'db.internal'] }, auto }), {
+      mode: 'custom',
+      allowedHosts: ['10.1.2.3', 'db.internal', 'api2.cursor.sh'],
+      allowedCIDRs: ['10.1.2.3/32'],
+    })
+    // Twin: without an address there are no ranges, and the other policies map as they are.
+    assert.deepEqual(gatewayPolicy({ policy: { allow: ['db.internal'] }, auto }), {
+      mode: 'custom',
+      allowedHosts: ['db.internal', 'api2.cursor.sh'],
+    })
+    assert.deepEqual(gatewayPolicy({ policy: 'deny-all', auto: [] }), { mode: 'deny-all' })
+    assert.deepEqual(gatewayPolicy({ policy: 'allow-all', auto: [] }), { mode: 'allow-all' })
   })
 
   test('DEFAULT_EGRESS_ALLOW is the registries and GitHub, and frozen', () => {

@@ -69,6 +69,45 @@ export const onEndpoint = (endpoints: readonly EndpointMatch[], request: Outboun
 export const decrypts = (rules: readonly RequestTransformation[], host: string) =>
   rules.some((r) => normaliseHost(r.match.host) === normaliseHost(host))
 
+/** What a credential the sandbox never sent comes back as. */
+const REDACTED = 'reeval_redacted_credential'
+/** Shorter values aren't credentials, and scrubbing them would mangle ordinary text. */
+const MIN_CREDENTIAL = 16
+
+const schemeAndToken = (value: string) => /^([A-Za-z][\w-]*) +(\S+)$/.exec(value)
+
+/**
+ * The values credential rules for `host` set (rules keyed on a header the sandbox sends, such as
+ * a placeholder key), each paired with what the sandbox sent in its place, for scrubbing from
+ * responses. A value with a scheme (`Bearer <key>`) is paired as a whole and by its token too.
+ */
+export function credentialValues(
+  rules: readonly RequestTransformation[],
+  host: string,
+): Array<[value: string, shown: string]> {
+  const pairs = new Map<string, string>()
+  const add = (value: string, shown: string) => {
+    if (value.length >= MIN_CREDENTIAL && value !== shown && !pairs.has(value)) {
+      pairs.set(value, shown)
+    }
+  }
+  for (const rule of rules) {
+    const keyed = rule.match.headers ?? []
+    if (!keyed.length || normaliseHost(rule.match.host) !== normaliseHost(host)) continue
+    for (const [name, value] of Object.entries(rule.transform.headers)) {
+      const sent = keyed.find(
+        (m) => m.key && 'exact' in m.key && m.key.exact.toLowerCase() === name.toLowerCase(),
+      )?.value
+      const shown = sent && 'exact' in sent ? sent.exact : REDACTED
+      add(value, shown)
+      const token = schemeAndToken(value)
+      const shownToken = schemeAndToken(shown)
+      if (token?.[2]) add(token[2], shownToken?.[2] ?? REDACTED)
+    }
+  }
+  return [...pairs]
+}
+
 /**
  * The request's headers after every matching rule, in order, so later rules win. Returns the
  * (lower-case) names that were replaced, for logging without values. With `endpoints`, no rule

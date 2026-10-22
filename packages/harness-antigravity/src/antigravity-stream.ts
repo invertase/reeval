@@ -21,6 +21,7 @@ export type AntigravityResult = {
   error?: string
   duration_seconds?: number
   num_turns?: number
+  /** The conversation's running total, every earlier turn's steps included, not this turn's. */
   usage?: AntigravityUsage
   structured_output?: JSONValue
 }
@@ -98,6 +99,22 @@ export function toUsage(usage: AntigravityUsage | undefined): Usage {
   }
 }
 
+const USAGE_KEYS = [
+  'input_tokens',
+  'output_tokens',
+  'thinking_tokens',
+  'cache_read_tokens',
+  'total_tokens',
+] as const
+
+const addUsage = (a: AntigravityUsage | undefined, b: AntigravityUsage): AntigravityUsage => {
+  const sum: AntigravityUsage = { ...a }
+  for (const key of USAGE_KEYS) {
+    if (b[key] !== undefined) sum[key] = (sum[key] ?? 0) + b[key]
+  }
+  return sum
+}
+
 const FINISH: Record<string, FinishReason['unified']> = {
   SUCCESS: 'stop',
   ERROR: 'error',
@@ -131,11 +148,16 @@ export class AntigravityStreamTranslator {
   >()
   private pendingStep: AntigravityUsage | undefined
   private stepUsage = false
+  /** The tokens of this turn's steps: the result's usage counts every earlier turn too. */
+  private turnUsage: AntigravityUsage | undefined
   private readonly turn: number
+  /** A resumed conversation's result counts turns before this process. */
+  private readonly resumed: boolean
 
   constructor(options: { turn: number; conversationId?: string | undefined }) {
     this.turn = options.turn
     this.conversationId = options.conversationId
+    this.resumed = options.conversationId !== undefined
   }
 
   /** Parts for one stdout line. Lines that aren't JSON events are passed through as raw. */
@@ -223,6 +245,7 @@ export class AntigravityStreamTranslator {
 
   private flushStep(parts: HarnessV1StreamPart[], next: 'tool-calls' | 'stop') {
     if (!this.pendingStep) return
+    this.turnUsage = addUsage(this.turnUsage, this.pendingStep)
     parts.push({
       type: 'finish-step',
       finishReason: { unified: next, raw: 'agent_response' },
@@ -276,7 +299,10 @@ export class AntigravityStreamTranslator {
     this.flushStep(parts, 'stop')
     if (retried) this.retried = true
     if (!retried && !f.usage) return
-    if (f.usage) this.stepUsage = true
+    if (f.usage) {
+      this.stepUsage = true
+      this.turnUsage = addUsage(this.turnUsage, f.usage)
+    }
     parts.push({
       type: 'finish-step',
       finishReason: { unified: retried ? 'error' : 'other', raw: 'error_message' },
@@ -344,7 +370,9 @@ export class AntigravityStreamTranslator {
       parts.push({ type: 'text-end', id: 'text-result' })
     }
     this.closeBlocks(parts)
-    if (!this.stepUsage && r.usage) {
+    // With no step's tokens, a fresh conversation's running total is this turn's alone.
+    if (!this.stepUsage && r.usage && !this.resumed) {
+      this.turnUsage = r.usage
       parts.push({
         type: 'finish-step',
         finishReason: { unified: 'stop', raw: 'result' },
@@ -362,7 +390,7 @@ export class AntigravityStreamTranslator {
     parts.push({
       type: 'finish',
       finishReason: { unified: FINISH[status] ?? 'other', raw: status },
-      totalUsage: toUsage(r.usage),
+      totalUsage: toUsage(this.turnUsage),
       ...(r.structured_output !== undefined
         ? { harnessMetadata: { antigravity: { structuredOutput: r.structured_output } } }
         : {}),

@@ -1,0 +1,137 @@
+# Compiles reeval into standalone binaries with Bun, all cross-compiled on one Linux runner, then
+# smoke-tests each on its own OS from an empty directory (scripts/binary-smoke.mjs). Uploads the
+# binaries and SHA256SUMS as one artifact, `reeval-<version>-binaries`.
+name: binary
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      version:
+        description: The version the binaries were built from
+        value: ${{ jobs.compile.outputs.version }}
+      artifact:
+        description: The artifact holding the binaries and SHA256SUMS
+        value: ${{ jobs.compile.outputs.artifact }}
+  pull_request:
+    paths:
+      - .github/workflows/binary.yml
+      - scripts/bun-compile.mjs
+      - scripts/binary-smoke.mjs
+      - packages/reeval/src/root.ts
+      - packages/reeval/src/bin.ts
+      - packages/reeval/src/jiti.ts
+      - packages/reeval/src/engine/pool.ts
+      - packages/reeval/src/engine/worker-entry.ts
+      - packages/reeval/src/studio/index.ts
+      - packages/reeval/tsdown.config.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BUN_VERSION: 1.4.2
+
+jobs:
+  compile:
+    name: compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact: reeval-${{ steps.version.outputs.version }}-binaries
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: pnpm build
+      - id: version
+        run: echo "version=$(node -p "require('./packages/reeval/package.json').version")" >> "$GITHUB_OUTPUT"
+      # This runner's own target also runs bun-compile's checks against Node; the rest compile only.
+      - name: bun build --compile
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p out
+          for target in linux-x64 linux-arm64 linux-x64-musl linux-arm64-musl darwin-x64 darwin-arm64 windows-x64; do
+            name="reeval-$VERSION-$target"
+            case $target in windows-*) name="$name.exe" ;; esac
+            echo "::group::$target"
+            start=$SECONDS
+            node scripts/bun-compile.mjs --target "bun-$target" --outfile "out/$name"
+            echo "$target: $((SECONDS - start))s"
+            echo "::endgroup::"
+          done
+          cd out
+          sha256sum reeval-* > SHA256SUMS
+          {
+            echo "| Binary | Size |"
+            echo "|---|---|"
+            for f in reeval-*; do echo "| \`$f\` | $(du -h "$f" | cut -f1) |"; done
+          } >> "$GITHUB_STEP_SUMMARY"
+          ls -l
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reeval-${{ steps.version.outputs.version }}-binaries
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
+
+  # No pnpm install and no build: the runner's preinstalled Node drives the binary.
+  smoke:
+    name: smoke (${{ matrix.target }})
+    needs: compile
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x64, os: ubuntu-24.04, flags: --docker }
+          - { target: linux-arm64, os: ubuntu-24.04-arm }
+          - { target: linux-x64-musl, os: ubuntu-24.04, alpine: true }
+          - { target: linux-arm64-musl, os: ubuntu-24.04-arm, alpine: true }
+          - { target: darwin-arm64, os: macos-15 }
+          - { target: darwin-x64, os: macos-15-intel }
+          - { target: windows-x64, os: windows-2025, ext: .exe }
+    steps:
+      # Only what the smoke test reads; the full tree has paths past Windows' 260 characters.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            examples/hello
+            packages/reeval/test/features/egress/blocked-host-recorded
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.compile.outputs.artifact }}
+          path: out
+      - name: Verify SHA256SUMS
+        shell: bash
+        working-directory: out
+        run: |
+          if command -v sha256sum >/dev/null; then sha256sum -c --ignore-missing SHA256SUMS
+          else shasum -a 256 -c --ignore-missing SHA256SUMS; fi
+      - if: ${{ !matrix.alpine }}
+        shell: bash
+        env:
+          BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}${{ matrix.ext }}
+          FLAGS: ${{ matrix.flags }}
+        run: node scripts/binary-smoke.mjs "$BINARY" $FLAGS
+      # musl: Alpine, with git (which reeval needs) and Node to drive the binary.
+      - if: ${{ matrix.alpine }}
+        env:
+          BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo -e BINARY node:22-alpine \
+            sh -c 'apk add -q git && node scripts/binary-smoke.mjs "$BINARY"'
