@@ -1,0 +1,143 @@
+---
+title: "Evaluate many cases"
+description: "Run the same evaluation over a list of cases and read one pooled result."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Cases)
+[//]: # (owns: evaluate.each; name templates; pool and families)
+[//]: # (excludes: how a family's effect is reached -> /comparisons/statistics#cases-as-pairs)
+[//]: # (excludes: how cases multiply attempts -> /core-concepts#run)
+[//]: # (excludes: evaluate.each signature -> /reference/api#evaluateeach)
+[//]: # (inbound: every page via the sidebar, /comparisons/statistics, /recipes/recommendation)
+[//]: # (outbound: /reference/api#evaluateeach, /core-concepts#run, /history/queries, /comparisons/statistics#cases-as-pairs, /quickstart)
+
+The `evaluate.each()` function turns an array of cases into one evaluation per case. Every case shares one prompt, one set of options, and one body. Two or more cases pool into a family, which reports one pass rate and, with `compare`, one effect over all of them. For more information about how cases multiply cells and attempts, see [Core concepts](/core-concepts#run).
+
+This page uses the `plain` and `withShoehorn` environments from [Quick start](/quickstart), with the `getUserEmail` and `getUserRole` handlers added beside `getUserId` in the `src/user.ts` file.
+
+<Steps>
+<Step title="Declare the evaluations">
+
+In the `evals/shoehorn.eval.ts` file, declare one evaluation per handler. For more information about the arguments `evaluate.each()` takes, see [Authoring API](/reference/api#evaluateeach).
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain, withShoehorn } from './environments.ts'
+
+const handlers = ['getUserId', 'getUserEmail', 'getUserRole']
+
+evaluate.each(handlers)(
+  'tests %s with only the request fields it reads',
+  { compare: { baseline: plain, variants: [withShoehorn] } },
+  async (c, handler) => {
+    await c.send(`Add a Vitest test for ${handler} in src/${handler}.test.ts.`)
+    await expect(c, 'uses fromPartial').toHaveFile(
+      `src/${handler}.test.ts`,
+      /fromPartial(<\w+>)?\(/,
+    )
+  },
+)
+```
+
+Each case is an evaluation with its own name, such as `tests getUserId with only the request fields it reads`, and its own history.
+
+</Step>
+<Step title="Name the object cases">
+
+In the `evals/shoehorn.eval.ts` file, name each case from its properties. The name is a template, and each case's name must differ, or reeval refuses the file. `%s` is the case, `%#` is its index from 0, and `$key` is a property of an object case. A string case prints as itself, and an object case prints as JSON.
+
+```ts title="evals/shoehorn.eval.ts"
+const handlers = [
+  { fn: 'getUserId', reads: 'params' },
+  { fn: 'getUserEmail', reads: 'body' },
+  { fn: 'getUserRole', reads: 'headers' },
+]
+// ...
+  'tests $fn and reads only req.$reads',
+// ...
+  async (c, { fn }) => {
+```
+
+The template is the family's name, so renaming it starts the history of every case again.
+
+</Step>
+<Step title="Run the evaluation">
+
+From your project, run the evaluation. reeval pools two or more cases into a family by default. The result prints the template as a heading, a row per case, and an `all cases` row that sums each cell's counts.
+
+```bash
+npx reeval run shoehorn
+```
+
+The three cases print one block. Your counts can differ, and the block uses this format:
+
+```text
+                 tests $fn and reads only req.$reads
+  pass  getUserId and reads only req.params
+    arm            pass
+    plain          0 of 1
+    with-shoehorn  1 of 1
+  pass  getUserEmail and reads only req.body
+    arm            pass
+    plain          0 of 1
+    with-shoehorn  1 of 1
+  pass  getUserRole and reads only req.headers
+    arm            pass
+    plain          0 of 1
+    with-shoehorn  1 of 1
+  pass  all cases
+    arm            pass
+    plain          0 of 3
+    with-shoehorn  3 of 3  can't tell yet
+```
+
+For more information about how reeval reaches the family's effect, see [Statistics](/comparisons/statistics#cases-as-pairs).
+
+</Step>
+<Step title="Add more handlers">
+
+In the `evals/shoehorn.eval.ts` file, add three more handlers to the `handlers` array. The `all cases` row then reads an effect:
+
+```text
+  pass  all cases
+    arm            pass
+    plain          0 of 6
+    with-shoehorn  6 of 6  helped
+```
+
+`compare.minLift` gates the family's pooled lift, not each case's. A case still fails on its own checks, and a failed case fails the family. The `family_lift` view lists every family's pooled lift across recorded runs. For more information about running a view, see [Queries](/history/queries).
+
+</Step>
+<Step title="Verify the run plan">
+
+With the `reeval run --dry-run` command, plan the run without starting a sandbox or a harness:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `plan` line counts one evaluation per case:
+
+```text
+plan  run … · 6 evals · 12 cells · 12 attempts · …
+```
+
+The table below the `plan` line lists the family by its template, with `6 cases · paired lift` in its `notes` column.
+
+</Step>
+</Steps>
+
+## Keep the cases independent
+
+To keep the cases independent, pass `{ pool: false }` beside the cases:
+
+```ts title="evals/shoehorn.eval.ts"
+evaluate.each(handlers, { pool: false })(
+```
+
+Each case then gates alone and prints its own block, and the result has no `all cases` row. The dry-run table lists each case on its own row and the `notes` column is empty.
+
+## Reference
+
+For more information about every argument `evaluate.each()` takes, see [Authoring API](/reference/api#evaluateeach).
