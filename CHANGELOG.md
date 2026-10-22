@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.12.0](https://github.com/invertase/reeval/compare/v0.11.0...v0.12.0) (2026-10-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **insights:** classify and explain each eval at the end of reeval run ([#451](https://github.com/invertase/reeval/issues/451))
+* **cli:** scaffold an environment, add --bare and a docker check to init ([#444](https://github.com/invertase/reeval/issues/444))
+* **compare:** print reeval compare as the catch-regressions layout ([#425](https://github.com/invertase/reeval/issues/425))
+
+### Features
+
+* **cli:** scaffold an environment, add --bare and a docker check to init ([#444](https://github.com/invertase/reeval/issues/444)) ([3f97710](https://github.com/invertase/reeval/commit/3f97710cf255120745c8000bd8349fe5113af7bc))
+* **compare:** print reeval compare as the catch-regressions layout ([#425](https://github.com/invertase/reeval/issues/425)) ([185eb94](https://github.com/invertase/reeval/commit/185eb943c5d65d2475ca9394a4ac5bf2e4454b91))
+* **environment:** plugin builds ([#437](https://github.com/invertase/reeval/issues/437)) ([7f9e255](https://github.com/invertase/reeval/commit/7f9e255e152f47d944b9af1ecced7597a3aa2bcd))
+* **environment:** plugins input ([#435](https://github.com/invertase/reeval/issues/435)) ([9186e05](https://github.com/invertase/reeval/commit/9186e051f2a3603411186e72db5148c8dd66a8a8))
+* **harness:** plugins on Claude Code and Grok Build ([#439](https://github.com/invertase/reeval/issues/439)) ([687e5a8](https://github.com/invertase/reeval/commit/687e5a8897a1ecdd61e7c5930185e91c563a24a6))
+* **init:** set analysis.model in the generated config, warn in doctor when it's unset, and document insights and remarks ([#459](https://github.com/invertase/reeval/issues/459)) ([f4e5d1f](https://github.com/invertase/reeval/commit/f4e5d1f8e6a366e3ee9e537596c55353c27123e9))
+* **insights:** classify and explain each eval at the end of reeval run ([#451](https://github.com/invertase/reeval/issues/451)) ([5c21e46](https://github.com/invertase/reeval/commit/5c21e462a968dae7c8af4d41e382ac7e882d3d46))
+* **insights:** write a recorded run's insights with reeval analyze --insights, and print them in reeval show ([#426](https://github.com/invertase/reeval/issues/426)) ([cfcd501](https://github.com/invertase/reeval/commit/cfcd501824f75e6cd6e0bcd2f4047dd09c73323b))
+* **mcp:** time server start-up ([#434](https://github.com/invertase/reeval/issues/434)) ([1361bae](https://github.com/invertase/reeval/commit/1361baec822c17e2dbe2e7cbf8ae4e94e05772cb))
+* **plugins:** plugin.marketplace, and plugins on Codex, Goose, Antigravity, Cursor, OpenCode, pi and fx ([#455](https://github.com/invertase/reeval/issues/455)) ([f0d9a9a](https://github.com/invertase/reeval/commit/f0d9a9a6f4b2558d3bada21950ebb536205a5354))
+* **remarks:** end reeval run with deterministic remarks on the evals themselves ([#450](https://github.com/invertase/reeval/issues/450)) ([7aa8b27](https://github.com/invertase/reeval/commit/7aa8b2783ebb101b3c3b41b6a7277720319178b5))
+* **remarks:** raise model remarks behind kind and quote gates, with the eval rubric, a flaky insight tier and a one-line skip ([#460](https://github.com/invertase/reeval/issues/460)) ([bd4ea8a](https://github.com/invertase/reeval/commit/bd4ea8a7ffbda4db4def98fd081e0aa71db7420c))
+* **test:** enforce plan-case tier for eval options in CI ([#376](https://github.com/invertase/reeval/issues/376)) ([d0dade0](https://github.com/invertase/reeval/commit/d0dade00ebc0d69031a44cf9d6de9545a7bc0aa2))
+
+
+### Bug Fixes
+
+* **claude-code:** turn off AskUserQuestion so the next turn can start ([#466](https://github.com/invertase/reeval/issues/466)) ([25247be](https://github.com/invertase/reeval/commit/25247be68170ff5e02d4f90e7104623251a153c5))
+* **cursor:** default fast to false so unpinned Cursor runs are standard-priced ([#467](https://github.com/invertase/reeval/issues/467)) ([0f3be6a](https://github.com/invertase/reeval/commit/0f3be6ac5cea190b2262f73ae44ee5889047fe89))
+* **history:** serialize concurrent history.db syncs with begin immediate ([#452](https://github.com/invertase/reeval/issues/452)) ([74ae40b](https://github.com/invertase/reeval/commit/74ae40bae2f32393ad2cf648c51784f6afb37f6b))
+* **insights:** refuse a headline that says all of a single result ([#465](https://github.com/invertase/reeval/issues/465)) ([f87d643](https://github.com/invertase/reeval/commit/f87d643e878b4feedc69f77657fe518707962d02))
+* **release:** open a release PR per package so a reeval-only release tags ([#432](https://github.com/invertase/reeval/issues/432)) ([3464ff6](https://github.com/invertase/reeval/commit/3464ff6d53e094200e5d18383f62a83c557dbc1d))
+* **remarks:** count a remark as seen only in a run that printed it, and find the default branch in ci ([#457](https://github.com/invertase/reeval/issues/457)) ([04d117c](https://github.com/invertase/reeval/commit/04d117c8e2ea8a69553dff8a821d8b1ede870567))
+* **results:** fence summary.md blocks past any backticks they carry ([#454](https://github.com/invertase/reeval/issues/454)) ([99fa22b](https://github.com/invertase/reeval/commit/99fa22b7e4a32dec3c72bb8598c988faff15508d))
+* **sandbox:** keep the diff's snapshot unreadable and free of pre-seed content ([#438](https://github.com/invertase/reeval/issues/438)) ([96129ee](https://github.com/invertase/reeval/commit/96129eeb76274aa79af9ac548a5369e99cb53053))
+* **sandbox:** run every exec with umask 022 ([#456](https://github.com/invertase/reeval/issues/456)) ([cebf376](https://github.com/invertase/reeval/commit/cebf376eaecfe4b07f9d8a0d54561507a873376a))
+* **stats:** mcnemar overflow, family rank ties, effort test direction and tied floor ([#463](https://github.com/invertase/reeval/issues/463)) ([7838776](https://github.com/invertase/reeval/commit/78387769dd56684f15139b44eabe199adf75b9a8))
+* **view:** make SuiteResult agree with the exit code and list every check ([#430](https://github.com/invertase/reeval/issues/430)) ([243ad7b](https://github.com/invertase/reeval/commit/243ad7bfd7f17f34fe4631f404afd5548f33f007))
+
 ## [0.11.0](https://github.com/invertase/reeval/compare/v0.10.0...v0.11.0) (2026-10-21)
 
 
