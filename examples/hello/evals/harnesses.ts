@@ -11,8 +11,7 @@ import {
   pi,
 } from 'reeval/harness'
 
-// `fast: 'true'` pins Composer's Fast variant; unset, reeval sends `false`, the standard price.
-export const composer = cursor({ model: 'composer-2.5', params: { fast: 'true' } }) // id cursor:composer-2.5
+export const composer = cursor({ model: 'composer-2.5' }) // id cursor:composer-2.5
 export const claude = claudeCode({ model: 'claude-sonnet-5' }) // id claude-code:claude-sonnet-5
 export const agy = antigravity({ model: 'gemini-3.8-flash-medium' }) // id antigravity:gemini-3.8-flash-medium
 export const oc = opencode({ model: 'google/gemini-3.8-flash' }) // id opencode:gemini-3.8-flash
