@@ -7,7 +7,7 @@ import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { hostAllowed, placeholder, type Substitution } from '@reeval/sandbox-docker'
 import { run } from '@reeval/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
-import { badCharacterAt, parseDuration } from '../config.ts'
+import { parseDuration } from '../config.ts'
 import {
   type AppliedEnvironment,
   DEFAULT_SKILL_EXCLUDE,
@@ -21,7 +21,7 @@ import {
 } from '../environment.ts'
 import { layoutOf, refusedPlugins } from '../harness/agents.ts'
 import { sha256 } from '../ids.ts'
-import { registerSecret } from '../redact.ts'
+import { badCharacterAt, registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type {
   EgressPolicy,

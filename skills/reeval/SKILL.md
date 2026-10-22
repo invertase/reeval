@@ -104,8 +104,9 @@ export default defineConfig({
   `OPENAI_API_KEY` for a bare id), `grokBuild` (`XAI_API_KEY`), `fakeHarness`. Details
   and `effort` in [references/config.md](references/config.md).
 - Judge models: `'typesafe-ai/jev-1.14.0'` (`TYPESAFE_AI_API_KEY`, recommended),
-  `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
-  the Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Always a provider prefix.
+  `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), `anthropic/*` (`ANTHROPIC_API_KEY`)
+  and `openai/*` (`OPENAI_API_KEY`) directly; any `provider/model` via the Vercel AI Gateway
+  (`AI_GATEWAY_API_KEY`), but a provider's own key wins when both are set. Always a provider prefix.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
   `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,

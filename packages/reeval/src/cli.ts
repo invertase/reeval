@@ -725,6 +725,11 @@ async function executeRun(
       insights: await planInsights(config, setup.insights),
     })
     plan.runId = runId
+    if (plan.insights) {
+      const { analysisKeyProblem } = await import('./analysis/model.ts')
+      const problem = analysisKeyProblem(config)
+      if (problem) plan.warnings.push(`insights will be skipped: ${problem}`)
+    }
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]
     const { imageStages, imageTargets } = await import('./sandbox/images.ts')
@@ -804,7 +809,7 @@ async function executeRun(
     })
     if (missing.length) {
       throw new UsageError(
-        `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
+        `Missing credentials: ${missing.join('; ')}. Set them in the environment or .env.local.`,
       )
     }
     const malformed = malformedCredentials(config, process.env, {

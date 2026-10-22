@@ -1323,6 +1323,53 @@ evaluate('agent eval', async (c) => {
     }
   })
 
+  test("anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's", async () => {
+    const seen: Array<{ url: string; headers: Record<string, unknown> }> = []
+    const server = createServer((req, res) => {
+      seen.push({ url: req.url ?? '', headers: req.headers })
+      res.statusCode = 401
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ error: { type: 'authentication_error', message: 'test key' } }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address() as AddressInfo
+    const base = `http://127.0.0.1:${port}/v1`
+    try {
+      for (const [model, env, header] of [
+        [
+          'anthropic/claude-sonnet-5',
+          { ANTHROPIC_API_KEY: 'reeval-direct-key', ANTHROPIC_BASE_URL: base },
+          'x-api-key',
+        ],
+        [
+          'openai/gpt-6-luna',
+          { OPENAI_API_KEY: 'reeval-direct-key', OPENAI_BASE_URL: base },
+          'authorization',
+        ],
+      ] as const) {
+        seen.length = 0
+        const p = await project('judge-direct', {
+          'reeval.config.ts': fakeConfig(),
+          'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('agent eval', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('Is it done?', { model: '${model}' })).toPass()
+})
+`,
+        })
+        const r = await runCli(p.dir, ['run'], {
+          env: { ...env, AI_GATEWAY_API_KEY: 'reeval-gateway-key' },
+        })
+        assert.equal(r.code, 1, r.stdout + r.stderr)
+        assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge', model)
+        assert.equal(seen.length, 1, `${model} reached the provider's own endpoint once`)
+        assert.match(String(seen[0]?.headers[header]), /reeval-direct-key/, model)
+      }
+    } finally {
+      server.close()
+    }
+  })
+
   test('a judge call retries a transient provider error and records it', async () => {
     const p = await project('judge-retry', {
       'reeval.config.ts': fakeConfig(),

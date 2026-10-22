@@ -119,20 +119,22 @@ A call that fails (a provider error after its retries, or a missing key) doesn't
 
 ## Providers and keys
 
-reeval calls a provider's own package when its key is set, and the Vercel AI Gateway otherwise:
+reeval calls a provider's own package when its key is set, and the Vercel AI Gateway otherwise. The direct key wins: with both set, reeval calls the provider directly and never the Gateway.
 
 | Provider prefix | Direct key | Package |
 |---|---|---|
-| `typesafe-ai/` | `TYPESAFE_AI_API_KEY` | `@ai-sdk/typesafe-ai` |
+| `anthropic/` | `ANTHROPIC_API_KEY` | `@ai-sdk/anthropic` |
 | `google/` | `GOOGLE_GENERATIVE_AI_API_KEY` | `@ai-sdk/google` |
+| `openai/` | `OPENAI_API_KEY` | `@ai-sdk/openai` |
+| `typesafe-ai/` | `TYPESAFE_AI_API_KEY` | `@ai-sdk/typesafe-ai` |
 | Any other | None | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
 
-[reeval analyze](/reference/cli/analyze) routes its `analysis.model` the same way: a direct key when the provider has one, the AI Gateway otherwise. It needs a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
+`analysis.model`, insights and compare questions route the same way. They need a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
 
-The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none:
+The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none. The message names the model and every key that would work for its prefix, the direct key first:
 
 ```text
-reeval: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.
+reeval: Missing credentials: CURSOR_API_KEY; ANTHROPIC_API_KEY (to call Anthropic directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for the judge model, "anthropic/claude-sonnet-5". Set them in the environment or .env.local.
 ```
 
 ## Retries
@@ -216,7 +218,9 @@ Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses 
 | An unknown capture name | `c.judge() artifacts names a capture this attempt doesn't have: "form"` |
 | A score function in the config | `judge.model in reeval.config.ts must be fakeJudge({ score }) with a number. Pass a score function per group, eval or call instead.` |
 | The provider refuses the input | The provider's message, then `The judge's input was ~29k tokens (estimated): diff 28k, of which …`, as a failed call |
-| No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway, in the environment or .env.local.` |
+| No key at call time | `No credentials for judge model "google/gemini-3.8-flash" (provider "google"). Set GOOGLE_GENERATIVE_AI_API_KEY (to call Google directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway), in the environment or .env.local.` |
+| No key for a prefix without a direct route | `… Set AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway, the only route for mistral/* models; reeval calls anthropic/*, google/*, openai/*, typesafe-ai/* directly), …` |
+| A key with whitespace or a line break | `ANTHROPIC_API_KEY for judge model "anthropic/claude-sonnet-5" has whitespace or a line break in it at character 7. …` |
 
 ## Related
 

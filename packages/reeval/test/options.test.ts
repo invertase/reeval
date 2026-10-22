@@ -685,7 +685,7 @@ evaluate('judged', async (c) => {
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
     assert.match(
       missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "google\/gemini-3\.8-flash"\./,
     )
     const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
       env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
@@ -695,6 +695,57 @@ evaluate('judged', async (c) => {
       malformed.stderr,
       /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
     )
+  })
+
+  const judgeKeyCases: Array<[string, string, RegExp]> = [
+    [
+      'anthropic/claude-sonnet-5',
+      'ANTHROPIC_API_KEY',
+      /Missing credentials: ANTHROPIC_API_KEY \(to call Anthropic directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "anthropic\/claude-sonnet-5"\. Set them in the environment or \.env\.local\./,
+    ],
+    [
+      'openai/gpt-6-luna',
+      'OPENAI_API_KEY',
+      /Missing credentials: OPENAI_API_KEY \(to call OpenAI directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "openai\/gpt-6-luna"\./,
+    ],
+    [
+      'mistral/mistral-large',
+      'AI_GATEWAY_API_KEY',
+      /Missing credentials: AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway, the only route for mistral\/\* models; reeval calls anthropic\/\*, google\/\*, openai\/\*, typesafe-ai\/\* directly\) for the judge model, "mistral\/mistral-large"\./,
+    ],
+  ]
+  test('a judge model without its key exits 2 naming the keys that work, before any attempt', async () => {
+    const noKeys = {
+      ANTHROPIC_API_KEY: '',
+      OPENAI_API_KEY: '',
+      AI_GATEWAY_API_KEY: '',
+      VERCEL_OIDC_TOKEN: '',
+    }
+    for (const [model, key, message] of judgeKeyCases) {
+      const p = await project('judge-key', {
+        'reeval.config.ts': fakeConfig({
+          extra: `profiles: { real: { judge: { model: '${model}' } } },`,
+        }),
+        'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('judged', async (c) => {
+  await c.send('x')
+  expect(await c.judge('Did it?')).toPass()
+})
+`,
+      })
+      const missing = await runCli(p.dir, ['run', '--profile', 'real'], { env: noKeys })
+      assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+      assert.match(missing.stderr, message)
+      if (key === 'AI_GATEWAY_API_KEY') continue
+      const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
+        env: { ...noKeys, [key]: 'sk-test\nrest' },
+      })
+      assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+      assert.match(
+        malformed.stderr,
+        new RegExp(`Credentials with whitespace or a line break in them: ${key} \\(character 8\\)`),
+      )
+    }
   })
 
   test('a profile name typo exits 2 and lists the profiles', async () => {
