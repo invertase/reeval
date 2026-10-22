@@ -1,0 +1,75 @@
+---
+title: "Start from a repository"
+description: "Start the agent in a copy of your repository at a pinned ref."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Workspaces)
+[//]: # (owns: workspace; git; git token)
+[//]: # (excludes: loose files -> /environments/files)
+[//]: # (excludes: git signature -> /reference/environment#git)
+[//]: # (inbound: /environments, /recipes/sdk)
+[//]: # (outbound: /reference/environment#git, /environments/files, /history)
+
+The `git()` helper gives the agent existing code to work on. reeval fetches the repository on the host before any attempt starts, copies its tree into the workspace, writes `files` there, then runs `setup`. For more information about the other fields of an environment, see [Environments](/environments).
+
+## Start from a repository
+
+In the `evals/environments.ts` file, set the environment's `workspace` to `git()` with a URL, `github:owner/repo`, or a local path relative to the file:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const chatbot = defineEnvironment('chatbot', ({ git }) => ({
+  workspace: git('github:vercel/ai-chatbot'),
+  setup: ['pnpm install --frozen-lockfile'],
+}))
+```
+
+The workspace holds the tree with no `.git` directory, so the agent's diff starts after `setup`, and the repository never counts as the agent's change. In the `evals/chatbot.eval.ts` file, add the `chatbot` import and pass `environment: chatbot`:
+
+```diff title="evals/chatbot.eval.ts"
++import { chatbot } from './environments.ts'
+ evaluate(
+   'adds a health route',
++  { environment: chatbot },
+   async (c) => {
+```
+
+To give an agent that expects a repository a `.git` directory, pass `init: true`. The workspace then holds one commit of the tree and no remote.
+
+## Pin a ref or a path
+
+Without a `ref`, the workspace is the remote's `HEAD`, and `reeval run` warns that results aren't comparable over time. In the `evals/environments.ts` file, pin a tag or a commit SHA:
+
+```ts title="evals/environments.ts"
+  workspace: git('github:vercel/ai-chatbot', { ref: 'v3.1.0' }),
+```
+
+To start from one directory of a repository, pass `path`. The directory's contents become the workspace:
+
+```ts title="evals/environments.ts"
+  workspace: git('github:vercel/next.js', {
+    ref: 'v16.3.7',
+    path: 'packages/create-next-app/templates/app-api/ts',
+  }),
+```
+
+A GitHub `/tree/<ref>/<path>` URL sets both at once. Whatever you pin, the record keeps the commit the ref resolved to and the hash of the tree copied in. A ref, path, or URL that doesn't exist fails the attempts that use it with an infrastructure error.
+
+## Use a private repository
+
+For an `https://` URL, pass `token` with the name of a host variable. reeval reads the variable on the host, sends it in the fetch's `Authorization` header, and never writes it into the sandbox:
+
+```ts title="evals/environments.ts"
+  workspace: git('https://example.com/vercel/ai-chatbot.git', {
+    ref: 'v3.1.0',
+    token: 'GITHUB_TOKEN',
+  }),
+```
+
+In your shell or the `.env.local` file, set the variable. reeval refuses the file when the token itself is in the URL or in `token`. For an SSH URL or a local repository, the fetch uses this machine's own Git credentials, and reeval refuses `token`.
+
+## Reference
+
+For more information, see [Environment helpers](/reference/environment#git) for the full `git()` signature, [Files](/environments/files) for adding single files or a fixture directory to the workspace, and [Recording](/history) for recording each run with its resolved commit.
