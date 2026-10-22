@@ -206,6 +206,13 @@ jobs:
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - name: reeval-python (uv sync, ruff, pyright, pytest)
         if: ${{ !cancelled() }}
         working-directory: packages/reeval-python
@@ -234,6 +241,13 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
@@ -269,6 +283,13 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
@@ -292,13 +313,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # The fixtures' Docker tier: the harness/* fixtures, then the rest.
+          # The fixtures' Docker tier, split by fixture directory: $FIXTURES' directories, then the rest.
           - package: 'reeval'
             part: fixtures 1/2
-            run: node --test --experimental-strip-types --no-warnings --test-name-pattern='harness/' test/features.test.ts
+            run: node --test --experimental-strip-types --no-warnings --test-name-pattern="$FIXTURES" test/features.test.ts
           - package: 'reeval'
             part: fixtures 2/2
-            run: node --test --experimental-strip-types --no-warnings --test-skip-pattern='harness/' test/features.test.ts
+            run: node --test --experimental-strip-types --no-warnings --test-skip-pattern="$FIXTURES" test/features.test.ts
           # test/docker.test.ts: the image builds from a from, a dockerfile or a moving tag, then the rest.
           - package: 'reeval'
             part: sandbox 1/2
@@ -320,12 +341,22 @@ jobs:
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # docker.test.ts's slowest tests, each building images: about half the file's time.
       IMAGE_BUILDS: 'a from tag that moves upstream|dockerfile: FROM|dockerfile \+ claudeCode|from: a toolchain image'
+      # About half the fixtures' Docker time, from each fixture's median on main. Rebalance from
+      # the `✔ <dir> [docker] (…ms)` lines in both legs' logs when one leg finishes well after the other.
+      FIXTURES: '(^| )(harness|mcp|secrets|egress|compare|assert|judge)/'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
+          # over a minute on Windows.
+          cache-dependency-glob: |
+            packages/reeval-python/uv.lock
+            packages/reeval/test/features/python-sdk/hello/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
         if: matrix.package == 'reeval'
       - uses: ./.github/actions/sandbox-images
       - if: needs.changes.outputs.coverage == 'true'
