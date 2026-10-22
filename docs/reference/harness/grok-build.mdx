@@ -42,10 +42,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `XAI_API_KEY` (an xAI API key) |
-| Adapter | `@reeval/harness-grok-build` 0.1.1 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | Grok Build 1.0.62, from npm's `@xai-official/grok-linux-*`, checked against its sha512 |
+| Adapter | `@reeval/harness-grok-build` 0.1.2 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | Grok Build 1.0.67, from npm's `@xai-official/grok-linux-*`, checked against its sha512 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:grok-build-0.1.1` |
+| Image | `reeval-sandbox:grok-build-0.1.2` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.grok/skills` in Grok's own home (below) |
 | Skills (`placement: 'workspace'`) | `.grok/skills` in the workspace |
@@ -57,7 +57,7 @@ Build its image once with `reeval image build` in a project whose config uses `g
 
 ## The key
 
-reeval passes `XAI_API_KEY` to the adapter explicitly, and Grok gets a placeholder in its place; the real key never enters the container. The gateway swaps it into the `Authorization` header on the requests Grok 1.0.62 sends it on:
+reeval passes `XAI_API_KEY` to the adapter explicitly, and Grok gets a placeholder in its place; the real key never enters the container. The gateway swaps it into the `Authorization` header on the requests Grok 1.0.67 sends it on:
 
 | Host | Endpoint |
 |---|---|
