@@ -9,9 +9,13 @@
 
  # Get started using the `/setup` skill:
  npx skills add invertase/reeval --skill setup
+
  # Or install manually:
  npm i -D reeval && npx reeval init
 ```
+
+> [!IMPORTANT]
+> **Work in Progress**: reeval is under active development. Expect breaking changes between minor version releases.
 
 # reeval
 
@@ -35,7 +39,7 @@ Cursor ⋅ Claude Code ⋅ Codex ⋅ Antigravity ⋅ OpenCode ⋅ Goose ⋅ pi �
 npm i -D reeval
 ```
 
-reeval runs on Node.js 22.13 or later. Real runs also need a sandbox runtime (Docker or Podman) and an API key for the agent. `npx reeval doctor` checks both and names the fix for anything missing.
+reeval runs on Node.js 22.13 or later. Real runs also need a sandbox runtime (Docker or Podman) and an API keys for the agents. `npx reeval doctor` checks both and names the fix for anything missing.
 
 ## Quick start
 
@@ -56,7 +60,7 @@ evals/greet.eval.ts › creates greet.js  1          —         1     1
 Then build the agent's sandbox image, add its key, and run it for real:
 
 ```bash
-npx reeval image build                  # bakes Cursor into its sandbox image
+npx reeval image build
 echo 'CURSOR_API_KEY=…' >> .env.local
 npx reeval run
 ```
@@ -69,26 +73,27 @@ The Vercel AI SDK deprecates `generateObject` in favour of `Output.object`, and 
 
 ```ts
 // evals/ai-sdk.eval.ts
-import { defineEnvironment, evaluate, expect } from 'reeval'
+import { defineEnvironment, evaluate, expect } from 'reeval';
 
-const plain = defineEnvironment('plain', {})
+const plain = defineEnvironment('plain', {});
+
 const withSkill = plain.extendEnvironment('with-skill', ({ skill }) => ({
   skills: [skill.local('../skills/ai-sdk')],
-}))
+}));
 
 evaluate(
   'triages a GitHub issue with the AI SDK',
   { runs: 4, compare: { baseline: plain, variants: [withSkill] } },
   async (c) => {
-    await c.send(
-      'Add triage.ts: triageIssue(title, body) uses the ai package to ' +
-        'return a typed { labels, priority, duplicateOf }.',
-    )
-    await expect(c, 'writes triage.ts').toHaveFile('triage.ts')
-    await expect(c, 'uses Output.object')
-      .toHaveFile('triage.ts', /Output\.object/)
+    await c.send(`
+      Add triage.ts: triageIssue(title, body) uses the ai package to
+      return a typed { labels, priority, duplicateOf }.
+    `);
+
+    await expect(c, 'writes triage.ts').toHaveFile('triage.ts');
+    await expect(c, 'uses Output.object').toHaveFile('triage.ts', /Output\.object/);
   },
-)
+);
 ```
 
 ```text
