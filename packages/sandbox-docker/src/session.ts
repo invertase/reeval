@@ -425,17 +425,21 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     abortSignal?: AbortSignal
   }) => {
     const path = posix.resolve(SANDBOX_ROOT, o.path)
-    await dockerOk(
-      [
-        'exec',
-        '--interactive',
-        id,
-        'sh',
-        '-c',
-        `${EXEC_UMASK} && mkdir -p ${q(posix.dirname(path))} && cat > ${q(path)}`,
-      ],
-      { input: Buffer.from(o.content), signal: o.abortSignal, engine },
-    )
+    const make = `${EXEC_UMASK} && mkdir -p ${q(posix.dirname(path))}`
+    // Given a stdin that is at EOF before it attaches, `docker exec --interactive` now and then
+    // never passes the EOF on, and `cat` waits forever: an empty file is made without stdin.
+    if (o.content.byteLength === 0) {
+      await dockerOk(['exec', id, 'sh', '-c', `${make} && : > ${q(path)}`], {
+        signal: o.abortSignal,
+        engine,
+      })
+      return
+    }
+    await dockerOk(['exec', '--interactive', id, 'sh', '-c', `${make} && cat > ${q(path)}`], {
+      input: Buffer.from(o.content),
+      signal: o.abortSignal,
+      engine,
+    })
   }
 
   const brokering: Partial<HarnessV1NetworkSandboxSession> = gateway

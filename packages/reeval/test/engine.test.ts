@@ -1876,6 +1876,48 @@ evaluate('fine', async () => {})
     assert.deepEqual(liveSandboxes(p), [])
   })
 
+  for (const [why, stop] of [
+    ['its deadline passes', { deadlineMs: 10_000 }],
+    ['its test is cancelled', { abortOnTurn: true }],
+  ] as const) {
+    test(`runCli stops a stuck run when ${why}: SIGTERM, then nothing is left`, {
+      skip: noSignals,
+    }, async () => {
+      const p = await project('stuck', {
+        'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 600_000 }' }),
+        'evals/agent.eval.ts': agentEval('', `{ timeout: '15m' }`),
+      })
+      const abort = new AbortController()
+      let pid = 0
+      const error = await runCli(p.dir, ['run', '--output-logs', 'full'], {
+        deadlineMs: 'deadlineMs' in stop ? stop.deadlineMs : undefined,
+        signal: abort.signal,
+        graceMs: 15_000,
+        onOutput: (stdout, child) => {
+          pid = child
+          if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
+          if ('abortOnTurn' in stop) abort.abort()
+          return true
+        },
+      }).then(
+        () => assert.fail('the stuck run finished'),
+        (e: Error) => e,
+      )
+      assert.match(
+        error.message,
+        'deadlineMs' in stop
+          ? /^reeval run --output-logs full was stopped because it was still running after 10000ms; it exited \(exit 143\)/
+          : /^reeval run --output-logs full was stopped because the test was cancelled .*; it exited \(exit 143\)/,
+      )
+      // The canary: the agent was mid-turn, with a sandbox, when it was stopped.
+      assert.match(error.message, /turn 1 started/)
+      assert.match(error.message, /Cancelling: stopping agents and destroying sandboxes/)
+      assert.throws(() => process.kill(-pid, 0), { code: 'ESRCH' }, 'its process group is gone')
+      assert.deepEqual(liveSandboxes(p), [])
+      assert.equal(readRun(p.dir).run.status, 'interrupted')
+    })
+  }
+
   for (const [target, signal, code] of [
     [
       'Ctrl-C mid-turn to the CLI only exits 130',

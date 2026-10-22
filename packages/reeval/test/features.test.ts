@@ -2956,6 +2956,43 @@ async function containersGone(runId: string, cli: string, deadlineMs = 20_000): 
   assert.equal(left, '', `containers of run ${runId} still exist after ${deadlineMs / 1000}s`)
 }
 
+/**
+ * Force-removes the containers of every run the fixture's project started, finished or not: the
+ * sweep after a stopped run, in case its SIGTERM teardown was cut short by the SIGKILL.
+ */
+function removeProjectContainers(project: string, cli: string): void {
+  const runIds = ['staging', 'runs'].flatMap((d) => {
+    const dir = join(project, '.reeval', d)
+    return existsSync(dir) ? readdirSync(dir).map((f) => f.replace(/\.json$/, '')) : []
+  })
+  for (const runId of new Set(runIds)) {
+    const ids = execFileSync(cli, ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
+      encoding: 'utf8',
+    })
+      .split(/\s+/)
+      .filter(Boolean)
+    if (ids.length) execFileSync(cli, ['rm', '-f', ...ids], { stdio: 'ignore' })
+  }
+}
+
+/** The end of each attempt's debug.log, which says where a stopped run was stuck. */
+function attemptTrails(project: string): string {
+  const root = join(project, '.reeval', 'debug')
+  if (!existsSync(root)) return ''
+  return readdirSync(root, { recursive: true, encoding: 'utf8' })
+    .filter((f) => f.endsWith('debug.log'))
+    .sort()
+    .map((f) => {
+      const lines = readFileSync(join(root, f), 'utf8').trimEnd().split('\n')
+      return `\n--- .reeval/debug/${f}, last ${Math.min(lines.length, 20)} lines:\n${lines.slice(-20).join('\n')}`
+    })
+    .join('')
+}
+
+/** A fixture's run is stopped this long before its test's timeout: the grace, and a margin. */
+const FIXTURE_STOP_MS = { fake: 10_000, docker: 30_000, podman: 30_000, real: 30_000 } as const
+const FIXTURE_GRACE_MS = { fake: 5_000, docker: 20_000, podman: 20_000, real: 20_000 } as const
+
 function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string | false {
   if (only && !only.includes(tier)) return `REEVAL_FIXTURE_TIERS=${only.join(',')}`
   if (tier === 'fake' && posixModes && process.platform === 'win32')
@@ -2986,7 +3023,7 @@ function fixtureTests(tiers: Tier[]) {
       test(`${f.dir} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
         timeout,
-      }, async () => {
+      }, async (t) => {
         const row = realRowOf(f)
         if (tier === 'real') {
           reserveAttempts(row, 2, `fixture ${f.dir}`)
@@ -3009,9 +3046,18 @@ function fixtureTests(tiers: Tier[]) {
                   }
                 : {}),
             },
-            timeoutMs: timeout - 10_000,
+            timeoutMs: timeout - FIXTURE_STOP_MS[tier],
+            // Stopped inside the test's timeout, so the failure has the run's output and the run
+            // has cancelled, and removed its containers, before the next test starts.
+            deadlineMs: timeout - FIXTURE_STOP_MS[tier],
+            graceMs: FIXTURE_GRACE_MS[tier],
+            signal: t.signal,
           },
-        )
+        ).catch((error: Error) => {
+          if (tier !== 'fake') removeProjectContainers(p.dir, cliOf(tier))
+          error.message += attemptTrails(p.dir)
+          throw error
+        })
         const sandbox = f.sandbox ?? (tier === 'real' ? 'docker' : tier)
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'

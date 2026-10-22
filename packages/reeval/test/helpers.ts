@@ -146,18 +146,32 @@ export type CliOptions = {
   /** Called with all stdout so far on every chunk, until it returns true. */
   onOutput?: (stdout: string, pid: number) => boolean
   /**
-   * Kills the CLI's process group when it goes this long with no stdout or stderr
-   * (default 60s). A slow host that still prints is not treated as hung.
+   * Stops the CLI when it goes this long with no stdout or stderr (default 60s). A slow host that
+   * still prints is not treated as hung, and neither is a stuck `reeval run`, whose heartbeat
+   * prints: `deadlineMs` bounds that.
    */
   timeoutMs?: number
+  /** Stops the CLI when it has run this long, output or not. */
+  deadlineMs?: number
+  /** Aborting stops the CLI, e.g. a test's `t.signal`, which aborts when the test times out. */
+  signal?: AbortSignal
+  /** How long a stopped CLI has to cancel its run and remove its sandboxes before SIGKILL (20s). */
+  graceMs?: number
 }
 
+/**
+ * Runs the CLI. Stopping it (`timeoutMs`, `deadlineMs`, `signal`) sends SIGTERM to its process
+ * group, as a CI runner's cancel does, so it cancels the run and removes its sandboxes; SIGKILL
+ * follows after `graceMs`. The promise rejects once the CLI has exited, with why it was stopped
+ * and its output so far, so nothing it started outlives the call.
+ */
 export function runCli(
   cwd: string,
   args: string[] = ['run'],
   opts: CliOptions = {},
 ): Promise<CliRun> {
   const timeoutMs = opts.timeoutMs ?? 60_000
+  const startedAt = Date.now()
   return new Promise((resolve, reject) => {
     // Detached, so the tests can signal its whole process group as a terminal would.
     const child = spawn(process.execPath, [cli, ...args], {
@@ -168,28 +182,42 @@ export function runCli(
     let stdout = ''
     let stderr = ''
     let watching = !!opts.onOutput
-    let settled = false
-    let timer: ReturnType<typeof setTimeout>
-    const finish = (fn: () => void) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      fn()
+    let stopped: string | null = null
+    let idle: ReturnType<typeof setTimeout> | undefined
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let kill: ReturnType<typeof setTimeout> | undefined
+    const clear = () => {
+      clearTimeout(idle)
+      clearTimeout(deadline)
+      clearTimeout(kill)
+      opts.signal?.removeEventListener('abort', onAbort)
     }
+    const stop = (why: string) => {
+      if (stopped !== null || !child.pid) return
+      stopped = why
+      clearTimeout(idle)
+      clearTimeout(deadline)
+      if (process.platform === 'win32') return killTree(child.pid)
+      try {
+        process.kill(-child.pid, 'SIGTERM')
+      } catch {}
+      const pid = child.pid
+      kill = setTimeout(() => killTree(pid), opts.graceMs ?? 20_000)
+    }
+    const onAbort = () => stop('the test was cancelled (it timed out, or a sibling failed)')
     const arm = () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => {
-        finish(() => {
-          if (child.pid) killTree(child.pid)
-          reject(
-            new Error(
-              `reeval ${args.join(' ')} produced no output for ${timeoutMs}ms\n${stdout}\n${stderr}`,
-            ),
-          )
-        })
-      }, timeoutMs)
+      clearTimeout(idle)
+      if (stopped === null) {
+        idle = setTimeout(() => stop(`it produced no output for ${timeoutMs}ms`), timeoutMs)
+      }
     }
     arm()
+    if (opts.deadlineMs !== undefined) {
+      const ms = opts.deadlineMs
+      deadline = setTimeout(() => stop(`it was still running after ${ms}ms`), ms)
+    }
+    if (opts.signal?.aborted) onAbort()
+    else opts.signal?.addEventListener('abort', onAbort, { once: true })
     child.stdout.on('data', (d) => {
       stdout += d
       arm()
@@ -199,8 +227,20 @@ export function runCli(
       stderr += d
       arm()
     })
-    child.on('error', (error) => finish(() => reject(error)))
-    child.on('close', (code) => finish(() => resolve({ code, stdout, stderr })))
+    child.on('error', (error) => {
+      clear()
+      reject(error)
+    })
+    child.on('close', (code, signal) => {
+      clear()
+      if (stopped === null) return resolve({ code, stdout, stderr })
+      const exit = signal ?? `exit ${code}`
+      reject(
+        new Error(
+          `reeval ${args.join(' ')} was stopped because ${stopped}; it exited (${exit}) ${Date.now() - startedAt}ms after it started\n${stdout}\n${stderr}`,
+        ),
+      )
+    })
   })
 }
 
