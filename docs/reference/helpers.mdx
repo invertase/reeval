@@ -169,6 +169,10 @@ export const review = defineEnvironment('review', ({ plugin }) => ({
 }))
 ```
 
+<Warning>
+Plugins are experimental. Which parts each harness loads, and how, may change in any release.
+</Warning>
+
 A plugin is a directory in Claude Code's layout: `.claude-plugin/plugin.json` with a kebab-case `name`, and any of these parts beside it.
 
 | Part | Where |
