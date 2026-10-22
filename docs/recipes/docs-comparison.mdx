@@ -1,0 +1,103 @@
+---
+title: "Measure your docs"
+description: "See whether your docs helped the agent pass a check."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: Measure your docs)
+[//]: # (owns: the end-to-end docs measurement: a control without the docs and a variant with them)
+[//]: # (excludes: rules files -> /environments/rules)
+[//]: # (excludes: placing files -> /environments/files)
+[//]: # (excludes: every compare key -> /reference/options#compare)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /environments/rules, /environments/files, /comparisons/compare, /results/output)
+
+You run one task on a control without your docs and on a variant that has them. The cells share the prompt and the checks.
+
+<Steps>
+<Step title="Define the control and variant">
+
+In the `evals/environments.ts` file, define the control `plain` and the variant `with-docs`. The `plain` control sets no `rules`. The `with-docs` variant sets `rules`.
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const plain = defineEnvironment('plain', {
+  setup: ['npm install ai'],
+})
+
+export const withDocs = plain.extendEnvironment('with-docs', {
+  rules: `Call streamText from the Vercel AI SDK.
+Do not buffer the whole response.
+`,
+})
+```
+
+Both cells install the `ai` package. The rules text is the only change. The harness reads the rules text at the start of every attempt.
+
+</Step>
+<Step title="Add your docs">
+
+Replace the rules string with your docs. For more information about rules files, see [Add project rules](/environments/rules). For more information about placing a doc in the workspace instead, see [Place files](/environments/files).
+
+</Step>
+<Step title="Write the evaluation">
+
+In the `evals/stream.eval.ts` file, declare the evaluation:
+
+```ts title="evals/stream.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain, withDocs } from './environments.ts'
+
+evaluate(
+  'streams the chat reply',
+  { runs: 4, compare: { baseline: plain, variants: [withDocs] } },
+  async (c) => {
+    await c.send('Stream the chat reply from src/chat.ts.')
+    await expect(c, 'uses streamText').toHaveFile(
+      'src/chat.ts',
+      /streamText/,
+    )
+  },
+)
+```
+
+The rules text names `streamText` from the Vercel AI SDK. The prompt does not name `streamText`, so the check passes only when the docs lead the harness to call it.
+
+`runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect reads `can't tell yet`.
+
+</Step>
+<Step title="Run the comparison">
+
+Run the evaluation in the `evals/stream.eval.ts` file:
+
+```bash
+npx reeval run stream
+```
+
+</Step>
+<Step title="Read whether the docs helped">
+
+Read the block the run prints for the evaluation. When `with-docs` passes every attempt and `plain` passes none, the block reads like this. For more information about the results summary, see [Read the results summary](/results/output).
+
+```text
+pass             streams the chat reply
+  arm              pass
+  plain            0 of 4
+  with-docs        4 of 4  helped
+  check            plain   with-docs
+  uses streamText  0 of 4  4 of 4
+    expected src/chat.ts to match /streamText/
+```
+
+Your counts can differ. The `with-docs` row reads `helped` because the `with-docs` variant passed the `uses streamText` check in 4 of 4 attempts, and the `plain` cell passed it in 0 of 4. The other effect words are `made it worse` and `can't tell yet`.
+
+If the `plain` control and the `with-docs` variant both pass, the harness already calls `streamText`, and this task cannot show what the docs changed. A control that already includes the docs measures nothing.
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about gates and extra variants, see [Compare setups](/comparisons/compare).
