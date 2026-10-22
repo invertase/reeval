@@ -1,0 +1,133 @@
+---
+title: "Test recommendations"
+description: "See whether harnesses recommend your library."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Test recommendations)
+[//]: # (owns: the end-to-end recommendation test: realistic choosing questions, a judge per answer and the result per agent)
+[//]: # (excludes: writing judge questions -> /evals/judges)
+[//]: # (excludes: one evaluation per question with evaluate.each -> /evals/cases)
+[//]: # (excludes: harness options -> /harnesses)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /evals/judges, /evals/cases, /harnesses, /results/output)
+
+You ask the questions a developer asks when choosing a library. Each harness answers on its own. A judge scores every answer.
+
+<Steps>
+<Step title="Write the questions">
+
+Declare each choosing question with `evaluate()` in the `evals/choose.eval.ts` file:
+
+```ts title="evals/choose.eval.ts"
+import { evaluate } from '{{ pkg }}'
+
+evaluate('recommends a framework for a production feature', async (c) => {
+  await c.send(
+    'I need multi-step workflows, structured output, and tool ' +
+      'calling. Which framework should I use, and why?',
+  )
+})
+
+evaluate('recommends Vercel AI SDK over LangGraph', async (c) => {
+  await c.send(
+    'Should I use Vercel AI SDK or LangGraph for multi-step ' +
+      'workflows, tool calling, and structured output, and why?',
+  )
+})
+```
+
+The first prompt asks which framework to use. A pass means the answer recommends your library. The second prompt names your library and one alternative.
+
+For more information about one evaluation per case from a list, see [Evaluate many cases](/evals/cases).
+
+</Step>
+<Step title="Judge each answer">
+
+Score each answer with `c.judge()`. Pass the verdict to `toPass()`. The second argument of `expect()` names the check in the result.
+
+In the `evals/choose.eval.ts` file, add the check to the first evaluation:
+
+```ts title="evals/choose.eval.ts"
+-import { evaluate } from '{{ pkg }}'
++import { evaluate, expect } from '{{ pkg }}'
+       'calling. Which framework should I use, and why?',
+   )
++  expect(
++    await c.judge('Does the answer recommend Vercel AI SDK?'),
++    'recommends the SDK',
++  ).toPass()
+```
+
+Add the check to the second evaluation. Ask whether the answer recommends your library over the alternative:
+
+```ts title="evals/choose.eval.ts"
+   await c.send(
+     'Should I use Vercel AI SDK or LangGraph for multi-step ' +
+       'workflows, tool calling, and structured output, and why?',
+   )
++  expect(
++    await c.judge(
++      'Does the answer recommend Vercel AI SDK over LangGraph?',
++    ),
++    'recommends the SDK',
++  ).toPass()
+```
+
+For more information about the question, the model, and the threshold, see [Score agent work](/evals/judges).
+
+</Step>
+<Step title="Configure each harness">
+
+Set `harness` to a list in the `reeval.config.ts` file. Set `judge.model` in the `reeval.config.ts` file. Each entry in the list is its own cell.
+
+```ts title="reeval.config.ts"
+-import { cursor } from '{{ pkg }}/harness'
++import { claudeCode, cursor } from '{{ pkg }}/harness'
+-  harness: cursor({ model: 'composer-2.5' }), // needs CURSOR_API_KEY
++  harness: [
++    cursor({ model: 'composer-2.5' }),
++    claudeCode({ model: 'claude-sonnet-5' }),
++  ],
++  judge: { model: 'typesafe-ai/jev-1.14.0' },
+```
+
+For more information about each harness and its key, see [Choose a harness](/harnesses). For more information about the judge model, see [Set the model and threshold](/evals/judges#set-the-model-and-threshold).
+
+</Step>
+<Step title="Add the API keys">
+
+Add each harness key and `TYPESAFE_AI_API_KEY` to the `.env.local` file.
+
+</Step>
+<Step title="Run the evaluations">
+
+Run the evaluations in the `evals/choose.eval.ts` file:
+
+```bash
+npx reeval run choose
+```
+
+</Step>
+<Step title="Read the results">
+
+Read the block `reeval run` prints for the first evaluation. Each row is one harness. The count is passed attempts out of counted attempts. When one harness passes and another fails, the block uses this shape. Your counts can differ. The judge line is trimmed.
+
+```text
+fail             recommends a framework for a production feature
+  harness                      pass
+  cursor:composer-2.5          1 of 1
+  claude-code:claude-sonnet-5  0 of 1
+    recommends the SDK         failed
+      judge score 0.10 is below 0.8 for …
+```
+
+The block reads `fail` when any harness fails `recommends the SDK`. The line under that row begins with the judge score. When every harness passes, the block reads `pass` and the check lines are absent. The second evaluation prints a block of the same shape.
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about the results summary, see [Read the results summary](/results/output).
