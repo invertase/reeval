@@ -452,6 +452,8 @@ export const inventory: InventoryFeature[] = [
       workspace('a missing subdirectory names what is there'),
       workspace('a pinned SHA reruns offline from the cache, with the same commit and tree'),
       workspace("the agent's diff starts from the repository, and a variant's workspace overrides"),
+      workspace('a commit a shallow local clone lacks says to fetch it or clone the full history'),
+      workspace('compare arms on different refs of the same tree get a warning'),
       options('common mistakes'),
     ],
   },

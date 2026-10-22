@@ -838,7 +838,7 @@ async function executeRun(
         },
       })
     }
-    const { prepareWorkspaces, workspaceKey } = await import('./workspace.ts')
+    const { prepareWorkspaces, sameTreeArms, workspaceKey } = await import('./workspace.ts')
     const live = skipped.filter((p) => !p.attempt.plan.skip)
     const outcomes = await prepareWorkspaces(
       live.flatMap(({ attempt: a }) =>
@@ -875,6 +875,9 @@ async function executeRun(
         state: 'failed',
         outcome: { target, ok: false, failure: o.failure, ms: 0 },
       })
+    }
+    for (const text of sameTreeArms(live, outcomes)) {
+      renderer.onEvent({ type: 'notice', at: Date.now(), level: 'warn', text })
     }
     try {
       sandboxVersions = await preflight(

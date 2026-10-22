@@ -849,6 +849,13 @@ describe('common mistakes', { concurrency: 4 }, () => {
       /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got "a"\)\. .* Leave it out to use the eval's environment as the control\./,
     ],
     [
+      'compare arms whose refs come from unset variables',
+      `const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_BASE }) }))
+const head = base.extendEnvironment('head', ({ git }) => ({ workspace: git('..', { ref: process.env.REEVAL_TEST_UNSET_HEAD }) }))
+evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})`,
+      /compare in evaluate\("e"\) runs head and base on the same tree: past what they share, each sets only workspace, and both are git\("\.\."\) with no ref \(the repository HEAD\)\. A ref read from an unset variable is undefined, so check the variables the arms take their refs from, and give each arm its own ref\./,
+    ],
+    [
       'a variant that is the environment a compare without a baseline runs as its control',
       `group('g', { environment: a }, () => { evaluate('e', { compare: { variants: [a, b] } }, async () => {}) })`,
       /compare in evaluate\("g › e"\) lists a, which is the control: compare has no baseline, so the eval's environment is\./,
@@ -1377,6 +1384,22 @@ ${body}
       assert.match(r.stderr, message)
     })
   }
+
+  test('compare arms on one workspace that differ in something else plan', async () => {
+    const p = await project('same-workspace-arms', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const base = defineEnvironment('base', ({ git }) => ({ workspace: git('..') }))
+const skilled = base.extendEnvironment('skilled', ({ git }) => ({ workspace: git('..'), files: { 'SKILL.md': 'x' } }))
+const ruled = defineEnvironment('ruled', ({ git }) => ({ workspace: git('..'), rules: 'Be brief.' }))
+const bare = defineEnvironment('bare', ({ git }) => ({ workspace: git('..') }))
+evaluate('extends', { compare: { baseline: base, variants: [skilled] } }, async () => {})
+evaluate('apart', { compare: { baseline: ruled, variants: [bare] } }, async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+  })
 
   const configCases: Array<[string, string, RegExp]> = [
     [
