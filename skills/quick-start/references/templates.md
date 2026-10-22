@@ -106,7 +106,7 @@ import { defineEnvironment } from 'reeval'
 
 /** This repository as committed, without keys, runs or the evals themselves. */
 export const repo = defineEnvironment('repo', ({ directory }) => ({
-  files: directory('..', { glob: ['!.env*', '!.reeval/', '!evals/'] }),
+  files: directory('..', { glob: ['!.env*', '!.reeval/', '!evals/', '!reeval.config.*'] }),
   setup: [{ run: 'npm ci --no-audit --no-fund', timeout: '5m' }],
 }))
 ```
@@ -130,7 +130,8 @@ evaluate('adds a slugify helper that passes a hidden test', { environment: repo 
 ```
 
 - `directory()` skips `node_modules/`, `dist/` and caches but not `.env*` or `.reeval/`: keep the
-  `!` patterns, so keys never reach the sandbox.
+  `!` patterns, so keys never reach the sandbox and the agent can't read the evals, or the
+  oracle's answer in `reeval.config.ts`.
 - Use the project's install and test commands (`pnpm install --frozen-lockfile`, `pytest`, …).
   A toolchain other than Node goes in `sandbox: docker({ from: 'python:3.12-slim' })` on the
   environment.
@@ -154,7 +155,9 @@ import { defineEnvironment } from 'reeval'
 
 /** This repository without its agent rules, keys, runs or the evals themselves. */
 export const repo = defineEnvironment('repo', ({ directory }) => ({
-  files: directory('..', { glob: ['!.env*', '!.reeval/', '!evals/', '!AGENTS.md'] }),
+  files: directory('..', {
+    glob: ['!.env*', '!.reeval/', '!evals/', '!reeval.config.*', '!AGENTS.md'],
+  }),
   setup: [{ run: 'npm ci --no-audit --no-fund --ignore-scripts', timeout: '10m' }],
 }))
 

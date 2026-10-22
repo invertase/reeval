@@ -135,7 +135,8 @@ Each eval:
   not `billing test`. Insights read the name first.
 - **Small:** `runs: 2` on a compare (4 attempts), 1 elsewhere. Seed only the files the task
   needs. If it needs the repo, seed it with `directory('..', { glob: ['!.env*', '!.reeval/',
-  '!evals/'] })`: `directory()` doesn't skip `.env*`, and keys must not reach the sandbox.
+  '!evals/', '!reeval.config.*'] })`: `directory()` doesn't skip `.env*`, keys must not reach
+  the sandbox, and the agent must not read your checks or the oracle's answer in the config.
 - **Eval files go in `evals/*.eval.ts`,** environments in `evals/environments.ts`. Paths in
   `skill.local()`, `file()` and `directory()` are relative to the file that calls them. If
   `evals/environments.ts` exists, append your environments below what's there and leave its

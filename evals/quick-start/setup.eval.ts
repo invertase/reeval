@@ -104,6 +104,7 @@ group('sets up reeval', () => {
       expect.soft(sources, 'checks by running something').toMatch(/\.exec\(/)
       expect.soft(sources, 'works in the real repo').toMatch(/directory\(\s*['"]\.\.['"]/)
       expect.soft(sources, 'keeps .env out of the sandbox').toMatch(/!\.env/)
+      expect.soft(sources, 'keeps the config out of the sandbox').toMatch(/!reeval\.config/)
       expect.soft(sources, 'compares GEMINI.md').toMatch(/rules:\s*file\(\s*['"][./]*GEMINI\.md/)
       expect.soft(sources, 'leaves GEMINI.md out of the control').toMatch(/!GEMINI\.md/)
       expect

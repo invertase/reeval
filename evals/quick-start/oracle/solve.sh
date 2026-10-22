@@ -40,7 +40,7 @@ elif [ -f GEMINI.md ]; then
   cat > evals/environments.ts <<'EOF'
 import { defineEnvironment } from 'reeval'
 export const repo = defineEnvironment('firebase-tools', ({ directory }) => ({
-  files: directory('..', { glob: ['!.env*', '!.reeval/', '!evals/', '!GEMINI.md'] }),
+  files: directory('..', { glob: ['!.env*', '!.reeval/', '!evals/', '!reeval.config.*', '!GEMINI.md'] }),
   setup: [{ run: 'npm ci --no-audit --no-fund --ignore-scripts', timeout: '10m' }],
 }))
 export const withRules = repo.extendEnvironment('with-gemini-md', ({ file }) => ({
