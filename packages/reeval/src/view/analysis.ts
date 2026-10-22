@@ -4,7 +4,7 @@
 /** Bumped when the system prompt or output schema changes: an older analysis is superseded. */
 export const ANALYSIS_PROMPT_VERSION = 'analysis-v10'
 /** Bumped when the digest's shape or selection rules change. */
-export const DIGEST_VERSION = 10
+export const DIGEST_VERSION = 11
 
 export type Confidence = 'high' | 'medium' | 'low'
 

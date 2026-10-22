@@ -19,8 +19,7 @@ import { type Digest as AnalysisDigest, RULES } from '../src/analysis/digest.ts'
 import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
 import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
-import { LIFT_MIN_COUNTED } from '../src/history/facts.ts'
-import { mannWhitney, minimumP } from '../src/stats.ts'
+import { EFFECT_MIN_COUNTED, mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import { formatTokens } from '../src/usage.ts'
 import { analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
@@ -224,7 +223,7 @@ describe('facts on the dogfood history (2 runs, 36 real Cursor attempts)', () =>
 })
 
 describe('facts on the harness-compare history (Cursor and Antigravity, 3 runs)', () => {
-  test('harness contrasts are controlled within a run; a clean sweep is an effect, the rest is noise', async () => {
+  test('harness contrasts are controlled within a run; a clean sweep of 2 a side is too few to call', async () => {
     const p = await historyProject('facts-harness', 'harness-compare')
     const all = await facts(p.dir)
     golden('harness-compare-facts', all)
@@ -244,8 +243,8 @@ describe('facts on the harness-compare history (Cursor and Antigravity, 3 runs)'
         compareControl?.control_pass,
         compareControl?.pass_verdict,
       ],
-      ['antigravity:gemini-3.8-flash-low', 'cursor:composer-2.5', 0, 2, 'effect'],
-      'antigravity failed both control attempts that cursor passed: the interval excludes 0',
+      ['antigravity:gemini-3.8-flash-low', 'cursor:composer-2.5', 0, 2, 'insufficient'],
+      'antigravity failed both control attempts that cursor passed: 2 a side is below the minimum',
     )
     assert.deepEqual(
       rows.filter((r) => r.tier === 'not_measured').map((r) => r.factor),
@@ -800,7 +799,7 @@ const BASE = '20260926T104130Z_60f3dc9_cursor-agent_92gs'
 describe('reeval analyze', () => {
   test('the prompt and rules say insufficient lift is not measured', () => {
     assert.match(SYSTEM_PROMPT, /insufficient is not measured: never put it on a results line/)
-    assert.match(RULES[0] ?? '', new RegExp(`fewer than ${LIFT_MIN_COUNTED} counted attempts`))
+    assert.match(RULES[0] ?? '', new RegExp(`fewer than ${EFFECT_MIN_COUNTED} counted attempts`))
   })
 
   test('the prompt and rules say missing usage omits tokens, not insufficient', () => {
@@ -1283,21 +1282,42 @@ evaluate('greets', { runs: 1 }, async (c) => {
     assert.doesNotMatch(dry.stdout.split('\n')[0] ?? '', / vs /)
   })
 
-  test('two counted attempts can still be an effect', async () => {
-    const p = await compareProject('analyze-lift-effect', 2)
-    assert.equal((await runCli(p.dir)).code, 0)
-    const { digest } = await digestOf(p.dir)
-    const pass = digest.facts.find((f) => f.kind === 'pass@1')
-    const variant = (pass?.cells as Array<{ lift?: string; verdict?: string }> | undefined)?.find(
-      (c) => c.lift,
-    )
-    assert.match(variant?.lift ?? '', /^\+100 pts \(95% \+7…\+100\)$/)
-    assert.equal(variant?.verdict, 'effect')
-    const [row] = await query(
-      p.dir,
-      "SELECT pass_verdict FROM factor_effects WHERE tier = 'controlled'",
-    )
-    assert.equal(row?.pass_verdict, 'effect')
+  for (const [runs, effect, lift, verdict] of [
+    [2, "can't tell yet", 'not enough attempts for lift (2 vs 2)', 'insufficient'],
+    [3, "can't tell yet", 'not enough attempts for lift (3 vs 3)', 'insufficient'],
+    [4, 'helped', '+100 pts (95% +31…+100)', 'effect'],
+  ] as const) {
+    test(`${runs} against ${runs}: every view gives the same verdict`, async () => {
+      const p = await compareProject(`analyze-lift-${runs}`, runs)
+      const run = await runCli(p.dir)
+      assert.equal(run.code, 0, run.stdout)
+      assert.match(run.stdout, new RegExp(`^ {2}\\S+ +${runs} of ${runs} {2}${effect}$`, 'm'))
+      const { digest } = await digestOf(p.dir)
+      const pass = digest.facts.find((f) => f.kind === 'pass@1')
+      const variant = (pass?.cells as Array<{ lift?: string; verdict?: string }> | undefined)?.find(
+        (c) => c.lift,
+      )
+      assert.deepEqual({ lift: variant?.lift, verdict: variant?.verdict }, { lift, verdict })
+      const [row] = await query(
+        p.dir,
+        "SELECT pass_verdict FROM factor_effects WHERE tier = 'controlled'",
+      )
+      assert.equal(row?.pass_verdict, verdict)
+    })
+  }
+
+  test('every view reads one minimum of counted attempts', async () => {
+    const stats = await import('../src/stats.ts')
+    const suite = await import('../src/view/suite.ts')
+    const view = await import('../src/view/index.ts')
+    assert.equal(stats.EFFECT_MIN_COUNTED, 4)
+    assert.equal(suite.EFFECT_MIN_COUNTED, stats.EFFECT_MIN_COUNTED)
+    assert.equal(view.EFFECT_MIN_COUNTED, stats.EFFECT_MIN_COUNTED)
+    const src = join(import.meta.dirname, '../src')
+    const defines = readdirSync(src, { recursive: true, encoding: 'utf8' })
+      .filter((f) => f.endsWith('.ts'))
+      .filter((f) => /\bconst \w*MIN_COUNTED\b/.test(readFileSync(join(src, f), 'utf8')))
+    assert.deepEqual(defines, ['stats.ts'], 'one definition, which every view imports')
   })
 
   test('claims with invented citations or quotes are dropped; invented CLI flags are rejected', async () => {
@@ -1806,9 +1826,9 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
         r.checks,
       ]),
       [
-        ['current-skill', 'no-skill', 0, 0, 'noise', 'Social OAuth', 5],
-        ['new-skill', 'no-skill', 0, 0, 'noise', null, 5],
-        ['new-skill', 'current-skill', 0, 0, 'noise', 'Social OAuth', 5],
+        ['current-skill', 'no-skill', 0, 0, 'insufficient', 'Social OAuth', 5],
+        ['new-skill', 'no-skill', 0, 0, 'insufficient', null, 5],
+        ['new-skill', 'current-skill', 0, 0, 'insufficient', 'Social OAuth', 5],
       ],
     )
     const { digest } = await digestOf(p.dir, ['--vs', 'none'])
@@ -1822,9 +1842,9 @@ describe('contrasts: each pair of arms, variant against variant too', () => {
         (f.checks as Row[]).map((k) => k.label),
       ]),
       [
-        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
-        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'within noise', []],
-        ['new-skill', 'current-skill', '0/3 vs 0/3', 'within noise', ['Social OAuth']],
+        ['current-skill', 'no-skill (control)', '0/3 vs 0/3', 'insufficient', ['Social OAuth']],
+        ['new-skill', 'no-skill (control)', '0/3 vs 0/3', 'insufficient', []],
+        ['new-skill', 'current-skill', '0/3 vs 0/3', 'insufficient', ['Social OAuth']],
       ],
     )
     assert.equal(
