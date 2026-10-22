@@ -196,7 +196,6 @@ export async function callAnalysisModel(
     system: SYSTEM_PROMPT,
     prompt,
     output: Output.object({ schema: analysisSchema, name: 'analysis' }),
-    temperature: 0.2,
     maxOutputTokens,
     maxRetries: 3,
   })
