@@ -100,6 +100,7 @@ export async function startGateway(
   })
   child.stdin.on('error', () => {})
   let closed = false
+  let started = false
   const mux = createMux({
     Duplex,
     parity: 0,
@@ -110,10 +111,15 @@ export async function startGateway(
       if (port === PROXY_PORT) proxy.handle(stream)
       else stream.destroy()
     },
-    onReady: () => ready.resolve(),
+    onReady: () => {
+      started = true
+      ready.resolve()
+    },
     // The forwarder runs as root, so only a root sandbox could forge its output: a frame that
-    // breaks the protocol stops the gateway rather than the worker.
+    // breaks the protocol stops the gateway rather than the worker. Before READY it's a forwarder
+    // that never started (a shell's "node: not found"), which its exit or the timeout reports.
     onError: (message) => {
+      if (!started) return
       stop(`the forwarder's output broke the protocol: ${message}`)
       child.kill('SIGKILL')
     },
