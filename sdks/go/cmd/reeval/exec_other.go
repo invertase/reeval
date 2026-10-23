@@ -8,27 +8,16 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"sync/atomic"
 )
 
-// run starts the binary and waits for it, forwarding its exit code; Ctrl-C, which the binary
-// gets too, exits 130.
+// run starts the binary and waits for it, forwarding its exit code. The console sends Ctrl-C
+// to both; the launcher ignores it, so reeval stops its attempts and cleans up before either exits.
 func run(binary string, args, env []string) int {
-	var interrupted atomic.Bool
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
-	go func() {
-		for range signals {
-			interrupted.Store(true)
-		}
-	}()
+	signal.Ignore(os.Interrupt)
 	cmd := exec.Command(binary, args...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	err := cmd.Run()
-	if interrupted.Load() {
-		return 130
-	}
 	var exit *exec.ExitError
 	if errors.As(err, &exit) {
 		return exit.ExitCode()

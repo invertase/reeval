@@ -5,11 +5,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -77,7 +81,7 @@ func TestDownloadsChecksAndCaches(t *testing.T) {
 func TestChecksumMismatchCachesNothing(t *testing.T) {
 	mirror(t, "9.9.9", func(name, _ string) string { return strings.Repeat("0", 64) + "  *" + name + "\n" })
 	_, err := resolve()
-	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "doesn't match SHA256SUMS") {
+	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "doesn't match its sha256") {
 		t.Fatalf("err = %v", err)
 	}
 	if found, _ := filepath.Glob(filepath.Join(os.Getenv("XDG_CACHE_HOME"), "reeval", "bin", "9.9.9", "*")); len(found) > 0 {
@@ -158,5 +162,190 @@ func TestExecsTheBinary(t *testing.T) {
 	}
 	if !strings.Contains(string(exit.Stderr), "reeval: downloading reeval-9.9.9-") {
 		t.Errorf("stderr = %q", exit.Stderr)
+	}
+}
+
+// embed makes this launcher the one released as version, carrying sums.
+func embed(t *testing.T, version string, sums map[string]string) {
+	t.Helper()
+	oldVersion, oldSums := sumsVersion, releaseSums
+	sumsVersion, releaseSums = version, sums
+	t.Cleanup(func() { sumsVersion, releaseSums = oldVersion, oldSums })
+}
+
+func fakeSum() string {
+	sum := sha256.Sum256([]byte(fakeBinary))
+	return hex.EncodeToString(sum[:])
+}
+
+func TestReleasedLauncherTrustsOnlyItsOwnSums(t *testing.T) {
+	dir, name := mirror(t, "9.9.9", listed)
+	// The mirror's SHA256SUMS isn't read: it could be as wrong as the binary beside it.
+	if err := os.Remove(filepath.Join(dir, "SHA256SUMS")); err != nil {
+		t.Fatal(err)
+	}
+	embed(t, "9.9.9", map[string]string{name: fakeSum()})
+	if _, err := resolve(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEmbeddedSumOutranksTheMirrors(t *testing.T) {
+	_, name := mirror(t, "9.9.9", listed)
+	embed(t, "9.9.9", map[string]string{name: strings.Repeat("0", 64)})
+	_, err := resolve()
+	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "doesn't match its sha256") {
+		t.Fatalf("err = %v", err)
+	}
+	if found, _ := filepath.Glob(filepath.Join(os.Getenv("XDG_CACHE_HOME"), "reeval", "bin", "9.9.9", "*")); len(found) > 0 {
+		t.Errorf("cached %v", found)
+	}
+}
+
+func TestReleasedLauncherWithoutThisTarget(t *testing.T) {
+	mirror(t, "9.9.9", listed)
+	embed(t, "9.9.9", map[string]string{"reeval-9.9.9-plan9-mips": fakeSum()})
+	if _, err := resolve(); code(t, err) != exitInfra || !strings.Contains(err.Error(), "has no binary") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAnotherVersionReadsItsSHA256SUMS(t *testing.T) {
+	mirror(t, "9.9.9", listed)
+	embed(t, "1.0.0", map[string]string{})
+	if _, err := resolve(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMuslIsTheLoaderNotAFileOnDisk(t *testing.T) {
+	for interp, want := range map[string]bool{
+		"/lib/ld-musl-x86_64.so.1":      true,
+		"/lib/ld-musl-aarch64.so.1":     true,
+		"/lib64/ld-linux-x86-64.so.2":   false,
+		"/lib/ld-linux-aarch64.so.1":    false,
+		"/usr/lib/musl/lib/ld-linux.so": false,
+	} {
+		if got := muslLoader(interp); got != want {
+			t.Errorf("muslLoader(%s) = %v", interp, got)
+		}
+	}
+	if runtime.GOOS != "linux" {
+		return
+	}
+	interp, ok := interpreter("/bin/sh")
+	if !ok {
+		t.Skip("/bin/sh isn't a dynamic ELF program")
+	}
+	if musl() != muslLoader(interp) {
+		t.Errorf("musl() = %v, but /bin/sh runs on %s", musl(), interp)
+	}
+}
+
+func TestRefusesARedirectFromHTTPS(t *testing.T) {
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("downgraded"))
+	}))
+	defer plain.Close()
+	secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/down" {
+			http.Redirect(w, r, plain.URL+"/x", http.StatusFound)
+			return
+		}
+		if r.URL.Path == "/across" {
+			http.Redirect(w, r, "/x", http.StatusFound)
+			return
+		}
+		_, _ = w.Write([]byte("secure"))
+	}))
+	defer secure.Close()
+	old := client.Transport
+	client.Transport = secure.Client().Transport
+	t.Cleanup(func() { client.Transport = old })
+
+	if _, err := fetch(secure.URL + "/down"); code(t, err) != exitInfra || !strings.Contains(err.Error(), "refusing the redirect") {
+		t.Errorf("https to http: %v", err)
+	}
+	if data, err := fetch(secure.URL + "/across"); err != nil || string(data) != "secure" {
+		t.Errorf("https to https: %q %v", data, err)
+	}
+}
+
+// Launchers in containers that share the cache all have pid 1; goroutines share one pid too.
+func TestConcurrentFirstRunsShareAPid(t *testing.T) {
+	mirror(t, "9.9.9", listed)
+	var wg sync.WaitGroup
+	errs := make([]error, 8)
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = resolve()
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, _ := resolve()
+	if data, _ := os.ReadFile(got); string(data) != fakeBinary {
+		t.Errorf("cached binary is %q", data)
+	}
+	if partial, _ := filepath.Glob(filepath.Join(filepath.Dir(got), "*.partial")); len(partial) > 0 {
+		t.Errorf("left %v", partial)
+	}
+}
+
+func TestReevalBinaryIsntALauncher(t *testing.T) {
+	mirror(t, "9.9.9", listed)
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REEVAL_BINARY", self)
+	if _, err := resolve(); code(t, err) != exitUsage || !strings.Contains(err.Error(), "this launcher") {
+		t.Errorf("itself: %v", err)
+	}
+	other := filepath.Join(t.TempDir(), "reeval")
+	if err := os.WriteFile(other, []byte(fakeBinary), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REEVAL_BINARY", other)
+	for _, pid := range []int{os.Getpid(), os.Getppid()} {
+		t.Setenv(launcherPID, strconv.Itoa(pid))
+		if _, err := resolve(); code(t, err) != exitUsage || !strings.Contains(err.Error(), "a reeval launcher") {
+			t.Errorf("started by launcher %d: %v", pid, err)
+		}
+	}
+	t.Setenv(launcherPID, "1")
+	if os.Getpid() != 1 && os.Getppid() != 1 {
+		if got, err := resolve(); err != nil || got != other {
+			t.Errorf("a launcher further up: %s %v", got, err)
+		}
+	}
+}
+
+// A launcher pointed at another launcher stops instead of starting it forever.
+func TestLauncherLoopStops(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("covered by the pid check above")
+	}
+	launcher := filepath.Join(t.TempDir(), "reeval")
+	if out, err := exec.Command("go", "build", "-o", launcher, ".").CombinedOutput(); err != nil {
+		t.Fatalf("go build: %v\n%s", err, out)
+	}
+	twin := filepath.Join(t.TempDir(), "reeval")
+	data, _ := os.ReadFile(launcher)
+	if err := os.WriteFile(twin, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(launcher, "run")
+	cmd.Env = append(os.Environ(), "REEVAL_BINARY="+twin, launcherPID+"=")
+	out, err := cmd.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != exitUsage || !strings.Contains(string(out), "launcher, not the reeval binary") {
+		t.Errorf("exit %v: %s", err, out)
 	}
 }
