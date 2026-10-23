@@ -8,6 +8,8 @@ import (
 	"math"
 	"reflect"
 	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/invertase/reeval/sdks/go/internal/wire"
@@ -216,20 +218,20 @@ func (x *Expectation) Matcher(name string, args ...any) error {
 		Subject: x.subject, Matcher: name, Args: wireArgs, Not: x.not, Soft: x.soft, Label: x.label,
 		Poll: x.poll,
 	}
-	var deadline time.Time
-	if x.poll != nil {
-		p := *x.poll
-		call.Poll = &p
-		total := p.Timeout
-		if total == 0 {
-			total = 1000
-		}
-		deadline = time.Now().Add(time.Duration(total) * time.Millisecond)
-	}
 	r, err := x.c.a.call(x.ctx, call)
-	// reeval asks for the strings it tested Go's patterns on; each round answers more, and a
-	// polled call keeps its first round's deadline.
-	for err == nil && r.Untested != nil {
+	// reeval asks for the strings it tested Go's patterns on; each round answers more. A subject
+	// that changes on every read never runs out of new strings, so the rounds stop.
+	for round := 0; err == nil && r.Untested != nil; round++ {
+		if round == patternRounds {
+			names := make([]string, 0, len(r.Untested))
+			for key := range r.Untested {
+				names = append(names, key)
+			}
+			sort.Strings(names)
+			return &CallError{Op: "expect", Name: "UsageError", Message: fmt.Sprintf(
+				"%s's subject changed while reeval matched %s on it, %d times over: check it once it "+
+					"has stopped changing", name, strings.Join(names, ", "), patternRounds)}
+		}
 		for key, tested := range r.Untested {
 			p, ok := patterns[key]
 			if !ok {
@@ -238,9 +240,6 @@ func (x *Expectation) Matcher(name string, args ...any) error {
 			for _, s := range tested {
 				p.answers[s] = p.re.MatchString(s)
 			}
-		}
-		if call.Poll != nil {
-			call.Poll.Timeout = math.Max(1, float64(time.Until(deadline).Milliseconds()))
 		}
 		r, err = x.c.a.call(x.ctx, call)
 	}
@@ -264,6 +263,9 @@ func JSRegexp(source, flags string) any { return wire.Pattern{Regexp: source, Fl
 
 // goPattern is a Go regexp on the wire: reeval sends back the strings it tested, and the
 // answers go with the call when it's made again.
+// patternRounds is how many times a call answers reeval's untested strings before giving up.
+const patternRounds = 5
+
 type goPattern struct {
 	re      *regexp.Regexp
 	answers map[string]bool

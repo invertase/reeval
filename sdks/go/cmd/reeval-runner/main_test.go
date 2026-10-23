@@ -3,13 +3,17 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/invertase/reeval/sdks/go/reeval"
 )
 
 // project writes a module beside this SDK that uses it, with an eval package, a package that
@@ -76,15 +80,31 @@ type session struct {
 	cmd   *exec.Cmd
 }
 
-func runner(t *testing.T, root string) *session {
+func build(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "reeval-runner")
 	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
 	}
-	cmd := exec.Command(bin)
+	return bin
+}
+
+// without is the environment with no REEVAL_RUNNER variables, plus env.
+func without(env ...string) []string {
+	var out []string
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "REEVAL_RUNNER") {
+			out = append(out, kv)
+		}
+	}
+	return append(out, env...)
+}
+
+func runner(t *testing.T, root string) *session {
+	t.Helper()
+	cmd := exec.Command(build(t))
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "REEVAL_RUNNER=stdio", "GOFLAGS=-mod=mod")
+	cmd.Env = without("REEVAL_RUNNER=stdio", "REEVAL_RUNNER_PROTOCOL="+strconv.Itoa(reeval.RunnerProtocol), "GOFLAGS=-mod=mod")
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	in, _ := cmd.StdinPipe()
@@ -176,5 +196,28 @@ func TestBuildsEachPackageAndRunsItsBodies(t *testing.T) {
 		"turn": map[string]any{"prompt": "hi", "text": "hello", "status": "completed"}})
 	if done := s.read(); done["type"] != "done" || done["key"] != "k1" || done["error"] != nil {
 		t.Errorf("done = %v", done)
+	}
+}
+
+func TestRefusesAnotherProtocolInsteadOfHello(t *testing.T) {
+	bin := build(t)
+	for _, c := range []struct {
+		env  []string
+		says string
+	}{
+		{nil, "run evals with go tool reeval run"},
+		{[]string{"REEVAL_RUNNER=127.0.0.1:4000"}, "the reeval that started it is older"},
+		{[]string{"REEVAL_RUNNER=stdio"}, "speaks runner protocol " + strconv.Itoa(reeval.RunnerProtocol) + ", but the reeval that started it speaks an older one"},
+		{[]string{"REEVAL_RUNNER=stdio", "REEVAL_RUNNER_PROTOCOL=99"}, "speaks 99"},
+	} {
+		cmd := exec.Command(bin)
+		cmd.Env = without(c.env...)
+		var stdout, stderr strings.Builder
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err := cmd.Run()
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 2 || stdout.Len() > 0 || !strings.Contains(stderr.String(), c.says) {
+			t.Errorf("%v: %v, stdout %q, stderr %q", c.env, err, stdout.String(), stderr.String())
+		}
 	}
 }

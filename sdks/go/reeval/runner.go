@@ -12,12 +12,13 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"github.com/invertase/reeval/sdks/go/internal/runnerenv"
 	"github.com/invertase/reeval/sdks/go/internal/stdio"
 	"github.com/invertase/reeval/sdks/go/internal/wire"
 )
 
 // RunnerProtocol is the runner protocol this SDK speaks; reeval refuses a runner on another.
-const RunnerProtocol = 2
+const RunnerProtocol = 3
 
 const modulePath = "github.com/invertase/reeval/sdks/go"
 
@@ -41,8 +42,8 @@ func MainStart(evals []InternalEval) *M { return &M{evals: evals} }
 // Run serves reeval over the runner protocol until reeval closes the connection, and returns the
 // exit code.
 func (m *M) Run() int {
-	if os.Getenv("REEVAL_RUNNER") != "stdio" {
-		fmt.Fprintln(os.Stderr, "This is a reeval eval runner; run evals with reeval run.")
+	if problem := runnerenv.Mismatch(os.LookupEnv, Version(), RunnerProtocol); problem != "" {
+		fmt.Fprintln(os.Stderr, problem)
 		return 2
 	}
 	in, out, err := stdio.Private()

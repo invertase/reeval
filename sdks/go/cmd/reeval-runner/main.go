@@ -18,13 +18,14 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/invertase/reeval/sdks/go/internal/runnerenv"
 	"github.com/invertase/reeval/sdks/go/internal/stdio"
 	"github.com/invertase/reeval/sdks/go/reeval"
 )
 
 func main() {
-	if os.Getenv("REEVAL_RUNNER") != "stdio" {
-		fmt.Fprintln(os.Stderr, "This is reeval's Go runner; run evals with go tool reeval run.")
+	if problem := runnerenv.Mismatch(os.LookupEnv, reeval.Version(), reeval.RunnerProtocol); problem != "" {
+		fmt.Fprintln(os.Stderr, problem)
 		os.Exit(2)
 	}
 	root, err := os.Getwd()

@@ -3,6 +3,7 @@ package reeval_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -153,5 +154,29 @@ func TestEachNamesCases(t *testing.T) {
 		names = append(names, n.(map[string]any)["name"])
 	}
 	diff(t, "names", names, []any{"0 ada is 36 ($missing)", "1", "2"})
+	r.finish()
+}
+
+func TestPatternRoundsStop(t *testing.T) {
+	var got error
+	r := start(t, one("changing", func(ctx context.Context, c *reeval.C) error {
+		got = c.Expect(ctx, c).Matcher("toHaveFile", "log.txt", regexp.MustCompile(`ok`))
+		return nil
+	}))
+	startBody(r, "k1")
+	// The first call, then 5 rounds of answers.
+	for i := 0; i < 6; i++ {
+		req := r.read()
+		if req["call"] == nil {
+			t.Fatalf("round %d: %v", i, req)
+		}
+		r.send(map[string]any{"key": "k1", "id": req["id"], "ok": true, "op": "expect",
+			"untested": map[string]any{"ok": []string{fmt.Sprintf("line %d", i)}}})
+	}
+	diff(t, "done", r.read(), map[string]any{"type": "done", "key": "k1"})
+	var refused *reeval.CallError
+	if !errors.As(got, &refused) || !strings.Contains(refused.Message, "5 times over") {
+		t.Errorf("Matcher = %v", got)
+	}
 	r.finish()
 }

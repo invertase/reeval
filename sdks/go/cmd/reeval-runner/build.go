@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/invertase/reeval/sdks/go/reeval"
 )
 
 const sdkImport = "github.com/invertase/reeval/sdks/go/reeval"
@@ -193,7 +195,7 @@ type child struct {
 func (d *driver) spawn(dir, bin string) (*child, error) {
 	cmd := exec.Command(bin)
 	cmd.Dir = d.root
-	cmd.Env = append(os.Environ(), "REEVAL_RUNNER=stdio")
+	cmd.Env = append(os.Environ(), "REEVAL_RUNNER=stdio", "REEVAL_RUNNER_PROTOCOL="+strconv.Itoa(reeval.RunnerProtocol))
 	cmd.Stderr = os.Stderr
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
