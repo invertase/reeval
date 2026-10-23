@@ -51,11 +51,11 @@ A check is an `expect` assertion on what an attempt produced, such as a file, a 
 
 ## Compare
 
-A [comparison](/comparisons/compare) runs one evaluation, through the `compare` option, on a control without your change and on one or more variants with it, then compares their pass rates. Each variant reads `helped` or `made it worse` when the difference is [clear of chance](/comparisons/statistics), and `can't tell yet` below four counted attempts a side or when the result is too close to call.
+A [comparison](/evals/compare) runs one evaluation, through the `compare` option, on a control without your change and on one or more variants with it, then compares their pass rates. Each variant reads `helped` or `made it worse` when the difference is [clear of chance](/evals/statistics), and `can't tell yet` below four counted attempts a side or when the result is too close to call.
 
 ## Record
 
-A record is the saved result of a run, with every attempt's outcome, checks, token usage, transcript, and diff. A scratch record lives in the `.reeval/runs/` directory, whereas [recording](/history) saves selected records beside the code they ran on.
+A record is the saved result of a run, with every attempt's outcome, checks, token usage, transcript, and diff. A scratch record lives in the `.reeval/runs/` directory, whereas [recording](/runs/recording) saves selected records beside the code they ran on.
 
 ## Analysis
 
@@ -63,4 +63,4 @@ Analysis is what a language model writes about a run, such as the insights that 
 
 ## Profile
 
-A profile is a named preset in the config's `profiles` that sizes a run. The `pr` and `nightly` [profiles](/evals/profiles) written by the `reeval init` command are examples, and each run records its selected profile.
+A profile is a named preset in the config's `profiles` that sizes a run. The `pr` and `nightly` [profiles](/runs/profiles) written by the `reeval init` command are examples, and each run records its selected profile.

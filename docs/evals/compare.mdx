@@ -50,7 +50,7 @@ pass             tests build only the request fields they read
 
 The `arm` column lists the control and the variant. The evaluation's outcome, `pass`, is the variant's, because reeval gates only variants by default. Set `compare.gate` to `'all'` to gate the control too, or `'none'` to gate neither.
 
-The effect reads `can't tell yet` even at 2 of 2 against 0 of 2. Below four counted attempts a side, reeval doesn't call `helped` or `made it worse`. Set `runs: 4` so reeval can report an effect ([Statistics](/comparisons/statistics)).
+The effect reads `can't tell yet` even at 2 of 2 against 0 of 2. Below four counted attempts a side, reeval doesn't call `helped` or `made it worse`. Set `runs: 4` so reeval can report an effect ([Statistics](/evals/statistics)).
 
 If the control and the variant both pass, the harness already does what the skill teaches, and this task can't show the change. A control that includes the change measures nothing either. A rules file or a doc that repeats the skill gives both cells the same instructions.
 

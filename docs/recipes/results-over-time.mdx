@@ -3,7 +3,7 @@ title: "Track results over time"
 description: "Follow an evaluation's outcomes and flaky cells across recorded runs."
 ---
 
-You follow each evaluation's outcomes across the runs you keep in Git, and you find cells that both passed and failed. For more information about the `record` and `history` options, see [Recording](/history).
+You follow each evaluation's outcomes across the runs you keep in Git, and you find cells that both passed and failed. For more information about the `record` and `history` options, see [Recording](/runs/recording).
 
 <Steps>
 <Step title="Add a recording profile">
@@ -24,7 +24,7 @@ export default defineConfig({
 
 A run that uses the `track` profile is copied into the history folder when its status is `complete` or `budget`. Evaluations that fail still leave the run `complete`. An interrupted run stays in the `.reeval/runs` directory.
 
-With the default include patterns, the history folder is the `evals/.history` directory. For more information about profiles, see [Profiles](/evals/profiles).
+With the default include patterns, the history folder is the `evals/.history` directory. For more information about profiles, see [Profiles](/runs/profiles).
 
 </Step>
 <Step title="Run the profile">
@@ -68,7 +68,7 @@ List up to the 20 newest recorded runs, oldest to newest:
 npx reeval history
 ```
 
-For more information about the strips, see [Browse history](/history/queries#browse-history). For more information about the flags, see [`reeval history`](/reference/cli#reeval-history).
+For more information about the strips, see [Browse history](/results/queries#browse-history). For more information about the flags, see [`reeval history`](/reference/cli#reeval-history).
 
 </Step>
 <Step title="Read the evaluation trend">
@@ -81,7 +81,7 @@ npx reeval query eval_trend
 
 Each row is one evaluation on one run, with its outcome and its pass rate, `pass_at_1`. The outcome is `pass`, `fail`, `infra_error`, or `skipped`.
 
-A run in the history folder has `recorded` set to 1. A run that exists only in the `.reeval/runs` directory has `recorded` set to 0. For more information about choosing columns, see [Write your own SQL](/history/queries#write-your-own-sql).
+A run in the history folder has `recorded` set to 1. A run that exists only in the `.reeval/runs` directory has `recorded` set to 0. For more information about choosing columns, see [Write your own SQL](/results/queries#write-your-own-sql).
 
 </Step>
 <Step title="Find flaky cells">
@@ -98,7 +98,7 @@ reeval sets `cause` to the first match in the order `infra`, `judge`, `check`, a
 
 `check` means the same change both passed and failed its checks. `agent` means none of the earlier causes matched.
 
-For more information about when a cell is flaky, see [Flaky cells](/comparisons/statistics#flaky-cells). For more information about the columns, see [Query views](/reference/query#views).
+For more information about when a cell is flaky, see [Flaky cells](/evals/statistics#flaky-cells). For more information about the columns, see [Query views](/reference/query#views).
 
 </Step>
 </Steps>
