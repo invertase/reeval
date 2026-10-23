@@ -20,6 +20,7 @@ import { captureUseSpend, runJourney } from '../capture/use.ts'
 import { getRunContext } from '../engine/runtime.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import { openRouterFallbacks } from '../gateway/openrouter-models.ts'
+import { vertexSettingsIn } from '../gateway/vertex.ts'
 import { sha256 } from '../ids.ts'
 import { cacheDir } from '../root.ts'
 import type {
@@ -255,7 +256,10 @@ async function shot(
         const { config, profile } = getRunContext()
         const scope = gatewayScope(config, profile)
         const gateway = resolveModelGateway(name, undefined, scope, 'capture model')
-        return hostModel(name, gateway, 'capture model', openRouterFallbacks(scope.gateways))
+        return hostModel(name, gateway, 'capture model', {
+          fallbacks: openRouterFallbacks(scope.gateways),
+          ...(gateway === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
+        })
       },
     })
     onMoves(result.moves)

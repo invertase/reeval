@@ -257,7 +257,8 @@ export function judgeCaller(
       const scope = gatewayScope(config, profile)
       const gateway = resolveModelGateway(model, judgeOptions.gateway, scope, 'judge model')
       const { gateway: _pin, ...unpinned } = judgeOptions
-      // The list's entry, so the judge gets its settings (OpenRouter's fallbacks).
+      // The list's entry, so the judge gets its settings (OpenRouter's fallbacks,
+      // Vertex's project and regions).
       const entry = gateway && scope.gateways.find((g) => g.kind === gateway)
       const routed = gateway ? { ...unpinned, gateway: entry || gateway } : unpinned
       const { verdict, retries } = await a.timed('judgeMs', () =>

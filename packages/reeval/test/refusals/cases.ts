@@ -1750,6 +1750,8 @@ environment:
       route([VERTEX, DIRECT], claudeCode({ model: 'm' })),
     ],
     ['model: anthropic on vertex alone', model('anthropic/m', undefined, [VERTEX])],
+    ['model: google on vertex alone', model('google/m', undefined, [VERTEX])],
+    ['model: openai on vertex alone', model('openai/m', undefined, [VERTEX])],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

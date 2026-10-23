@@ -20,7 +20,14 @@ import {
   vercelCredential,
   vercelCredentialProblem,
 } from '../src/gateway/vercel.ts'
-import { vertexHost, vertexRegion, vertexSettings } from '../src/gateway/vertex.ts'
+import {
+  vertexDecisionModel,
+  vertexHost,
+  vertexLanguageModel,
+  vertexModelRefusal,
+  vertexRegion,
+  vertexSettings,
+} from '../src/gateway/vertex.ts'
 import { everyCallFailed } from '../src/harness/agent.ts'
 import {
   agentAuth,
@@ -795,6 +802,69 @@ describe('Vertex AI routes', () => {
     assert.throws(
       () => agentFor({ ...claude, gateway: 'vertex' } as AgentHarnessDescriptor),
       /no vertex\(\) settings/,
+    )
+  })
+
+  test("reeval's own models on Vertex: google/* and anthropic/*, with the host's token", async () => {
+    const regional = vertexSettings(
+      { project: 'reeval-512515', regions: { anthropic: 'us-east5' } },
+      {},
+    )
+    assert.equal(vertexModelRefusal('google/gemini-3.8-flash'), undefined)
+    assert.equal(vertexModelRefusal('anthropic/claude-haiku-4-5'), undefined)
+    assert.match(vertexModelRefusal('openai/gpt-5.4') ?? '', /only google\/\* and anthropic\/\*/)
+    assert.equal(
+      resolveModelGateway(
+        'anthropic/m',
+        undefined,
+        { gateways: list('vertex') } as GatewayScope,
+        'judge model',
+      ),
+      'vertex',
+    )
+    assert.deepEqual(judgeRoute('google/m', {}, 'judge model', 'vertex'), { kind: 'vertex' })
+    assert.deepEqual(judgeCredentials('google/m', 'vertex'), [])
+    await assert.rejects(
+      vertexLanguageModel('openai/gpt-5.4', regional, async () => ({ token: 't', expiresAt: 0 })),
+      /only google\/\* and anthropic\/\*/,
+    )
+
+    const seen: { url: string; authorization: string | null }[] = []
+    const realFetch = globalThis.fetch
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push({
+        url: String(url),
+        authorization: new Headers(init?.headers).get('authorization'),
+      })
+      throw new Error('offline')
+    }) as typeof fetch
+    try {
+      const source = async () => ({ token: 'ya29.host', expiresAt: Date.now() + 3_600_000 })
+      for (const id of ['anthropic/claude-haiku-4-5@20251001', 'google/gemini-3.8-flash']) {
+        const model = await vertexDecisionModel(id, regional, source)
+        assert.equal(model.provider, 'google-vertex.decision')
+        const inner = await vertexLanguageModel(id, regional, source)
+        await inner
+          .doGenerate({ prompt: [{ role: 'user', content: [{ type: 'text', text: 'hi' }] }] })
+          .catch(() => undefined)
+      }
+    } finally {
+      globalThis.fetch = realFetch
+    }
+    assert.deepEqual(
+      seen.map((s) => [new URL(s.url).host, new URL(s.url).pathname, s.authorization]),
+      [
+        [
+          'us-east5-aiplatform.googleapis.com',
+          '/v1/projects/reeval-512515/locations/us-east5/publishers/anthropic/models/claude-haiku-4-5@20251001:rawPredict',
+          'Bearer ya29.host',
+        ],
+        [
+          'aiplatform.googleapis.com',
+          '/v1beta1/projects/reeval-512515/locations/global/publishers/google/models/gemini-3.8-flash:generateContent',
+          'Bearer ya29.host',
+        ],
+      ],
     )
   })
 })

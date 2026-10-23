@@ -1,6 +1,7 @@
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import type { RoutingGatewayName } from '../gateway/routes.ts'
 import { VERCEL_KEY, VERCEL_OIDC, vercelCredentialProblem } from '../gateway/vercel.ts'
+import { vertexSettings } from '../gateway/vertex.ts'
 import type { JudgeRetry } from '../history/types.ts'
 import { badCharacterAt, redactSecrets } from '../redact.ts'
 import type {
@@ -40,11 +41,15 @@ export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string; name: 
   'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai', name: 'TypeSafe AI' },
 }
 
-/** A host call's route: its provider's own package, Vercel AI Gateway by name, or OpenRouter's package. */
+/**
+ * A host call's route: its provider's own package, Vercel AI Gateway by name, OpenRouter's
+ * package, or Vertex AI.
+ */
 export type JudgeRoute =
   | { kind: 'direct'; provider: string; pkg: string }
   | { kind: 'gateway' }
   | { kind: 'openrouter' }
+  | { kind: 'vertex' }
 
 export type { JudgeState } from '../types.ts'
 
@@ -126,7 +131,8 @@ export function unusedGatewayKey(env: NodeJS.ProcessEnv, gateway: GatewayName = 
 
 /**
  * The provider's own package on direct, the Vercel AI Gateway on vercel, or OpenRouter's package
- * on openrouter. Throws, naming the model, its prefix and the keys that would work, when none is
+ * on openrouter, or Vertex AI on vertex, whose token is minted when the model is called.
+ * Throws, naming the model, its prefix and the keys that would work, when none is
  * set, when the key it would send has whitespace or a line break in it, or when Vercel's project
  * token has expired.
  */
@@ -136,6 +142,7 @@ export function judgeRoute(
   what = 'judge model',
   gateway: GatewayName = 'direct',
 ): JudgeRoute {
+  if (gateway === 'vertex') return { kind: 'vertex' }
   const provider = providerOf(model)
   const direct = DIRECT_PROVIDERS[provider]
   const keys = judgeCredentials(model, gateway)
@@ -187,6 +194,14 @@ export async function runJudge(
     typeof options.gateway === 'object' &&
     options.gateway.kind === 'openrouter' &&
     options.gateway.fallbacks === true
+  const vertex =
+    gateway === 'vertex'
+      ? vertexSettings(
+          typeof options.gateway === 'object' && options.gateway.kind === 'vertex'
+            ? options.gateway
+            : {},
+        )
+      : undefined
   let score: number
   let resolvedModel: string | undefined
   let billing: { upstream?: string; costUsd?: number } = {}
@@ -209,6 +224,7 @@ export async function runJudge(
           signal,
           gateway,
           fallbacks,
+          vertex,
         ),
       retry,
       signal,

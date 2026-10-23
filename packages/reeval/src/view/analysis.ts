@@ -90,7 +90,7 @@ export type AnalysisDoc = {
   promptVersion: string
   model: string
   resolvedModel: string | null
-  route: 'direct' | 'gateway' | 'openrouter' | 'fake'
+  route: 'direct' | 'gateway' | 'openrouter' | 'vertex' | 'fake'
   usage: { inputTokens: number | null; outputTokens: number | null }
   latencyMs: number
   createdAt: string

@@ -88,7 +88,8 @@ everything else on its own key; the plan's hint says where each harness fell thr
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. `vertex({ project })`
 (else `GOOGLE_CLOUD_PROJECT`) runs Claude Code on Vertex AI with no key: reeval mints a token from
 Application Default Credentials on the host and the egress gateway adds it, so use Vertex's model
-ids (`claude-haiku-4-5@20251001`). Default `[direct()]`:
+ids (`claude-haiku-4-5@20251001`); `google/*` and `anthropic/*` judge and analysis models run there
+too. `reeval doctor --online` checks the token and the project's Vertex AI API. Default `[direct()]`:
 no gateway, so the judge, analysis and captures take only their provider's own key.
 `gateway: [openrouter(), direct()]` runs Claude Code, Codex, Goose, OpenCode and Grok Build on
 OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, fx, pi, and `effort` on any but

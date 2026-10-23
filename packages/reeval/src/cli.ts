@@ -29,6 +29,7 @@ import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
 import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { openRouterFallbacks } from './gateway/openrouter-models.ts'
+import { vertexSettingsIn } from './gateway/vertex.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
@@ -794,6 +795,7 @@ async function executeRun(
           ...(gateway === 'openrouter' && openRouterFallbacks(scope.gateways)
             ? { fallbacks: true }
             : {}),
+          ...(gateway === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
           ...(q.across !== undefined ? { across: q.across } : {}),
           ...(q.choices ? { choices: q.choices } : {}),
           ...(q.state ? { state: q.state } : {}),

@@ -274,7 +274,7 @@
           ]
         },
         "route": {
-          "enum": ["direct", "fake", "gateway", "openrouter"]
+          "enum": ["direct", "fake", "gateway", "openrouter", "vertex"]
         },
         "schemaVersion": {
           "const": 1

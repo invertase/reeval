@@ -67,6 +67,7 @@ A model's line names the key its gateway takes: its provider's own without a `ga
 | `judge` | None of the keys that work for the judge model's prefix is set, or the one reeval would send has whitespace in it | The same, for a profile's judge; or no judge model is set and an eval file calls `c.judge` |
 | `analysis` | `analysis.model`'s key has whitespace in it | None of the keys that work for `analysis.model`'s prefix is set: [`reeval analyze`](/reference/cli/analyze) and questions without their own model need it. Shown only when `analysis.model` is set |
 | `gateway` | A harness in the config or a profile that no entry of its [`gateway` list](/reference/gateway) can serve, or an expired `VERCEL_OIDC_TOKEN` under `vercel()`. Otherwise it shows where each harness resolves. Shown only when the config or a profile sets `gateway` | |
+| `vertex` | A `vertex()` entry names no project and `GOOGLE_CLOUD_PROJECT` isn't set; `GOOGLE_APPLICATION_CREDENTIALS` names a file that doesn't exist; (`--online`) no access token can be minted, or the Vertex AI API isn't enabled in the project | No Application Default Credentials found (`GOOGLE_APPLICATION_CREDENTIALS`, or gcloud's `application_default_credentials.json`), which a Google Cloud VM's metadata server can still serve; `--online` couldn't read whether the API is enabled. Shown only when the config or a profile lists `vertex()` |
 | `egress` | A sandbox can't enforce its policy, such as a restricted policy on `fakeSandbox()` | The config or a profile sets `'allow-all'` on a CI runner (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `CI`), a cloud VM (its firmware's vendor in `/sys/class/dmi/id`) or a machine whose cloud metadata service (`169.254.169.254`) answers: the sandbox can reach it around the gateway |
 | `gitignore` | `.env*` isn't ignored | `.reeval/` isn't ignored |
 | `env-files` | | A `.env` or `.env.*` file git doesn't ignore, such as `.env.example`, sets a `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*CREDENTIAL*` variable to a value that isn't empty or a placeholder (`<key>`, `your-key-here`, `${KEY}`, `xxx`). Shown only when git sees such a file |
@@ -92,7 +93,7 @@ The `image` and `key` checks cover the harnesses a run would use: doctor collect
              fix: set a valid CURSOR_API_KEY in .env.local
 ```
 
-With `--online`, each key goes in one request to its API, only in a header: `GET /v0/me` on `api.cursor.com`, `GET /v1/models` on `api.anthropic.com`, `GET /v1beta/models` on `generativelanguage.googleapis.com` and `GET /v1/models` on `api.openai.com`. HTTP 401 or 403 is a problem. Other keys, such as `TYPESAFE_AI_API_KEY`, are only checked for being set.
+With `--online`, each key goes in one request to its API, only in a header: `GET /v0/me` on `api.cursor.com`, `GET /v1/models` on `api.anthropic.com`, `GET /v1beta/models` on `generativelanguage.googleapis.com` and `GET /v1/models` on `api.openai.com`. HTTP 401 or 403 is a problem. Under `vertex()`, it mints a token, sends it to `oauth2.googleapis.com/tokeninfo` to name the account, and reads `aiplatform.googleapis.com`'s state from `serviceusage.googleapis.com`. Other keys, such as `TYPESAFE_AI_API_KEY`, are only checked for being set.
 
 ## --json
 

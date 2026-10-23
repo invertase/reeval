@@ -20,6 +20,7 @@ import {
 import { UsageError } from './errors.ts'
 import { gatewayScope, modelGatewayOrNone } from './gateway/models.ts'
 import { DEFAULT_GATEWAYS, gatewayHelper } from './gateway/resolve.ts'
+import { VERTEX_PROJECT_ENV } from './gateway/vertex.ts'
 import {
   AGENTS,
   credentialOf,
@@ -875,6 +876,13 @@ export function missingCredentials(
   ]
   const named = new Set<string>()
   for (const { model, gateway, what } of models) {
+    if (gateway === 'vertex') {
+      const gateways = gatewayScope(config, options.profile).gateways
+      const line = `${VERTEX_PROJECT_ENV} (for vertex()) for ${what}, "${model}"`
+      const hasProject = gateways.some((g) => g.kind === 'vertex' && g.project)
+      if (!hasProject && !env[VERTEX_PROJECT_ENV] && !missing.includes(line)) missing.push(line)
+      continue
+    }
     const keys = judgeCredentials(model, gateway)
     const once = `${keys.join(' ')}\0${model}`
     if (named.has(once)) continue

@@ -73,5 +73,7 @@
   "vertex: no project": "UsageError: vertex() has no project: set vertex({ project: '<id>' }) or GOOGLE_CLOUD_PROJECT",
   "vertex: the project from GOOGLE_CLOUD_PROJECT": null,
   "route: claude code on vertex then direct": null,
-  "model: anthropic on vertex alone": "UsageError: the judge model \"anthropic/m\": no gateway in the list can serve it (vertex: reeval doesn't call models on Vertex AI yet). Add direct() to gateway."
+  "model: anthropic on vertex alone": null,
+  "model: google on vertex alone": null,
+  "model: openai on vertex alone": "UsageError: the judge model \"openai/m\": no gateway in the list can serve it (vertex: reeval calls only google/* and anthropic/* models on Vertex AI). Add direct() to gateway."
 }

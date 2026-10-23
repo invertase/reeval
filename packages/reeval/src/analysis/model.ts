@@ -6,6 +6,12 @@ import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import { openRouterFallbacks, openRouterLanguageModel } from '../gateway/openrouter-models.ts'
+import {
+  type VertexSettings,
+  vertexLanguageModel,
+  vertexSettings,
+  vertexSettingsIn,
+} from '../gateway/vertex.ts'
 import { isFakeJudge, judgeRoute } from '../judge/index.ts'
 import type { FakeAnalysisModel, GatewayName, JudgeModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
@@ -13,10 +19,12 @@ import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
 
 export type ResolvedAnalysisModel = {
   name: string
-  route: 'direct' | 'gateway' | 'openrouter' | 'fake'
+  route: 'direct' | 'gateway' | 'openrouter' | 'vertex' | 'fake'
   fake?: FakeAnalysisModel
   /** On OpenRouter, whether it may fail the call over to another upstream provider. */
   fallbacks?: boolean
+  /** On vertex, the entry's project and regions. */
+  vertex?: VertexSettings
 }
 
 export const isFake = (m: unknown): m is FakeAnalysisModel =>
@@ -110,6 +118,7 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
       name: model,
       route,
       ...(route === 'openrouter' ? { fallbacks: openRouterFallbacks(scope.gateways) } : {}),
+      ...(route === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
     }
   } catch (error) {
     throw new UsageError(
@@ -178,12 +187,15 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
 }
 
 /**
- * The provider's own model for a direct route, the AI Gateway's by name on vercel, or OpenRouter's
- * on openrouter.
+ * The provider's own model for a direct route, the AI Gateway's by name on vercel, OpenRouter's
+ * on openrouter, or Vertex AI's on vertex.
  */
 export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
   if (model.route === 'gateway') return model.name
   if (model.route === 'openrouter') return openRouterLanguageModel(model.name, !!model.fallbacks)
+  if (model.route === 'vertex') {
+    return vertexLanguageModel(model.name, model.vertex ?? vertexSettings())
+  }
   const provider = model.name.slice(0, model.name.indexOf('/'))
   const id = model.name.slice(provider.length + 1)
   switch (provider) {
@@ -198,18 +210,23 @@ export async function providerModel(model: ResolvedAnalysisModel): Promise<Langu
   }
 }
 
-/**
- * The language model `name` is on `gateway`, checked for its key: what the judge's route says,
- * with `fallbacks` on OpenRouter.
- */
+/** What a host model takes from its gateway's entry: OpenRouter's fallbacks, Vertex's project and regions. */
+export type HostModelSettings = { fallbacks?: boolean; vertex?: VertexSettings }
+
+/** The language model `name` is on `gateway`, checked for its key: what the judge's route says. */
 export function hostModel(
   name: string,
   gateway: GatewayName | undefined,
   what: string,
-  fallbacks = false,
+  { fallbacks = false, vertex }: HostModelSettings = {},
 ): Promise<LanguageModel> {
   const route = judgeRoute(name, process.env, what, gateway).kind
-  return providerModel({ name, route, ...(route === 'openrouter' ? { fallbacks } : {}) })
+  return providerModel({
+    name,
+    route,
+    ...(route === 'openrouter' ? { fallbacks } : {}),
+    ...(route === 'vertex' && vertex ? { vertex } : {}),
+  })
 }
 
 export type ModelAnswer = {
