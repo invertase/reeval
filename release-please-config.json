@@ -1,8 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "bootstrap-sha": "5b725c806c2250223bbc55a5fce3839339730a97",
-  "include-component-in-tag": true,
-  "separate-pull-requests": true,
   "packages": {
     ".": {
       "release-type": "node",
@@ -11,16 +9,18 @@
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "extra-files": [
-        { "type": "json", "path": "packages/reeval/package.json", "jsonpath": "$.version" }
+        { "type": "json", "path": "packages/reeval/package.json", "jsonpath": "$.version" },
+        {
+          "type": "toml",
+          "path": "packages/reeval-python/pyproject.toml",
+          "jsonpath": "$.project.version"
+        },
+        {
+          "type": "toml",
+          "path": "packages/reeval-python/uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='reeval-python')].version"
+        }
       ]
-    },
-    "packages/reeval-python": {
-      "release-type": "python",
-      "component": "reeval-python",
-      "include-component-in-tag": true,
-      "package-name": "reeval-python",
-      "changelog-path": "CHANGELOG.md",
-      "bump-minor-pre-major": true
     }
   }
 }

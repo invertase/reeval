@@ -205,7 +205,8 @@ jobs:
       # docs.page's own check: internal links, assets and frontmatter targets.
       - if: ${{ !cancelled() }}
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - if: ${{ !cancelled() }}
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
           # over a minute on Windows.
@@ -217,11 +218,22 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: packages/reeval-python
         run: |
-          uv sync --dev
+          uv sync --locked --dev
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
           uv run pytest
+      # On a release commit, release.yml publishes this sdist and wheel: the ones built from the
+      # commit these checks ran on.
+      - name: reeval-python (uv build)
+        working-directory: packages/reeval-python
+        run: uv build --out-dir "$RUNNER_TEMP/reeval-python-dist"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reeval-python-dist
+          path: ${{ runner.temp }}/reeval-python-dist/*
+          if-no-files-found: error
+          retention-days: 7
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
   # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.

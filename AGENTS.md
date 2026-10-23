@@ -364,16 +364,17 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   on the PR tier, over every file the merge group adds to `main`; each queue entry has its own concurrency group (its
   `gh-readonly-queue/…` ref), so entries never cancel each other or PR runs. The queue's merge
   method must be squash. `real.yml` and `contract.yml` don't run in the queue.
-- **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open with the new version
-  (in `packages/reeval/package.json`, the root `package.json` and
-  `.release-please-manifest.json`) and `CHANGELOG.md`, and `reeval-python` its own
-  `chore(main): release reeval-python X.Y.Z` PR. Merging one tags `vX.Y.Z` (or
-  `reeval-python-vX.Y.Z`) and creates the GitHub release. Keep `separate-pull-requests` on: a
-  combined PR that releases only `reeval` has one untitled section in its body, which
-  release-please then matches against the branch's component, and the combined branch has none,
-  so it tags nothing. `release.yml` then runs all of `ci.yml` on that commit and, if it passes,
+- **Releases:** `reeval` and `reeval-python` release in lockstep, one version for both, since
+  an SDK downloads the reeval binary of its own version. release-please keeps one
+  `chore(main): release X.Y.Z` PR open with the new version (in `packages/reeval/package.json`,
+  the root `package.json`, `packages/reeval-python/pyproject.toml` and `uv.lock`, and
+  `.release-please-manifest.json`) and `CHANGELOG.md`. Merging it tags `vX.Y.Z` and creates the
+  GitHub release. (release-please's `linked-versions` plugin can't do this: it skips a component
+  with `include-component-in-tag: false`, as the root package's is so its tags stay `vX.Y.Z`.)
+  `release.yml` then runs all of `ci.yml` on that commit and, if it passes,
   publishes the tarball that its `packed install` job packed (with the `@reeval/*` packages bundled in),
-  in the `npm` environment with npm trusted publishing (OIDC, no token). If a flake fails it,
+  in the `npm` environment with npm trusted publishing (OIDC, no token), and the sdist and wheel
+  its `lint, typecheck and docs` job built to PyPI, in the `pypi` environment. If a flake fails it,
   re-run the failed jobs. Provenance is automatic once the repository is public. Don't publish
   by hand, and don't edit versions or `CHANGELOG.md`.
 - **Dependabot** (`.github/dependabot.yml`) opens weekly version updates, titled `build(deps): …`,
