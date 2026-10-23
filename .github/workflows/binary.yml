@@ -24,6 +24,8 @@ on:
       - packages/reeval/src/engine/pool.ts
       - packages/reeval/src/engine/worker-entry.ts
       - packages/reeval/src/studio/index.ts
+      - packages/reeval/src/studio/app.ts
+      - packages/reeval/src/studio/app-files.ts
       - packages/reeval/tsdown.config.mjs
 
 permissions:
