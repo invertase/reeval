@@ -1,7 +1,8 @@
-# Releases reeval (npm) and reeval-python (PyPI). release-please keeps one release PR per package open
-# from Conventional Commits on main; merging tags vX.Y.Z (npm) or reeval-python-vX.Y.Z (PyPI).
-# Then ci.yml runs on that commit; npm publishes the packed tarball with trusted publishing (OIDC,
-# environment `npm`). PyPI publishes from packages/reeval-python with OIDC, environment `pypi`.
+# Releases reeval (npm) and reeval-python (PyPI) in lockstep: reeval-python downloads the reeval
+# binary of its own version, so both carry one version. release-please keeps one release PR open
+# from Conventional Commits on main; merging it tags vX.Y.Z. Then ci.yml runs on that commit; npm
+# publishes the tarball its packed install job packed, with trusted publishing (OIDC, environment
+# `npm`), and PyPI the sdist and wheel its lint job built, with OIDC, environment `pypi`.
 # Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
 # GitHub environments that allow deployment from branch `main` still approve the job.
 name: release
@@ -32,9 +33,8 @@ jobs:
       contents: write
       pull-requests: write
     outputs:
-      any_created: ${{ steps.release.outputs.release_created == 'true' || steps.release.outputs['packages/reeval-python--release_created'] == 'true' }}
-      npm_created: ${{ steps.release.outputs.release_created }}
-      pypi_created: ${{ steps.release.outputs['packages/reeval-python--release_created'] }}
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - id: release
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
@@ -51,15 +51,7 @@ jobs:
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
         run: |
           if [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then
-            echo "::error::The reeval release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
-            exit 1
-          fi
-      - if: steps.release.outputs['packages/reeval-python--release_created'] == 'true'
-        env:
-          RELEASE_SHA: ${{ steps.release.outputs['packages/reeval-python--sha'] }}
-        run: |
-          if [ "$RELEASE_SHA" != "$GITHUB_SHA" ]; then
-            echo "::error::The reeval-python release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
+            echo "::error::The release is tagged at $RELEASE_SHA, not this push's $GITHUB_SHA, so it isn't tested or published."
             exit 1
           fi
 
@@ -71,9 +63,8 @@ jobs:
     permissions:
       contents: read
     outputs:
-      any_created: ${{ steps.check.outputs.any_created }}
-      npm_created: ${{ steps.check.outputs.npm_created }}
-      pypi_created: ${{ steps.check.outputs.pypi_created }}
+      release_created: ${{ steps.check.outputs.release_created }}
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -83,13 +74,10 @@ jobs:
       - id: check
         run: |
           set -euo pipefail
-          npm_v=$(jq -r '."."' .release-please-manifest.json)
-          py_v=$(jq -r '."packages/reeval-python"' .release-please-manifest.json)
-          git rev-parse "refs/tags/v${npm_v}^{commit}" >/dev/null
-          git rev-parse "refs/tags/reeval-python-v${py_v}^{commit}" >/dev/null
-          echo "any_created=true" >> "$GITHUB_OUTPUT"
-          echo "npm_created=true" >> "$GITHUB_OUTPUT"
-          echo "pypi_created=true" >> "$GITHUB_OUTPUT"
+          v=$(jq -r '."."' .release-please-manifest.json)
+          git rev-parse "refs/tags/v${v}^{commit}" >/dev/null
+          echo "release_created=true" >> "$GITHUB_OUTPUT"
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
 
   test:
     name: test
@@ -97,7 +85,7 @@ jobs:
     if: |
       always() && !cancelled() && !failure() &&
       (
-        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.any_created == 'true') ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && needs.republish-gate.result == 'success')
       )
     permissions:
@@ -111,8 +99,8 @@ jobs:
     if: |
       always() && needs.test.result == 'success' &&
       (
-        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.npm_created == 'true') ||
-        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.npm_created == 'true')
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true')
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -150,26 +138,34 @@ jobs:
     if: |
       always() && needs.test.result == 'success' && github.repository == 'invertase/reeval' &&
       (
-        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.pypi_created == 'true') ||
-        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.pypi_created == 'true')
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true')
       )
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: pypi
     permissions:
       id-token: write
-      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          persist-credentials: false
-          ref: main
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-      - name: Build sdist and wheel
-        working-directory: packages/reeval-python
-        run: uv build
+          name: reeval-python-dist
+          path: ${{ runner.temp }}/reeval-python-dist
+      # The release PR sets reeval-python's version with reeval's; a mismatch would ship an SDK
+      # that downloads another reeval.
+      - name: Check the version
+        env:
+          DIST: ${{ runner.temp }}/reeval-python-dist
+          WANT: ${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          wheel=$(ls "$DIST"/reeval_python-*.whl)
+          if [ "$(basename "$wheel")" != "reeval_python-${WANT}-py3-none-any.whl" ]; then
+            echo "::error::Built $(basename "$wheel"), but this release is reeval ${WANT}."
+            exit 1
+          fi
       # v1.14.3 (aef6c9b): commit SHAs are not published to ghcr.io; the release tag is.
       - uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
-          packages-dir: packages/reeval-python/dist
+          packages-dir: ${{ runner.temp }}/reeval-python-dist
           skip-existing: true

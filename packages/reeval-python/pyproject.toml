@@ -52,7 +52,7 @@ pythonVersion = "3.11"
 reportUnknownLambdaType = false
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
