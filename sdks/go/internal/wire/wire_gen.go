@@ -1568,7 +1568,7 @@ func (v JudgeCallDataGatewayDirect) MarshalJSON() ([]byte, error) {
 }
 
 // Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-// `reeval/gateway`. It serves Claude Code and Codex.
+// `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
 type JudgeCallDataGatewayVercel struct{}
 
 // MarshalJSON writes JudgeCallDataGatewayVercel with its constant fields.
@@ -2404,7 +2404,7 @@ const (
 )
 
 // Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-// `reeval/gateway`. It serves Claude Code and Codex.
+// `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
 type VercelGatewayDescriptor struct{}
 
 // MarshalJSON writes VercelGatewayDescriptor with its constant fields.
