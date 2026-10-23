@@ -49,7 +49,7 @@ pass             the weather agent loops on its tool
   uses ToolLoopAgent  0 of 4  4 of 4
 ```
 
-The `arm` column lists the control and the variant. The variant passed `uses ToolLoopAgent` in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. A real run's counts can differ. For more information about how reeval reaches the effect, see [Statistics](/comparisons/statistics).
+The `arm` column lists the control and the variant. The variant passed `uses ToolLoopAgent` in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. A real run's counts can differ. For more information about how reeval reaches the effect, see [Statistics](/evals/statistics).
 
 ## What reeval supports
 
@@ -58,11 +58,11 @@ This table lists what reeval supports, and each area links to its section:
 | Area | What reeval supports |
 |---|---|
 | [Evaluations](/evals/evaluate) | TypeScript files beside the tool they test, with checks on files, commands, and tool calls, and a judge for what checks can't read |
-| [Compare](/comparisons/compare) | A control and one or more variants, with an effect for each variant |
+| [Compare](/evals/compare) | A control and one or more variants, with an effect for each variant |
 | [Environments](/environments) | Skills, MCP servers, rules, files, setup commands, and secrets for the harness |
 | [Harnesses](/harnesses) | Coding agents, each on the model and effort you set |
 | [Sandboxes](/sandboxes) | A fresh container for each attempt, with API keys kept on the host |
-| [Runs](/evals/running) | A plan before any attempt starts, profiles that size a run, and records you commit beside the code |
+| [Runs](/runs/running) | A plan before any attempt starts, profiles that size a run, and records you commit beside the code |
 | [Results](/results/output) | The outcome, transcript, and analysis of each run, and queries across recorded runs |
 
 Each kind of tool reeval evaluates has a recipe: [Test an SDK](/recipes/sdk), [Test a CLI](/recipes/cli), [Measure MCP servers](/recipes/mcp-comparison), and [Measure your docs](/recipes/docs-comparison). For more information about commands and options, see the [CLI reference](/reference/cli) and [Options](/reference/options).

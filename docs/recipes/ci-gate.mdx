@@ -23,7 +23,7 @@ export default defineConfig({
 })
 ```
 
-`budget.attempts` caps the plan. The profile sets no `limit`, so the variant still runs. For more information about profiles, see [Profiles](/evals/profiles).
+`budget.attempts` caps the plan. The profile sets no `limit`, so the variant still runs. For more information about profiles, see [Profiles](/runs/profiles).
 
 </Step>
 <Step title="Require a minimum lift">
@@ -45,7 +45,7 @@ Set `compare.gate` and `compare.minLift` in the `evals/shoehorn.eval.ts` file.
 
 `compare.minLift` is the smallest lift you accept, from -1 to 1. `compare.gate` at `'variants'` is the default, so a variant's failure fails the evaluation. A control that fails its checks does not fail the run, so `reeval run` can exit 0.
 
-For more information about the comparison and the other `compare.gate` values, see [Compare setups](/comparisons/compare).
+For more information about the comparison and the other `compare.gate` values, see [Compare setups](/evals/compare).
 
 With `compare.gate` at `'variants'`, the variant fails when the low end of its lift interval is below `0.25`. The variant's row adds `not by minLift 25`. The effect can still read `helped`.
 
@@ -54,7 +54,7 @@ With `compare.gate` at `'variants'`, the variant fails when the low end of its l
 </Step>
 <Step title="Add the workflow">
 
-Add the workflow that runs the `pr` profile. For more information about the workflow file and the API key, see [CI](/evals/ci).
+Add the workflow that runs the `pr` profile. For more information about the workflow file and the API key, see [CI](/runs/ci).
 
 </Step>
 <Step title="Print the summary">

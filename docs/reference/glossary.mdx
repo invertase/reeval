@@ -21,7 +21,7 @@ A check is a named assertion on what an attempt produced, from `expect`, `c.exec
 
 ## Compare
 
-A compare runs its control and each variant as separate cells; `compare.baseline` optionally names the control's environment. It measures a variant against the control only when the cells share a harness and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a compare, see [Compare](/comparisons/compare).
+A compare runs its control and each variant as separate cells; `compare.baseline` optionally names the control's environment. It measures a variant against the control only when the cells share a harness and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a compare, see [Compare](/evals/compare).
 
 ## Environment
 
@@ -37,15 +37,15 @@ A harness is a coding agent harness that carries out an evaluation's task in a s
 
 ## Profile
 
-A profile is a named preset that sizes a run, and the run's record stores the profile that sized it. For more information about a profile, see [Profiles](/evals/profiles).
+A profile is a named preset that sizes a run, and the run's record stores the profile that sized it. For more information about a profile, see [Profiles](/runs/profiles).
 
 ## Record
 
-A record is the saved JSON of a run. reeval writes a scratch copy in the `.reeval/runs/` directory, and recording copies that JSON into the history folder. For more information about a record, see [Recording](/history).
+A record is the saved JSON of a run. reeval writes a scratch copy in the `.reeval/runs/` directory, and recording copies that JSON into the history folder. For more information about a record, see [Recording](/runs/recording).
 
 ## Run
 
-A run is one `reeval run` command and every attempt that command starts, and reeval saves them as one record. For more information about a run, see [Running](/evals/running).
+A run is one `reeval run` command and every attempt that command starts, and reeval saves them as one record. For more information about a run, see [Running](/runs/running).
 
 ## Sandbox
 

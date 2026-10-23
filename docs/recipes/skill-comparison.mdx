@@ -90,7 +90,7 @@ In the `evals/shoehorn.eval.ts` file, set `minLift` on the compare. `compare.min
 +  },
 ```
 
-A variant whose lift may be below `0.25` fails. The row then adds `not by minLift 25`, even when the effect reads `helped`. For more information about this gate, see [Gate on lift](/comparisons/compare#gate-on-lift).
+A variant whose lift may be below `0.25` fails. The row then adds `not by minLift 25`, even when the effect reads `helped`. For more information about this gate, see [Gate on lift](/evals/compare#gate-on-lift).
 
 </Step>
 <Step title="Run the comparison">
@@ -119,7 +119,7 @@ pass             tests build only the request fields they read
 
 `uses fromPartial` is the row that separates the cells. `loaded the skill` passed on the variant, so it prints under `+1 more passed`. When `uses fromPartial` passes on both sides, the harness already does the task, and this task can't show the skill.
 
-For more information about the other gates, see [Compare setups](/comparisons/compare). For more information about asking which attempt did better, see [Ask which did better](/comparisons/compare#ask-which-did-better).
+For more information about the other gates, see [Compare setups](/evals/compare). For more information about asking which attempt did better, see [Ask which did better](/evals/compare#ask-which-did-better).
 
 </Step>
 </Steps>

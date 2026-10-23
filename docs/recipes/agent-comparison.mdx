@@ -5,7 +5,7 @@ description: "Run one task on each harness and read each one's pass rate and eff
 
 You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, checks, and attempts, so the block reads side by side. For more information about choosing a harness and its key, see [Harnesses](/harnesses).
 
-To measure a change on each harness instead, add `compare` ([Compare harnesses](/comparisons/compare#compare-harnesses)).
+To measure a change on each harness instead, add `compare` ([Compare harnesses](/evals/compare#compare-harnesses)).
 
 <Steps>
 <Step title="Write the evaluation">
@@ -90,7 +90,7 @@ claude-code:claude-sonnet-5  9             0.3
 codex:gpt-5.6-luna           21            0.9
 ```
 
-A harness that passes with fewer tool calls and seconds did the task with less work. To add tokens, select `tokens_median`. For more information about the `reeval query` command, see [Query run history](/history/queries).
+A harness that passes with fewer tool calls and seconds did the task with less work. To add tokens, select `tokens_median`. For more information about the `reeval query` command, see [Query run history](/results/queries).
 
 </Step>
 </Steps>
