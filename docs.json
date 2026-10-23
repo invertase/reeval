@@ -35,6 +35,7 @@
       "pages": [
         { "title": "Introduction", "href": "/" },
         { "title": "Quickstart", "href": "/quickstart" },
+        { "title": "Standalone binary", "href": "/guide/binary" },
         { "title": "Your first real run", "href": "/guide/first-real-run" }
       ]
     },

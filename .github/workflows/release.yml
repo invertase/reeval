@@ -2,7 +2,8 @@
 # binary of its own version, so both carry one version. release-please keeps one release PR open
 # from Conventional Commits on main; merging it tags vX.Y.Z. Then ci.yml runs on that commit; npm
 # publishes the tarball its packed install job packed, with trusted publishing (OIDC, environment
-# `npm`), and PyPI the sdist and wheel its lint job built, with OIDC, environment `pypi`.
+# `npm`), and PyPI the sdist and wheel its lint job built, with OIDC, environment `pypi`. The
+# release also gets the standalone binaries and their SHA256SUMS (binary.yml) as assets.
 # Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
 # GitHub environments that allow deployment from branch `main` still approve the job.
 name: release
@@ -16,6 +17,10 @@ on:
         description: Run full CI on main and publish npm/PyPI from the manifest (tags must already exist)
         type: boolean
         default: true
+      dry_run:
+        description: Only build and smoke-test the binaries, and list what would be uploaded to the release; publish nothing
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -86,18 +91,70 @@ jobs:
       always() && !cancelled() && !failure() &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
-        (github.event_name == 'workflow_dispatch' && needs.republish-gate.result == 'success')
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.result == 'success' && !inputs.dry_run)
       )
     permissions:
       contents: read
       actions: read
     uses: ./.github/workflows/ci.yml
 
+  binaries:
+    name: binaries
+    needs: [release-please, republish-gate, test]
+    if: |
+      always() && !cancelled() && !failure() &&
+      (
+        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true' && needs.test.result == 'success') ||
+        (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true' && (inputs.dry_run || needs.test.result == 'success'))
+      )
+    permissions:
+      contents: read
+    uses: ./.github/workflows/binary.yml
+
+  upload-binaries:
+    name: upload binaries
+    needs: [release-please, republish-gate, binaries]
+    if: always() && needs.binaries.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.binaries.outputs.artifact }}
+          path: out
+      - name: Upload to the release
+        working-directory: out
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: v${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
+          VERSION: ${{ needs.binaries.outputs.version }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: |
+          set -euo pipefail
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::The binaries are reeval $VERSION, but the release is $TAG."
+            exit 1
+          fi
+          sha256sum -c SHA256SUMS
+          gh release view "$TAG" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/assets"
+          files=(reeval-* SHA256SUMS)
+          for f in "${files[@]}"; do
+            if grep -qxF "$f" "$RUNNER_TEMP/assets"; then echo "$TAG has $f: replace it"; else echo "$TAG: add $f"; fi
+          done
+          if [ "$DRY_RUN" = true ]; then
+            echo "::notice::Dry run: nothing uploaded to $TAG"
+            exit 0
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber
+
   publish:
     name: publish to npm
     needs: [release-please, republish-gate, test]
     if: |
-      always() && needs.test.result == 'success' &&
+      always() && needs.test.result == 'success' && !inputs.dry_run &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true')
@@ -136,7 +193,7 @@ jobs:
     name: publish to PyPI
     needs: [release-please, republish-gate, test]
     if: |
-      always() && needs.test.result == 'success' && github.repository == 'invertase/reeval' &&
+      always() && needs.test.result == 'success' && !inputs.dry_run && github.repository == 'invertase/reeval' &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true')

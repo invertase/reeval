@@ -1,0 +1,83 @@
+---
+title: Standalone binary
+description: Install reeval as one executable, with no Node or npm, from its GitHub release.
+---
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/invertase/reeval/main/scripts/install.sh | sh
+```
+
+```text
+reeval install: reeval-0.13.0-linux-x64
+######################################################################## 100.0%
+reeval install: reeval 0.13.0 at /home/you/.local/bin/reeval
+```
+
+The script picks the binary for your OS and CPU from the newest release, checks it against the release's `SHA256SUMS` and installs it as `reeval`. It's the same reeval as the npm package, compiled with the Bun runtime inside, so it needs no Node. You still need `git`, and [Docker](https://docs.docker.com/get-docker/) for real runs. The x64 builds need a CPU with AVX2.
+
+## Windows
+
+```powershell
+irm https://raw.githubusercontent.com/invertase/reeval/main/scripts/install.ps1 | iex
+```
+
+It installs `reeval.exe` in `%LOCALAPPDATA%\reeval\bin` and adds that folder to your user `PATH`; open a new terminal to use it. There's one Windows build, for x64.
+
+## Options
+
+Both scripts read the same environment variables:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `REEVAL_VERSION` | the newest release | The version to install, such as `0.13.0` |
+| `REEVAL_INSTALL_DIR` | `~/.local/bin`, or `%LOCALAPPDATA%\reeval\bin` on Windows | Where `reeval` goes |
+| `REEVAL_DOWNLOAD` | the version's GitHub release | A URL (or `file://` directory) holding the binaries and `SHA256SUMS`; needs `REEVAL_VERSION` |
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/invertase/reeval/main/scripts/install.sh \
+  | REEVAL_VERSION=0.13.0 REEVAL_INSTALL_DIR=/usr/local/bin sh
+```
+
+## Downloading by hand
+
+Each [release](https://github.com/invertase/reeval/releases) has one binary per target and a `SHA256SUMS` file:
+
+| Target | File |
+|---|---|
+| Linux x64, arm64 (glibc) | `reeval-<version>-linux-x64`, `reeval-<version>-linux-arm64` |
+| Linux x64, arm64 (musl: Alpine) | `reeval-<version>-linux-x64-musl`, `reeval-<version>-linux-arm64-musl` |
+| macOS Apple silicon, Intel | `reeval-<version>-darwin-arm64`, `reeval-<version>-darwin-x64` |
+| Windows x64 | `reeval-<version>-windows-x64.exe` |
+
+```bash
+sha256sum --check --ignore-missing SHA256SUMS
+chmod +x reeval-0.13.0-darwin-arm64
+mv reeval-0.13.0-darwin-arm64 ~/.local/bin/reeval
+```
+
+On macOS, use `shasum -a 256 --check --ignore-missing SHA256SUMS`.
+
+<Warning>
+The binaries aren't signed. macOS blocks a file a browser downloaded until you remove its quarantine flag with `xattr -d com.apple.quarantine reeval`, and Windows SmartScreen may warn on first run. The install scripts download with `curl` and PowerShell, which set neither.
+</Warning>
+
+## Evals with the binary
+
+Eval files import `{{ pkg }}` as usual, and the binary answers those imports itself, so a project needs no `node_modules` to plan or run. Your editor and `tsc` still need the types, which `npm install -D {{ pkg }}` gives them.
+
+```bash
+reeval init         # a project, as in the Quickstart
+reeval image build  # the agent's sandbox image
+reeval run
+```
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Scaffold a project and run your first eval.
+  </Card>
+  <Card title="CLI" icon="terminal" href="/reference/cli">
+    Every command and flag.
+  </Card>
+</CardGroup>
