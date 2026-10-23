@@ -298,6 +298,12 @@ export const patternSchema = z
   .describe('A regular expression, where a matcher takes a string or a `RegExp`.')
 
 /** A pattern in the runner's own language, which reeval never compiles. */
+function hasAnsweredPattern(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasAnsweredPattern)
+  if (typeof value !== 'object' || value === null) return false
+  return 'matchedBy' in value || Object.values(value).some(hasAnsweredPattern)
+}
+
 export const answeredPatternSchema = z
   .strictObject({
     matchedBy: z
@@ -525,6 +531,14 @@ export const attemptCallSchema = z
             code: 'custom',
             path: ['subject', 'result'],
             message: "can't be polled: drop result so reeval runs the command on each try",
+          })
+        }
+        if (call.poll && call.args.some(hasAnsweredPattern)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['args'],
+            message:
+              "can't be polled with a { matchedBy } pattern, whose answers can't follow the subject from try to try: poll with a string, or check once",
           })
         }
       })

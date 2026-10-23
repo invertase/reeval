@@ -123,9 +123,11 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
 
 
 def _cancelled_done(conn: _Connection, key: str) -> None:
-    aborted = conn.aborted.get(key)
-    error = {"name": aborted.name, "message": str(aborted)} if aborted else None
-    conn.write({"type": "done", "key": key, **({"error": error} if error else {})})
+    aborted = conn.aborted.get(key) or AttemptAborted(
+        "RunnerError", "the runner stopped this body without reeval aborting it"
+    )
+    error = {"name": aborted.name, "message": str(aborted)}
+    conn.write({"type": "done", "key": key, "error": error})
 
 
 async def serve() -> None:

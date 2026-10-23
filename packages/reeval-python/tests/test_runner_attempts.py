@@ -193,3 +193,36 @@ def test_bytes_go_as_base64_and_a_judge_without_options_sends_none(tmp_path: Pat
         ]
 
     _scenario(tmp_path, body)
+
+
+def test_a_body_the_runner_cancels_without_an_abort_ends_with_an_error() -> None:
+    from reeval_python.runner import (
+        _cancelled_done,  # pyright: ignore[reportPrivateUsage]
+        _Connection,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    written: list[dict[str, Any]] = []
+
+    class Writer:
+        def write(self, data: bytes) -> None:
+            written.append(json.loads(data))
+
+    conn = _Connection(Writer())  # type: ignore[arg-type]
+    _cancelled_done(conn, "k1")
+    conn.abort("k2", "TimeoutError", "Eval timed out after 1s")
+    _cancelled_done(conn, "k2")
+    assert written == [
+        {
+            "type": "done",
+            "key": "k1",
+            "error": {
+                "name": "RunnerError",
+                "message": "the runner stopped this body without reeval aborting it",
+            },
+        },
+        {
+            "type": "done",
+            "key": "k2",
+            "error": {"name": "TimeoutError", "message": "Eval timed out after 1s"},
+        },
+    ]

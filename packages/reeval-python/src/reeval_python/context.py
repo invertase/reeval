@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, cast
@@ -13,6 +14,9 @@ from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
 from reeval_python.wire import Patterns, options_to_wire, wire_args
 
 SendFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+
+
+PATTERN_ROUNDS = 5
 
 
 class AttemptContext:
@@ -98,10 +102,22 @@ class AttemptContext:
         if label is not None:
             call["label"] = label
         reply = await self._send({"call": call})
-        # reeval asks for the strings it tested the patterns on; each round answers more.
-        while reply.get("ok", False) and "untested" in reply:
-            patterns.answer(cast(dict[str, list[str]], reply["untested"]))
+        # reeval asks for the strings it tested the patterns on; each round answers more. A
+        # subject that changes on every read never runs out of new strings, so the rounds stop.
+        # A pattern is answered off the event loop, where a slow one can't hold up other bodies.
+        for _ in range(PATTERN_ROUNDS):
+            if not (reply.get("ok", False) and "untested" in reply):
+                break
+            untested = cast(dict[str, list[str]], reply["untested"])
+            await asyncio.to_thread(patterns.answer, untested)
             reply = await self._send({"call": call})
+        else:
+            if reply.get("ok", False) and "untested" in reply:
+                names = ", ".join(cast(dict[str, Any], reply["untested"]))
+                raise RuntimeError(
+                    f"UsageError: {matcher}'s subject changed while reeval matched {names} on it, "
+                    f"{PATTERN_ROUNDS} times over: check it once it has stopped changing"
+                )
         if not reply.get("ok", False):
             err = reply.get("error") or {"name": "Error", "message": "call failed"}
             raise RuntimeError(f"{err.get('name')}: {err.get('message')}")

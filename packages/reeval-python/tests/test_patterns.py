@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from reeval_python.context import AttemptContext
+from reeval_python.context import PATTERN_ROUNDS, AttemptContext
 from reeval_python.errors import ReevalAssertionError
 
 
@@ -94,3 +94,43 @@ def test_patterns_at_any_depth_are_answered_and_long_ones_kept_apart() -> None:
     assert last[0]["query"]["answers"] == {"a" * 300 + "y": False}
     assert last[1][0]["answers"] == {"a" * 300 + "y": True}
     assert last[1][0]["matchedBy"] == f"{long_b!r} #2"
+
+
+class Changing(Host):
+    """A subject with a new string on every read, so reeval always has one untested."""
+
+    async def send(self, msg: dict[str, Any]) -> dict[str, Any]:
+        self.strings = [f"line {len(self.calls)}"]
+        return await super().send(msg)
+
+
+def test_a_subject_that_changes_on_every_read_stops_after_a_few_rounds() -> None:
+    host = Changing([])
+    with pytest.raises(RuntimeError, match=r"subject changed while reeval matched re\.compile"):
+        _expect(host, [re.compile("line")])
+    assert len(host.calls) == 1 + PATTERN_ROUNDS
+
+
+def test_patterns_are_answered_off_the_event_loop() -> None:
+    ticks: list[float] = []
+
+    async def main() -> None:
+        async def tick() -> None:
+            while True:
+                ticks.append(1)
+                await asyncio.sleep(0.005)
+
+        ticker = asyncio.create_task(tick())
+        await asyncio.sleep(0)
+        # Each string backtracks for about 15 ms; `re` keeps the GIL for one search, so the loop
+        # runs between them.
+        strings = [f"{'a' * 18}!{i}" for i in range(40)]
+        c = AttemptContext("a", Host(strings).send)
+        slow = re.compile(r"(a+)+$")
+        await c.run_expect(
+            subject={"turn": 0}, matcher="toHaveRun", args=[slow], label=None, not_=True, soft=True
+        )
+        ticker.cancel()
+
+    asyncio.run(main())
+    assert len(ticks) > 10, "the event loop kept running while the patterns were matched"

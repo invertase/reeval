@@ -107,9 +107,10 @@ SDK runner responsibilities:
    the language writes the pattern, e.g. Python's `repr`), never translated to JavaScript.
    reeval runs the matcher and, when it tests a string `answers` lacks, replies
    `{ ok: true, op: 'expect', untested: { [matchedBy]: strings } }` and records nothing: match
-   them in the language, add them to `answers` and make the same call again. A polled call keeps
-   its first round's deadline, so lower `poll.timeout` by the time spent. `{ regexp, flags }`
-   is for a language whose patterns are JavaScript's.
+   them in the language, off the thread that reads reeval's messages, add them to `answers` and
+   make the same call again. Stop after a few rounds (Python stops at 5): a subject that
+   changes on every read never runs out of new strings. reeval refuses `poll` with such an
+   argument. `{ regexp, flags }` is for a language whose patterns are JavaScript's.
 
 Declaration tree JSON is validated by the same contract TypeScript uses (`declareTree` in the worker).
 

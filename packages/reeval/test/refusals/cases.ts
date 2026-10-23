@@ -1316,6 +1316,18 @@ environment:
       }),
     ],
     [
+      'a polled call with a pattern the runner answers',
+      request({
+        op: 'expect',
+        subject: { attempt: true },
+        matcher: 'toHaveFile',
+        args: ['ready.txt', { matchedBy: "re.compile('ok')", answers: {} }],
+        not: false,
+        soft: false,
+        poll: { timeout: 1000 },
+      }),
+    ],
+    [
       'an exec result with a fractional exit code',
       request({
         op: 'expect',
