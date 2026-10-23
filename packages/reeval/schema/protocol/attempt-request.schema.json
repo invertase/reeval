@@ -251,6 +251,43 @@
           "additionalProperties": false
         },
         {
+          "description": "A check the eval's own language made, such as Python's `assert`: recorded as a matcher call is, so it's named, counted and compared the same. Replies with its record.",
+          "type": "object",
+          "properties": {
+            "label": {
+              "description": "The check's own name, the same whether it passes or fails.",
+              "type": "string"
+            },
+            "matcher": {
+              "description": "What made the check in the eval's language, e.g. `assert`.",
+              "type": "string",
+              "pattern": "^[a-z][A-Za-z]*$"
+            },
+            "message": {
+              "description": "Why it failed.",
+              "type": "string"
+            },
+            "op": {
+              "type": "string",
+              "const": "record"
+            },
+            "soft": {
+              "description": "A failure fails the attempt at its end, as `expect.soft`. Default false.",
+              "type": "boolean"
+            },
+            "status": {
+              "type": "string",
+              "enum": ["pass", "fail"]
+            },
+            "subject": {
+              "description": "What it checked, as the eval wrote it (`result.ok`): names the check when it has no label.",
+              "type": "string"
+            }
+          },
+          "required": ["matcher", "op", "status"],
+          "additionalProperties": false
+        },
+        {
           "description": "`c.judge(question, options)`. Replies with its verdict, or a judge failure when the provider failed.",
           "type": "object",
           "properties": {

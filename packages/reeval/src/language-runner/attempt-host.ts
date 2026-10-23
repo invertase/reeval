@@ -1,6 +1,6 @@
 // Answers attempt-protocol calls from a language runner on the real AttemptContext.
 
-import { type ExpectCall, expectCall } from '../attempt/match.ts'
+import { type ExpectCall, expectCall, recordCall } from '../attempt/match.ts'
 import {
   type AttemptCall,
   type AttemptReply,
@@ -69,6 +69,8 @@ async function perform(
       return {}
     case 'expect':
       return await expectCall(c, matcherCalls, call as ExpectCall)
+    case 'record':
+      return { assertion: recordCall(matcherCalls, call) }
     case 'judge': {
       const { question, options } = call
       const opts = (options ?? {}) as JudgeCallOptions & { on?: unknown }

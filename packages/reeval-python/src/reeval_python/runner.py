@@ -8,6 +8,7 @@ import contextlib
 import contextvars
 import inspect
 import io
+import itertools
 import json
 import os
 import sys
@@ -19,6 +20,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO, cast
 
+from reeval_python.checks import RecordedAssertionError, bind_recorder, unrecorded_failure
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
 from reeval_python.errors import AttemptAborted, ReevalAssertionError
@@ -209,17 +211,22 @@ async def _in_thread(fn: Any, *args: Any) -> Any:
 async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
     _attempt.set(attempt_id)
     fn = get_body(body_id)
-    seq = 0
+    # One numbering for the body's requests and records (a sync body records from its thread).
+    ids = itertools.count(1)
 
     async def send_request(message: dict[str, Any]) -> dict[str, Any]:
-        nonlocal seq
-        seq += 1
-        return await conn.request(attempt_id, str(seq), message["call"])
+        return await conn.request(attempt_id, str(next(ids)), message["call"])
 
     loop = asyncio.get_running_loop()
     async_ctx = AttemptContext(attempt_id, send_request)
     error: dict[str, Any] | None = None
 
+    def record(call: dict[str, Any]) -> None:
+        if attempt_id in conn.aborted:
+            raise conn.aborted[attempt_id]
+        conn.write({"id": str(next(ids)), "call": call, "key": attempt_id})
+
+    bind_recorder(record)
     try:
         if inspect.iscoroutinefunction(fn):
             async_ctx.bind_expect()
@@ -233,15 +240,16 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         raise
     except AttemptAborted as exc:
         error = {"name": exc.name, "message": str(exc)}
-    except ReevalAssertionError as exc:
+    except (ReevalAssertionError, RecordedAssertionError) as exc:
         error = {"name": "AssertionError", "message": str(exc), "stack": traceback.format_exc()}
     except AssertionError as exc:
-        stack = traceback.format_exc()
-        error = {"name": "AssertionError", "message": str(exc) or "assert failed", "stack": stack}
-        try:
-            await async_ctx.record_plain_assert(exc)
-        except AssertionError as recorded:
-            error["message"] = str(recorded)
+        call = unrecorded_failure(exc)
+        record(call)
+        error = {
+            "name": "AssertionError",
+            "message": call["message"],
+            "stack": traceback.format_exc(),
+        }
     except BaseException as exc:  # noqa: BLE001
         # SystemExit and the like end this body only: the runner serves other attempts too.
         error = {"name": type(exc).__name__, "message": str(exc), "stack": traceback.format_exc()}

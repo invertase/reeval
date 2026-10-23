@@ -547,6 +547,33 @@ export const attemptCallSchema = z
       ),
     z
       .strictObject({
+        op: z.literal('record'),
+        matcher: z
+          .string()
+          .regex(/^[a-z][A-Za-z]*$/, 'must be a name such as assert')
+          .describe("What made the check in the eval's language, e.g. `assert`."),
+        subject: z
+          .string()
+          .optional()
+          .describe(
+            'What it checked, as the eval wrote it (`result.ok`): names the check when it has no label.',
+          ),
+        label: z
+          .string()
+          .optional()
+          .describe("The check's own name, the same whether it passes or fails."),
+        status: z.enum(['pass', 'fail']),
+        message: z.string().optional().describe('Why it failed.'),
+        soft: z
+          .boolean()
+          .optional()
+          .describe('A failure fails the attempt at its end, as `expect.soft`. Default false.'),
+      })
+      .describe(
+        "A check the eval's own language made, such as Python's `assert`: recorded as a matcher call is, so it's named, counted and compared the same. Replies with its record.",
+      ),
+    z
+      .strictObject({
         op: z.literal('judge'),
         question: nonEmpty.describe('A yes/no question about the graded turn or value.'),
         options: judgeCallDataSchema.optional(),
@@ -610,6 +637,12 @@ export const attemptReplySchema = z
       z.strictObject({
         id,
         ok: z.literal(true),
+        op: z.literal('record'),
+        assertion: assertionRecordSchema,
+      }),
+      z.strictObject({
+        id,
+        ok: z.literal(true),
         op: z.literal('judge'),
         verdict: z.union([verdictSchema, judgeFailureSchema]),
       }),
@@ -633,6 +666,7 @@ export const attemptReplySchema = z
         'readFile',
         'writeFile',
         'expect',
+        'record',
         'judge',
         'serve',
         'kill',

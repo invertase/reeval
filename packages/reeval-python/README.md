@@ -45,8 +45,10 @@ def lands(c):
     expect(c.judge("Does greet.py print hi?")).to_pass()
 ```
 
-Plain `assert` is first-class: failures become hard checks in the run record (same shape as
-TypeScript). Use typed results (`ExecResult.ok`, `Verdict.passed`, `Turn.text`, …) and `c.file(path)`
+Plain `assert` is first-class: every one in an eval file, passing or failing, is a check in
+the run record, named by its message (`assert ok, "greet.py exists"`) or by what it checked
+(`assert c.exec("test -f greet.py").ok`). A failing one ends the body, as in Python, and shows
+both sides of a comparison (`assert 1 == 2`). Use typed results (`ExecResult.ok`, `Verdict.passed`, `Turn.text`, …) and `c.file(path)`
 for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, soft checks,
 labels) — Playwright-style.
 

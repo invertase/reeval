@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import type { AttemptContext, BackgroundHandle } from 'reeval'
 import { expect } from 'reeval'
+import { recordCheck } from 'reeval/testing'
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 type Message = { [key: string]: Json }
@@ -132,6 +133,11 @@ export async function runScript(c: AttemptContext, run: ScriptRun): Promise<void
       }
       case 'expect':
         return expectCall(call)
+      case 'record': {
+        const { op, ...check } = call
+        assertions++
+        return { assertion: recordCheck(check as Parameters<typeof recordCheck>[0]) }
+      }
       case 'judge': {
         const { on, ...options } = (call.options ?? {}) as { on?: Subject; [key: string]: Json }
         const graded = on === undefined ? {} : { on: reader(on)() as Json }

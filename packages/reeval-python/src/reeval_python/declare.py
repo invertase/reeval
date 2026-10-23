@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from reeval_python.checks import ASSERT_HOOK, check, compile_eval
 from reeval_python.wire import options_to_wire
 
 Mode = Literal["run", "skip", "only", "todo"]
@@ -255,9 +256,10 @@ def collect_eval_file(path: Path) -> dict[str, Any]:
 
     def loader() -> None:
         spec = importlib.util.spec_from_file_location("reeval_eval", path)
-        if spec is None or spec.loader is None:
+        if spec is None:
             raise ImportError(f"can't load {path}")
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        module.__dict__[ASSERT_HOOK] = check
+        exec(compile_eval(path.read_text(encoding="utf-8"), str(path)), module.__dict__)  # noqa: S102
 
     return collect_module_tree_sync(loader)

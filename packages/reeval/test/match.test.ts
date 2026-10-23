@@ -5,12 +5,13 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { assertionRecords } from '../src/attempt/assertions.ts'
+import { assertionRecords, softFailure } from '../src/attempt/assertions.ts'
 import {
   type ExpectCall,
   expectCall,
   fromWire,
   match,
+  recordCall,
   type UntestedReply,
 } from '../src/attempt/match.ts'
 import {
@@ -332,6 +333,32 @@ describe('one matcher table', () => {
       match(broken, { ...call, subject: { readFile: 'a' }, matcher: 'toHaveFile', args: ['a'] }),
       { message: 'sandbox gone' },
     )
+  })
+
+  test('a record call joins the matcher calls, named and numbered as they are', () => {
+    const calls: RawAssertion[] = []
+    const check = { op: 'record', matcher: 'assert' } as const
+    recordCall(calls, { ...check, subject: 'result.ok', status: 'pass' })
+    const again = recordCall(calls, { ...check, subject: 'result.ok', status: 'pass' })
+    assert.equal(again.label, 'assert result.ok #2')
+    const soft = recordCall(calls, {
+      ...check,
+      label: 'copy is final',
+      status: 'fail',
+      message: "copy is final: assert 'draft' == 'final'",
+      soft: true,
+    })
+    assert.deepEqual(soft, {
+      label: 'copy is final',
+      labelled: true,
+      matcher: 'assert',
+      status: 'fail',
+      soft: true,
+      message: "copy is final: assert 'draft' == 'final'",
+    })
+    assert.equal(softFailure(calls)?.message, "copy is final: assert 'draft' == 'final'")
+    assert.equal(recordCall(calls, { ...check, status: 'fail' }).message, 'assert failed')
+    assert.equal(assertionRecords(calls).length, 4)
   })
 
   test('wire arguments become the values expect takes, patterns at any depth', () => {
