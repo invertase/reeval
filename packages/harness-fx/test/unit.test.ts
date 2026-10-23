@@ -44,8 +44,11 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     Object.keys(fxEnv('openai/gpt-5.6')).sort(),
     Object.keys(fxEnv('gpt-4.1')).sort(),
   )
-  assert.deepEqual(fxSettings('openai/gpt-5.6'), [])
+  assert.deepEqual(fxSettings('openai/gpt-5.6'), [
+    { path: '.fx/settings.json', content: '{\n  "session_titles": false\n}\n' },
+  ])
   const [file] = fxSettings('gpt-4.1-mini')
+  assert.equal(JSON.parse(file?.content ?? '').session_titles, false)
   assert.equal(file?.path, '.fx/settings.json')
   assert.deepEqual(JSON.parse(file?.content ?? '').providers.openai.auth, {
     type: 'bearer',

@@ -135,19 +135,22 @@ export function fxEnv(model: string) {
 }
 
 /**
- * fx's `settings.json`, with OpenAI's Chat Completions API as the configured provider `openai`
- * for a bare OpenAI id; the gateway needs none.
+ * fx's `settings.json`: no session titles, which fx otherwise generates on its own model
+ * (`openai/gpt-5.6-luna`) with each first prompt, so the run's model is the only one called; and
+ * for a bare OpenAI id, OpenAI's Chat Completions API as the configured provider `openai`.
  */
 export function fxSettings(model: string) {
-  if (fxProviderOf(model) !== 'openai') return []
   const settings = {
-    providers: {
-      openai: {
-        protocol: 'openai-chat-completions',
-        base_url: `${relayUrl}/v1`,
-        auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+    session_titles: false,
+    ...(fxProviderOf(model) === 'openai' && {
+      providers: {
+        openai: {
+          protocol: 'openai-chat-completions',
+          base_url: `${relayUrl}/v1`,
+          auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+        },
       },
-    },
+    }),
   }
   return [{ path: '.fx/settings.json', content: `${JSON.stringify(settings, null, 2)}\n` }]
 }
