@@ -234,7 +234,7 @@ record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness an
 compare` says "same", every `reeval query` view answers, `-v` and `.reeval/debug` have the trace, and `reeval
 studio build` builds the history. Both need `REEVAL_TEST_REAL=1` (which `pnpm test:contract` sets) and
 each harness's key; asked for, a row without its key fails (it never skips), naming the variable,
-so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. A row with a `gated` reason (a `*-gateway` row not yet passed on its real CLI) runs only when
+so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. A row with a `gated` reason (`pi-gateway`, whose model sometimes times out the rules eval) runs only when
 `REEVAL_CONTRACT_HARNESSES` names it. Their
 `fake` rows run key-free in the Docker tier. `test/replay.test.ts` replays streams captured from
 real runs (`REEVAL_UPDATE_CAPTURES=1` on a contract run refreshes them, `REEVAL_UPDATE_FORMATS=1` accepts a

@@ -397,7 +397,11 @@ export const harnesses: HarnessRow[] = [
     id: 'pi-gateway',
     harness: 'pi',
     gateway: 'vercel',
-    gated: 'not yet passed on the real CLI; name pi-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    // Every behaviour passes, but Gemini 3.8 Flash here can find the codeword and then spend the
+    // rules eval's whole timeout probing the sandbox instead of writing it: a model's flake, not
+    // the route's, so the row stays out of the default run until it holds.
+    gated:
+      'Gemini 3.8 Flash on AI Gateway sometimes times out the rules eval exploring the sandbox; name pi-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'pi',
