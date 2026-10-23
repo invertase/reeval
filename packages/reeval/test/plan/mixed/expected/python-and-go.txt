@@ -1,0 +1,4 @@
+no profile · 2 evals · 2 cells · 2 attempts
+evals/go_eval.go › from go          fake/-/fake  control  gated  ×1
+evals/python.eval.py › from python  fake/-/fake  control  gated  ×1
+excluded: —

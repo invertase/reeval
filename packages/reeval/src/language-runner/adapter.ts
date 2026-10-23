@@ -50,8 +50,25 @@ const PYTHON_ADAPTER: RemoteAdapter = {
   setupHint: PYTHON_RUNNER_HINT,
 }
 
+/** The Go SDK's runner, which builds a program per package of `_eval.go` files. */
+export const GO_RUNNER_PACKAGE = 'github.com/invertase/reeval/sdks/go/cmd/reeval-runner'
+
+const GO_ADAPTER: RemoteAdapter = {
+  id: 'go',
+  extensions: ['_eval.go'],
+  includeGlobs: ['evals/**/*_eval.go'],
+  remote: true,
+  load: (file, root) => import('./remote.ts').then((m) => m.collectLanguageFile(file, root)),
+  // `go run` in the project, so the runner is the SDK version its go.mod requires.
+  runnerCommand: () => [process.env.REEVAL_GO?.trim() || 'go', 'run', GO_RUNNER_PACKAGE],
+}
+
 /** Every adapter; TypeScript is first and the in-process default. */
-export const LANGUAGE_ADAPTERS: readonly LanguageAdapter[] = [TYPESCRIPT_ADAPTER, PYTHON_ADAPTER]
+export const LANGUAGE_ADAPTERS: readonly LanguageAdapter[] = [
+  TYPESCRIPT_ADAPTER,
+  PYTHON_ADAPTER,
+  GO_ADAPTER,
+]
 
 export function adapterForFile(file: string): LanguageAdapter {
   const match = LANGUAGE_ADAPTERS.find((a) => a.extensions.some((ext) => file.endsWith(ext)))
@@ -63,6 +80,7 @@ export function defaultIncludeGlobs(): string[] {
 }
 
 export function runnerEnv(root: string, adapter: LanguageAdapter): NodeJS.ProcessEnv {
+  if (adapter.id === 'go') return { ...process.env, REEVAL_PROJECT_ROOT: resolve(root) }
   const sdk = process.env.REEVAL_PYTHON_SDK ?? repoPythonSdk()
   if (adapter.id !== 'python' || !sdk) return process.env
   const src = join(sdk, 'src')

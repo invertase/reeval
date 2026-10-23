@@ -122,6 +122,8 @@ jobs:
                 packages/reeval-python/* | \
                 packages/reeval/src/language-runner/* | \
                 packages/reeval/test/python-sdk.test.ts | \
+                sdks/go/* | \
+                packages/reeval/test/go-sdk.test.ts | \
                 packages/reeval/test/language-runner.test.ts)
                   unit=true
                   features=true ;;
@@ -235,6 +237,11 @@ jobs:
             packages/reeval-python/uv.lock
             packages/reeval/test/features/python-sdk/hello/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdks/go/go.mod
+          # The SDK has no dependencies, so there's no go.sum to key a cache on.
+          cache: false
       - name: reeval-python (uv sync, ruff, pyright, pytest)
         if: ${{ !cancelled() }}
         working-directory: packages/reeval-python
@@ -247,6 +254,15 @@ jobs:
           for v in 3.11 3.12 3.13 3.14; do
             UV_PROJECT_ENVIRONMENT=".venv-$v" uv run --locked --python "$v" pytest -q
           done
+      - name: Go SDK (gofmt, vet, staticcheck, test)
+        if: ${{ !cancelled() }}
+        working-directory: sdks/go
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          for os in linux darwin windows; do GOOS=$os go vet ./...; done
+          go run honnef.co/go/tools/cmd/staticcheck@2025.1.1 ./...
+          go test -race ./...
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
   # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.
@@ -275,6 +291,11 @@ jobs:
             packages/reeval-python/uv.lock
             packages/reeval/test/features/python-sdk/hello/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdks/go/go.mod
+          # The SDK has no dependencies, so there's no go.sum to key a cache on.
+          cache: false
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
@@ -319,6 +340,11 @@ jobs:
             packages/reeval-python/uv.lock
             packages/reeval/test/features/python-sdk/hello/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdks/go/go.mod
+          # The SDK has no dependencies, so there's no go.sum to key a cache on.
+          cache: false
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
@@ -388,6 +414,11 @@ jobs:
             packages/reeval-python/uv.lock
             packages/reeval/test/features/python-sdk/hello/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdks/go/go.mod
+          # The SDK has no dependencies, so there's no go.sum to key a cache on.
+          cache: false
         if: matrix.package == 'reeval'
       - uses: ./.github/actions/sandbox-images
       - if: needs.changes.outputs.coverage == 'true'

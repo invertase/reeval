@@ -387,7 +387,10 @@ function aligned(rows: (string | string[])[], indent: string): string[] {
       })
     }
     for (const row of run) {
-      out.push(indent + row.map((cell, i) => (i < row.length - 1 ? cell.padEnd(widths[i] ?? 0) : cell)).join(' '))
+      out.push(
+        indent +
+          row.map((cell, i) => (i < row.length - 1 ? cell.padEnd(widths[i] ?? 0) : cell)).join(' '),
+      )
     }
     run = []
   }
@@ -410,7 +413,8 @@ const goConstType = (value: unknown) =>
 /** Go: each named object a struct, each union of objects an interface its variants implement. */
 export function go(defs: Map<string, Schema> = definitions()): string {
   for (const name of defs.keys()) {
-    if (!/^[A-Z][A-Za-z0-9]*$/.test(name)) throw new Error(`$defs/${name} can't be a Go name: rename it`)
+    if (!/^[A-Z][A-Za-z0-9]*$/.test(name))
+      throw new Error(`$defs/${name} can't be a Go name: rename it`)
   }
   const blocks: string[] = []
   const synthetic = new Set<string>()
@@ -420,7 +424,8 @@ export function go(defs: Map<string, Schema> = definitions()): string {
   const fresh = (name: string) => {
     let candidate = name
     for (let n = 2; synthetic.has(candidate); n++) candidate = `${name}${n}`
-    if (defs.has(candidate)) throw new Error(`the generated name ${candidate} is also a $def: rename the $def`)
+    if (defs.has(candidate))
+      throw new Error(`the generated name ${candidate} is also a $def: rename the $def`)
     synthetic.add(candidate)
     return candidate
   }
@@ -451,7 +456,7 @@ export function go(defs: Map<string, Schema> = definitions()): string {
     if (schema.enum) {
       for (const v of schema.enum) goLiteral(v, hint)
       const kinds = new Set(schema.enum.map(goConstType))
-      return kinds.size === 1 ? [...kinds][0]! : 'any'
+      return kinds.size === 1 ? ([...kinds][0] ?? 'any') : 'any'
     }
     const union = schema.anyOf ?? schema.oneOf
     if (union) return unionOf(union, hint)
@@ -487,12 +492,14 @@ export function go(defs: Map<string, Schema> = definitions()): string {
 
   /** `T | null` is `*T`; a union of objects an interface named `hint`; any other union `any`. */
   function unionOf(nested: Schema[], hint: string, named = false): string {
-    const flat = (v: Schema): Schema[] => (v.anyOf ?? v.oneOf ?? [v]).flatMap((x) => (x === v ? [x] : flat(x)))
+    const flat = (v: Schema): Schema[] =>
+      (v.anyOf ?? v.oneOf ?? [v]).flatMap((x) => (x === v ? [x] : flat(x)))
     const variants = nested.flatMap(flat)
     const present = variants.filter((v) => v.type !== 'null')
     if (present.length < variants.length) {
-      if (present.length !== 1) return 'any'
-      const type = typeOf(present[0]!, hint)
+      const [only] = present
+      if (present.length !== 1 || !only) return 'any'
+      const type = typeOf(only, hint)
       return nillable(type) || markers.has(type) || type === hint ? type : `*${type}`
     }
     if (present.length > 1 && present.every(isStruct)) {
@@ -507,7 +514,7 @@ export function go(defs: Map<string, Schema> = definitions()): string {
       return name
     }
     const types = new Set(present.map((v, i) => typeOf(v, variantName(v, hint, i))))
-    return types.size === 1 ? [...types][0]! : 'any'
+    return types.size === 1 ? ([...types][0] ?? 'any') : 'any'
   }
 
   function variantName(variant: Schema, parent: string, index: number): string {
@@ -561,7 +568,9 @@ export function go(defs: Map<string, Schema> = definitions()): string {
     }
     const doc = schema.description ? goComment(schema.description, '') : []
     blocks.push(
-      [...doc, `type ${name} struct {`, ...aligned(fields, '\t'), '}'].join('\n').replace('struct {\n}', 'struct{}'),
+      [...doc, `type ${name} struct {`, ...aligned(fields, '\t'), '}']
+        .join('\n')
+        .replace('struct {\n}', 'struct{}'),
     )
     if (consts.length > 0) {
       needsJSON = true
@@ -587,7 +596,8 @@ export function go(defs: Map<string, Schema> = definitions()): string {
     }
     const union = schema.anyOf ?? schema.oneOf
     const doc = schema.description ? goComment(schema.description, '') : []
-    const flat = (v: Schema): Schema[] => (v.anyOf ?? v.oneOf ?? [v]).flatMap((x) => (x === v ? [x] : flat(x)))
+    const flat = (v: Schema): Schema[] =>
+      (v.anyOf ?? v.oneOf ?? [v]).flatMap((x) => (x === v ? [x] : flat(x)))
     const variants = union?.flatMap(flat)
     if (variants && variants.length > 1 && variants.every(isStruct)) {
       unionOf(union, name, true)
@@ -595,9 +605,15 @@ export function go(defs: Map<string, Schema> = definitions()): string {
       blocks.push([...doc, iface].join('\n'))
       continue
     }
-    if (schema.enum && schema.enum.every((v) => typeof v === 'string')) {
-      const rows = (schema.enum as string[]).map((v) => [`${name}${pascal(v)}`, name, `= ${JSON.stringify(v)}`])
-      blocks.push([...doc, `type ${name} string`, '', 'const (', ...aligned(rows, '\t'), ')'].join('\n'))
+    if (schema.enum?.every((v) => typeof v === 'string')) {
+      const rows = (schema.enum as string[]).map((v) => [
+        `${name}${pascal(v)}`,
+        name,
+        `= ${JSON.stringify(v)}`,
+      ])
+      blocks.push(
+        [...doc, `type ${name} string`, '', 'const (', ...aligned(rows, '\t'), ')'].join('\n'),
+      )
       continue
     }
     const type = typeOf(schema, name)

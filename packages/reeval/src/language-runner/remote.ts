@@ -33,14 +33,16 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
   const adapter = adapterForFile(file)
   if (!adapter.remote) throw new Error(`${adapter.id} evals load in-process`)
   const rel = relative(root, file).replaceAll('\\', '/')
-  let runner = runners.get(root)
+  // One runner per language per project: a Go file never goes to the Python runner.
+  const slot = `${adapter.id}\0${root}`
+  let runner = runners.get(slot)
   if (!runner) {
     const command = adapter.runnerCommand(root)
     runner = await startLanguageRunner(command, root, runnerEnv(root, adapter)).catch((error) => {
       if (!(error instanceof RunnerLoadError)) throw error
       throw new UsageError(`${error.message}\n${adapter.setupHint}`)
     })
-    runners.set(root, runner)
+    runners.set(slot, runner)
   }
   const liveRunner = runner
   runner.send({ t: 'collect', file: rel })

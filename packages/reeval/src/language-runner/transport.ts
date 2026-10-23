@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
+import { PACKAGE_VERSION } from '../root.ts'
 import { InfraError } from '../sandbox/types.ts'
 import {
   type FromRunner,
@@ -25,6 +26,11 @@ export type LanguageRunner = {
 }
 
 export class RunnerLoadError extends Error {}
+
+/** How each SDK moves to reeval version `{V}`, which its launcher then runs too. */
+const UPGRADE: Record<string, string> = {
+  go: 'go get -tool github.com/invertase/reeval/sdks/go/cmd/reeval@v{V}',
+}
 
 const STDERR_KEPT = 4_000
 
@@ -97,8 +103,9 @@ export async function startLanguageRunner(
   const hello = first
   if (hello.protocol !== RUNNER_PROTOCOL) {
     child.kill()
+    const upgrade = UPGRADE[hello.sdk]?.replace('{V}', PACKAGE_VERSION)
     throw new UsageError(
-      `${hello.sdk} ${hello.version} speaks runner protocol ${hello.protocol}, but this reeval speaks ${RUNNER_PROTOCOL}. Use the SDK version that matches reeval.`,
+      `${hello.sdk} ${hello.version} speaks runner protocol ${hello.protocol}, but this reeval speaks ${RUNNER_PROTOCOL}. ${upgrade ? `Put the SDK on this reeval's version: ${upgrade}` : 'Use the SDK version that matches reeval.'}`,
     )
   }
 

@@ -2640,4 +2640,12 @@ export const inventory: InventoryFeature[] = [
     plan: ['python/hello'],
     tests: ['reeval/test/python-sdk.test.ts › Python SDK tests and conformance goldens'],
   },
+  {
+    id: 'sdk.go',
+    area: 'CLI and runner',
+    name: 'Go eval authoring SDK (conformance goldens and fake run)',
+    fixtures: ['go-sdk/hello'],
+    plan: ['go/hello'],
+    tests: ['reeval/test/go-sdk.test.ts › Go SDK tests and conformance goldens'],
+  },
 ]

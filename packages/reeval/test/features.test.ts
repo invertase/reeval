@@ -39,6 +39,7 @@ import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
+import { useRepoGoSdk } from './support/go-fixture.ts'
 import {
   type HarnessRow,
   harnesses,
@@ -2982,6 +2983,35 @@ export const features: Feature[] = [
       )
       const [timedOut] = run.evals.find((e) => e.name === 'times out')?.attempts ?? []
       assert.deepEqual(timedOut?.checks, [], 'nor in its own, which reeval already ended')
+    },
+  },
+  {
+    dir: 'go-sdk/hello',
+    tiers: ['fake', 'docker'],
+    env: '-',
+    canary: /expected.*to succeed/i,
+    prepare: (dir) => useRepoGoSdk(dir),
+    record: ({ run, stdout }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.assertions?.map(({ label, labelled }) => [label, labelled]),
+        [
+          ['assert found.OK()', false],
+          ['assert verdict.Passed()', false],
+        ],
+        'each c.Assert in a Go body is a check named by its expression, passing ones too',
+      )
+      const [canary] = run.evals.find((e) => e.name === 'canary')?.attempts ?? []
+      assert.deepEqual(
+        canary?.assertions?.map(({ label, status }) => [label, status]),
+        [['toSucceed test -f missing-greet.go', 'fail']],
+        "a Go body's expect lands in its record",
+      )
+      assert.match(
+        stdout,
+        /canary#1[^\n]*stdout \| looking for missing-greet\.go/,
+        "a Go body's c.Log is its attempt's output",
+      )
     },
   },
   {
