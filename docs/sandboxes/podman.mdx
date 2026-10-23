@@ -16,7 +16,7 @@ export default defineConfig({
 })
 ```
 
-`podman()` takes the same options as `docker()`: the image recipes, the resource limits, `id`, `maxConcurrent`, `root`, and `capabilities`. Every option is optional. For more information about each option, see [Docker sandbox](/reference/sandbox/docker). For more information about where the `sandbox` option is accepted, see [Choose a sandbox](/sandboxes).
+`podman()` takes the same options as `docker()`: the image recipes, the resource limits, `id`, `maxConcurrent`, `root`, and `capabilities`. Every option is optional. For more information about each option, see [Docker sandbox](/sandboxes/docker). For more information about where the `sandbox` option is accepted, see [Choose a sandbox](/sandboxes).
 
 The cell key's last segment defaults to `podman`, or `podman:<image>` when `image` or `from` names another image, plus a hash of `install`. The sandbox's images, egress gateway, and records are the Docker sandbox's.
 
