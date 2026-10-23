@@ -11,9 +11,11 @@
 // one with the fake judge, and a canary that must fail. Then it runs the project from its .venv
 // with no pyproject.toml, so reeval starts .venv's python rather than uv, and checks that a
 // reeval-python too old for the binary (0.10.0, from PyPI) and a project without reeval-python
-// both stop with how to install it rather than hang. It also runs `uv run reeval`, the SDK's shim,
-// which downloads the binary from --release, checks it against SHA256SUMS and caches it, and,
-// given --platform-wheel, the same command from a wheel that carries the binary, offline.
+// both stop with how to install it rather than hang. It also runs `uv run reeval`, the SDK's
+// launcher, which downloads the binary from --release, checks it against the hashes the wheel
+// records and caches it. Given --platform-wheel, which carries the binary, it runs that offline,
+// installed by uv and by pip, checks pip picks it from the wheels directory, and presses Ctrl-C on
+// a run through it (scripts/ctrl-c.py): reeval must stop the run, save it and exit 130.
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -21,13 +23,14 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs, stripVTControlCharacters } from 'node:util'
 
 const { values, positionals } = parseArgs({
@@ -65,10 +68,14 @@ const baseEnv = {
 delete baseEnv.REEVAL_PYTHON
 delete baseEnv.REEVAL_PYTHON_SDK
 delete baseEnv.VIRTUAL_ENV
+for (const key of ['BINARY', 'DOWNLOAD', 'OFFLINE', 'VERSION']) delete baseEnv[`REEVAL_${key}`]
 
 // reeval.yml, not reeval.config.ts: a Python project has no TypeScript.
-const CONFIG = `include: ['evals/**/*.eval.py']
-harness: { kind: fake, files: { greet.py: "print(\\"hi\\")\\n" }, text: I wrote greet.py. }
+const config = (delayMs = 0) => `include: ['evals/**/*.eval.py']
+harness:
+  kind: fake
+  files: { greet.py: "print(\\"hi\\")\\n" }
+  text: I wrote greet.py.${delayMs ? `\n  delayMs: ${delayMs}` : ''}
 sandbox: { kind: fake }
 judge: { model: { kind: fake-judge, score: 1 } }
 timeout: 2m
@@ -109,10 +116,10 @@ def canary(c):
 `,
 }
 
-function project(name, dependency, from = wheel) {
+function project(name, dependency, from = wheel, delayMs = 0) {
   const dir = join(alone, name)
   mkdirSync(join(dir, 'evals'), { recursive: true })
-  writeFileSync(join(dir, 'reeval.yml'), CONFIG)
+  writeFileSync(join(dir, 'reeval.yml'), config(delayMs))
   for (const [file, text] of Object.entries(EVALS)) writeFileSync(join(dir, 'evals', file), text)
   writeFileSync(
     join(dir, 'pyproject.toml'),
@@ -201,13 +208,18 @@ check(
 )
 
 // The SDK's own `reeval` command: it fetches this binary from its release directory, checks it
-// against SHA256SUMS, caches it, and runs the evals on the venv's Python.
+// against the hash the wheel records for it, caches it, and runs the evals on the venv's Python.
 for (const f of ['pyproject.toml', 'uv.lock']) renameSync(join(dir, `${f}.off`), join(dir, f))
 const version = reeval(alone, ['--version']).stdout.trim()
+const wheelVersion = basename(wheel).split('-')[1]
+check(
+  `the wheels are reeval-python ${wheelVersion}, the binary's version`,
+  wheelVersion === version,
+)
+const download = pathToFileURL(release).href
 const shimCache = join(alone, 'shim-cache')
 const shimEnv = {
-  REEVAL_DOWNLOAD: pathToFileURL(release).href,
-  REEVAL_VERSION: version,
+  REEVAL_DOWNLOAD: download,
   XDG_CACHE_HOME: shimCache,
   UV_PYTHON: last,
   SMOKE_PYTHON: last,
@@ -219,6 +231,7 @@ check(
   shim.status === 1 &&
     outcome(shim) === '1 fail · 2 pass' &&
     shim.out.includes(`downloading ${name}`) &&
+    !shim.out.includes('SHA256SUMS only') &&
     existsSync(join(shimCache, 'reeval', 'bin', version, name)),
 )
 const offline = sh('uv', ['run', 'python', '-m', 'reeval_python', '--version'], dir, {
@@ -230,19 +243,93 @@ check(
   offline.status === 0 && offline.stdout.trim() === version && !offline.out.includes('downloading'),
 )
 
+// pip, not uv: a venv seeded with pip, and reeval-python installed by it.
+const bin = process.platform === 'win32' ? 'Scripts' : 'bin'
+const exe = process.platform === 'win32' ? '.exe' : ''
+function pipVenv(name, ...install) {
+  const at = join(alone, name)
+  sh('uv', ['venv', '--seed', '--python', last, at], alone)
+  const python = join(at, bin, `python${exe}`)
+  const pip = sh(python, ['-m', 'pip', 'install', '-q', '--no-index', ...install], alone)
+  return { ok: pip.status === 0, python, reeval: join(at, bin, `reeval${exe}`) }
+}
+const pipPure = pipVenv('pip-pure', wheel)
+const pure = sh(pipPure.reeval, ['--version'], alone, {
+  REEVAL_DOWNLOAD: download,
+  XDG_CACHE_HOME: join(alone, 'pip-cache'),
+})
+check(
+  `pip install ${basename(wheel)}: reeval downloads ${name} for reeval-python's own version`,
+  pipPure.ok &&
+    pure.status === 0 &&
+    pure.stdout.trim() === version &&
+    pure.out.includes(`downloading ${name}`) &&
+    !pure.out.includes('SHA256SUMS only'),
+)
+
 // The platform wheel carries the binary, so nothing is downloaded, even with an empty cache.
 if (values['platform-wheel']) {
   const own = resolve(values['platform-wheel']).replaceAll('\\', '/')
+  const ownEnv = { XDG_CACHE_HOME: join(alone, 'empty-cache'), REEVAL_OFFLINE: '1' }
   const bundled = project('bundled', 'reeval-python', own)
-  const r = sh('uv', ['run', 'reeval', 'run'], bundled, {
-    XDG_CACHE_HOME: join(alone, 'empty-cache'),
-    REEVAL_OFFLINE: '1',
-    UV_PYTHON: last,
-    SMOKE_PYTHON: last,
-  })
+  const env = { ...ownEnv, UV_PYTHON: last, SMOKE_PYTHON: last }
+  const r = sh('uv', ['run', 'reeval', 'run'], bundled, env)
+  const v = sh('uv', ['run', 'reeval', '--version'], bundled, env)
   check(
-    `uv run reeval from ${basename(own)}: its own binary runs the evals, offline`,
-    r.status === 1 && outcome(r) === '1 fail · 2 pass' && !r.out.includes('downloading'),
+    `uv run reeval from ${basename(own)}: its own binary, reeval ${version}, runs the evals, offline`,
+    r.status === 1 &&
+      outcome(r) === '1 fail · 2 pass' &&
+      !r.out.includes('downloading') &&
+      v.stdout.trim() === version,
+  )
+
+  // pip keeps the binary's exec bit only when the wheel marks it a regular file.
+  const pip = pipVenv('pip-platform', own)
+  const pv = sh(pip.reeval, ['--version'], alone, ownEnv)
+  const pipProject = project('pip', '')
+  const pr = sh(pip.reeval, ['run'], pipProject, { ...ownEnv, SMOKE_PYTHON: last })
+  check(
+    `pip install ${basename(own)}: its own binary runs the evals on the venv's Python, offline`,
+    pip.ok && pv.stdout.trim() === version && pr.status === 1 && outcome(pr) === '1 fail · 2 pass',
+  )
+
+  const links = pipVenv(
+    'pip-find-links',
+    '--find-links',
+    dirname(wheel),
+    `reeval-python==${version}`,
+  )
+  const picked = sh(
+    links.python,
+    ['-c', 'from reeval_python.cli import bundled; print(bundled().is_file())'],
+    alone,
+  )
+  check(
+    `pip install --find-links ${basename(dirname(wheel))}: pip picks the platform wheel`,
+    links.ok && picked.stdout.trim() === 'True',
+  )
+
+  // Ctrl-C through the launcher reaches reeval, which cancels the attempts and saves the run.
+  const stop = project('ctrl-c', '', wheel, 60_000)
+  const ctrlC = fileURLToPath(new URL('./ctrl-c.py', import.meta.url))
+  const stopped = sh(
+    pip.python,
+    [ctrlC, join('.reeval', 'staging', '*', 'live.json'), pip.reeval, 'run'],
+    stop,
+    { ...ownEnv, SMOKE_PYTHON: last },
+  )
+  // `results <run dir>/summary.md`, with the record at `<run dir>.json`.
+  const summary = stopped.out.match(/results (\S+)summary\.md/)?.[1]
+  let status
+  try {
+    const record = `${resolve(stop, summary).replace(/[\\/]$/, '')}.json`
+    status = JSON.parse(readFileSync(record, 'utf8')).status
+  } catch {}
+  check(
+    'Ctrl-C on reeval run through the launcher: reeval saves the run as interrupted and exits 130',
+    stopped.status === 130 &&
+      stopped.out.includes('Interrupted: attempts') &&
+      status === 'interrupted',
   )
 }
 
