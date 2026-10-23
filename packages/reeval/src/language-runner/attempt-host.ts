@@ -68,7 +68,7 @@ async function perform(
       )
       return {}
     case 'expect':
-      return { assertion: await expectCall(c, matcherCalls, call as ExpectCall) }
+      return await expectCall(c, matcherCalls, call as ExpectCall)
     case 'judge': {
       const { question, options } = call
       const opts = (options ?? {}) as JudgeCallOptions & { on?: unknown }

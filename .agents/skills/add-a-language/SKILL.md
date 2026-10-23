@@ -103,6 +103,13 @@ SDK runner responsibilities:
    language can. A body that keeps running must not reach reeval (it answers any call whose key
    it no longer knows with an `AbortError`).
 5. Optionally route stdout/stderr as `{ t: 'log', stream, text }`.
+6. Send the language's own regular expressions as `{ matchedBy, answers }` (`matchedBy` is how
+   the language writes the pattern, e.g. Python's `repr`), never translated to JavaScript.
+   reeval runs the matcher and, when it tests a string `answers` lacks, replies
+   `{ ok: true, op: 'expect', untested: { [matchedBy]: strings } }` and records nothing: match
+   them in the language, add them to `answers` and make the same call again. A polled call keeps
+   its first round's deadline, so lower `poll.timeout` by the time spent. `{ regexp, flags }`
+   is for a language whose patterns are JavaScript's.
 
 Declaration tree JSON is validated by the same contract TypeScript uses (`declareTree` in the worker).
 

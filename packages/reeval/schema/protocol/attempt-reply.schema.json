@@ -297,6 +297,39 @@
         {
           "type": "object",
           "properties": {
+            "id": {
+              "description": "Pairs a reply with its request.",
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "ok": {
+              "type": "boolean",
+              "const": true
+            },
+            "op": {
+              "type": "string",
+              "const": "expect"
+            },
+            "untested": {
+              "description": "The strings the matcher tested that a `{ matchedBy, answers }` argument has no answer for, by its `matchedBy`. Nothing was recorded: answer them and make the call again.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": ["id", "ok", "op", "untested"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
             "error": {
               "$ref": "#/$defs/AttemptError"
             },

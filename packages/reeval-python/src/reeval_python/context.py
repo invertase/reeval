@@ -10,7 +10,7 @@ from reeval_python.assertion import assert_to_expect
 from reeval_python.errors import ReevalAssertionError
 from reeval_python.expect import bind_expect
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
-from reeval_python.wire import options_to_wire
+from reeval_python.wire import Patterns, options_to_wire, wire_args
 
 SendFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
@@ -86,17 +86,22 @@ class AttemptContext:
         not_: bool,
         soft: bool,
     ) -> None:
+        patterns = Patterns()
         call: dict[str, Any] = {
             "op": "expect",
             "subject": subject,
             "matcher": matcher,
-            "args": args,
+            "args": wire_args(args, patterns),
             "not": not_,
             "soft": soft,
         }
         if label is not None:
             call["label"] = label
         reply = await self._send({"call": call})
+        # reeval asks for the strings it tested the patterns on; each round answers more.
+        while reply.get("ok", False) and "untested" in reply:
+            patterns.answer(cast(dict[str, list[str]], reply["untested"]))
+            reply = await self._send({"call": call})
         if not reply.get("ok", False):
             err = reply.get("error") or {"name": "Error", "message": "call failed"}
             raise RuntimeError(f"{err.get('name')}: {err.get('message')}")

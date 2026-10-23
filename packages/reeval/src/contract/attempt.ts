@@ -297,12 +297,27 @@ export const patternSchema = z
   })
   .describe('A regular expression, where a matcher takes a string or a `RegExp`.')
 
+/** A pattern in the runner's own language, which reeval never compiles. */
+export const answeredPatternSchema = z
+  .strictObject({
+    matchedBy: z
+      .string()
+      .regex(/\S/)
+      .describe("The pattern as the runner's language writes it, e.g. `re.compile('npm t')`."),
+    answers: z
+      .record(z.string(), z.boolean())
+      .describe('Whether it matches each string the runner has been asked about.'),
+  })
+  .describe(
+    'A pattern the runner matches in its own language. reeval runs the matcher with it, and when the matcher tests a string not in `answers` replies with those strings (`untested`) instead of a record; the runner matches them and makes the call again with them in `answers`.',
+  )
+
 const isPatternLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) && 'regexp' in value
 
 // Any object is a JSON value, so an object with `regexp` is held to the pattern's shape here.
 export const matcherArgSchema = z
-  .union([patternSchema, jsonValueSchema])
+  .union([patternSchema, answeredPatternSchema, jsonValueSchema])
   .superRefine((value, ctx) => {
     if (!isPatternLike(value)) return
     for (const issue of patternSchema.safeParse(value).error?.issues ?? []) {
@@ -310,7 +325,7 @@ export const matcherArgSchema = z
     }
   })
   .describe(
-    'One argument to a matcher: a JSON value, or a regular expression as `{ regexp, flags? }`.',
+    "One argument to a matcher: a JSON value, a regular expression as `{ regexp, flags? }`, or a pattern in the runner's own language as `{ matchedBy, answers }`.",
   )
 
 export const matcherSubjectSchema = z
@@ -587,6 +602,16 @@ export const attemptReplySchema = z
     ]),
     z.strictObject({
       id,
+      ok: z.literal(true),
+      op: z.literal('expect'),
+      untested: z
+        .record(z.string(), z.array(z.string()))
+        .describe(
+          'The strings the matcher tested that a `{ matchedBy, answers }` argument has no answer for, by its `matchedBy`. Nothing was recorded: answer them and make the call again.',
+        ),
+    }),
+    z.strictObject({
+      id,
       ok: z.literal(false),
       op: z.enum([
         'send',
@@ -676,6 +701,8 @@ const OTHER_KEYS = [
   'value',
   'regexp',
   'flags',
+  'matchedBy',
+  'answers',
   ...Object.keys(judgeCallDataSchema.shape),
   ...Object.keys(judgeStateSchema.shape),
   ...Object.keys(captureSchema.shape),
@@ -726,6 +753,7 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   MatcherSubject: matcherSubjectSchema,
   MatcherArg: matcherArgSchema,
   Pattern: patternSchema,
+  AnsweredPattern: answeredPatternSchema,
   JSONValue: jsonValueSchema,
   TurnData: turnDataSchema,
   TurnStatus: turnStatusSchema,

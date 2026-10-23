@@ -5,14 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any
-
-import pytest
-
-from reeval_python.wire import _pattern_arg  # pyright: ignore[reportPrivateUsage]
 
 EVALS = """
 import time
@@ -198,8 +193,3 @@ def test_bytes_go_as_base64_and_a_judge_without_options_sends_none(tmp_path: Pat
         ]
 
     _scenario(tmp_path, body)
-
-
-def test_a_bytes_pattern_is_refused_where_it_is_written() -> None:
-    with pytest.raises(ValueError, match="str patterns"):
-        _pattern_arg(re.compile(b"abc"))  # type: ignore[arg-type]

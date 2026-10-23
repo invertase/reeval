@@ -4,6 +4,29 @@
   "title": "AttemptRequest",
   "$ref": "#/$defs/AttemptRequest",
   "$defs": {
+    "AnsweredPattern": {
+      "description": "A pattern the runner matches in its own language. reeval runs the matcher with it, and when the matcher tests a string not in `answers` replies with those strings (`untested`) instead of a record; the runner matches them and makes the call again with them in `answers`.",
+      "type": "object",
+      "properties": {
+        "answers": {
+          "description": "Whether it matches each string the runner has been asked about.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "matchedBy": {
+          "description": "The pattern as the runner's language writes it, e.g. `re.compile('npm t')`.",
+          "type": "string",
+          "pattern": "\\S"
+        }
+      },
+      "required": ["answers", "matchedBy"],
+      "additionalProperties": false
+    },
     "AttemptCall": {
       "description": "One call an eval's body makes on its attempt. The sandbox and the agent session start on the first call that needs them; there's no call to start them.",
       "oneOf": [
@@ -698,10 +721,13 @@
       "additionalProperties": false
     },
     "MatcherArg": {
-      "description": "One argument to a matcher: a JSON value, or a regular expression as `{ regexp, flags? }`.",
+      "description": "One argument to a matcher: a JSON value, a regular expression as `{ regexp, flags? }`, or a pattern in the runner's own language as `{ matchedBy, answers }`.",
       "anyOf": [
         {
           "$ref": "#/$defs/Pattern"
+        },
+        {
+          "$ref": "#/$defs/AnsweredPattern"
         },
         {
           "$ref": "#/$defs/JSONValue"
