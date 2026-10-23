@@ -25,14 +25,18 @@
     else { Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $out }
   }
 
+  $windows = [Environment]::OSVersion.Platform -eq 'Win32NT'
+  if ($windows) {
+    $native = Add-Type -PassThru -Name Native -Namespace ReevalInstall -MemberDefinition @'
+[DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint feature);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(
+  IntPtr hWnd, uint msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result);
+'@
+  }
   # The only Windows builds are x64. The default one needs AVX2; the baseline one runs on any x64
   # CPU. 40 is PF_AVX2_INSTRUCTIONS_AVAILABLE.
   $target = 'windows-x64'
-  if ([Environment]::OSVersion.Platform -eq 'Win32NT') {
-    $cpu = Add-Type -PassThru -Name Cpu -Namespace ReevalInstall -MemberDefinition `
-      '[DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint feature);'
-    if (-not $cpu::IsProcessorFeaturePresent(40)) { $target = 'windows-x64-baseline' }
-  }
+  if ($windows -and -not $native::IsProcessorFeaturePresent(40)) { $target = 'windows-x64-baseline' }
   $version = "$env:REEVAL_VERSION" -replace '^v', ''
   if (-not $version) {
     if ($env:REEVAL_DOWNLOAD) { Fail 'REEVAL_DOWNLOAD needs REEVAL_VERSION' }
@@ -104,10 +108,21 @@
   $exe = Join-Path $dir 'reeval.exe'
   Write-Host "reeval install: reeval $installed at $exe"
 
-  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-  if (($userPath -split ';') -notcontains $dir) {
-    [Environment]::SetEnvironmentVariable('Path', (@($dir, $userPath) | Where-Object { $_ }) -join ';', 'User')
-    Write-Host "reeval install: added $dir to your user PATH; open a new terminal to use it"
+  # The user PATH is REG_EXPAND_SZ, with entries such as %USERPROFILE%\.cargo\bin, so it's read
+  # and written raw: [Environment]::SetEnvironmentVariable would write it expanded, as REG_SZ.
+  # Then WM_SETTINGCHANGE tells Explorer, so the terminals it opens next have it.
+  if ($windows) {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+    try {
+      $entries = @("$($key.GetValue('Path', '', 'DoNotExpandEnvironmentNames'))" -split ';' | Where-Object { $_ })
+      $expanded = $entries | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_).TrimEnd('\') }
+      if (@($expanded) -notcontains $dir.TrimEnd('\')) {
+        $key.SetValue('Path', (@($dir) + $entries) -join ';', [Microsoft.Win32.RegistryValueKind]::ExpandString)
+        $result = [UIntPtr]::Zero
+        $native::SendMessageTimeout([IntPtr]0xffff, 0x1a, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result) | Out-Null
+        Write-Host "reeval install: added $dir to your user PATH; open a new terminal to use it"
+      }
+    } finally { $key.Dispose() }
   }
   if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$dir;$env:Path" }
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
