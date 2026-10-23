@@ -28,7 +28,7 @@ export const directGatewaySchema = z
 export const vercelGatewaySchema = z
   .strictObject({ kind: z.literal('vercel') })
   .describe(
-    'Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code and Codex.',
+    'Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose and pi.',
   )
 
 export const gatewayDescriptorSchema = z

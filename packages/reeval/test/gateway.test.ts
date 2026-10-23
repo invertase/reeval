@@ -222,6 +222,62 @@ describe('Vercel AI Gateway routes', () => {
     assert.equal(agent.modelId?.('openai/gpt-5.4-mini'), 'openai/gpt-5.4-mini')
   })
 
+  test('Goose and pi take Gemini ids as Google models on Vercel, and read the served model', () => {
+    const goose = onVercel({ kind: 'goose', model: 'gemini-3-flash' } as HarnessDescriptor)
+    assert.equal(goose.credential, 'AI_GATEWAY_API_KEY')
+    assert.deepEqual(
+      goose.endpoints.map((e) => [e.method, e.path]),
+      [
+        [['POST'], { exact: '/v1/chat/completions' }],
+        [['POST'], { exact: '/v1/responses' }],
+        [['GET'], { exact: '/v1/models' }],
+      ],
+    )
+    assert.deepEqual(
+      goose.modelResponses?.map((e) => e.path),
+      [{ exact: '/v1/chat/completions' }, { exact: '/v1/responses' }],
+    )
+    assert.deepEqual(goose.expectedBlocked?.hosts, ['models.dev'], "Goose's catalogue refresh")
+    const pi = onVercel({ kind: 'pi', model: 'gemini-3-flash' } as HarnessDescriptor)
+    assert.deepEqual(
+      pi.endpoints.map((e) => [e.host, e.method, e.path]),
+      [['ai-gateway.vercel.sh', ['POST'], { exact: '/v1/messages' }]],
+    )
+    for (const agent of [goose, pi]) {
+      assert.deepEqual(agent.hosts, ['ai-gateway.vercel.sh'])
+      assert.equal(agent.modelId?.('gemini-3-flash'), 'google/gemini-3-flash')
+      assert.equal(agent.modelId?.('anthropic/claude-haiku-4.5'), 'anthropic/claude-haiku-4.5')
+      assert.equal(
+        agent.servedModel?.({
+          host: 'ai-gateway.vercel.sh',
+          responseModel: 'google/gemini-3-flash',
+        } as never),
+        'google/gemini-3-flash',
+      )
+      process.env.AI_GATEWAY_API_KEY = 'vck_test'
+      assert.deepEqual(agentAuth(agent), { AI_GATEWAY_API_KEY: 'vck_test' })
+    }
+  })
+
+  test('Goose and pi on Vercel get its key and provider, and keep Gemini off Vercel', async () => {
+    process.env.AI_GATEWAY_API_KEY = 'vck_test'
+    for (const kind of ['goose', 'pi'] as const) {
+      const descriptor = { kind, model: 'gemini-3-flash', gateway: 'vercel' } as never
+      const agent = agentFor(descriptor)
+      const adapter = (await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor,
+        model: 'google/gemini-3-flash',
+        plugins: [],
+      })) as { harnessId: string }
+      assert.equal(adapter.harnessId, kind)
+    }
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AIza-test'
+    const direct = agentFor({ kind: 'pi', model: 'gemini-3-flash' } as never)
+    assert.equal(direct.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
+    assert.ok(direct.endpoints.every((e) => e.host === 'generativelanguage.googleapis.com'))
+  })
+
   test("the egress gateway swaps Vercel's key in only on Vercel's model paths", () => {
     process.env.AI_GATEWAY_API_KEY = 'vck_test'
     const brokering = brokeringFor({ ...claude, gateway: 'vercel' } as HarnessDescriptor)

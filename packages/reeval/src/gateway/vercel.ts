@@ -90,10 +90,46 @@ function codex(env: NodeJS.ProcessEnv): VercelRoute {
   }
 }
 
+/** A Gemini id as Vercel names it (`google/gemini-3-flash`), unless the id names a provider. */
+const googleId = (model: string) => (model.includes('/') ? model : `google/${model}`)
+
+/**
+ * Goose on its `vercel_ai_gateway` provider, an OpenAI-compatible one: Chat Completions, the
+ * Responses API for OpenAI's reasoning models, and the model list it fetches each turn.
+ */
+function goose(env: NodeJS.ProcessEnv): VercelRoute {
+  const calls = [onVercel('/v1/chat/completions', 'POST'), onVercel('/v1/responses', 'POST')]
+  return {
+    credential: vercelCredential(env),
+    authAs: VERCEL_KEY,
+    endpoints: [...calls, onVercel('/v1/models', 'GET')],
+    modelResponses: calls,
+    servedModel: servedOnVercel,
+    hosts: [VERCEL_HOST],
+    modelId: googleId,
+  }
+}
+
+/** pi on its `vercel-ai-gateway` provider, Anthropic's Messages API at Vercel's host. */
+function pi(env: NodeJS.ProcessEnv): VercelRoute {
+  const endpoints = [onVercel('/v1/messages', 'POST')]
+  return {
+    credential: vercelCredential(env),
+    authAs: VERCEL_KEY,
+    endpoints,
+    modelResponses: endpoints,
+    servedModel: servedOnVercel,
+    hosts: [VERCEL_HOST],
+    modelId: googleId,
+  }
+}
+
 /** The harnesses reeval runs on Vercel, and what each needs there. */
 export const VERCEL_ROUTES: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => VercelRoute>> = {
   'claude-code': claudeCode,
   codex,
+  goose,
+  pi,
 }
 
 /** Why Vercel can't serve an agent reeval doesn't route there, for the plan's messages. */

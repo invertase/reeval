@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
+  AI_GATEWAY_PROVIDER,
   createGoose,
   GOOSE_CLI_SHA256,
   GOOSE_CLI_VERSION,
@@ -52,13 +53,38 @@ test("with requireCredentialBrokering, a sandbox that can't broker never gets th
 test('effort is GOOSE_THINKING_EFFORT', () => {
   assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash' }), {
     ...GOOSE_QUIET_ENV,
+    GOOSE_PROVIDER: 'google',
     GOOSE_MODEL: 'gemini-3.8-flash',
   })
   assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash', effort: 'high' }), {
     ...GOOSE_QUIET_ENV,
+    GOOSE_PROVIDER: 'google',
     GOOSE_MODEL: 'gemini-3.8-flash',
     GOOSE_THINKING_EFFORT: 'high',
   })
+})
+
+test("on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel's key", () => {
+  assert.deepEqual(gooseEnv({ model: 'google/gemini-3-flash', provider: AI_GATEWAY_PROVIDER }), {
+    ...GOOSE_QUIET_ENV,
+    GOOSE_PROVIDER: 'vercel_ai_gateway',
+    GOOSE_MODEL: 'google/gemini-3-flash',
+  })
+  assert.throws(
+    () =>
+      createGoose({
+        auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' },
+        provider: AI_GATEWAY_PROVIDER,
+        model: 'm',
+      }),
+    /with AI_GATEWAY_API_KEY \(a Vercel AI Gateway key\)/,
+  )
+  const harness = createGoose({
+    auth: { AI_GATEWAY_API_KEY: 'vck_k' },
+    provider: AI_GATEWAY_PROVIDER,
+    model: 'google/gemini-3-flash',
+  })
+  assert.equal(harness.harnessId, 'goose')
 })
 
 test("MCP servers are enabled extensions in Goose's config.yaml", () => {

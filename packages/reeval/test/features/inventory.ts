@@ -331,7 +331,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.vercel',
     area: 'Config and selection',
-    name: '`vercel()`: Claude Code and Codex on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin',
+    name: '`vercel()`: Claude Code, Codex, Goose and pi on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin',
     plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
     tests: [
       'reeval/test/plan.test.ts › a judge model no listed gateway serves exits 2 at plan time',
@@ -341,6 +341,10 @@ export const inventory: InventoryFeature[] = [
       "reeval/test/gateway.test.ts › the egress gateway swaps Vercel's key in only on Vercel's model paths",
       'reeval/test/gateway.test.ts › Claude Code takes the key as AI_GATEWAY_API_KEY and is brokered only on Vercel',
       "reeval/test/gateway.test.ts › Codex reads the served model from Vercel's responses and names OpenAI's models",
+      'reeval/test/gateway.test.ts › Goose and pi take Gemini ids as Google models on Vercel, and read the served model',
+      'reeval/test/gateway.test.ts › Goose and pi on Vercel get its key and provider, and keep Gemini off Vercel',
+      "harness-goose/test/unit.test.ts › on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel's key",
+      "harness-pi/test/unit.test.ts › on Vercel AI Gateway, pi runs its vercel-ai-gateway provider, brokered on Vercel's host",
       "reeval/test/gateway.test.ts › an expired project token is refused before the run; a live one, or a key, isn't",
       'reeval/test/doctor.test.ts › gateway: where each harness resolves, its keys, and an expired Vercel token',
     ],

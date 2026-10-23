@@ -120,9 +120,11 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
       let servedModel: string | null = null
       let finishMetadata: unknown
       const servers = agentMcp(catalog, mcp, plugins)
+      const model = catalog.modelId?.(descriptor.model) ?? descriptor.model
       const adapter = await catalog.adapter({
         auth,
         descriptor,
+        model,
         plugins,
         ...(Object.keys(servers).length ? { mcpServers: catalog.mcpServers(servers) } : {}),
       })
@@ -135,7 +137,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           if (part.type === 'stream-start' && part.modelId) servedModel = part.modelId
           if (part.type === 'finish') finishMetadata = part.harnessMetadata
         }),
-        model: catalog.modelId?.(descriptor.model) ?? descriptor.model,
+        model,
         permissionMode: 'allow-all',
         ...(off.length ? { inactiveTools: off } : {}),
         sandboxConfig: { workDir: WORKSPACE_DIR },

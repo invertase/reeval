@@ -2605,7 +2605,7 @@
       "enum": ["header", "query", "body"]
     },
     "VercelGatewayDescriptor": {
-      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code and Codex.",
+      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose and pi.",
       "type": "object",
       "properties": {
         "kind": {

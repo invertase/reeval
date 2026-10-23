@@ -149,6 +149,8 @@ export type Agent = Layout & {
     mcpServers?: Record<string, unknown>
     auth: Record<string, string>
     descriptor: AgentHarnessDescriptor
+    /** The model id the agent asks for: `modelId` of the harness's own. */
+    model: string
     plugins: readonly PlacedPlugin[]
   }) => Promise<HarnessAgentAdapter>
 }
@@ -922,11 +924,13 @@ export const AGENTS: Record<AgentKind, Agent> = {
     },
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, model }) =>
       (await import('@reeval/harness-goose')).createGoose({
-        // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
-        auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
-        model: descriptor.model,
+        ...(auth[VERCEL_KEY]
+          ? { auth, provider: (await import('@reeval/harness-goose')).AI_GATEWAY_PROVIDER }
+          : // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
+            { auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
+        model,
         ...(descriptor.kind === 'goose' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
@@ -947,8 +951,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     mcpServers: piMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-pi')).createPi({
-        // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
-        auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+        ...(auth[VERCEL_KEY]
+          ? { auth, provider: (await import('@reeval/harness-pi')).AI_GATEWAY_PROVIDER }
+          : // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
+            { auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
         ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,

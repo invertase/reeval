@@ -40,11 +40,13 @@ export type HarnessRow = {
     | 'fx-gateway'
     | 'claude-code-gateway'
     | 'codex-gateway'
+    | 'goose-gateway'
+    | 'pi-gateway'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's, and the rows on AI Gateway.
    */
-  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex'
+  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
   gateway?: 'vercel'
   /**
@@ -356,6 +358,45 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /gpt-5\.6-luna/,
     wireModel: /gpt-5\.6-luna/,
+  },
+  {
+    // Goose on Vercel AI Gateway: its vercel_ai_gateway provider (OpenAI-compatible, a Bearer
+    // key), the Gemini id as google/<id>, and the served model from Vercel's response.
+    id: 'goose-gateway',
+    harness: 'goose',
+    gateway: 'vercel',
+    gated:
+      'no AI_GATEWAY_API_KEY repository secret yet; name goose-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+  },
+  {
+    // pi on Vercel AI Gateway: its vercel-ai-gateway provider (Anthropic's Messages API, the key
+    // in x-api-key), the Gemini id as google/<id>.
+    id: 'pi-gateway',
+    harness: 'pi',
+    gateway: 'vercel',
+    gated:
+      'no AI_GATEWAY_API_KEY repository secret yet; name pi-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
   },
   {
     id: 'grok-build',

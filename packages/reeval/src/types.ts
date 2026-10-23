@@ -779,7 +779,7 @@ export type DirectGatewayDescriptor = {
 
 /**
  * Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
- * `reeval/gateway`. It serves Claude Code and Codex.
+ * `reeval/gateway`. It serves Claude Code, Codex, Goose and pi.
  */
 export type VercelGatewayDescriptor = {
   kind: 'vercel'

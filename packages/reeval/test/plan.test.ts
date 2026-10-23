@@ -266,6 +266,8 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
             skipped: [{ gateway: 'vercel', why: "Cursor's agent only calls Cursor's own API" }],
           },
         ],
+        ['goose:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
+        ['pi:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
       ],
     )
   })

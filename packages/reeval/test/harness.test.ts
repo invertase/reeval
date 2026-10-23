@@ -1169,7 +1169,12 @@ async function adapterRules(kind: AgentKind, env: Record<string, string>, model 
   return withHostEnv(env, async () => {
     const descriptor = { kind, model } as AgentHarnessDescriptor
     const agent = agentFor(descriptor)
-    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent),
+      descriptor,
+      model: descriptor.model,
+      plugins: [],
+    })
     const { session, rules } = recordingSession()
     await assert.rejects(
       adapter.doStart({ sessionId: 's', sandboxSession: session }),
@@ -1340,6 +1345,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: antigravity({ model: 'm' }),
+        model: 'm',
         plugins: [],
       })
       const { session } = recordingSession()
@@ -1449,7 +1455,12 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
       const descriptor = opencode({ model: 'google/m' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor,
+        model: descriptor.model,
+        plugins: [],
+      })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1489,6 +1500,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: goose({ model: 'm' }),
+        model: 'm',
         plugins: [],
       })
       const { session } = recordingSession()
@@ -1539,7 +1551,12 @@ describe('credential brokering per agent', () => {
     await withHostEnv({ OPENAI_API_KEY: 'sk-real' }, async () => {
       const descriptor = fx({ model: 'gpt-4.1-mini' })
       const agent = agentFor(descriptor)
-      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor,
+        model: descriptor.model,
+        plugins: [],
+      })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false
@@ -1597,6 +1614,7 @@ describe('credential brokering per agent', () => {
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
         descriptor: grokBuild({ model: 'm' }),
+        model: 'm',
         plugins: [],
       })
       const { session } = recordingSession()
@@ -2173,7 +2191,12 @@ describe('tools that wait on a person are off', () => {
     await withHostEnv(keys, async () => {
       for (const descriptor of descriptors) {
         const agent = agentFor(descriptor)
-        const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor, plugins: [] })
+        const adapter = await agent.adapter({
+          auth: agentAuth(agent),
+          descriptor,
+          model: descriptor.model,
+          plugins: [],
+        })
         assert.deepEqual(
           interactiveTools(adapter as HarnessV1),
           descriptor.kind === 'claude-code' ? ['askUserQuestions'] : [],
