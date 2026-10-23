@@ -8,7 +8,7 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-type Schema = {
+export type Schema = {
   $ref?: string
   type?: string | string[]
   const?: unknown
@@ -32,12 +32,14 @@ const SOURCES = [
 ]
 export const PYTHON_OUT = join(pkg, '../reeval-python/src/reeval_python/_wire.py')
 
+const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
+
 /** A schema as its meaning: unions in one order, and no keywords that don't change the type. */
 function canonical(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonical)
   if (typeof value !== 'object' || value === null) return value
   const out: Record<string, unknown> = {}
-  for (const [key, v] of Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [key, v] of Object.entries(value).sort(([a], [b]) => byCodePoint(a, b))) {
     if (key === 'propertyNames' || key === 'description') continue
     if ((key === 'properties' || key === 'required') && Object.keys(v as object).length === 0)
       continue
@@ -45,21 +47,22 @@ function canonical(value: unknown): unknown {
       key === 'anyOf' || key === 'oneOf'
         ? (v as unknown[])
             .map(canonical)
-            .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+            .sort((a, b) => byCodePoint(JSON.stringify(a), JSON.stringify(b)))
         : canonical(v)
   }
   return out
 }
 
 /** Every `$def` of the sources, by name; one name with two shapes is an error. */
-function definitions(): Map<string, Schema> {
+export function definitions(
+  files: Record<string, Schema>[] = SOURCES.map(
+    (source) => JSON.parse(readFileSync(join(pkg, source), 'utf8')).$defs,
+  ),
+): Map<string, Schema> {
   const defs = new Map<string, Schema>()
   const seen = new Map<string, string>()
-  for (const source of SOURCES) {
-    const file = JSON.parse(readFileSync(join(pkg, source), 'utf8')) as {
-      $defs: Record<string, Schema>
-    }
-    for (const [name, schema] of Object.entries(file.$defs)) {
+  for (const file of files) {
+    for (const [name, schema] of Object.entries(file)) {
       const shape = JSON.stringify(canonical(schema))
       const before = seen.get(name)
       if (before !== undefined && before !== shape) {
@@ -69,7 +72,7 @@ function definitions(): Map<string, Schema> {
       defs.set(name, schema)
     }
   }
-  return new Map([...defs].sort(([a], [b]) => a.localeCompare(b)))
+  return new Map([...defs].sort(([a], [b]) => byCodePoint(a, b)))
 }
 
 const pascal = (s: string) =>
@@ -89,16 +92,64 @@ const PY_KEYWORDS = new Set(
   ),
 )
 
-const pyLiteral = (value: unknown) =>
-  typeof value === 'string'
-    ? JSON.stringify(value)
-    : value === true
-      ? 'True'
-      : value === false
-        ? 'False'
-        : value === null
-          ? 'None'
-          : String(value)
+// What the generated file itself refers to, which a def can't be named.
+const TYPING = ['Any', 'Literal', 'NotRequired', 'TypeAlias', 'TypedDict']
+
+// The keywords mapped to a type, and the value constraints a static type can't carry. Anything
+// else (`allOf`, `not`, `prefixItems`, …) would change what's valid, so it fails the generator
+// rather than weakening the type.
+const MAPPED = new Set([
+  'type',
+  'const',
+  'enum',
+  'anyOf',
+  'oneOf',
+  'items',
+  'properties',
+  'required',
+  'additionalProperties',
+  '$ref',
+])
+const IGNORED = new Set([
+  'description',
+  'title',
+  'default',
+  'examples',
+  'readOnly',
+  'format',
+  'pattern',
+  'minLength',
+  'maxLength',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minItems',
+  'maxItems',
+  'uniqueItems',
+  'propertyNames',
+])
+
+const pyLiteral = (value: unknown, where: string) => {
+  if (typeof value === 'string') return JSON.stringify(value)
+  if (value === true) return 'True'
+  if (value === false) return 'False'
+  if (value === null) return 'None'
+  if (Number.isInteger(value)) return String(value)
+  throw new Error(`${where}: no Python Literal for ${JSON.stringify(value)}`)
+}
+
+function mappable(schema: Schema, where: string) {
+  for (const key of Object.keys(schema)) {
+    if (!MAPPED.has(key) && !IGNORED.has(key)) {
+      throw new Error(`${where}: the generator can't map the keyword ${key}`)
+    }
+  }
+}
+
+/** Whether an object schema names its keys (a TypedDict) rather than being a record. */
+const hasFields = (schema: Schema) => Object.keys(schema.properties ?? {}).length > 0
 
 const wrapped = (text: string, indent: string, width = 96) => {
   const lines: string[] = []
@@ -116,22 +167,36 @@ const wrapped = (text: string, indent: string, width = 96) => {
 }
 
 /** Python: each named object a TypedDict, each other named schema an alias. */
-export function python(): string {
-  const defs = definitions()
+export function python(defs: Map<string, Schema> = definitions()): string {
+  for (const name of defs.keys()) {
+    if (!/^[A-Z][A-Za-z0-9_]*$/.test(name) || PY_KEYWORDS.has(name) || TYPING.includes(name)) {
+      throw new Error(`$defs/${name} can't be a Python name: rename it`)
+    }
+  }
   const blocks: string[] = []
-  const taken = new Set(defs.keys())
+  const synthetic = new Set<string>()
 
+  // A nested schema's name comes from where it is; one that would rebind a def or a name the
+  // file uses is an error, since the SDK imports these names.
   const fresh = (name: string) => {
     let candidate = name
-    for (let n = 2; taken.has(candidate); n++) candidate = `${name}${n}`
-    taken.add(candidate)
+    for (let n = 2; synthetic.has(candidate); n++) candidate = `${name}${n}`
+    if (defs.has(candidate) || TYPING.includes(candidate)) {
+      throw new Error(`the generated name ${candidate} is also a $def: rename the $def`)
+    }
+    synthetic.add(candidate)
     return candidate
   }
 
   function typeOf(schema: Schema, hint: string): string {
-    if (schema.$ref) return schema.$ref.replace('#/$defs/', '')
-    if ('const' in schema) return `Literal[${pyLiteral(schema.const)}]`
-    if (schema.enum) return `Literal[${schema.enum.map(pyLiteral).join(', ')}]`
+    mappable(schema, hint)
+    if (schema.$ref) {
+      const name = /^#\/\$defs\/([A-Za-z_][A-Za-z0-9_]*)$/.exec(schema.$ref)?.[1]
+      if (!name || !defs.has(name)) throw new Error(`${hint}: can't resolve $ref ${schema.$ref}`)
+      return name
+    }
+    if ('const' in schema) return `Literal[${pyLiteral(schema.const, hint)}]`
+    if (schema.enum) return `Literal[${schema.enum.map((v) => pyLiteral(v, hint)).join(', ')}]`
     const union = schema.anyOf ?? schema.oneOf
     if (union) {
       const parts = union.map((variant, i) => typeOf(variant, variantName(variant, hint, i)))
@@ -154,12 +219,14 @@ export function python(): string {
       case 'array':
         return `list[${schema.items ? typeOf(schema.items, `${hint}Item`) : 'Any'}]`
       case 'object': {
-        if (schema.properties) return typedDict(fresh(hint), schema)
+        if (hasFields(schema)) return typedDict(fresh(hint), schema)
         const values = schema.additionalProperties
         return `dict[str, ${typeof values === 'object' ? typeOf(values, `${hint}Value`) : 'Any'}]`
       }
-      default:
+      case undefined:
         return 'Any'
+      default:
+        throw new Error(`${hint}: the generator can't map the type ${schema.type}`)
     }
   }
 
@@ -178,6 +245,11 @@ export function python(): string {
   }
 
   function typedDict(name: string, schema: Schema): string {
+    mappable(schema, name)
+    const others = schema.additionalProperties
+    if (typeof others === 'object' && Object.keys(others).length > 0) {
+      throw new Error(`${name}: a TypedDict can't have both fields and other keys`)
+    }
     const required = new Set(schema.required ?? [])
     const fields = Object.entries(schema.properties ?? {}).map(([key, prop]) => {
       const type = typeOf(prop, `${name}${pascal(key)}`)
@@ -210,7 +282,7 @@ export function python(): string {
   }
 
   for (const [name, schema] of defs) {
-    if (schema.type === 'object' && schema.properties) {
+    if (schema.type === 'object' && hasFields(schema)) {
       typedDict(name, schema)
       continue
     }
@@ -225,7 +297,8 @@ export function python(): string {
     ...SOURCES.map((s) => `- ${s}`),
     '',
     "Generated by packages/reeval/scripts/sdk-types.ts; don't edit. Private: the SDK's public API",
-    "is hand-written and doesn't expose these.",
+    "is hand-written and doesn't expose these. Static types only: the aliases are strings at",
+    "runtime, so `typing.get_type_hints` and runtime validators can't read them.",
     '"""',
     '',
     'from __future__ import annotations',
@@ -244,7 +317,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       current = readFileSync(PYTHON_OUT, 'utf8')
     } catch {}
     if (current !== out) {
-      console.error(`${PYTHON_OUT} is stale: run pnpm --filter reeval sdk:types`)
+      console.error(`${PYTHON_OUT} is stale: run pnpm --filter reeval sdk-types`)
       process.exit(1)
     }
   } else writeFileSync(PYTHON_OUT, out)
