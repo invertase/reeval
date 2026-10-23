@@ -18,9 +18,10 @@ lifecycle stay shared.
 - **SDKs are language-native; the wire format is never the public API.** Python evals import
   `evaluate` and `expect` from `reeval_python`, use snake_case (`c.read_file`, `assert result.ok`,
   typed `ExecResult` / `Turn` / `Verdict`), and snake_case options mapped to camelCase on the wire
-  internally. Every plain `assert` in an eval file, passing or failing, is a check in the record: the
-  SDK rewrites them at import, as pytest does, and sends each outcome as a protocol `record` call
-  (named by its message, or by what it checked). Use `expect(…).to_succeed()` and the other matchers for reeval-specific checks.
+  internally. Plain `assert`s in an eval file are checks in the record: the SDK rewrites them at
+  import, as pytest does, and sends a protocol `record` call named by the assert's test as
+  written. A pass is sent at once; a failure only if its `AssertionError` escapes the body, so a
+  failure the body catches isn't a failed check. The message is the failure's reason. Use `expect(…).to_succeed()` and the other matchers for reeval-specific checks.
   Plain `def` bodies run on a worker thread with a sync context; `async def` uses the same asyncio
   implementation.
 - **TypeScript stays in-process.** Never send `.eval.ts` through the runner transport; records,

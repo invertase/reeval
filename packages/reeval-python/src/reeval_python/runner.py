@@ -20,7 +20,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO, cast
 
-from reeval_python.checks import bind_recorder, is_recorded, unrecorded_failure
+from reeval_python.checks import bind_recorder, failed_check, unrecorded_failure
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
 from reeval_python.errors import AttemptAborted, ReevalAssertionError
@@ -257,11 +257,8 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
     except ReevalAssertionError as exc:
         error = {"name": "AssertionError", "message": str(exc), "stack": traceback.format_exc()}
     except AssertionError as exc:
-        if is_recorded(exc):
-            call = {"message": str(exc)}
-        else:
-            call = unrecorded_failure(exc)
-            record(call)
+        call = failed_check(exc) or unrecorded_failure(exc)
+        record(call)
         error = {
             "name": "AssertionError",
             "message": call["message"],
@@ -269,6 +266,8 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         }
     except BaseException as exc:  # noqa: BLE001
         # SystemExit and the like end this body only: the runner serves other attempts too.
+        if (failed := failed_check(exc)) is not None:
+            record(failed)
         error = {"name": type(exc).__name__, "message": str(exc), "stack": traceback.format_exc()}
     _flush(attempt_id)
     conn.write({"type": "done", "key": attempt_id, **({"error": error} if error else {})})

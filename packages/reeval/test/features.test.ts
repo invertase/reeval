@@ -2930,7 +2930,7 @@ export const features: Feature[] = [
         lands?.assertions?.map(({ label, labelled }) => [label, labelled]),
         [
           ['assert c.exec("test -f greet.py").ok', false],
-          ['greet.py content matches print(hi)', true],
+          ['assert node_check.ok', false],
           ['assert verdict.passed', false],
         ],
         'each plain assert in a Python body is a check, passing ones too',

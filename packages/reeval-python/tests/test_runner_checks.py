@@ -28,6 +28,21 @@ def helper(c):
     must_be_even(3)
 
 
+@evaluate("retries")
+def retries(c):
+    for n in (1, 2):
+        try:
+            assert n == 2
+            break
+        except AssertionError:
+            pass
+
+
+@evaluate("message raises")
+def message_raises(c):
+    assert False, 1 / 0
+
+
 @evaluate("after abort")
 def after_abort(c):
     time.sleep(0.3)
@@ -62,7 +77,6 @@ def test_an_async_body_records_awaited_compares_and_its_traceback_ends_in_the_ev
                 "op": "record",
                 "matcher": "assert",
                 "subject": "await two() == 3",
-                "label": "two is three",
                 "message": "two is three: assert 2 == 3",
                 "status": "fail",
             },
@@ -91,6 +105,30 @@ def test_a_helper_modules_assert_is_recorded_by_its_test(tmp_path: Path) -> None
                 "message": "assert n % 2 == 0",
             }
         ]
+    finally:
+        host.kill()
+
+
+def test_a_failure_the_body_catches_is_not_recorded(tmp_path: Path) -> None:
+    host = _host(tmp_path)
+    try:
+        host.start("retries")
+        assert "error" not in host.done()
+        assert _records(host) == [
+            {"op": "record", "matcher": "assert", "subject": "n == 2", "status": "pass"},
+        ]
+    finally:
+        host.kill()
+
+
+def test_an_assert_whose_message_raised_is_recorded_when_its_error_escapes(
+    tmp_path: Path,
+) -> None:
+    host = _host(tmp_path)
+    try:
+        host.start("message raises")
+        assert host.done()["error"]["name"] == "ZeroDivisionError"
+        assert [(c["subject"], c["status"]) for c in _records(host)] == [("False", "fail")]
     finally:
         host.kill()
 

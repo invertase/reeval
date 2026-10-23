@@ -18,7 +18,7 @@ from reeval_python.checks import (
     bind_recorder,
     check,
     compile_eval,
-    is_recorded,
+    failed_check,
     unrecorded_failure,
 )
 
@@ -49,17 +49,11 @@ def _run(*args: Any) -> tuple[list[dict[str, Any]], BaseException | None]:
     return calls, raised
 
 
-def test_passing_asserts_record_their_label_or_what_they_checked() -> None:
+def test_passing_asserts_record_at_once_named_by_their_test() -> None:
     calls, raised = _run(["a", "b"], "a", True)
     assert raised is None
     assert calls == [
-        {
-            "op": "record",
-            "matcher": "assert",
-            "subject": "flag",
-            "label": "flag is set",
-            "status": "pass",
-        },
+        {"op": "record", "matcher": "assert", "subject": "flag", "status": "pass"},
         {"op": "record", "matcher": "assert", "subject": "len(items) == 2", "status": "pass"},
         {"op": "record", "matcher": "assert", "subject": "name in items", "status": "pass"},
         {"op": "record", "matcher": "assert", "subject": "items", "status": "pass"},
@@ -68,9 +62,10 @@ def test_passing_asserts_record_their_label_or_what_they_checked() -> None:
 
 def test_a_failed_compare_shows_both_sides_and_its_message() -> None:
     calls, raised = _run(["a", "b"], "z", True)
-    assert isinstance(raised, AssertionError) and is_recorded(raised)
+    assert isinstance(raised, AssertionError)
     assert str(raised) == "z is missing: assert 'z' in ['a', 'b']"
-    assert calls[-1] == {
+    assert [c["status"] for c in calls] == ["pass", "pass"], "a failure isn't recorded yet"
+    assert failed_check(raised) == {
         "op": "record",
         "matcher": "assert",
         "subject": "name in items",
@@ -79,10 +74,12 @@ def test_a_failed_compare_shows_both_sides_and_its_message() -> None:
     }
 
 
-def test_a_falsy_value_is_shown_and_a_label_leads_the_message() -> None:
+def test_a_falsy_value_is_shown_and_the_message_leads_the_reason() -> None:
     calls, raised = _run([], "a", 0)
+    assert calls == []
     assert str(raised) == "flag is set: assert flag (0 is falsy)"
-    assert calls[-1]["label"] == "flag is set"
+    check_ = failed_check(raised) or {}
+    assert (check_["subject"], check_["message"]) == ("flag", str(raised))
     _, raised = _run(["a"], "a", True)
     assert str(raised) == "assert 1 == 2"
 
@@ -91,7 +88,13 @@ def test_outside_an_attempt_assert_raises_as_python_does() -> None:
     scope: dict[str, Any] = {ASSERT_HOOK: check}
     with pytest.raises(AssertionError, match=r"^assert 1 == 2$") as raised:
         exec(compile_eval("assert 1 == 2\n", "top.eval.py"), scope)  # noqa: S102
-    assert not is_recorded(raised.value)
+    assert failed_check(raised.value) == {
+        "op": "record",
+        "matcher": "assert",
+        "subject": "1 == 2",
+        "status": "fail",
+        "message": "assert 1 == 2",
+    }
 
 
 def test_an_assert_outside_an_eval_file_is_recorded_by_its_line() -> None:
@@ -131,9 +134,9 @@ def _body(source: str, *args: Any) -> tuple[list[dict[str, Any]], Any, dict[str,
 
 def test_a_message_can_await_yield_and_see_its_class() -> None:
     awaits = "async def body():\n    async def why(): return 'no'\n    assert False, await why()\n"
-    calls, raised, _ = _body(awaits)
+    _, raised, _ = _body(awaits)
     assert str(raised) == "no: assert False"
-    assert calls[-1]["message"] == "no: assert False"
+    assert (failed_check(raised) or {})["message"] == "no: assert False"
 
     yields = "def body():\n    def gen():\n        assert True, (yield 1)\n    return gen\n"
     _, gen, _ = _body(yields)
@@ -151,11 +154,10 @@ def test_a_message_is_evaluated_only_when_the_assert_fails() -> None:
     assert raised is None and calls[-1]["status"] == "pass"
 
 
-def test_a_message_that_raises_still_records_the_failure() -> None:
-    calls, raised, _ = _body("def body():\n    assert False, 1 / 0\n")
+def test_a_message_that_raises_carries_the_failure() -> None:
+    _, raised, _ = _body("def body():\n    assert False, 1 / 0\n")
     assert isinstance(raised, ZeroDivisionError)
-    assert calls[-1]["status"] == "fail"
-    assert calls[-1]["message"] == (
+    assert (failed_check(raised) or {})["message"] == (
         "<the message raised ZeroDivisionError: division by zero>: assert False"
     )
 
@@ -261,3 +263,19 @@ def test_a_threads_assert_raised_in_the_body_is_named_by_its_test() -> None:
     )
     _, raised, _ = _body(source)
     assert unrecorded_failure(raised)["subject"] == "1 == 2"
+
+
+def test_a_failure_the_body_catches_is_not_a_check() -> None:
+    source = (
+        "def body():\n"
+        "    try:\n"
+        "        assert 1 == 2, 'retried'\n"
+        "    except AssertionError:\n"
+        "        pass\n"
+        "    assert 2 == 2\n"
+    )
+    calls, raised, _ = _body(source)
+    assert raised is None
+    assert calls == [
+        {"op": "record", "matcher": "assert", "subject": "2 == 2", "status": "pass"},
+    ]
