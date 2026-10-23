@@ -3,14 +3,6 @@ title: "Run setup commands"
 description: "Install dependencies or seed data in the sandbox before the agent starts."
 ---
 
-[//]: # (quadrant: How-To Guide)
-[//]: # (sidebar: Setup commands)
-[//]: # (owns: setup; setup timeout and cwd)
-[//]: # (excludes: toolchains baked into the image -> /sandboxes/toolchains)
-[//]: # (excludes: setup field reference -> /reference/environment#environment-fields)
-[//]: # (inbound: /environments, /sandboxes/toolchains, /recipes/sdk)
-[//]: # (outbound: /sandboxes/toolchains, /reference/environment#environment-fields, /environments/secrets, /results/debugging)
-
 The `setup` field lists shell commands that run in the sandbox before the agent's first turn, such as installing dependencies or seeding a database. For a tool that every attempt needs and that never changes, install it in the image instead. For more information about installing tools in an image, see [Toolchains](/sandboxes/toolchains).
 
 ## Run a setup command

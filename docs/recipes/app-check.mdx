@@ -3,18 +3,6 @@ title: "Judge a running app"
 description: "See whether the app the harness built renders what you asked for."
 ---
 
-[//]: # (quadrant: How-To Guide)
-[//]: # (sidebar: Judge an app)
-[//]: # (owns: the end-to-end app check: serve, capture and judge)
-[//]: # (excludes: putting the app in the workspace -> /environments/workspaces)
-[//]: # (excludes: starting servers -> /evals/servers)
-[//]: # (excludes: capture options -> /reference/options#capture)
-[//]: # (excludes: the judge model, threshold, and key -> /evals/judges)
-[//]: # (excludes: judge options -> /reference/options#judge)
-[//]: # (excludes: fake* helpers of any kind -> not documented)
-[//]: # (inbound: every page via the sidebar)
-[//]: # (outbound: /environments/workspaces, /evals/servers, /evals/servers#judge-a-capture, /evals/servers#capture-a-page, /evals/judges, /results/output)
-
 A file check tells you the harness wrote a page. It can't tell you the page renders. You start the app the harness built, capture one page, and ask the judge what the picture shows.
 
 This page uses the `nextApp` environment, whose workspace holds a Next.js app on the Vercel AI SDK with `build` and `start` scripts. For more information about putting an app in the workspace, see [Workspaces](/environments/workspaces).

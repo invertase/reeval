@@ -3,14 +3,6 @@ title: "Size runs with profiles"
 description: "Size a run for pull requests, nightly runs, and local work."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Profiles)
-[//]: # (owns: profiles; defaultProfile; limit and pin; budget; REEVAL_PROFILE)
-[//]: # (excludes: exhaustive profile key reference -> /reference/profiles)
-[//]: # (excludes: CI wiring -> /evals/ci)
-[//]: # (inbound: /core-concepts, /evals/running, /evals/ci, /recipes/ci-gate, /reference/profiles, /recipes/results-over-time, /reference/glossary)
-[//]: # (outbound: /reference/profiles, /evals/ci, /reference/options#pin, /core-concepts#run)
-
 A profile is a named preset in the `reeval.config.ts` file that sizes a [run](/core-concepts#run): what evaluations get by default, caps over every evaluation, a budget, and which tags run. One set of evaluation files then serves a cheap pull-request run and a thorough nightly one. For more information about wiring a profile into a workflow, see [CI](/evals/ci).
 
 ## Define a profile

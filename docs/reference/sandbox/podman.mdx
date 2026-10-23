@@ -3,14 +3,6 @@ title: "Run with Podman"
 description: "Run each attempt in one Podman container on your machine."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Podman)
-[//]: # (owns: podman; Podman host requirements)
-[//]: # (excludes: shared options -> /reference/sandbox/docker)
-[//]: # (excludes: choosing a sandbox -> /sandboxes)
-[//]: # (inbound: /sandboxes, /reference/sandbox/docker)
-[//]: # (outbound: /reference/sandbox/docker, /sandboxes)
-
 ## The `podman()` function
 
 `podman()` returns a sandbox that the `podman` CLI starts in one container on your machine. `{{ pkg }}/sandbox` exports the function. The `sandbox` option accepts its return value:

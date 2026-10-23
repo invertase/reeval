@@ -3,15 +3,6 @@ title: "Evaluate many cases"
 description: "Run the same evaluation over a list of cases and read one pooled result."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Cases)
-[//]: # (owns: evaluate.each; name templates; pool and families)
-[//]: # (excludes: how a family's effect is reached -> /comparisons/statistics#cases-as-pairs)
-[//]: # (excludes: how cases multiply attempts -> /core-concepts#run)
-[//]: # (excludes: evaluate.each signature -> /reference/api#evaluateeach)
-[//]: # (inbound: every page via the sidebar, /comparisons/statistics, /recipes/recommendation)
-[//]: # (outbound: /reference/api#evaluateeach, /core-concepts#run, /history/queries, /comparisons/statistics#cases-as-pairs, /quickstart)
-
 The `evaluate.each()` function turns an array of cases into one evaluation per case. Every case shares one prompt, one set of options, and one body. Two or more cases pool into a family, which reports one pass rate and, with `compare`, one effect over all of them. For more information about how cases multiply cells and attempts, see [Core concepts](/core-concepts#run).
 
 This page uses the `plain` and `withShoehorn` environments from [Quick start](/quickstart), with the `getUserEmail` and `getUserRole` handlers added beside `getUserId` in the `src/user.ts` file.

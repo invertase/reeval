@@ -3,16 +3,6 @@ title: "Test a CLI"
 description: "See whether your harness runs a CLI and its result works."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Test a CLI)
-[//]: # (owns: the end-to-end CLI test: the CLI in the image, a task, toHaveRun and the command's result)
-[//]: # (excludes: adding a tool to the image -> /sandboxes/toolchains)
-[//]: # (excludes: matcher signatures -> /reference/matchers#tohaverun)
-[//]: # (excludes: measuring a skill that documents the CLI -> /recipes/skill-comparison)
-[//]: # (excludes: fake* helpers of any kind -> not documented)
-[//]: # (inbound: every page via the sidebar)
-[//]: # (outbound: /sandboxes/toolchains, /reference/matchers#tohaverun, /evals/checks, /results/output, /recipes/skill-comparison)
-
 You test a CLI by installing it on the sandbox image, giving your harness a task that uses it, and checking the command and its result.
 
 Before any attempt starts, reeval prepares the sandbox image and builds this `install` layer if it is missing. For more information about adding a tool to the image, see [Add toolchains](/sandboxes/toolchains).

@@ -3,14 +3,6 @@ title: "Add project rules"
 description: "Give the harness project instructions it reads at the start of every attempt."
 ---
 
-[//]: # (quadrant: How-To Guide)
-[//]: # (sidebar: Rules)
-[//]: # (owns: rules)
-[//]: # (excludes: each harness's rules file -> /harnesses#where-each-harness-reads-rules-and-skills)
-[//]: # (excludes: skills -> /environments/skills)
-[//]: # (inbound: /environments, /environments/files, /recipes/docs-comparison, /comparisons/compare, /reference/harness/cursor)
-[//]: # (outbound: /harnesses#where-each-harness-reads-rules-and-skills, /evals/checks, /reference/environment#rules)
-
 The `rules` field holds project instructions for the harness. reeval writes them into the file your harness reads at the start of every attempt, such as the `AGENTS.md` file. For more information about the file each harness reads, see [Harnesses](/harnesses#where-each-harness-reads-rules-and-skills).
 
 You extend the `plain` environment in the `evals/environments.ts` file with a variant, `with-rules`. A comparison between the control and the variant shows whether the rules helped.

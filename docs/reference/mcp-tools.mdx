@@ -3,16 +3,6 @@ title: "History MCP server reference"
 description: "Look up the tools and resources reeval mcp serves."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Run history)
-[//]: # (owns: core tools; view tools; resources; REEVAL_MCP_TOKEN)
-[//]: # (excludes: connecting a client -> /reference/cli#reeval-mcp)
-[//]: # (excludes: MCP servers you give the agent -> /environments/mcp)
-[//]: # (excludes: run record fields -> /reference/record)
-[//]: # (excludes: view and table columns -> /reference/query)
-[//]: # (inbound: /environments/mcp, /history/queries, /reference/glossary)
-[//]: # (outbound: /reference/query, /reference/cli#reeval-mcp, /reference/record, /environments/mcp)
-
 `reeval mcp` is a read-only MCP server for the loaded project's run history. Its name is `reeval` and its title is `reeval run history`. Stdio is the default. Closing stdin ends the stdio server, and `SIGINT` or `SIGTERM` ends either server with exit code 0. Tools set `readOnlyHint` and `idempotentHint` to true, and `destructiveHint` and `openWorldHint` to false. Tool results and resource bodies replace secrets with `[REDACTED]`. Errors return the redacted message.
 
 A run reference is `latest` (the default), `latest~N`, a run id, a unique prefix, or a Git SHA prefix of 4 to 40 hexadecimal characters. The SHA match ignores case and selects the newest run. A run id prefix must be unique. No match is an error. Recorded runs and scratch runs both resolve.

@@ -3,16 +3,6 @@ title: "Measure MCP servers"
 description: "See whether an MCP server helped your harness."
 ---
 
-[//]: # (quadrant: How-To Guide)
-[//]: # (sidebar: Measure MCP servers)
-[//]: # (owns: the end-to-end MCP measurement: a control without the server and a variant with it)
-[//]: # (excludes: adding MCP servers -> /environments/mcp)
-[//]: # (excludes: matcher signatures -> /reference/matchers#tohavecalledmcp)
-[//]: # (excludes: every compare key -> /reference/options#compare)
-[//]: # (excludes: fake* helpers of any kind -> not documented)
-[//]: # (inbound: every page via the sidebar)
-[//]: # (outbound: /environments/mcp, /reference/matchers#tohavecalledmcp, /comparisons/compare, /results/output)
-
 You measure an MCP server by running one task on a control with no server and a variant with the server. The effect reads `helped`, `made it worse`, or `can't tell yet`. For more information about adding MCP servers, see [Connect MCP servers](/environments/mcp).
 
 This page uses the control `plain` and the variant `withDocs`, which adds a filesystem server.

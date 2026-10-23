@@ -3,14 +3,6 @@ title: "Environment variables reference"
 description: "Every public REEVAL_* variable, provider key, and CI variable reeval uses."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Environment variables)
-[//]: # (owns: every public REEVAL_* variable; harness, judge and analysis credentials; for judge.model and analysis.model, google/* uses GOOGLE_GENERATIVE_AI_API_KEY and typesafe-ai/* uses TYPESAFE_AI_API_KEY directly when set, while every other prefix and either direct provider without its key uses AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN through Vercel AI Gateway; a direct key takes precedence; typesafe-ai/* is judge-only; CI and terminal variables)
-[//]: # (source: packages/reeval/src/judge/index.ts)
-[//]: # (excludes: REEVAL_BACKGROUND, REEVAL_FAKE_EXEC, REEVAL_PROJECT_ROOT, REEVAL_PYTHON, REEVAL_PYTHON_SDK, REEVAL_RUNNER and REEVAL_RUNNER_TOKEN -> not documented)
-[//]: # (inbound: /quickstart, /evals/running, /evals/ci, /evals/judges, /harnesses/models, /reference/harness/cursor, /reference/harness/claude-code, /reference/harness/codex, /reference/harness/antigravity, /reference/harness/opencode, /reference/harness/goose, /reference/harness/pi, /reference/harness/grok-build, /results/debugging, /results/analysis)
-[//]: # (outbound: /harnesses, /reference/options)
-
 Where a flag and a variable set the same thing, the flag takes precedence. `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` then take precedence over the matching config key. A variable already in the environment takes precedence over the `.env.local` file, which takes precedence over the `.env` file, from the config file's directory.
 
 For more information about config keys, see [Options](/reference/options).

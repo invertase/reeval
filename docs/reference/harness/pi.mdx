@@ -3,19 +3,6 @@ title: "pi harness"
 description: "Look up options, the key, and recorded events for the pi harness."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: pi)
-[//]: # (owns: pi factory options; GOOGLE_GENERATIVE_AI_API_KEY)
-[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
-[//]: # (excludes: model ids and effort values across harnesses -> /harnesses/models)
-[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
-[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
-[//]: # (excludes: egress policies and the automatic hosts -> /environments/egress)
-[//]: # (excludes: plugins and their parts -> not documented)
-[//]: # (excludes: the fx harness and every fake* helper -> not documented)
-[//]: # (inbound: /harnesses, /harnesses/models)
-[//]: # (outbound: /harnesses, /harnesses/models, /environments/rules, /environments/skills, /environments/mcp, /environments/secrets#keep-api-keys-on-the-host, /environments/egress#block-non-automatic-hosts, /reference/env-vars#provider-keys, /reference/matchers#tohavesearched, /reference/record)
-
 ## pi
 
 `pi()` is one harness factory. It runs pi in the sandbox on a Gemini API key, as one `pi --mode json` process per turn that resumes the session's conversation.

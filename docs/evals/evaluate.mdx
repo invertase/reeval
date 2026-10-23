@@ -3,18 +3,6 @@ title: "Write an evaluation"
 description: "Declare an evaluation that gives your harness one task and checks the outcome."
 ---
 
-[//]: # (quadrant: How-To Guide)
-[//]: # (sidebar: Overview)
-[//]: # (owns: evaluate; a name that states the question, which the results and insights lead with; one prompt that asks for the outcome and doesn't name the rule or use its terms, naming the file the task is about rather than the files the rule decides; where evaluation files live, evals/*.eval.ts; pointers to Compare and Checks, since a first evaluation is evaluate plus those two; reeval run --dry-run as the verify step; at the bottom, .skip, .only and .todo, and the timeout option)
-[//]: # (excludes: matchers -> /evals/checks)
-[//]: # (excludes: the control and the variant -> /comparisons/compare)
-[//]: # (excludes: several turns -> /evals/turns)
-[//]: # (excludes: shared options -> /evals/groups)
-[//]: # (excludes: evaluate signature -> /reference/api#evaluate)
-[//]: # (excludes: *.eval.py and reeval.yaml -> not documented)
-[//]: # (inbound: /, /core-concepts, /reference/glossary, /evals/checks, /evals/groups, /environments/mcp)
-[//]: # (outbound: /evals/checks, /evals/turns, /evals/groups, /reference/api#evaluate, /reference/options#timeout, /core-concepts#evaluation, /comparisons/compare, /quickstart)
-
 An evaluation is one `evaluate()` call that gives your harness a task and checks the outcome. For more information about how an evaluation fits into a run, see [Core concepts](/core-concepts#evaluation).
 
 reeval loads every `*.eval.ts` file under the `evals/` folder. This page uses the `plain` and `withShoehorn` environments from [Quick start](/quickstart), which live in the `evals/environments.ts` file.
