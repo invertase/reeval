@@ -25,6 +25,7 @@ on:
       - scripts/bun-compile.mjs
       - scripts/binary-smoke.mjs
       - scripts/install.sh
+      - scripts/install-test.sh
       - scripts/install.ps1
       - packages/reeval/src/root.ts
       - packages/reeval/src/bin.ts
@@ -152,6 +153,16 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo -e BINARY node:22-alpine \
             sh -c 'apk add -q git && node scripts/binary-smoke.mjs "$BINARY"'
+      - name: install-test.sh
+        if: ${{ !matrix.ext }}
+        env:
+          ALPINE: ${{ matrix.alpine }}
+        run: |
+          if [ "$ALPINE" = true ]; then
+            docker run --rm -v "$PWD/current:/repo" -w /repo node:22-alpine sh -c 'apk add -q curl && sh scripts/install-test.sh'
+          else
+            sh current/scripts/install-test.sh
+          fi
       # The install scripts pick this runner's target and check it against SHA256SUMS.
       - name: install.sh
         if: ${{ !matrix.ext }}
