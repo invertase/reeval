@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
+import { gzipSync } from 'node:zlib'
 import {
   costLine,
   formatTokenRange,
@@ -10,6 +13,7 @@ import {
   type PlanCost,
   planCost,
   priceFor,
+  usdOf,
 } from '../src/cost.ts'
 import { loadPrices, type Price } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
@@ -40,6 +44,19 @@ describe('priceFor', () => {
     assert.deepEqual(priceFor('google/gemini-3.8-flash', TABLE), FLASH)
     assert.deepEqual(priceFor('gemini-3.8-flash-medium', TABLE), FLASH)
     assert.deepEqual(priceFor('gemini-3.8-flash[effort=high]', TABLE), FLASH)
+  })
+
+  test("matches a gateway's `provider/model` id as written before the bare id", () => {
+    const sonnet: Price = [3, 0.3, 3.75, 15]
+    const table = { ...TABLE, 'anthropic/claude-sonnet-4.5': sonnet }
+    assert.deepEqual(priceFor('anthropic/claude-sonnet-4.5', table), sonnet)
+    assert.deepEqual(priceFor('anthropic/claude-sonnet-4.5-high', table), sonnet)
+    assert.equal(priceFor('claude-sonnet-4.5', table), null)
+  })
+
+  test('prices reasoning as part of output, never on top of it', () => {
+    const tokens = { input: 0, cacheRead: 0, cacheWrite: 0, output: 1_000_000 }
+    assert.equal(usdOf({ ...tokens, reasoning: 800_000 }, FLASH), usdOf(tokens, FLASH))
   })
 
   test('is null for a model without an exact price, rather than a near one', () => {
@@ -174,6 +191,44 @@ describe('loadPrices', () => {
     else process.env.XDG_CACHE_HOME = before
   })
   const now = Date.parse('2026-10-23T12:00:00Z')
+  const CATALOG = {
+    google: {
+      models: {
+        'gemini-3.8-flash': { cost: { input: 0.75, output: 3.75, cache_read: 0.075 } },
+      },
+    },
+    vercel: {
+      models: { 'anthropic/claude-sonnet-4.5': { cost: { input: 3, output: 15 } } },
+    },
+    openrouter: { models: { other: { cost: { input: 1, output: 1 } } } },
+    openai: { models: { 'no-cost': {}, 'bad-cost': { cost: { input: '1', output: 2 } } } },
+  }
+
+  /** A local models.dev: `answer` serves the catalog gzipped, `hang` accepts and never answers. */
+  async function server(mode: 'answer' | 'hang') {
+    const hits: number[] = []
+    const closed: Promise<void>[] = []
+    const srv = createServer((_req, res) => {
+      hits.push(Date.now())
+      if (mode === 'hang') return
+      res.writeHead(200, { 'content-type': 'application/json', 'content-encoding': 'gzip' })
+      res.end(gzipSync(JSON.stringify(CATALOG)))
+    })
+    srv.on('connection', (socket) => {
+      closed.push(new Promise((done) => socket.on('close', () => done())))
+    })
+    await new Promise<void>((done) => srv.listen(0, '127.0.0.1', done))
+    const { port } = srv.address() as AddressInfo
+    const source = { url: `http://127.0.0.1:${port}/api.json`, timeoutMs: 300 }
+    const stop = () => new Promise<void>((done) => srv.close(() => done()))
+    return { source, hits, closed, stop }
+  }
+  /** Nothing listens on a port that was just closed. */
+  async function refused() {
+    const s = await server('answer')
+    await s.stop()
+    return s.source
+  }
 
   test('REEVAL_PRICES=none is tokens only, and a file is used instead of models.dev', async () => {
     assert.deepEqual(await loadPrices({ REEVAL_PRICES: 'none' }), {
@@ -184,32 +239,33 @@ describe('loadPrices', () => {
     const file = join(dir, 'prices.json')
     writeFileSync(
       file,
-      JSON.stringify({ 'composer-2.5': { input: 0.5, cache_read: 0.2, output: 2.5 } }),
+      JSON.stringify({ 'Composer-2.5': { input: 0.5, cache_read: 0.2, output: 2.5 } }),
     )
     const prices = await loadPrices({ REEVAL_PRICES: file })
     assert.deepEqual(prices.table, { 'composer-2.5': [0.5, 0.2, 0.5, 2.5] })
-    writeFileSync(file, JSON.stringify({ 'composer-2.5': { input: 0.5 } }))
-    const bad = await loadPrices({ REEVAL_PRICES: file })
-    assert.equal(bad.table, null)
-    assert.match('why' in bad ? bad.why : '', /composer-2\.5 needs at least input and output/)
+    for (const cost of [{ input: 0.5 }, { input: '0.5', output: 2 }, { input: -1, output: 2 }]) {
+      writeFileSync(file, JSON.stringify({ 'composer-2.5': cost }))
+      const bad = await loadPrices({ REEVAL_PRICES: file })
+      assert.equal(bad.table, null)
+      assert.match('why' in bad ? bad.why : '', /composer-2\.5 needs input and output/)
+    }
   })
 
-  const seed = (dir: string, fetchedAt: string) => {
+  const seed = (dir: string, fetchedAt: string, table: unknown = TABLE) => {
     mkdirSync(join(dir, 'reeval'), { recursive: true })
     writeFileSync(
       join(dir, 'reeval', 'models-dev-prices.json'),
-      JSON.stringify({ fetchedAt, table: TABLE }),
+      JSON.stringify({ fetchedAt, table }),
     )
   }
 
   test('a cache under a day old is used without fetching', async (t) => {
+    const s = await server('answer')
+    t.after(s.stop)
     const { dir, env } = cache()
     seed(dir, '2026-10-23T06:00:00Z')
-    const fetch = t.mock.method(globalThis, 'fetch', async () => {
-      throw new Error('fetched')
-    })
-    const prices = await loadPrices(env, now)
-    assert.equal(fetch.mock.callCount(), 0)
+    const prices = await loadPrices(env, now, s.source)
+    assert.equal(s.hits.length, 0)
     assert.deepEqual(prices, {
       table: TABLE,
       source: 'models.dev',
@@ -218,40 +274,61 @@ describe('loadPrices', () => {
     })
   })
 
-  test('offline, an older cache is used and marked stale; with none, there are no prices', async (t) => {
-    t.mock.method(globalThis, 'fetch', async () => {
-      throw new Error('offline')
-    })
+  test('a corrupt cache, or one dated in the future, is fetched again', async (t) => {
+    const s = await server('answer')
+    t.after(s.stop)
+    const { dir, env } = cache()
+    for (const [fetchedAt, table] of [
+      ['2026-10-23T06:00:00Z', { 'gemini-3.8-flash': 'oops' }],
+      ['2026-10-23T06:00:00Z', { 'gemini-3.8-flash': [1, 2] }],
+      ['not a date', TABLE],
+      ['2099-01-01T00:00:00Z', TABLE],
+    ] as const) {
+      seed(dir, fetchedAt, table)
+      const prices = await loadPrices(env, now, s.source)
+      assert.equal('stale' in prices && prices.fetchedAt, new Date(now).toISOString())
+    }
+    assert.equal(s.hits.length, 4)
+  })
+
+  test('offline, an older cache is used and marked stale; with none, there are no prices', async () => {
+    const source = await refused()
     const { dir, env } = cache()
     seed(dir, '2026-10-01T00:00:00Z')
-    const stale = await loadPrices(env, now)
+    const stale = await loadPrices(env, now, source)
     assert.equal('stale' in stale && stale.stale, true)
     cache()
-    assert.deepEqual(await loadPrices({}, now), {
+    assert.deepEqual(await loadPrices({}, now, source), {
       table: null,
       why: 'models.dev unreachable',
     })
   })
 
-  test("a fetch keeps the direct providers' priced models and caches them", async (t) => {
-    t.mock.method(globalThis, 'fetch', async () =>
-      Response.json({
-        google: {
-          models: {
-            'gemini-3.8-flash': { cost: { input: 0.75, output: 3.75, cache_read: 0.075 } },
-          },
-        },
-        openrouter: { models: { other: { cost: { input: 1, output: 1 } } } },
-        openai: { models: { 'no-cost': {} } },
-      }),
-    )
+  test('a host that never answers gives up at the deadline and closes the socket', async (t) => {
+    const s = await server('hang')
+    t.after(s.stop)
     const { env } = cache()
-    const prices = await loadPrices(env, now)
-    assert.deepEqual(prices.table, { 'gemini-3.8-flash': FLASH })
-    t.mock.restoreAll()
-    t.mock.method(globalThis, 'fetch', async () => {
-      throw new Error('fetched again')
+    const start = Date.now()
+    assert.deepEqual(await loadPrices(env, now, s.source), {
+      table: null,
+      why: 'models.dev unreachable',
     })
-    assert.deepEqual((await loadPrices(env, now)).table, { 'gemini-3.8-flash': FLASH })
+    assert.ok(Date.now() - start < 2000, 'waited past the deadline')
+    assert.equal(s.hits.length, 1)
+    await Promise.all(s.closed)
+  })
+
+  test("a fetch keeps the direct providers' and the gateway's priced models and caches them", async (t) => {
+    const s = await server('answer')
+    t.after(s.stop)
+    const { env } = cache()
+    const expected = {
+      'gemini-3.8-flash': FLASH,
+      'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+    }
+    assert.deepEqual((await loadPrices(env, now, s.source)).table, expected)
+    await s.stop()
+    assert.deepEqual((await loadPrices(env, now, await refused())).table, expected)
+    assert.equal(s.hits.length, 1)
   })
 })

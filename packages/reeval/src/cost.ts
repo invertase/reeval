@@ -75,14 +75,14 @@ export const TYPICAL_JUDGE_CALL: { low: Tokens; high: Tokens } = {
 const EFFORT_SUFFIX = /-(none|minimal|low|medium|high|xhigh|max|thinking)$/
 
 /**
- * A model's price by its id, without a `provider/` prefix, `[param=…]` labels or a trailing
- * effort (`gemini-3.8-flash-medium`); null when `table` has no exact match.
+ * A model's price by its id, as written (`anthropic/claude-sonnet-4.5`) or without its
+ * `provider/` prefix, without `[param=…]` labels or a trailing effort
+ * (`gemini-3.8-flash-medium`); null when `table` has no exact match.
  */
 export function priceFor(model: string, table: Record<string, Price>): Price | null {
   let id = model.toLowerCase().replace(/\[.*\]$/, '')
-  id = id.slice(id.lastIndexOf('/') + 1)
   for (;;) {
-    const price = table[id]
+    const price = table[id] ?? table[id.slice(id.lastIndexOf('/') + 1)]
     if (price) return price
     const shorter = id.replace(EFFORT_SUFFIX, '')
     if (shorter === id) return null
@@ -90,13 +90,9 @@ export function priceFor(model: string, table: Record<string, Price>): Price | n
   }
 }
 
-/** Reasoning tokens are billed as output. */
+/** `output` already counts the reasoning tokens, which are billed as output. */
 export const usdOf = (t: Tokens, [input, cacheRead, cacheWrite, output]: Price) =>
-  (t.input * input +
-    t.cacheRead * cacheRead +
-    t.cacheWrite * cacheWrite +
-    (t.output + (t.reasoning ?? 0)) * output) /
-  1e6
+  (t.input * input + t.cacheRead * cacheRead + t.cacheWrite * cacheWrite + t.output * output) / 1e6
 
 const tokensOf = (t: Tokens) => totalTokens({ reasoning: null, ...t })
 

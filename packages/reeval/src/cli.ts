@@ -187,7 +187,6 @@ async function run(argv: string[]): Promise<number> {
   return runCommand(values, configPath, filters)
 }
 
-/** Asks a yes/no question on the terminal; anything but y or yes is no. */
 /** The dry run's prices, fetched only when a planned attempt or the judge has anything to price. */
 async function dryRunPrices(planned: PlannedItem[], judgeModel: string | null) {
   const { needsPrices } = await import('./cost.ts')
@@ -197,6 +196,7 @@ async function dryRunPrices(planned: PlannedItem[], judgeModel: string | null) {
   return loadPrices()
 }
 
+/** Asks a yes/no question on the terminal; anything but y or yes is no. */
 async function confirm(question: string): Promise<boolean> {
   const { createInterface } = await import('node:readline/promises')
   const rl = createInterface({ input: process.stdin, output: process.stdout })
