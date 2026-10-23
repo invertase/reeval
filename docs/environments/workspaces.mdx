@@ -3,14 +3,6 @@ title: "Start from a repository"
 description: "Start the agent in a copy of your repository at a pinned ref."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Workspaces)
-[//]: # (owns: workspace; git; git token)
-[//]: # (excludes: loose files -> /environments/files)
-[//]: # (excludes: git signature -> /reference/environment#git)
-[//]: # (inbound: /environments, /recipes/sdk)
-[//]: # (outbound: /reference/environment#git, /environments/files, /history)
-
 The `git()` helper gives the agent existing code to work on. reeval fetches the repository on the host before any attempt starts, copies its tree into the workspace, writes `files` there, then runs `setup`. For more information about the other fields of an environment, see [Environments](/environments).
 
 ## Start from a repository

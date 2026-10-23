@@ -3,18 +3,6 @@ title: "Fail a pull request"
 description: "Fail a pull request when an evaluation regresses."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Gate pull requests)
-[//]: # (owns: the end-to-end pull-request gate: a profile that keeps the variant, compare.gate and minLift so the run exits 1, the summary that reeval show --md prints, and the regression check)
-[//]: # (excludes: the workflow file and the API key -> /evals/ci)
-[//]: # (excludes: record mode ci and the history commit in the job -> /evals/ci)
-[//]: # (excludes: profile keys -> /reference/profiles)
-[//]: # (excludes: exit codes -> /reference/cli#exit-codes)
-[//]: # (excludes: browsing history -> /history/queries#browse-history)
-[//]: # (excludes: fake* helpers of any kind -> not documented)
-[//]: # (inbound: every page via the sidebar)
-[//]: # (outbound: /evals/profiles, /comparisons/compare, /reference/cli#exit-codes, /evals/ci, /results/output#show-one-run, /results/regressions, /recipes/results-over-time)
-
 Fail a pull request when a variant misses the minimum lift, or when an evaluation regresses.
 
 <Steps>

@@ -3,16 +3,6 @@ title: "Configure Docker sandboxes"
 description: "Run evaluation attempts in containers with controlled images, resources, and privileges."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Docker)
-[//]: # (owns: docker; DockerOptions)
-[//]: # (excludes: choosing a sandbox -> /sandboxes)
-[//]: # (excludes: toolchain recipes -> /sandboxes/toolchains)
-[//]: # (excludes: the egress option and its automatic hosts -> /environments/egress)
-[//]: # (excludes: fake* helpers of any kind -> not documented)
-[//]: # (inbound: /sandboxes, /sandboxes/toolchains, /reference/sandbox/podman)
-[//]: # (outbound: /sandboxes, /sandboxes/toolchains, /reference/sandbox/podman, /environments/egress)
-
 ## The `docker()` factory
 
 `docker()` returns a sandbox that runs each attempt in one Docker container on your machine. The `{{ pkg }}/sandbox` subpath exports `docker()` for the `sandbox` option:

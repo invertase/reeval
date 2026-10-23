@@ -3,25 +3,6 @@ title: "How statistics work"
 description: "Understand when reeval can tell whether a change helped."
 ---
 
-[//]: # (quadrant: Explanation)
-[//]: # (sidebar: Statistics)
-[//]: # (owns: pass rates with the Wilson score interval; lift with Newcombe's hybrid score interval for two independent rates; the effect words: helped or made it worse when the 95% interval excludes zero, can't tell yet inside it or below 4 counted attempts a side; pooled cases as pairs, computed on every reeval run: the pooled lift is called by its 95% interval, Newcombe's paired interval at one attempt per case or a t interval over the cases at several, and it needs at least 6 discordant pairs at one attempt per case, or at least 6 cases at several, before a call; the McNemar or Wilcoxon p is reported but decides nothing; effort: the exact Mann-Whitney rank-sum test at p below 0.05, the only place p below 0.05 applies, on tool calls, time and tokens, with medians and quartiles, and the smallest p a runs count can reach; compare questions as blinded pairwise judging in both orders, counted as wins, ties and splits, with no test, never changing an outcome; flaky cells: mixed outcomes over at least 6 attempts pooled across comparable runs, a threshold rather than a test; every threshold is a constant, PAIRED_MIN, EFFECT_MIN_COUNTED, EFFORT_ALPHA and Z, with no public knob)
-[//]: # (source: packages/reeval/src/stats.ts)
-[//]: # (source: packages/reeval/src/view/suite.ts)
-[//]: # (source: packages/reeval/src/view/contrasts.ts)
-[//]: # (source: packages/reeval/src/view/judgements.ts)
-[//]: # (source: packages/reeval/src/view/effort.ts)
-[//]: # (source: packages/reeval/src/history/families.ts)
-[//]: # (source: packages/reeval/src/history/facts.ts)
-[//]: # (source: packages/reeval/src/compare/pairs.ts)
-[//]: # (source: packages/reeval/src/history/db.ts)
-[//]: # (excludes: setting up a comparison -> /comparisons/compare)
-[//]: # (excludes: reading the printed words -> /results/output)
-[//]: # (excludes: the views that expose these numbers -> /reference/query)
-[//]: # (excludes: remark kind ids -> not documented)
-[//]: # (inbound: /, /core-concepts, /comparisons/compare, /results/output, /quickstart, /evals/cases)
-[//]: # (outbound: /comparisons/compare, /comparisons/compare#ask-which-did-better, /evals/cases, /results/output, /reference/query, /core-concepts#compare)
-
 The thresholds on this page are fixed; you can't configure them.
 
 For more information about the run model, see [Core concepts](/core-concepts#compare). For more information about configuring a comparison, see [Compare setups](/comparisons/compare).

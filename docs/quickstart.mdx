@@ -3,25 +3,6 @@ title: "Quick start"
 description: "Install reeval and see whether a change helped your coding agent."
 ---
 
-[//]: # (quadrant: Tutorial)
-[//]: # (sidebar: Quickstart)
-[//]: # (owns: Node requirement; the setup skill as one alternative sentence; package install with npm; Docker with Linux containers as the example sandbox; reeval init --harness; the harness key in .env.local; building the sandbox image as one step; reeval doctor; the golden path from install to a variant that helped: the migrate-to-shoehorn skill, a control and a variant, a labelled check, runs: 4, and the helped result)
-[//]: # (terms: runs and --runs mean attempts per cell)
-[//]: # (excludes: project defaults, config discovery and the config helpers -> /reference/config)
-[//]: # (excludes: every reeval init flag -> /reference/cli#reeval-init)
-[//]: # (excludes: every environment variable -> /reference/env-vars)
-[//]: # (excludes: other harnesses -> /harnesses)
-[//]: # (excludes: Podman, and Docker on macOS and Windows -> /sandboxes)
-[//]: # (excludes: image builds -> /sandboxes/toolchains)
-[//]: # (excludes: every doctor flag and the first-run problems -> /reference/cli#reeval-doctor)
-[//]: # (excludes: insights and the analysis model -> /results/analysis)
-[//]: # (excludes: compare options, gates and gate: { passRate } -> /comparisons/compare)
-[//]: # (excludes: how the effect is reached and why four attempts -> /comparisons/statistics)
-[//]: # (excludes: troubleshooting -> not on a Tutorial)
-[//]: # (excludes: fake* helpers of any kind -> not documented)
-[//]: # (inbound: /, /reference/config, /comparisons/compare, /evals/evaluate, /evals/cases, /evals/judges, /results/analysis, /harnesses)
-[//]: # (outbound: /reference/config, /comparisons/compare, /comparisons/compare#read-the-result, /comparisons/compare#add-more-variants, /core-concepts, /core-concepts#compare, /environments/skills, /results/output, /results/analysis#set-an-analysis-model, /evals/running, /sandboxes, /reference/cli#reeval-doctor, /reference/cli#reeval-init, /reference/env-vars, /comparisons/statistics, /comparisons/statistics#why-four-attempts-a-side, /harnesses, /sandboxes/toolchains, /environments/secrets)
-
 reeval runs a coding agent in a sandbox and checks the outcome. Here you run the same harness as a control without the skill and a variant with the skill, then see whether the skill helped.
 
 To have a coding agent follow these steps, use the [setup skill](https://github.com/invertase/reeval/tree/main/skills/setup).

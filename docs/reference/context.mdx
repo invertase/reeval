@@ -3,19 +3,6 @@ title: "Attempt context reference"
 description: "Look up every method and field of c and of the turn it returns."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Attempt context)
-[//]: # (owns: c.send; c.exec; c.serve; c.capture; c.judge; c.readFile; c.writeFile; c.turns; c.signal; c.attempt; Turn)
-[//]: # (excludes: matchers -> /reference/matchers)
-[//]: # (excludes: walkthroughs -> /evals/turns, /evals/checks, /evals/judges and /evals/servers)
-[//]: # (excludes: the judge and capture option keys -> /reference/options#judge and /reference/options#capture)
-[//]: # (excludes: environment helpers -> /reference/environment)
-[//]: # (excludes: the run record -> /reference/record)
-[//]: # (excludes: reading transcripts -> /results/debugging)
-[//]: # (excludes: fake* helpers and scripted capture drivers -> not documented)
-[//]: # (inbound: /evals/turns, /evals/checks, /evals/judges, /evals/servers, /reference/api, /reference/matchers, /reference/options, /recipes/skill-comparison)
-[//]: # (outbound: /reference/matchers, /reference/options#judge, /reference/options#capture, /evals/turns, /evals/checks, /evals/judges, /evals/servers, /reference/record, /results/debugging)
-
 `c` is the attempt context the evaluation body receives, for one cell and one run. The sandbox and the harness session start on the first call that needs them.
 
 ## `c.send()`

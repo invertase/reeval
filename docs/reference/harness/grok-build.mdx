@@ -3,18 +3,6 @@ title: "Grok Build harness"
 description: "Look up options, the key, and recorded events for the Grok Build harness."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Grok Build)
-[//]: # (owns: grokBuild factory options; XAI_API_KEY)
-[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
-[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
-[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
-[//]: # (excludes: egress policies and the automatic hosts -> /environments/egress)
-[//]: # (excludes: plugins -> not documented)
-[//]: # (excludes: the fx harness and every fake* helper -> not documented)
-[//]: # (inbound: /harnesses)
-[//]: # (outbound: /harnesses, /harnesses/models, /environments/rules, /environments/skills, /environments/mcp, /environments/secrets#keep-api-keys-on-the-host, /environments/egress#block-non-automatic-hosts, /reference/env-vars#provider-keys, /reference/matchers#tohavecalledmcp, /reference/matchers#tohavesearched, /reference/record)
-
 ## `grokBuild()` factory
 
 `grokBuild()` is one harness factory. It runs Grok Build in the sandbox on an xAI API key. The factory comes from `{{ pkg }}/harness`, and its return value sets the `harness` option:

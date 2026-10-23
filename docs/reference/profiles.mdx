@@ -3,20 +3,6 @@ title: "Profiles reference"
 description: "Look up each profile key and how reeval chooses a profile."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Profiles)
-[//]: # (owns: PROFILE_KEYS: defaults, limit, judge, budget, record and tags; LIMIT_KEYS: runs, compare and harness; how a profile is chosen: --profile, REEVAL_PROFILE and defaultProfile)
-[//]: # (excludes: task walkthrough -> /evals/profiles)
-[//]: # (excludes: option keys inside defaults -> /reference/options)
-[//]: # (excludes: the pin option -> /reference/options#pin)
-[//]: # (excludes: the option cascade table -> /reference/options#the-cascade)
-[//]: # (excludes: judge fields -> /reference/options#judge)
-[//]: # (excludes: tags on a group or evaluation -> /reference/options#tags)
-[//]: # (excludes: the profile field on the config callback -> /reference/config#profile)
-[//]: # (excludes: the --profile flag text and the reeval record command -> /reference/cli)
-[//]: # (inbound: /evals/profiles, /reference/options, /reference/config, /reference/api)
-[//]: # (outbound: /evals/profiles, /reference/options, /reference/options#the-cascade, /reference/options#pin, /reference/options#judge, /reference/options#tags, /reference/config#profile, /reference/cli#reeval-run, /reference/cli#reeval-record)
-
 ## `profiles`
 
 `profiles` in the `reeval.config.ts` file maps a name to `defaults`, `limit`, `judge`, `budget`, `record`, and `tags`. reeval exits with code 2 for an unknown key or a value of the wrong shape.

@@ -3,18 +3,6 @@ title: Environment helpers reference
 description: Look up environment fields and helper signatures.
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Environment helpers)
-[//]: # (owns: EnvironmentSpec fields; git; file; directory; skill.*; mcp.*; secret.*; extend)
-[//]: # (excludes: plugins and plugin.* -> not documented)
-[//]: # (excludes: fakeSandbox and every fake* helper -> not documented)
-[//]: # (excludes: walkthroughs -> the Environments pages)
-[//]: # (excludes: config discovery, defineConfig and profile selection -> /reference/config and /reference/profiles)
-[//]: # (excludes: sandbox helper options -> /sandboxes)
-[//]: # (excludes: egress policy behaviour beyond the field -> /environments/egress)
-[//]: # (inbound: the Environments pages, /environments, /environments/workspaces, /environments/files, /environments/rules, /environments/setup, /environments/skills, /environments/mcp, /environments/secrets, /reference/config, /reference/api, /reference/context, /recipes/skill-comparison)
-[//]: # (outbound: /environments, /harnesses#where-each-harness-reads-rules-and-skills)
-
 ## Environment fields
 
 `defineEnvironment()` and `extend()` take a spec or a callback with `git`, `file`, `directory`, `skill`, `mcp`, and `secret`. Relative host paths passed to those helpers resolve against the calling file. The return is synchronous, and a `Promise` stops the run with exit code 2.

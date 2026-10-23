@@ -3,16 +3,6 @@ title: "Matchers reference"
 description: "Look up expect, expect.soft, expect.poll, and every matcher reeval adds."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Matchers)
-[//]: # (owns: expect; expect.soft; expect.poll; every reeval matcher)
-[//]: # (excludes: standard Vitest matchers such as toBe and toEqual -> https://vitest.dev/api/expect)
-[//]: # (excludes: walkthrough -> /evals/checks)
-[//]: # (excludes: HarnessCapabilityError -> /reference/api#harnesscapabilityerror)
-[//]: # (excludes: c.send, c.exec, c.judge and Turn -> /reference/context)
-[//]: # (inbound: /evals/checks, /environments/skills, /environments/mcp, /recipes/skill-comparison, /recipes/mcp-comparison, /recipes/cli, /reference/context, /reference/api, /reference/harness/cursor, /reference/harness/claude-code, /reference/harness/codex, /reference/harness/antigravity, /reference/harness/opencode, /reference/harness/goose, /reference/harness/pi, /reference/harness/grok-build)
-[//]: # (outbound: /evals/checks, /reference/api#harnesscapabilityerror)
-
 Each matcher reads a turn from `c.send()`, the attempt context `c`, a `c.exec()` result, or a `c.judge()` verdict. Passed `c`, a transcript matcher reads every turn so far.
 
 For more information about standard matchers, see [Vitest's `expect` reference](https://vitest.dev/api/expect).

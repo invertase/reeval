@@ -3,18 +3,6 @@ title: "Compare setups"
 description: "See whether a skill, doc, or MCP server changes what your harness does."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Compare)
-[//]: # (owns: compare.baseline and compare.variants with one control and one variant; runs: 2 on a first compare, and that it reads can't tell yet below four attempts a side; reading the result: both passing means the harness already does it, and only the variants are gated by default, compare.gate 'variants'; a control that still holds the rules file, or a doc that repeats them, measures nothing; below that, more variants, compare.gate, compare.minLift and compare.harness; after the gating sections, Ask which did better: compare.questions, the question option, blinded pairwise judging in both orders, counted as wins, ties and splits, the question_pairs view, and that questions never gate or change an outcome)
-[//]: # (excludes: how the effect is reached -> /core-concepts#compare)
-[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
-[//]: # (excludes: building the variant with extendEnvironment -> /environments)
-[//]: # (excludes: the complete compare option reference -> /reference/options#compare)
-[//]: # (excludes: question option table -> /reference/options#question)
-[//]: # (excludes: how the interval and the effect words are reached -> /comparisons/statistics)
-[//]: # (inbound: /, /quickstart, /core-concepts, /comparisons/statistics, /environments/skills, /harnesses, /recipes/skill-comparison, /recipes/docs-comparison, /recipes/mcp-comparison, /recipes/agent-comparison, /reference/glossary, /evals/evaluate, /evals/servers, /results/regressions)
-[//]: # (outbound: /reference/options#compare, /core-concepts#compare, /results/output, /comparisons/statistics, /environments, /reference/options#question, /reference/query, /quickstart, /environments/rules, /reference/options#gate, /harnesses)
-
 A compare runs one evaluation on a control without your change and on a variant with it. Both get the same prompt and checks. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a compare appears in a run, see [Core concepts](/core-concepts#compare).
 
 This page uses the control `plain` and the variant `with-shoehorn`, which adds Matt Pocock's `migrate-to-shoehorn` skill. For more information about building the control and variant, see [Quick start](/quickstart) or [Environments](/environments).

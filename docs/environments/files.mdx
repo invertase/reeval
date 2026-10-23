@@ -3,15 +3,6 @@ title: "Place files"
 description: "Give the agent the files an evaluation starts from."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Files)
-[//]: # (owns: files; file; directory; the default directory ignores)
-[//]: # (excludes: DEFAULT_DIRECTORY_IGNORES as an import -> not documented)
-[//]: # (excludes: rules files -> /environments/rules)
-[//]: # (excludes: helper signatures -> /reference/environment#directory)
-[//]: # (inbound: /environments, /environments/workspaces, /recipes/docs-comparison)
-[//]: # (outbound: /reference/environment#file, /reference/environment#directory, /environments/rules)
-
 You set `files` on an environment to put source in the workspace before the agent starts. A destination path is relative to the workspace, uses forward slashes, and never contains `..`. To write into the home directory, start a path with `~/`.
 
 ## Write a file

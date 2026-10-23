@@ -3,18 +3,6 @@ title: "Configuration reference"
 description: "Look up defineConfig, config discovery, and the helpers a config callback receives."
 ---
 
-[//]: # (quadrant: Reference)
-[//]: # (sidebar: Configuration)
-[//]: # (owns: defineConfig and its two forms; project defaults in reeval.config.ts; config discovery, the file names and --config; the config's directory as the project root; which commands require a file; ConfigHelpers: secret, skill, mcp, file, directory, git, ci, command, hostEnv and profile)
-[//]: # (excludes: every config key -> /reference/options)
-[//]: # (excludes: the signatures of secret, skill, mcp, file, directory and git -> /reference/environment)
-[//]: # (excludes: profile keys, how a profile is chosen and defaultProfile -> /reference/profiles)
-[//]: # (excludes: the .env.local and .env files and their precedence -> /environments/secrets)
-[//]: # (excludes: the contents of the reeval.yaml and reeval.yml files, and the plugin helper -> not documented)
-[//]: # (excludes: scaffolding a project with reeval init and the first-run keys -> /quickstart)
-[//]: # (inbound: /quickstart, /environments, /history, /reference/options)
-[//]: # (outbound: /reference/options, /reference/environment, /reference/profiles, /reference/cli, /environments/secrets, /quickstart)
-
 ## `defineConfig()`
 
 `{{ pkg }}` exports the `defineConfig()` function. The function returns the project defaults under the `reeval.config.ts` file:

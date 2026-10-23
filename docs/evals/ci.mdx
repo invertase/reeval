@@ -3,14 +3,6 @@ title: "Run evaluations in CI"
 description: "Fail a CI job when a recorded run regresses."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: CI)
-[//]: # (owns: record mode ci; GitHub Actions summary and outputs; compare --fail-on-regression in CI; exit codes in CI)
-[//]: # (excludes: history browsing -> /history/queries#browse-history)
-[//]: # (excludes: exit code table -> /reference/cli#exit-codes)
-[//]: # (inbound: /evals/profiles, /results/regressions, /recipes/ci-gate)
-[//]: # (outbound: /evals/profiles, /results/regressions, /reference/cli#exit-codes, /reference/env-vars)
-
 Run evaluations on each pull request opened from this repository so the job keeps a recorded run and fails when an evaluation regresses. Create a profile named `pr` before adding the workflow. For more information about profiles, see [Profiles](/evals/profiles).
 
 <Steps>

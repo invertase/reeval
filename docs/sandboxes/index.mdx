@@ -3,15 +3,6 @@ title: "Choose a sandbox"
 description: "Run each attempt in a fresh container on your machine."
 ---
 
-[//]: # (quadrant: How-To Guide)
-[//]: # (sidebar: Overview)
-[//]: # (owns: the sandbox option; choosing docker or podman; memory, swap, cpus and pids)
-[//]: # (excludes: base images and toolchains -> /sandboxes/toolchains)
-[//]: # (excludes: every docker option -> /reference/sandbox/docker)
-[//]: # (excludes: fakeSandbox and every fake* helper -> not documented)
-[//]: # (inbound: /, /environments, /quickstart, /core-concepts, /reference/sandbox/docker, /reference/sandbox/podman, /reference/glossary)
-[//]: # (outbound: /reference/sandbox/docker, /reference/sandbox/podman, /sandboxes/toolchains, /reference/options#sandbox)
-
 A sandbox is the container an attempt runs in. reeval starts one container per attempt, runs the harness, the setup commands, and the checks in it, and removes it when the attempt ends. Without a `sandbox` option, every attempt runs in `docker()`.
 
 ## Choose Docker or Podman

@@ -3,23 +3,6 @@ title: "Define an environment"
 description: "Give each harness attempt the files, rules, skills, and servers it needs."
 ---
 
-[//]: # (quadrant: How-to)
-[//]: # (sidebar: Overview)
-[//]: # (owns: defineEnvironment; extend and extendEnvironment; the environment option; giving every evaluation the same skills, MCP servers, files and rules from reeval.config.ts with the config helpers)
-[//]: # (excludes: workspace -> /environments/workspaces)
-[//]: # (excludes: files -> /environments/files)
-[//]: # (excludes: rules -> /environments/rules)
-[//]: # (excludes: setup -> /environments/setup)
-[//]: # (excludes: skills -> /environments/skills)
-[//]: # (excludes: mcp -> /environments/mcp)
-[//]: # (excludes: env and secrets -> /environments/secrets)
-[//]: # (excludes: egress -> /environments/egress)
-[//]: # (excludes: sandbox -> /sandboxes)
-[//]: # (excludes: plugins -> not documented)
-[//]: # (excludes: helper signatures -> /reference/environment)
-[//]: # (inbound: /, /reference/environment, /reference/glossary, /core-concepts, /comparisons/compare, /evals/servers)
-[//]: # (outbound: /environments/workspaces, /environments/files, /environments/rules, /environments/setup, /environments/skills, /environments/mcp, /environments/secrets, /environments/egress, /sandboxes, /reference/environment, /reference/environment#environment-fields, /reference/environment#extend, /reference/options#environment, /reference/config#config-helpers)
-
 An environment is what your harness gets in an attempt. `defineEnvironment()` defines an environment, and its `.extendEnvironment()` method derives a variant from it. Define environments in the `evals/environments.ts` file that `reeval init` writes.
 
 <Steps>

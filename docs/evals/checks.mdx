@@ -3,15 +3,6 @@ title: "Check an attempt"
 description: "Fail the attempt when the agent's work misses a check."
 ---
 
-[//]: # (quadrant: How-To Guide)
-[//]: # (sidebar: Checks)
-[//]: # (owns: expect; expect.soft and expect.poll; c.exec; c.readFile and c.writeFile; HarnessCapabilityError; one line pointing at Overview's Verify with reeval run --dry-run step: a check is only as good as a run you have seen, and reeval run --dry-run is how you see the plan first; it prints the evaluations, cells, attempts and estimate, and runs no check and no harness)
-[//]: # (excludes: matcher signatures -> /reference/matchers)
-[//]: # (excludes: LLM scoring -> /evals/judges)
-[//]: # (excludes: how checks become an outcome -> /core-concepts#check)
-[//]: # (inbound: /core-concepts, /evals/evaluate, /evals/turns, /evals/judges, /environments/rules, /recipes/sdk, /recipes/cli, /reference/matchers, /reference/glossary)
-[//]: # (outbound: /reference/matchers, /evals/judges, /core-concepts#check, /reference/context#cexec, /evals/evaluate)
-
 You call `expect` in the evaluation body. A failing check fails the attempt. For more information about how a check becomes an outcome, see [Check](/core-concepts#check).
 
 Before you rely on a check, verify the plan with the `reeval run --dry-run` command, as [Write an evaluation](/evals/evaluate) shows. The command prints the evaluations, cells, attempts, and estimate, and runs no check and no harness.
