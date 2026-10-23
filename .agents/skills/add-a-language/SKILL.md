@@ -86,7 +86,7 @@ see [Prior art](#prior-art-dart-spike) below):
 
 | Module | Role |
 |---|---|
-| `protocol.ts` | `RUNNER_PROTOCOL = 2`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call}`, replies), each with the `key` reeval gave the body in its `start` — no `t` on attempt lines. `key` is unique per started body; `attempt.id` isn't (two evals on one cell share it), so never multiplex on it. |
+| `protocol.ts` | `RUNNER_PROTOCOL = 3`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call}`, replies), each with the `key` reeval gave the body in its `start` — no `t` on attempt lines. `key` is unique per started body; `attempt.id` isn't (two evals on one cell share it), so never multiplex on it. |
 | `transport.ts` | Spawns the runner; one JSON message a line on its stdin (to it) and stdout (from it). A stdout line that isn't a message is shown on stderr |
 | `attempt-host.ts` | Maps protocol ops to real `AttemptContext` (`expect` → `match.ts`) |
 | `remote.ts` | `collectLanguageFile`: collect tree, `declareTree`, run remote bodies |
@@ -99,7 +99,9 @@ SDK runner responsibilities:
    shares those copies but not the runner's lock: send its output to stderr. reeval takes a
    stdout line as a message only when it has a message's shape (`isFromRunner`), so print
    nothing else there that could pass for one. Send
-   `{ t: 'hello', protocol: 2, sdk, version, runtime }`.
+   `{ t: 'hello', protocol: 3, sdk, version, runtime }`. reeval sets `REEVAL_RUNNER=stdio` and
+   `REEVAL_RUNNER_PROTOCOL`; a runner started without them, or on another protocol, exits
+   non-zero with a sentence naming both versions instead of saying hello.
 2. On `{ t: 'collect', file }`, import the eval file; reply with `{ t: 'declared', file, tree }`
    (tree must match `schema/plan/declaration.schema.json`).
 3. On `start`, run the body async; each `c.*` becomes `{ id, call, key }`; read replies

@@ -57,6 +57,7 @@ test('a runner talks over its stdin and stdout, and stray stdout is not a messag
   const runner = await startLanguageRunner(
     fakeRunner(`
       if (process.env.REEVAL_RUNNER !== 'stdio') process.exit(3)
+      if (process.env.REEVAL_RUNNER_PROTOCOL !== '${RUNNER_PROTOCOL}') process.exit(5)
       console.log('not a message')
       send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'fake', version: '1', runtime: 'node' })
       lines.on('line', (line) => {
@@ -102,11 +103,11 @@ test('a runner on another protocol, or one that stops before hello, says why', a
       fakeRunner(`send({ t: 'hello', protocol: 1, sdk: 'fake', version: '0.1', runtime: 'node' })`),
       tmpdir(),
     ),
-    /fake 0\.1 speaks runner protocol 1, but this reeval speaks 2/,
+    new RegExp(`fake 0\\.1 speaks runner protocol 1, but this reeval speaks ${RUNNER_PROTOCOL}`),
   )
   await assert.rejects(
     startLanguageRunner(fakeRunner(`console.error('no SDK here'); process.exit(4)`), tmpdir()),
-    /stopped before it said hello: it exited \(code 4\):\nno SDK here/,
+    /stopped before it said hello: it exited \(code 4\):\nno SDK here\nAn SDK that speaks an older runner protocol/,
   )
 })
 

@@ -15,6 +15,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from reeval_python.runner import RUNNER_PROTOCOL
+
 SRC = Path(__file__).resolve().parents[1] / "src"
 
 ATTEMPT = {
@@ -58,7 +60,12 @@ class Host:
     def __init__(self, root: Path, source: str, *, answer: bool = True) -> None:
         (root / "evals").mkdir(exist_ok=True)
         (root / "evals" / "x.eval.py").write_text(source)
-        env = {**os.environ, "REEVAL_RUNNER": "stdio", "REEVAL_PROJECT_ROOT": str(root)}
+        env = {
+            **os.environ,
+            "REEVAL_RUNNER": "stdio",
+            "REEVAL_RUNNER_PROTOCOL": str(RUNNER_PROTOCOL),
+            "REEVAL_PROJECT_ROOT": str(root),
+        }
         env["PYTHONPATH"] = os.pathsep.join([str(SRC), env.get("PYTHONPATH", "")])
         self.proc = subprocess.Popen(
             [sys.executable, "-m", "reeval_python"],

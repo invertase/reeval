@@ -46,7 +46,7 @@ export async function startLanguageRunner(
   const [cmd = '', ...args] = command
   const child = spawn(cmd, args, {
     cwd,
-    env: { ...env, REEVAL_RUNNER: 'stdio' },
+    env: { ...env, REEVAL_RUNNER: 'stdio', REEVAL_RUNNER_PROTOCOL: String(RUNNER_PROTOCOL) },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   })
@@ -84,13 +84,15 @@ export async function startLanguageRunner(
   })
   const first = await Promise.race([greeted, exited])
   if (typeof first === 'string') {
-    throw new RunnerLoadError(`The language runner stopped before it said hello: ${first}`)
+    throw new RunnerLoadError(
+      `The language runner stopped before it said hello: ${first}\nAn SDK that speaks an older runner protocol than this reeval's (${RUNNER_PROTOCOL}) stops like this: update the SDK to the version that matches reeval.`,
+    )
   }
   const hello = first
   if (hello.protocol !== RUNNER_PROTOCOL) {
     child.kill()
     throw new UsageError(
-      `${hello.sdk} ${hello.version} speaks runner protocol ${hello.protocol}, but this reeval speaks ${RUNNER_PROTOCOL}. Update the SDK or reeval.`,
+      `${hello.sdk} ${hello.version} speaks runner protocol ${hello.protocol}, but this reeval speaks ${RUNNER_PROTOCOL}. Use the SDK version that matches reeval.`,
     )
   }
 

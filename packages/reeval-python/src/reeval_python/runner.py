@@ -13,6 +13,7 @@ import os
 import sys
 import threading
 import traceback
+from collections.abc import Mapping
 from contextvars import ContextVar
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -22,7 +23,7 @@ from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
 from reeval_python.errors import AttemptAborted, ReevalAssertionError
 
-RUNNER_PROTOCOL = 2
+RUNNER_PROTOCOL = 3
 
 _attempt: ContextVar[str | None] = ContextVar("_attempt", default=None)
 
@@ -343,9 +344,26 @@ async def serve(frames: _Frames, stdin: BinaryIO, root: Path) -> None:
         _handle(cast(dict[str, Any], msg), conn, root, tasks)
 
 
+def _mismatch(env: Mapping[str, str]) -> str | None:
+    """Why this runner can't serve the reeval that started it, or None when it can."""
+    started_by = env.get("REEVAL_RUNNER")
+    if started_by is None:
+        return "This is reeval's Python runner; run evals with reeval run."
+    ours = f"reeval-python {sdk_version()} speaks runner protocol {RUNNER_PROTOCOL}"
+    if started_by != "stdio":
+        return f"{ours}, but the reeval that started it is older: use the reeval that matches it."
+    theirs = env.get("REEVAL_RUNNER_PROTOCOL")
+    if theirs != str(RUNNER_PROTOCOL):
+        return (
+            f"{ours}, but the reeval that started it speaks {theirs or 'an older one'}: "
+            "use the reeval-python version that matches reeval."
+        )
+    return None
+
+
 def main() -> None:
-    if os.environ.get("REEVAL_RUNNER") != "stdio":
-        print("This is reeval's Python runner; run evals with reeval run.", file=sys.stderr)
+    if (problem := _mismatch(os.environ)) is not None:
+        print(problem, file=sys.stderr)
         sys.exit(2)
     root = Path(os.environ.get("REEVAL_PROJECT_ROOT", os.getcwd()))
     # The runner keeps private copies of fd 0 and fd 1 for messages (os.dup's are

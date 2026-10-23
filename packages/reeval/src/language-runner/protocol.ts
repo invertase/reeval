@@ -10,7 +10,7 @@ import type {
 } from '../contract/attempt.ts'
 import type { DeclarationTree } from '../declaration.ts'
 
-export const RUNNER_PROTOCOL = 2
+export const RUNNER_PROTOCOL = 3
 
 export type WireError = {
   name: string
