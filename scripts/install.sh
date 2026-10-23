@@ -39,7 +39,9 @@ main() {
     arch=arm64
   fi
   target=$os-$arch
-  if [ "$os" = linux ] && { [ -f /etc/alpine-release ] || ls /lib/ld-musl-* >/dev/null 2>&1; }; then
+  # musl only when it's the system's libc: a glibc system can have musl's loader installed too.
+  if [ "$os" = linux ] && ! getconf GNU_LIBC_VERSION >/dev/null 2>&1 &&
+    { ldd --version 2>&1 | grep -qi musl || ls /lib/ld-musl-* >/dev/null 2>&1; }; then
     target=$target-musl
   fi
   # The default x64 builds need AVX2; the baseline ones run on any x64 CPU.

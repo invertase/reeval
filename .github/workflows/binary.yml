@@ -184,6 +184,17 @@ jobs:
             REEVAL_DOWNLOAD="file://$PWD/out" REEVAL_INSTALL_DIR="$RUNNER_TEMP/bin" sh current/scripts/install.sh
             test "$("$RUNNER_TEMP/bin/reeval" --version)" = "$REEVAL_VERSION"
           fi
+      # A glibc system with musl's loader installed beside it still gets the glibc build.
+      - name: install.sh (glibc with musl installed)
+        if: ${{ matrix.target == 'linux-x64' }}
+        env:
+          REEVAL_VERSION: ${{ needs.compile.outputs.version }}
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo -e REEVAL_VERSION debian:bookworm-slim sh -c \
+            'apt-get update -qq && apt-get install -y -qq musl curl ca-certificates > /dev/null &&
+              ls /lib/ld-musl-* &&
+              REEVAL_DOWNLOAD=file:///repo/out REEVAL_INSTALL_DIR=/tmp/bin sh current/scripts/install.sh &&
+              test "$(/tmp/bin/reeval --version)" = "$REEVAL_VERSION"'
       - name: install.ps1
         if: ${{ matrix.ext && !matrix.baseline }}
         shell: pwsh
