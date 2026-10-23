@@ -1,6 +1,7 @@
 @TestOn('linux || mac-os')
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -144,6 +145,182 @@ void main() {
     env['REEVAL_BINARY'] = binary.path;
     final result = await launcher([]);
     expect(result.stdout, '${Platform.resolvedExecutable}\n');
+  });
+
+  group('a download of the published version', () {
+    late String hash;
+    late String platform;
+
+    setUp(() {
+      platform = target(env);
+      File(p.join(release, asset)).writeAsStringSync(script);
+      hash = sha256.convert(script.codeUnits).toString();
+    });
+
+    test('is checked against the hashes published in the package', () async {
+      final binary = await locateBinary(
+        env,
+        hashes: (version: packageVersion, sha256: {platform: hash}),
+      );
+      expect(File(binary).readAsStringSync(), script);
+    });
+
+    test('refuses a hash other than the published one, with exit 3', () {
+      File(p.join(release, 'SHA256SUMS')).writeAsStringSync('$hash  $asset\n');
+      expect(
+        locateBinary(
+          env,
+          hashes: (version: packageVersion, sha256: {platform: '0' * 64}),
+        ),
+        throwsA(
+          isA<LaunchError>()
+              .having((e) => e.code, 'code', 3)
+              .having(
+                (e) => e.message,
+                'message',
+                contains(
+                  'package:reeval $packageVersion was published with '
+                  '${'0' * 64}',
+                ),
+              ),
+        ),
+      );
+    });
+
+    test('refuses a target the package was published without', () {
+      expect(
+        locateBinary(
+          env,
+          hashes: (version: packageVersion, sha256: {'other': hash}),
+        ),
+        throwsA(
+          isA<LaunchError>()
+              .having((e) => e.code, 'code', 3)
+              .having((e) => e.message, 'message', contains(platform)),
+        ),
+      );
+    });
+
+    test('uses SHA256SUMS for a version the package has no hashes for', () {
+      expect(
+        locateBinary(
+          env,
+          hashes: (version: '0.0.1', sha256: {platform: '0' * 64}),
+        ),
+        throwsA(
+          isA<LaunchError>().having(
+            (e) => e.message,
+            'message',
+            contains('SHA256SUMS'),
+          ),
+        ),
+      );
+    });
+  });
+
+  test('follows redirects, but never from HTTPS to HTTP', () async {
+    publish();
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(server.close);
+    server.listen((request) async {
+      final path = request.uri.path;
+      if (path.startsWith('/moved/')) {
+        await request.response.redirect(
+          Uri.parse('/release/${p.basename(path)}'),
+        );
+        return;
+      }
+      final file = File(p.join(release, p.basename(path)));
+      request.response.add(file.readAsBytesSync());
+      await request.response.close();
+    });
+    env['REEVAL_DOWNLOAD'] = 'http://127.0.0.1:${server.port}/moved';
+    expect(File(await locateBinary(env)).readAsStringSync(), script);
+
+    final https = Uri.parse('https://github.com/a/b');
+    expect(redirect(https, '/c'), Uri.parse('https://github.com/c'));
+    expect(
+      redirect(Uri.parse('http://mirror/a'), 'https://cdn/b'),
+      Uri.parse('https://cdn/b'),
+    );
+    for (final to in ['http://github.com/c', 'file:///etc/passwd']) {
+      expect(
+        () => redirect(https, to),
+        throwsA(isA<LaunchError>().having((e) => e.code, 'code', 3)),
+      );
+    }
+  });
+
+  test("a cache write isn't named by the PID alone", () async {
+    publish();
+    final cached = p.join(cache, 'reeval', 'bin', packageVersion, asset);
+    // What another container's process with this PID left mid-write.
+    final other = Directory('$cached.$pid.partial')
+      ..createSync(recursive: true);
+    expect(await locateBinary(env), cached);
+    expect(Directory(p.dirname(cached)).listSync().map((e) => e.path), {
+      cached,
+      other.path,
+    });
+  });
+
+  test('a REEVAL_BINARY that runs the launcher again is exit 2', () async {
+    final again = File(p.join(temp.path, 'again'))
+      ..writeAsStringSync(
+        '#!/bin/sh\ncd "${Directory.current.path}"\n'
+        'exec "${Platform.resolvedExecutable}" bin/reeval.dart "\$@"\n',
+      );
+    Process.runSync('chmod', ['755', again.path]);
+    env['REEVAL_BINARY'] = again.path;
+    final result = await launcher(['run']).timeout(const Duration(minutes: 1));
+    expect(result.exitCode, 2);
+    expect(result.stderr, contains('runs this launcher again'));
+  });
+
+  test('a Ctrl-C waits for reeval and exits with its code', () async {
+    final binary = File(p.join(temp.path, 'slow'))
+      ..writeAsStringSync(
+        '#!/bin/sh\nsleep 0.5\necho ready\nsleep 1\necho done\nexit 7\n',
+      );
+    Process.runSync('chmod', ['755', binary.path]);
+    env['REEVAL_BINARY'] = binary.path;
+    final process = await Process.start(
+      Platform.resolvedExecutable,
+      ['bin/reeval.dart'],
+      environment: env,
+      includeParentEnvironment: false,
+    );
+    final lines = process.stdout
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+    final out = <String>[];
+    await for (final line in lines) {
+      out.add(line);
+      if (line == 'ready') process.kill(ProcessSignal.sigint);
+    }
+    expect(out, ['ready', 'done']);
+    expect(await process.exitCode, 7);
+  });
+
+  test('musl is the libc this process loaded, not one on disk', () {
+    expect(
+      mapsMusl('7f00-7f01 r-xp 00000000 08:01 1 /lib/ld-musl-x86_64.so.1\n'),
+      isTrue,
+    );
+    expect(
+      mapsMusl(
+        '7f00-7f01 r-xp 00000000 08:01 1 /usr/lib/libc.musl-aarch64.so.1\n',
+      ),
+      isTrue,
+    );
+    expect(
+      mapsMusl(
+        '7f00-7f01 r-xp 00000000 08:01 1 '
+        '/usr/lib/x86_64-linux-gnu/libc.so.6\n'
+        '7f02-7f03 r--p 00000000 08:01 2 /usr/share/doc/ld-musl-x86_64.so.1/x\n',
+      ),
+      isFalse,
+    );
   });
 
   test('the cache root follows the binary', () {

@@ -1,15 +1,30 @@
 import 'dart:async';
-import 'dart:ffi' show Abi;
+import 'dart:ffi' show Abi, DynamicLibrary;
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data' show BytesBuilder;
 
 import 'package:crypto/crypto.dart';
 
+import 'binaries.g.dart';
 import 'version.dart';
 
 /// reeval's own exit codes for what the launcher refuses or can't fetch.
 const _usage = 2;
 const _infra = 3;
+
+/// Set on the binary's environment to the binary the launcher ran, so a
+/// `REEVAL_BINARY` that is this launcher again stops instead of looping.
+const _launched = 'REEVAL_LAUNCHER_BINARY';
+
+/// The sha256 of each target's binary for one reeval version.
+typedef BinaryHashes = ({String version, Map<String, String> sha256});
+
+/// The hashes this package was published with.
+const BinaryHashes publishedHashes = (
+  version: binariesVersion,
+  sha256: binarySha256,
+);
 
 final class LaunchError implements Exception {
   LaunchError(this.code, this.message);
@@ -36,20 +51,38 @@ Future<int> launch(
 /// The lookup order: `REEVAL_BINARY`, the cache, then a download unless
 /// `REEVAL_OFFLINE=1`. pub can't ship a per-platform binary, so there's no
 /// bundled copy.
-Future<String> locateBinary(Map<String, String> env) async {
+///
+/// A download of the version this package was published with is checked
+/// against the hashes published in it ([hashes]), so the release's own
+/// `SHA256SUMS` isn't trusted. Another version (`REEVAL_VERSION`), or a
+/// package that wasn't published (a git or path dependency, whose [hashes] are
+/// empty), is checked against `SHA256SUMS`.
+Future<String> locateBinary(
+  Map<String, String> env, {
+  BinaryHashes hashes = publishedHashes,
+}) async {
   final override = env['REEVAL_BINARY'];
   if (override != null && override.isNotEmpty) {
-    if (!File(override).existsSync()) {
+    final binary = File(override).absolute.path;
+    if (!File(binary).existsSync()) {
       throw LaunchError(
         _usage,
         'REEVAL_BINARY is $override, which is not a file',
       );
     }
-    return override;
+    if (env[_launched] == binary) {
+      throw LaunchError(
+        _usage,
+        'REEVAL_BINARY is $override, which runs this launcher again rather '
+        'than reeval. Point it at a reeval binary',
+      );
+    }
+    return binary;
   }
   final version = env['REEVAL_VERSION']?.trim().replaceFirst(RegExp('^v'), '');
   final v = version == null || version.isEmpty ? packageVersion : version;
-  final asset = 'reeval-$v-${target(env)}${Platform.isWindows ? '.exe' : ''}';
+  final platform = target(env);
+  final asset = 'reeval-$v-$platform${Platform.isWindows ? '.exe' : ''}';
   final cached = File(_join([cacheRoot(env), 'bin', v, asset]));
   if (cached.existsSync()) return cached.path;
   if (env['REEVAL_OFFLINE'] == '1') {
@@ -64,31 +97,62 @@ Future<String> locateBinary(Map<String, String> env) async {
         'https://github.com/invertase/reeval/releases/download/v$v',
   );
   stderr.writeln('reeval: downloading $asset');
-  final sums = String.fromCharCodes(await _fetch('$base/SHA256SUMS'));
-  final expected = _sumFor(sums, asset);
-  if (expected == null) {
-    throw LaunchError(_infra, '$base/SHA256SUMS has no entry for $asset');
+  final published = v == hashes.version && hashes.sha256.isNotEmpty;
+  final String expected;
+  final String source;
+  if (published) {
+    expected =
+        hashes.sha256[platform] ??
+        (throw LaunchError(
+          _infra,
+          'package:reeval $v was published with no reeval binary for '
+          '$platform. Set REEVAL_BINARY to a reeval binary',
+        ));
+    source = 'package:reeval $v was published with';
+  } else {
+    final sums = String.fromCharCodes(await _fetch('$base/SHA256SUMS'));
+    expected =
+        _sumFor(sums, asset) ??
+        (throw LaunchError(_infra, '$base/SHA256SUMS has no entry for $asset'));
+    source = 'SHA256SUMS says';
   }
   final bytes = await _fetch('$base/$asset');
   final actual = sha256.convert(bytes).toString();
   if (actual != expected) {
     throw LaunchError(
       _infra,
-      '$base/$asset has sha256 $actual, but SHA256SUMS says $expected',
+      '$base/$asset has sha256 $actual, but $source $expected',
     );
   }
   cached.parent.createSync(recursive: true);
-  final partial = File('${cached.path}.$pid.partial');
-  partial.writeAsBytesSync(bytes, flush: true);
-  if (!Platform.isWindows) {
-    final chmod = Process.runSync('chmod', ['755', partial.path]);
-    if (chmod.exitCode != 0) {
-      partial.deleteSync();
-      throw LaunchError(_infra, 'could not make ${partial.path} executable');
+  // Containers each have their own PID 1, so a PID alone could name another
+  // machine's write to a shared cache.
+  final partial = File('${cached.path}.$pid-${_nonce()}.partial');
+  try {
+    partial.writeAsBytesSync(bytes, flush: true);
+    if (!Platform.isWindows) {
+      final chmod = Process.runSync('chmod', ['755', partial.path]);
+      if (chmod.exitCode != 0) {
+        throw LaunchError(_infra, 'could not make ${partial.path} executable');
+      }
     }
+    try {
+      partial.renameSync(cached.path);
+    } on FileSystemException {
+      // Windows won't rename over a binary a concurrent first run cached.
+      if (!cached.existsSync()) rethrow;
+    }
+  } finally {
+    if (partial.existsSync()) partial.deleteSync();
   }
-  partial.renameSync(cached.path);
   return cached.path;
+}
+
+String _nonce() {
+  final random = Random.secure();
+  return [
+    for (var i = 0; i < 8; i++) random.nextInt(256).toRadixString(16),
+  ].map((b) => b.padLeft(2, '0')).join();
 }
 
 /// The release target for this machine: `linux-x64-musl`, `darwin-arm64`, ….
@@ -105,12 +169,23 @@ String target(Map<String, String> env) {
   return Platform.isLinux && _musl() ? '$name-musl' : name;
 }
 
+/// Whether this process runs on musl, from the libc it has loaded: a musl
+/// loader on disk proves nothing (Debian's `musl` package installs one beside
+/// glibc).
 bool _musl() {
-  if (File('/etc/alpine-release').existsSync()) return true;
-  final lib = Directory('/lib');
-  return lib.existsSync() &&
-      lib.listSync().any((e) => _base(e.path).startsWith('ld-musl-'));
+  try {
+    return mapsMusl(File('/proc/self/maps').readAsStringSync());
+  } on FileSystemException {
+    return !DynamicLibrary.process().providesSymbol('gnu_get_libc_version');
+  }
 }
+
+/// Whether the libraries mapped in [maps], as `/proc/self/maps` lists them,
+/// include musl's libc.
+bool mapsMusl(String maps) => RegExp(
+  r'/(ld-musl-[^/\s]*|libc\.musl-[^/\s]*)$',
+  multiLine: true,
+).hasMatch(maps);
 
 /// The reeval binary's own cache directory, so both share one cache.
 String cacheRoot(Map<String, String> env) {
@@ -152,15 +227,28 @@ Future<List<int>> _fetch(String url) async {
     ..connectionTimeout = const Duration(seconds: 60);
   try {
     return await () async {
-      final request = await client.getUrl(uri);
-      final response = await request.close();
-      if (response.statusCode != HttpStatus.ok) {
-        await response.drain<void>();
-        throw _downloadFailed(url, 'HTTP ${response.statusCode}');
+      var current = uri;
+      for (var hops = 0; ; hops++) {
+        final request = await client.getUrl(current);
+        request.followRedirects = false;
+        final response = await request.close();
+        if (response.isRedirect) {
+          final location = response.headers.value(HttpHeaders.locationHeader);
+          await response.drain<void>();
+          if (location == null || hops == 10) {
+            throw _downloadFailed(url, 'too many redirects');
+          }
+          current = redirect(current, location);
+          continue;
+        }
+        if (response.statusCode != HttpStatus.ok) {
+          await response.drain<void>();
+          throw _downloadFailed(url, 'HTTP ${response.statusCode}');
+        }
+        final bytes = BytesBuilder(copy: false);
+        await response.forEach(bytes.add);
+        return bytes.takeBytes();
       }
-      final bytes = BytesBuilder(copy: false);
-      await response.forEach(bytes.add);
-      return bytes.takeBytes();
     }().timeout(const Duration(seconds: 60));
   } on LaunchError {
     rethrow;
@@ -173,6 +261,20 @@ Future<List<int>> _fetch(String url) async {
   }
 }
 
+/// Where a redirect from [from] to [location] goes. One from HTTPS must stay on
+/// HTTPS, and none may leave HTTP for another scheme.
+Uri redirect(Uri from, String location) {
+  final to = from.resolve(location);
+  final downgrade = from.scheme == 'https' && to.scheme != 'https';
+  if (downgrade || (to.scheme != 'https' && to.scheme != 'http')) {
+    throw LaunchError(
+      _infra,
+      'refusing the redirect from $from to $to, which leaves HTTPS',
+    );
+  }
+  return to;
+}
+
 LaunchError _downloadFailed(String url, String why) => LaunchError(
   _infra,
   'could not download $url ($why). Set REEVAL_DOWNLOAD to a mirror of the '
@@ -180,8 +282,9 @@ LaunchError _downloadFailed(String url, String why) => LaunchError(
 );
 
 /// Dart can't replace its process, so the binary runs as a child with this
-/// process's stdio. A terminal's Ctrl-C reaches the child too (one process
-/// group), so the launcher only outlives it; SIGTERM is passed on.
+/// process's stdio. A Ctrl-C reaches the child too (one process group, or one
+/// Windows console), so the launcher ignores it and waits for reeval to clean
+/// up and exit, then exits with its code; SIGTERM and SIGHUP are passed on.
 Future<int> _run(
   String binary,
   List<String> args,
@@ -189,33 +292,36 @@ Future<int> _run(
 ) async {
   final childEnv = {
     ...env,
+    _launched: binary,
     if ((env['REEVAL_DART'] ?? '').isEmpty)
       'REEVAL_DART': Platform.resolvedExecutable,
   };
-  final child = await Process.start(
-    binary,
-    args,
-    environment: childEnv,
-    includeParentEnvironment: false,
-    mode: ProcessStartMode.inheritStdio,
-  );
-  var interrupted = false;
+  final Process child;
+  try {
+    child = await Process.start(
+      binary,
+      args,
+      environment: childEnv,
+      includeParentEnvironment: false,
+      mode: ProcessStartMode.inheritStdio,
+    );
+  } on ProcessException catch (error) {
+    throw LaunchError(_usage, 'could not run $binary: ${error.message}');
+  }
   final subscriptions = <StreamSubscription<ProcessSignal>>[
-    ProcessSignal.sigint.watch().listen((_) => interrupted = true),
+    ProcessSignal.sigint.watch().listen((_) {}),
     if (!Platform.isWindows)
-      ProcessSignal.sigterm.watch().listen((_) => child.kill()),
+      for (final signal in [ProcessSignal.sigterm, ProcessSignal.sighup])
+        signal.watch().listen(child.kill),
   ];
   final code = await child.exitCode;
   for (final subscription in subscriptions) {
     await subscription.cancel();
   }
-  if (Platform.isWindows && interrupted) return 130;
   return code < 0 ? 128 - code : code;
 }
 
 String _join(List<String> parts) => parts.join(Platform.pathSeparator);
-
-String _base(String path) => path.split(Platform.pathSeparator).last;
 
 String _trimSlash(String s) =>
     s.endsWith('/') ? s.substring(0, s.length - 1) : s;

@@ -9,8 +9,8 @@ dart run reeval run
 ```
 
 `package:reeval` brings its own `reeval` command: it downloads the reeval binary of the same
-version from the GitHub release, checks it against the release's `SHA256SUMS`, caches it and runs
-it. `dart pub upgrade reeval` moves both.
+version from the GitHub release, checks it against the sha256 published in the package, caches it
+and runs it. `dart pub upgrade reeval` moves both.
 
 ## An eval
 
