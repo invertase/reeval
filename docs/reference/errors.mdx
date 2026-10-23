@@ -170,6 +170,7 @@ See [Profiles and budgets](/reference/profiles).
 | `killed (exit 137): usually out of memory; …` | Give Docker more memory, or lower `--concurrency`. |
 | `Baking the <harness> CLI onto <base> failed: …` | Usually the network; reeval already retried it twice. |
 | `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (…). …` | The image has no Node for the egress gateway. Use `docker({ from })` or `docker({ dockerfile })`. |
+| `Can't enforce egress proxy: the egress gateway, the sandbox's only way out, could not start (…). …` | The same, for any policy but `'allow-all'`: the container has no network without the gateway. Use `docker({ from })` or `docker({ dockerfile })`. |
 | `The Cursor harness needs the Docker sandbox: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()` | Real harnesses run only in `docker()`. |
 
 See [docker()](/reference/sandbox/docker).

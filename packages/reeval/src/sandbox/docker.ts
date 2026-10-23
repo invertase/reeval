@@ -6,6 +6,7 @@ import {
   DEFAULT_LIMITS,
   docker,
   type EgressEvent,
+  EgressUnavailableError,
   ENGINES,
   type Engine,
   engineSpec,
@@ -115,6 +116,10 @@ export async function createDockerSandbox(
   }
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
+  const needsNode = (reason: string) =>
+    brokered.length > 0
+      ? `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
+      : `Can't enforce egress ${egressLabel(options.egress) || 'proxy'}: the egress gateway, the sandbox's only way out, could not start (${reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`
   const network = await createDockerSession({
     image,
     engine,
@@ -150,6 +155,8 @@ export async function createDockerSandbox(
           ),
       }),
     },
+  }).catch((error: unknown) => {
+    throw error instanceof EgressUnavailableError ? new InfraError(needsNode(error.reason)) : error
   })
   debug?.log(
     'container',
@@ -168,9 +175,7 @@ export async function createDockerSandbox(
   // Brokered values never enter the container: with no gateway to swap them in, the attempt can't start.
   if (network.egress?.active === false && brokered.length > 0) {
     await Promise.resolve(network.destroy()).catch(() => {})
-    throw new InfraError(
-      `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with ${spec.fn}({ from: '${image}' }) or ${spec.fn}({ dockerfile }), and reeval adds it.`,
-    )
+    throw new InfraError(needsNode(network.egress.reason))
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
   await network.run({ command: `mkdir -p ${workdir}` })

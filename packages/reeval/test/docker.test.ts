@@ -1145,6 +1145,35 @@ evaluate('hi', { environment: keys }, async (c) => { await c.exec('true') })
   )
 
   test(
+    "egress 'proxy' on an image without the gateway fails closed; allow-all starts without it",
+    docker,
+    async () => {
+      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+      const p = await project('docker-proxy-no-gateway', {
+        'reeval.config.ts': config('{}'),
+        'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+const bare = defineEnvironment('bare', { sandbox: docker({ image: 'busybox:1.37', root: true }) })
+evaluate('proxied', { environment: bare }, async (c) => { await c.exec('true') })
+evaluate('direct', { environment: bare, egress: 'allow-all' }, async (c) => { await c.exec('true') })
+`,
+      })
+      const r = await runCli(p.dir, ['run'], { env: {} })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      const { run, evals } = readRun(p.dir)
+      const proxied = evals.find((e) => e.name === 'proxied')
+      assert.equal(proxied?.error?.kind, 'infra')
+      assert.match(
+        proxied?.error?.message ?? '',
+        /^Can't enforce egress proxy: the egress gateway, the sandbox's only way out, could not start \(the forwarder exited .*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\)/,
+      )
+      // busybox has no git, so the attempt fails later on, past the gateway.
+      assert.match(evals.find((e) => e.name === 'direct')?.error?.message ?? '', /snapshot/)
+      assert.equal(liveContainers(run.runId), '')
+    },
+  )
+
+  test(
     "two runs with the same agent context are comparable; a changed skill isn't",
     docker,
     async () => {

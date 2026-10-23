@@ -180,6 +180,16 @@ const userEnv = (options: SessionOptions): Record<string, string> =>
 /** Whether the gateway runs. When it doesn't, the session has no request-transformation methods. */
 export type EgressStatus = { active: true } | { active: false; reason: string }
 
+/** The gateway didn't start for a detached container, which then has no way out: `reason` says why. */
+export class EgressUnavailableError extends Error {
+  readonly reason: string
+  constructor(reason: string) {
+    super(`Can't enforce the egress policy: ${reason}`)
+    this.name = 'EgressUnavailableError'
+    this.reason = reason
+  }
+}
+
 export type DockerSession = HarnessV1NetworkSandboxSession & {
   /** Unset when the session wasn't asked to start the gateway. */
   readonly egress?: EgressStatus
@@ -372,7 +382,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       if (signal?.aborted || !direct(policy)) {
         await remove()
         if (signal?.aborted) throw signal.reason
-        throw new Error(`Can't enforce the egress policy: ${(error as Error).message}`)
+        throw new EgressUnavailableError((error as Error).message)
       }
       egress = { active: false, reason: (error as Error).message }
     }

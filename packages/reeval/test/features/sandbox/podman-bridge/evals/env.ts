@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { defineEnvironment } from 'reeval'
 import { podman } from 'reeval/sandbox'
 
-export const bridged = defineEnvironment('bridged', { sandbox: podman() })
+// allow-all keeps the network the container started on; every other policy detaches it.
+export const bridged = defineEnvironment('bridged', { sandbox: podman(), egress: 'allow-all' })
 
 /** The sandbox's own IPv4 addresses, loopback aside. */
 export const ADDRESSES = `awk '/32 host/ {print f} {f=$2}' /proc/net/fib_trie | sort -u | grep -v '^127\\.'`
