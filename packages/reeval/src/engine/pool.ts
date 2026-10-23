@@ -36,6 +36,15 @@ export const forkWorker: Spawn = (entry, cwd) => {
   // Done once it has exited and its last messages are in. On Windows 'exit' can come first; they
   // all arrive before 'disconnect', which Windows doesn't always send, so at most a second later.
   // Not 'close', which also waits for stdout and stderr: pipes a process it started may hold.
+  // `done` is the worker's last message, and the worker exits when its channel closes: it can't
+  // exit on its own once `done` is sent, since Bun, on Windows, closes a child's channel when it
+  // exits, dropping messages still in the pipe. A worker still up seconds after is killed.
+  child.on('message', (m: FromWorker) => {
+    if (m.t !== 'done' || !child.connected) return
+    child.disconnect()
+    const stuck = setTimeout(() => child.kill('SIGKILL'), 3000)
+    child.once('exit', () => clearTimeout(stuck))
+  })
   const disconnected = new Promise<void>((resolve) => child.once('disconnect', resolve))
   const exited = new Promise<Exit>((resolve) =>
     child.once('exit', (code, signal) => {

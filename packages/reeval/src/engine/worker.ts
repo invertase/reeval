@@ -14,9 +14,9 @@ import { useEngine } from './runtime.ts'
 
 /** The worker's side of its IPC channel. */
 export type Channel = {
-  send(message: FromWorker, sent?: () => void): void
+  send(message: FromWorker): void
   onMessage(listener: (message: ToWorker) => void): void
-  /** The main process is gone. */
+  /** The main process closed the channel, after `done` or because it's gone. */
   onDisconnect(listener: () => void): void
   exit(code: number): void
 }
@@ -37,7 +37,8 @@ export function startWorker(channel: Channel): Worker {
     else if (message.t === 'grant') grant?.(message.id)
     else stop()
   })
-  // Orphaned (the CLI was killed): cancel, let every attempt clean up, then go.
+  // The main process closed the channel after `done`, or is gone (the CLI was killed): cancel, let
+  // every attempt clean up, then go.
   channel.onDisconnect(() => {
     stop()
     void working.finally(() => channel.exit(0))
@@ -82,7 +83,8 @@ export function startWorker(channel: Channel): Worker {
     } catch (error) {
       channel.send({ t: 'load-error', error: serializeError(error) })
     }
-    channel.send({ t: 'done' }, () => channel.exit(0))
+    // The last message: the main process closes the channel once it has it, and the worker exits.
+    channel.send({ t: 'done' })
   }
 
   channel.send({ t: 'hello', protocol: PROTOCOL })

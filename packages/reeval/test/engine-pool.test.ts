@@ -67,6 +67,32 @@ process.on('message', (m) => {
     })
   })
 
+  test('after done the main process closes the channel; a worker that stays up is killed', async () => {
+    const leaves = script(`
+process.send({ t: 'hello', protocol: ${PROTOCOL} })
+process.on('message', () => process.send({ t: 'result', index: 0 }, () => process.send({ t: 'done' })))
+process.on('disconnect', () => process.exit(0))
+`)
+    const worker = forkWorker(leaves, tempDir('cwd'))
+    const messages: string[] = []
+    worker.onMessage((m) => messages.push(m.t))
+    await handshake(worker, leaves)
+    worker.send({ t: 'cancel' })
+    assert.deepEqual(await worker.exited, { code: 0, signal: null })
+    assert.deepEqual(messages, ['hello', 'result', 'done'])
+
+    const stays = script(`
+process.send({ t: 'hello', protocol: ${PROTOCOL} })
+process.on('message', () => process.send({ t: 'done' }))
+process.on('disconnect', () => {})
+setInterval(() => {}, 1000)
+`)
+    const stuck = forkWorker(stays, tempDir('cwd'))
+    await handshake(stuck, stays)
+    stuck.send({ t: 'cancel' })
+    assert.equal((await stuck.exited).signal, 'SIGKILL')
+  })
+
   test('a worker in another protocol is refused and killed', async () => {
     const entry = script(
       `process.send({ t: 'hello', protocol: ${PROTOCOL + 1} }); setInterval(() => {}, 1000)`,

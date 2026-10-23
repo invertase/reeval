@@ -8,7 +8,7 @@ import type { DebugLine } from '../view/debug.ts'
 import type { SerializedError } from './errors.ts'
 
 /** Bumped whenever a message changes shape or meaning, or the framing changes (PROTOCOL.md). */
-export const PROTOCOL = 2
+export const PROTOCOL = 3
 
 /** What one registered test looks like to the main process. */
 export type WireTest = {
