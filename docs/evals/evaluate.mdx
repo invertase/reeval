@@ -7,6 +7,22 @@ An evaluation is one `evaluate()` call that gives your harness a task and checks
 
 reeval loads every `*.eval.ts` file under the `evals/` folder. This page uses the `plain` and `withShoehorn` environments from [Quick start](/quickstart), which live in the `evals/environments.ts` file.
 
+## Skip, focus, or plan evaluations
+
+The `evaluate.skip`, `evaluate.only`, and `evaluate.todo` functions change which evaluations run. In an evaluation file such as `evals/shoehorn.eval.ts`, focus one evaluation and plan another:
+
+```ts title="evals/shoehorn.eval.ts"
+evaluate.only(
+  'tests build only the request fields they read',
+  // ...
+)
+evaluate.todo('tests mock only the services they call')
+```
+
+`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`.
+
+For more information about sharing options across several evaluations, see [Groups](/evals/groups).
+
 <Steps>
 <Step title="Name the question">
 
@@ -76,22 +92,6 @@ A table below the `plan` line lists each evaluation by its file and name. If you
 </Steps>
 
 To start the attempts, run the same command without `--dry-run`.
-
-## Skip, focus, or plan evaluations
-
-The `evaluate.skip`, `evaluate.only`, and `evaluate.todo` functions change which evaluations run. In the `evals/shoehorn.eval.ts` file, focus one evaluation and plan another:
-
-```ts title="evals/shoehorn.eval.ts"
-evaluate.only(
-  'tests build only the request fields they read',
-  // ...
-)
-evaluate.todo('tests mock only the services they call')
-```
-
-`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`.
-
-For more information about sharing options across several evaluations, see [Groups](/evals/groups).
 
 ## Set a timeout
 

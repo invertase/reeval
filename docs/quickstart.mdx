@@ -1,6 +1,6 @@
 ---
 title: "Quick start"
-description: "Install reeval and see whether a change helped your coding agent."
+description: "reeval shows you whether a change helped a coding agent."
 ---
 
 reeval runs a coding agent in a sandbox and checks the outcome. Here you run the same harness as a control without the skill and a variant with the skill, then see whether the skill helped.
@@ -9,13 +9,13 @@ To have a coding agent follow these steps, use the [setup skill](https://github.
 
 ## Before you begin
 
-This example uses Docker with Linux containers for its sandbox. You need these:
+This example uses Docker for its sandbox. You need these:
 
 | You need | For |
 |---|---|
 | Node {{ node }} or later | reeval's CLI |
-| Docker with Linux containers | the sandbox |
-| An API key for your agent harness | the harness |
+| Docker or Podman | the sandbox |
+| API keys for the agent harnesses | the harnesses |
 
 For more information about other harnesses and their keys, see [Harnesses](/harnesses).
 
@@ -35,13 +35,7 @@ Create a project for your harness:
 npx reeval init --harness cursor
 ```
 
-The command writes the `reeval.config.ts` and `evals/environments.ts` files and names the key your harness needs:
-
-```text
-  npx reeval run          the eval on Cursor, with CURSOR_API_KEY in .env.local
-```
-
-Add the key to the `.env.local` file next to the `reeval.config.ts` file:
+The command writes the `reeval.config.ts` and `evals/environments.ts` files and names the key your harness needs. Add the key to the `.env.local` file next to the `reeval.config.ts` file:
 
 ```bash title=".env.local"
 CURSOR_API_KEY=replace-with-your-key
@@ -61,7 +55,7 @@ Check Node, Docker, the image, and your key with the `reeval doctor` command:
 npx reeval doctor
 ```
 
-The output ends with this line when the machine is ready:
+The command highlights any environment issues. When it finds none, the output ends with this line:
 
 ```text
 No problems.
@@ -85,7 +79,6 @@ export const withShoehorn = plain.extendEnvironment(
   ({ skill }) => ({
     skills: [
       skill.git('github:mattpocock/skills', {
-        ref: '5beb35b040e3de97e54fa9e386d7e42d15c295c2',
         path: 'skills/misc',
         only: ['migrate-to-shoehorn'],
       }),
