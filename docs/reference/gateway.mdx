@@ -80,7 +80,7 @@ judge: { model: 'anthropic/claude-haiku-4-5', gateway: 'direct' },
 
 With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
 
-Without a list or a pin, a model takes its provider's own key when it's set, else `AI_GATEWAY_API_KEY`, as on [Judges](/reference/judges).
+Without a list, reeval uses no gateway: the list is `[direct()]`, so a model takes only its provider's own key, as on [Judges](/reference/judges), and a model `direct()` can't serve stops the plan. A set `AI_GATEWAY_API_KEY` is never read until you add `vercel()`; the missing-key message says so.
 
 ## In a profile
 

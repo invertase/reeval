@@ -74,7 +74,7 @@ const route = (gateways: GatewayDescriptor[], harness: HarnessDescriptor) => () 
   resolveGateway(gateways, harness, WHERE)
 /** Which gateway a model reeval calls itself (the judge's) resolves to in a list. */
 const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDescriptor[]) => () =>
-  resolveModelGateway(name, pin, { gateways, set: true }, 'the judge model')
+  resolveModelGateway(name, pin, { gateways }, 'the judge model')
 const VERCEL: GatewayDescriptor = { kind: 'vercel' }
 const DIRECT: GatewayDescriptor = { kind: 'direct' }
 /** What the plan says of Vercel's credentials, at noon on 1 January 2026. */

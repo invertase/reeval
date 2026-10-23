@@ -84,14 +84,17 @@ attempt and run (no prices).
 judge and analysis take the first that can serve them. `gateway: [vercel(), direct()]` runs Claude
 Code and Codex on Vercel AI Gateway with one `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), and
 everything else on its own key; the plan's hint says where each harness fell through. Pin one with
-the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. Default `[direct()]`.
+the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. Default `[direct()]`:
+no gateway, so the judge, analysis and captures take only their provider's own key.
 
 ## Judge models and imports
 
 - Judge models: `'typesafe-ai/jev-1.14.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), `anthropic/*` (`ANTHROPIC_API_KEY`)
-  and `openai/*` (`OPENAI_API_KEY`) directly; any `provider/model` via the Vercel AI Gateway
-  (`AI_GATEWAY_API_KEY`), but a provider's own key wins when both are set. Always a provider prefix.
+  and `openai/*` (`OPENAI_API_KEY`), each on its provider's own key. reeval uses no gateway by
+  default: `AI_GATEWAY_API_KEY` is read only with `gateway: [vercel()]` in the config (or a judge
+  `gateway: 'vercel'` pin, listed there), which also serves any other `provider/model`. Always a
+  provider prefix.
   With a `gateway` list set, a judge model takes the first listed gateway that serves it, and only
   that gateway's key.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,

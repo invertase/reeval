@@ -154,9 +154,13 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       })
   const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed })
   if (plannedAttempts.length) {
-    const scope = { gateways, set: gatewaySet }
     try {
-      resolveModelGateway(resolved.judge.model, resolved.judge.gateway, scope, 'the judge model')
+      resolveModelGateway(
+        resolved.judge.model,
+        resolved.judge.gateway,
+        { gateways },
+        'the judge model',
+      )
     } catch (error) {
       if (error instanceof UsageError) throw new UsageError(`${where}: ${error.message}`)
       throw error

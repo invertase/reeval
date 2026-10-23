@@ -52,20 +52,22 @@ There's no default model. Set `judge.model` in the config, a group, an eval or t
 
 ```mermaid
 flowchart LR
-  M["model string"] --> D{"provider's own key set?"}
+  M["model string"] --> L{"vercel() in gateway, first to serve it?"}
+  L -- no --> D{"provider's own key set?"}
   D -- yes --> P["provider's AI SDK package"]
-  D -- no --> G{"AI Gateway key set?"}
-  G -- yes --> W["Vercel AI Gateway"]
-  G -- no --> E["the run stops before it starts, naming both"]
+  D -- no --> E["the run stops before it starts, naming the key"]
+  L -- yes --> W["Vercel AI Gateway, with AI_GATEWAY_API_KEY"]
 ```
 
-| `model` | With its own key | Otherwise |
+reeval uses no gateway by default: a judge takes its provider's own key. The Vercel AI Gateway is used only when the config's [`gateway` list](/reference/gateway#the-judge-analysis-and-captures) has `vercel()`: first in the list, or pinned with the judge's `gateway: 'vercel'`.
+
+| `model` | Key, with no `gateway` list | With `vercel()` first in `gateway` |
 |---|---|---|
-| `'typesafe-ai/jev-1.14.0'` (recommended) | `TYPESAFE_AI_API_KEY` | The AI Gateway |
-| `'google/gemini-3.8-flash'` | `GOOGLE_GENERATIVE_AI_API_KEY` | The AI Gateway |
-| `'anthropic/…'` | `ANTHROPIC_API_KEY` | The AI Gateway |
-| `'openai/…'` | `OPENAI_API_KEY` | The AI Gateway |
-| Any other `provider/model` | — | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+| `'typesafe-ai/jev-1.14.0'` (recommended) | `TYPESAFE_AI_API_KEY` | `AI_GATEWAY_API_KEY` |
+| `'google/gemini-3.8-flash'` | `GOOGLE_GENERATIVE_AI_API_KEY` | `AI_GATEWAY_API_KEY` |
+| `'anthropic/…'` | `ANTHROPIC_API_KEY` | `AI_GATEWAY_API_KEY` |
+| `'openai/…'` | `OPENAI_API_KEY` | `AI_GATEWAY_API_KEY` |
+| Any other `provider/model` | Refused at plan time: add `vercel()` to `gateway` | `AI_GATEWAY_API_KEY` |
 | An evaluation model object | Used as is, per group, eval or call only | — |
 | `fakeJudge({ score })` | A fixed score, no model call | — |
 

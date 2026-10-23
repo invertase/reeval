@@ -20,8 +20,8 @@ export const DEFAULT_THRESHOLD = 0.8
 const GATEWAY_KEYS = [VERCEL_KEY, VERCEL_OIDC]
 
 /**
- * Providers reeval calls directly, through their own AI SDK package, when their key is set. The
- * direct key wins over a Gateway credential; any other prefix goes through the AI Gateway.
+ * Providers `direct()` calls, each through its own AI SDK package and key. Any other prefix needs
+ * `vercel()` in the config's gateway list.
  */
 export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string; name: string }> = {
   anthropic: { key: 'ANTHROPIC_API_KEY', pkg: '@ai-sdk/anthropic', name: 'Anthropic' },
@@ -60,58 +60,73 @@ export function checkModelString(
 const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 
 /**
- * Environment variables a model needs, as alternatives in the order reeval prefers them: its
- * provider's own key, then the Gateway's. Any one of them is enough. On a gateway from the
- * config's list, only that gateway's.
+ * Environment variables a model needs on `gateway`, in the order reeval prefers them; any one is
+ * enough. On direct, its provider's own key (none for a prefix reeval can't call directly); on
+ * vercel, the Gateway's.
  */
-export function judgeCredentials(model: string | FakeJudgeModel, gateway?: GatewayName): string[] {
+export function judgeCredentials(
+  model: string | FakeJudgeModel,
+  gateway: GatewayName = 'direct',
+): string[] {
   if (isFakeJudge(model)) return []
-  const direct = DIRECT_PROVIDERS[providerOf(model)]
-  if (gateway === 'direct') return direct ? [direct.key] : []
   if (gateway === 'vercel') return GATEWAY_KEYS
-  return direct ? [direct.key, ...GATEWAY_KEYS] : GATEWAY_KEYS
+  const direct = DIRECT_PROVIDERS[providerOf(model)]
+  return direct ? [direct.key] : []
 }
 
+/** The keys that would work for a model on `on`: `ANTHROPIC_API_KEY (for direct())`. */
+export function modelKeyOptions(model: string, on: GatewayName = 'direct'): string {
+  if (on === 'vercel') return `${GATEWAY_KEYS.join(' or ')} (for vercel())`
+  const direct = DIRECT_PROVIDERS[providerOf(model)]
+  return direct
+    ? `${direct.key} (for direct())`
+    : `vercel() in gateway (direct() calls only ${Object.keys(DIRECT_PROVIDERS)
+        .map((p) => `${p}/*`)
+        .join(', ')} models)`
+}
+
+/** The Vercel credential set in `env`, if any. */
+export const setGatewayKey = (env: NodeJS.ProcessEnv) => GATEWAY_KEYS.find((k) => env[k])
+
 /**
- * The keys that would work for a model, each with its route: `ANTHROPIC_API_KEY (to call
- * Anthropic directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI
- * Gateway)`. A prefix with no direct route says the Gateway is its only one. On a gateway from
- * the config's list, only that gateway's keys.
+ * ` AI_GATEWAY_API_KEY is set, but …` when a Vercel credential is set and the model goes direct, so
+ * a key that worked before reeval stopped falling back to the Gateway says how to use it.
  */
-export function modelKeyOptions(model: string, on?: GatewayName): string {
-  const prefix = providerOf(model)
-  const direct = DIRECT_PROVIDERS[prefix]
-  const gateway = GATEWAY_KEYS.join(' or ')
-  if (on === 'vercel') return `${gateway} (for vercel())`
-  if (on === 'direct' && direct) return `${direct.key} (for direct())`
-  if (direct) {
-    return `${direct.key} (to call ${direct.name} directly) or ${gateway} (to go through the Vercel AI Gateway)`
-  }
-  return `${gateway} (to go through the Vercel AI Gateway, the only route for ${prefix}/* models; reeval calls ${Object.keys(
-    DIRECT_PROVIDERS,
-  )
-    .map((p) => `${p}/*`)
-    .join(', ')} directly)`
+export function unusedGatewayKey(env: NodeJS.ProcessEnv, gateway: GatewayName = 'direct'): string {
+  if (gateway !== 'direct') return ''
+  const set = setGatewayKey(env)
+  return set
+    ? ` ${set} is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.`
+    : ''
 }
 
 /**
- * The provider's own package when its key is set, else the Vercel AI Gateway when a Gateway
- * credential is set; on a gateway from the config's list, only that one. Throws, naming the
- * model, its prefix and every key that would work, when none is set, when the key it would send
+ * The provider's own package on direct, or the Vercel AI Gateway on vercel. Throws, naming the
+ * model, its prefix and the keys that would work, when none is set, when the key it would send
  * has whitespace or a line break in it, or when Vercel's project token has expired.
  */
 export function judgeRoute(
   model: string,
   env: NodeJS.ProcessEnv = process.env,
   what = 'judge model',
-  gateway?: GatewayName,
+  gateway: GatewayName = 'direct',
 ): JudgeRoute {
   const provider = providerOf(model)
   const direct = DIRECT_PROVIDERS[provider]
-  const key = judgeCredentials(model, gateway).find((k) => env[k])
+  const keys = judgeCredentials(model, gateway)
+  if (!keys.length) {
+    throw new Error(
+      `${what} "${model}" needs vercel() in the config's gateway list: direct() calls only ${Object.keys(
+        DIRECT_PROVIDERS,
+      )
+        .map((p) => `${p}/*`)
+        .join(', ')} models.`,
+    )
+  }
+  const key = keys.find((k) => env[k])
   if (key === undefined) {
     throw new Error(
-      `No credentials for ${what} "${model}" (provider "${provider}"). Set ${modelKeyOptions(model, gateway)}, in the environment or .env.local.`,
+      `No credentials for ${what} "${model}" (provider "${provider}"). Set ${modelKeyOptions(model, gateway)}, in the environment or .env.local.${unusedGatewayKey(env, gateway)}`,
     )
   }
   if (key === VERCEL_OIDC) {

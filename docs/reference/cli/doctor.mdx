@@ -37,8 +37,8 @@ reeval doctor · reeval.config.ts
 ✓ image      reeval-sandbox:cursor-0.1.6 (cursor)
 ✗ key        CURSOR_API_KEY for cursor:composer-2.5: not set
              fix: add CURSOR_API_KEY=... to .env.local
-! analysis   GOOGLE_GENERATIVE_AI_API_KEY (to call Google directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for google/gemini-3.8-flash (analysis.model): not set
-             fix: add GOOGLE_GENERATIVE_AI_API_KEY=... to .env.local, or AI_GATEWAY_API_KEY=... to go through the Vercel AI Gateway
+! analysis   GOOGLE_GENERATIVE_AI_API_KEY (for direct()) for google/gemini-3.8-flash (analysis.model): not set
+             fix: add GOOGLE_GENERATIVE_AI_API_KEY=... to .env.local
 ✓ egress     proxy: the agents reach any host over HTTP(S) through the egress gateway, which records it; nothing else leaves the sandbox (the default); evals and environments may set their own
 ✓ gitignore  .env* and .reeval/ are ignored
 
@@ -52,10 +52,11 @@ reeval doctor · reeval.config.ts
              fix: set analysis: { model: 'google/gemini-3.8-flash' } in reeval.config.ts for answers to what each eval asks, or analysis: { insights: false } to go without
 ```
 
-A model's line names the key it found. With its provider's own key and a Gateway key both set, the direct key wins, and the line says so:
+A model's line names the key its gateway takes: its provider's own without a `gateway` list. With only `AI_GATEWAY_API_KEY` set, the fix says how to use it:
 
 ```text
-✓ analysis   ANTHROPIC_API_KEY for anthropic/claude-sonnet-5 (analysis.model): set (ANTHROPIC_API_KEY wins over AI_GATEWAY_API_KEY)
+✗ judge      TYPESAFE_AI_API_KEY (for direct()) for typesafe-ai/jev-1.14.0: not set
+             fix: add TYPESAFE_AI_API_KEY=... to .env.local, or add vercel() to gateway to use the AI_GATEWAY_API_KEY that's set
 ```
 
 ## Checks

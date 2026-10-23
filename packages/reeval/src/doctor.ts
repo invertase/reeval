@@ -19,7 +19,7 @@ import { ciRunner, DEFAULT_EGRESS, directOnCloud, isDirect, unenforceable } from
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox } from './environment.ts'
-import { gatewayScope, modelGatewayOrNone } from './gateway/models.ts'
+import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { resolveGateway, routedHarness } from './gateway/resolve.ts'
 import { VERCEL_KEY, vercelCredentialProblem } from './gateway/vercel.ts'
 import { credentialOf } from './harness/agents.ts'
@@ -32,6 +32,7 @@ import {
   modelKeyOptions,
   RECOMMENDED_ANALYSIS_MODEL,
   RECOMMENDED_JUDGE_MODEL,
+  setGatewayKey,
 } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
 import { badCharacterAt, redactSecrets, SECRET_NAME } from './redact.ts'
@@ -586,14 +587,12 @@ async function keyCheck(
 ): Promise<Check> {
   const name = names.find((n) => deps.env[n])
   if (!name) {
+    const unused = model && (gateway ?? 'direct') === 'direct' ? setGatewayKey(deps.env) : undefined
     return {
       id,
       status: required ? 'fail' : 'warn',
       summary: `${model ? modelKeyOptions(model, gateway) : names.join(' or ')} for ${who}: not set`,
-      fix:
-        model && names.length > 2
-          ? `add ${names[0]}=... to ${envFile}, or ${names[1]}=... to go through the Vercel AI Gateway`
-          : `add ${names[0]}=... to ${envFile}`,
+      fix: `add ${names[0]}=... to ${envFile}${unused ? `, or add vercel() to gateway to use the ${unused} that's set` : ''}`,
     }
   }
   const value = deps.env[name] as string
@@ -658,6 +657,14 @@ export async function checkKeys(
   )
 }
 
+/** A model no gateway in the list serves: the plan refuses it, so the check names why. */
+const unservedModel = (id: string, error: unknown, required: boolean): Check => ({
+  id,
+  status: required ? 'fail' : 'warn',
+  summary: (error as Error).message,
+  fix: 'add vercel() to gateway in the config',
+})
+
 export async function checkJudge(
   config: ResolvedConfig,
   deps: DoctorDeps,
@@ -676,7 +683,7 @@ export async function checkJudge(
   const gatewayOf = (model: string | FakeJudgeModel, profile: string | undefined) => {
     const p = profile === undefined ? undefined : config.profiles[profile]
     const pin = p?.defaults?.judge?.gateway ?? p?.judge?.gateway ?? config.judge.gateway
-    return modelGatewayOrNone(model, pin, gatewayScope(config, p))
+    return resolveModelGateway(model, pin, gatewayScope(config, p), 'the judge model')
   }
   if (!models.length) {
     const callers = await judgeCallers(config)
@@ -695,7 +702,12 @@ export async function checkJudge(
     models.map(({ model, profile }) => {
       const label = typeof model === 'string' ? model : 'fakeJudge()'
       const who = profile ? `${label} in profile ${profile}` : label
-      const gateway = gatewayOf(model, profile)
+      let gateway: GatewayName | undefined
+      try {
+        gateway = gatewayOf(model, profile)
+      } catch (error) {
+        return unservedModel('judge', error, !profile)
+      }
       const keys = judgeCredentials(model, gateway)
       if (!keys.length)
         return { id: 'judge', status: 'ok', summary: `${who} needs no key` } as Check
@@ -755,7 +767,12 @@ export async function checkAnalysis(
   if (typeof model !== 'string') {
     return [{ id: 'analysis', status: 'ok', summary: 'fakeAnalysis() needs no key' }]
   }
-  const gateway = modelGatewayOrNone(model, undefined, gatewayScope(config))
+  let gateway: GatewayName | undefined
+  try {
+    gateway = resolveModelGateway(model, undefined, gatewayScope(config), 'analysis.model')
+  } catch (error) {
+    return [unservedModel('analysis', error, false)]
+  }
   const keys = judgeCredentials(model, gateway)
   const who = `${model} (analysis.model)`
   if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: `${who} needs no key` }]

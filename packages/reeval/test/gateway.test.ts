@@ -87,21 +87,19 @@ describe('resolveGateway', () => {
 })
 
 describe('the models reeval calls itself', () => {
-  const scope = (...kinds: GatewayName[]) => ({ gateways: list(...kinds), set: true })
-  const UNSET = { gateways: list('direct'), set: false }
+  const scope = (...kinds: GatewayName[]) => ({ gateways: list(...kinds) })
+  const UNSET = { gateways: list('direct') }
   const route = (model: string, pin: GatewayName | undefined, s: GatewayScope) =>
     resolveModelGateway(model, pin, s, 'judge model')
 
-  test('without a list or a pin, a model keeps taking its own key, else Vercel’s', () => {
-    assert.equal(route('mistral/large', undefined, UNSET), undefined)
-    assert.deepEqual(judgeCredentials('anthropic/claude-x'), [
-      'ANTHROPIC_API_KEY',
-      'AI_GATEWAY_API_KEY',
-      'VERCEL_OIDC_TOKEN',
-    ])
-    assert.deepEqual(judgeRoute('anthropic/claude-x', { AI_GATEWAY_API_KEY: 'g' }), {
-      kind: 'gateway',
-    })
+  test('without a list, a model takes only its own key: no gateway by default', () => {
+    assert.equal(route('anthropic/claude-x', undefined, UNSET), 'direct')
+    assert.throws(() => route('mistral/large', undefined, UNSET), /Add vercel\(\) to gateway\./)
+    assert.deepEqual(judgeCredentials('anthropic/claude-x'), ['ANTHROPIC_API_KEY'])
+    assert.throws(
+      () => judgeRoute('anthropic/claude-x', { AI_GATEWAY_API_KEY: 'g' }),
+      /AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel\(\) to gateway/,
+    )
   })
 
   test('on a list, a model takes the first gateway that serves it, and only its keys', () => {

@@ -568,7 +568,7 @@ evaluate('a', async () => {})
     assert.equal(missing[0]?.status, 'fail')
     assert.match(
       missing[0]?.summary ?? '',
-      /^GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for google\/gemini-3\.8-flash: not set$/,
+      /^GOOGLE_GENERATIVE_AI_API_KEY \(for direct\(\)\) for google\/gemini-3\.8-flash: not set$/,
     )
     const gateway = await checkJudge(
       google,
@@ -576,8 +576,22 @@ evaluate('a', async () => {})
       false,
       '.env.local',
     )
-    assert.equal(gateway[0]?.status, 'ok')
+    assert.equal(gateway[0]?.status, 'fail', 'no gateway list: the Gateway key never stands in')
+    assert.equal(
+      gateway[0]?.fix,
+      "add GOOGLE_GENERATIVE_AI_API_KEY=... to .env.local, or add vercel() to gateway to use the AI_GATEWAY_API_KEY that's set",
+    )
     noSecret(gateway)
+    const mistral = await configOf(
+      'judge-mistral',
+      "{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }), judge: { model: 'mistral/large' } }",
+    )
+    const unserved = await checkJudge(mistral, deps(), false, '.env.local')
+    assert.equal(unserved[0]?.status, 'fail')
+    assert.match(
+      unserved[0]?.summary ?? '',
+      /no gateway in the list can serve it .* Add vercel\(\) to gateway\.$/,
+    )
   })
 
   test("analysis: analysis.model's key, a warning only: a run without it prints no insights", async () => {
@@ -602,12 +616,9 @@ evaluate('a', async () => {})
     assert.deepEqual(statuses(unset), ['warn'])
     assert.match(
       unset[0]?.summary ?? '',
-      /^GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY.* for google\/gemini-3\.8-flash \(analysis\.model\): not set$/,
+      /^GOOGLE_GENERATIVE_AI_API_KEY \(for direct\(\)\) for google\/gemini-3\.8-flash \(analysis\.model\): not set$/,
     )
-    assert.equal(
-      unset[0]?.fix,
-      'add GOOGLE_GENERATIVE_AI_API_KEY=... to .env.local, or AI_GATEWAY_API_KEY=... to go through the Vercel AI Gateway',
-    )
+    assert.equal(unset[0]?.fix, 'add GOOGLE_GENERATIVE_AI_API_KEY=... to .env.local')
     const set = await checkAnalysis(
       model,
       deps({ env: { GOOGLE_GENERATIVE_AI_API_KEY: SECRET } }),
@@ -618,7 +629,7 @@ evaluate('a', async () => {})
     noSecret(set)
   })
 
-  test('analysis: an anthropic/* or openai/* model takes its own key, which wins over the Gateway', async () => {
+  test("analysis: an anthropic/* or openai/* model takes its own key, never the Gateway's", async () => {
     for (const [model, key] of [
       ['anthropic/claude-sonnet-5', 'ANTHROPIC_API_KEY'],
       ['openai/gpt-6-luna', 'OPENAI_API_KEY'],
@@ -641,16 +652,17 @@ evaluate('a', async () => {})
         false,
         '.env.local',
       )
+      assert.equal(both[0]?.summary, `${key} for ${model} (analysis.model): set`)
+      const unset = await checkAnalysis(
+        config,
+        deps({ env: { AI_GATEWAY_API_KEY: SECRET } }),
+        false,
+        '.env.local',
+      )
       assert.equal(
-        both[0]?.summary,
-        `${key} for ${model} (analysis.model): set (${key} wins over AI_GATEWAY_API_KEY)`,
+        unset[0]?.summary,
+        `${key} (for direct()) for ${model} (analysis.model): not set`,
       )
-      const unset = await checkAnalysis(config, deps(), false, '.env.local')
-      assert.match(
-        unset[0]?.summary ?? '',
-        new RegExp(`^${key} \\(to call \\w+ directly\\) or AI_GATEWAY_API_KEY`),
-      )
-      assert.doesNotMatch(unset[0]?.summary ?? '', /only route/)
       const bad = await checkAnalysis(
         config,
         deps({ env: { [key]: 'sk\nx' } }),

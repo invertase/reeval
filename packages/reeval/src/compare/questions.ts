@@ -21,6 +21,7 @@ import type {
   EvalRecord,
   FakeAnalysisModel,
   FakeVote,
+  GatewayName,
   PairFactor,
   PairVote,
   QuestionCall,
@@ -320,6 +321,7 @@ export function questionRequest(input: BlindInput) {
 
 async function ask(
   model: QuestionModel,
+  gateway: GatewayName | undefined,
   input: BlindInput,
   maxOutputTokens: number,
   signal?: AbortSignal,
@@ -329,7 +331,7 @@ async function ask(
       ? fakeAnswer(model, input.blind)
       : await providerModel({
           name: model,
-          route: judgeRoute(model, process.env, 'compare question model').kind,
+          route: judgeRoute(model, process.env, 'compare question model', gateway).kind,
         }),
     ...questionRequest(input),
     output: Output.object({ schema: voteSchema, name: 'vote' }),
@@ -362,6 +364,8 @@ async function pooled<T, R>(items: T[], limit: number, work: (item: T) => Promis
 export type AnswerOptions = {
   question: string
   model: QuestionModel
+  /** The gateway a model string goes through; direct when unset. */
+  gateway?: GatewayName
   pairs: Pair[]
   maxInputTokens: number
   maxOutputTokens: number
@@ -478,6 +482,7 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
     try {
       const { pick, reason, resolvedModel } = await ask(
         model,
+        options.gateway,
         input,
         options.maxOutputTokens,
         options.signal,
@@ -557,6 +562,7 @@ export type EvalQuestions = {
   questions: Array<{
     question: string
     model: QuestionModel
+    gateway?: GatewayName
     across?: PairFactor
     state?: QuestionStateOptions
     artifacts?: true | string[]
@@ -606,6 +612,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
           const answer = await answerQuestion({
             question: q.question,
             model: q.model,
+            ...(q.gateway ? { gateway: q.gateway } : {}),
             pairs: pairsOf(staged, acrossOf(q.across)),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,

@@ -1,17 +1,19 @@
-// The analysis model: a language model, routed like the judge (a provider key goes direct, else
-// the AI Gateway; on the config's gateway list, the first entry that serves it). Evaluation models (typesafe-ai/*) score yes/no questions and can't write one.
+// The analysis model: a language model, routed like the judge (the first gateway in the config's
+// list that serves it; with no list, its provider's own key). Evaluation models (typesafe-ai/*)
+// score yes/no questions and can't write one.
 import { generateText, type LanguageModel, Output } from 'ai'
 import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
-import { gatewayScope, modelGatewayOrNone, resolveModelGateway } from '../gateway/models.ts'
+import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import {
   checkModelString,
   isFakeJudge,
   judgeCredentials,
   judgeRoute,
   modelKeyOptions,
+  unusedGatewayKey,
 } from '../judge/index.ts'
-import type { FakeAnalysisModel, ResolvedConfig } from '../types.ts'
+import type { FakeAnalysisModel, GatewayName, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
 
@@ -95,11 +97,19 @@ export function analysisKeyProblem(
 ): string | null {
   const model = analysisModelOf(config)
   if (typeof model !== 'string' || isEvaluationModel(model) || checkModelString(model)) return null
-  const gateway = modelGatewayOrNone(model, undefined, gatewayScope(config))
+  let gateway: GatewayName | undefined
+  try {
+    gateway = resolveModelGateway(model, undefined, gatewayScope(config), 'analysis.model')
+  } catch (error) {
+    return brief
+      ? 'add vercel() to gateway, or analysis: { insights: false }'
+      : `${(error as Error).message} Or analysis: { insights: false }.`
+  }
   const keys = judgeCredentials(model, gateway)
   if (!keys.some((k) => env[k])) {
     if (brief) return `set ${keys.slice(0, 2).join(' or ')}, or analysis: { insights: false }`
-    return `set ${modelKeyOptions(model, gateway)} for analysis.model, "${model}", in .env.local, or analysis: { insights: false }`
+    const unused = unusedGatewayKey(env, gateway)
+    return `set ${modelKeyOptions(model, gateway)} for analysis.model, "${model}", in .env.local, or analysis: { insights: false }${unused ? `.${unused}` : ''}`
   }
   try {
     judgeRoute(model, env, 'analysis model', gateway)
@@ -190,7 +200,7 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
   return providerModel(model)
 }
 
-/** The provider's own model for a direct route, else the AI Gateway's by name. */
+/** The provider's own model for a direct route, or the AI Gateway's by name on vercel. */
 export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
   if (model.route === 'gateway') return model.name
   const provider = model.name.slice(0, model.name.indexOf('/'))

@@ -5,7 +5,7 @@ import { type JudgeState, judgeRoute } from './index.ts'
 
 type DecisionModel = Parameters<typeof decide>[0]['model']
 
-/** See `judgeRoute`: a known provider's own package when its key is set, else the AI Gateway. */
+/** See `judgeRoute`: the provider's own package on direct, the AI Gateway on vercel. */
 async function resolveModel(
   model: Exclude<JudgeModel, { kind: 'fake-judge' }>,
   gateway: GatewayName | undefined,

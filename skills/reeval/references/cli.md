@@ -67,9 +67,9 @@ they run to the end (Ctrl-C skips the rest, keeping the exit code); `--no-insigh
 `reeval analyze <run> --insights` writes them for a run that has none, or finishes
 the evals a stopped, failed or over-budget run left out. Insights use
 `analysis.model` only, never the judge's model; `reeval init` sets it to
-`google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`, or `AI_GATEWAY_API_KEY`). Without the
-key the plan warns up front, naming every key that works, and the run prints
-`insights skipped: set <its key> or AI_GATEWAY_API_KEY, or analysis: { insights: false }` and its facts; `analysis.insights: false` turns them off.
+`google/gemini-3.8-flash` (`GOOGLE_GENERATIVE_AI_API_KEY`; `AI_GATEWAY_API_KEY` only with
+`gateway: [vercel()]`). Without the key the plan warns up front, naming it, and the run prints
+`insights skipped: set <its key>, or analysis: { insights: false }` and its facts; `analysis.insights: false` turns them off.
 A sentence that cites no fact, or a count, quote or effect word its facts don't hold, is dropped
 before it prints (`-v` lists each with its reason), and a run headline prints above the tally.
 

@@ -4,6 +4,7 @@ import { GATEWAY_NAMES } from '../contract/gateway.ts'
 import { UsageError } from '../errors.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
 import type {
+  FakeAnalysisModel,
   GatewayDescriptor,
   GatewayName,
   JudgeModel,
@@ -25,30 +26,28 @@ const MODEL_GATEWAYS: Readonly<Record<GatewayName, (model: string) => string | u
   vercel: () => undefined,
 }
 
-/** The run's gateway list, and whether the config or the profile set it. */
-export type GatewayScope = { gateways: readonly GatewayDescriptor[]; set: boolean }
+/** The run's gateway list: the profile's, else the config's (`[direct()]` when neither sets one). */
+export type GatewayScope = { gateways: readonly GatewayDescriptor[] }
 
 export const gatewayScope = (
-  config: Pick<ResolvedConfig, 'gateway' | 'gatewaySet'>,
+  config: Pick<ResolvedConfig, 'gateway'>,
   profile?: Pick<ResolvedProfile, 'gateway'> | null,
-): GatewayScope => ({
-  gateways: profile?.gateway ?? config.gateway,
-  set: config.gatewaySet || profile?.gateway !== undefined,
-})
+): GatewayScope => ({ gateways: profile?.gateway ?? config.gateway })
 
 /**
- * The gateway `model` goes through, or undefined when neither the list nor a pin is set: then it
- * takes its provider's own key, else Vercel's, whichever is set. A model object or a fake calls
- * through itself. Throws a UsageError naming each gateway tried.
+ * The gateway `model` goes through: its pin, or the first in the list that can serve it. An unset
+ * list is `[direct()]`, so a model takes its provider's own key unless the config lists another
+ * gateway. A model object or a fake calls through itself, and is undefined. Throws a UsageError
+ * naming each gateway tried.
  */
 export function resolveModelGateway(
-  model: JudgeModel | undefined,
+  model: JudgeModel | FakeAnalysisModel | undefined,
   pin: GatewayName | GatewayDescriptor | undefined,
   scope: GatewayScope,
   what: string,
 ): GatewayName | undefined {
-  if (typeof model !== 'string') return undefined
-  if (!scope.set && pin === undefined) return undefined
+  // A model without a provider prefix is refused by its shape check, which says how to fix it.
+  if (typeof model !== 'string' || !model.includes('/')) return undefined
   const on = `${what} "${model}"`
   const listed = scope.gateways.map((g) => g.kind)
   const name = typeof pin === 'object' ? pin.kind : pin
@@ -80,7 +79,7 @@ export function resolveModelGateway(
 
 /** As `resolveModelGateway`, but undefined where it would throw, for checks the plan already makes. */
 export function modelGatewayOrNone(
-  model: JudgeModel | undefined,
+  model: JudgeModel | FakeAnalysisModel | undefined,
   pin: GatewayName | GatewayDescriptor | undefined,
   scope: GatewayScope,
 ): GatewayName | undefined {

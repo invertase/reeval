@@ -104,7 +104,7 @@ All 16 results passed across greeting, code generation, and framework recommenda
 16 pass
 ```
 
-With `analysis.model` set, `reeval run` asks the model what each eval checks and how the run answers it, once the attempts finish and the exit code is fixed. `reeval init` sets it to `google/gemini-3.8-flash`, which needs `GOOGLE_GENERATIVE_AI_API_KEY` (or `AI_GATEWAY_API_KEY`). An `anthropic/*` or `openai/*` model takes `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` the same way. Each sentence cites the run's facts and passes the [insight checks](/concepts/insights#every-sentence-cites-a-fact), or it's dropped.
+With `analysis.model` set, `reeval run` asks the model what each eval checks and how the run answers it, once the attempts finish and the exit code is fixed. `reeval init` sets it to `google/gemini-3.8-flash`, which needs `GOOGLE_GENERATIVE_AI_API_KEY`. An `anthropic/*` or `openai/*` model takes `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` the same way, and any model goes through Vercel AI Gateway once the config lists [`vercel()` in `gateway`](/reference/gateway#the-judge-analysis-and-captures). Each sentence cites the run's facts and passes the [insight checks](/concepts/insights#every-sentence-cites-a-fact), or it's dropped.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -129,7 +129,7 @@ wrote .reeval/runs/20261021T182958Z_a343e84_cursor-agent_bfvz/insights.json: 11 
 …
 ```
 
-That command asks about only the evals left, with a fresh budget, and keeps every sentence already written. Without the model's key, the plan warns up front, and the run prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY, or analysis: { insights: false }` and its facts; `reeval analyze --insights` and `reeval doctor` say every way to set it. [Insights and remarks](/concepts/insights) covers the headline and the remarks that end a run.
+That command asks about only the evals left, with a fresh budget, and keeps every sentence already written. Without the model's key, the plan warns up front, and the run prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: false }` and its facts; `reeval analyze --insights` and `reeval doctor` say every way to set it. [Insights and remarks](/concepts/insights) covers the headline and the remarks that end a run.
 
 ## Next
 

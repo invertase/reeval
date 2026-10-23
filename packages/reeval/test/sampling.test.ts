@@ -1,5 +1,5 @@
 // reeval's own model calls leave sampling to the provider: Anthropic's API refuses `temperature`,
-// `top_p` and `top_k` on newer models, and an `anthropic/*` model always goes through the gateway.
+// `top_p` and `top_k` on newer models. Each call here goes through Vercel AI Gateway.
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, test } from 'node:test'
@@ -67,6 +67,7 @@ describe('sampling parameters on anthropic/* models', () => {
     const answer = await answerQuestion({
       question: 'Which is cleaner?',
       model: MODEL,
+      gateway: 'vercel',
       pairs: [
         {
           cut: 'within',
@@ -106,6 +107,7 @@ describe('sampling parameters on anthropic/* models', () => {
         { messages: [] } as never,
         undefined,
         AbortSignal.timeout(10_000),
+        'vercel',
       ),
     )
     assertNoSampling('judge')
