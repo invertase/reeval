@@ -1,0 +1,6 @@
+{
+  "name": "reeval-dart",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Dart authoring SDK for reeval (*.eval.dart); npm private workspace helper only"
+}

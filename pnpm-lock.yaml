@@ -299,6 +299,8 @@ importers:
         specifier: 0.23.1
         version: 0.23.1(oxc-resolver@11.24.2)(typescript@7.0.2)
 
+  packages/reeval-dart: {}
+
   packages/reeval-python: {}
 
   packages/sandbox-docker:
