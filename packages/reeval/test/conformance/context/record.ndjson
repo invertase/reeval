@@ -1,0 +1,12 @@
+{"case":"record","about":"checks the eval's own language made (Python's assert), each named by what it checked (a repeat gets #2): passes, and a failure that ends the body, whose message is the reason","options":{}}
+{"reeval":{"type":"start","attempt":{"id":"fake/-/fake#1","cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},"n":1},"file":"evals/record.eval.ts","body":"b1"}}
+{"runner":{"id":"1","call":{"op":"record","matcher":"assert","subject":"exists","status":"pass"}}}
+{"reeval":{"id":"1","ok":true,"op":"record","assertion":{"label":"assert exists","labelled":false,"matcher":"assert","status":"pass","soft":false}}}
+{"runner":{"id":"2","call":{"op":"record","matcher":"assert","subject":"result.ok","status":"pass"}}}
+{"reeval":{"id":"2","ok":true,"op":"record","assertion":{"label":"assert result.ok","labelled":false,"matcher":"assert","status":"pass","soft":false}}}
+{"runner":{"id":"3","call":{"op":"record","matcher":"assert","subject":"result.ok","status":"pass"}}}
+{"reeval":{"id":"3","ok":true,"op":"record","assertion":{"label":"assert result.ok #2","labelled":false,"matcher":"assert","status":"pass","soft":false}}}
+{"runner":{"id":"4","call":{"op":"record","matcher":"assert","subject":"one == 2","status":"fail","message":"one is two: assert 1 == 2"}}}
+{"reeval":{"id":"4","ok":true,"op":"record","assertion":{"label":"assert one == 2","labelled":false,"matcher":"assert","status":"fail","soft":false,"message":"one is two: assert 1 == 2"}}}
+{"runner":{"type":"done","error":{"name":"AssertionError","message":"one is two: assert 1 == 2"}}}
+{"record":{"outcome":"fail","error":{"kind":"assertion","message":"one is two: assert 1 == 2"},"assertions":[{"label":"assert exists","labelled":false,"matcher":"assert","status":"pass","soft":false},{"label":"assert result.ok","labelled":false,"matcher":"assert","status":"pass","soft":false},{"label":"assert result.ok #2","labelled":false,"matcher":"assert","status":"pass","soft":false},{"label":"assert one == 2","labelled":false,"matcher":"assert","status":"fail","soft":false,"message":"one is two: assert 1 == 2"}],"judgements":[],"checks":[]}}

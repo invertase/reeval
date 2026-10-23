@@ -2925,6 +2925,16 @@ export const features: Feature[] = [
     canary: /expected.*to succeed/i,
     prepare: (dir) => syncPythonFixtureProject(dir),
     record: ({ run, stdout }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.assertions?.map(({ label, labelled }) => [label, labelled]),
+        [
+          ['assert c.exec("test -f greet.py").ok', false],
+          ['assert node_check.ok', false],
+          ['assert verdict.passed', false],
+        ],
+        'each plain assert in a Python body is a check, passing ones too',
+      )
       const [canary] = run.evals.find((e) => e.name === 'canary')?.attempts ?? []
       assert.deepEqual(
         canary?.assertions?.map(({ label, status }) => [label, status]),

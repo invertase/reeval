@@ -45,8 +45,13 @@ def lands(c):
     expect(c.judge("Does greet.py print hi?")).to_pass()
 ```
 
-Plain `assert` is first-class: failures become hard checks in the run record (same shape as
-TypeScript). Use typed results (`ExecResult.ok`, `Verdict.passed`, `Turn.text`, …) and `c.file(path)`
+Plain `assert` is first-class, as in pytest: each one in an eval file is a check in the run
+record, named by its test as written (`assert c.exec("test -f greet.py").ok` is
+`assert c.exec("test -f greet.py").ok`). A pass is recorded when it runs. A failure ends the body,
+as in Python, and is recorded with its message and both sides of a comparison as the reason
+(`greet.py exists: assert 1 == 2`). An `AssertionError` the body catches isn't a failed check, so
+a retry loop can assert; one the escaping error carries (each failure in a `TaskGroup`'s
+`ExceptionGroup`, or one an error was raised from or while handling) is. Use typed results (`ExecResult.ok`, `Verdict.passed`, `Turn.text`, …) and `c.file(path)`
 for quick checks. Keep `expect` for reeval matchers (`to_have_file`, `to_succeed`, soft checks,
 labels) — Playwright-style.
 

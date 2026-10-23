@@ -1340,6 +1340,14 @@ environment:
     ['an empty id', request({ op: 'send', prompt: 'hi' }, '')],
     ['an unknown op', request({ op: 'teleport', to: 'mars' })],
     [
+      'record with a status that is neither pass nor fail',
+      request({ op: 'record', matcher: 'assert', status: 'skipped' }),
+    ],
+    [
+      'record with a matcher that is not a name',
+      request({ op: 'record', matcher: 'my check', status: 'pass' }),
+    ],
+    [
       'a polled exec with the result it already has',
       request({
         op: 'expect',

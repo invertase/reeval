@@ -10,6 +10,7 @@ import type { AssertionRecord, AttemptContext } from '../types.ts'
 import { assertionRecords } from './assertions.ts'
 
 export type ExpectCall = Extract<AttemptCall, { op: 'expect' }>
+export type RecordCall = Extract<AttemptCall, { op: 'record' }>
 
 type Outcome = Pick<RawAssertion, 'status' | 'error'> & { async: boolean }
 
@@ -230,4 +231,23 @@ export async function expectCall(
   }
   Object.assign(slot, result)
   return { assertion: assertionRecords(calls)[calls.indexOf(slot)] as AssertionRecord }
+}
+
+/**
+ * Adds a check the eval's own language made (`record`) to the attempt's matcher calls and replies
+ * with its record, named and numbered as a matcher call is.
+ */
+export function recordCall(calls: RawAssertion[], call: RecordCall): AssertionRecord {
+  const failure = new Error(call.message ?? `${call.label ?? call.subject ?? call.matcher} failed`)
+  failure.name = 'AssertionError'
+  calls.push({
+    matcher: call.matcher,
+    args: [],
+    ...(call.subject === undefined ? {} : { subject: call.subject }),
+    ...(call.label === undefined ? {} : { label: call.label }),
+    soft: call.soft ?? false,
+    status: call.status,
+    ...(call.status === 'pass' ? {} : { error: failure }),
+  })
+  return assertionRecords(calls).at(-1) as AssertionRecord
 }

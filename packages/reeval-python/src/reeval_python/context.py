@@ -7,7 +7,6 @@ import base64
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, cast
 
-from reeval_python.assertion import assert_to_expect
 from reeval_python.errors import ReevalAssertionError
 from reeval_python.expect import bind_expect
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
@@ -125,17 +124,6 @@ class AttemptContext:
         assertion = cast(dict[str, Any], assertion_raw) if isinstance(assertion_raw, dict) else {}
         if assertion.get("status") == "fail" and not soft:
             raise ReevalAssertionError(str(assertion.get("message") or "expect failed"))
-
-    async def record_plain_assert(self, exc: AssertionError) -> None:
-        wire = assert_to_expect(exc)
-        await self.run_expect(
-            subject=wire.subject,
-            matcher=wire.matcher,
-            args=wire.args,
-            label=wire.label,
-            not_=wire.not_,
-            soft=False,
-        )
 
     def bind_expect(self) -> None:
         async def submit(**kwargs: Any) -> None:
