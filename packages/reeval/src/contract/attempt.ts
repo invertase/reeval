@@ -170,7 +170,7 @@ export const turnDataSchema = z
   )
 
 export const execResultSchema = z.strictObject({
-  exitCode: z.number(),
+  exitCode: z.number().int(),
   stdout: z.string(),
   stderr: z.string(),
 })

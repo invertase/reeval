@@ -2939,6 +2939,37 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'python-sdk/attempt-isolation',
+    tiers: ['fake'],
+    env: '-',
+    args: ['--concurrency', '1'],
+    canary: /expected.*to succeed/i,
+    evals: {
+      lands: { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /expected.*to succeed/i },
+      },
+      'times out': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'timeout', message: /timed out/ },
+      },
+    },
+    prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.checks.map((c) => c.command),
+        ['test ! -f zombie.txt'],
+        "a timed-out body's late call doesn't run in the next attempt on its cell",
+      )
+      const [timedOut] = run.evals.find((e) => e.name === 'times out')?.attempts ?? []
+      assert.deepEqual(timedOut?.checks, [], 'nor in its own, which reeval already ended')
+    },
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',

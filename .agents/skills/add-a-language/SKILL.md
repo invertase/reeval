@@ -46,7 +46,7 @@ flowchart TD
   Dart -.-> Remote
   Remote <-->|"loopback TCP + token<br/>protocol v2 NDJSON"| SDK["Language SDK runner<br/>reeval_python / sdks/dart"]
   SDK -->|"collect → declared tree"| Declare["declareTree()"]
-  SDK <-->|"start · {id, call, attempt} · replies · done"| Host["attempt-host.ts"]
+  SDK <-->|"start · {id, call, key} · replies · done"| Host["attempt-host.ts"]
 
   Jiti --> Plan["Shared plan and matrix<br/>(one code path)"]
   Declare --> Plan
@@ -86,7 +86,7 @@ see [Prior art](#prior-art-dart-spike) below):
 
 | Module | Role |
 |---|---|
-| `protocol.ts` | `RUNNER_PROTOCOL = 2`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call, attempt}`, replies with `attempt`) — no `t` on attempt lines. |
+| `protocol.ts` | `RUNNER_PROTOCOL = 2`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call}`, replies), each with the `key` reeval gave the body in its `start` — no `t` on attempt lines. `key` is unique per started body; `attempt.id` isn't (two evals on one cell share it), so never multiplex on it. |
 | `transport.ts` | Loopback TCP, one-time token (`REEVAL_RUNNER`, `REEVAL_RUNNER_TOKEN`) |
 | `attempt-host.ts` | Maps protocol ops to real `AttemptContext` (`expect` → `match.ts`) |
 | `remote.ts` | `collectLanguageFile`: collect tree, `declareTree`, run remote bodies |
@@ -96,9 +96,13 @@ SDK runner responsibilities:
 1. Connect; send `{ t: 'hello', protocol: 2, token, sdk, version, runtime }`.
 2. On `{ t: 'collect', file }`, import the eval file; reply with `{ t: 'declared', file, tree }`
    (tree must match `schema/plan/declaration.schema.json`).
-3. On `start`, run the body async; each `c.*` becomes `{ id, call, attempt }`; read replies
-   (including `expect` assertion records); send `{ type: 'done', attempt, error? }`.
-4. Optionally route stdout/stderr as `{ t: 'log', stream, text }`.
+3. On `start`, run the body async; each `c.*` becomes `{ id, call, key }`; read replies
+   (including `expect` assertion records); send `{ type: 'done', key, error? }`.
+4. On `{ type: 'abort', key }`, reeval has already settled the attempt: fail the body's calls in
+   flight and every later one at once, without sending them, and stop the body where the
+   language can. A body that keeps running must not reach reeval (it answers any call whose key
+   it no longer knows with an `AbortError`).
+5. Optionally route stdout/stderr as `{ t: 'log', stream, text }`.
 
 Declaration tree JSON is validated by the same contract TypeScript uses (`declareTree` in the worker).
 

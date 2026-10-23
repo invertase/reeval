@@ -122,6 +122,21 @@ export async function expectCall(
   calls: RawAssertion[],
   call: ExpectCall,
 ): Promise<AssertionRecord> {
-  calls.push(await match(c, call))
-  return assertionRecords(calls).at(-1) as AssertionRecord
+  // The slot is taken at call time, so concurrent calls are numbered (` #2`) in call order.
+  const slot: RawAssertion = {
+    matcher: [call.poll && 'poll', call.not && 'not', call.matcher].filter(Boolean).join('.'),
+    args: call.args.map(fromWire),
+    subject: subjectName(call.subject),
+    ...(call.label ? { label: call.label } : {}),
+    soft: call.soft,
+    status: 'pass',
+  }
+  calls.push(slot)
+  try {
+    Object.assign(slot, await match(c, call))
+  } catch (error) {
+    calls.splice(calls.indexOf(slot), 1)
+    throw error
+  }
+  return assertionRecords(calls)[calls.indexOf(slot)] as AssertionRecord
 }

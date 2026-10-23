@@ -1,6 +1,8 @@
 {
   "an empty id": "UsageError: The attempt request's id must not be empty (got \"\")",
   "an unknown op": "UsageError: The attempt request's call.op is one of 'send', 'exec', 'serve', 'kill', 'capture', 'readFile', 'writeFile', 'expect' or 'judge' (got \"teleport\")",
+  "a polled exec with the result it already has": "UsageError: The attempt request's call.subject.result: can't be polled: drop result so reeval runs the command on each try (got {\"exitCode\":1,\"stdout\":\"\",\"stderr\":\"\"})",
+  "an exec result with a fractional exit code": "UsageError: The attempt request's call.subject.result.exitCode must be a whole number (got 0.5)",
   "judge without a question": "UsageError: The attempt request's call.question is missing: it must be a string",
   "judge with an empty question": "UsageError: The attempt request's call.question must not be empty (got \" \")",
   "judge with a model without a provider": "UsageError: The attempt request's call.options.model must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got \"jev\")",

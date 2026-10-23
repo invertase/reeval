@@ -1,14 +1,14 @@
 // Out-of-process eval files: declaration tree over the runner session, bodies over attempt protocol v2.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { relative } from 'node:path'
-import type { AttemptDone, AttemptStart } from '../contract/attempt.ts'
+import type { AttemptDone } from '../contract/attempt.ts'
 import { attemptRecordings } from '../engine/runtime.ts'
 import { declareTree } from '../evaluate.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { AttemptContext, BackgroundHandle, EvalFn } from '../types.ts'
+import type { BackgroundHandle, EvalFn } from '../types.ts'
 import { adapterForFile, runnerEnv } from './adapter.ts'
 import { replyToAttempt } from './attempt-host.ts'
-import type { RunnerAttemptDone, RunnerAttemptRequest } from './protocol.ts'
+import type { RunnerAttemptRequest, RunnerAttemptStart } from './protocol.ts'
 import {
   errorFrom,
   isRunnerAttemptDone,
@@ -50,12 +50,14 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
       return
     }
     if (isRunnerAttemptRequest(message)) {
-      const slot = live.get(message.attempt)
-      slot?.onRequest(message)
+      const slot = live.get(message.key)
+      if (slot) return slot.onRequest(message)
+      // A body reeval already settled (aborted, or its runner raced its done) gets an answer, so
+      // it can't wait on one forever.
+      const error = { name: 'AbortError', message: 'The attempt this call belongs to has ended' }
+      liveRunner.send({ id: message.id, ok: false, op: message.call?.op, error, key: message.key })
     } else if (isRunnerAttemptDone(message)) {
-      const key = (message as RunnerAttemptDone).attempt
-      if (key) live.get(key)?.onDone(message)
-      else if (live.size === 1) live.values().next().value?.onDone(message)
+      live.get(message.key)?.onDone(message)
     }
   })
   runner.onGone((reason) => {
@@ -65,6 +67,8 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
   declareTree(tree.children, (body) => remoteBody(liveRunner, live, body, rel))
 }
 
+let started = 0
+
 function remoteBody(
   runner: LanguageRunner,
   live: Map<string, Live>,
@@ -73,7 +77,7 @@ function remoteBody(
 ): EvalFn {
   return (t) =>
     new Promise<void>((resolve, reject) => {
-      const attemptKey = t.attempt.id
+      const attemptKey = `${body}:${t.attempt.id}:${++started}`
       const matcherCalls = attemptRecordings()
       const handles = new Map<string, BackgroundHandle>()
       const inAttempt = AsyncLocalStorage.snapshot()
@@ -88,7 +92,7 @@ function remoteBody(
           reason instanceof Error ? reason.message : String(reason ?? 'The run was cancelled')
         runner.send({
           type: 'abort',
-          attempt: attemptKey,
+          key: attemptKey,
           reason:
             reason instanceof Error && reason.name === 'TimeoutError' ? 'timeout' : 'cancelled',
           message,
@@ -99,7 +103,7 @@ function remoteBody(
       live.set(attemptKey, {
         onRequest: (message) => {
           void replyToAttempt(t, matcherCalls, handles, message).then((reply) =>
-            runner.send({ ...reply, attempt: attemptKey }),
+            runner.send({ ...reply, key: attemptKey }),
           )
         },
         onLog: ({ stream, text }) =>
@@ -118,8 +122,9 @@ function remoteBody(
       if (t.signal.aborted) return onAbort()
       t.signal.addEventListener('abort', onAbort, { once: true })
 
-      const start: AttemptStart = {
+      const start: RunnerAttemptStart = {
         type: 'start',
+        key: attemptKey,
         attempt: t.attempt,
         file,
         body,

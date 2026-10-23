@@ -417,7 +417,9 @@
       "type": "object",
       "properties": {
         "exitCode": {
-          "type": "number"
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
         },
         "stderr": {
           "type": "string"

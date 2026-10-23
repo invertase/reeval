@@ -49,6 +49,8 @@ _FLAGS = {re.IGNORECASE: "i", re.MULTILINE: "m", re.DOTALL: "s"}
 
 
 def _pattern_arg(value: re.Pattern[str]) -> dict[str, str]:
+    if not isinstance(cast(object, value.pattern), str):
+        raise ValueError(f"{value.pattern!r}: reeval's matchers take str patterns, not bytes")
     flags = value.flags & ~re.UNICODE
     letters = "".join(letter for flag, letter in _FLAGS.items() if flags & flag)
     unsupported = flags & ~(re.IGNORECASE | re.MULTILINE | re.DOTALL)

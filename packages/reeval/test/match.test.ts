@@ -205,6 +205,37 @@ describe('one matcher table', () => {
     }
   })
 
+  test('concurrent calls are numbered in the order they were made, not the order they finish', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const slowFirst = {
+      ...c,
+      readFile: async (path: string) => {
+        if (path === 'slow') await gate
+        return files['greet.js'] ?? null
+      },
+    } as unknown as AttemptContext
+    const call = (path: string): ExpectCall => ({
+      op: 'expect',
+      subject: { readFile: path },
+      matcher: 'toContain',
+      args: ['greet'],
+      not: false,
+      soft: false,
+    })
+    const calls: RawAssertion[] = []
+    const first = expectCall(slowFirst, calls, call('slow'))
+    const second = await expectCall(slowFirst, calls, call('fast'))
+    release()
+    assert.deepEqual([(await first).label, second.label], ['toContain greet', 'toContain greet #2'])
+    assert.deepEqual(
+      assertionRecords(calls).map((r) => r.label),
+      ['toContain greet', 'toContain greet #2'],
+    )
+  })
+
   test('a polled call re-reads its subject until the matcher passes, or answers its last try', async () => {
     let reads = 0
     const later = {

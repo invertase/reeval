@@ -102,7 +102,7 @@ class AttemptContext:
             raise RuntimeError(f"{err.get('name')}: {err.get('message')}")
         assertion_raw = reply.get("assertion")
         assertion = cast(dict[str, Any], assertion_raw) if isinstance(assertion_raw, dict) else {}
-        if assertion.get("status") == "fail":
+        if assertion.get("status") == "fail" and not soft:
             raise ReevalAssertionError(str(assertion.get("message") or "expect failed"))
 
     async def record_plain_assert(self, exc: AssertionError) -> None:
