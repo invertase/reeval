@@ -19,6 +19,7 @@ import {
   checkJudge,
   checkKeys,
   checkRuntime,
+  checkVertex,
   configuredUses,
   type DoctorDeps,
   defaultDeps,
@@ -52,6 +53,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   gitVisibleEnvFiles: async () => [],
   fetch: async () => new Response('{}', { status: 200 }),
   cloudHost: async () => null,
+  vertexToken: async () => SECRET,
   ...over,
 })
 
@@ -59,7 +61,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
 async function configOf(name: string, body: string) {
   const p = await project(`doctor-${name}`, {
     'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
-import { direct, vercel } from 'reeval/gateway'
+import { direct, vercel, vertex } from 'reeval/gateway'
 import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { docker, fakeSandbox, podman } from 'reeval/sandbox'
@@ -729,6 +731,106 @@ evaluate('a', async () => {})
       "{ harness: cursor({ model: 'composer-2.5' }), gateway: [vercel()] }",
     )
     assert.equal(checkGateways(stuck, deps(), '.env.local')[0]?.status, 'fail')
+  })
+
+  test('vertex: each entry’s project, where its tokens come from, and online whose they are', async () => {
+    const config = await configOf(
+      'gateway-vertex',
+      `{ harness: claudeCode({ model: 'claude-haiku-4-5@20251001' }),
+         gateway: [vertex({ project: 'reeval-test' })],
+         judge: { model: 'anthropic/claude-haiku-4-5' },
+         profiles: { env: { gateway: [vertex()] } } }`,
+    )
+    const judge = await checkJudge(config, deps({ env: {} }), false, '.env.local')
+    assert.deepEqual(statuses(judge), ['ok'])
+    assert.match(judge[0]?.summary ?? '', /on vertex\(\), with a token from Application Default/)
+
+    const home = await mkdtemp(join(tmpdir(), 'reeval-adc-'))
+    const offline = await checkVertex(config, deps({ env: { HOME: home } }), false)
+    assert.deepEqual(
+      offline.map((c) => [c.status, c.summary]),
+      [
+        ['ok', 'vertex(): project reeval-test, global'],
+        [
+          'fail',
+          "vertex() has no project: set vertex({ project: '<id>' }) or GOOGLE_CLOUD_PROJECT in profile env",
+        ],
+        [
+          'warn',
+          'no Application Default Credentials found (fine on a Google Cloud VM, whose metadata server serves them)',
+        ],
+      ],
+    )
+    await mkdir(join(home, '.config', 'gcloud'), { recursive: true })
+    const adc = join(home, '.config', 'gcloud', 'application_default_credentials.json')
+    await writeFile(adc, '{}')
+    const env = { HOME: home, GOOGLE_CLOUD_PROJECT: 'from-env' }
+    const found = await checkVertex(config, deps({ env }), false)
+    assert.deepEqual(
+      found.map((c) => [c.status, c.summary]),
+      [
+        ['ok', 'vertex(): project reeval-test, global'],
+        ['ok', 'vertex() in profile env: project from-env (from GOOGLE_CLOUD_PROJECT), global'],
+        ['ok', `access tokens from gcloud's ${adc}`],
+      ],
+    )
+    const missing = await checkVertex(
+      config,
+      deps({ env: { ...env, GOOGLE_APPLICATION_CREDENTIALS: join(home, 'nope.json') } }),
+      false,
+    )
+    assert.equal(missing.at(-1)?.status, 'fail')
+    assert.match(missing.at(-1)?.summary ?? '', /nope\.json, which doesn't exist/)
+
+    const asked: string[] = []
+    const online = await checkVertex(
+      config,
+      deps({
+        env,
+        fetch: async (url, init) => {
+          asked.push(String(url))
+          if (String(url).startsWith('https://oauth2.googleapis.com/tokeninfo'))
+            return Response.json({ email: 'ci@reeval-test.iam.gserviceaccount.com' })
+          const authorization = new Headers(init?.headers).get('authorization')
+          assert.equal(authorization, `Bearer ${SECRET}`)
+          return String(url).includes('/projects/reeval-test/')
+            ? Response.json({ state: 'ENABLED' })
+            : Response.json({ state: 'DISABLED' })
+        },
+      }),
+      true,
+    )
+    assert.deepEqual(
+      online.slice(2).map((c) => [c.status, c.summary]),
+      [
+        [
+          'ok',
+          `access token minted for ci@reeval-test.iam.gserviceaccount.com from gcloud's ${adc}`,
+        ],
+        ['ok', 'Vertex AI API enabled in reeval-test'],
+        ['fail', 'Vertex AI API not enabled in from-env'],
+      ],
+    )
+    assert.equal(
+      online.at(-1)?.fix,
+      'run gcloud services enable aiplatform.googleapis.com --project from-env',
+    )
+    assert.equal(asked.length, 3)
+    noSecret(online)
+    const refused = await checkVertex(
+      config,
+      deps({
+        env,
+        vertexToken: async () => {
+          throw new Error('invalid_grant: reauth related error')
+        },
+      }),
+      true,
+    )
+    assert.equal(refused.at(-1)?.status, 'fail')
+    assert.match(refused.at(-1)?.summary ?? '', /gave no access token: invalid_grant/)
+    const unset = await configOf('vertex-unset', "{ harness: cursor({ model: 'composer-2.5' }) }")
+    assert.deepEqual(await checkVertex(unset, deps(), true), [])
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {

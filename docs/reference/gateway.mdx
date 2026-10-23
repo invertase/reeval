@@ -28,7 +28,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, and any judge or analysis model | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
-| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code ([below](#vertex-ai)) | Application Default Credentials |
+| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
 
 ## Vercel AI Gateway
 
@@ -68,7 +68,9 @@ There's no key. reeval mints a Google Cloud access token on the host from Applic
 |---|---|---|---|---|
 | Claude Code | `CLAUDE_CODE_USE_VERTEX`, with `ANTHROPIC_VERTEX_PROJECT_ID` and `CLOUD_ML_REGION` from the entry, and `CLAUDE_CODE_SKIP_VERTEX_AUTH` | `POST /v1/projects/<project>/locations/<region>/publishers/anthropic/models/<id>:streamRawPredict` (and `:rawPredict`) on the region's host | Vertex's, e.g. `claude-haiku-4-5@20251001`; an `anthropic/` prefix is dropped | from each call's path |
 
-Every other harness and model falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
+Every other harness falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
+
+The judge, `analysis.model`, captures and compare's questions call `google/*` and `anthropic/*` models on Vertex too, from the host with the same token, in the publisher's region (`claude-haiku-4-5@20251001` keeps Vertex's id after the prefix). Other prefixes fall through. `reeval doctor` checks each entry's project and where its credentials come from; with `--online` it mints a token, names its account and checks the Vertex AI API is enabled in the project.
 
 ## Fallback
 
@@ -104,7 +106,7 @@ gateway: [vercel(), direct()],
 judge: { model: 'anthropic/claude-haiku-4-5', gateway: 'direct' },
 ```
 
-With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
+With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's, and `vertex()` a token from Application Default Credentials. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
 
 Without a list, reeval uses no gateway: the list is `[direct()]`, so a model takes only its provider's own key, as on [Judges](/reference/judges), and a model `direct()` can't serve stops the plan. A set `AI_GATEWAY_API_KEY` is never read until you add `vercel()`; the missing-key message says so.
 

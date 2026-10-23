@@ -19,6 +19,7 @@ import { stubPng } from '../capture/stub.ts'
 import { captureUseSpend, runJourney } from '../capture/use.ts'
 import { getRunContext } from '../engine/runtime.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
+import { vertexSettingsIn } from '../gateway/vertex.ts'
 import { sha256 } from '../ids.ts'
 import { judgeRoute } from '../judge/index.ts'
 import { cacheDir } from '../root.ts'
@@ -246,16 +247,13 @@ async function shot(
       remaining,
       loadModel: async (name) => {
         const { config, profile } = getRunContext()
-        const gateway = resolveModelGateway(
-          name,
-          undefined,
-          gatewayScope(config, profile),
-          'capture model',
-        )
-        const route = judgeRoute(name, process.env, 'capture model', gateway)
+        const scope = gatewayScope(config, profile)
+        const gateway = resolveModelGateway(name, undefined, scope, 'capture model')
+        const route = judgeRoute(name, process.env, 'capture model', gateway).kind
         return providerModel({
           name,
-          route: route.kind === 'direct' ? 'direct' : 'gateway',
+          route,
+          ...(route === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
         })
       },
     })

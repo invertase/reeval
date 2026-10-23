@@ -362,7 +362,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.vertex',
     area: 'Config and selection',
-    name: '`vertex({ project, location, regions })`: its shape and project checked at plan time, Claude Code on Vertex AI with a host-minted access token the egress gateway adds and refreshes, and the other harnesses and models falling through it',
+    name: '`vertex({ project, location, regions })`: its shape and project checked at plan time, Claude Code on Vertex AI with a host-minted access token the egress gateway adds and refreshes, `google/*` and `anthropic/*` judge and analysis models called there with the same token, `reeval doctor`’s vertex check, and the other harnesses and models falling through it',
     plan: ['gateway/vertex-yaml'],
     tests: [
       'reeval/test/gateway.test.ts › vertex() takes its project from the entry, else GOOGLE_CLOUD_PROJECT, else refuses',
@@ -371,6 +371,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/gateway.test.ts › a cached source shares one mint and one token until near its expiry',
       'reeval/test/gateway.test.ts › the session gets fresh rules before each token expires, and none after stop',
       'reeval/test/gateway.test.ts › a failed refresh is retried while the current token works; a failed first mint throws',
+      "reeval/test/gateway.test.ts › reeval's own models on Vertex: google/* and anthropic/*, with the host's token",
+      'reeval/test/doctor.test.ts › vertex: each entry’s project, where its tokens come from, and online whose they are',
     ],
   },
   {

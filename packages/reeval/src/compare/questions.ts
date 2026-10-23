@@ -1,12 +1,14 @@
 // Compare questions, answered on the host once an eval's attempts have finished: every pair is
 // shown to a language model twice, in both orders, under blinded labels, and each pick is mapped
 // back to the side's name. A model error is kept on the answer; outcomes never depend on it.
+
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
 import { cannedModel, isFake, providerModel } from '../analysis/model.ts'
 import type { EngineEval } from '../engine/node.ts'
+import type { VertexSettings } from '../gateway/vertex.ts'
 import { recordFileName } from '../ids.ts'
 import { judgeRoute } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
@@ -322,6 +324,7 @@ export function questionRequest(input: BlindInput) {
 async function ask(
   model: QuestionModel,
   gateway: GatewayName | undefined,
+  vertex: VertexSettings | undefined,
   input: BlindInput,
   maxOutputTokens: number,
   signal?: AbortSignal,
@@ -332,6 +335,7 @@ async function ask(
       : await providerModel({
           name: model,
           route: judgeRoute(model, process.env, 'compare question model', gateway).kind,
+          ...(vertex ? { vertex } : {}),
         }),
     ...questionRequest(input),
     output: Output.object({ schema: voteSchema, name: 'vote' }),
@@ -366,6 +370,8 @@ export type AnswerOptions = {
   model: QuestionModel
   /** The gateway a model string goes through; direct when unset. */
   gateway?: GatewayName
+  /** On vertex, the entry's project and regions. */
+  vertex?: VertexSettings
   pairs: Pair[]
   maxInputTokens: number
   maxOutputTokens: number
@@ -483,6 +489,7 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
       const { pick, reason, resolvedModel } = await ask(
         model,
         options.gateway,
+        options.vertex,
         input,
         options.maxOutputTokens,
         options.signal,
@@ -563,6 +570,7 @@ export type EvalQuestions = {
     question: string
     model: QuestionModel
     gateway?: GatewayName
+    vertex?: VertexSettings
     across?: PairFactor
     state?: QuestionStateOptions
     artifacts?: true | string[]
@@ -613,6 +621,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
             question: q.question,
             model: q.model,
             ...(q.gateway ? { gateway: q.gateway } : {}),
+            ...(q.vertex ? { vertex: q.vertex } : {}),
             pairs: pairsOf(staged, acrossOf(q.across)),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,

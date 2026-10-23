@@ -85,6 +85,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.83",
     "@ai-sdk/google": "4.0.100",
+    "@ai-sdk/google-vertex": "5.0.116",
     "@ai-sdk/harness": "1.0.156",
     "@ai-sdk/harness-acp": "1.0.95",
     "@ai-sdk/openai": "4.0.97",

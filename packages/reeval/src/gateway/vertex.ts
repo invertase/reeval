@@ -4,7 +4,7 @@
 import type { EndpointMatch, RequestTransformation } from '@reeval/sandbox-docker'
 import { UsageError } from '../errors.ts'
 import type { AgentKind, ModelSpecific } from '../harness/agents.ts'
-import type { VertexGatewayDescriptor, VertexPublisher } from '../types.ts'
+import type { GatewayDescriptor, VertexGatewayDescriptor, VertexPublisher } from '../types.ts'
 import { type BrokeredToken, cachedTokenSource, type TokenSource } from './token.ts'
 
 /** The host variable `vertex()` takes its project from when it names none. */
@@ -29,6 +29,15 @@ export function vertexSettings(
     )
   }
   return { project, location: entry.location ?? 'global', regions: entry.regions ?? {} }
+}
+
+/** The settings of the `vertex()` entry in a gateway list; a UsageError when it names no project. */
+export function vertexSettingsIn(
+  gateways: readonly GatewayDescriptor[],
+  env: NodeJS.ProcessEnv = process.env,
+): VertexSettings {
+  const entry = gateways.find((g) => g.kind === 'vertex')
+  return vertexSettings(entry?.kind === 'vertex' ? entry : {}, env)
 }
 
 /** The region a publisher's models are called in: its own, else the entry's location. */
@@ -141,4 +150,56 @@ export const VERTEX_ROUTES: Partial<
 export const VERTEX_REFUSALS: Partial<Record<AgentKind, string>> = {
   cursor: "Cursor's agent only calls Cursor's own API",
   codex: "Codex only calls OpenAI's Responses API, which Vertex AI doesn't serve",
+}
+
+/** The model prefixes reeval calls on Vertex AI itself (the judge, analysis, captures, questions). */
+export const VERTEX_MODEL_PROVIDERS = ['google', 'anthropic'] as const
+
+/** Why reeval can't call `model` on Vertex AI, or undefined when it can. */
+export const vertexModelRefusal = (model: string) =>
+  (VERTEX_MODEL_PROVIDERS as readonly string[]).includes(model.slice(0, model.indexOf('/')))
+    ? undefined
+    : `reeval calls only ${VERTEX_MODEL_PROVIDERS.map((p) => `${p}/*`).join(' and ')} models on Vertex AI`
+
+/**
+ * A `google/*` or `anthropic/*` model on Vertex AI in the entry's project and the publisher's
+ * region, authenticated with the process's token source, so ADC is read in one place.
+ */
+export async function vertexLanguageModel(
+  model: string,
+  settings: VertexSettings,
+  source: TokenSource = vertexTokens(),
+) {
+  const refused = vertexModelRefusal(model)
+  if (refused) throw new Error(`${refused} (got "${model}")`)
+  const provider = model.slice(0, model.indexOf('/'))
+  const id = model.slice(provider.length + 1)
+  const googleAuthOptions = {
+    authClient: { getAccessToken: async () => ({ token: (await source()).token }) },
+  } as unknown as NonNullable<
+    Parameters<typeof import('@ai-sdk/google-vertex').createVertex>[0]
+  >['googleAuthOptions']
+  if (provider === 'anthropic') {
+    const { createVertexAnthropic } = await import('@ai-sdk/google-vertex/anthropic')
+    const location = vertexRegion(settings, 'anthropic')
+    return createVertexAnthropic({ project: settings.project, location, googleAuthOptions })(id)
+  }
+  const { createVertex } = await import('@ai-sdk/google-vertex')
+  const location = vertexRegion(settings, 'google')
+  return createVertex({ project: settings.project, location, googleAuthOptions })(id)
+}
+
+/** As `vertexLanguageModel`, as a decision model for the judge. */
+export async function vertexDecisionModel(
+  model: string,
+  settings: VertexSettings,
+  source: TokenSource = vertexTokens(),
+) {
+  const { Experimental_DecisionLanguageModel } = await import(
+    '@ai-sdk/provider-utils/experimental-decision'
+  )
+  return new Experimental_DecisionLanguageModel({
+    model: await vertexLanguageModel(model, settings, source),
+    provider: 'google-vertex.decision',
+  })
 }

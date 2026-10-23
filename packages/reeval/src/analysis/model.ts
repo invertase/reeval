@@ -6,6 +6,12 @@ import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import {
+  type VertexSettings,
+  vertexLanguageModel,
+  vertexSettings,
+  vertexSettingsIn,
+} from '../gateway/vertex.ts'
+import {
   checkModelString,
   isFakeJudge,
   judgeCredentials,
@@ -19,8 +25,10 @@ import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
 
 export type ResolvedAnalysisModel = {
   name: string
-  route: 'direct' | 'gateway' | 'fake'
+  route: 'direct' | 'gateway' | 'vertex' | 'fake'
   fake?: FakeAnalysisModel
+  /** On vertex, the entry's project and regions. */
+  vertex?: VertexSettings
 }
 
 export const isFake = (m: unknown): m is FakeAnalysisModel =>
@@ -105,6 +113,16 @@ export function analysisKeyProblem(
       ? 'add vercel() to gateway, or analysis: { insights: false }'
       : `${(error as Error).message} Or analysis: { insights: false }.`
   }
+  if (gateway === 'vertex') {
+    try {
+      vertexSettingsIn(gatewayScope(config).gateways, env)
+      return null
+    } catch (error) {
+      return brief
+        ? 'set GOOGLE_CLOUD_PROJECT, or analysis: { insights: false }'
+        : `${(error as Error).message}, for analysis.model, "${model}", or analysis: { insights: false }`
+    }
+  }
   const keys = judgeCredentials(model, gateway)
   if (!keys.some((k) => env[k])) {
     if (brief) return `set ${keys.slice(0, 2).join(' or ')}, or analysis: { insights: false }`
@@ -128,11 +146,14 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
       `analysis.model in ${config.file} is "${model}", an evaluation model: it scores yes/no questions and can't write an analysis. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
     )
   }
-  const gateway = resolveModelGateway(model, undefined, gatewayScope(config), 'analysis.model')
+  const scope = gatewayScope(config)
+  const gateway = resolveModelGateway(model, undefined, scope, 'analysis.model')
   try {
+    const route = judgeRoute(model, process.env, 'analysis model', gateway).kind
     return {
       name: model,
-      route: judgeRoute(model, process.env, 'analysis model', gateway).kind,
+      route,
+      ...(route === 'vertex' ? { vertex: vertexSettingsIn(scope.gateways) } : {}),
     }
   } catch (error) {
     throw new UsageError(
@@ -203,6 +224,8 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
 /** The provider's own model for a direct route, or the AI Gateway's by name on vercel. */
 export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
   if (model.route === 'gateway') return model.name
+  if (model.route === 'vertex')
+    return vertexLanguageModel(model.name, model.vertex ?? vertexSettings())
   const provider = model.name.slice(0, model.name.indexOf('/'))
   const id = model.name.slice(provider.length + 1)
   switch (provider) {
