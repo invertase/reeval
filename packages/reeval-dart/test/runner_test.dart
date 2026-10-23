@@ -4,7 +4,9 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:path/path.dart' as p;
 import 'package:reeval/src/version.dart';
 import 'package:test/test.dart';
 
@@ -65,6 +67,25 @@ void main() {
       'version': packageVersion,
       'runtime': isA<String>(),
     });
+  });
+
+  test('refuses a reeval on another runner protocol, naming both', () async {
+    for (final (env, says) in [
+      (<String, String>{}, "This is reeval's Dart runner"),
+      ({'REEVAL_RUNNER': 'pipe'}, 'the reeval that started it is older'),
+      (
+        {'REEVAL_RUNNER': 'stdio', 'REEVAL_RUNNER_PROTOCOL': '2'},
+        'speaks runner protocol $runnerProtocol, but the reeval that started '
+            'it speaks 2: use the package:reeval version that matches reeval.',
+      ),
+    ]) {
+      final result = await Process.run(Platform.resolvedExecutable, [
+        p.join('bin', 'runner.dart'),
+      ], environment: env);
+      expect(result.exitCode, 2, reason: '$env');
+      expect(result.stderr, contains(says), reason: '$env');
+      expect(result.stdout, isEmpty, reason: '$env');
+    }
   });
 
   test("records expect, named by what the eval wrote", () async {

@@ -12,10 +12,8 @@ import 'version.dart';
 
 /// Serves reeval until it closes the runner's stdin.
 Future<void> serve() async {
-  if (Platform.environment['REEVAL_RUNNER'] != 'stdio') {
-    stderr.writeln(
-      "This is reeval's Dart runner; run evals with `dart run reeval run`.",
-    );
+  if (mismatch(Platform.environment) case final problem?) {
+    stderr.writeln(problem);
     exit(2);
   }
   final root = Directory(
@@ -32,6 +30,27 @@ Future<void> serve() async {
   final runner = _Runner(channel, root);
   await channel.input.forEach(runner.handle);
   exit(0);
+}
+
+/// Why this runner can't serve the reeval that started it, or null when it can.
+String? mismatch(Map<String, String> env) {
+  final startedBy = env['REEVAL_RUNNER'];
+  if (startedBy == null) {
+    return "This is reeval's Dart runner; run evals with `dart run reeval run`.";
+  }
+  final ours =
+      'package:reeval $packageVersion speaks runner protocol $runnerProtocol';
+  if (startedBy != 'stdio') {
+    return '$ours, but the reeval that started it is older: '
+        'use the reeval that matches it.';
+  }
+  final theirs = env['REEVAL_RUNNER_PROTOCOL'];
+  if (theirs != '$runnerProtocol') {
+    return '$ours, but the reeval that started it speaks '
+        '${theirs ?? 'an older one'}: '
+        'use the package:reeval version that matches reeval.';
+  }
+  return null;
 }
 
 final class _EvalFile {

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:reeval/src/version.dart';
 
 /// The goldens reeval keeps for SDKs in other languages.
 final conformance = p.join(_repoPackages(), 'reeval', 'test', 'conformance');
@@ -61,6 +62,7 @@ final class Runner {
       workingDirectory: _packageDir(),
       environment: {
         'REEVAL_RUNNER': 'stdio',
+        'REEVAL_RUNNER_PROTOCOL': '$runnerProtocol',
         'REEVAL_PROJECT_ROOT': root,
         ...?env,
       },

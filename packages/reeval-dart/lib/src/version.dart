@@ -3,4 +3,4 @@
 const packageVersion = '0.13.0'; // x-release-please-version
 
 /// The runner protocol this package speaks, as reeval's `RUNNER_PROTOCOL`.
-const runnerProtocol = 2;
+const runnerProtocol = 3;
