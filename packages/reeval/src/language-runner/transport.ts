@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
 import {
   type FromRunner,
+  isFromRunner,
   isSessionFrom,
   RUNNER_PROTOCOL,
   type SessionFromRunner,
@@ -30,7 +31,8 @@ const STDERR_KEPT = 4_000
 function parsed(line: string): FromRunner | undefined {
   if (!line.startsWith('{')) return undefined
   try {
-    return JSON.parse(line) as FromRunner
+    const value: unknown = JSON.parse(line)
+    return isFromRunner(value) ? value : undefined
   } catch {
     return undefined
   }

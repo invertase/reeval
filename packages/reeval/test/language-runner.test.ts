@@ -75,6 +75,27 @@ test('a runner talks over its stdin and stdout, and stray stdout is not a messag
   assert.match(await gone, /exited|closed/)
 })
 
+test('a JSON object on stdout that is no message is shown, not taken as one', async () => {
+  const runner = await startLanguageRunner(
+    fakeRunner(`
+      send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'fake', version: '1', runtime: 'node' })
+      lines.on('line', () => {
+        send({ type: 'done', attempt: 'a#1' })
+        send({ id: '1', call: 'exec', key: 'k' })
+        send({ t: 'log', text: 'no stream' })
+        send({ type: 'done', key: 'k' })
+      })
+    `),
+    tmpdir(),
+  )
+  const seen: unknown[] = []
+  runner.onMessage((message) => seen.push(message))
+  runner.send({ t: 'collect', file: 'x' })
+  await new Promise<void>((resolve) => runner.onMessage((message) => 'key' in message && resolve()))
+  runner.close()
+  assert.deepEqual(seen, [{ type: 'done', key: 'k' }])
+})
+
 test('a runner on another protocol, or one that stops before hello, says why', async () => {
   await assert.rejects(
     startLanguageRunner(

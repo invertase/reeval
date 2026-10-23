@@ -93,8 +93,13 @@ see [Prior art](#prior-art-dart-spike) below):
 
 SDK runner responsibilities:
 
-1. Keep stdout for messages only: move fd 1 aside for them and point fd 1 at stderr, so a child
-   process can't write into a message. Send `{ t: 'hello', protocol: 2, sdk, version, runtime }`.
+1. Keep stdin and stdout for messages only: move fd 0 and fd 1 aside (non-inheritable copies the
+   runner alone reads and writes), point fd 1 at stderr and fd 0 at `/dev/null`, so neither a
+   child process nor the body's own input can write into a message or read one. A forked child
+   shares those copies but not the runner's lock: send its output to stderr. reeval takes a
+   stdout line as a message only when it has a message's shape (`isFromRunner`), so print
+   nothing else there that could pass for one. Send
+   `{ t: 'hello', protocol: 2, sdk, version, runtime }`.
 2. On `{ t: 'collect', file }`, import the eval file; reply with `{ t: 'declared', file, tree }`
    (tree must match `schema/plan/declaration.schema.json`).
 3. On `start`, run the body async; each `c.*` becomes `{ id, call, key }`; read replies

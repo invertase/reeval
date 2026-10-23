@@ -73,3 +73,42 @@ export const isRunnerAttemptRequest = (message: FromRunner): message is RunnerAt
 
 export const isRunnerAttemptDone = (message: FromRunner): message is RunnerAttemptDone =>
   'type' in message && message.type === 'done' && 'key' in message
+
+type Fields = Record<string, unknown>
+
+const isObject = (value: unknown): value is Fields =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isString = (value: unknown): value is string => typeof value === 'string'
+
+const isWireError = (value: unknown) =>
+  isObject(value) && isString(value.name) && isString(value.message)
+
+const SESSION: Record<string, (m: Fields) => boolean> = {
+  hello: (m) =>
+    typeof m.protocol === 'number' && isString(m.sdk) && isString(m.version) && isString(m.runtime),
+  declared: (m) => isString(m.file) && isObject(m.tree),
+  'load-error': (m) => isWireError(m.error),
+  log: (m) =>
+    (m.stream === 'stdout' || m.stream === 'stderr') &&
+    isString(m.text) &&
+    (m.key === undefined || isString(m.key)),
+}
+
+/**
+ * Whether a runner's stdout line is a message: one of the shapes above, with its fields. Anything
+ * else (a print the SDK didn't route that happens to be a JSON object) is output, not a message.
+ */
+export function isFromRunner(value: unknown): value is FromRunner {
+  if (!isObject(value)) return false
+  if ('t' in value) return isString(value.t) && SESSION[value.t]?.(value) === true
+  if (!isString(value.key)) return false
+  if (value.type === 'done') return value.error === undefined || isWireError(value.error)
+  return (
+    isString(value.id) &&
+    isObject(value.call) &&
+    isString(value.call.op) &&
+    !('ok' in value) &&
+    !('type' in value)
+  )
+}

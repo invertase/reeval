@@ -121,9 +121,7 @@ class Host:
             except (BrokenPipeError, ValueError):
                 pass
 
-    def wait(
-        self, pred: Callable[[dict[str, Any]], bool], timeout: float = 10
-    ) -> dict[str, Any]:
+    def wait(self, pred: Callable[[dict[str, Any]], bool], timeout: float = 10) -> dict[str, Any]:
         end = time.monotonic() + timeout
         with self._cond:
             while True:

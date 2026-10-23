@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
+import contextlib
+import contextvars
 import inspect
 import io
 import json
@@ -37,12 +40,34 @@ class _Frames:
     def __init__(self, out: BinaryIO) -> None:
         self._out = out
         self._lock = threading.Lock()
+        self.pid = os.getpid()
 
     def write(self, msg: dict[str, Any]) -> None:
         data = (json.dumps(msg) + "\n").encode()
+        if os.getpid() != self.pid:
+            # A forked child (multiprocessing, os.fork) shares the frame fd but not the lock, so
+            # its writes would interleave with the runner's: what it says goes to stderr.
+            os.write(2, data)
+            return
         with self._lock:
             self._out.write(data)
             self._out.flush()
+
+
+class _RoutedBytes(io.RawIOBase):
+    """`sys.stdout.buffer`: bytes written are decoded and routed like text."""
+
+    def __init__(self, text: _Routed) -> None:
+        self._text = text
+        self._decoder = codecs.getincrementaldecoder("utf-8")(errors="backslashreplace")
+
+    def writable(self) -> bool:
+        return True
+
+    def write(self, b: Any) -> int:
+        data = bytes(b)
+        self._text.write(self._decoder.decode(data))
+        return len(data)
 
 
 class _Routed(io.TextIOBase):
@@ -54,11 +79,35 @@ class _Routed(io.TextIOBase):
         self._fallback = fallback
         self._partial: dict[str | None, str] = {}
         self._lock = threading.Lock()
+        self._buffer = _RoutedBytes(self)
+
+    @property
+    def encoding(self) -> str:  # pyright: ignore[reportIncompatibleVariableOverride]
+        return "utf-8"
+
+    @property
+    def errors(self) -> str:  # pyright: ignore[reportIncompatibleVariableOverride]
+        return "backslashreplace"
+
+    @property
+    def buffer(self) -> _RoutedBytes:  # pyright: ignore[reportIncompatibleVariableOverride]
+        return self._buffer
 
     def writable(self) -> bool:
         return True
 
+    def isatty(self) -> bool:
+        return False
+
+    def fileno(self) -> int:
+        # fd 1 and fd 2 both reach reeval's stderr: what writes to the fd (a child process, a C
+        # extension, faulthandler) is shown there, unattributed.
+        return 2
+
     def write(self, s: str) -> int:
+        if os.getpid() != self._frames.pid:
+            os.write(2, s.encode("utf-8", "backslashreplace"))
+            return len(s)
         attempt = _attempt.get()
         with self._lock:
             text = self._partial.pop(attempt, "") + s
@@ -66,8 +115,13 @@ class _Routed(io.TextIOBase):
             if rest:
                 self._partial[attempt] = rest
         for line in lines:
-            self._emit(attempt, line)
+            self._emit(attempt, line.removesuffix("\r"))
         return len(s)
+
+    def flush(self) -> None:
+        attempt = _attempt.get()
+        if attempt is not None:
+            self.flush_attempt(attempt)
 
     def flush_attempt(self, attempt: str) -> None:
         with self._lock:
@@ -80,9 +134,7 @@ class _Routed(io.TextIOBase):
             self._fallback.write(line + "\n")
             self._fallback.flush()
         else:
-            self._frames.write(
-                {"t": "log", "key": attempt, "stream": self._stream, "text": line}
-            )
+            self._frames.write({"t": "log", "key": attempt, "stream": self._stream, "text": line})
 
 
 class _Connection:
@@ -120,6 +172,39 @@ class _Connection:
         return await fut
 
 
+async def _in_thread(fn: Any, *args: Any) -> Any:
+    """Runs a sync body on a thread of its own, in the caller's context.
+
+    Not the default executor: a body that never returns would hold one of its few workers, and
+    keep the runner alive after reeval goes away (a daemon thread doesn't), and a child forked
+    from an executor's thread fails at exit joining that thread.
+    """
+    loop = asyncio.get_running_loop()
+    fut: asyncio.Future[Any] = loop.create_future()
+    ctx = contextvars.copy_context()
+
+    def settle(error: BaseException | None, result: Any) -> None:
+        if fut.done():
+            return
+        if error is None:
+            fut.set_result(result)
+        else:
+            fut.set_exception(error)
+
+    def run() -> None:
+        try:
+            result = ctx.run(fn, *args)
+        except BaseException as exc:  # noqa: BLE001
+            outcome: tuple[BaseException | None, Any] = (exc, None)
+        else:
+            outcome = (None, result)
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(settle, *outcome)
+
+    threading.Thread(target=run, name="reeval-body", daemon=True).start()
+    return await fut
+
+
 async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
     _attempt.set(attempt_id)
     fn = get_body(body_id)
@@ -141,7 +226,12 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         else:
             sync_ctx = SyncAttemptContext(async_ctx, loop)
             sync_ctx.bind_expect()
-            await asyncio.to_thread(fn, sync_ctx)
+            await _in_thread(fn, sync_ctx)
+    except asyncio.CancelledError:
+        _flush(attempt_id)
+        raise
+    except AttemptAborted as exc:
+        error = {"name": exc.name, "message": str(exc)}
     except ReevalAssertionError as exc:
         error = {"name": "AssertionError", "message": str(exc), "stack": traceback.format_exc()}
     except AssertionError as exc:
@@ -151,12 +241,17 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
             await async_ctx.record_plain_assert(exc)
         except AssertionError as recorded:
             error["message"] = str(recorded)
-    except Exception as exc:  # noqa: BLE001
+    except BaseException as exc:  # noqa: BLE001
+        # SystemExit and the like end this body only: the runner serves other attempts too.
         error = {"name": type(exc).__name__, "message": str(exc), "stack": traceback.format_exc()}
+    _flush(attempt_id)
+    conn.write({"type": "done", "key": attempt_id, **({"error": error} if error else {})})
+
+
+def _flush(key: str) -> None:
     for stream in (sys.stdout, sys.stderr):
         if isinstance(stream, _Routed):
-            stream.flush_attempt(attempt_id)
-    conn.write({"type": "done", "key": attempt_id, **({"error": error} if error else {})})
+            stream.flush_attempt(key)
 
 
 def _cancelled_done(conn: _Connection, key: str) -> None:
@@ -212,10 +307,21 @@ def _handle(
 def _read_lines(
     stdin: BinaryIO, loop: asyncio.AbstractEventLoop, inbox: asyncio.Queue[Any]
 ) -> None:
-    for line in stdin:
-        if line.strip():
-            loop.call_soon_threadsafe(inbox.put_nowait, json.loads(line))
-    loop.call_soon_threadsafe(inbox.put_nowait, None)
+    try:
+        for line in stdin:
+            if not line.strip():
+                continue
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                print(f"reeval sent a line that isn't JSON: {line[:200]!r}", file=sys.stderr)
+                continue
+            loop.call_soon_threadsafe(inbox.put_nowait, msg)
+    except BaseException:  # noqa: BLE001
+        traceback.print_exc()
+    finally:
+        with contextlib.suppress(RuntimeError):
+            loop.call_soon_threadsafe(inbox.put_nowait, None)
 
 
 async def serve(frames: _Frames, stdin: BinaryIO, root: Path) -> None:
@@ -242,15 +348,21 @@ def main() -> None:
         print("This is reeval's Python runner; run evals with reeval run.", file=sys.stderr)
         sys.exit(2)
     root = Path(os.environ.get("REEVAL_PROJECT_ROOT", os.getcwd()))
-    # Frames own a copy of fd 1; fd 1 itself goes to stderr, so a child process's or C
-    # extension's output can't land in the middle of a frame.
+    # The runner keeps private copies of fd 0 and fd 1 for messages (os.dup's are
+    # non-inheritable). fd 1 itself goes to stderr and fd 0 reads /dev/null, so a child process,
+    # a C extension or the body's own input() can neither write into a message nor read one.
     sys.stdout.flush()
     frames = _Frames(os.fdopen(os.dup(1), "wb"))
+    messages = os.fdopen(os.dup(0), "rb")
     os.dup2(2, 1)
+    devnull = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(devnull, 0)
+    os.close(devnull)
+    sys.stdin = open(os.devnull, encoding="utf-8")  # noqa: SIM115
     real_stderr = sys.__stderr__ or sys.stderr
     sys.stdout = cast(TextIO, _Routed(frames, "stdout", real_stderr))
     sys.stderr = cast(TextIO, _Routed(frames, "stderr", real_stderr))
-    asyncio.run(serve(frames, sys.stdin.buffer, root))
+    asyncio.run(serve(frames, messages, root))
 
 
 if __name__ == "__main__":
