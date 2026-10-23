@@ -3,7 +3,7 @@ title: Egress
 description: Egress policies, the hosts reeval allows automatically, DEFAULT_EGRESS_ALLOW, the plan line and the egress field of the record.
 ---
 
-`egress` says where the sandbox may connect. The Docker sandbox enforces it and records every connection.
+`egress` says where the sandbox may connect. The Docker sandbox enforces it and records every connection through its egress gateway.
 
 ```ts title="evals/offline.eval.ts"
 import { DEFAULT_EGRESS_ALLOW, evaluate } from '{{ pkg }}'
@@ -19,8 +19,12 @@ evaluate(
 
 ## Policies
 
+<Property name="'proxy'" type="EgressPolicy">
+  Any host over HTTP(S), through the egress gateway only. The default. The container has no network of its own, so every connection is brokered, checked against the [refused addresses](#addresses-that-are-always-refused) and recorded. Raw TCP and UDP (SSH, database drivers, a client that ignores `HTTPS_PROXY`) get no connection.
+</Property>
+
 <Property name="'allow-all'" type="EgressPolicy">
-  Anywhere. The default. Connections are still recorded.
+  Anywhere, by any protocol. The container keeps its Docker network: proxy-aware HTTP(S) still goes through the gateway, brokered and recorded, but anything else goes out directly, unfiltered and unrecorded, and reaches cloud metadata and the host's network. The record marks the attempt's egress `partial`.
 </Property>
 
 <Property name="'deny-all'" type="EgressPolicy">
@@ -41,7 +45,7 @@ A refused request doesn't fail the attempt: the client gets an error and the age
 |---|---|
 | The eval, then its groups | Everything below |
 | The environment (its last layer that sets `egress`) | Config and profile `defaults` |
-| Profile `defaults`, then the config | The default, `'allow-all'` |
+| Profile `defaults`, then the config | The default, `'proxy'` |
 
 ## Automatic hosts
 
@@ -88,13 +92,31 @@ To reach a private host by name, list both its name and its address. A `*.` patt
 | `<host> isn't in the allowlist` | An allowlist that doesn't match |
 | `can't resolve …` | DNS failed (a 502) |
 | `… is a loopback or link-local address` | Always refused |
-| `… is a private or reserved address, which allow-all doesn't reach; list the address in an allowlist to reach it` | `'allow-all'` reaching a private or reserved address |
+| `… is a private or reserved address, which allow-all doesn't reach; list the address in an allowlist to reach it` | `'proxy'` or `'allow-all'` reaching a private or reserved address through the gateway |
 | `… is a private or reserved address; list the address itself in the allowlist to reach it` | An allowlist that doesn't name the private or reserved address |
 | `… resolves to a private address, which a *. pattern doesn't allow; list the host itself` | A wildcard reaching a private address |
 
 <Warning>
-  An allowlist with `DEFAULT_EGRESS_ALLOW` still reaches GitHub, npm and PyPI, where the agent could push or publish data. Under `'allow-all'` the container keeps its own network for now, so a client that ignores the proxy bypasses the gateway and these refusals.
+  An allowlist with `DEFAULT_EGRESS_ALLOW` still reaches GitHub, npm and PyPI, where the agent could push or publish data. Under `'allow-all'` the container keeps its own network, so a client that ignores the proxy bypasses the gateway and these refusals.
 </Warning>
+
+## allow-all on a cloud VM or CI runner
+
+```text
+warning: egress 'allow-all' on a GitHub Actions runner (GITHUB_ACTIONS): anything in the sandbox can reach the cloud metadata service (169.254.169.254, which hands out the machine's credentials), the host's network and its services around the egress gateway, unfiltered and unrecorded. Under it: evals/db.eval.ts › reaches the database (allow-all). Keep 'allow-all' to the evals that need raw TCP or UDP; the default, 'proxy', sends everything through the gateway
+```
+
+`reeval run` prints this warning under the plan when a Docker attempt runs under `'allow-all'` on a CI runner (`GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI` or `CI`). [`reeval doctor`](/reference/cli/doctor) warns too when the config or a profile sets `'allow-all'` there, on a cloud VM (its firmware's vendor) or where the metadata service answers.
+
+## Connections that never reach the gateway
+
+```text
+Remarks:
+  reaches the database: It failed with "Network is unreachable" and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.
+    fix  evals/db.eval.ts:5  set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY
+```
+
+Under `'proxy'`, a raw TCP connection fails with `Network is unreachable`, `connection refused` or a name that doesn't resolve, and the gateway records nothing. When a failed attempt's error, failed checks or turns show one of those and the gateway refused nothing, the run ends with the `proxy-only-egress` remark. Set `egress: 'allow-all'` on that eval, or point the client at `HTTPS_PROXY`.
 
 ## The plan line
 
@@ -112,10 +134,11 @@ With `-v`, each attempt logs a `gateway` line per request, allowed or refused. S
 
 ## In the record
 
-Each attempt's record has an `egress` field. From a real Antigravity attempt under `'allow-all'`:
+Each attempt's record has an `egress` field. From a fake agent in Docker that ran `curl https://registry.npmjs.org/left-pad`, under the default and under `'allow-all'`:
 
 ```text
-"egress": {"policy": "allow-all", "allowed": null, "recorded": true, "contacted": [{"host": "antigravity-unleash.goog", "port": 443, "connections": 2, "sent": 5440, "received": 84121}, {"host": "generativelanguage.googleapis.com", "port": 443, "connections": 1, "sent": 1394332, "received": 65707}, {"host": "play.googleapis.com", "port": 443, "connections": 2, "sent": 1630357, "received": 15318}], "blocked": [], "expectedBlocked": []}
+"egress": {"policy": "proxy", "allowed": null, "recorded": true, "contacted": [{"host": "registry.npmjs.org", "port": 443, "connections": 1, "sent": 916, "received": 26363}], "blocked": [], "expectedBlocked": []}
+"egress": {"policy": "allow-all", "allowed": null, "recorded": true, "partial": true, "contacted": [{"host": "registry.npmjs.org", "port": 443, "connections": 1, "sent": 916, "received": 26343}], "blocked": [], "expectedBlocked": []}
 ```
 
 <Property name="policy" type="EgressPolicy">
@@ -123,11 +146,15 @@ Each attempt's record has an `egress` field. From a real Antigravity attempt und
 </Property>
 
 <Property name="allowed" type="string[] | null">
-  Every allowed host, automatic ones included. `null` under `'allow-all'`.
+  Every allowed host, automatic ones included. `null` under `'proxy'` and `'allow-all'`.
 </Property>
 
 <Property name="recorded" type="boolean">
   Whether traffic was recorded: `true` in Docker, `false` in the fake sandbox.
+</Property>
+
+<Property name="partial" type="true" optional>
+  Set when the record can't be complete: under `'allow-all'` in Docker, traffic that ignored the proxy went out directly and isn't in `contacted`.
 </Property>
 
 <Property name="contacted" type="{ host, port, connections, sent, received }[]">
@@ -142,13 +169,13 @@ Each attempt's record has an `egress` field. From a real Antigravity attempt und
   Refused hosts the harness is known to try and doesn't need, such as Antigravity's telemetry. Kept apart from `blocked` so they don't look like a problem.
 </Property>
 
-A restricted policy is part of the environment's fingerprint, so runs under different policies don't compare as equal.
+Any policy but the default is part of the environment's fingerprint, so runs under different policies don't compare as equal.
 
 ## Errors
 
 | Mistake | Message |
 |---|---|
-| A bare list | `egress in reeval.config.ts is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got ["api.example.com"]). For a list of hosts, use { allow: ["api.example.com"] }.` |
+| A bare list | `egress in reeval.config.ts is 'proxy' (the default), 'allow-all', 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got ["api.example.com"]). For a list of hosts, use { allow: ["api.example.com"] }.` |
 | A deny list | `Unknown egress key "deny" in reeval.config.ts. A policy lists what's allowed; everything else is refused.` |
 | A URL | `egress.allow in reeval.config.ts: hosts are host names, not URLs: use 'api.example.com' (got 'https://api.example.com/v1')` |
 | A port | `egress.allow in reeval.config.ts: hosts are host names without a port: use 'api.example.com' (got 'api.example.com:443')` |

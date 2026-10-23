@@ -81,6 +81,7 @@ A remark is something reeval noticed about an eval itself, with the source line 
 |---|---|---|
 | `flaky-check` | concern | A check both passed and failed across recent comparable runs with nothing changed |
 | `slow-mcp-start` | concern | A stdio MCP server took 2s or more to answer `initialize` |
+| `proxy-only-egress` | concern | An attempt under egress `'proxy'` failed with a connection error, and nothing reached the egress gateway |
 | `no-baseline` | concern | With a model: the eval is about a change, such as a skill, and has no `compare` |
 | `name-contradicts` | concern | Model: the name asks one thing and the checks look at another |
 | `judge-too-loose` | concern | Model: a judge question passed a reply that doesn't do what the eval asks |
@@ -93,7 +94,7 @@ A remark is something reeval noticed about an eval itself, with the source line 
 
 Only concerns print, at most three, with `+N more (-v)` for the rest; `-v` adds the suggestions, as in this capture. Remarks never change the exit code.
 
-A remark prints until a run shows it for that version of the eval, and again after you edit the eval (`slow-mcp-start` prints in every run that has it); one the cap or a run without `-v` left out still counts as unseen. [Remarks](/reference/cli/run#remarks) has each threshold.
+A remark prints until a run shows it for that version of the eval, and again after you edit the eval (`slow-mcp-start` and `proxy-only-egress` print in every run that has them); one the cap or a run without `-v` left out still counts as unseen. [Remarks](/reference/cli/run#remarks) has each threshold.
 
 ## What insights cost
 

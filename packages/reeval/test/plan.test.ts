@@ -110,11 +110,22 @@ export const cases: PlanCase[] = [
   { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'effort', name: 'effort', args: [] },
   { dir: 'secrets', name: 'brokered', args: [] },
-  { dir: 'egress', name: 'cascade', args: [] },
+  { dir: 'egress', name: 'cascade', args: ['evals/auto.eval.ts', 'evals/cascade.eval.ts'] },
   {
     dir: 'egress',
     name: 'profile-defaults',
     args: ['--profile', 'locked', 'evals/cascade.eval.ts'],
+  },
+  {
+    dir: 'egress',
+    name: 'default-proxy',
+    args: ['--config', 'reeval.default.config.ts', 'evals/direct.eval.ts'],
+  },
+  {
+    dir: 'egress',
+    name: 'allow-all-on-ci',
+    args: ['--config', 'reeval.default.config.ts', 'evals/direct.eval.ts'],
+    env: { GITHUB_ACTIONS: 'true' },
   },
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },

@@ -21,6 +21,7 @@ import {
   selectProfile,
   UsageError,
 } from './config.ts'
+import { ciRunner, directOnCloud, isDirect } from './egress.ts'
 import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
@@ -727,6 +728,22 @@ async function executeRun(
       const { analysisKeyProblem } = await import('./analysis/model.ts')
       const problem = analysisKeyProblem(config)
       if (problem) plan.warnings.push(`insights will be skipped: ${problem}`)
+    }
+    const cloud = ciRunner(process.env)
+    const direct = cloud
+      ? [
+          ...new Set(
+            skipped
+              .filter((p) => !p.attempt.plan.skip && p.attempt.sandbox.kind === 'docker')
+              .filter((p) => isDirect(p.attempt.egress.policy))
+              .map((p) => p.id),
+          ),
+        ]
+      : []
+    if (cloud && direct.length) {
+      plan.warnings.push(
+        `${directOnCloud(cloud)}. Under it: ${direct.join(', ')}. Keep 'allow-all' to the evals that need raw TCP or UDP; the default, 'proxy', sends everything through the gateway`,
+      )
     }
     if (completed.size) plan.resume = { runId, completed: completed.size }
     run.completed = [...completed]

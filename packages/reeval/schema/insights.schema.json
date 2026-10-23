@@ -177,6 +177,7 @@
             "name-no-intent",
             "no-baseline",
             "prompt-names-tool",
+            "proxy-only-egress",
             "slow-mcp-start",
             "too-few-tries"
           ]

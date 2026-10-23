@@ -29,11 +29,12 @@ evals/offline.eval.ts › installs from npm only  1          —         1     1
 evals/offline.eval.ts › works offline           2          —         1     2         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh; deny-all + auto: api.anthropic.com, *.anthropic.com
 ```
 
-## Three policies
+## Four policies
 
 | Policy | The sandbox may reach |
 |---|---|
-| `'allow-all'` (default) | Anywhere |
+| `'proxy'` (default) | Any host over HTTP(S), through the gateway only |
+| `'allow-all'` | Anywhere, by any protocol; only proxy-aware HTTP(S) goes through the gateway |
 | `'deny-all'` | Only the automatic hosts below |
 | `{ allow: [hosts] }` | The listed hosts and the automatic hosts |
 
@@ -96,13 +97,13 @@ flowchart LR
   P --> G{gateway: host allowed?}
   G -- yes --> N[internet]
   G -- no --> R[403, recorded]
-  S -. restricted: no network .-> X[no route]
+  S -. all but allow-all: no network .-> X[no route]
 ```
 
 | Under | The container |
 |---|---|
-| A restricted policy | Is detached from every Docker network before anything but `sleep` runs, so the gateway is its only way out; a client that ignores the proxy gets no connection |
-| `'allow-all'` | Keeps its network; only proxy-aware clients (curl, npm, pip, git, Node, the agents) show up in the record |
+| `'proxy'`, `'deny-all'` or an allowlist | Is detached from every Docker network before anything but `sleep` runs, so the gateway is its only way out; a client that ignores the proxy gets no connection, and a gateway that won't start fails the attempt |
+| `'allow-all'` | Keeps its network; only proxy-aware clients (curl, npm, pip, git, Node, the agents) show up in the record, which is marked `partial`. Anything else reaches the internet, cloud metadata and the host's network directly |
 | Any policy | Can't reach loopback, link-local (cloud metadata), private or reserved addresses through the gateway; an allowlist reaches a private one by naming the address |
 
 The allowlist is checked by name at `CONNECT`, before any DNS lookup. A client that sends `GET https://host/…` to the proxy instead (Puppeteer's browser download does) gets the same check, and the gateway opens the TLS connection to the host for it.
@@ -111,20 +112,20 @@ A name a `*.` pattern matches that resolves to a private address is refused. An 
 
 ## What's recorded
 
-Each attempt's record has an `egress` block. From a real Cursor attempt under `'allow-all'`:
+Each attempt's record has an `egress` block. From a fake agent in Docker that ran `curl https://registry.npmjs.org/left-pad` under the default:
 
 ```text
           "egress": {
-            "policy": "allow-all",
+            "policy": "proxy",
             "allowed": null,
             "recorded": true,
             "contacted": [
               {
-                "host": "api2.cursor.sh",
+                "host": "registry.npmjs.org",
                 "port": 443,
-                "connections": 12,
-                "sent": 99152,
-                "received": 213426
+                "connections": 1,
+                "sent": 916,
+                "received": 26363
               }
             ],
             "blocked": [],
@@ -132,13 +133,13 @@ Each attempt's record has an `egress` block. From a real Cursor attempt under `'
           },
 ```
 
-`allowed` is every host a restricted policy let through (null under `'allow-all'`), and `blocked` each refused `host:port` with its connections and reason. A restricted policy is also part of the environment's [fingerprint](/concepts/fingerprints). The studio shows it on the attempt's State tab.
+`allowed` is every host a restricted policy let through (null under `'proxy'` and `'allow-all'`), and `blocked` each refused `host:port` with its connections and reason. Under `'allow-all'` it also has `"partial": true`. Any policy but the default is also part of the environment's [fingerprint](/concepts/fingerprints). The studio shows it on the attempt's State tab.
 
 <Image src="/assets/studio/attempt-state-egress.png" alt="reeval studio attempt State tab with the egress panel: the policy, hosts contacted with bytes, and hosts refused" width={800} />
 
 ## The fake sandbox can't enforce
 
-The fake sandbox runs commands on the host, so it enforces nothing and records nothing. A restricted policy on it stops the run before anything starts:
+The fake sandbox runs commands on the host, so it enforces nothing and records nothing, under `'proxy'` too. A restricted policy on it stops the run before anything starts:
 
 ```text
 reeval: evals/offline.eval.ts: evaluate("works offline") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.

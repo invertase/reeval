@@ -1,5 +1,5 @@
 no profile · 2 evals · 2 cells · 2 attempts
-evals/fetches.eval.ts › npx under allow-all            fake/fetcher/docker:node:22-bookworm  control  gated  ×1  the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start; add a build that installs it to keep it off the network · plugins fetcher (mcp)
+evals/fetches.eval.ts › npx under the default policy   fake/fetcher/docker:node:22-bookworm  control  gated  ×1  the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start; add a build that installs it to keep it off the network · plugins fetcher (mcp)
 evals/fetches.eval.ts › npx with the registry allowed  fake/fetcher/docker:node:22-bookworm  control  gated  ×1  plugins fetcher (mcp) · egress {"allow":["registry.npmjs.org"]}
 excluded: —
 image docker:node:22-bookworm · cursor · 2 evals

@@ -1213,7 +1213,7 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
     [
       'egress as a list of hosts',
       `evaluate('e', { egress: ['api.example.com'] as never }, async () => {})`,
-      /egress in evaluate\("e"\) is 'allow-all' \(the default\), 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
+      /egress in evaluate\("e"\) is 'proxy' \(the default\), 'allow-all', 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
     ],
     [
       'an egress deny list',

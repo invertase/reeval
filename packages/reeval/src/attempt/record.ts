@@ -1,7 +1,7 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { debugLog } from '../debug/attempt.ts'
-import { allowedHosts } from '../egress.ts'
+import { allowedHosts, isDirect } from '../egress.ts'
 import { isTimeout } from '../errors.ts'
 import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
@@ -78,6 +78,7 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
     policy: a.spec.egress.policy,
     allowed: allowedHosts(a.spec.egress),
     recorded: !!traffic,
+    ...(traffic && isDirect(a.spec.egress.policy) ? { partial: true as const } : {}),
     contacted: traffic?.contacted ?? [],
     blocked: refused.filter((h) => !isExpected(h)),
     expectedBlocked,

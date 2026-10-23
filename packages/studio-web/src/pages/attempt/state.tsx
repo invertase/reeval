@@ -71,6 +71,12 @@ function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
       {!egress.recorded ? (
         <div className="font-sans text-muted-foreground">not recorded by this sandbox</div>
       ) : null}
+      {egress.partial ? (
+        <div className="font-sans text-muted-foreground">
+          partial: only what went through the egress gateway; traffic that ignored the proxy went
+          out directly, unrecorded
+        </div>
+      ) : null}
       {egress.contacted.map((h) => (
         <div key={`${h.host}:${h.port}`}>
           {h.host}:{h.port}{' '}

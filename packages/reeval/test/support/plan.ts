@@ -99,7 +99,7 @@ export function renderPlan(plan: PlanDocument): string {
             : '',
           c.files ? `files ${c.files.join(', ')}` : '',
           c.plugins ? `plugins ${c.plugins.join('; ')}` : '',
-          c.egress.policy === 'allow-all'
+          c.egress.policy === 'proxy'
             ? ''
             : `egress ${JSON.stringify(c.egress.policy)}${c.egress.auto.length ? ` + ${c.egress.auto.join(', ')}` : ''}`,
         ]

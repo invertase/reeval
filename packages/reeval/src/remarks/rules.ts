@@ -55,6 +55,7 @@ const KIND_ORDER: Remark['kind'][] = [
   'prompt-names-tool',
   'no-baseline',
   'slow-mcp-start',
+  'proxy-only-egress',
   'too-few-tries',
   'compound-judge',
   'check-never-fails',
@@ -356,6 +357,61 @@ function slowMcpStart(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): 
 }
 
 /**
+ * What a client prints when it can't connect, resolve a name or find a route: under `proxy` the
+ * sandbox has no network of its own, so a client that ignores the proxy fails with one of these.
+ */
+const CONNECTION_ERROR =
+  /\b(?:ENETUNREACH|EHOSTUNREACH|ECONNREFUSED|EAI_AGAIN|ENOTFOUND)\b|network is unreachable|no route to host|connection refused|could not resolve host|temporary failure in name resolution|name or service not known|could not translate host name|getaddrinfo/i
+
+/** The record's text an attempt failed with: its error, failed assertions and turns. */
+const failureText = (a: AttemptRecord) => [
+  a.error?.message ?? '',
+  ...(a.assertions ?? []).filter((x) => x.status !== 'pass').map((x) => x.message ?? ''),
+  ...a.turns.flatMap((t) => [t.text, t.error ?? '']),
+]
+
+/**
+ * proxy-only-egress (concern): an attempt under `proxy` failed with a connection error, and the
+ * gateway refused nothing, so the connection never reached it: a raw TCP or UDP client (SSH, a
+ * database driver), or one that ignores `HTTPS_PROXY`. One per eval.
+ */
+function proxyOnlyEgress(e: EvalResult, entries: EvalEntry[], ctx: RemarkContext): Candidate[] {
+  const cellPaths = new Map<string, string>()
+  for (const u of units(e)) for (const c of u.cells) cellPaths.set(`${u.id}\0${c.key}`, c.path)
+  const hits = entries.flatMap((entry) =>
+    entry.attempts.flatMap((attempt) => {
+      if (attempt.outcome !== 'fail' && attempt.outcome !== 'infra_error') return []
+      const egress = attempt.egress
+      if (egress?.policy !== 'proxy' || !egress.recorded || egress.blocked.length) return []
+      const error = failureText(attempt)
+        .map((t) => CONNECTION_ERROR.exec(t)?.[0])
+        .find(Boolean)
+      return error ? [{ entry, attempt, error }] : []
+    }),
+  )
+  const [first] = hits
+  if (!first) return []
+  const ofTries = hits.length > 1 ? ` (${hits.length} tries)` : ''
+  return [
+    {
+      id: remarkId('proxy-only-egress', e.path, first.entry),
+      evalId: e.path,
+      kind: 'proxy-only-egress',
+      severity: 'concern',
+      text: `It failed with "${first.error}"${ofTries} and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.`,
+      evidence: hits.map(
+        (h) => `${cellPaths.get(`${h.entry.id}\0${h.attempt.cell}`) ?? h.entry.id}#${h.attempt.n}`,
+      ),
+      fix: {
+        at: ctx.locate(first.entry, null),
+        edit: "set egress: 'allow-all' on the eval if it needs raw TCP or UDP, or point the client at HTTPS_PROXY",
+      },
+      origin: 'deterministic',
+    },
+  ]
+}
+
+/**
  * no-baseline (concern): the classification says the eval is about a change (`subject.change`),
  * but it declares no compare, so nothing shows what the change does. A profile's
  * `limit.compare: false` stripped the compare on purpose, so it never raises it.
@@ -414,6 +470,7 @@ export function deterministicRemarks(
       out.push(
         ...flakyCheck(e, entries, ctx),
         ...slowMcpStart(e, own, ctx),
+        ...proxyOnlyEgress(e, own, ctx),
         ...tooFewTries(e, first, ctx),
         ...checkNeverFails(e, entries, ctx),
       )

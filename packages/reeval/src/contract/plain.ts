@@ -75,12 +75,13 @@ export const gatePolicySchema = z
 
 export const egressPolicySchema = z
   .union([
+    z.literal('proxy'),
     z.literal('allow-all'),
     z.literal('deny-all'),
     z.strictObject({ allow: z.array(host).readonly() }),
   ])
   .describe(
-    "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
+    "Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
   )
 
 export const substituteInSchema = z
@@ -451,7 +452,7 @@ const GATE_SHAPE =
 export const gateProblem = (value: unknown, where: string) =>
   refusal(gatePolicySchema, value, () => `gate in ${where} ${GATE_SHAPE} (got ${got(value)})`)
 
-const EGRESS_SHAPE = `is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
+const EGRESS_SHAPE = `is 'proxy' (the default), 'allow-all', 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
 
 /** reeval's sentence for an egress policy that isn't one, or undefined. */
 export function egressProblem(value: unknown, where: string): string | undefined {

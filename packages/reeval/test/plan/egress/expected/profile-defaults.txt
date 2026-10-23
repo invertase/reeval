@@ -1,7 +1,7 @@
 profile locked (--profile) · 8 evals · 9 cells · 9 attempts
 evals/cascade.eval.ts › the config policy                                   fake/-/docker         control         gated    ×1  egress "deny-all"
 evals/cascade.eval.ts › an environment replaces it                          fake/closed/docker    control         gated    ×1  egress "deny-all"
-evals/cascade.eval.ts › an extend child replaces its parent                 fake/reopened/docker  control         gated    ×1
+evals/cascade.eval.ts › an extend child replaces its parent                 fake/reopened/docker  control         gated    ×1  egress "allow-all"
 evals/cascade.eval.ts › the default list spreads                            fake/installs/docker  control         gated    ×1  egress {"allow":["registry.npmjs.org","registry.yarnpkg.com","github.com","*.github.com","*.githubusercontent.com","pypi.org","files.pythonhosted.org","api.example.com"]}
 evals/cascade.eval.ts › the eval replaces the environment                   fake/closed/docker    control         gated    ×1  egress {"allow":["eval.example.com"]}
 evals/cascade.eval.ts › a group › replaces the environment too              fake/closed/docker    control         gated    ×1  egress {"allow":["group.example.com"]}

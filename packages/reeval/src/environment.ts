@@ -141,7 +141,7 @@ export const localNpmSpec = (spec: string, base: string) => {
 
 const SUBSTITUTE_IN: readonly SubstituteIn[] = ['header', 'query', 'body']
 
-/** Throws unless `value` is `'allow-all'`, `'deny-all'` or `{ allow: [hosts] }`. */
+/** Throws unless `value` is `'proxy'`, `'allow-all'`, `'deny-all'` or `{ allow: [hosts] }`. */
 export function checkEgress(
   value: unknown,
   where: string,

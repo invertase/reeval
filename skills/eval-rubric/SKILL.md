@@ -128,3 +128,12 @@ change does. A profile's `limit.compare: false` is deliberate and never raises i
 reeval's rule, concern. A stdio MCP server took 2 seconds or more to answer `initialize`, or never
 answered. It's about the environment, not the eval's source, so it prints in every run it happens.
 **Fix:** install what the server needs in the image, so it doesn't fetch or build it at start-up.
+
+## `proxy-only-egress`
+
+reeval's rule, concern. An attempt under egress `'proxy'` (the default) failed with a connection
+error (`Network is unreachable`, `ECONNREFUSED`, `Could not resolve host`, …) and the egress gateway
+refused nothing, so the connection never reached it: a raw TCP or UDP client, SSH, a database
+driver, or a client that ignores `HTTPS_PROXY`. It's about what happened in the run, so it prints in
+every run it happens. **Fix:** set `egress: 'allow-all'` on the eval if it needs raw TCP or UDP, or
+point the client at `HTTPS_PROXY`.

@@ -90,7 +90,7 @@ describe('recording runs into evals/.history', () => {
     assert.deepEqual(
       evals[0]?.trial.egress,
       {
-        policy: 'allow-all',
+        policy: 'proxy',
         allowed: null,
         recorded: false,
         contacted: [],

@@ -45,7 +45,8 @@ evaluate(
 
 | Policy | The sandbox can reach |
 |---|---|
-| `'allow-all'` (default) | Anything |
+| `'proxy'` (default) | Any host over HTTP(S), through the gateway |
+| `'allow-all'` | Anything, by any protocol, mostly unrecorded |
 | `'deny-all'` | Only the automatic hosts below |
 | `{ allow: [...] }` | The listed hosts, plus the automatic hosts |
 

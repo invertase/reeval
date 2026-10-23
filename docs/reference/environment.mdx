@@ -101,7 +101,7 @@ It returns a frozen `Environment` with `name`, `layers` and `extend` / `extendEn
   MCP servers, keyed by name, from `mcp.stdio`, `mcp.http` or `mcp.sse`. The agent gets them when its session starts.
 </Property>
 
-<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }" optional>
+<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }" optional>
   Where the sandbox may connect. It replaces the policy from the config and profile `defaults`; a group's or eval's own `egress` replaces it in turn. See [Egress](/reference/egress).
 </Property>
 

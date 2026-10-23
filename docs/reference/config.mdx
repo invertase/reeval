@@ -195,8 +195,8 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
   Variables for the sandbox. A literal string under a secret-looking name (containing `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`) is refused. A required secret that isn't set stops the run before it starts. Default `{}`.
 </Property>
 
-<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }">
-  Which hosts the sandbox can reach. Default `'allow-all'`. See [Egress](/reference/egress).
+<Property name="egress" type="'proxy' | 'allow-all' | 'deny-all' | { allow: string[] }">
+  Which hosts the sandbox can reach. Default `'proxy'`. See [Egress](/reference/egress).
 </Property>
 
 <Property name="judge" type="{ model?, threshold?, providerOptions?, maxConcurrent? }">

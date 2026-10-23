@@ -190,6 +190,46 @@ evaluate('coin', { runs: 2 }, async (c) => {
     assert.deepEqual(kinds(record, withHistory({ flaky: null, window })), [])
   })
 
+  test('proxy-only-egress: a connection error under proxy that reached no gateway, not under allow-all or a refusal', async () => {
+    const record = await recordOf('remarks-proxy', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/db.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('migrates', async (c) => {
+  await c.send('go')
+  expect('psql: Network is unreachable', 'migrated').toBe('ok')
+})
+`,
+    })
+    const egressed = (egress: Partial<NonNullable<EvalEntry['attempts'][number]['egress']>>) => {
+      const copy = structuredClone(record)
+      for (const a of copy.evals[0]?.attempts ?? []) {
+        a.egress = {
+          policy: 'proxy',
+          allowed: null,
+          recorded: true,
+          contacted: [],
+          blocked: [],
+          expectedBlocked: [],
+          ...egress,
+        }
+      }
+      return copy
+    }
+    const [remark] = raise(egressed({}), NO_HISTORY)
+    assert.equal(remark?.kind, 'proxy-only-egress')
+    assert.equal(remark?.severity, 'concern')
+    assert.equal(
+      remark?.text,
+      `It failed with "Network is unreachable" and nothing reached the egress gateway: under egress 'proxy' only HTTP(S) through the gateway leaves the sandbox, so raw TCP, UDP, SSH and database connections fail.`,
+    )
+    assert.match(remark?.fix.edit ?? '', /^set egress: 'allow-all' on the eval/)
+    // Twins: under allow-all the connection went direct, and a refusal means it reached the gateway.
+    assert.deepEqual(kinds(egressed({ policy: 'allow-all', partial: true }), NO_HISTORY), [])
+    const refused = { host: 'db.example.com', port: 443, connections: 1, reason: 'denied' }
+    assert.deepEqual(kinds(egressed({ blocked: [refused] }), NO_HISTORY), [])
+    assert.deepEqual(kinds(egressed({ recorded: false }), NO_HISTORY), [])
+  })
+
   test('slow-mcp-start: 2000 ms or no answer on a recorded turn, not 1999 ms', async () => {
     const record = await recordOf('remarks-mcp', {
       'reeval.config.ts': mcpConfig,

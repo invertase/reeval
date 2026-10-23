@@ -251,7 +251,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
 /**
  * What the plan can tell of an attempt's plugins before any is fetched: a build outside Docker, a
  * local plugin's content, and the harness's refusal, as a refusal; the commands that fetch a
- * package at start, as notes under `allow-all`; and a label for each plugin. Git and npm plugins
+ * package at start, as notes under `proxy` and `allow-all`; and a label for each plugin. Git and npm plugins
  * are read when the attempt resolves its environment, which refuses them the same way.
  */
 function planPlugins(

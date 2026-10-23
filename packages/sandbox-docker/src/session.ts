@@ -28,8 +28,14 @@ import { traceDocker } from './trace.ts'
 
 /** Starts the egress gateway: credential brokering, and an enforceable network policy. */
 export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
-  /** Defaults to `allow-all`. Anything else detaches the container from every Docker network. */
+  /** Defaults to `allow-all`. */
   policy?: NetworkPolicy
+  /**
+   * Under `allow-all`, keep the container on its Docker networks, so traffic that ignores the
+   * proxy (raw TCP and UDP, SSH, database drivers) goes out directly: unfiltered and unrecorded.
+   * Otherwise the container is detached from every network and the gateway is its only way out.
+   */
+  direct?: boolean
 }
 
 /** A container's resource limits. */
@@ -173,6 +179,16 @@ const userEnv = (options: SessionOptions): Record<string, string> =>
 
 /** Whether the gateway runs. When it doesn't, the session has no request-transformation methods. */
 export type EgressStatus = { active: true } | { active: false; reason: string }
+
+/** The gateway didn't start for a detached container, which then has no way out: `reason` says why. */
+export class EgressUnavailableError extends Error {
+  readonly reason: string
+  constructor(reason: string) {
+    super(`Can't enforce the egress policy: ${reason}`)
+    this.name = 'EgressUnavailableError'
+    this.reason = reason
+  }
+}
 
 export type DockerSession = HarnessV1NetworkSandboxSession & {
   /** Unset when the session wasn't asked to start the gateway. */
@@ -332,39 +348,41 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
 
   const egressOptions = options.egress === true ? {} : options.egress || undefined
   let egress: EgressStatus | undefined
+  const direct = (policy: NetworkPolicy) => !!egressOptions?.direct && !isRestricted(policy)
   // Networks the container was detached from, to reattach if the policy opens up again.
   let detached: string[] = []
   const attach = async (policy: NetworkPolicy) => {
-    if (isRestricted(policy) && detached.length === 0) {
+    if (!direct(policy) && detached.length === 0) {
       detached = await networksOf(id, engine)
       // A container on no network has a route out only in a network mode (`host`, rootless
       // Podman's slirp4netns or pasta) no disconnect can take away.
       const mode = detached.length === 0 ? await networkMode(id, engine) : 'none'
       if (detached.length === 0 && mode !== 'none') {
         throw new Error(
-          `the container's network is ${mode}, which ${spec.name} can't detach it from, so a restricted policy would still have a route out`,
+          `the container's network is ${mode}, which ${spec.name} can't detach it from, so traffic around the gateway would still have a route out`,
         )
       }
       for (const n of detached) {
         await dockerOk(['network', 'disconnect', '--force', n, id], { engine })
       }
-    } else if (!isRestricted(policy) && detached.length > 0) {
+    } else if (direct(policy) && detached.length > 0) {
       for (const n of detached) await dockerOk(['network', 'connect', n, id], { engine })
       detached = []
     }
   }
   if (egressOptions) {
-    const { policy = { mode: 'allow-all' }, ...rest } = egressOptions
+    const { policy = { mode: 'allow-all' }, direct: _, ...rest } = egressOptions
     try {
-      // Before anything but `sleep` runs, so a restricted container never has a route out.
+      // Before anything but `sleep` runs, so a detached container never has a route out.
       await attach(policy)
       gateway = await startGateway(id, { ...rest, policy }, signal, engine)
       egress = { active: true }
     } catch (error) {
-      if (signal?.aborted || isRestricted(policy)) {
+      // Only a direct container has a way out without the gateway.
+      if (signal?.aborted || !direct(policy)) {
         await remove()
         if (signal?.aborted) throw signal.reason
-        throw new Error(`Can't enforce the egress policy: ${(error as Error).message}`)
+        throw new EgressUnavailableError((error as Error).message)
       }
       egress = { active: false, reason: (error as Error).message }
     }
