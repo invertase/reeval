@@ -267,7 +267,7 @@ export const reevalConfigDataSchema = z
       .describe('Variables and secrets for the sandbox, merged by name down the cascade.'),
     egress: egressPolicySchema
       .optional()
-      .describe("Where the sandbox may connect; default `'allow-all'`."),
+      .describe("Where the sandbox may connect; default `'proxy'`."),
     judge: configJudgeDataSchema
       .optional()
       .describe('Defaults for `c.judge()`, merged field by field down the cascade.'),

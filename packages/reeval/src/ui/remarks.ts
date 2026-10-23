@@ -1,8 +1,8 @@
 // The `Remarks:` section under the tally: what's wrong with the evals themselves, each with its
 // fix. Concerns only and at most `REMARK_CAP` of them; `verbose` adds the rest and the
 // suggestions. A remark prints until a run has printed it, so once you've seen it a run on the
-// same source prints nothing, except a slow MCP start, which prints in every run it happens. With
-// none to print there's no heading.
+// same source prints nothing, except a slow MCP start or a connection that never reached the
+// egress gateway, which print in every run they happen. With none to print there's no heading.
 import { clip } from '../text.ts'
 import type { Remark, RunInsights } from '../view/insights.ts'
 import type { SuiteResult } from '../view/suite.ts'
@@ -11,9 +11,12 @@ import type { Colors } from './colors.ts'
 /** The most concerns the section prints without `verbose`. */
 export const REMARK_CAP = 3
 
-/** Whether a remark may print in this run: no earlier run printed it, or it's a slow MCP start. */
+/** Kinds about what happened in this run, not the eval's source: they print in every run they happen. */
+const EVERY_RUN: readonly Remark['kind'][] = ['slow-mcp-start', 'proxy-only-egress']
+
+/** Whether a remark may print in this run: no earlier run printed it, or it's one of `EVERY_RUN`. */
 export const printsIn = (r: Remark, runId: string) =>
-  r.firstSeenRun === runId || r.kind === 'slow-mcp-start'
+  r.firstSeenRun === runId || EVERY_RUN.includes(r.kind)
 
 /** The remarks the section prints, in order, and how many concerns the cap left out. */
 export function shownRemarks(remarks: Remark[], runId: string, verbose: boolean) {

@@ -19,7 +19,7 @@ import {
 } from '@reeval/sandbox-docker'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
-import { egressLabel, gatewayPolicy } from '../egress.ts'
+import { egressLabel, gatewayPolicy, isDirect } from '../egress.ts'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
@@ -130,9 +130,10 @@ export async function createDockerSandbox(
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
-    // Always, so every attempt's egress is recorded; a restricted policy can't start without it.
+    // Always, so every attempt's egress is recorded; a detached container can't start without it.
     egress: {
       policy,
+      direct: isDirect(options.egress.policy),
       log: process.env.REEVAL_DEBUG ? (line) => console.error(line) : undefined,
       onEvent,
       onUnsubstituted: ({ name, where, in: places, method, url }) =>
@@ -156,7 +157,7 @@ export async function createDockerSandbox(
   )
   debug?.log(
     'container',
-    `network policy ${egressLabel(options.egress) || 'allow-all'}${policy.mode === 'allow-all' ? ` · keeps its ${spec.name} network` : ` · detached from every ${spec.name} network, the gateway is its only way out`}`,
+    `network policy ${egressLabel(options.egress) || 'proxy'}${isDirect(options.egress.policy) ? ` · keeps its ${spec.name} network, so traffic that ignores the proxy goes out directly, unrecorded` : ` · detached from every ${spec.name} network, the gateway is its only way out`}`,
   )
   debug?.log(
     'container',

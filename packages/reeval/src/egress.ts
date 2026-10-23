@@ -20,6 +20,7 @@ import type {
   PlannedEgress,
   SandboxDescriptor,
 } from './types.ts'
+import { isCI } from './ui/mode.ts'
 
 /**
  * The package registries and GitHub, to spread into an allowlist that still installs:
@@ -33,7 +34,17 @@ export const SANDBOX_EGRESS: Record<SandboxDescriptor['kind'], EgressCapabilitie
   fake: FAKE_EGRESS,
 }
 
-export const isRestricted = (policy: EgressPolicy) => policy !== 'allow-all'
+/** The policy an attempt runs under when nothing sets one. */
+export const DEFAULT_EGRESS: EgressPolicy = 'proxy'
+
+/** Whether the policy allows only some hosts: `deny-all` and allowlists. */
+export const isRestricted = (policy: EgressPolicy) => policy !== 'allow-all' && policy !== 'proxy'
+
+/**
+ * Whether traffic can leave around the gateway: under `allow-all` the container keeps its network,
+ * so whatever ignores the proxy goes out directly, unfiltered and unrecorded.
+ */
+export const isDirect = (policy: EgressPolicy) => policy === 'allow-all'
 
 /**
  * The hosts the harness needs: a real agent's own API (its model's provider's, for OpenCode), or
@@ -73,7 +84,7 @@ export function plannedEgress(
   layers: readonly EnvironmentLayer[],
 ): PlannedEgress {
   const fromLayers = layers.findLast((l) => l.spec.egress !== undefined)?.spec.egress
-  const policy = egress.own ?? fromLayers ?? egress.inherited ?? 'allow-all'
+  const policy = egress.own ?? fromLayers ?? egress.inherited ?? DEFAULT_EGRESS
   if (!isRestricted(policy)) return { policy, auto: [] }
   const own = policy === 'deny-all' ? [] : policy.allow
   const auto = [
@@ -84,16 +95,17 @@ export function plannedEgress(
   return { policy, auto: [...new Set(auto)].filter((h) => !own.includes(h)) }
 }
 
-/** Every host a restricted policy lets through, or null under `allow-all`. */
+/** Every host a restricted policy lets through, or null under `proxy` and `allow-all`. */
 export function allowedHosts({ policy, auto }: PlannedEgress): string[] | null {
   if (!isRestricted(policy)) return null
   return [...new Set([...(policy === 'deny-all' ? [] : policy.allow), ...auto])]
 }
 
 /**
- * The policy the Docker sandbox's gateway enforces: `deny-all` when a restricted policy allows no
- * host at all, else an allowlist. A listed IP address is an allowed range too, since the gateway
- * reaches a private address only through one.
+ * The policy the Docker sandbox's gateway enforces: `allow-all` under `proxy` and `allow-all`
+ * (whether the container also keeps its network is {@link isDirect}), `deny-all` when a
+ * restricted policy allows no host at all, else an allowlist. A listed IP address is an allowed
+ * range too, since the gateway reaches a private address only through one.
  */
 export function gatewayPolicy(planned: PlannedEgress): NetworkPolicy {
   const hosts = allowedHosts(planned)
@@ -143,9 +155,26 @@ const describeEgress = (policy: EgressPolicy) =>
     ? `'${policy}'`
     : `{ allow: [${policy.allow.map((h) => `'${h}'`).join(', ')}] }`
 
-/** `deny-all + auto: api2.cursor.sh, …` for the plan; '' under `allow-all`. */
+/** A CI runner as the environment names it, which usually runs on a cloud VM; null elsewhere. */
+export function ciRunner(env: NodeJS.ProcessEnv): string | null {
+  if (env.GITHUB_ACTIONS === 'true') return 'a GitHub Actions runner (GITHUB_ACTIONS)'
+  if (env.GITLAB_CI) return 'a GitLab CI runner (GITLAB_CI)'
+  if (env.BUILDKITE) return 'a Buildkite agent (BUILDKITE)'
+  if (env.CIRCLECI) return 'a CircleCI runner (CIRCLECI)'
+  return isCI(env) ? 'a CI runner (CI)' : null
+}
+
+/**
+ * What `allow-all` exposes on a cloud VM or CI runner (`where`): the container keeps its network,
+ * so anything in it reaches cloud metadata and the host's network around the gateway.
+ */
+export const directOnCloud = (where: string) =>
+  `egress 'allow-all' on ${where}: anything in the sandbox can reach the cloud metadata service (169.254.169.254, which hands out the machine's credentials), the host's network and its services around the egress gateway, unfiltered and unrecorded`
+
+/** `deny-all + auto: api2.cursor.sh, …` or `allow-all` for the plan; '' under `proxy`, the default. */
 export function egressLabel({ policy, auto }: PlannedEgress): string {
-  if (!isRestricted(policy)) return ''
+  if (policy === 'proxy') return ''
+  if (policy === 'allow-all') return 'allow-all'
   const own =
     policy === 'deny-all'
       ? 'deny-all'

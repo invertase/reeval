@@ -73,11 +73,12 @@ key the plan warns up front, naming every key that works, and the run prints
 A sentence that cites no fact, or a count, quote or effect word its facts don't hold, is dropped
 before it prints (`-v` lists each with its reason), and a run headline prints above the tally.
 
-`reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`
-and `slow-mcp-start` (concerns, at most three), and with `-v` `too-few-tries` and
-`check-never-fails` (suggestions). Each names the source line to change (`fix  <file:line>`).
-Act on them: raise `runs`, tighten or remove the check, or bake the MCP server's dependencies into
-the image. Each prints once per eval version (`slow-mcp-start` every run); an edit re-arms it.
+`reeval run` ends with `Remarks:` when an eval itself needs work, with no model: `flaky-check`,
+`slow-mcp-start` and `proxy-only-egress` (concerns, at most three), and with `-v` `too-few-tries`
+and `check-never-fails` (suggestions). Each names the source line to change (`fix  <file:line>`).
+Act on them: raise `runs`, tighten or remove the check, bake the MCP server's dependencies into
+the image, or set `egress: 'allow-all'` on an eval that needs raw TCP. Each prints once per eval
+version (`slow-mcp-start` and `proxy-only-egress` every run); an edit re-arms it.
 One the cap or a run without `-v` hid isn't spent: the next `reeval run -v` prints it.
 
 ## Config discovery, filters and exit codes

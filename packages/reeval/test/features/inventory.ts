@@ -1182,12 +1182,24 @@ export const inventory: InventoryFeature[] = [
     plan: ['egress/cascade', 'egress/profile-defaults'],
     tests: [
       sandboxDocker('docker', 'allowlist: a listed host gets 200'),
-      sandboxDocker('docker', 'no direct route: custom and deny-all'),
+      sandboxDocker('docker', 'no direct route: allow-all without direct, custom and deny-all'),
       sandboxDocker('docker', 'absolute-form https (GET https://… without CONNECT)'),
       sandboxDocker('proxy', 'absolute-form https requests through the proxy'),
       sandboxDocker('unit', 'deny list: every always-denied form'),
     ],
     real: ['contract › deny-all plus auto hosts works, a blocked host refused and recorded'],
+  },
+  {
+    id: 'egress.proxy',
+    area: 'Sandbox',
+    name: "`egress: 'proxy'` (the default) detaches the container, so only HTTP(S) through the gateway leaves it; `'allow-all'` keeps its network, records `partial` and warns on a CI runner or cloud VM",
+    fixtures: ['egress/proxy-no-direct-route', 'egress/allow-all-direct'],
+    plan: ['egress/default-proxy', 'egress/allow-all-on-ci'],
+    tests: [
+      sandboxDocker('docker', 'without node the gateway falls back (direct allow-all)'),
+      'reeval/test/doctor.test.ts › egress: allow-all on a cloud VM or CI runner warns; proxy there, or allow-all elsewhere, does not',
+      'reeval/test/remarks.test.ts › proxy-only-egress: a connection error under proxy that reached no gateway, not under allow-all or a refusal',
+    ],
   },
   {
     id: 'brokering.harness-key',

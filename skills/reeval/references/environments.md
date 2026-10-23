@@ -170,6 +170,12 @@ defineEnvironment('gemini', ({ secret }) => ({
 With `hosts`, the sandbox only sees a placeholder and reeval's gateway swaps in the real value on
 HTTPS requests to those hosts. `{ to: 'checks' }` keeps it from the agent.
 
-`egress: 'allow-all' | 'deny-all' | { allow: [hosts] }` limits where the sandbox may connect (the
-harness's API, brokered hosts and MCP hosts are always allowed; `DEFAULT_EGRESS_ALLOW` is npm,
-Yarn, PyPI and GitHub). A blocked request doesn't fail the attempt; it's recorded, and your checks decide.
+`egress: 'proxy' | 'allow-all' | 'deny-all' | { allow: [hosts] }` limits where the sandbox may
+connect (the harness's API, brokered hosts and MCP hosts are always allowed; `DEFAULT_EGRESS_ALLOW`
+is npm, Yarn, PyPI and GitHub). A blocked request doesn't fail the attempt; it's recorded, and your
+checks decide.
+
+The default, `'proxy'`, reaches any host over HTTP(S) through the egress gateway and nothing
+else: SSH, a database driver or a raw TCP/UDP client gets `Network is unreachable` (and the run's
+`proxy-only-egress` remark). Set `egress: 'allow-all'` on just the evals that need that; it keeps
+the container's network, so such traffic goes out unrecorded (the record's `egress.partial`).

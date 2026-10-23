@@ -33,7 +33,7 @@ flowchart TD
 [agent#1 cursor]  17:40:47 image     cache hit reeval-sandbox:cursor-0.1.0 (reeval's image for cursor; reeval image build rebuilds it)
 [agent#1 cursor]  17:40:47 image     ready reeval-sandbox:cursor-0.1.0 (a987bc712d5b) in 33ms · agent CLI @cursor/sdk 1.0.32
 [agent#1 cursor]  17:40:48 container created 442ac2d4e235 from reeval-sandbox:cursor-0.1.0 in 800ms
-[agent#1 cursor]  17:40:48 container network policy allow-all · keeps its Docker network
+[agent#1 cursor]  17:40:48 container network policy proxy · detached from every Docker network, the gateway is its only way out
 [agent#1 cursor]  17:40:48 container egress gateway started · brokers CURSOR_API_KEY
 [agent#1 cursor]  17:40:48 env       workspace snapshot taken: the diff starts here
 [agent#1 cursor]  17:40:48 harness   starting cursor:composer-2.5: bootstrap and session

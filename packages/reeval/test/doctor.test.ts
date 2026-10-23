@@ -50,6 +50,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   gitIgnored: async (_, paths) => paths.map(() => true),
   gitVisibleEnvFiles: async () => [],
   fetch: async () => new Response('{}', { status: 200 }),
+  cloudHost: async () => null,
   ...over,
 })
 
@@ -661,7 +662,7 @@ evaluate('a', async () => {})
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {
     const open = await configOf('egress-open', "{ harness: cursor({ model: 'composer-2.5' }) }")
-    assert.match(checkEgress(open)[0]?.summary ?? '', /^allow-all: .* \(the default\)/)
+    assert.match(checkEgress(open)[0]?.summary ?? '', /^proxy: .* \(the default\)/)
     const denied = await configOf(
       'egress-deny',
       "{ harness: cursor({ model: 'composer-2.5' }), egress: 'deny-all' }",
@@ -676,6 +677,26 @@ evaluate('a', async () => {})
     assert.deepEqual(statuses(checks), ['ok', 'ok', 'fail'])
     assert.match(checks[1]?.summary ?? '', /profile fake: allow example\.com/)
     assert.match(checks[2]?.summary ?? '', /the fake sandbox enforces no egress policy/)
+  })
+
+  test('egress: allow-all on a cloud VM or CI runner warns; proxy there, or allow-all elsewhere, does not', async () => {
+    const direct = await configOf(
+      'egress-direct',
+      "{ harness: cursor({ model: 'composer-2.5' }), egress: 'allow-all' }",
+    )
+    const runner = 'a GitHub Actions runner (GITHUB_ACTIONS)'
+    const checks = checkEgress(direct, runner)
+    assert.deepEqual(statuses(checks), ['ok', 'warn'])
+    assert.match(checks[0]?.summary ?? '', /^allow-all: .* goes out directly, unrecorded/)
+    assert.match(
+      checks[1]?.summary ?? '',
+      /^egress 'allow-all' on a GitHub Actions runner \(GITHUB_ACTIONS\): .*cloud metadata service \(169\.254\.169\.254/,
+    )
+    assert.match(checks[1]?.fix ?? '', /egress: 'proxy' \(the default\)/)
+    // Twins: the same config on a machine that isn't a cloud host, and the default on one.
+    assert.deepEqual(statuses(checkEgress(direct, null)), ['ok'])
+    const open = await configOf('egress-proxy', "{ harness: cursor({ model: 'composer-2.5' }) }")
+    assert.deepEqual(statuses(checkEgress(open, runner)), ['ok'])
   })
 
   test('.gitignore: from git when it can, else from the file', async () => {

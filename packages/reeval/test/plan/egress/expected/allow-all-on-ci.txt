@@ -1,0 +1,8 @@
+no profile · 3 evals · 3 cells · 3 attempts
+warning: egress 'allow-all' on a GitHub Actions runner (GITHUB_ACTIONS): anything in the sandbox can reach the cloud metadata service (169.254.169.254, which hands out the machine's credentials), the host's network and its services around the egress gateway, unfiltered and unrecorded. Under it: evals/direct.eval.ts › allow-all keeps the network for raw TCP, evals/direct.eval.ts › an eval can ask for allow-all itself. Keep 'allow-all' to the evals that need raw TCP or UDP; the default, 'proxy', sends everything through the gateway
+evals/direct.eval.ts › the default sends everything through the gateway  fake/-/docker         control  gated  ×1
+evals/direct.eval.ts › allow-all keeps the network for raw TCP           fake/database/docker  control  gated  ×1  egress "allow-all"
+evals/direct.eval.ts › an eval can ask for allow-all itself              fake/-/docker         control  gated  ×1  egress "allow-all"
+excluded: —
+image docker · cursor · 3 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

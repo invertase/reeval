@@ -15,7 +15,7 @@ import {
   selectProfile,
   UsageError,
 } from './config.ts'
-import { unenforceable } from './egress.ts'
+import { ciRunner, DEFAULT_EGRESS, directOnCloud, isDirect, unenforceable } from './egress.ts'
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox } from './environment.ts'
@@ -71,6 +71,8 @@ export type DoctorDeps = {
   /** `.env` and `.env.*` files under `root` that git doesn't ignore, relative; null outside a repository. */
   gitVisibleEnvFiles: (root: string) => Promise<string[] | null>
   fetch: typeof fetch
+  /** The cloud VM or CI runner this machine looks like, as a phrase (`a GitHub Actions runner …`), or null. */
+  cloudHost: () => Promise<string | null>
 }
 
 const run = (command: string, args: string[], cwd?: string) =>
@@ -136,7 +138,30 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
       return r.code === 0 ? r.stdout.split('\n').filter(Boolean) : null
     },
     fetch: globalThis.fetch,
+    cloudHost: () => cloudHost(env),
   }
+}
+
+/** Cloud providers as their VMs' firmware names them in `/sys/class/dmi/id`. */
+const CLOUD_VENDORS =
+  /amazon|google|microsoft corporation|digitalocean|hetzner|alibaba|oracle|openstack/i
+
+/**
+ * Whether this machine is a CI runner (its variables), a cloud VM (the firmware's vendor on Linux)
+ * or can reach a cloud metadata service: what `allow-all` exposes to a sandbox on its network.
+ */
+async function cloudHost(env: NodeJS.ProcessEnv): Promise<string | null> {
+  const runner = ciRunner(env)
+  if (runner) return runner
+  for (const file of ['sys_vendor', 'product_name']) {
+    const path = `/sys/class/dmi/id/${file}`
+    const vendor = existsSync(path) ? readFileSync(path, 'utf8').trim() : ''
+    if (CLOUD_VENDORS.test(vendor)) return `a cloud VM (${vendor}, ${path})`
+  }
+  const answered = await fetch('http://169.254.169.254/', { signal: AbortSignal.timeout(1000) })
+    .then(() => true)
+    .catch(() => false)
+  return answered ? 'a machine whose cloud metadata service answers (169.254.169.254)' : null
 }
 
 // ---- Machine -------------------------------------------------------------------------------
@@ -716,15 +741,24 @@ export async function checkAnalysis(
 // ---- Egress and git ------------------------------------------------------------------------
 
 const policyText = (policy: EgressPolicy) =>
-  policy === 'allow-all'
-    ? 'allow-all: the agents reach any host'
-    : policy === 'deny-all'
-      ? "deny-all: only each harness's own hosts"
-      : `allow ${policy.allow.join(', ') || 'none'}, plus each harness's own hosts`
+  policy === 'proxy'
+    ? 'proxy: the agents reach any host over HTTP(S) through the egress gateway, which records it; nothing else leaves the sandbox'
+    : policy === 'allow-all'
+      ? 'allow-all: the agents reach any host, and traffic that ignores the proxy goes out directly, unrecorded'
+      : policy === 'deny-all'
+        ? "deny-all: only each harness's own hosts"
+        : `allow ${policy.allow.join(', ') || 'none'}, plus each harness's own hosts`
 
-export function checkEgress(config: ResolvedConfig): Check[] {
+/** Every policy the config and its profiles set, the config's own first; the default when it sets none. */
+const configuredEgress = (config: ResolvedConfig): EgressPolicy[] => [
+  config.egress ?? DEFAULT_EGRESS,
+  ...Object.values(config.profiles).flatMap((p) => p.defaults?.egress ?? []),
+]
+
+/** `cloud` is the cloud VM or CI runner this machine looks like, which `allow-all` exposes. */
+export function checkEgress(config: ResolvedConfig, cloud: string | null = null): Check[] {
   const checks: Check[] = []
-  const inherited = config.egress ?? 'allow-all'
+  const inherited = config.egress ?? DEFAULT_EGRESS
   checks.push({
     id: 'egress',
     status: 'ok',
@@ -744,6 +778,14 @@ export function checkEgress(config: ResolvedConfig): Check[] {
     if (problem && !checks.some((c) => c.summary === problem)) {
       checks.push({ id: 'egress', status: 'fail', summary: problem })
     }
+  }
+  if (cloud && configuredEgress(config).some(isDirect)) {
+    checks.push({
+      id: 'egress',
+      status: 'warn',
+      summary: directOnCloud(cloud),
+      fix: "use egress: 'proxy' (the default), and set egress: 'allow-all' only on the evals that need raw TCP or UDP",
+    })
   }
   return checks
 }
@@ -911,7 +953,8 @@ export async function doctor(
     checks.push(...(await checkKeys(config, deps, online, envFile, planned)))
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...(await checkAnalysis(config, deps, online, envFile)))
-    checks.push(...checkEgress(config))
+    const cloud = configuredEgress(config).some(isDirect) ? await deps.cloudHost() : null
+    checks.push(...checkEgress(config, cloud))
     checks.push(await checkGitignore(config.root, deps))
     const envFiles = await checkEnvFiles(config.root, deps)
     if (envFiles) checks.push(envFiles)

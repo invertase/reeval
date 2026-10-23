@@ -941,12 +941,13 @@ export type SetupStep =
     }
 
 /**
- * Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or
- * only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the
- * harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any
- * other request gets a refusal, and the attempt goes on.
+ * Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the
+ * default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere
+ * (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a
+ * restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are
+ * allowed too; any other request gets a refusal, and the attempt goes on.
  */
-export type EgressPolicy = 'allow-all' | 'deny-all' | { allow: readonly string[] }
+export type EgressPolicy = 'proxy' | 'allow-all' | 'deny-all' | { allow: readonly string[] }
 
 /**
  * A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url`
@@ -1733,7 +1734,7 @@ export type ReevalConfig = {
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
   env?: EnvVars
-  /** Where the sandbox may connect; default `'allow-all'`. */
+  /** Where the sandbox may connect; default `'proxy'`. */
   egress?: EgressPolicy
   /** Defaults for `c.judge()`, merged field by field down the cascade. */
   judge?: ConfigJudgeOptions
@@ -2061,7 +2062,7 @@ export type EnvironmentRecord = {
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
-  /** The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`. */
+  /** The policy the attempt ran under, from the options and the environment; in the digest unless `proxy`. */
   egress: EgressPolicy
   /**
    * The git repository the workspace started as: the repo as written (a local one relative to the
@@ -2081,15 +2082,22 @@ export type EnvironmentRecord = {
 
 /**
  * An attempt's network traffic. `allowed` is every host a restricted policy let through, its own
- * and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see
- * the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the
- * sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness
- * always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.
+ * and the automatic ones; null under `proxy` and `allow-all`. `recorded` is false when the sandbox
+ * can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between
+ * the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the
+ * harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands
+ * out.
  */
 export type EgressRecord = {
   policy: EgressPolicy
   allowed: string[] | null
   recorded: boolean
+  /**
+   * True when traffic could leave around the gateway (`allow-all` in a container that kept its
+   * network): `contacted` lists only what went through the gateway, and anything that ignored the
+   * proxy (raw TCP and UDP, SSH, database drivers) went out unrecorded. Unset otherwise.
+   */
+  partial?: true
   contacted: Array<{
     host: string
     port: number

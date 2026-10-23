@@ -8,6 +8,7 @@ import { hostAllowed, placeholder, type Substitution } from '@reeval/sandbox-doc
 import { run } from '@reeval/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
 import { parseDuration } from '../config.ts'
+import { DEFAULT_EGRESS } from '../egress.ts'
 import {
   type AppliedEnvironment,
   DEFAULT_SKILL_EXCLUDE,
@@ -120,7 +121,7 @@ export type ResolvedPlugin = {
   built?: { dir: string; tag: string }
 }
 
-/** What else resolving an environment needs: the harness (for its plugin refusals) and the hosts egress allows (null under `allow-all`). */
+/** What else resolving an environment needs: the harness (for its plugin refusals) and the hosts egress allows (null under `proxy` and `allow-all`). */
 export type ResolveOptions = {
   harness?: HarnessDescriptor
   allowed?: readonly string[] | null
@@ -592,7 +593,7 @@ export async function resolveEnvironment(
   root: string,
   where: string,
   rulesFile: string,
-  egress: EgressPolicy = 'allow-all',
+  egress: EgressPolicy = DEFAULT_EGRESS,
   prepared: (w: GitWorkspace) => PreparedWorkspace | undefined = () => undefined,
   options: ResolveOptions = {},
 ): Promise<ResolvedEnvironment> {
@@ -882,7 +883,7 @@ export async function resolveEnvironment(
       checks: [...secrets.checks].sort(),
       unset: [...secrets.unset].sort(),
       brokered,
-      ...(egress === 'allow-all'
+      ...(egress === DEFAULT_EGRESS
         ? {}
         : { egress: typeof egress === 'string' ? egress : [...egress.allow].sort() }),
       ...(pluginRecords.length

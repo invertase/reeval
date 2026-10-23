@@ -385,8 +385,12 @@
       ]
     },
     "EgressPolicy": {
-      "description": "Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
+      "description": "Where the sandbox may connect: any host over HTTP(S) through the egress gateway (`'proxy'`, the default), anywhere including raw TCP and UDP around the gateway (`'allow-all'`), nowhere (`'deny-all'`), or only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any other request gets a refusal, and the attempt goes on.",
       "anyOf": [
+        {
+          "type": "string",
+          "const": "proxy"
+        },
         {
           "type": "string",
           "const": "allow-all"
@@ -1980,7 +1984,7 @@
           "description": "Where the sandbox may connect; replaces the config's policy.",
           "anyOf": [
             {
-              "enum": ["allow-all", "deny-all"]
+              "enum": ["allow-all", "deny-all", "proxy"]
             },
             {
               "type": "object",
@@ -2328,7 +2332,7 @@
         "egress": {
           "anyOf": [
             {
-              "enum": ["allow-all", "deny-all"]
+              "enum": ["allow-all", "deny-all", "proxy"]
             },
             {
               "type": "object",

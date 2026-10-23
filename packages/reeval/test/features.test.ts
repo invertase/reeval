@@ -1039,6 +1039,46 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'egress/proxy-no-direct-route',
+    tiers: ['docker', 'podman'],
+    env: 'proxied',
+    canaryEnv: 'open',
+    hostEnv: egressEnv,
+    canary: /expected 'reeval-egress-ok exit=0' to match/,
+    record: ({ run }) =>
+      assert.deepEqual(landed(run)?.egress, {
+        policy: 'proxy',
+        allowed: null,
+        recorded: true,
+        contacted: [],
+        blocked: [],
+        expectedBlocked: [],
+      }),
+  },
+  {
+    dir: 'egress/allow-all-direct',
+    tiers: ['docker', 'podman'],
+    env: 'open',
+    canaryEnv: 'proxied',
+    hostEnv: egressEnv,
+    canary: /expected '.*Network is unreachable[\s\S]*' to be 'reeval-egress-ok exit=0'/,
+    record: ({ run }) => {
+      // The connection reached the listener, but around the gateway: nothing records it.
+      assert.deepEqual(landed(run)?.egress, {
+        policy: 'allow-all',
+        allowed: null,
+        recorded: true,
+        partial: true,
+        contacted: [],
+        blocked: [],
+        expectedBlocked: [],
+      })
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]?.egress
+      assert.equal(canary?.policy, 'proxy')
+      assert.equal(canary?.partial, undefined)
+    },
+  },
+  {
     dir: 'egress/secret-hosts-allowed',
     tiers: ['docker'],
     env: 'keyed',

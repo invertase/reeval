@@ -227,7 +227,7 @@ reeval: evals/review.eval.ts: evaluate("reviews the diff") on goose:gemini-3.8-f
 | `plugin.local('plugins/bare') has no .claude-plugin/plugin.json` | Point at the plugin's root, the directory with `.claude-plugin/plugin.json`. |
 | `the review plugin has no hooks, so only: ['hooks'] matches nothing (it has skills, mcp)` | Name parts the plugin has in `only`. |
 | `plugin "review" has a build, which runs in a Docker image layer: use docker()` | Builds run on Docker only. Run the eval on `docker()`, or leave `build` out on `fakeSandbox()`. |
-| `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: add a build that installs it, or allow the host in egress` | Give the plugin a `build` that installs the server, or add the registry to `egress`. Under `allow-all` this is a note in the plan instead. |
+| `the fetcher plugin's MCP server "search" runs npx, which fetches from registry.npmjs.org at start: add a build that installs it, or allow the host in egress` | Give the plugin a `build` that installs the server, or add the registry to `egress`. Under `proxy` and `allow-all` this is a note in the plan instead. |
 | `the review plugin's manifest sets "skills", which reeval doesn't read: keep each part in its default place (skills/, agents/, commands/, hooks/hooks.json)` | Move the part to its default directory. |
 | `environment review lists two plugins named "review", plugin.local('plugins/a') and plugin.local('plugins/b'): rename one, or leave one out` | One environment lists each plugin name once. A child environment's plugin replaces its parent's of the same name. |
 | `the review plugin's MCP server "docs" would join mcp as review:docs, which mcp already names: rename mcp["review:docs"]` | Rename the environment's own server. |
@@ -260,6 +260,7 @@ A plugin `build` runs in preflight, like an `install` layer: a failing command f
 | `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. |
 | `expect(…).toSucceed() wasn't awaited. …` | Write `await expect(…)`. The eval fails even when the check passes. |
 | `judge score 0.40 is below 0.8 for "…" (…)` | The judge said no. Read its input in the attempt's `judge-input.json`. |
+| `Network is unreachable`, `connection refused` or `could not resolve host` in a check or the transcript, with nothing in the record's `egress.contacted` or `blocked` | Under the default, `'proxy'`, only HTTP(S) through the egress gateway leaves the sandbox, so raw TCP, UDP, SSH and database drivers get no connection. Set `egress: 'allow-all'` on the eval, or point the client at `HTTPS_PROXY`. The run's `proxy-only-egress` remark names the eval. See [Egress](/reference/egress#connections-that-never-reach-the-gateway). |
 | `Eval timed out after 900s` | Raise `timeout`, or make the task smaller. |
 | `out of memory: 1 process killed at the 4g limit (+4g swap); raise docker({ memory })` | A process in the sandbox hit its memory limit, so the attempt is an infra error, whatever its checks said. Raise `docker({ memory })`, or give Docker more memory. |
 | `setup step 1/2 "npm ci" in environment base exited 1 after …` | Fix the setup step; its output is in the attempt's `setup.log`. An infra error. |

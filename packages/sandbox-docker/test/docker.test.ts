@@ -418,7 +418,7 @@ describe('egress gateway in Docker', {
   test('a restricted policy leaves the gateway as the only way out', async () => {
     const s = await open({
       image: DEFAULT_IMAGE,
-      egress: egress({ policy: { mode: 'custom', allowedHosts: ['upstream.test'] } }),
+      egress: egress({ policy: { mode: 'custom', allowedHosts: ['upstream.test'] }, direct: true }),
     })
     assert.deepEqual(await upInterfaces(s), ['lo'])
     const allowed = await sh(
@@ -469,7 +469,7 @@ describe('egress gateway in Docker', {
     await server.kill()
   })
 
-  test('without node the gateway falls back (allow-all) or refuses (restricted)', async () => {
+  test('without node the gateway falls back (direct allow-all) or refuses (detached)', async () => {
     try {
       execFileSync(CLI, ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
     } catch {
@@ -493,24 +493,28 @@ describe('egress gateway in Docker', {
         '',
       ),
     )
-    const s = await open({ image: 'busybox:1.37', root: true, egress: egress() })
+    const s = await open({ image: 'busybox:1.37', root: true, egress: egress({ direct: true }) })
     assert.equal(s.egress?.active, false)
     assert.match(s.egress?.active === false ? s.egress.reason : '', /forwarder/)
     assert.equal(s.addRequestTransformations, undefined)
     assert.equal(s.setNetworkPolicy, undefined)
-    await assert.rejects(
-      createSession({
-        image: 'busybox:1.37',
-        root: true,
-        labels: { 'ai.reeval.test': 'fallback' },
-        egress: egress({ policy: { mode: 'deny-all' } }),
-      }),
-      /Can't enforce the egress policy/,
-    )
+    // A detached container has no way out but the gateway: allow-all without direct, or restricted.
+    for (const policy of [{ mode: 'allow-all' }, { mode: 'deny-all' }] as const) {
+      await assert.rejects(
+        createSession({
+          image: 'busybox:1.37',
+          root: true,
+          labels: { 'ai.reeval.test': 'fallback' },
+          egress: egress({ policy }),
+        }),
+        /Can't enforce the egress policy/,
+        policy.mode,
+      )
+    }
     const left = execFileSync(CLI, ['ps', '-aq', '--filter', 'label=ai.reeval.test=fallback'], {
       encoding: 'utf8',
     })
-    assert.equal(left.trim(), '', 'the refused container was removed')
+    assert.equal(left.trim(), '', 'the refused containers were removed')
   })
 
   test('destroy stops the tunnel and removes the container', async () => {
@@ -548,8 +552,9 @@ describe('egress policy in Docker', {
   /** The host as a container on the default bridge reaches it directly. */
   let hostAddress: string
   const sessions: DockerSession[] = []
-  const open = async (policy: NetworkPolicy) => {
-    const s = await createSession({ image: DEFAULT_IMAGE, egress: egress({ policy }) })
+  /** `direct` keeps an allow-all container on its networks, as reeval's `egress: 'allow-all'` does. */
+  const open = async (policy: NetworkPolicy, direct = true) => {
+    const s = await createSession({ image: DEFAULT_IMAGE, egress: egress({ policy, direct }) })
     sessions.push(s)
     return s
   }
@@ -653,12 +658,17 @@ describe('egress policy in Docker', {
     assert.equal(seen.length, 2, 'the refused request never reached the upstream')
   })
 
-  test('no direct route: custom and deny-all, at start and after a switch', async () => {
+  test('no direct route: allow-all without direct, custom and deny-all, at start and after a switch', async () => {
     const s = await open(allowAll)
-    // Twin: under allow-all the same direct connect reaches the host listener.
+    // Twin: under a direct allow-all the same direct connect reaches the host listener.
     const hits = listener.hits
     assert.equal((await direct(s)).stdout, '200')
     assert.equal(listener.hits, hits + 1)
+    const proxied = await open(allowAll, false)
+    await expectNoDirectRoute(proxied, 'allow-all without direct at start')
+    await proxied.setNetworkPolicy?.(denyAll)
+    await proxied.setNetworkPolicy?.(allowAll)
+    await expectNoDirectRoute(proxied, 'allow-all without direct → deny-all → allow-all')
     await expectNoDirectRoute(await open(custom), 'custom at start')
     await expectNoDirectRoute(await open(denyAll), 'deny-all at start')
     await s.setNetworkPolicy?.(custom)
@@ -694,7 +704,7 @@ describe('egress policy in Docker', {
     }
     const network = `reeval-test-${process.pid}`
     execFileSync(CLI, ['network', 'create', network], { stdio: 'ignore' })
-    const s = await createSession({ image: DEFAULT_IMAGE, egress: egress() })
+    const s = await createSession({ image: DEFAULT_IMAGE, egress: egress({ direct: true }) })
     try {
       execFileSync(CLI, ['network', 'connect', network, s.id])
       const networks = () =>

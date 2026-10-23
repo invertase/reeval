@@ -843,7 +843,7 @@ function fetcher(
 /**
  * The plugins' MCP servers and hooks that fetch a package at start (`npx`, `bunx`, `uvx`,
  * `pipx run`): a refusal under a policy that doesn't allow the registry, else notes, since
- * `allowed` is null under `allow-all`.
+ * `allowed` is null under `proxy` and `allow-all`.
  */
 export function fetchesAtStart(
   plugins: readonly PluginContents[],
