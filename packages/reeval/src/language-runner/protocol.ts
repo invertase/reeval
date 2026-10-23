@@ -1,4 +1,4 @@
-// Loopback NDJSON between reeval and a language SDK runner. Session messages use `t`; attempt
+// NDJSON on a language SDK runner's stdin and stdout. Session messages use `t`; attempt
 // traffic uses the attempt protocol shapes from src/contract/attempt.ts (no `t`).
 
 import type {
@@ -26,14 +26,20 @@ export type SessionFromRunner =
   | {
       t: 'hello'
       protocol: number
-      token: string
       sdk: string
       version: string
       runtime: string
     }
   | { t: 'declared'; file: string; tree: DeclarationTree }
   | { t: 'load-error'; error: WireError }
-  | { t: 'log'; stream: 'stdout' | 'stderr'; text: string }
+  | {
+      t: 'log'
+      /** The `key` of the body that wrote it; none for output outside a body. */
+      key?: string
+      stream: 'stdout' | 'stderr'
+      /** One line, without its line break. */
+      text: string
+    }
 
 /**
  * One runner runs every body of its files, several at once, so each attempt message carries the

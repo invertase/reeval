@@ -3,11 +3,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { RUNNER_PROTOCOL } from '../src/language-runner/protocol.ts'
 import {
   projectUsesUv,
   REEVAL_PYTHON_MODULE,
   resolvePythonRunnerCommand,
 } from '../src/language-runner/python-runner.ts'
+import { type RunnerCommand, startLanguageRunner } from '../src/language-runner/transport.ts'
 
 test('resolvePythonRunnerCommand prefers REEVAL_PYTHON', () => {
   const prev = process.env.REEVAL_PYTHON
@@ -39,6 +41,52 @@ test('resolvePythonRunnerCommand uses .venv python when present', () => {
     if (prev === undefined) delete process.env.REEVAL_PYTHON
     else process.env.REEVAL_PYTHON = prev
   }
+})
+
+/** A runner as a Node script: `body` runs with `send(message)` and `lines` (what reeval sent). */
+function fakeRunner(body: string): RunnerCommand {
+  const script = `
+    const send = (m) => process.stdout.write(JSON.stringify(m) + '\\n')
+    const lines = require('node:readline').createInterface({ input: process.stdin })
+    ${body}
+  `
+  return [process.execPath, '-e', script]
+}
+
+test('a runner talks over its stdin and stdout, and stray stdout is not a message', async () => {
+  const runner = await startLanguageRunner(
+    fakeRunner(`
+      if (process.env.REEVAL_RUNNER !== 'stdio') process.exit(3)
+      console.log('not a message')
+      send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'fake', version: '1', runtime: 'node' })
+      lines.on('line', (line) => {
+        const m = JSON.parse(line)
+        send({ t: 'declared', file: m.file, tree: { children: [] } })
+      })
+    `),
+    tmpdir(),
+  )
+  assert.equal(runner.hello.sdk, 'fake')
+  runner.send({ t: 'collect', file: 'evals/a.eval.fake' })
+  const declared = await runner.nextSession('declared')
+  assert.equal(declared.file, 'evals/a.eval.fake')
+  const gone = new Promise<string>((resolve) => runner.onGone(resolve))
+  runner.close()
+  assert.match(await gone, /exited|closed/)
+})
+
+test('a runner on another protocol, or one that stops before hello, says why', async () => {
+  await assert.rejects(
+    startLanguageRunner(
+      fakeRunner(`send({ t: 'hello', protocol: 1, sdk: 'fake', version: '0.1', runtime: 'node' })`),
+      tmpdir(),
+    ),
+    /fake 0\.1 speaks runner protocol 1, but this reeval speaks 2/,
+  )
+  await assert.rejects(
+    startLanguageRunner(fakeRunner(`console.error('no SDK here'); process.exit(4)`), tmpdir()),
+    /stopped before it said hello: it exited \(code 4\):\nno SDK here/,
+  )
 })
 
 test('projectUsesUv is true when pyproject.toml or uv.lock exists', () => {

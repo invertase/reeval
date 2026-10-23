@@ -1,7 +1,5 @@
-// Starts a language SDK runner and talks to it over loopback TCP + NDJSON + one-time token.
+// Starts a language SDK runner and talks to it over its stdin and stdout, one JSON message a line.
 import { spawn } from 'node:child_process'
-import { randomBytes } from 'node:crypto'
-import { createServer, type Socket } from 'node:net'
 import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
 import {
@@ -10,6 +8,7 @@ import {
   RUNNER_PROTOCOL,
   type SessionFromRunner,
   type ToRunner,
+  type WireError,
 } from './protocol.ts'
 
 export type RunnerCommand = readonly [command: string, ...args: string[]]
@@ -27,30 +26,34 @@ export class RunnerLoadError extends Error {}
 
 const STDERR_KEPT = 4_000
 
+/** A runner's stdout line: a message, or `undefined` for output that isn't one. */
+function parsed(line: string): FromRunner | undefined {
+  if (!line.startsWith('{')) return undefined
+  try {
+    return JSON.parse(line) as FromRunner
+  } catch {
+    return undefined
+  }
+}
+
 export async function startLanguageRunner(
   command: RunnerCommand,
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<LanguageRunner> {
-  const token = randomBytes(16).toString('hex')
-  const server = createServer()
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', resolve)
-  })
-  const { port } = server.address() as { port: number }
   const [cmd = '', ...args] = command
   const child = spawn(cmd, args, {
     cwd,
-    env: { ...env, REEVAL_RUNNER: `127.0.0.1:${port}`, REEVAL_RUNNER_TOKEN: token },
-    stdio: ['ignore', 'inherit', 'pipe'],
+    env: { ...env, REEVAL_RUNNER: 'stdio' },
+    stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   })
   let stderr = ''
-  child.stderr?.on('data', (chunk: Buffer) => {
+  child.stderr.on('data', (chunk: Buffer) => {
     process.stderr.write(chunk)
     stderr = (stderr + chunk.toString()).slice(-STDERR_KEPT)
   })
+  child.stdin.on('error', () => {})
   const exited = new Promise<string>((resolve) => {
     child.once('error', (error) => resolve(`it didn't start: ${error.message}`))
     child.once('exit', (code, signal) =>
@@ -60,32 +63,28 @@ export async function startLanguageRunner(
     )
   })
 
-  const connected = new Promise<{
-    socket: Socket
-    hello: Extract<SessionFromRunner, { t: 'hello' }>
-  }>((resolve) => {
-    server.on('connection', (socket) => {
-      const lines = createInterface({ input: socket })
-      lines.once('line', (line) => {
-        let hello: FromRunner | undefined
-        try {
-          hello = JSON.parse(line) as FromRunner
-        } catch {}
-        if (!isSessionFrom(hello!) || hello.t !== 'hello' || hello.token !== token)
-          return void socket.destroy()
-        lines.removeAllListeners('line')
-        lines.close()
-        server.close()
-        resolve({ socket, hello })
-      })
-    })
+  const listeners: ((message: FromRunner) => void)[] = []
+  const lines = createInterface({ input: child.stdout })
+  // Anything on stdout that isn't a message (a stray write the SDK didn't route) is shown, not parsed.
+  lines.on('line', (line) => {
+    const message = parsed(line)
+    if (!message) return void (line && process.stderr.write(`${line}\n`))
+    for (const listener of [...listeners]) listener(message)
   })
-  const first = await Promise.race([connected, exited])
+
+  const greeted = new Promise<Extract<SessionFromRunner, { t: 'hello' }>>((resolve) => {
+    const listener = (message: FromRunner) => {
+      if (!isSessionFrom(message) || message.t !== 'hello') return
+      listeners.splice(listeners.indexOf(listener), 1)
+      resolve(message)
+    }
+    listeners.push(listener)
+  })
+  const first = await Promise.race([greeted, exited])
   if (typeof first === 'string') {
-    server.close()
-    throw new RunnerLoadError(`The language runner stopped before it connected: ${first}`)
+    throw new RunnerLoadError(`The language runner stopped before it said hello: ${first}`)
   }
-  const { socket, hello } = first
+  const hello = first
   if (hello.protocol !== RUNNER_PROTOCOL) {
     child.kill()
     throw new UsageError(
@@ -93,30 +92,24 @@ export async function startLanguageRunner(
     )
   }
 
-  const listeners: ((message: FromRunner) => void)[] = []
   const gone: ((reason: string) => void)[] = []
   let goneReason: string | undefined
-  const lines = createInterface({ input: socket })
-  lines.on('line', (line) => {
-    if (!line) return
-    const message = JSON.parse(line) as FromRunner
-    for (const listener of [...listeners]) listener(message)
-  })
-  socket.on('error', () => {})
   const markGone = async () => {
     if (goneReason !== undefined) return
     goneReason = await Promise.race([
       exited,
-      new Promise<string>((r) => setTimeout(() => r('it closed its connection'), 1_000).unref()),
+      new Promise<string>((r) => setTimeout(() => r('it closed its stdout'), 1_000).unref()),
     ])
     for (const listener of gone) listener(goneReason)
   }
-  socket.once('close', markGone)
+  lines.once('close', markGone)
   void exited.then(markGone)
 
   return {
     hello,
-    send: (message) => void socket.write(`${JSON.stringify(message)}\n`),
+    send: (message) => {
+      if (child.stdin.writable) child.stdin.write(`${JSON.stringify(message)}\n`)
+    },
     onMessage: (listener) => void listeners.push(listener),
     onGone: (listener) => {
       if (goneReason !== undefined) listener(goneReason)
@@ -134,7 +127,7 @@ export async function startLanguageRunner(
         gone.push((reason) => reject(new RunnerLoadError(`The language runner stopped: ${reason}`)))
       }),
     close: () => {
-      socket.end()
+      child.stdin.end()
       setTimeout(() => child.kill(), 2_000).unref()
     },
   }
@@ -150,7 +143,5 @@ export function errorFrom(wire: WireError): Error {
   }
   return error
 }
-
-type WireError = import('./protocol.ts').WireError
 
 export { isRunnerAttemptDone, isRunnerAttemptRequest, isSessionFrom } from './protocol.ts'

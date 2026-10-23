@@ -2,7 +2,7 @@
 
 Python authoring SDK for [reeval](https://github.com/invertase/reeval). Write `*.eval.py` files,
 declare evals with the same options as TypeScript, and run them through reeval's language runner
-(loopback TCP, attempt protocol v2).
+(over its stdin and stdout, attempt protocol v2).
 
 Import as `reeval_python` (`from reeval_python import evaluate`). The PyPI distribution is
 **reeval-python** (the name `reeval` is already taken on PyPI by another project).
