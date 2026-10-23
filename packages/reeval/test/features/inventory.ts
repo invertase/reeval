@@ -1673,13 +1673,13 @@ export const inventory: InventoryFeature[] = [
       engine(
         "anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's",
       ),
-      unit('judge strings use the provider package when its key is set, else the AI Gateway'),
+      unit('judge strings use the provider package on direct, and the AI Gateway only on vercel'),
       questions("a question's own model needs its key, and a malformed one exits 2"),
       options(
         'a judge model without its key exits 2 naming the keys that work, before any attempt',
       ),
       secrets("masks every direct model provider's key by its value, whatever its shape"),
-      'reeval/test/doctor.test.ts › analysis: an anthropic/* or openai/* model takes its own key, which wins over the Gateway',
+      "reeval/test/doctor.test.ts › analysis: an anthropic/* or openai/* model takes its own key, never the Gateway's",
     ],
   },
   {
