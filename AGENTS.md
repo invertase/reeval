@@ -234,8 +234,8 @@ record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness an
 compare` says "same", every `reeval query` view answers, `-v` and `.reeval/debug` have the trace, and `reeval
 studio build` builds the history. Both need `REEVAL_TEST_REAL=1` (which `pnpm test:contract` sets) and
 each harness's key; asked for, a row without its key fails (it never skips), naming the variable,
-so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. The `fx-gateway` row (fx on AI Gateway) is gated, so it runs only when `REEVAL_CONTRACT_HARNESSES`
-names it, until the repository has an `AI_GATEWAY_API_KEY` secret. Their
+so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. A row with a `gated` reason (a `*-gateway` row not yet passed on its real CLI) runs only when
+`REEVAL_CONTRACT_HARNESSES` names it. Their
 `fake` rows run key-free in the Docker tier. `test/replay.test.ts` replays streams captured from
 real runs (`REEVAL_UPDATE_CAPTURES=1` on a contract run refreshes them, `REEVAL_UPDATE_FORMATS=1` accepts a
 new native format). No real-agent test retries: checks read files, exit codes, the record and
@@ -506,7 +506,7 @@ pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # t
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.6`, `claude-code-1.0.160-patch.b17cde50`,
-   `antigravity-0.1.11`, `opencode-0.2.9`, `goose-0.1.3`, `pi-0.2.8`, `codex-0.1.7`, `fx-0.1.0`, `grok-build-0.1.2`), so
+   `antigravity-0.1.11`, `opencode-0.2.9`, `goose-0.1.4`, `pi-0.2.8`, `codex-0.1.7`, `fx-0.1.0`, `grok-build-0.1.2`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 

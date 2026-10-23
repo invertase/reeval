@@ -18,7 +18,13 @@ import {
   pluginServerName,
 } from '../environment/plugins.ts'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
-import { VERCEL_KEY, VERCEL_ROUTES } from '../gateway/vercel.ts'
+import {
+  FX_VERCEL_CALL,
+  FX_VERCEL_ENDPOINTS,
+  VERCEL_HOST,
+  VERCEL_KEY,
+  VERCEL_ROUTES,
+} from '../gateway/vercel.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type {
   AgentHarnessDescriptor,
@@ -453,8 +459,9 @@ export function acpMcpServers(
 }
 
 /**
- * fx on the model's provider: Vercel AI Gateway for a gateway id, OpenAI's Chat Completions API
- * for a bare OpenAI id. Each response's first `model` names the model that served it.
+ * fx on the model's provider: OpenAI's Chat Completions API for a bare OpenAI id, and Vercel AI
+ * Gateway for a gateway id, which only `vercel()` in the gateway list serves. Each response's
+ * first `model` names the model that served it.
  */
 export function fxForModel(model: string): ModelSpecific {
   if (!model.includes('/')) {
@@ -470,23 +477,12 @@ export function fxForModel(model: string): ModelSpecific {
       hosts: ['api.openai.com'],
     }
   }
-  // The model list fx fetches before a turn, and its language-model calls.
-  const call = {
-    host: 'ai-gateway.vercel.sh',
-    path: { regex: '^/v\\d+/ai/language-model$' },
-    method: ['POST'],
-  } as const satisfies EndpointMatch
-  const endpoints = [
-    { host: 'ai-gateway.vercel.sh', path: { regex: '^/coding-agent/v1/' }, method: ['GET'] },
-    call,
-  ] as const satisfies readonly EndpointMatch[]
   return {
-    credential: 'AI_GATEWAY_API_KEY',
-    endpoints,
-    modelResponses: [call],
-    servedModel: ({ host, responseModel }) =>
-      host === 'ai-gateway.vercel.sh' ? responseModel : undefined,
-    hosts: ['ai-gateway.vercel.sh'],
+    credential: VERCEL_KEY,
+    endpoints: FX_VERCEL_ENDPOINTS,
+    modelResponses: [FX_VERCEL_CALL],
+    servedModel: ({ host, responseModel }) => (host === VERCEL_HOST ? responseModel : undefined),
+    hosts: [VERCEL_HOST],
   }
 }
 
@@ -895,11 +891,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // titles), probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, descriptor, model }) =>
       (await import('@reeval/harness-opencode')).createOpenCode({
         auth,
-        model: descriptor.model,
-        vars: opencodeVars(descriptor.model),
+        model,
+        vars: opencodeVars(model),
         ...(descriptor.kind === 'opencode' && descriptor.effort
           ? { effort: descriptor.effort }
           : {}),
@@ -1011,10 +1007,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     ...fxForModel('provider/model'),
     forModel: fxForModel,
     mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor }) =>
+    adapter: async ({ auth, mcpServers, model }) =>
       (await import('@reeval/harness-fx')).createFx({
         auth,
-        model: descriptor.model,
+        model,
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
@@ -1279,11 +1275,13 @@ export function refusedPlugins(
 /** A real agent's catalog entry, with what its model's provider decides. */
 export function agentFor(h: AgentHarnessDescriptor): Agent {
   const agent = AGENTS[h.kind]
-  const own = agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
-  if (h.gateway !== 'vercel') return own
-  const route = VERCEL_ROUTES[h.kind]
-  if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on Vercel AI Gateway`)
-  return { ...own, ...route(process.env) }
+  if (h.gateway === 'vercel') {
+    const route = VERCEL_ROUTES[h.kind]
+    if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on Vercel AI Gateway`)
+    // The route stands in for forModel: it decides the credential, endpoints and hosts on Vercel.
+    return { ...agent, ...route(process.env) }
+  }
+  return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
 }
 
 /** The catalog entry for a harness's agent; undefined for the fake harness. */

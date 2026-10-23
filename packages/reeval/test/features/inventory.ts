@@ -331,7 +331,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.vercel',
     area: 'Config and selection',
-    name: '`vercel()`: Claude Code, Codex, Goose and pi on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin',
+    name: '`vercel()`: Claude Code, Codex, Goose, pi, OpenCode and fx on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin',
     plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
     tests: [
       'reeval/test/plan.test.ts › a judge model no listed gateway serves exits 2 at plan time',
@@ -343,6 +343,9 @@ export const inventory: InventoryFeature[] = [
       "reeval/test/gateway.test.ts › Codex reads the served model from Vercel's responses and names OpenAI's models",
       'reeval/test/gateway.test.ts › Goose and pi take Gemini ids as Google models on Vercel, and read the served model',
       'reeval/test/gateway.test.ts › Goose and pi on Vercel get its key and provider, and keep Gemini off Vercel',
+      'reeval/test/gateway.test.ts › OpenCode takes its own vercel provider, with the model as vercel/<id>',
+      'reeval/test/gateway.test.ts › fx takes its own AI Gateway provider, and a bare id is OpenAI on Vercel',
+      "reeval/test/gateway.test.ts › a gateway id isn't fx on direct: it falls through to Vercel, or names it",
       "harness-goose/test/unit.test.ts › on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel's key",
       "harness-pi/test/unit.test.ts › on Vercel AI Gateway, pi runs its vercel-ai-gateway provider, brokered on Vercel's host",
       "reeval/test/gateway.test.ts › an expired project token is refused before the run; a live one, or a key, isn't",

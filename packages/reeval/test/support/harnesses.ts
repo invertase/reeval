@@ -40,6 +40,7 @@ export type HarnessRow = {
     | 'fx-gateway'
     | 'claude-code-gateway'
     | 'codex-gateway'
+    | 'opencode-gateway'
     | 'goose-gateway'
     | 'pi-gateway'
   /**
@@ -308,11 +309,11 @@ export const harnesses: HarnessRow[] = [
     wireModel: /^gpt-4\.1-\d{4}-\d{2}-\d{2}$/,
   },
   {
-    // And on Vercel AI Gateway, fx's own provider, with a gateway model id.
+    // And on Vercel AI Gateway through `gateway: [vercel()]`: fx's own provider, with a gateway
+    // model id.
     id: 'fx-gateway',
     harness: 'fx',
-    gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name fx-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    gateway: 'vercel',
     model: 'google/gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'fx',
@@ -330,8 +331,6 @@ export const harnesses: HarnessRow[] = [
     id: 'claude-code-gateway',
     harness: 'claude-code',
     gateway: 'vercel',
-    gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name claude-code-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'claude-haiku-4-5',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'claude-code',
@@ -347,8 +346,6 @@ export const harnesses: HarnessRow[] = [
     id: 'codex-gateway',
     harness: 'codex',
     gateway: 'vercel',
-    gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name codex-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'gpt-5.6-luna',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'codex',
@@ -360,13 +357,30 @@ export const harnesses: HarnessRow[] = [
     wireModel: /gpt-5\.6-luna/,
   },
   {
+    // OpenCode on Vercel AI Gateway: its own vercel provider, the model as vercel/<id>.
+    id: 'opencode-gateway',
+    harness: 'opencode',
+    gateway: 'vercel',
+    gated:
+      'not yet passed on the real CLI; name opencode-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh', 'mcp.exa.ai'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+  },
+  {
     // Goose on Vercel AI Gateway: its vercel_ai_gateway provider (OpenAI-compatible, a Bearer
     // key), the Gemini id as google/<id>, and the served model from Vercel's response.
     id: 'goose-gateway',
     harness: 'goose',
     gateway: 'vercel',
     gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name goose-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+      'not yet passed on the real CLI; name goose-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'goose',
@@ -386,8 +400,7 @@ export const harnesses: HarnessRow[] = [
     id: 'pi-gateway',
     harness: 'pi',
     gateway: 'vercel',
-    gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name pi-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    gated: 'not yet passed on the real CLI; name pi-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'pi',

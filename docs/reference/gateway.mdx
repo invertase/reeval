@@ -27,7 +27,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 | Helper | YAML | Serves | Key |
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
-| `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, pi, and any judge or analysis model | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
+| `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, pi, OpenCode, fx, and any judge or analysis model | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
 
 ## Vercel AI Gateway
 
@@ -43,6 +43,8 @@ One key serves every harness and model on `vercel()`. The egress gateway swaps i
 | Codex | a Responses API provider on Vercel in `config.toml` | `POST /v1/responses` | `openai/` prefixed unless the id names a provider | Vercel's, from each response, e.g. `openai/gpt-5.6-luna[effort=medium]` |
 | Goose | its `vercel_ai_gateway` provider, a Bearer key | `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/models` | `google/` prefixed unless the id names a provider | Vercel's, from each response |
 | pi | its `vercel-ai-gateway` provider (Anthropic's Messages API), the key in `x-api-key` | `POST /v1/messages` | `google/` prefixed unless the id names a provider | Vercel's, from each response |
+| OpenCode | its `vercel` provider, a Bearer key | `POST /v1/messages`, `POST /v4/ai/messages` | `<provider>/<model>` as written, run as `vercel/<provider>/<model>` | Vercel's, from each response |
+| fx | its AI Gateway provider | `GET /coding-agent/v1/…`, `POST /v<n>/ai/language-model` | `openai/` prefixed unless the id names a provider | Vercel's, from each response |
 
 A Vercel project's token from `vercel env pull` (`VERCEL_OIDC_TOKEN`) works when `AI_GATEWAY_API_KEY` isn't set. It lasts about 12 hours, so the plan refuses an expired one before anything runs, and `reeval doctor` fails on it.
 
@@ -108,6 +110,8 @@ Each cell resolved under a configured `gateway` or a pin records its gateway as 
 | Settings a gateway doesn't take | `gateway[0] in reeval.yaml isn't a valid vercel(): Unrecognized key: "apikey" (got {"vercel":{"apikey":"x"}})` |
 | A harness pin that isn't a gateway | `cursor({ gateway }) names a gateway in the config's gateway list: 'direct' or 'vercel' (got 3)` |
 | Nothing in the list serves a harness | `evals/a.eval.ts › e on cursor:composer-2.5: no gateway in the list can serve it (vercel: Cursor's agent only calls Cursor's own API). Add direct() to the end of gateway to use Cursor's own key.` |
+| An fx gateway id without `vercel()` | `evals/a.eval.ts › e on fx:m: no gateway in the list can serve it (direct: fx runs a gateway id such as "google/m" only through Vercel AI Gateway). Add vercel() to gateway.` |
+| An OpenCode `vercel/…` id | `opencode(): a vercel/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add vercel() to gateway (got "vercel/anthropic/claude-haiku-4.5")` |
 | A pin to a gateway that can't serve it | `evals/a.eval.ts › e on cursor:composer-2.5: it pins gateway 'vercel', which can't serve it (Cursor's agent only calls Cursor's own API). A pin never falls back; …` |
 | A pin to a gateway that isn't listed | `evals/a.eval.ts › e on codex:m: it pins gateway 'vercel', which isn't in the gateway list (direct). Add vercel() to gateway, or pin one that's there.` |
 | A judge model nothing in the list serves | `the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.` |

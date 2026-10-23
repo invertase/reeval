@@ -513,7 +513,7 @@
                   "additionalProperties": false
                 },
                 {
-                  "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose and pi.",
+                  "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode and fx.",
                   "type": "object",
                   "properties": {
                     "kind": {

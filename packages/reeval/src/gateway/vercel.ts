@@ -1,5 +1,12 @@
 // Vercel AI Gateway as a route for a harness's model calls: the key it takes, the requests the
 // egress gateway brokers it on, and the model ids it names. One key serves every harness here.
+import {
+  providerEndpoints,
+  providerHosts,
+  providerModelResponses,
+  providerServedModel,
+  resolveOpenCodeProvider,
+} from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
 import type { AgentKind, ModelSpecific } from '../harness/agents.ts'
 
@@ -90,6 +97,32 @@ function codex(env: NodeJS.ProcessEnv): VercelRoute {
   }
 }
 
+/** fx's language-model calls on Vercel, whose responses name the model that served them. */
+export const FX_VERCEL_CALL = {
+  host: VERCEL_HOST,
+  path: { regex: '^/v\\d+/ai/language-model$' },
+  method: ['POST'],
+} as const satisfies EndpointMatch
+
+/** The model list fx fetches before a turn, and its language-model calls. */
+export const FX_VERCEL_ENDPOINTS = [
+  { host: VERCEL_HOST, path: { regex: '^/coding-agent/v1/' }, method: ['GET'] },
+  FX_VERCEL_CALL,
+] as const satisfies readonly EndpointMatch[]
+
+/** fx on its own AI Gateway provider, which takes a gateway id; a bare one is OpenAI's. */
+function fx(env: NodeJS.ProcessEnv): VercelRoute {
+  return {
+    credential: vercelCredential(env),
+    authAs: VERCEL_KEY,
+    endpoints: FX_VERCEL_ENDPOINTS,
+    modelResponses: [FX_VERCEL_CALL],
+    servedModel: servedOnVercel,
+    hosts: [VERCEL_HOST],
+    modelId: (model) => (model.includes('/') ? model : `openai/${model}`),
+  }
+}
+
 /** A Gemini id as Vercel names it (`google/gemini-3-flash`), unless the id names a provider. */
 const googleId = (model: string) => (model.includes('/') ? model : `google/${model}`)
 
@@ -124,12 +157,34 @@ function pi(env: NodeJS.ProcessEnv): VercelRoute {
   }
 }
 
+/**
+ * OpenCode on its own `vercel` provider, with the model as `vercel/<id>`: the requests the pinned
+ * CLI sends that provider's key on (harness-opencode's provider table), plus Exa's host for web
+ * search.
+ */
+function opencode(env: NodeJS.ProcessEnv): VercelRoute {
+  const resolved = resolveOpenCodeProvider('vercel/model')
+  if ('error' in resolved) throw new Error(resolved.error)
+  const { provider } = resolved
+  return {
+    credential: vercelCredential(env),
+    authAs: VERCEL_KEY,
+    endpoints: providerEndpoints(provider),
+    modelResponses: providerModelResponses(provider),
+    servedModel: (request) => providerServedModel(provider, request),
+    hosts: [...providerHosts(provider), 'mcp.exa.ai'],
+    modelId: (model) => `vercel/${model}`,
+  }
+}
+
 /** The harnesses reeval runs on Vercel, and what each needs there. */
 export const VERCEL_ROUTES: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => VercelRoute>> = {
   'claude-code': claudeCode,
   codex,
   goose,
   pi,
+  opencode,
+  fx,
 }
 
 /** Why Vercel can't serve an agent reeval doesn't route there, for the plan's messages. */

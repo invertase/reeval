@@ -21,7 +21,12 @@ export type GatewayEntry = {
 
 /** Every gateway reeval can route through, by name. */
 export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
-  direct: { cantServe: () => undefined },
+  direct: {
+    cantServe: (h) =>
+      h.kind === 'fx' && h.model.includes('/')
+        ? `fx runs a gateway id such as ${JSON.stringify(h.model)} only through Vercel AI Gateway`
+        : undefined,
+  },
   vercel: {
     // A fake agent calls no model, so any gateway serves it.
     cantServe: (h) =>
@@ -74,8 +79,23 @@ export function resolveGateway(
     skipped.push({ gateway: kind as GatewayName, why: refused })
   }
   throw new UsageError(
-    `${on}: no gateway in the list can serve it (${skipped.map((s) => `${s.gateway}: ${s.why}`).join('; ')}). Add direct() to the end of gateway to use ${agentName(harness)}'s own key.`,
+    `${on}: no gateway in the list can serve it (${skipped.map((s) => `${s.gateway}: ${s.why}`).join('; ')}). ${addHint(gateways, harness, catalog)}`,
   )
+}
+
+/** What to add to the list so it serves `harness`: `direct()` when it can, else the first that can. */
+function addHint(
+  gateways: readonly { kind: string }[],
+  harness: HarnessDescriptor,
+  catalog: Readonly<Record<string, GatewayEntry>>,
+): string {
+  const unlisted = Object.keys(catalog).filter((name) => !gateways.some((g) => g.kind === name))
+  const serves = unlisted.filter((name) => !catalog[name]?.cantServe(harness))
+  if (serves.includes('direct')) {
+    return `Add direct() to the end of gateway to use ${agentName(harness)}'s own key.`
+  }
+  const [first] = serves
+  return first ? `Add ${gatewayHelper(first)} to gateway.` : `No gateway reeval knows can serve it.`
 }
 
 /**

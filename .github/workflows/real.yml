@@ -66,7 +66,7 @@ jobs:
           [ "$HAS_ANTHROPIC" = true ] || echo "::error::No ANTHROPIC_API_KEY repository secret: the Claude Code rows fail"
           [ "$HAS_OPENAI" = true ] || echo "::error::No OPENAI_API_KEY repository secret: the Codex and fx rows fail"
           [ "$HAS_XAI" = true ] || echo "::error::No XAI_API_KEY repository secret: the Grok Build rows fail"
-          case "$HARNESSES" in *gateway*) [ "$HAS_GATEWAY" = true ] || echo "::error::No AI_GATEWAY_API_KEY repository secret: the *-gateway rows fail" ;; esac
+          [ "$HAS_GATEWAY" = true ] || echo "::error::No AI_GATEWAY_API_KEY repository secret: the *-gateway rows fail"
           true
 
   pinned:

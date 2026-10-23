@@ -261,6 +261,7 @@ export const CASES: Record<string, Case[]> = {
     ['opencode without a model', any(opencode, {})],
     ['opencode without a provider', any(opencode, { model: 'gemini-3.8-flash' })],
     ['opencode with an unknown provider', any(opencode, { model: 'nope/model' })],
+    ['opencode with a vercel/ id', any(opencode, { model: 'vercel/anthropic/claude-haiku-4.5' })],
     ['opencode good', any(opencode, { model: 'google/gemini-3.8-flash' })],
     ['goose with a provider', any(goose, { model: 'google/gemini-3.8-flash' })],
     ['goose without a model', any(goose, {})],
@@ -1186,7 +1187,13 @@ environment:
     ['yaml: vercel then direct', yaml('gateway: [vercel, direct]\n')],
     ['route: cursor on vercel alone', route([VERCEL], cursor({ model: 'composer-2.5' }))],
     ['route: antigravity on vercel alone', route([VERCEL], antigravity({ model: 'm' }))],
-    ['route: opencode on vercel alone', route([VERCEL], opencode({ model: 'anthropic/m' }))],
+    ['route: grok build on vercel alone', route([VERCEL], grokBuild({ model: 'm' }))],
+    ['route: opencode on vercel', route([VERCEL], opencode({ model: 'anthropic/m' }))],
+    ['route: an fx gateway id on direct alone', route([DIRECT], fx({ model: 'google/m' }))],
+    [
+      'route: an fx gateway id falls through to vercel',
+      route([DIRECT, VERCEL], fx({ model: 'google/m' })),
+    ],
     [
       'route: cursor pinned to vercel',
       route([VERCEL, DIRECT], cursor({ model: 'composer-2.5', gateway: 'vercel' })),

@@ -278,6 +278,61 @@ describe('Vercel AI Gateway routes', () => {
     assert.ok(direct.endpoints.every((e) => e.host === 'generativelanguage.googleapis.com'))
   })
 
+  test('OpenCode takes its own vercel provider, with the model as vercel/<id>', () => {
+    const agent = onVercel({ kind: 'opencode', model: 'google/gemini-3-flash' } as never)
+    assert.equal(agent.credential, 'AI_GATEWAY_API_KEY')
+    assert.deepEqual(agent.hosts, ['ai-gateway.vercel.sh', 'mcp.exa.ai'])
+    assert.deepEqual(
+      agent.endpoints.map((e) => [e.host, e.path]),
+      [
+        ['ai-gateway.vercel.sh', { exact: '/v1/messages' }],
+        ['ai-gateway.vercel.sh', { exact: '/v4/ai/messages' }],
+      ],
+    )
+    assert.deepEqual(agent.modelResponses, agent.endpoints)
+    assert.equal(agent.modelId?.('google/gemini-3-flash'), 'vercel/google/gemini-3-flash')
+    assert.equal(
+      agent.servedModel?.({
+        method: 'POST',
+        host: 'ai-gateway.vercel.sh',
+        path: '/v1/messages',
+        responseModel: 'google/gemini-3-flash',
+      } as never),
+      'google/gemini-3-flash',
+    )
+  })
+
+  test('fx takes its own AI Gateway provider, and a bare id is OpenAI on Vercel', () => {
+    const agent = onVercel({ kind: 'fx', model: 'gpt-4.1' } as never)
+    assert.equal(agent.credential, 'AI_GATEWAY_API_KEY')
+    assert.equal(agent.authAs, 'AI_GATEWAY_API_KEY')
+    assert.deepEqual(agent.hosts, ['ai-gateway.vercel.sh'])
+    assert.deepEqual(
+      agent.endpoints.map((e) => [e.method, e.path]),
+      [
+        [['GET'], { regex: '^/coding-agent/v1/' }],
+        [['POST'], { regex: '^/v\\d+/ai/language-model$' }],
+      ],
+    )
+    assert.equal(agent.modelId?.('gpt-4.1'), 'openai/gpt-4.1')
+    assert.equal(agent.modelId?.('google/gemini-3-flash'), 'google/gemini-3-flash')
+  })
+
+  test("a gateway id isn't fx on direct: it falls through to Vercel, or names it", () => {
+    const fx = { kind: 'fx', model: 'google/gemini-3-flash' } as HarnessDescriptor
+    const why =
+      'fx runs a gateway id such as "google/gemini-3-flash" only through Vercel AI Gateway'
+    assert.deepEqual(resolve(list('direct', 'vercel'), fx), {
+      name: 'vercel',
+      skipped: [{ gateway: 'direct', why }],
+    })
+    assert.throws(() => resolve(list('direct'), fx), {
+      message: `evaluate("e") on fx:gemini-3-flash: no gateway in the list can serve it (direct: ${why}). Add vercel() to gateway.`,
+    })
+    const bare = { kind: 'fx', model: 'gpt-4.1' } as HarnessDescriptor
+    assert.deepEqual(resolve(list('direct'), bare), { name: 'direct', skipped: [] })
+  })
+
   test("the egress gateway swaps Vercel's key in only on Vercel's model paths", () => {
     process.env.AI_GATEWAY_API_KEY = 'vck_test'
     const brokering = brokeringFor({ ...claude, gateway: 'vercel' } as HarnessDescriptor)

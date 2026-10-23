@@ -163,7 +163,9 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     args: ['acp'],
     auth: settings.auth,
     env: gooseEnv(settings),
-    credentialEnv: [credential],
+    // Every provider's, not just this one's: the bootstrap is keyed on these names, so the image's
+    // bootstrap serves each provider.
+    credentialEnv: [GEMINI_PROVIDER.credentialEnv, AI_GATEWAY_PROVIDER.credentialEnv],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[credential]
       const placeholder = sandboxEnv?.[credential]
