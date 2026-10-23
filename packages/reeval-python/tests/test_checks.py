@@ -188,6 +188,18 @@ def test_temporaries_are_gone_after_the_assert() -> None:
     assert not [k for k in vars(cls) if k.startswith("@reeval")]
 
 
+def test_temporaries_are_gone_after_a_failed_assert_too() -> None:
+    source = (
+        "x = 1\n"
+        "try:\n    assert x == 2, 'x'\nexcept AssertionError:\n    pass\n"
+        "class C:\n    try:\n        assert x == 2\n    except AssertionError:\n        pass\n"
+        "def body(): return C\n"
+    )
+    _, cls, scope = _body(source)
+    assert not [k for k in scope if k.startswith("@reeval")]
+    assert not [k for k in vars(cls) if k.startswith("@reeval")]
+
+
 def test_walrus_on_a_compared_side_binds_as_python_does() -> None:
     _, out, _ = _body("def body():\n    assert (y := 3) == 3\n    return y\n")
     assert out == 3

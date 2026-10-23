@@ -9,6 +9,8 @@ from stdio_host import Host
 
 EVALS = """
 import asyncio
+import contextvars
+import threading
 import time
 from reeval_python import evaluate
 from helper import must_be_even
@@ -47,6 +49,55 @@ def message_raises(c):
 def after_abort(c):
     time.sleep(0.3)
     assert True
+
+
+@evaluate("task group")
+async def task_group(c):
+    async def is_two(n):
+        assert n == 2
+
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(is_two(1))
+        tg.create_task(is_two(3))
+
+
+@evaluate("task group with an error")
+async def task_group_with_an_error(c):
+    async def is_two(n):
+        assert n == 2
+
+    async def breaks():
+        raise ValueError("broken")
+
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(is_two(1))
+        tg.create_task(breaks())
+
+
+@evaluate("chained")
+def chained(c):
+    try:
+        assert 1 == 2
+    except AssertionError as e:
+        raise RuntimeError("wrapped") from e
+
+
+@evaluate("fails after the abort")
+async def fails_after_the_abort(c):
+    try:
+        await c.exec("sleep 20")
+    except BaseException:
+        pass
+    assert 1 == 2
+
+
+@evaluate("leaves a thread")
+def leaves_a_thread(c):
+    def late():
+        time.sleep(0.3)
+        assert True
+
+    threading.Thread(target=contextvars.copy_context().run, args=(late,)).start()
 """
 
 HELPER = """
@@ -173,5 +224,64 @@ def test_an_eval_file_in_another_encoding_loads(tmp_path: Path) -> None:
         host.send({"t": "collect", "file": "evals/latin.eval.py"})
         declared = host.wait(lambda m: m.get("file") == "evals/latin.eval.py")
         assert [n["name"] for n in declared["tree"]["children"]] == ["café"]
+    finally:
+        host.kill()
+
+
+def test_every_failure_in_a_task_group_is_recorded_and_the_attempt_fails(tmp_path: Path) -> None:
+    host = _host(tmp_path)
+    try:
+        host.start("task group")
+        error = host.done()["error"]
+        assert [(c["subject"], c["status"]) for c in _records(host)] == [
+            ("n == 2", "fail"),
+            ("n == 2", "fail"),
+        ]
+        assert error["name"] == "AssertionError"
+        assert error["message"] == "assert 1 == 2\nassert 3 == 2"
+    finally:
+        host.kill()
+
+
+def test_a_task_group_with_an_error_records_its_failures_and_errors(tmp_path: Path) -> None:
+    host = _host(tmp_path)
+    try:
+        host.start("task group with an error")
+        assert host.done()["error"]["name"] == "ExceptionGroup"
+        assert [(c["subject"], c["status"]) for c in _records(host)] == [("n == 2", "fail")]
+    finally:
+        host.kill()
+
+
+def test_a_failure_an_error_was_raised_from_is_recorded(tmp_path: Path) -> None:
+    host = _host(tmp_path)
+    try:
+        host.start("chained")
+        assert host.done()["error"]["name"] == "RuntimeError"
+        assert [(c["subject"], c["status"]) for c in _records(host)] == [("1 == 2", "fail")]
+    finally:
+        host.kill()
+
+
+def test_a_body_that_fails_after_its_abort_still_ends(tmp_path: Path) -> None:
+    host = _host(tmp_path, answer=False)
+    try:
+        host.start("fails after the abort")
+        host.wait(lambda m: m.get("call", {}).get("op") == "exec")
+        host.abort("k1")
+        assert host.done()["error"]["name"] == "AssertionError"
+        assert _records(host) == []
+        assert "never retrieved" not in host.stderr
+    finally:
+        host.kill()
+
+
+def test_a_thread_that_outlives_its_body_records_nothing(tmp_path: Path) -> None:
+    host = _host(tmp_path)
+    try:
+        host.start("leaves a thread")
+        assert "error" not in host.done()
+        time.sleep(0.6)
+        assert _records(host) == []
     finally:
         host.kill()

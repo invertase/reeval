@@ -20,7 +20,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO, cast
 
-from reeval_python.checks import bind_recorder, failed_check, unrecorded_failure
+from reeval_python.checks import bind_recorder, escaped_failures, only_assertions
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
 from reeval_python.errors import AttemptAborted, ReevalAssertionError
@@ -146,9 +146,14 @@ class _Connection:
         self._pending: dict[tuple[str, str], asyncio.Future[dict[str, Any]]] = {}
         self.aborted: dict[str, AttemptAborted] = {}
         self._records: set[tuple[str, str]] = set()
+        self._ended: set[str] = set()
 
     def write(self, msg: dict[str, Any]) -> None:
         self._frames.write(msg)
+
+    def done(self, key: str, error: dict[str, Any] | None = None) -> None:
+        self._ended.add(key)
+        self.write({"type": "done", "key": key, **({"error": error} if error else {})})
 
     def abort(self, key: str, name: str, message: str) -> None:
         """reeval gave up on the body: its calls in flight and every later one raise."""
@@ -179,6 +184,9 @@ class _Connection:
         """Sends a check without waiting for reeval's answer, which only a refusal is shown of."""
         if attempt_id in self.aborted:
             raise self.aborted[attempt_id]
+        # A thread that outlived its body checks after the attempt's outcome is settled.
+        if attempt_id in self._ended:
+            return
         self._records.add((attempt_id, req_id))
         self.write({"id": req_id, "call": call, "key": attempt_id})
 
@@ -254,23 +262,22 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         raise
     except AttemptAborted as exc:
         error = {"name": exc.name, "message": str(exc)}
-    except ReevalAssertionError as exc:
-        error = {"name": "AssertionError", "message": str(exc), "stack": traceback.format_exc()}
-    except AssertionError as exc:
-        call = failed_check(exc) or unrecorded_failure(exc)
-        record(call)
-        error = {
-            "name": "AssertionError",
-            "message": call["message"],
-            "stack": traceback.format_exc(),
-        }
     except BaseException as exc:  # noqa: BLE001
         # SystemExit and the like end this body only: the runner serves other attempts too.
-        if (failed := failed_check(exc)) is not None:
-            record(failed)
-        error = {"name": type(exc).__name__, "message": str(exc), "stack": traceback.format_exc()}
+        failures = escaped_failures(exc)
+        # Once reeval has aborted the attempt it has settled it, and refuses the records.
+        with contextlib.suppress(AttemptAborted):
+            for call in failures:
+                record(call)
+        if only_assertions(exc):
+            own = failures if not isinstance(exc, ReevalAssertionError) else []
+            message = "\n".join(c["message"] for c in own) if own else str(exc)
+            error = {"name": "AssertionError", "message": message}
+        else:
+            error = {"name": type(exc).__name__, "message": str(exc)}
+        error["stack"] = traceback.format_exc()
     _flush(attempt_id)
-    conn.write({"type": "done", "key": attempt_id, **({"error": error} if error else {})})
+    conn.done(attempt_id, error)
 
 
 def _flush(key: str) -> None:
@@ -297,7 +304,7 @@ def _cancelled_done(conn: _Connection, key: str) -> None:
             "RunnerError", "the runner stopped this body without reeval aborting it"
         )
     error = {"name": aborted.name, "message": str(aborted)}
-    conn.write({"type": "done", "key": key, "error": error})
+    conn.done(key, error)
 
 
 def _handle(

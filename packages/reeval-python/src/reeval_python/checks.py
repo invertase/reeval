@@ -16,7 +16,9 @@ import traceback
 import warnings
 from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, cast
+
+from reeval_python.errors import ReevalAssertionError
 
 Recorder = Callable[[dict[str, Any]], None]
 
@@ -143,6 +145,40 @@ def unrecorded_failure(exc: AssertionError) -> dict[str, Any]:
     }
 
 
+def escaped_failures(exc: BaseException) -> list[dict[str, Any]]:
+    """The `record` calls for the failures that escape a body with `exc`: its own, its group's
+    (a `TaskGroup`'s) and those it was raised from or while handling. An `expect` failure isn't
+    one: reeval recorded it when it failed."""
+    out: list[dict[str, Any]] = []
+    seen: set[int] = set()
+
+    def walk(e: BaseException) -> None:
+        if id(e) in seen:
+            return
+        seen.add(id(e))
+        if (call := failed_check(e)) is not None:
+            out.append(call)
+        elif isinstance(e, AssertionError) and not isinstance(e, ReevalAssertionError):
+            out.append(unrecorded_failure(e))
+        if isinstance(e, BaseExceptionGroup):
+            for sub in cast(BaseExceptionGroup[BaseException], e).exceptions:
+                walk(sub)
+        for link in (e.__cause__, e.__context__):
+            if link is not None:
+                walk(link)
+
+    walk(exc)
+    return out
+
+
+def only_assertions(exc: BaseException) -> bool:
+    """Whether `exc` is a failed check: an `AssertionError`, or a group of nothing else."""
+    if isinstance(exc, BaseExceptionGroup):
+        group = cast(BaseExceptionGroup[BaseException], exc)
+        return all(only_assertions(sub) for sub in group.exceptions)
+    return isinstance(exc, AssertionError)
+
+
 def _name(name: str, ctx: ast.expr_context | None = None) -> ast.Name:
     return ast.Name(name, ctx or ast.Load())
 
@@ -210,12 +246,20 @@ class _Rewrite(ast.NodeTransformer):
         out: list[ast.stmt] = [
             *before,
             ast.Assign(targets=[_name(error, ast.Store())], value=hook(_name(message))),
+            # Deleted on both paths, so a module- or class-level assert leaves no names behind.
+            ast.Delete(targets=[_name(t, ast.Del()) for t in temps if t != error]),
             ast.If(
                 test=ast.Compare(_name(error), [ast.IsNot()], [ast.Constant(None)]),
-                body=[ast.Raise(exc=_name(error))],
-                orelse=[],
+                body=[
+                    ast.Try(
+                        body=[ast.Raise(exc=_name(error))],
+                        handlers=[],
+                        orelse=[],
+                        finalbody=[ast.Delete(targets=[_name(error, ast.Del())])],
+                    )
+                ],
+                orelse=[ast.Delete(targets=[_name(error, ast.Del())])],
             ),
-            ast.Delete(targets=[_name(t, ast.Del()) for t in temps]),
         ]
         for stmt in out:
             ast.copy_location(stmt, node)
