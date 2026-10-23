@@ -360,6 +360,13 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'gateway.vertex',
+    area: 'Config and selection',
+    name: '`vertex({ project, location, regions })`: its shape checked at plan time, and every harness and model falling through it until reeval routes them to Vertex AI',
+    plan: ['gateway/vertex-yaml'],
+    tests: [],
+  },
+  {
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',

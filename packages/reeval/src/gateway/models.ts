@@ -24,6 +24,7 @@ const MODEL_GATEWAYS: Readonly<Record<GatewayName, (model: string) => string | u
           .map((p) => `${p}/*`)
           .join(', ')} models on their own keys`,
   vercel: () => undefined,
+  vertex: () => "reeval doesn't call models on Vertex AI yet",
 }
 
 /** The run's gateway list: the profile's, else the config's (`[direct()]` when neither sets one). */

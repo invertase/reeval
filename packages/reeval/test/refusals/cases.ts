@@ -77,6 +77,7 @@ const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDesc
   resolveModelGateway(name, pin, { gateways }, 'the judge model')
 const VERCEL: GatewayDescriptor = { kind: 'vercel' }
 const DIRECT: GatewayDescriptor = { kind: 'direct' }
+const VERTEX: GatewayDescriptor = { kind: 'vertex' }
 /** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
 const oidc = (env: NodeJS.ProcessEnv) => () => {
   const problem = vercelCredentialProblem(env, new Date('2026-01-01T12:00:00Z'))
@@ -1247,6 +1248,40 @@ environment:
     ['model: mistral on vercel then direct', model('mistral/large', undefined, [VERCEL, DIRECT])],
     ['model: pinned to vercel, not listed', model('anthropic/m', 'vercel', [DIRECT])],
     ['model: mistral pinned to direct', model('mistral/large', 'direct', [VERCEL, DIRECT])],
+    [
+      'ts: vertex with settings',
+      config({
+        gateway: [
+          {
+            kind: 'vertex',
+            project: 'p',
+            location: 'us-east5',
+            regions: { anthropic: 'us-east5' },
+          },
+        ],
+      }),
+    ],
+    ['ts: vertex with a typo', config({ gateway: [{ kind: 'vertex', projet: 'p' }] })],
+    [
+      'ts: vertex with an unknown publisher',
+      config({ gateway: [{ kind: 'vertex', regions: { openai: 'us-east5' } }] }),
+    ],
+    [
+      'ts: vertex with a region not one',
+      config({ gateway: [{ kind: 'vertex', location: 'US East' }] }),
+    ],
+    [
+      'yaml: vertex with settings',
+      yaml('gateway: [{ vertex: { project: p, regions: { anthropic: us-east5 } } }, direct]\n'),
+    ],
+    ['route: codex on vertex alone', route([VERTEX], codex({ model: 'm' }))],
+    ['route: cursor on vertex alone', route([VERTEX], cursor({ model: 'composer-2.5' }))],
+    ['route: claude code on vertex alone', route([VERTEX], claudeCode({ model: 'm' }))],
+    [
+      'route: claude code on vertex then direct',
+      route([VERTEX, DIRECT], claudeCode({ model: 'm' })),
+    ],
+    ['model: anthropic on vertex alone', model('anthropic/m', undefined, [VERTEX])],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

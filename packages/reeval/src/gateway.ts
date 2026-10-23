@@ -1,5 +1,9 @@
 // `reeval/gateway`: the gateways a config's `gateway` list names, in preference order.
-import type { DirectGatewayDescriptor, VercelGatewayDescriptor } from './types.ts'
+import type {
+  DirectGatewayDescriptor,
+  VercelGatewayDescriptor,
+  VertexGatewayDescriptor,
+} from './types.ts'
 
 /**
  * Each provider's own key, as a config without `gateway` uses: the harness's own credential
@@ -15,10 +19,21 @@ export const direct = (): DirectGatewayDescriptor => ({ kind: 'direct' })
  */
 export const vercel = (): VercelGatewayDescriptor => ({ kind: 'vercel' })
 
+/**
+ * Google Cloud's Vertex AI, on Application Default Credentials: `project` defaults to
+ * `GOOGLE_CLOUD_PROJECT` and `location` to `global`, and `regions` names a publisher's own region
+ * where it differs.
+ */
+export const vertex = (
+  options: Omit<VertexGatewayDescriptor, 'kind'> = {},
+): VertexGatewayDescriptor => ({ kind: 'vertex', ...options })
+
 export type {
   DirectGatewayDescriptor,
   GatewayDescriptor,
   GatewayName,
   ResolvedGateway,
   VercelGatewayDescriptor,
+  VertexGatewayDescriptor,
+  VertexPublisher,
 } from './types.ts'
