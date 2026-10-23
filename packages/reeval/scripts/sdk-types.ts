@@ -366,16 +366,282 @@ export function python(defs: Map<string, Schema> = definitions()): string {
   ].join('\n')}${blocks.join('\n\n\n')}\n`
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const out = python()
-  if (process.argv.includes('--check')) {
-    let current = ''
-    try {
-      current = readFileSync(PYTHON_OUT, 'utf8')
-    } catch {}
-    if (current !== out) {
-      console.error(`${PYTHON_OUT} is stale: run pnpm --filter reeval sdk-types`)
-      process.exit(1)
+const goComment = (text: string, indent: string) =>
+  wrapped(text, indent, 100).map((line) => line.replace(/^(\s*)# ?/, '$1// ').trimEnd())
+
+const goLiteral = (value: unknown, where: string) => {
+  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value)
+  if (Number.isInteger(value)) return String(value)
+  throw new Error(`${where}: no Go constant for ${JSON.stringify(value)}`)
+}
+
+/** Lines as gofmt aligns them: each run of cell rows padded to its columns; a string breaks the run. */
+function aligned(rows: (string | string[])[], indent: string): string[] {
+  const out: string[] = []
+  let run: string[][] = []
+  const flush = () => {
+    const widths: number[] = []
+    for (const row of run) {
+      row.forEach((cell, i) => {
+        if (i < row.length - 1) widths[i] = Math.max(widths[i] ?? 0, cell.length)
+      })
     }
-  } else writeFileSync(PYTHON_OUT, out)
+    for (const row of run) {
+      out.push(indent + row.map((cell, i) => (i < row.length - 1 ? cell.padEnd(widths[i] ?? 0) : cell)).join(' '))
+    }
+    run = []
+  }
+  for (const row of rows) {
+    if (typeof row === 'string') {
+      flush()
+      out.push(row)
+    } else if (row.length === 1) {
+      flush()
+      out.push(indent + row[0])
+    } else run.push(row)
+  }
+  flush()
+  return out
+}
+
+const goConstType = (value: unknown) =>
+  typeof value === 'string' ? 'string' : typeof value === 'boolean' ? 'bool' : 'int'
+
+/** Go: each named object a struct, each union of objects an interface its variants implement. */
+export function go(defs: Map<string, Schema> = definitions()): string {
+  for (const name of defs.keys()) {
+    if (!/^[A-Z][A-Za-z0-9]*$/.test(name)) throw new Error(`$defs/${name} can't be a Go name: rename it`)
+  }
+  const blocks: string[] = []
+  const synthetic = new Set<string>()
+  const markers = new Map<string, Set<string>>()
+  let needsJSON = false
+
+  const fresh = (name: string) => {
+    let candidate = name
+    for (let n = 2; synthetic.has(candidate); n++) candidate = `${name}${n}`
+    if (defs.has(candidate)) throw new Error(`the generated name ${candidate} is also a $def: rename the $def`)
+    synthetic.add(candidate)
+    return candidate
+  }
+  const resolve = (schema: Schema): Schema =>
+    schema.$ref ? (defs.get(schema.$ref.replace('#/$defs/', '')) ?? {}) : schema
+  const isStruct = (schema: Schema): boolean => {
+    const s = resolve(schema)
+    return s.type === 'object' && hasFields(s) && !(s.anyOf ?? s.oneOf)
+  }
+  const nillable = (type: string) =>
+    type === 'any' || type.startsWith('[]') || type.startsWith('map[') || type.startsWith('*')
+  const mark = (struct: string, union: string) => {
+    const set = markers.get(struct) ?? new Set()
+    markers.set(struct, set.add(union))
+  }
+
+  function typeOf(schema: Schema, hint: string): string {
+    mappable(schema, hint)
+    if (schema.$ref) {
+      const name = /^#\/\$defs\/([A-Za-z_][A-Za-z0-9_]*)$/.exec(schema.$ref)?.[1]
+      if (!name || !defs.has(name)) throw new Error(`${hint}: can't resolve $ref ${schema.$ref}`)
+      return name
+    }
+    if ('const' in schema) {
+      goLiteral(schema.const, hint)
+      return goConstType(schema.const)
+    }
+    if (schema.enum) {
+      for (const v of schema.enum) goLiteral(v, hint)
+      const kinds = new Set(schema.enum.map(goConstType))
+      return kinds.size === 1 ? [...kinds][0]! : 'any'
+    }
+    const union = schema.anyOf ?? schema.oneOf
+    if (union) return unionOf(union, hint)
+    if (Array.isArray(schema.type)) {
+      return unionOf(
+        schema.type.map((t) => ({ ...schema, type: t })),
+        hint,
+      )
+    }
+    switch (schema.type) {
+      case 'string':
+        return 'string'
+      case 'integer':
+        return 'int'
+      case 'number':
+        return 'float64'
+      case 'boolean':
+        return 'bool'
+      case 'null':
+      case undefined:
+        return 'any'
+      case 'array':
+        return `[]${schema.items ? typeOf(schema.items, `${hint}Item`) : 'any'}`
+      case 'object': {
+        if (hasFields(schema)) return struct(fresh(hint), schema)
+        const values = schema.additionalProperties
+        return `map[string]${typeof values === 'object' && Object.keys(values).length > 0 ? typeOf(values, `${hint}Value`) : 'any'}`
+      }
+      default:
+        throw new Error(`${hint}: the generator can't map the type ${schema.type}`)
+    }
+  }
+
+  /** `T | null` is `*T`; a union of objects an interface named `hint`; any other union `any`. */
+  function unionOf(nested: Schema[], hint: string, named = false): string {
+    const flat = (v: Schema): Schema[] => (v.anyOf ?? v.oneOf ?? [v]).flatMap((x) => (x === v ? [x] : flat(x)))
+    const variants = nested.flatMap(flat)
+    const present = variants.filter((v) => v.type !== 'null')
+    if (present.length < variants.length) {
+      if (present.length !== 1) return 'any'
+      const type = typeOf(present[0]!, hint)
+      return nillable(type) || markers.has(type) || type === hint ? type : `*${type}`
+    }
+    if (present.length > 1 && present.every(isStruct)) {
+      const name = named ? hint : fresh(hint)
+      for (const [i, variant] of present.entries()) {
+        const struct = variant.$ref
+          ? typeOf(variant, hint)
+          : typeOf(variant, variantName(variant, name, i))
+        mark(struct, name)
+      }
+      blocks.push(`type ${name} interface {\n\tis${name}()\n}`)
+      return name
+    }
+    const types = new Set(present.map((v, i) => typeOf(v, variantName(v, hint, i))))
+    return types.size === 1 ? [...types][0]! : 'any'
+  }
+
+  function variantName(variant: Schema, parent: string, index: number): string {
+    if (variant.anyOf || variant.oneOf) return parent
+    for (const key of DISCRIMINATORS) {
+      const value = variant.properties?.[key]?.const
+      if (typeof value === 'string') return `${parent}${pascal(value)}`
+    }
+    if (variant.properties?.ok?.const === false) return `${parent}Error`
+    const required = variant.required ?? []
+    const keys = required.length === 1 ? required : Object.keys(variant.properties ?? {})
+    const [only] = keys
+    if (keys.length === 1 && only) return `${parent}${pascal(only)}`
+    return `${parent}${index + 1}`
+  }
+
+  function struct(name: string, schema: Schema): string {
+    mappable(schema, name)
+    const others = schema.additionalProperties
+    if (typeof others === 'object' && Object.keys(others).length > 0) {
+      throw new Error(`${name}: a struct can't have both fields and other keys`)
+    }
+    const required = new Set(schema.required ?? [])
+    const consts: string[][] = []
+    const values: string[] = []
+    const fields: (string | string[])[] = []
+    const goNames = new Set<string>()
+    for (const [key, prop] of Object.entries(schema.properties ?? {})) {
+      const field = pascal(key)
+      if (!/^[A-Z]/.test(field) || goNames.has(field)) {
+        throw new Error(`${name}.${key} can't be a Go field name`)
+      }
+      goNames.add(field)
+      if ('const' in prop) {
+        mappable(prop, `${name}${field}`)
+        consts.push([field, goConstType(prop.const), `\`json:"${key}"\``])
+        values.push(goLiteral(prop.const, `${name}.${key}`))
+        continue
+      }
+      const type = typeOf(prop, `${name}${field}`)
+      const optional = !required.has(key)
+      const tag = optional ? `${key},omitzero` : key
+      // An absent struct is nil, so an empty one (`poll: {}`, an exit code of 0) still goes out.
+      if (optional && isStruct(prop)) {
+        if (prop.description) fields.push(...goComment(prop.description, '\t'))
+        fields.push([field, `*${type}`, `\`json:"${tag}"\``])
+        continue
+      }
+      if (prop.description) fields.push(...goComment(prop.description, '\t'))
+      fields.push([field, type, `\`json:"${tag}"\``])
+    }
+    const doc = schema.description ? goComment(schema.description, '') : []
+    blocks.push(
+      [...doc, `type ${name} struct {`, ...aligned(fields, '\t'), '}'].join('\n').replace('struct {\n}', 'struct{}'),
+    )
+    if (consts.length > 0) {
+      needsJSON = true
+      blocks.push(
+        [
+          `// MarshalJSON writes ${name} with its constant fields.`,
+          `func (v ${name}) MarshalJSON() ([]byte, error) {`,
+          `\ttype fields ${name}`,
+          '\treturn json.Marshal(struct {',
+          ...aligned([...consts, ['fields']], '\t\t'),
+          `\t}{${[...values, 'fields(v)'].join(', ')}})`,
+          '}',
+        ].join('\n'),
+      )
+    }
+    return name
+  }
+
+  for (const [name, schema] of defs) {
+    if (isStruct(schema) && !schema.$ref) {
+      struct(name, schema)
+      continue
+    }
+    const union = schema.anyOf ?? schema.oneOf
+    const doc = schema.description ? goComment(schema.description, '') : []
+    const flat = (v: Schema): Schema[] => (v.anyOf ?? v.oneOf ?? [v]).flatMap((x) => (x === v ? [x] : flat(x)))
+    const variants = union?.flatMap(flat)
+    if (variants && variants.length > 1 && variants.every(isStruct)) {
+      unionOf(union, name, true)
+      const iface = blocks.pop() as string
+      blocks.push([...doc, iface].join('\n'))
+      continue
+    }
+    if (schema.enum && schema.enum.every((v) => typeof v === 'string')) {
+      const rows = (schema.enum as string[]).map((v) => [`${name}${pascal(v)}`, name, `= ${JSON.stringify(v)}`])
+      blocks.push([...doc, `type ${name} string`, '', 'const (', ...aligned(rows, '\t'), ')'].join('\n'))
+      continue
+    }
+    const type = typeOf(schema, name)
+    blocks.push([...doc, `type ${name} = ${type}`].join('\n'))
+  }
+
+  for (const [structName, unions] of [...markers].sort(([a], [b]) => byCodePoint(a, b))) {
+    for (const union of [...unions].sort(byCodePoint)) {
+      blocks.push(`func (${structName}) is${union}() {}`)
+    }
+  }
+
+  return `${[
+    '// Code generated by packages/reeval/scripts/sdk-types.ts. DO NOT EDIT.',
+    '',
+    "// Package wire is reeval's wire types, generated from its JSON Schemas in packages/reeval:",
+    '//',
+    ...SOURCES.map((s) => `//   - ${s}`),
+    '//',
+    "// Private to the SDK: its public API is hand-written and doesn't expose these.",
+    'package wire',
+    '',
+    ...(needsJSON ? ['import "encoding/json"', ''] : []),
+    '',
+  ].join('\n')}${blocks.join('\n\n')}\n`
+}
+
+export const GO_OUT = join(pkg, '../../sdks/go/internal/wire/wire_gen.go')
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const outputs: [string, string][] = [
+    [PYTHON_OUT, python()],
+    [GO_OUT, go()],
+  ]
+  for (const [file, out] of outputs) {
+    if (process.argv.includes('--check')) {
+      let current = ''
+      try {
+        current = readFileSync(file, 'utf8')
+      } catch {}
+      if (current !== out) {
+        console.error(`${file} is stale: run pnpm --filter reeval sdk-types`)
+        process.exitCode = 1
+      }
+    } else writeFileSync(file, out)
+  }
 }
