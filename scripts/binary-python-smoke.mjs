@@ -3,9 +3,9 @@
 //
 //   node scripts/binary-python-smoke.mjs <binary> --wheel <reeval_python-*.whl> [--python 3.11,3.14]
 //
-// In an empty directory it writes a project whose pyproject.toml depends on the wheel (built from
-// the same commit as the binary), and for each Python version runs three *.eval.py files on the
-// fake harness and sandbox: one judge-free (it also checks the runner's Python is that version),
+// In an empty directory it writes a project with a reeval.yml and a pyproject.toml that depends on
+// the wheel (built from the same commit as the binary). For each Python version it runs three
+// *.eval.py files on the fake harness and sandbox: one judge-free (it also checks the runner's Python is that version),
 // one with the fake judge, and a canary that must fail. Then it runs the project from its .venv
 // with no pyproject.toml, so reeval starts .venv's python rather than uv, and checks that a
 // reeval-python too old for the binary (0.10.0, from PyPI) and a project without reeval-python
@@ -56,18 +56,12 @@ delete baseEnv.REEVAL_PYTHON
 delete baseEnv.REEVAL_PYTHON_SDK
 delete baseEnv.VIRTUAL_ENV
 
-const CONFIG = `import { defineConfig } from 'reeval'
-import { fakeHarness } from 'reeval/harness'
-import { fakeJudge } from 'reeval/judge'
-import { fakeSandbox } from 'reeval/sandbox'
-
-export default defineConfig({
-  include: ['evals/**/*.eval.py'],
-  harness: fakeHarness({ files: { 'greet.py': 'print("hi")\\n' }, text: 'I wrote greet.py.' }),
-  sandbox: fakeSandbox(),
-  judge: { model: fakeJudge({ score: 1 }) },
-  timeout: '2m',
-})
+// reeval.yml, not reeval.config.ts: a Python project has no TypeScript.
+const CONFIG = `include: ['evals/**/*.eval.py']
+harness: { kind: fake, files: { greet.py: "print(\\"hi\\")\\n" }, text: I wrote greet.py. }
+sandbox: { kind: fake }
+judge: { model: { kind: fake-judge, score: 1 } }
+timeout: 2m
 `
 const EVALS = {
   'greet.eval.py': `import os
@@ -108,7 +102,7 @@ def canary(c):
 function project(name, dependency) {
   const dir = join(alone, name)
   mkdirSync(join(dir, 'evals'), { recursive: true })
-  writeFileSync(join(dir, 'reeval.config.ts'), CONFIG)
+  writeFileSync(join(dir, 'reeval.yml'), CONFIG)
   for (const [file, text] of Object.entries(EVALS)) writeFileSync(join(dir, 'evals', file), text)
   writeFileSync(
     join(dir, 'pyproject.toml'),

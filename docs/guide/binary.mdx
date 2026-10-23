@@ -83,7 +83,12 @@ uv add reeval-python  # the Python SDK
 reeval run            # runs evals/**/*.eval.py with it
 ```
 
-The binary doesn't carry the Python SDK: it runs each `*.eval.py` with the `reeval_python` module from your project's Python. With a `pyproject.toml` and [uv](https://docs.astral.sh/uv/) on your `PATH` that's `uv run`, which picks Python 3.11 or later (`UV_PYTHON` chooses one); otherwise `.venv`'s Python, then `python3` (`python` on Windows). `REEVAL_PYTHON` names another interpreter.
+```yaml title="reeval.yml"
+include: ['evals/**/*.eval.py']
+harness: { kind: cursor, model: composer-2.5 }
+```
+
+A Python project configures reeval with [`reeval.yml`](/reference/config#reevalyaml) rather than `reeval.config.ts`. The binary doesn't carry the Python SDK: it runs each `*.eval.py` with the `reeval_python` module from your project's Python. With a `pyproject.toml` and [uv](https://docs.astral.sh/uv/) on your `PATH` that's `uv run`, which picks Python 3.11 or later (`UV_PYTHON` chooses one); otherwise `.venv`'s Python, then `python3` (`python` on Windows). `REEVAL_PYTHON` names another interpreter.
 
 ```text
 reeval: evals/greet.eval.py: The language runner (uv run --project … python -m
