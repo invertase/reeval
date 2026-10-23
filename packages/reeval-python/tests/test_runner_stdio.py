@@ -76,3 +76,26 @@ def test_a_runner_on_another_protocol_says_so_instead_of_hello(
     assert done.returncode == 2
     assert done.stdout == ""
     assert says in done.stderr, done.stderr
+
+
+SLEEPS = """
+import asyncio
+from reeval_python import evaluate
+
+
+@evaluate("sleeps")
+async def sleeps(c):
+    await asyncio.sleep(30)
+"""
+
+
+def test_an_abort_between_calls_ends_the_body(tmp_path: Path) -> None:
+    host = Host(tmp_path, SLEEPS)
+    try:
+        host.start("sleeps")
+        host.abort("k1", "timeout", "Eval timed out after 1s")
+        error = {"name": "TimeoutError", "message": "Eval timed out after 1s"}
+        assert host.done() == {"type": "done", "key": "k1", "error": error}
+        assert host.close() == 0
+    finally:
+        host.kill()

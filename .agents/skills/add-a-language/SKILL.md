@@ -18,12 +18,19 @@ lifecycle stay shared.
 - **SDKs are language-native; the wire format is never the public API.** Python evals import
   `evaluate` and `expect` from `reeval_python`, use snake_case (`c.read_file`, `assert result.ok`,
   typed `ExecResult` / `Turn` / `Verdict`), and snake_case options mapped to camelCase on the wire
-  internally. Plain `assert`s in an eval file are checks in the record: the SDK rewrites them at
-  import, as pytest does, and sends a protocol `record` call named by the assert's test as
-  written. A pass is sent at once; a failure only if its `AssertionError` escapes the body, so a
-  failure the body catches isn't a failed check. The message is the failure's reason. Use `expect(…).to_succeed()` and the other matchers for reeval-specific checks.
-  Plain `def` bodies run on a worker thread with a sync context; `async def` uses the same asyncio
-  implementation.
+  internally, at any depth, from the generated key tables (`CAMEL_KEYS`, and `RECORD_FIELDS`,
+  whose keys are the eval's own and keep their spelling). Plain `assert`s in an eval file are
+  checks in the record: the SDK rewrites them at import, as pytest does, and sends a protocol
+  `record` call named by the assert's test as written. A pass is sent at once; a failure only if
+  its `AssertionError` escapes the body, so a failure the body catches isn't a failed check. The
+  message is the failure's reason. Use `expect(…).to_succeed()` and the other matchers for
+  reeval-specific checks.
+  Follow the language's own sync and async idioms rather than TypeScript's promises: in Python a
+  `def` body runs on a worker thread with a blocking context (`c.exec` returns its result) and
+  `reeval_python.expect`, and an `async def` body gets coroutines and `reeval_python.aio.expect`,
+  whose typed matchers return coroutines so the type checker reports a missing `await`. A poll
+  takes a function that reads or runs something (`expect.poll(lambda: c.read_file(p))`), which the
+  SDK calls once to learn the subject for reeval to re-read.
 - **TypeScript stays in-process.** Never send `.eval.ts` through the runner transport; records,
   stacks and matcher behaviour must stay unchanged.
 - **No per-language branches in the engine.** The worker calls `loadEvalModule()` only; do not

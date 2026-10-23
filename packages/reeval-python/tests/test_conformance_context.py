@@ -42,6 +42,7 @@ def test_context_golden(mirror: Path, tmp_path: Path) -> None:
     shutil.copy(mirror, tmp_path / rel)
     runner = Runner(tmp_path)
     [node] = runner.collect(rel)["children"]
+    assert node["options"] == lines[0]["options"], "the mirror declares the golden's options"
 
     # The transport's `key` isn't in the goldens, which are the attempt protocol's own lines.
     for line in lines[1:]:
@@ -54,10 +55,16 @@ def test_context_golden(mirror: Path, tmp_path: Path) -> None:
             sent = runner.read()
             assert sent.pop("key", None) == "k1"
             assert _without_stack(sent) == line["runner"]
-    runner.close()
+    assert runner.finish() == [], "the runner sent nothing after the golden's last line"
+
+
+# JavaScript regular expressions on the wire: Python sends its own patterns ({ matchedBy }).
+NOT_PYTHON = {"expect-regexp"}
 
 
 def test_every_golden_has_a_mirror() -> None:
-    goldens = {p.stem for p in GOLDENS.glob("*.ndjson")}
+    goldens = {p.stem for p in GOLDENS.glob("*.ndjson")} - NOT_PYTHON
     mirrored = {m.name.split(".")[0] for m in MIRRORS}
-    assert mirrored <= goldens, f"mirrors without a golden: {sorted(mirrored - goldens)}"
+    assert mirrored == goldens, (
+        f"unmirrored {sorted(goldens - mirrored)}, extra {sorted(mirrored - goldens)}"
+    )

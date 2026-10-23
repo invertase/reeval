@@ -20,7 +20,7 @@ class Host:
         self.calls: list[dict[str, Any]] = []
 
     async def send(self, call: Any) -> dict[str, Any]:
-        self.calls.append({**call, "args": _copy(call["args"])})
+        self.calls.append(_copy(call))
         patterns = _patterns(call["args"])
         untested = {
             p["matchedBy"]: [s for s in self.strings if s not in p["answers"]]
@@ -53,12 +53,17 @@ def _patterns(value: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _expect(host: Host, args: list[Any], *, not_: bool = False) -> None:
+def _expect(host: Host, args: list[Any], *, not_: bool = False, poll: Any = None) -> None:
     c = AttemptContext("a", host.send)
-    subject = {"turn": 0}
     asyncio.run(
         c.run_expect(
-            subject=subject, matcher="toHaveRun", args=args, label=None, not_=not_, soft=False
+            subject={"turn": 0},
+            matcher="toHaveRun",
+            args=args,
+            label=None,
+            not_=not_,
+            soft=False,
+            poll=poll,
         )
     )
 
