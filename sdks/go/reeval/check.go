@@ -157,11 +157,16 @@ const sdkPrefix = "github.com/invertase/reeval/sdks/go/reeval."
 func callerSubject(method string) string {
 	pcs := make([]uintptr, 32)
 	frames := runtime.CallersFrames(pcs[:runtime.Callers(2, pcs)])
+	whole := false
 	for {
 		f, more := frames.Next()
 		_, helper := helpers.Load(f.Function)
+		if helper {
+			// A helper's check is named by the helper's call, as its caller wrote it.
+			method, whole = f.Function[strings.LastIndex(f.Function, ".")+1:], true
+		}
 		if !strings.HasPrefix(f.Function, sdkPrefix) && !helper {
-			if s := sourceSubject(f.File, f.Line, method); s != "" {
+			if s := sourceSubject(f.File, f.Line, method, whole); s != "" {
 				return s
 			}
 			return fmt.Sprintf("%s:%d", filepath.Base(f.File), f.Line)
@@ -200,7 +205,7 @@ func parsed(path string) *source {
 	return s
 }
 
-func sourceSubject(path string, line int, method string) string {
+func sourceSubject(path string, line int, method string, whole bool) string {
 	s := parsed(path)
 	if s == nil {
 		return ""
@@ -211,9 +216,8 @@ func sourceSubject(path string, line int, method string) string {
 		if !ok {
 			return true
 		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
 		start, end := s.fset.Position(call.Pos()).Line, s.fset.Position(call.End()).Line
-		if ok && sel.Sel.Name == method && start <= line && line <= end && len(call.Args) > 0 {
+		if calls(call, method) && start <= line && line <= end && (whole || len(call.Args) > 0) {
 			found = call
 		}
 		return true
@@ -221,15 +225,30 @@ func sourceSubject(path string, line int, method string) string {
 	if found == nil {
 		return ""
 	}
-	text := s.text(found.Args[0])
-	if strings.HasSuffix(method, "Equal") && len(found.Args) > 1 {
-		text += " == " + s.text(found.Args[1])
+	var text string
+	switch {
+	case whole:
+		text = s.text(found)
+	case strings.HasSuffix(method, "Equal") && len(found.Args) > 1:
+		text = s.text(found.Args[0]) + " == " + s.text(found.Args[1])
+	default:
+		text = s.text(found.Args[0])
 	}
 	text = strings.Join(strings.Fields(text), " ")
 	if len(text) > subjectLimit {
 		text = text[:subjectLimit-1] + "…"
 	}
 	return text
+}
+
+func calls(call *ast.CallExpr, name string) bool {
+	switch fn := call.Fun.(type) {
+	case *ast.SelectorExpr:
+		return fn.Sel.Name == name
+	case *ast.Ident:
+		return fn.Name == name
+	}
+	return false
 }
 
 func (s *source) text(n ast.Node) string {
