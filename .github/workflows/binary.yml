@@ -1,7 +1,8 @@
 # Compiles reeval into standalone binaries with Bun, all cross-compiled on one Linux runner, then
-# smoke-tests each on its own OS from an empty directory (scripts/binary-smoke.mjs) and installs it
-# with scripts/install.sh or install.ps1 from those files. Uploads the binaries and SHA256SUMS as
-# one artifact, `reeval-<version>-binaries`, which release.yml uploads to the release.
+# smoke-tests each on its own OS from an empty directory (scripts/binary-smoke.mjs), runs *.eval.py
+# with it on Python 3.11 to 3.14 with only uv besides (scripts/binary-python-smoke.mjs), and
+# installs it with scripts/install.sh or install.ps1 from those files. Uploads the binaries and
+# SHA256SUMS as one artifact, `reeval-<version>-binaries`, which release.yml uploads to the release.
 name: binary
 
 on:
@@ -24,6 +25,7 @@ on:
       - .github/workflows/binary.yml
       - scripts/bun-compile.mjs
       - scripts/binary-smoke.mjs
+      - scripts/binary-python-smoke.mjs
       - scripts/install.sh
       - scripts/install-test.sh
       - scripts/install.ps1
@@ -37,6 +39,9 @@ on:
       - packages/reeval/src/studio/app.ts
       - packages/reeval/src/studio/app-files.ts
       - packages/reeval/tsdown.config.mjs
+      - packages/reeval/src/language-runner/**
+      - packages/reeval-python/src/**
+      - packages/reeval-python/pyproject.toml
 
 permissions:
   contents: read
@@ -105,7 +110,7 @@ jobs:
     name: smoke (${{ matrix.target }})
     needs: compile
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -131,6 +136,7 @@ jobs:
             scripts
             examples/hello
             packages/reeval/test/features/egress/blocked-host-recorded
+            packages/reeval-python
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -159,6 +165,27 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo -e BINARY node:22-alpine \
             sh -c 'apk add -q git && node scripts/binary-smoke.mjs "$BINARY"'
+      # The Python SDK from this commit, as a wheel the Python smoke's project depends on.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+      - name: Build the reeval-python wheel
+        shell: bash
+        run: uv build --wheel --out-dir "$RUNNER_TEMP/wheel" packages/reeval-python
+      - name: Python evals
+        if: ${{ !matrix.alpine }}
+        shell: bash
+        env:
+          BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}${{ matrix.ext }}
+        run: node scripts/binary-python-smoke.mjs "$BINARY" --wheel "$(ls "$RUNNER_TEMP"/wheel/*.whl)"
+      # musl: uv from Alpine's packages, and Python from uv's musl builds.
+      - name: Python evals (Alpine)
+        if: ${{ matrix.alpine }}
+        env:
+          BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}
+        run: |
+          docker run --rm -v "$PWD:/repo" -v "$RUNNER_TEMP/wheel:/wheel" -w /repo -e BINARY node:22-alpine \
+            sh -c 'apk add -q git uv && node scripts/binary-python-smoke.mjs "$BINARY" --wheel /wheel/*.whl'
       - name: install-test.sh
         if: ${{ !matrix.ext && !matrix.baseline }}
         env:
