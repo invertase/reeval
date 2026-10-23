@@ -2640,4 +2640,12 @@ export const inventory: InventoryFeature[] = [
     plan: ['python/hello'],
     tests: ['reeval/test/python-sdk.test.ts › Python SDK tests and conformance goldens'],
   },
+  {
+    id: 'sdk.dart',
+    area: 'CLI and runner',
+    name: 'Dart eval authoring SDK (conformance goldens and fake run)',
+    fixtures: ['dart-sdk/hello', 'dart-sdk/attempt-isolation'],
+    plan: ['dart/hello'],
+    tests: ['reeval/test/dart-sdk.test.ts › Dart SDK tests and conformance goldens'],
+  },
 ]

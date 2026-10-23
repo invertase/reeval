@@ -37,6 +37,7 @@ import type { RunRecord } from '../src/history/types.ts'
 import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import type { SuiteResult } from '../src/view/suite.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
+import { prepareDartSdk } from './support/dart-fixture.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import {
@@ -2973,6 +2974,72 @@ export const features: Feature[] = [
       },
     },
     prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.checks.map((c) => c.command),
+        ['test ! -f zombie.txt'],
+        "a timed-out body's late call doesn't run in the next attempt on its cell",
+      )
+      const [timedOut] = run.evals.find((e) => e.name === 'times out')?.attempts ?? []
+      assert.deepEqual(timedOut?.checks, [], 'nor in its own, which reeval already ended')
+    },
+  },
+  {
+    dir: 'dart-sdk/hello',
+    tiers: ['fake', 'docker', 'real'],
+    env: '-',
+    canary: /expected.*to succeed/i,
+    prepare: () => prepareDartSdk(),
+    record: ({ run, stdout }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.assertions?.map(({ label, labelled }) => [label, labelled]),
+        [
+          ['assert exists.ok', false],
+          ['greet.dart prints hi', true],
+          ['expect verdict', false],
+        ],
+        'each check in a Dart body is recorded, passing ones too, named by the code it checked',
+      )
+      const [canary] = run.evals.find((e) => e.name === 'canary')?.attempts ?? []
+      assert.deepEqual(
+        canary?.assertions?.map(({ label, status }) => [label, status]),
+        [['toSucceed test -f missing-greet.dart', 'fail']],
+        "a Dart body's expectLater lands in its record",
+      )
+      assert.deepEqual(
+        canary?.checks.map((c) => c.command),
+        ['test -f missing-greet.dart'],
+        'the command expectLater checks runs once',
+      )
+      assert.match(
+        stdout,
+        /canary#1[^\n]*stdout \| looking for missing-greet\.dart/,
+        "a Dart body's print is its attempt's output",
+      )
+    },
+  },
+  {
+    dir: 'dart-sdk/attempt-isolation',
+    tiers: ['fake'],
+    env: '-',
+    args: ['--concurrency', '1'],
+    canary: /expected.*to succeed/i,
+    evals: {
+      lands: { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /expected.*to succeed/i },
+      },
+      'times out': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'timeout', message: /timed out/ },
+      },
+    },
+    prepare: () => prepareDartSdk(),
     record: ({ run }) => {
       const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
       assert.deepEqual(

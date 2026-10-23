@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
+import { PACKAGE_VERSION } from '../root.ts'
 import { InfraError } from '../sandbox/types.ts'
 import {
   type FromRunner,
@@ -99,6 +100,13 @@ export async function startLanguageRunner(
     child.kill()
     throw new UsageError(
       `${hello.sdk} ${hello.version} speaks runner protocol ${hello.protocol}, but this reeval speaks ${RUNNER_PROTOCOL}. Use the SDK version that matches reeval.`,
+    )
+  }
+  // package:reeval and the binary release together, at one version.
+  if (hello.sdk === 'dart' && hello.version !== PACKAGE_VERSION) {
+    child.kill()
+    throw new UsageError(
+      `This project's package:reeval is ${hello.version}, but this is reeval ${PACKAGE_VERSION}, and they release together. Run reeval with \`dart run reeval\`, which runs the binary of the package's version, or \`dart pub add dev:reeval:${PACKAGE_VERSION}\`.`,
     )
   }
 

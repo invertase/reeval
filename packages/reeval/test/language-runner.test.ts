@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
+import { adapterForFile, defaultIncludeGlobs } from '../src/language-runner/adapter.ts'
+import { resolveDartRunnerCommand } from '../src/language-runner/dart-runner.ts'
 import { RUNNER_PROTOCOL } from '../src/language-runner/protocol.ts'
 import {
   projectUsesUv,
@@ -17,6 +19,7 @@ import {
   type RunnerCommand,
   startLanguageRunner,
 } from '../src/language-runner/transport.ts'
+import { PACKAGE_VERSION } from '../src/root.ts'
 import { InfraError } from '../src/sandbox/types.ts'
 
 test('resolvePythonRunnerCommand prefers REEVAL_PYTHON', () => {
@@ -192,4 +195,59 @@ test("a runner's InfraError and UsageError come back as reeval's own classes", (
   const other = errorFrom({ name: 'TypeError', message: 'y' })
   assert.ok(!(other instanceof InfraError) && !(other instanceof UsageError))
   assert.equal(other.name, 'TypeError')
+})
+
+test('a Dart runner of another version than reeval is refused, with how to match them', async () => {
+  await assert.rejects(
+    startLanguageRunner(
+      fakeRunner(
+        `send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'dart', version: '0.0.1', runtime: '3' })`,
+      ),
+      tmpdir(),
+    ),
+    (error) =>
+      error instanceof UsageError &&
+      error.message.includes(`package:reeval is 0.0.1, but this is reeval ${PACKAGE_VERSION}`) &&
+      error.message.includes('dart run reeval'),
+  )
+})
+
+test('resolveDartRunnerCommand runs reeval:runner from a pub project, with REEVAL_DART', () => {
+  const prev = { dart: process.env.REEVAL_DART, sdk: process.env.REEVAL_DART_SDK }
+  delete process.env.REEVAL_DART_SDK
+  process.env.REEVAL_DART = '/custom/dart'
+  const root = mkdtempSync(join(tmpdir(), 'reeval-dart-'))
+  mkdirSync(join(root, '.dart_tool'))
+  writeFileSync(join(root, '.dart_tool', 'package_config.json'), '{}')
+  try {
+    assert.deepEqual(resolveDartRunnerCommand(root), [
+      '/custom/dart',
+      'run',
+      '--enable-asserts',
+      'reeval:runner',
+    ])
+    const sdk = mkdtempSync(join(tmpdir(), 'reeval-dart-sdk-'))
+    mkdirSync(join(sdk, '.dart_tool'))
+    writeFileSync(join(sdk, '.dart_tool', 'package_config.json'), '{}')
+    process.env.REEVAL_DART_SDK = sdk
+    assert.deepEqual(resolveDartRunnerCommand(root), [
+      '/custom/dart',
+      '--enable-asserts',
+      `--packages=${join(sdk, '.dart_tool', 'package_config.json')}`,
+      join(sdk, 'bin', 'runner.dart'),
+    ])
+  } finally {
+    for (const [key, value] of [
+      ['REEVAL_DART', prev.dart],
+      ['REEVAL_DART_SDK', prev.sdk],
+    ] as const) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+})
+
+test('*.eval.dart files are found and load through a runner', () => {
+  assert.equal(adapterForFile('/p/evals/a.eval.dart').id, 'dart')
+  assert.ok(defaultIncludeGlobs().includes('evals/**/*.eval.dart'))
 })

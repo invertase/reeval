@@ -7,6 +7,7 @@ import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
 import { VERCEL_REFUSALS } from '../src/gateway/vercel.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
+import { prepareDartSdk } from './support/dart-fixture.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
 import { syncPythonFixtureProject } from './support/python-fixture.ts'
@@ -98,6 +99,12 @@ export const cases: PlanCase[] = [
     name: 'hello',
     args: [],
     prepare: (dir) => syncPythonFixtureProject(dir),
+  },
+  {
+    dir: 'dart',
+    name: 'hello',
+    args: [],
+    prepare: () => prepareDartSdk(),
   },
   { dir: 'gateway', name: 'default', args: ['--config', 'reeval.default.config.ts'] },
   { dir: 'gateway', name: 'listed', args: [] },

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { delimiter, join, resolve } from 'node:path'
 import { loadEvalFile } from '../engine/loader.ts'
 import { ownFile } from '../root.ts'
+import { DART_RUNNER_HINT, resolveDartRunnerCommand } from './dart-runner.ts'
 import { PYTHON_RUNNER_HINT, resolvePythonRunnerCommand } from './python-runner.ts'
 import type { RunnerCommand } from './transport.ts'
 
@@ -50,8 +51,22 @@ const PYTHON_ADAPTER: RemoteAdapter = {
   setupHint: PYTHON_RUNNER_HINT,
 }
 
+const DART_ADAPTER: RemoteAdapter = {
+  id: 'dart',
+  extensions: ['.eval.dart'],
+  includeGlobs: ['evals/**/*.eval.dart'],
+  remote: true,
+  load: (file, root) => import('./remote.ts').then((m) => m.collectLanguageFile(file, root)),
+  runnerCommand: (root) => resolveDartRunnerCommand(root),
+  setupHint: DART_RUNNER_HINT,
+}
+
 /** Every adapter; TypeScript is first and the in-process default. */
-export const LANGUAGE_ADAPTERS: readonly LanguageAdapter[] = [TYPESCRIPT_ADAPTER, PYTHON_ADAPTER]
+export const LANGUAGE_ADAPTERS: readonly LanguageAdapter[] = [
+  TYPESCRIPT_ADAPTER,
+  PYTHON_ADAPTER,
+  DART_ADAPTER,
+]
 
 export function adapterForFile(file: string): LanguageAdapter {
   const match = LANGUAGE_ADAPTERS.find((a) => a.extensions.some((ext) => file.endsWith(ext)))
@@ -63,6 +78,7 @@ export function defaultIncludeGlobs(): string[] {
 }
 
 export function runnerEnv(root: string, adapter: LanguageAdapter): NodeJS.ProcessEnv {
+  if (adapter.id === 'dart') return { ...process.env, REEVAL_PROJECT_ROOT: resolve(root) }
   const sdk = process.env.REEVAL_PYTHON_SDK ?? repoPythonSdk()
   if (adapter.id !== 'python' || !sdk) return process.env
   const src = join(sdk, 'src')
