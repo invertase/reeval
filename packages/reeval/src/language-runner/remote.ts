@@ -44,9 +44,10 @@ export async function collectLanguageFile(file: string, root: string): Promise<v
   const live = new Map<string, Live>()
   runner.onMessage((message) => {
     if (isSessionFrom(message)) {
-      if (message.t === 'log') {
-        for (const attempt of live.values()) attempt.onLog(message)
-      }
+      if (message.t !== 'log') return
+      const owner = message.key === undefined ? undefined : live.get(message.key)
+      if (owner) owner.onLog(message)
+      else process.stderr.write(`${message.text}\n`)
       return
     }
     if (isRunnerAttemptRequest(message)) {
@@ -107,7 +108,7 @@ function remoteBody(
           )
         },
         onLog: ({ stream, text }) =>
-          inAttempt(() => console[stream === 'stderr' ? 'error' : 'log'](text.replace(/\n$/, ''))),
+          inAttempt(() => console[stream === 'stderr' ? 'error' : 'log'](text)),
         onDone: ({ error }) =>
           finish(() => {
             if (!error) return resolve()

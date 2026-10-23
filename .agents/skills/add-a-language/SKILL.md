@@ -2,14 +2,14 @@
 name: add-a-language
 description: >
   How to add a new eval language runtime to reeval (Dart, Go, and so on): LanguageAdapter,
-  loopback transport, attempt protocol v2, conformance goldens and a feature smoke fixture.
+  stdio transport, attempt protocol v2, conformance goldens and a feature smoke fixture.
   Use when extending reeval beyond TypeScript *.eval.ts or wiring another *.eval.<lang> suffix.
 ---
 
 # Add a language runtime to reeval
 
 reeval routes every eval file through a **`LanguageAdapter`**. TypeScript is adapter #1
-(in-process jiti). Python is adapter #2 (out-of-process runner on loopback TCP). The next
+(in-process jiti). Python is adapter #2 (out-of-process runner over stdio). The next
 language registers another adapter and ships an SDK package; the engine, plan and attempt
 lifecycle stay shared.
 
@@ -44,7 +44,7 @@ flowchart TD
   Pick -.->|".eval.dart (next)"| Dart["Dart adapter<br/>remote: true"]
   Py --> Remote["remote.ts<br/>spawn runnerCommand()"]
   Dart -.-> Remote
-  Remote <-->|"loopback TCP + token<br/>protocol v2 NDJSON"| SDK["Language SDK runner<br/>reeval_python / sdks/dart"]
+  Remote <-->|"stdin/stdout<br/>protocol v2 NDJSON"| SDK["Language SDK runner<br/>reeval_python / sdks/dart"]
   SDK -->|"collect → declared tree"| Declare["declareTree()"]
   SDK <-->|"start · {id, call, key} · replies · done"| Host["attempt-host.ts"]
 
@@ -86,14 +86,22 @@ see [Prior art](#prior-art-dart-spike) below):
 
 | Module | Role |
 |---|---|
-| `protocol.ts` | `RUNNER_PROTOCOL = 2`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call}`, replies), each with the `key` reeval gave the body in its `start` — no `t` on attempt lines. `key` is unique per started body; `attempt.id` isn't (two evals on one cell share it), so never multiplex on it. |
-| `transport.ts` | Loopback TCP, one-time token (`REEVAL_RUNNER`, `REEVAL_RUNNER_TOKEN`) |
+| `protocol.ts` | `RUNNER_PROTOCOL = 3`. Session messages use `t` (`hello`, `collect`, `declared`, `log`). Attempt traffic uses shapes from `src/contract/attempt.ts` (`start`, `abort`, `done`, `{id, call}`, replies), each with the `key` reeval gave the body in its `start` — no `t` on attempt lines. `key` is unique per started body; `attempt.id` isn't (two evals on one cell share it), so never multiplex on it. |
+| `transport.ts` | Spawns the runner; one JSON message a line on its stdin (to it) and stdout (from it). A stdout line that isn't a message is shown on stderr |
 | `attempt-host.ts` | Maps protocol ops to real `AttemptContext` (`expect` → `match.ts`) |
 | `remote.ts` | `collectLanguageFile`: collect tree, `declareTree`, run remote bodies |
 
 SDK runner responsibilities:
 
-1. Connect; send `{ t: 'hello', protocol: 2, token, sdk, version, runtime }`.
+1. Keep stdin and stdout for messages only: move fd 0 and fd 1 aside (non-inheritable copies the
+   runner alone reads and writes), point fd 1 at stderr and fd 0 at `/dev/null`, so neither a
+   child process nor the body's own input can write into a message or read one. A forked child
+   shares those copies but not the runner's lock: send its output to stderr. reeval takes a
+   stdout line as a message only when it has a message's shape (`isFromRunner`), so print
+   nothing else there that could pass for one. Send
+   `{ t: 'hello', protocol: 3, sdk, version, runtime }`. reeval sets `REEVAL_RUNNER=stdio` and
+   `REEVAL_RUNNER_PROTOCOL`; a runner started without them, or on another protocol, exits
+   non-zero with a sentence naming both versions instead of saying hello.
 2. On `{ t: 'collect', file }`, import the eval file; reply with `{ t: 'declared', file, tree }`
    (tree must match `schema/plan/declaration.schema.json`).
 3. On `start`, run the body async; each `c.*` becomes `{ id, call, key }`; read replies
@@ -102,7 +110,8 @@ SDK runner responsibilities:
    flight and every later one at once, without sending them, and stop the body where the
    language can. A body that keeps running must not reach reeval (it answers any call whose key
    it no longer knows with an `AbortError`).
-5. Optionally route stdout/stderr as `{ t: 'log', stream, text }`.
+5. Route a body's prints as `{ t: 'log', key, stream, text }`, one line each, by the language's
+   async-local context (`contextvars` in Python), so concurrent bodies' output stays apart.
 6. Send the language's own regular expressions as `{ matchedBy, answers }` (`matchedBy` is how
    the language writes the pattern, e.g. Python's `repr`), never translated to JavaScript.
    reeval runs the matcher and, when it tests a string `answers` lacks, replies
@@ -194,7 +203,7 @@ Documented for users in `docs/reference/env-vars.mdx`. Remote runners receive:
 
 | Variable | Purpose |
 |---|---|
-| `REEVAL_RUNNER` / `REEVAL_RUNNER_TOKEN` | Set by the engine when spawning the SDK (`127.0.0.1:<port>` and secret) |
+| `REEVAL_RUNNER` | `stdio`, set by the engine when it spawns the SDK; a runner started without it says to use `reeval run` |
 | `REEVAL_PROJECT_ROOT` | Project root for eval imports |
 | `REEVAL_PYTHON` / `REEVAL_PYTHON_SDK` | Override Python binary or monorepo SDK path (Python today) |
 

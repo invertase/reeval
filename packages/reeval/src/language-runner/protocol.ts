@@ -1,4 +1,4 @@
-// Loopback NDJSON between reeval and a language SDK runner. Session messages use `t`; attempt
+// NDJSON on a language SDK runner's stdin and stdout. Session messages use `t`; attempt
 // traffic uses the attempt protocol shapes from src/contract/attempt.ts (no `t`).
 
 import type {
@@ -10,7 +10,7 @@ import type {
 } from '../contract/attempt.ts'
 import type { DeclarationTree } from '../declaration.ts'
 
-export const RUNNER_PROTOCOL = 2
+export const RUNNER_PROTOCOL = 3
 
 export type WireError = {
   name: string
@@ -26,14 +26,20 @@ export type SessionFromRunner =
   | {
       t: 'hello'
       protocol: number
-      token: string
       sdk: string
       version: string
       runtime: string
     }
   | { t: 'declared'; file: string; tree: DeclarationTree }
   | { t: 'load-error'; error: WireError }
-  | { t: 'log'; stream: 'stdout' | 'stderr'; text: string }
+  | {
+      t: 'log'
+      /** The `key` of the body that wrote it; none for output outside a body. */
+      key?: string
+      stream: 'stdout' | 'stderr'
+      /** One line, without its line break. */
+      text: string
+    }
 
 /**
  * One runner runs every body of its files, several at once, so each attempt message carries the
@@ -67,3 +73,42 @@ export const isRunnerAttemptRequest = (message: FromRunner): message is RunnerAt
 
 export const isRunnerAttemptDone = (message: FromRunner): message is RunnerAttemptDone =>
   'type' in message && message.type === 'done' && 'key' in message
+
+type Fields = Record<string, unknown>
+
+const isObject = (value: unknown): value is Fields =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isString = (value: unknown): value is string => typeof value === 'string'
+
+const isWireError = (value: unknown) =>
+  isObject(value) && isString(value.name) && isString(value.message)
+
+const SESSION: Record<string, (m: Fields) => boolean> = {
+  hello: (m) =>
+    typeof m.protocol === 'number' && isString(m.sdk) && isString(m.version) && isString(m.runtime),
+  declared: (m) => isString(m.file) && isObject(m.tree),
+  'load-error': (m) => isWireError(m.error),
+  log: (m) =>
+    (m.stream === 'stdout' || m.stream === 'stderr') &&
+    isString(m.text) &&
+    (m.key === undefined || isString(m.key)),
+}
+
+/**
+ * Whether a runner's stdout line is a message: one of the shapes above, with its fields. Anything
+ * else (a print the SDK didn't route that happens to be a JSON object) is output, not a message.
+ */
+export function isFromRunner(value: unknown): value is FromRunner {
+  if (!isObject(value)) return false
+  if ('t' in value) return isString(value.t) && SESSION[value.t]?.(value) === true
+  if (!isString(value.key)) return false
+  if (value.type === 'done') return value.error === undefined || isWireError(value.error)
+  return (
+    isString(value.id) &&
+    isObject(value.call) &&
+    isString(value.call.op) &&
+    !('ok' in value) &&
+    !('type' in value)
+  )
+}
