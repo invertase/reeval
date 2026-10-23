@@ -860,6 +860,34 @@ describe("replay: OpenCode's format holds a model call it retried", () => {
   })
 })
 
+describe("replay: fx's format holds a model call it retried", () => {
+  // A contract turn on Vercel AI Gateway (skill, gemini-3.8-flash) where a model call timed out
+  // (502) and fx retried it: `session_info_update`s report the recovery in `_meta.fx`.
+  const retried = readFileSync(join(testDir, 'fixtures', 'fx-provider-retry.raw.jsonl'), 'utf8')
+  const recovery = (l: Line) =>
+    l.part.type === 'raw' && JSON.stringify(l.part.rawValue).includes('"modelResponseRecovery"')
+
+  test('the recovery updates are not a format change, and change nothing in the transcript', () => {
+    assert.match(retried, /"state":"active","kind":"auto_retry"/)
+    assert.match(retried, /"state":"recovered"/)
+    assert.deepEqual(unknownSignatures('fx', nativeEvents(retried)), [])
+    const lines = parse(retried)
+    const translate = (ls: Line[]) => {
+      const t = new FxStreamTranslator()
+      return ls.map((l) => ({ ...l, part: t.push(l.part as never) as Line['part'] }))
+    }
+    const all = events(translate(lines))
+    assert.ok(all.some((e) => e.type === 'tool'))
+    assert.deepEqual(all, events(translate(lines.filter((l) => !recovery(l)))))
+  })
+
+  test('twin: a key fx sends outside _meta is a format change', () => {
+    const changed = retried.replaceAll('"_meta":{"fx"', '"recovery":{"fx"')
+    assert.notEqual(changed, retried)
+    assert.notDeepEqual(unknownSignatures('fx', nativeEvents(changed)), [])
+  })
+})
+
 describe('replay: the Claude Code bridge, from the SDK’s own messages', () => {
   // A real contract turn (edit and run, claude-haiku-4-5): the host's `start` and every message
   // the bridge's query() loop saw. Claude Code acknowledges the bridge's streamed user message

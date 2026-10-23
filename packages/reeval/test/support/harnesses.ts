@@ -102,9 +102,10 @@ export type HarnessRow = {
   servedModelGap?: string
   /**
    * What `servedModels` (the models its API requests named, seen by the gateway) must include;
-   * null when its requests don't name one, so the record says it's unknown.
+   * null when its requests don't name one, so the record says it's unknown; `'none named'` when the
+   * gateway reads its responses but they name no model, so the record has `[]`.
    */
-  wireModel: RegExp | null
+  wireModel: RegExp | null | 'none named'
   /**
    * What `askedModels` (the models its calls asked the gateway for, in the agent's own words) must
    * include; unset when the harness records none.
@@ -330,7 +331,7 @@ export const harnesses: HarnessRow[] = [
     // Gemini's stream through fx's provider names no model, so nothing proves what served it; the
     // record keeps the model each call asked for apart, in `askedModels`.
     servedModel: null,
-    wireModel: null,
+    wireModel: 'none named',
     askedModel: /^google\/gemini-3\.8-flash$/,
   },
   {
