@@ -95,7 +95,7 @@ import {
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 import type { AgentHarnessDescriptor, TranscriptEvent } from '../src/types.ts'
-import { promptTokens, sumUsage } from '../src/usage.ts'
+import { promptTokens, sumUsage, totalTokens } from '../src/usage.ts'
 import { formatUsage } from '../src/view/model.ts'
 
 describe('the Claude Code harness', () => {
@@ -2504,6 +2504,8 @@ describe('token usage and the served model, from any harness', () => {
       cacheWrite: 0,
       reasoning: 21,
     })
+    assert.ok(usage)
+    assert.equal(totalTokens(usage), 33942 + 117, 'the reasoning is in the output, counted once')
   })
 
   test('a harness that reports neither records null for both', async () => {

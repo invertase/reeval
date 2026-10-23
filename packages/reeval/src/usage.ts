@@ -23,8 +23,8 @@ export const sumUsage = (usages: Iterable<TokenUsage | null | undefined>): Token
 /** Every token the prompt side used: uncached input plus cache reads and writes. */
 export const promptTokens = (u: TokenUsage) => u.input + u.cacheRead + u.cacheWrite
 
-/** Prompt side, output, and reasoning when the harness reported it. No USD. */
-export const totalTokens = (u: TokenUsage) => promptTokens(u) + u.output + (u.reasoning ?? 0)
+/** Prompt side and output. `output` already counts `reasoning`, its share of thinking. No USD. */
+export const totalTokens = (u: TokenUsage) => promptTokens(u) + u.output
 
 /** A token count as people read it: `9,512`, `430k`, `1,094k`. */
 export const formatTokens = (n: number) =>
