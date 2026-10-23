@@ -6,12 +6,13 @@ import importlib.util
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, cast
 
+from reeval_python import _wire as w
 from reeval_python.checks import ASSERT_HOOK, check, compile_eval
 from reeval_python.wire import options_to_wire
 
-Mode = Literal["run", "skip", "only", "todo"]
+Mode = w.DeclaredMode
 
 
 @dataclass
@@ -20,7 +21,7 @@ class DeclaredFamily:
     case: int
     cases: int
 
-    def as_json(self) -> dict[str, Any]:
+    def as_json(self) -> w.DeclaredFamily:
         return {"name": self.name, "case": self.case, "cases": self.cases}
 
 
@@ -32,12 +33,12 @@ class DeclaredEval:
     body: str
     family: DeclaredFamily | None = None
 
-    def as_json(self) -> dict[str, Any]:
-        out: dict[str, Any] = {
+    def as_json(self) -> w.DeclaredEval:
+        out: w.DeclaredEval = {
             "type": "eval",
             "name": self.name,
             "mode": self.mode,
-            "options": self.options,
+            "options": cast(w.EvalOptionsData, self.options),
             "body": self.body,
         }
         if self.family is not None:
@@ -52,12 +53,12 @@ class DeclaredGroup:
     options: dict[str, Any]
     children: list[DeclNode] = field(default_factory=list)  # pyright: ignore[reportUnknownVariableType]
 
-    def as_json(self) -> dict[str, Any]:
+    def as_json(self) -> w.DeclaredGroup:
         return {
             "type": "group",
             "name": self.name,
             "mode": self.mode,
-            "options": self.options,
+            "options": cast(w.EvalOptionsData, self.options),
             "children": [c.as_json() for c in self.children],
         }
 
@@ -66,7 +67,7 @@ class DeclaredGroup:
 class DeclaredTodo:
     name: str
 
-    def as_json(self) -> dict[str, Any]:
+    def as_json(self) -> w.DeclaredTodo:
         return {"type": "todo", "name": self.name}
 
 
@@ -229,7 +230,7 @@ def _collect_suite_sync(suite: _Suite) -> None:
         _collect_suite_sync(nested)
 
 
-def _tree_after_loader(loader: Callable[[], None]) -> dict[str, Any]:
+def _tree_after_loader(loader: Callable[[], None]) -> w.DeclarationTree:
     reset_collector()
     loader()
     _collect_suite_sync(_suites[0])
@@ -237,11 +238,11 @@ def _tree_after_loader(loader: Callable[[], None]) -> dict[str, Any]:
     return {"children": [c.as_json() for c in _tree_children]}
 
 
-async def collect_module_tree(loader: Callable[[], None]) -> dict[str, Any]:
+async def collect_module_tree(loader: Callable[[], None]) -> w.DeclarationTree:
     return _tree_after_loader(loader)
 
 
-def collect_module_tree_sync(loader: Callable[[], None]) -> dict[str, Any]:
+def collect_module_tree_sync(loader: Callable[[], None]) -> w.DeclarationTree:
     return _tree_after_loader(loader)
 
 
@@ -251,7 +252,7 @@ def get_body(body_id: str) -> Callable[..., Any]:
     return _bodies[body_id]
 
 
-def collect_eval_file(path: Path) -> dict[str, Any]:
+def collect_eval_file(path: Path) -> w.DeclarationTree:
     """Import one *.eval.py file and return its declaration tree JSON."""
 
     def loader() -> None:
