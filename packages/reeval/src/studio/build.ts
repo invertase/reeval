@@ -5,6 +5,7 @@ import { scratchDir } from '../history/files.ts'
 import { type AnalysisIndex, analysisDataPath, sortAnalyses } from '../view/analysis.ts'
 import { indexFiles, type StudioInfo } from '../view/model.ts'
 import { recordPath, studioPath } from '../view/paths.ts'
+import type { StudioAppFiles } from './app.ts'
 import { listHeaders, type StudioSource } from './source.ts'
 
 export class StudioBuildError extends Error {
@@ -13,7 +14,7 @@ export class StudioBuildError extends Error {
 
 export type BuildOptions = {
   source: StudioSource
-  appDir: string
+  app: StudioAppFiles
   out: string
   /** Copy transcripts, diffs, logs and judge inputs; false writes records and the index only. */
   artifacts: boolean
@@ -41,8 +42,10 @@ async function sizeOf(dir: string): Promise<{ files: number; bytes: number }> {
  */
 export async function buildStudio(options: BuildOptions): Promise<BuildResult> {
   const { out, source } = options
-  if (!existsSync(join(options.appDir, 'index.html'))) {
-    throw new StudioBuildError(`The studio web app is missing from ${options.appDir}`)
+  if (!options.app.has('index.html')) {
+    throw new StudioBuildError(
+      'This reeval was built without the studio web app: run pnpm build from the repo root',
+    )
   }
   if (existsSync(out)) {
     const names = await readdir(out)
@@ -54,7 +57,10 @@ export async function buildStudio(options: BuildOptions): Promise<BuildResult> {
     await rm(out, { recursive: true, force: true })
   }
   await mkdir(out, { recursive: true })
-  await cp(options.appDir, out, { recursive: true })
+  for (const [path, file] of options.app) {
+    await mkdir(dirname(join(out, path)), { recursive: true })
+    await writeFile(join(out, path), file.body)
+  }
 
   const headers = await listHeaders(source)
   const generatedAt = new Date().toISOString()

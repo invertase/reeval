@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import fsp, { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
+import fsp, { cp, mkdtemp, readFile, symlink } from 'node:fs/promises'
 import { syncBuiltinESMExports } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { before, describe, mock, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
+import { appFiles } from '../src/studio/app.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import type { AnalysisNote } from '../src/view/analysis.ts'
@@ -747,13 +748,11 @@ describe('view-models over a real history', () => {
 const HOST = '127.0.0.1:4984'
 const TOKEN = 'test-token-0123456789'
 
-async function fakeApp() {
-  const app = join(dir, 'app')
-  await mkdir(join(app, 'assets'), { recursive: true })
-  await writeFile(join(app, 'index.html'), '<!doctype html><title>studio</title>')
-  await writeFile(join(app, 'assets', 'app.js'), 'console.log(1)')
-  return app
-}
+const fakeApp = () =>
+  appFiles({
+    'index.html': '<!doctype html><title>studio</title>',
+    'assets/app.js': 'console.log(1)',
+  })
 
 describe('studio server', () => {
   let app: ReturnType<typeof createStudioApp>
@@ -766,7 +765,7 @@ describe('studio server', () => {
   before(async () => {
     app = createStudioApp({
       source,
-      appDir: await fakeApp(),
+      app: fakeApp(),
       reeval: 'test',
       project: 'studio',
       token: TOKEN,
@@ -810,7 +809,15 @@ describe('studio server', () => {
     const index = await get('/')
     assert.equal(index.status, 200)
     assert.match(index.headers.get('content-security-policy') ?? '', /script-src 'self'/)
-    assert.equal((await get('/assets/app.js')).status, 200)
+    assert.equal(await index.text(), '<!doctype html><title>studio</title>')
+    assert.equal(index.headers.get('cache-control'), 'no-cache')
+    const script = await get('/assets/app.js')
+    assert.equal(script.status, 200)
+    assert.equal(script.headers.get('content-type'), 'text/javascript; charset=utf-8')
+    assert.match(script.headers.get('cache-control') ?? '', /immutable/)
+    const scriptTag = script.headers.get('etag') as string
+    assert.equal((await get('/assets/app.js', { 'if-none-match': scriptTag })).status, 304)
+    assert.equal((await get('/assets/missing.js')).status, 404)
     const info = await (await get('/studio.json')).json()
     assert.equal(info.mode, 'live')
     assert.equal(info.features.scratch, true)
@@ -900,7 +907,7 @@ describe('studio server', () => {
   test("without the scratch source, unrecorded runs aren't served", async () => {
     const recordedOnly = createStudioApp({
       source: { ...source, scratch: false },
-      appDir: await fakeApp(),
+      app: fakeApp(),
       reeval: 'test',
       project: 'studio',
       token: null,
@@ -945,7 +952,7 @@ describe('a record landing while the studio lists runs', () => {
       )
       const app = createStudioApp({
         source: fresh,
-        appDir: await fakeApp(),
+        app: fakeApp(),
         reeval: 'test',
         project: 'studio',
         token: TOKEN,
@@ -974,7 +981,7 @@ describe('a record landing while the studio lists runs', () => {
 
 describe('reeval studio build', () => {
   test('writes a static site with the same paths the server answers', async () => {
-    assert.ok(existsSync(join(pkgRoot, 'dist/studio-app/index.html')), 'run pnpm build first')
+    assert.ok(existsSync(join(pkgRoot, 'dist/cli.js')), 'run pnpm build first')
     const out = join(dir, 'site')
     const r = await runCli(dir, ['studio', 'build', '--out', out, '--scratch'])
     assert.equal(r.code, 0, r.stderr)
@@ -997,7 +1004,7 @@ describe('reeval studio build', () => {
 
     const app = createStudioApp({
       source: { ...source, historyDir: source.historyDir },
-      appDir: join(pkgRoot, 'dist/studio-app'),
+      app: new Map(),
       reeval: 'test',
       project: 'studio',
       token: null,
@@ -1074,7 +1081,7 @@ evaluate('writes', async (c) => {
     )
     const app = createStudioApp({
       source: { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true },
-      appDir: join(pkgRoot, 'dist/studio-app'),
+      app: new Map(),
       reeval: 'test',
       project: 'studio',
       token: null,

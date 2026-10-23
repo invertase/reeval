@@ -1562,7 +1562,7 @@ evaluate('greets', { runs: 1 }, async (c) => {
     // The studio shows saved and cached analyses live, and saved ones in a static build.
     const app = createStudioApp({
       source: { root: p.dir, historyDir: history, scratch: false },
-      appDir: join(pkgRoot, 'dist/studio-app'),
+      app: new Map(),
       reeval: 'test',
       project: 'analysis',
       token: null,

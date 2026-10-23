@@ -14,12 +14,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     studioDevData(),
-    // For reeval's THIRD_PARTY_NOTICES.md; its build leaves this file out of
-    // dist/studio-app.
-    bundledLicenses('dist/studio-app', (packages) =>
+    // For reeval's THIRD_PARTY_NOTICES.md; its build leaves this file out of the app it inlines.
+    bundledLicenses('the studio app', (packages) =>
       writeFileSync(
         src('./dist/third-party.json'),
-        JSON.stringify([...packages, ...cssImports(src('./src/index.css'), 'dist/studio-app')]),
+        JSON.stringify([...packages, ...cssImports(src('./src/index.css'), 'the studio app')]),
       ),
     ),
   ],

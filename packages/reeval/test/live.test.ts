@@ -438,7 +438,7 @@ describe('the studio serves and streams live runs', () => {
     const listeners = new Set<(e: StudioEvent) => void>()
     const app = createStudioApp({
       source,
-      appDir: root,
+      app: new Map(),
       reeval: 'test',
       project: 'live',
       token: null,

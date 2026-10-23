@@ -2,7 +2,8 @@
 // inlined from their TypeScript sources, so the published package imports only its own
 // `dependencies`. What ships next to the code: each of those packages' other `files` (such as
 // sandbox-docker's `docker/` build context), at the package root beside `dist/`, where their
-// `../<dir>` from a module names the same place, and the prebuilt studio app (`dist/studio-app`).
+// `../<dir>` from a module names the same place. The prebuilt studio app is inlined, as the
+// contents of src/studio/app-files.ts.
 // Those lookups go through src/root.ts, reeval's one resource locator: the build rewrites each
 // `new URL('<path>', import.meta.url)` in an inlined package to root.ts's `ownFileURL`, and fails
 // on any other import.meta.url, so a compiled reeval (scripts/bun-compile.mjs) finds them too. THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
@@ -11,13 +12,15 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, posix, relative, sep } from 'node:path'
+import { dirname, extname, join, posix, relative, sep } from 'node:path'
 import { defineConfig } from 'tsdown'
 import {
   bundledLicenses,
@@ -120,6 +123,28 @@ const studioApp = join(studioWeb, 'dist')
 const studioLicenses = join(studioApp, 'third-party.json')
 let bundled = []
 
+const appFiles = join(here, 'src/studio/app-files.ts')
+const TEXT = new Set(['.html', '.js', '.css', '.svg', '.json', '.txt'])
+
+/** src/studio/app-files.ts with studio-web's built files in it, text as strings. */
+function studioAppModule() {
+  const files = {}
+  if (existsSync(join(studioApp, 'index.html'))) {
+    for (const file of readdirSync(studioApp, { recursive: true, encoding: 'utf8' }).sort()) {
+      const path = join(studioApp, file)
+      if (path === studioLicenses || !statSync(path).isFile()) continue
+      const body = readFileSync(path)
+      files[file.split(sep).join(posix.sep)] = TEXT.has(extname(file))
+        ? { utf8: body.toString('utf8') }
+        : { base64: body.toString('base64') }
+    }
+  } else
+    console.warn(
+      "studio-web isn't built; reeval studio will have no app. Run pnpm build from the repo root.",
+    )
+  return `export const APP_FILES = ${JSON.stringify(files)}\n`
+}
+
 export default defineConfig({
   entry: {
     index: 'src/index.ts',
@@ -149,6 +174,10 @@ export default defineConfig({
       resolveId: {
         order: 'pre',
         handler: (id) => sources.get(id),
+      },
+      load: {
+        order: 'pre',
+        handler: (id) => (id === appFiles ? { code: studioAppModule(), map: null } : null),
       },
       transform: {
         order: 'pre',
@@ -212,16 +241,8 @@ export default defineConfig({
         rmSync(join(here, asset), { recursive: true, force: true })
         cpSync(from, join(here, asset), { recursive: true })
       }
-      if (existsSync(join(studioApp, 'index.html'))) {
-        cpSync(studioApp, join(dist, 'studio-app'), {
-          recursive: true,
-          filter: (file) => file !== studioLicenses,
-        })
+      if (existsSync(studioLicenses))
         thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
-      } else
-        console.warn(
-          "studio-web isn't built; reeval studio will have no app. Run pnpm build from the repo root.",
-        )
       // The published package's README is the repo-root README, copied so the
       // tarball has the same file. It is handwritten; `pnpm docs:gen` does not write it.
       cpSync(join(here, '../..', 'README.md'), join(here, 'README.md'))
@@ -241,7 +262,7 @@ export default defineConfig({
             licenseText: readFileSync(join(studioWeb, 'src/components/ui/LICENSE'), 'utf8'),
             source: 'https://github.com/shadcn-ui/ui',
             files: shadcn,
-            into: 'the studio app (`dist/studio-app`)',
+            into: 'the studio app',
             modified: true,
           },
           {

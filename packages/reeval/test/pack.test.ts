@@ -188,7 +188,7 @@ test('the packed package installs into a clean project and runs reeval', {
     readFileSync(join(pkgRoot, '..', '..', 'README.md'), 'utf8'),
   )
   assert.match(listing, /^package\/dist\/cli\.js$/m)
-  assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
+  assert.doesNotMatch(listing, /^package\/dist\/studio-app\//m, 'the studio app is in a chunk')
   for (const entry of ['index', 'harness', 'sandbox', 'judge', 'view/index']) {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.d\\.ts$`, 'm'))
@@ -202,7 +202,6 @@ test('the packed package installs into a clean project and runs reeval', {
     readFileSync(join(pkgRoot, '..', '..', 'skills', 'eval-rubric', 'SKILL.md'), 'utf8'),
   )
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
-  assert.doesNotMatch(listing, /^package\/dist\/studio-app\/third-party\.json$/m)
 
   // The @reeval/* packages are bundled into dist, so nothing in the manifest points at the
   // workspace.
@@ -274,7 +273,7 @@ test('the packed package installs into a clean project and runs reeval', {
   const shipped = readdirSync(dist, { recursive: true, encoding: 'utf8' }).map((f) =>
     f.replaceAll(sep, '/'),
   )
-  const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f) && !f.startsWith('studio-app/'))
+  const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f))
   const source = (file: string) => readFileSync(join(dist, file), 'utf8')
   for (const file of code)
     assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//, file)
