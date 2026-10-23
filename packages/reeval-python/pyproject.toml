@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+reeval = "reeval_python.cli:main"
+
 [project.urls]
 Homepage = "https://reeval.ai"
 Repository = "https://github.com/invertase/reeval"
