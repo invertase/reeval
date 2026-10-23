@@ -135,3 +135,25 @@ test('the checked-in _wire.py is the generator output, and imports', (t) => {
   const imported = spawnSync('python3', ['-c', 'import wire'], { cwd: dir, encoding: 'utf8' })
   assert.equal(imported.status, 0, imported.stderr)
 })
+
+test("the key tables name reeval's camelCase keys and the fields that are records", () => {
+  const out = generate({
+    Options: {
+      type: 'object',
+      properties: {
+        minLift: { type: 'number' },
+        env: { type: 'object', additionalProperties: { type: 'string' } },
+        mcp: { anyOf: [{ type: 'string' }, { type: 'object', properties: {} }] },
+        sandbox: { type: 'object', properties: { startTimeout: { type: 'string' } } },
+      },
+    },
+  })
+  assert.match(
+    out,
+    /CAMEL_KEYS: frozenset\[str\] = frozenset\(\n {4}\{\n {8}"minLift",\n {8}"startTimeout",\n {4}\}\n\)/,
+  )
+  assert.match(
+    out,
+    /RECORD_FIELDS: frozenset\[str\] = frozenset\(\n {4}\{\n {8}"env",\n {8}"mcp",\n {4}\}\n\)/,
+  )
+})

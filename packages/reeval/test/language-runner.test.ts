@@ -4,13 +4,19 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { UsageError } from '../src/errors.ts'
 import { RUNNER_PROTOCOL } from '../src/language-runner/protocol.ts'
 import {
   projectUsesUv,
   REEVAL_PYTHON_MODULE,
   resolvePythonRunnerCommand,
 } from '../src/language-runner/python-runner.ts'
-import { type RunnerCommand, startLanguageRunner } from '../src/language-runner/transport.ts'
+import {
+  errorFrom,
+  type RunnerCommand,
+  startLanguageRunner,
+} from '../src/language-runner/transport.ts'
+import { InfraError } from '../src/sandbox/types.ts'
 
 test('resolvePythonRunnerCommand prefers REEVAL_PYTHON', () => {
   const prev = process.env.REEVAL_PYTHON
@@ -157,4 +163,14 @@ test('projectUsesUv is true when pyproject.toml or uv.lock exists', () => {
   assert.equal(projectUsesUv(root), false)
   writeFileSync(join(root, 'pyproject.toml'), '[project]\nname = "x"\n')
   assert.equal(projectUsesUv(root), true)
+})
+
+test("a runner's InfraError and UsageError come back as reeval's own classes", () => {
+  const infra = errorFrom({ name: 'InfraError', message: 'the sandbox went away' })
+  assert.ok(infra instanceof InfraError)
+  assert.equal(infra.message, 'the sandbox went away')
+  assert.ok(errorFrom({ name: 'UsageError', message: 'x' }) instanceof UsageError)
+  const other = errorFrom({ name: 'TypeError', message: 'y' })
+  assert.ok(!(other instanceof InfraError) && !(other instanceof UsageError))
+  assert.equal(other.name, 'TypeError')
 })

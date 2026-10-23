@@ -69,7 +69,10 @@ expect(c.turns[0]).to_have_run(re.compile(r"^(npm|pnpm) t(est)?$"))
 Use snake_case on the context (`read_file`, `write_file`, `file`) and on matchers (`to_succeed`,
 `to_pass`, `to_equal`, `to_contain`, …). Matcher failures raise `ReevalAssertionError`. Async bodies use
 `async def`, `await c.send(...)`, and `await expect(await c.exec(...)).to_succeed()`; sync bodies
-use plain `def` and block on the runner loop.
+use plain `def` and block on the runner loop. In an async body a matcher left unawaited fails the
+attempt, and a `c.exec(...)` left unawaited warns, since neither ran. Options take reeval's keys
+in snake_case at any depth (`min_lift`, `delay_ms`); the keys of `env`, `headers` and the other
+maps of your own keep their spelling.
 
 ## Examples
 

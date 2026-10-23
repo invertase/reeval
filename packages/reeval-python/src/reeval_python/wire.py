@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable
 from typing import Any, cast
 
-from reeval_python._wire import MatcherSubject
+from reeval_python._wire import CAMEL_KEYS, RECORD_FIELDS, MatcherSubject
 from reeval_python.types import ExecResult, Turn, Verdict
 
 
@@ -20,27 +21,28 @@ def matcher_to_wire(name: str) -> str:
 _SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+")
 
 
-def camel_keys(options: dict[str, Any]) -> dict[str, Any]:
-    """An options dict's own snake_case keys (`min_lift`) as reeval's (`minLift`).
-
-    One level only: nested dicts such as `env` hold the user's own keys.
-    """
-    out: dict[str, Any] = {}
-    for key, value in options.items():
-        if _SNAKE.fullmatch(key):
-            head, *rest = key.split("_")
-            key = head + "".join(part.capitalize() for part in rest)
-        out[key] = value
-    return out
+def _camel(key: str) -> str:
+    """reeval's spelling of one of its keys written in snake_case (`min_lift` -> `minLift`)."""
+    if not _SNAKE.fullmatch(key):
+        return key
+    head, *rest = key.split("_")
+    camel = head + "".join(part.capitalize() for part in rest)
+    return camel if camel in CAMEL_KEYS else key
 
 
-def value_to_wire(value: Any) -> Any:
-    """A value with the SDK's objects in it (environments) as plain data."""
+def value_to_wire(value: Any, *, record: bool = False) -> Any:
+    """Options as reeval's data: the SDK's objects (environments) as plain data, and reeval's own
+    keys at any depth in camelCase. A record's keys (`env`, `headers`, …) are the eval's own and
+    keep their spelling; reeval names any other key it doesn't have."""
     to_wire = getattr(value, "to_wire", None)
     if callable(to_wire):
         return to_wire()
     if isinstance(value, dict):
-        return {k: value_to_wire(v) for k, v in cast(dict[str, Any], value).items()}
+        out: dict[str, Any] = {}
+        for key, item in cast(dict[str, Any], value).items():
+            name = key if record or not isinstance(cast(object, key), str) else _camel(key)
+            out[name] = value_to_wire(item, record=name in RECORD_FIELDS)
+        return out
     if isinstance(value, list | tuple):
         return [value_to_wire(v) for v in cast(list[Any], value)]
     return value
@@ -50,11 +52,21 @@ def options_to_wire(options: dict[str, Any] | None) -> dict[str, Any] | None:
     """Eval, group or judge options as reeval's data."""
     if not options:
         return None
-    out = camel_keys(options)
-    compare = out.get("compare")
-    if isinstance(compare, dict):
-        out["compare"] = camel_keys(cast(dict[str, Any], compare))
-    return cast(dict[str, Any], value_to_wire(out))
+    return cast(dict[str, Any], value_to_wire(options))
+
+
+def json_value(value: Any, where: str) -> Any:
+    """A value reeval reads as JSON: an `ExecResult` or a `Verdict` as their data, and anything
+    else that isn't JSON refused here, where the eval passed it."""
+    if isinstance(value, ExecResult):
+        return {"exitCode": value.exit_code, "stdout": value.stdout, "stderr": value.stderr}
+    if isinstance(value, Verdict):
+        return value.raw
+    try:
+        json.dumps(value)
+    except (TypeError, ValueError) as exc:
+        raise TypeError(f"{where}: {exc}") from None
+    return value
 
 
 class Patterns:
@@ -123,14 +135,15 @@ def subject_for_matcher(actual: Any) -> MatcherSubject:
     if isinstance(actual, AttemptContext | SyncAttemptContext):
         return {"attempt": True}
     if isinstance(actual, PendingExec):
+        actual.used()
         return {"exec": actual.command}
     if isinstance(actual, PendingRead):
+        actual.used()
         return {"readFile": actual.path}
     if isinstance(actual, ExecResult):
         result = {"exitCode": actual.exit_code, "stdout": actual.stdout, "stderr": actual.stderr}
         return cast(MatcherSubject, {"exec": actual.command, "result": result})
     if isinstance(actual, Turn):
         return {"turn": actual.index}
-    if isinstance(actual, Verdict):
-        return cast(MatcherSubject, {"value": actual.raw})
-    return {"value": actual}
+    accepted = "expect() takes the attempt, a turn, c.exec(…), c.read_file(…) or a JSON value"
+    return {"value": json_value(actual, accepted)}

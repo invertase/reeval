@@ -1800,3 +1800,48 @@ Wait: TypeAlias = "CaptureWait | WaitMs"
 
 # The transcript events a harness may be unable to report.
 WebEventType: TypeAlias = "Literal[\"web-search\", \"web-fetch\"]"
+
+
+# reeval's camelCase keys: the SDK takes each in snake_case too.
+CAMEL_KEYS: frozenset[str] = frozenset(
+    {
+        "atMs",
+        "cacheRead",
+        "cacheWrite",
+        "delayMs",
+        "durationMs",
+        "exitCode",
+        "failWith",
+        "flakeRate",
+        "ignoreAbort",
+        "maxConcurrent",
+        "mediaType",
+        "minLift",
+        "passRate",
+        "providerOptions",
+        "readFile",
+        "resolvedModel",
+        "servedModel",
+        "startHangs",
+        "startTimeout",
+        "startedAt",
+        "toolCallId",
+        "withSkill",
+    }
+)
+
+
+# Fields whose keys are the eval's own (env, headers, …), which keep their spelling.
+RECORD_FIELDS: frozenset[str] = frozenset(
+    {
+        "env",
+        "files",
+        "headers",
+        "mcp",
+        "params",
+        "providerOptions",
+        "score",
+        "value",
+        "write",
+    }
+)

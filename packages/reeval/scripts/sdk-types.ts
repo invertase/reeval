@@ -166,6 +166,38 @@ const wrapped = (text: string, indent: string, width = 96) => {
   return lines.map((l) => `${indent}# ${l}`.trimEnd())
 }
 
+/** Every camelCase property name, and every property that is a record somewhere. */
+function keyTables(defs: Map<string, Schema>) {
+  const camel = new Set<string>()
+  const records = new Set<string>()
+  const seen = new Set<Schema>()
+  const resolve = (schema: Schema): Schema =>
+    schema.$ref ? (defs.get(schema.$ref.replace('#/$defs/', '')) ?? {}) : schema
+  const isRecord = (schema: Schema): boolean => {
+    const s = resolve(schema)
+    const union = s.anyOf ?? s.oneOf
+    if (union) return union.some(isRecord)
+    const types = Array.isArray(s.type) ? s.type : [s.type]
+    return types.includes('object') && !hasFields(s)
+  }
+  const walk = (schema: Schema) => {
+    if (seen.has(schema)) return
+    seen.add(schema)
+    const s = resolve(schema)
+    if (s !== schema) return walk(s)
+    for (const variant of s.anyOf ?? s.oneOf ?? []) walk(variant)
+    if (s.items) walk(s.items)
+    if (typeof s.additionalProperties === 'object') walk(s.additionalProperties)
+    for (const [key, prop] of Object.entries(s.properties ?? {})) {
+      if (/[A-Z]/.test(key)) camel.add(key)
+      if (isRecord(prop)) records.add(key)
+      walk(prop)
+    }
+  }
+  for (const schema of defs.values()) walk(schema)
+  return { camel, records }
+}
+
 /** Python: each named object a TypedDict, each other named schema an alias. */
 export function python(defs: Map<string, Schema> = definitions()): string {
   for (const name of defs.keys()) {
@@ -290,6 +322,23 @@ export function python(defs: Map<string, Schema> = definitions()): string {
     const doc = schema.description ? wrapped(schema.description, '') : []
     blocks.push([...doc, `${name}: TypeAlias = ${JSON.stringify(type)}`].join('\n'))
   }
+
+  const { camel, records } = keyTables(defs)
+  const frozenset = (names: Set<string>) =>
+    `frozenset(\n    {\n${[...names]
+      .sort(byCodePoint)
+      .map((n) => `        ${JSON.stringify(n)},\n`)
+      .join('')}    }\n)`
+  blocks.push(
+    [
+      "# reeval's camelCase keys: the SDK takes each in snake_case too.",
+      `CAMEL_KEYS: frozenset[str] = ${frozenset(camel)}`,
+    ].join('\n'),
+    [
+      "# Fields whose keys are the eval's own (env, headers, …), which keep their spelling.",
+      `RECORD_FIELDS: frozenset[str] = ${frozenset(records)}`,
+    ].join('\n'),
+  )
 
   return `${[
     `"""reeval's wire types, generated from its JSON Schemas in packages/reeval:`,

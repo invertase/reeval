@@ -79,3 +79,12 @@ class Runner:
         self.proc.stdin.close()
         self.proc.wait(timeout=10)
         return self.proc.stderr.read().decode()
+
+    def finish(self) -> list[dict[str, Any]]:
+        """Closes stdin as reeval does when it exits; the messages the runner sent after that,
+        such as a body still running when reeval went away."""
+        assert self.proc.stdin is not None and self.proc.stdout is not None
+        self.proc.stdin.close()
+        rest = [json.loads(line) for line in self.proc.stdout if line.strip()]
+        self.proc.wait(timeout=10)
+        return [m for m in rest if m.get("t") != "log"]

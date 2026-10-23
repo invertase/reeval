@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import sys
+import warnings
 from collections.abc import Awaitable, Callable, Coroutine, Generator
 from typing import Any, Literal, cast, overload
 
@@ -19,21 +21,49 @@ from reeval_python._wire import (
 from reeval_python.errors import ReevalAssertionError, ReevalCallError
 from reeval_python.expect import bind_expect
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
-from reeval_python.wire import Patterns, options_to_wire, wire_args
+from reeval_python.wire import Patterns, json_value, options_to_wire, wire_args
+
+_UNSET: Any = object()
 
 SendFn = Callable[[AttemptCall], Awaitable[dict[str, Any]]]
 CallFn = SendFn
 
 
-class PendingExec:
+class _Lazy:
+    """A call that runs when it's awaited or handed to `expect`; one dropped unused warns where
+    it was made, since it never ran."""
+
+    def __init__(self, what: str) -> None:
+        self._what = what
+        self._used = False
+        # Three frames up: the eval's line that called c.exec(…) or c.read_file(…).
+        frame = sys._getframe(3)  # pyright: ignore[reportPrivateUsage]
+        self._where = (frame.f_code.co_filename, frame.f_lineno)
+
+    def used(self) -> None:
+        self._used = True
+
+    def __del__(self) -> None:
+        if not getattr(self, "_used", True):
+            filename, lineno = self._where
+            message = f"{self._what} was never awaited, so it didn't run"
+            warnings.warn_explicit(message, RuntimeWarning, filename, lineno)
+
+
+class PendingExec(_Lazy):
     """`c.exec(command)` before it's awaited: `await` it for its result, or hand it to `expect`,
     which runs it (once per poll) and names the check by its command."""
 
     def __init__(self, call: CallFn, command: str) -> None:
+        super().__init__(f"c.exec({command!r})")
         self._call = call
         self.command = command
 
-    async def result(self) -> ExecResult:
+    def result(self) -> Coroutine[Any, Any, ExecResult]:
+        self.used()
+        return self._result()
+
+    async def _result(self) -> ExecResult:
         reply = await self._call({"op": "exec", "command": self.command})
         return ExecResult.from_wire(self.command, cast(dict[str, Any], reply["result"]))
 
@@ -41,15 +71,20 @@ class PendingExec:
         return self.result().__await__()
 
 
-class PendingRead:
+class PendingRead(_Lazy):
     """`c.read_file(path)` before it's awaited: `await` it for the contents (`None` when there's
     no file), or hand it to `expect`, which reads it (once per poll)."""
 
     def __init__(self, call: CallFn, path: str) -> None:
+        super().__init__(f"c.read_file({path!r})")
         self._call = call
         self.path = path
 
-    async def result(self) -> str | None:
+    def result(self) -> Coroutine[Any, Any, str | None]:
+        self.used()
+        return self._result()
+
+    async def _result(self) -> str | None:
         reply = await self._call({"op": "readFile", "path": self.path})
         contents = reply.get("contents")
         return None if contents is None else str(contents)
@@ -86,6 +121,10 @@ class AttemptContext:
     def exec(
         self, command: str, *, background: Literal[True]
     ) -> Coroutine[Any, Any, BackgroundHandle]: ...
+    @overload
+    def exec(
+        self, command: str, *, background: bool
+    ) -> PendingExec | Coroutine[Any, Any, BackgroundHandle]: ...
 
     def exec(
         self, command: str, *, background: bool = False
@@ -104,7 +143,7 @@ class AttemptContext:
         return PendingRead(self._call, path)
 
     def file(self, path: str) -> PendingRead:
-        return self.read_file(path)
+        return PendingRead(self._call, path)
 
     async def write_file(self, path: str, contents: str | bytes) -> None:
         if isinstance(contents, bytes):
@@ -118,12 +157,15 @@ class AttemptContext:
     async def kill(self, handle: BackgroundHandle) -> None:
         await self._call({"op": "kill", "handle": handle.id})
 
-    async def judge(self, question: str, *, on: Any = None, **options: Any) -> Verdict:
+    async def judge(self, question: str, *, on: Any = _UNSET, **options: Any) -> Verdict:
         """Ask the judge a yes/no question about the latest turn, or `on` an earlier turn or
-        a value."""
+        a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included."""
         wire_opts = options_to_wire(options) or {}
-        if on is not None:
-            wire_opts["on"] = {"turn": on.index} if isinstance(on, Turn) else {"value": on}
+        if on is not _UNSET:
+            accepted = "judge(on=…) takes a turn, an ExecResult, a Verdict or a JSON value"
+            wire_opts["on"] = (
+                {"turn": on.index} if isinstance(on, Turn) else {"value": json_value(on, accepted)}
+            )
         call: AttemptCallJudge = {"op": "judge", "question": question}
         if wire_opts:
             call["options"] = cast(JudgeCallData, wire_opts)
@@ -207,6 +249,8 @@ class SyncAttemptContext:
     def exec(self, command: str) -> ExecResult: ...
     @overload
     def exec(self, command: str, *, background: Literal[True]) -> BackgroundHandle: ...
+    @overload
+    def exec(self, command: str, *, background: bool) -> ExecResult | BackgroundHandle: ...
 
     def exec(self, command: str, *, background: bool = False) -> ExecResult | BackgroundHandle:
         if background:
@@ -225,7 +269,7 @@ class SyncAttemptContext:
     def kill(self, handle: BackgroundHandle) -> None:
         self._run(self._ctx.kill(handle))
 
-    def judge(self, question: str, *, on: Any = None, **options: Any) -> Verdict:
+    def judge(self, question: str, *, on: Any = _UNSET, **options: Any) -> Verdict:
         return self._run(self._ctx.judge(question, on=on, **options))
 
     def bind_expect(self) -> None:

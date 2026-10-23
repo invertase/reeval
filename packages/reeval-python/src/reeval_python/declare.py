@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypeVar, cast, overload
 
 from reeval_python import _wire as w
 from reeval_python.checks import ASSERT_HOOK, check, compile_eval
@@ -164,6 +164,19 @@ def group(
     _register_group(name, mode, opts, factory)
 
 
+Body = TypeVar("Body", bound=Callable[..., Any])
+
+
+@overload
+def evaluate(
+    name: str, options: dict[str, Any] | None = None, /, *, mode: Mode = "run"
+) -> Callable[[Body], Body]: ...
+@overload
+def evaluate(name: str, fn: Body, /, *, mode: Mode = "run") -> Body: ...
+@overload
+def evaluate(name: str, options: dict[str, Any], fn: Body, /, *, mode: Mode = "run") -> Body: ...
+
+
 def evaluate(
     name: str,
     arg: Callable[..., Any] | dict[str, Any] | None = None,
@@ -171,7 +184,7 @@ def evaluate(
     /,
     *,
     mode: Mode = "run",
-) -> Callable[[Callable[..., Any]], Callable[..., Any]] | None:
+) -> Any:
     if callable(arg) and arg2 is None:
         _register_eval(name, mode, {}, arg, None)
         return arg
@@ -197,11 +210,22 @@ def _case_name(template: str, case: Any, index: int) -> str:
     return name
 
 
-def _with_case(fn: Callable[..., Any], case: Any) -> Callable[..., Any]:
+def is_async(fn: Callable[..., Any]) -> bool:
+    """Whether a body is `async def`, under any decorators that keep `functools.wraps`."""
     if inspect.iscoroutinefunction(fn):
+        return True
+    try:
+        return inspect.iscoroutinefunction(inspect.unwrap(fn))
+    except ValueError:
+        return False
+
+
+def _with_case(fn: Callable[..., Any], case: Any) -> Callable[..., Any]:
+    if is_async(fn):
 
         async def body_async(c: Any) -> Any:
-            return await fn(c, case)
+            result = fn(c, case)
+            return await result if inspect.isawaitable(result) else result
 
         return body_async
 
@@ -212,17 +236,31 @@ def _with_case(fn: Callable[..., Any], case: Any) -> Callable[..., Any]:
 
 
 def evaluate_each(
-    cases: Sequence[Any],
+    cases: list[Any] | tuple[Any, ...],
     name_template: str,
     options: dict[str, Any] | None = None,
     *,
     pool: bool = True,
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+) -> Callable[[Body], Body]:
     """One eval per case, named from `name_template` (`%s`, `%#`, `$field`); the body gets
     `(c, case)`. Its cases pool into one family unless `pool=False` or there's only one."""
+    if not isinstance(cast(object, cases), list | tuple):
+        raise TypeError(
+            f"evaluate_each takes a list of cases (got {type(cases).__name__}), e.g. "
+            'evaluate_each([{"n": 1}, {"n": 2}], "case $n")'
+        )
     opts = dict[str, Any](options or {})
 
-    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(fn: Body) -> Body:
+        try:
+            inspect.signature(fn).bind(None, None)
+        except TypeError:
+            raise TypeError(
+                f"evaluate_each({name_template!r}): the body takes the attempt and its case, "
+                "e.g. def body(c, case)"
+            ) from None
+        except ValueError:
+            pass
         for index, case in enumerate(cases):
             family = None
             if pool and len(cases) > 1:

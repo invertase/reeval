@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
+import { InfraError } from '../sandbox/types.ts'
 import {
   type FromRunner,
   isFromRunner,
@@ -142,8 +143,11 @@ export async function startLanguageRunner(
   }
 }
 
+/** The runner's error as reeval's own class where it has one, so an infra failure records as one. */
 export function errorFrom(wire: WireError): Error {
-  const error = new Error(wire.message) as Error & { expected?: unknown; actual?: unknown }
+  const Class =
+    wire.name === 'InfraError' ? InfraError : wire.name === 'UsageError' ? UsageError : Error
+  const error = new Class(wire.message) as Error & { expected?: unknown; actual?: unknown }
   error.name = wire.name
   error.stack = wire.stack ?? `${wire.name}: ${wire.message}`
   if ('expected' in wire && 'actual' in wire) {

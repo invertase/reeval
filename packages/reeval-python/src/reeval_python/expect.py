@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+from collections.abc import Coroutine
 from contextvars import ContextVar
 from typing import Any
 
@@ -12,9 +14,20 @@ SubmitFn = Any
 
 _submit: ContextVar[SubmitFn | None] = ContextVar("_submit", default=None)
 
+# An async body's matchers not awaited yet, by name; the runner fails a body that leaves any.
+_unawaited: ContextVar[dict[int, str] | None] = ContextVar("_unawaited", default=None)
+
+
+_tokens = itertools.count()
+
 
 def bind_expect(submit: SubmitFn) -> None:
     _submit.set(submit)
+    _unawaited.set({})
+
+
+def unawaited_matchers() -> list[str]:
+    return list((_unawaited.get() or {}).values())
 
 
 def _bound(what: str) -> SubmitFn:
@@ -70,13 +83,26 @@ class Expectation:
         if self._poll is not None:
             fields["poll"] = self._poll
 
-        async def _async_matcher(*args: Any) -> None:
-            await self._submit(args=list(args), **fields)
-
         def _sync_matcher(*args: Any) -> None:
             self._submit(args=list(args), **fields)
 
-        return _sync_matcher if self._sync else _async_matcher
+        if self._sync:
+            return _sync_matcher
+
+        def _async_matcher(*args: Any) -> Coroutine[Any, Any, None]:
+            pending = _unawaited.get()
+            token = next(_tokens)
+            if pending is not None:
+                pending[token] = name
+
+            async def run() -> None:
+                if pending is not None:
+                    pending.pop(token, None)
+                await self._submit(args=list(args), **fields)
+
+            return run()
+
+        return _async_matcher
 
 
 class _Expect:

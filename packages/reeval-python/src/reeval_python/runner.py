@@ -23,8 +23,9 @@ from typing import Any, BinaryIO, TextIO, cast
 from reeval_python._wire import AttemptCall, AttemptCallRecord
 from reeval_python.checks import bind_recorder, escaped_failures, only_assertions
 from reeval_python.context import AttemptContext, SyncAttemptContext
-from reeval_python.declare import collect_eval_file, get_body
+from reeval_python.declare import collect_eval_file, get_body, is_async
 from reeval_python.errors import AttemptAborted, ReevalAssertionError, ReevalCallError
+from reeval_python.expect import unawaited_matchers
 
 RUNNER_PROTOCOL = 3
 
@@ -196,7 +197,11 @@ class _Connection:
             raise self.aborted[attempt_id]
         fut = asyncio.get_running_loop().create_future()
         self._pending[(attempt_id, req_id)] = fut
-        self.write({"id": req_id, "call": call, "key": attempt_id})
+        try:
+            self.write({"id": req_id, "call": call, "key": attempt_id})
+        except BaseException:
+            self._pending.pop((attempt_id, req_id), None)
+            raise
         return await fut
 
 
@@ -251,13 +256,30 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
 
     bind_recorder(record)
     try:
-        if inspect.iscoroutinefunction(fn):
+        if is_async(fn):
             async_ctx.bind_expect()
-            await fn(async_ctx)
+            result = fn(async_ctx)
+            if inspect.isawaitable(result):
+                await result
+            if never_awaited := unawaited_matchers():
+                raise ReevalCallError(
+                    "UsageError",
+                    f"expect(…).{never_awaited[0]}() was never awaited, so it didn't check "
+                    "anything: an async body awaits each matcher",
+                )
         else:
             sync_ctx = SyncAttemptContext(async_ctx, loop)
             sync_ctx.bind_expect()
-            await _in_thread(fn, sync_ctx)
+            result = await _in_thread(fn, sync_ctx)
+            if inspect.isawaitable(result):
+                if inspect.iscoroutine(result):
+                    result.close()
+                raise ReevalCallError(
+                    "UsageError",
+                    "the eval body is a plain function that returned an awaitable, which never "
+                    "ran: declare the body `async def`, and keep functools.wraps on any "
+                    "decorator around it",
+                )
     except asyncio.CancelledError:
         _flush(attempt_id)
         raise

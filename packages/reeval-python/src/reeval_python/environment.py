@@ -3,10 +3,12 @@ plans the run."""
 
 from __future__ import annotations
 
+import copy
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NotRequired, TypedDict
 
-from reeval_python.wire import camel_keys, value_to_wire
+from reeval_python.wire import value_to_wire
 
 # The package registries and code hosts an install step needs, for an `egress` allow list
 # that adds to them: `{"allow": [*DEFAULT_EGRESS_ALLOW, "api.example.com"]}`.
@@ -23,34 +25,58 @@ DEFAULT_EGRESS_ALLOW: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class Environment:
-    """A named environment: its own spec on top of the environments it extends."""
+    """A named environment: its own spec on top of the environments it extends. Each spec is a
+    copy, so changing the dict passed in later doesn't change the environment."""
 
     name: str
     layers: tuple[tuple[str, dict[str, Any]], ...]
 
     def extend(self, name: str, spec: dict[str, Any]) -> Environment:
         """A child environment: its spec replaces this one's, key by key."""
-        return Environment(name, (*self.layers, (name, dict(spec))))
+        return Environment(name, (*self.layers, (name, copy.deepcopy(spec))))
 
     def to_wire(self) -> dict[str, Any]:
-        layers = [{"name": n, "spec": value_to_wire(camel_keys(s))} for n, s in self.layers]
+        layers = [{"name": n, "spec": value_to_wire(s)} for n, s in self.layers]
         return {"kind": "environment", "name": self.name, "layers": layers}
 
 
 def define_environment(name: str, spec: dict[str, Any]) -> Environment:
     """An environment to run evals in: sandbox, files, setup, skills, plugins, egress, env."""
-    return Environment(name, ((name, dict(spec)),))
+    return Environment(name, ((name, copy.deepcopy(spec)),))
 
 
 def _present(**fields: Any) -> dict[str, Any]:
     return {k: v for k, v in fields.items() if v is not None}
 
 
+class PluginBuild(TypedDict):
+    """A plugin's build commands, run from `cwd` (relative to its source) instead of its
+    directory."""
+
+    run: str | list[str]
+    cwd: NotRequired[str]
+
+
+Build = str | Sequence[str] | PluginBuild
+
+
+def _build(build: Build | None) -> dict[str, Any]:
+    """`build=` as reeval's data: a command, commands in order, or `{"run": …, "cwd": …}`."""
+    if build is None:
+        return {}
+    if isinstance(build, str) or isinstance(build, dict):
+        return {"build": build}
+    return {"build": list(build)}
+
+
 class _Plugins:
     """Agent plugins an environment installs: `plugin.git(...)`, `plugin.npm(...)`, …"""
 
-    def local(self, path: str, *, only: list[str] | None = None) -> dict[str, Any]:
-        return {"kind": "plugin", "source": "local", "path": path, **_present(only=only)}
+    def local(
+        self, path: str, *, only: list[str] | None = None, build: Build | None = None
+    ) -> dict[str, Any]:
+        fields = {**_present(only=only), **_build(build)}
+        return {"kind": "plugin", "source": "local", "path": path, **fields}
 
     def git(
         self,
@@ -59,9 +85,9 @@ class _Plugins:
         ref: str | None = None,
         path: str | None = None,
         only: list[str] | None = None,
-        build: dict[str, Any] | None = None,
+        build: Build | None = None,
     ) -> dict[str, Any]:
-        fields = _present(ref=ref, path=path, only=only, build=build)
+        fields = {**_present(ref=ref, path=path, only=only), **_build(build)}
         return {"kind": "plugin", "source": "git", "repo": repo, **fields}
 
     def npm(
@@ -70,9 +96,9 @@ class _Plugins:
         *,
         path: str | None = None,
         only: list[str] | None = None,
-        build: dict[str, Any] | None = None,
+        build: Build | None = None,
     ) -> dict[str, Any]:
-        fields = _present(path=path, only=only, build=build)
+        fields = {**_present(path=path, only=only), **_build(build)}
         return {"kind": "plugin", "source": "npm", "spec": spec, **fields}
 
     def marketplace(
@@ -81,6 +107,7 @@ class _Plugins:
         *,
         ref: str | None = None,
         only: list[str] | None = None,
+        build: Build | None = None,
     ) -> dict[str, Any]:
         """`name@source`: an entry of a git marketplace, or of an `npm:<package>` one."""
         name, at, source = entry.partition("@")
@@ -99,7 +126,7 @@ class _Plugins:
             market = {"source": "npm", "spec": source.removeprefix("npm:")}
         else:
             market = {"source": "git", "repo": source, **_present(ref=ref)}
-        fields = _present(only=only)
+        fields = {**_present(only=only), **_build(build)}
         return {
             "kind": "plugin",
             "source": "marketplace",
@@ -114,14 +141,14 @@ plugin = _Plugins()
 
 def docker(*, from_: str | None = None, **options: Any) -> dict[str, Any]:
     """reeval's Docker sandbox, on another image (`from_`), Dockerfile or install layer."""
-    return {"kind": "docker", **_present(**{"from": from_}), **camel_keys(options)}
+    return {"kind": "docker", **_present(**{"from": from_}), **value_to_wire(options)}
 
 
 def fake_harness(**options: Any) -> dict[str, Any]:
     """The fake agent, for evals that run without a real one."""
-    return {"kind": "fake", **camel_keys(options)}
+    return {"kind": "fake", **value_to_wire(options)}
 
 
 def fake_judge(**options: Any) -> dict[str, Any]:
     """A judge with a fixed `score`, for evals that run without a model."""
-    return {"kind": "fake-judge", **camel_keys(options)}
+    return {"kind": "fake-judge", **value_to_wire(options)}

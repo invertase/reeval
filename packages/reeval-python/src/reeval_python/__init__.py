@@ -12,6 +12,7 @@ from reeval_python.declare import (
 from reeval_python.environment import (
     DEFAULT_EGRESS_ALLOW,
     Environment,
+    PluginBuild,
     define_environment,
     docker,
     fake_harness,
@@ -28,6 +29,7 @@ __all__ = [
     "BackgroundHandle",
     "Environment",
     "ExecResult",
+    "PluginBuild",
     "ReevalAssertionError",
     "ReevalCallError",
     "SyncAttemptContext",
