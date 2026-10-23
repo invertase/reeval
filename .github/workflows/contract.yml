@@ -41,22 +41,22 @@ jobs:
       REEVAL_TEST_REAL: '1'
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # Every real row, or the ones asked for; one without its key fails, naming the variable.
-      REEVAL_CONTRACT_HARNESSES: ${{ inputs.harnesses || 'cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build' }}
-      # The hard cap for this job: the contract on all eleven rows (22 attempts on Cursor and
+      REEVAL_CONTRACT_HARNESSES: ${{ inputs.harnesses || 'cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,fx-gateway,grok-build' }}
+      # The hard cap for this job: the contract on all twelve rows (22 attempts on Cursor and
       # Antigravity, whose plugin fields load rules; 20 on Claude Code and Grok Build, whose don't;
       # 16 on Codex and Goose, whose plugins have no hooks or subagents; 18 on OpenCode, with
-      # subagents but no hooks; 16 on pi and fx, with neither; 12 on the two without), the e2e (2)
-      # on the nine harnesses' own rows, and the real-tier fixtures (2 each, 12 of them):
-      # 44 + 40 + 32 + 18 + 32 + 24 + 18 + 24, plus 8 of headroom. Each reserves its attempts in
-      # the ledger first, and fails rather than go over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '240'
+      # subagents but no hooks; 16 on pi and fx, with neither; 12 on the three without, fx-gateway
+      # among them), the e2e (2) on the nine harnesses' own rows, and the real-tier fixtures (2
+      # each, 12 of them): 44 + 40 + 32 + 18 + 32 + 36 + 18 + 24, plus 8 of headroom. Each
+      # reserves its attempts in the ledger first, and fails rather than go over.
+      REEVAL_REAL_ATTEMPT_BUDGET: '252'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-      # The gated *-gateway rows, when REEVAL_CONTRACT_HARNESSES names them.
+      # fx-gateway, and the other *-gateway rows when REEVAL_CONTRACT_HARNESSES names them.
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
