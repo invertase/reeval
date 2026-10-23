@@ -14,6 +14,7 @@ import os
 import sys
 import threading
 import traceback
+import weakref
 from collections.abc import Mapping
 from contextvars import ContextVar
 from importlib.metadata import PackageNotFoundError, version
@@ -25,11 +26,32 @@ from reeval_python.checks import bind_recorder, escaped_failures, only_assertion
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body, is_async
 from reeval_python.errors import AttemptAborted, ReevalAssertionError, ReevalCallError
-from reeval_python.expect import unawaited_matchers
+from reeval_python.expect import unawaited
 
 RUNNER_PROTOCOL = 3
 
 _attempt: ContextVar[str | None] = ContextVar("_attempt", default=None)
+
+# The tasks each attempt's body started, by its key: a body that returns leaves none running.
+_started: dict[str, weakref.WeakSet[asyncio.Task[Any]]] = {}
+
+
+def _task_factory(loop: asyncio.AbstractEventLoop, coro: Any, **kwargs: Any) -> asyncio.Task[Any]:
+    task: asyncio.Task[Any] = asyncio.Task(coro, loop=loop, **kwargs)
+    context = kwargs.get("context")
+    key = context.get(_attempt) if context is not None else _attempt.get()
+    if key is not None:
+        _started.setdefault(key, weakref.WeakSet()).add(task)
+    return task
+
+
+def _left_running(key: str) -> list[asyncio.Task[Any]]:
+    """The tasks the body started that are still running, cancelled."""
+    current = asyncio.current_task()
+    left = [t for t in _started.pop(key, ()) if not t.done() and t is not current]
+    for task in left:
+        task.cancel()
+    return left
 
 
 def sdk_version() -> str:
@@ -149,13 +171,25 @@ class _Connection:
         self.aborted: dict[str, AttemptAborted] = {}
         self._records: set[tuple[str, str]] = set()
         self._ended: set[str] = set()
+        # Bodies that ended before reeval aborted them: `aborted` holds their refusal of calls.
+        self._finished_first: set[str] = set()
 
     def write(self, msg: dict[str, Any]) -> None:
         self._frames.write(msg)
 
     def done(self, key: str, error: dict[str, Any] | None = None) -> None:
-        self._ended.add(key)
         self.write({"type": "done", "key": key, **({"error": error} if error else {})})
+
+    def finish(self, key: str) -> None:
+        """The body is done: a call it left running, or makes later, raises without reaching
+        reeval, and a check made later isn't sent."""
+        self._ended.add(key)
+        if key not in self.aborted:
+            self._finished_first.add(key)
+            self.abort(key, "AbortError", "the attempt is over: its body already returned")
+
+    def aborted_by_reeval(self, key: str) -> AttemptAborted | None:
+        return None if key in self._finished_first else self.aborted.get(key)
 
     def abort(self, key: str, name: str, message: str) -> None:
         """reeval gave up on the body: its calls in flight and every later one raise."""
@@ -184,11 +218,11 @@ class _Connection:
 
     def record(self, attempt_id: str, req_id: str, call: AttemptCallRecord) -> None:
         """Sends a check without waiting for reeval's answer, which only a refusal is shown of."""
-        if attempt_id in self.aborted:
-            raise self.aborted[attempt_id]
         # A thread that outlived its body checks after the attempt's outcome is settled.
         if attempt_id in self._ended:
             return
+        if attempt_id in self.aborted:
+            raise self.aborted[attempt_id]
         self._records.add((attempt_id, req_id))
         self.write({"id": req_id, "call": call, "key": attempt_id})
 
@@ -261,16 +295,29 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
             result = fn(async_ctx)
             if inspect.isawaitable(result):
                 await result
-            if never_awaited := unawaited_matchers():
+            if left := _left_running(attempt_id):
                 raise ReevalCallError(
                     "UsageError",
-                    f"expect(…).{never_awaited[0]}() was never awaited, so it didn't check "
-                    "anything: an async body awaits each matcher",
+                    f"the body returned with {len(left)} task(s) it started still running, so "
+                    "their calls and checks were cut short: await each task (asyncio.gather or "
+                    "a TaskGroup) before the body returns",
+                )
+            if never_awaited := unawaited():
+                raise ReevalCallError(
+                    "UsageError",
+                    f"{never_awaited[0]} was never awaited, so it didn't run: an async body "
+                    "awaits each c call and matcher",
                 )
         else:
             sync_ctx = SyncAttemptContext(async_ctx, loop)
             sync_ctx.bind_expect()
             result = await _in_thread(fn, sync_ctx)
+            if inspect.isgenerator(result) or inspect.isasyncgen(result):
+                raise ReevalCallError(
+                    "UsageError",
+                    "the eval body is a generator, so it never ran: declare it def or async def "
+                    "without yield",
+                )
             if inspect.isawaitable(result):
                 if inspect.iscoroutine(result):
                     result.close()
@@ -281,6 +328,9 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
                     "decorator around it",
                 )
     except asyncio.CancelledError:
+        _left_running(attempt_id)
+        unawaited()
+        conn.finish(attempt_id)
         _flush(attempt_id)
         raise
     except AttemptAborted as exc:
@@ -301,6 +351,9 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         else:
             error = {"name": type(exc).__name__, "message": str(exc)}
         error["stack"] = traceback.format_exc()
+    _left_running(attempt_id)
+    unawaited()
+    conn.finish(attempt_id)
     _flush(attempt_id)
     conn.done(attempt_id, error)
 
@@ -317,7 +370,7 @@ _escaped: BaseException | None = None
 
 
 def _cancelled_done(conn: _Connection, key: str) -> None:
-    aborted = conn.aborted.get(key)
+    aborted = conn.aborted_by_reeval(key)
     if aborted is None and _escaped is not None:
         aborted = AttemptAborted(
             type(_escaped).__name__,
@@ -406,6 +459,7 @@ async def serve(frames: _Frames, stdin: BinaryIO, root: Path) -> None:
         }
     )
     loop = asyncio.get_running_loop()
+    loop.set_task_factory(_task_factory)
     inbox: asyncio.Queue[Any] = asyncio.Queue()
     threading.Thread(target=_read_lines, args=(stdin, loop, inbox), daemon=True).start()
     tasks: dict[str, asyncio.Task[None]] = {}

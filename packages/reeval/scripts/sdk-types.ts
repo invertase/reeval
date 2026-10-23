@@ -170,6 +170,7 @@ const wrapped = (text: string, indent: string, width = 96) => {
 function keyTables(defs: Map<string, Schema>) {
   const camel = new Set<string>()
   const records = new Set<string>()
+  const durations = new Set<string>()
   const seen = new Set<Schema>()
   const resolve = (schema: Schema): Schema =>
     schema.$ref ? (defs.get(schema.$ref.replace('#/$defs/', '')) ?? {}) : schema
@@ -180,6 +181,8 @@ function keyTables(defs: Map<string, Schema>) {
     const types = Array.isArray(s.type) ? s.type : [s.type]
     return types.includes('object') && !hasFields(s)
   }
+  const isDuration = (schema: Schema): boolean =>
+    schema.$ref === '#/$defs/Duration' || (schema.anyOf ?? schema.oneOf ?? []).some(isDuration)
   const walk = (schema: Schema) => {
     if (seen.has(schema)) return
     seen.add(schema)
@@ -191,11 +194,12 @@ function keyTables(defs: Map<string, Schema>) {
     for (const [key, prop] of Object.entries(s.properties ?? {})) {
       if (/[A-Z]/.test(key)) camel.add(key)
       if (isRecord(prop)) records.add(key)
+      if (isDuration(prop)) durations.add(key)
       walk(prop)
     }
   }
   for (const schema of defs.values()) walk(schema)
-  return { camel, records }
+  return { camel, records, durations }
 }
 
 /** Python: each named object a TypedDict, each other named schema an alias. */
@@ -323,7 +327,7 @@ export function python(defs: Map<string, Schema> = definitions()): string {
     blocks.push([...doc, `${name}: TypeAlias = ${JSON.stringify(type)}`].join('\n'))
   }
 
-  const { camel, records } = keyTables(defs)
+  const { camel, records, durations } = keyTables(defs)
   const frozenset = (names: Set<string>) =>
     `frozenset(\n    {\n${[...names]
       .sort(byCodePoint)
@@ -337,6 +341,10 @@ export function python(defs: Map<string, Schema> = definitions()): string {
     [
       "# Fields whose keys are the eval's own (env, headers, …), which keep their spelling.",
       `RECORD_FIELDS: frozenset[str] = ${frozenset(records)}`,
+    ].join('\n'),
+    [
+      '# Fields that take a duration: the SDK takes seconds or a timedelta.',
+      `DURATION_FIELDS: frozenset[str] = ${frozenset(durations)}`,
     ].join('\n'),
   )
 

@@ -6,9 +6,10 @@ import inspect
 import json
 import re
 from collections.abc import Iterable
+from datetime import timedelta
 from typing import Any, cast
 
-from reeval_python._wire import CAMEL_KEYS, RECORD_FIELDS, MatcherSubject
+from reeval_python._wire import CAMEL_KEYS, DURATION_FIELDS, RECORD_FIELDS, MatcherSubject
 from reeval_python.types import ExecResult, Turn, Verdict
 
 _SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+")
@@ -23,18 +24,49 @@ def _camel(key: str) -> str:
     return camel if camel in CAMEL_KEYS else key
 
 
+def seconds(value: object, where: str) -> float:
+    """A duration the eval wrote, as seconds: a `timedelta`, or a number of seconds."""
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    raise TypeError(
+        f"{where} takes seconds or a timedelta, e.g. 90 or timedelta(minutes=5) (got {value!r})"
+    )
+
+
+def _number(n: float) -> str:
+    return str(int(n)) if n == int(n) else f"{n:.3f}".rstrip("0")
+
+
+def duration_to_wire(value: Any, where: str) -> str:
+    """A duration as reeval writes one: `"90s"`, `"5m"`, `"1h"` or `"250ms"`."""
+    ms = round(seconds(value, where) * 1000, 3)
+    for unit, size in (("h", 3_600_000), ("m", 60_000), ("s", 1000)):
+        if ms and ms % size == 0:
+            return f"{_number(ms / size)}{unit}"
+    return f"{_number(ms)}ms"
+
+
 def value_to_wire(value: Any, *, record: bool = False) -> Any:
-    """Options as reeval's data: the SDK's objects (environments) as plain data, and reeval's own
-    keys at any depth in camelCase. A record's keys (`env`, `headers`, …) are the eval's own and
-    keep their spelling; reeval names any other key it doesn't have."""
-    to_wire = getattr(value, "to_wire", None)
+    """Options as reeval's data: the SDK's objects (environments, sandboxes) as plain data,
+    durations from seconds, and reeval's own keys at any depth in camelCase. A record's keys
+    (`env`, `headers`, …) are the eval's own and keep their spelling; reeval names any other key
+    it doesn't have."""
+    to_wire = getattr(value, "_to_wire", None)
     if callable(to_wire):
         return to_wire()
     if isinstance(value, dict):
         out: dict[str, Any] = {}
         for key, item in cast(dict[str, Any], value).items():
-            name = key if record or not isinstance(cast(object, key), str) else _camel(key)
-            out[name] = value_to_wire(item, record=name in RECORD_FIELDS)
+            if record or not isinstance(cast(object, key), str):
+                out[key] = value_to_wire(item, record=key in RECORD_FIELDS)
+                continue
+            name = _camel(key)
+            if name in DURATION_FIELDS:
+                out[name] = duration_to_wire(item, key)
+            else:
+                out[name] = value_to_wire(item, record=name in RECORD_FIELDS)
         return out
     if isinstance(value, list | tuple):
         return [value_to_wire(v) for v in cast(list[Any], value)]
@@ -54,7 +86,7 @@ def json_value(value: Any, where: str) -> Any:
     if isinstance(value, ExecResult):
         return {"exitCode": value.exit_code, "stdout": value.stdout, "stderr": value.stderr}
     if isinstance(value, Verdict):
-        return value.raw
+        return value._data  # pyright: ignore[reportPrivateUsage]
     try:
         json.dumps(value)
     except (TypeError, ValueError) as exc:

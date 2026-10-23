@@ -1848,3 +1848,12 @@ RECORD_FIELDS: frozenset[str] = frozenset(
         "write",
     }
 )
+
+
+# Fields that take a duration: the SDK takes seconds or a timedelta.
+DURATION_FIELDS: frozenset[str] = frozenset(
+    {
+        "startTimeout",
+        "timeout",
+    }
+)

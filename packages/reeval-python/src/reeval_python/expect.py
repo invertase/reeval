@@ -10,21 +10,29 @@ import itertools
 import re
 from collections.abc import Callable, Coroutine, Sequence
 from contextvars import ContextVar
-from typing import Any, Generic, Self, TypeVar
+from datetime import timedelta
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar
 
 from reeval_python._wire import AttemptCallExpectPoll, MatcherSubject
-from reeval_python.wire import subject_for_matcher
+from reeval_python.wire import seconds, subject_for_matcher
+
+if TYPE_CHECKING:
+    from reeval_python.context import AttemptContext, SyncAttemptContext
 
 SubmitFn = Any
 
 _submit: ContextVar[SubmitFn | None] = ContextVar("_submit", default=None)
 
-# An async body's matchers not awaited yet, by name; the runner fails a body that leaves any.
-_unawaited: ContextVar[dict[int, str] | None] = ContextVar("_unawaited", default=None)
+# An async body's calls and matchers not awaited yet: each one's name, and how to close it.
+# The runner fails a body that leaves any, since what wasn't awaited never ran.
+_unawaited: ContextVar[dict[int, tuple[str, Callable[[], None]]] | None] = ContextVar(
+    "_unawaited", default=None
+)
 
 _tokens = itertools.count()
 
 R = TypeVar("R")
+T = TypeVar("T")
 
 Pattern = str | re.Pattern[str] | re.Pattern[bytes]
 ToolInput = str | re.Pattern[str] | re.Pattern[bytes] | dict[str, Any]
@@ -37,8 +45,35 @@ def bind_expect(submit: SubmitFn) -> None:
     _unawaited.set({})
 
 
-def unawaited_matchers() -> list[str]:
-    return list((_unawaited.get() or {}).values())
+def tracked(coro: Coroutine[Any, Any, T], name: str) -> Coroutine[Any, Any, T]:
+    """`coro`, noted as not yet run until it's first awaited (or a task starts it)."""
+    pending = _unawaited.get()
+    if pending is None:
+        return coro
+    token = next(_tokens)
+
+    async def run() -> T:
+        pending.pop(token, None)
+        return await coro
+
+    wrapper = run()
+
+    def close() -> None:
+        wrapper.close()
+        coro.close()
+
+    pending[token] = (name, close)
+    return wrapper
+
+
+def unawaited() -> list[str]:
+    """The body's calls and matchers it never awaited, closed so Python doesn't warn too."""
+    pending = _unawaited.get() or {}
+    names = [name for name, _ in pending.values()]
+    for _, close in pending.values():
+        close()
+    pending.clear()
+    return names
 
 
 def _bound(what: str, sync: bool) -> SubmitFn:
@@ -180,18 +215,8 @@ class AsyncExpectation(_Matchers[Coroutine[Any, Any, None]]):
     """`expect(subject, label)` in an `async def` body: await each matcher."""
 
     def _match(self, matcher: str, args: list[Any]) -> Coroutine[Any, Any, None]:
-        pending = _unawaited.get()
-        token = next(_tokens)
-        if pending is not None:
-            pending[token] = re.sub(r"[A-Z]", lambda m: f"_{m.group().lower()}", matcher)
-        fields = self._fields(matcher, args)
-
-        async def run() -> None:
-            if pending is not None:
-                pending.pop(token, None)
-            await self._submit(**fields)
-
-        return run()
+        snake = re.sub(r"[A-Z]", lambda m: f"_{m.group().lower()}", matcher)
+        return tracked(self._submit(**self._fields(matcher, args)), f"expect(…).{snake}()")
 
 
 E = TypeVar("E", bound=_Matchers[Any])
@@ -213,13 +238,14 @@ class _Expect(Generic[E]):
 
     def poll(
         self,
-        actual: Callable[[], object] | Any,
+        actual: AttemptContext | SyncAttemptContext | Callable[[], object],
         label: str | None = None,
         *,
-        interval: int | None = None,
-        timeout: int | None = None,
+        interval: timedelta | float | None = None,
+        timeout: timedelta | float | None = None,
     ) -> E:
-        """Retry the matcher until it passes or `timeout` (ms) runs out, every `interval` ms.
+        """Retry the matcher until it passes or `timeout` runs out (default 1 second), trying
+        every `interval`; each in seconds or as a timedelta.
 
         `actual` is `c`, or a function that reads a file or runs a command, which reeval reads
         or runs again on each try: `expect.poll(lambda: c.read_file("ready.txt"))`.
@@ -238,10 +264,17 @@ class _Expect(Generic[E]):
             )
         poll: AttemptCallExpectPoll = {}
         if interval is not None:
-            poll["interval"] = interval
+            poll["interval"] = _ms(interval, "expect.poll(interval=…)")
         if timeout is not None:
-            poll["timeout"] = timeout
+            poll["timeout"] = _ms(timeout, "expect.poll(timeout=…)")
         return self._make(subject, submit, label=label, poll=poll)
+
+
+def _ms(value: timedelta | float, where: str) -> float:
+    ms = seconds(value, where) * 1000
+    if ms <= 0:
+        raise ValueError(f"{where} takes more than zero seconds (got {value!r})")
+    return int(ms) if ms == int(ms) else ms
 
 
 expect: _Expect[Expectation] = _Expect(Expectation, sync=True)

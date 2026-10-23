@@ -55,3 +55,76 @@ def test_pyright_finds_a_missing_await_and_an_unknown_matcher(tmp_path: Path) ->
     ], report["generalDiagnostics"]
     clean = [d for d in report["generalDiagnostics"] if d["range"]["start"]["line"] < errors[0][0]]
     assert clean == [], "the sync body and the awaited calls type-check"
+
+
+MISUSE = """
+from datetime import timedelta
+
+from reeval_python import AttemptContext, SyncAttemptContext, evaluate, evaluate_each, expect
+from reeval_python import aio
+
+
+@evaluate("ok", {"runs": 2, "timeout": timedelta(minutes=5)})
+async def ok(c: AttemptContext) -> None:
+    await c.judge("did it work?", threshold=0.5)
+    await aio.expect.poll(lambda: c.read_file("x"), timeout=1.5).to_be("y")
+
+
+@evaluate_each([{"n": 1}], "case $n")
+def ok_each(c: SyncAttemptContext, case: dict[str, int]) -> None: ...
+
+
+@evaluate("wrong context")  # flagged
+async def wrong_context(c: SyncAttemptContext) -> None: ...
+
+
+@evaluate("sync generator")  # flagged
+def sync_generator(c: SyncAttemptContext):
+    yield
+
+
+@evaluate("async generator")  # flagged
+async def async_generator(c: AttemptContext):
+    yield
+
+
+@evaluate("returns a value")  # flagged
+def returns_value(c: SyncAttemptContext) -> bool:
+    return True
+
+
+@evaluate_each([1], "case %s")  # flagged
+async def wrong_each(c: SyncAttemptContext, case: int) -> None: ...
+
+
+@evaluate("misspelt option", {"runz": 3})  # flagged
+def misspelt(c: SyncAttemptContext) -> None:
+    c.judge("q", treshold=1)  # flagged
+    expect.poll(c.read_file("x")).to_be("y")  # flagged
+    expect.poll(c.read_file).to_be("y")  # flagged
+    expect.poll(c, timeout="1s").to_have_file("x")  # flagged
+"""
+
+
+def test_pyright_refuses_a_misdeclared_body_and_misspelt_options(tmp_path: Path) -> None:
+    sample = tmp_path / "misuse.eval.py"
+    sample.write_text(MISUSE)
+    out = subprocess.run(
+        [sys.executable, "-m", "pyright", "--outputjson", "--pythonpath", sys.executable, sample],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    report = json.loads(out.stdout)
+    lines = MISUSE.splitlines()
+    errors = {
+        d["range"]["start"]["line"]
+        for d in report["generalDiagnostics"]
+        if d["severity"] == "error"
+    }
+    flagged = {i for i, text in enumerate(lines) if text.endswith("# flagged")}
+    # pyright reports a refused decorator on the decorator's line or on the def below it.
+    found = {i if i in flagged else i - 1 for i in errors}
+    assert found == flagged, [
+        (lines[d["range"]["start"]["line"]], d["message"]) for d in report["generalDiagnostics"]
+    ]

@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import sys
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,10 @@ from reeval_python import (
     AttemptContext,
     define_environment,
     docker,
+    evaluate,
     evaluate_each,
     fake_harness,
+    group,
     plugin,
 )
 from reeval_python.declare import collect_module_tree_sync
@@ -31,7 +34,7 @@ def test_reeval_keys_are_camel_cased_at_any_depth_and_record_keys_are_not() -> N
             "compare": {"min_lift": 0.1},
             "judge": {"provider_options": {"google": {"thinking_config": 1}}},
             "harness": fake_harness(delay_ms=5, fail_with="boom"),
-            "sandbox": docker(start_timeout="1m", env={"MY_VAR": "x", "snake_key": "y"}),
+            "sandbox": docker(start_timeout=60, env={"MY_VAR": "x", "snake_key": "y"}),
             "not_a_reeval_key": 1,
         }
     )
@@ -48,13 +51,36 @@ def test_reeval_keys_are_camel_cased_at_any_depth_and_record_keys_are_not() -> N
     }
 
 
+@pytest.mark.parametrize(
+    ("given", "wire"),
+    [
+        (90, "90s"),
+        (1.5, "1500ms"),
+        (0.25, "250ms"),
+        (timedelta(minutes=5), "5m"),
+        (timedelta(hours=2), "2h"),
+        (timedelta(milliseconds=1.5), "1.5ms"),
+    ],
+)
+def test_a_duration_is_seconds_or_a_timedelta(given: Any, wire: str) -> None:
+    assert options_to_wire({"timeout": given}) == {"timeout": wire}
+    sandbox = options_to_wire({"sandbox": docker(start_timeout=given)})
+    assert sandbox == {"sandbox": {"kind": "docker", "startTimeout": wire}}
+
+
+@pytest.mark.parametrize("given", ["1s", True, None])
+def test_a_duration_refuses_anything_but_seconds(given: Any) -> None:
+    with pytest.raises(TypeError, match="timeout takes seconds or a timedelta"):
+        options_to_wire({"timeout": given})
+
+
 def test_an_environment_spec_is_camel_cased_and_copied() -> None:
     spec: dict[str, Any] = {"harness": {"kind": "fake", "delay_ms": 5}, "env": {"A": "1"}}
     env = define_environment("e", spec)
     spec["env"]["A"] = "changed"
     child = env.extend("child", spec)
     spec["env"]["A"] = "changed again"
-    layers = child.to_wire()["layers"]
+    layers = child._to_wire()["layers"]  # pyright: ignore[reportPrivateUsage]
     assert layers[0]["spec"] == {"harness": {"kind": "fake", "delayMs": 5}, "env": {"A": "1"}}
     assert layers[1]["spec"]["env"] == {"A": "changed"}
 
@@ -66,7 +92,8 @@ def test_every_plugin_source_takes_a_build() -> None:
         plugin.npm("@acme/lint", build={"run": "make", "cwd": "src"}),
         plugin.marketplace("lint@github:acme/plugins", build=["make"]),
     ]
-    assert [p["build"] for p in sources] == [
+    assert repr(sources[0]) == "Plugin(source='local', path='plugins/lint', build='npm run build')"
+    assert [p._to_wire()["build"] for p in sources] == [  # pyright: ignore[reportPrivateUsage]
         "npm run build",
         ["npm ci", "npm run build"],
         {"run": "make", "cwd": "src"},
@@ -113,15 +140,68 @@ def test_expect_refuses_a_coroutine_and_poll_a_value() -> None:
     assert describe(lambda: c.exec("npm test")) == {"exec": "npm test"}
     with pytest.raises(TypeError, match="must return c.read_file"):
         describe(lambda: "ready")
-    with pytest.raises(TypeError, match="must return c.read_file"):
+    with pytest.raises(TypeError, match="not c.send"):
         describe(lambda: c.send("hi"))
+
+
+def test_poll_s_function_names_one_read_and_says_what_to_do_with_more() -> None:
+    from reeval_python.context import describe
+
+    async def send(call: Any) -> dict[str, Any]:
+        return {"ok": True}
+
+    c = AttemptContext("k1", send)
+    with pytest.raises(TypeError, match=r"check its contents or output with a matcher.*\.stdout"):
+        describe(lambda: c.exec("cat x").stdout)  # pyright: ignore[reportAttributeAccessIssue]
+    with pytest.raises(TypeError, match="check its contents or output with a matcher"):
+        describe(lambda: c.read_file("a") or c.read_file("b"))
+    with pytest.raises(TypeError, match="check its contents or output with a matcher"):
+        describe(lambda: c.read_file("a") == "x")
+    with pytest.raises(TypeError, match="this one made 2"):
+        describe(lambda: (c.read_file("a"), c.read_file("b")))
+    with pytest.raises(TypeError, match="takes no arguments"):
+        describe(c.read_file)  # pyright: ignore[reportArgumentType]
+
+
+def test_a_case_name_declared_twice_says_how_to_tell_cases_apart() -> None:
+    def load() -> None:
+        @evaluate_each([1, 2], "same", pool=False)
+        def _(c: Any, case: int) -> None: ...
+
+    with pytest.raises(ValueError, match=r"is declared twice.*put \$key, %s or %# in the name"):
+        collect_module_tree_sync(load)
+
+
+def test_an_eval_declared_twice_is_refused_where_it_is_declared() -> None:
+    def load() -> None:
+        def body(c: Any) -> None: ...
+
+        evaluate("a", body)
+        group("g", lambda: evaluate("a", body))
+        evaluate("a", body)
+
+    with pytest.raises(ValueError, match=r"evaluate\('a'\) is declared twice") as raised:
+        collect_module_tree_sync(load)
+    assert "evaluate_each" not in str(raised.value)
+
+
+@pytest.mark.parametrize("kind", ["def", "async def"])
+def test_a_generator_body_is_refused_where_it_is_declared(kind: str) -> None:
+    source = f"{kind} body(c):\n    yield\n"
+    space: dict[str, Any] = {}
+    exec(source, space)  # noqa: S102
+
+    with pytest.raises(TypeError, match="an eval body can't yield"):
+        collect_module_tree_sync(lambda: evaluate("g", space["body"]))
+    with pytest.raises(TypeError, match="an eval body can't yield"):
+        collect_module_tree_sync(lambda: evaluate_each([1], "g %s")(space["body"]))
 
 
 USER_EVAL = """
 from reeval_python import AttemptContext, evaluate
 
 
-@evaluate("typed", {"timeout": "1s"})
+@evaluate("typed", {"timeout": 1})
 async def typed(c: AttemptContext) -> None:
     flag = bool(len("x"))
     await c.exec("true", background=flag)

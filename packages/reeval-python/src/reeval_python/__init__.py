@@ -1,17 +1,14 @@
 """Python eval authoring API for reeval (*.eval.py)."""
 
 from reeval_python.context import AttemptContext, SyncAttemptContext
-from reeval_python.declare import (
-    collect_module_tree,
-    evaluate,
-    evaluate_each,
-    group,
-    reset_collector,
-    todo,
-)
+from reeval_python.declare import evaluate, evaluate_each, group, todo
 from reeval_python.environment import (
     DEFAULT_EGRESS_ALLOW,
+    DockerSandbox,
     Environment,
+    FakeHarness,
+    FakeJudge,
+    Plugin,
     PluginBuild,
     define_environment,
     docker,
@@ -20,22 +17,32 @@ from reeval_python.environment import (
     plugin,
 )
 from reeval_python.errors import ReevalAssertionError, ReevalCallError
-from reeval_python.expect import expect, soft
-from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
+from reeval_python.expect import Expectation, expect, soft
+from reeval_python.options import EvalOptions, JudgeDefaults, JudgeOptions
+from reeval_python.types import BackgroundHandle, Diff, ExecResult, FileChange, Turn, Verdict
 
 __all__ = [
     "DEFAULT_EGRESS_ALLOW",
     "AttemptContext",
     "BackgroundHandle",
+    "Diff",
+    "DockerSandbox",
     "Environment",
+    "EvalOptions",
     "ExecResult",
+    "Expectation",
+    "FakeHarness",
+    "FakeJudge",
+    "FileChange",
+    "JudgeDefaults",
+    "JudgeOptions",
+    "Plugin",
     "PluginBuild",
     "ReevalAssertionError",
     "ReevalCallError",
     "SyncAttemptContext",
     "Turn",
     "Verdict",
-    "collect_module_tree",
     "define_environment",
     "docker",
     "evaluate",
@@ -45,7 +52,6 @@ __all__ = [
     "fake_judge",
     "group",
     "plugin",
-    "reset_collector",
     "soft",
     "todo",
 ]

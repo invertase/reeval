@@ -5,14 +5,18 @@ from __future__ import annotations
 import importlib.util
 import inspect
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast, overload
 
 from reeval_python import _wire as w
 from reeval_python.checks import ASSERT_HOOK, check, compile_eval
+from reeval_python.options import EvalOptions
 from reeval_python.wire import options_to_wire
+
+if TYPE_CHECKING:
+    from reeval_python.context import AttemptContext, SyncAttemptContext
 
 Mode = w.DeclaredMode
 
@@ -97,14 +101,16 @@ _tree_children: list[DeclNode] | None = None
 _group_stack: list[_GroupFrame] = []
 _suites: list[_Suite] = []
 _bodies: dict[str, Callable[..., Any]] = {}
+_names: set[tuple[str, ...]] = set()
 
 
 def reset_collector() -> None:
-    global _tree_children, _group_stack, _suites, _bodies
+    global _tree_children, _group_stack, _suites, _bodies, _names
     _tree_children = []
     _group_stack = []
     _suites = [_Suite()]
     _bodies = {}
+    _names = set()
 
 
 def _next_body(fn: Callable[..., Any]) -> str:
@@ -135,7 +141,7 @@ def _wire_options(options: dict[str, Any]) -> dict[str, Any]:
 
 def group(
     name: str,
-    arg: Callable[[], None] | dict[str, Any] | None = None,
+    arg: Callable[[], None] | EvalOptions | None = None,
     arg2: Callable[[], None] | None = None,
     /,
     *,
@@ -165,22 +171,26 @@ def group(
     _register_group(name, mode, opts, factory)
 
 
-Body = TypeVar("Body", bound=Callable[..., Any])
+SyncBody = Callable[["SyncAttemptContext"], None]
+AsyncBody = Callable[["AttemptContext"], Coroutine[Any, Any, None]]
+# A body is a `def` taking the blocking context or an `async def` taking the awaiting one, and
+# returns nothing: pyright refuses a mismatched context, a generator or a returned value.
+Body = TypeVar("Body", SyncBody, AsyncBody)
 
 
 @overload
 def evaluate(
-    name: str, options: dict[str, Any] | None = None, /, *, mode: Mode = "run"
+    name: str, options: EvalOptions | None = None, /, *, mode: Mode = "run"
 ) -> Callable[[Body], Body]: ...
 @overload
 def evaluate(name: str, fn: Body, /, *, mode: Mode = "run") -> Body: ...
 @overload
-def evaluate(name: str, options: dict[str, Any], fn: Body, /, *, mode: Mode = "run") -> Body: ...
+def evaluate(name: str, options: EvalOptions, fn: Body, /, *, mode: Mode = "run") -> Body: ...
 
 
 def evaluate(
     name: str,
-    arg: Callable[..., Any] | dict[str, Any] | None = None,
+    arg: Callable[..., Any] | EvalOptions | None = None,
     arg2: Callable[..., Any] | None = None,
     /,
     *,
@@ -232,6 +242,18 @@ def is_async(fn: Callable[..., Any]) -> bool:
         return False
 
 
+def _refuse_generator(fn: Callable[..., Any], where: str) -> None:
+    try:
+        inner = inspect.unwrap(fn)
+    except ValueError:
+        inner = fn
+    if inspect.isgeneratorfunction(inner) or inspect.isasyncgenfunction(inner):
+        raise TypeError(
+            f"{where}: an eval body can't yield, or it never runs: declare it def or async def "
+            "without yield"
+        )
+
+
 def _with_case(fn: Callable[..., Any], case: Any) -> Callable[..., Any]:
     if is_async(fn):
 
@@ -247,13 +269,34 @@ def _with_case(fn: Callable[..., Any], case: Any) -> Callable[..., Any]:
     return body
 
 
+T = TypeVar("T")
+SyncCaseBody = Callable[["SyncAttemptContext", T], None]
+AsyncCaseBody = Callable[["AttemptContext", T], Coroutine[Any, Any, None]]
+
+
+class _Each(Generic[T]):
+    """`evaluate_each(…)`'s decorator: a body taking the context and one case."""
+
+    def __init__(self, register: Callable[[Callable[..., Any]], None]) -> None:
+        self._register = register
+
+    @overload
+    def __call__(self, fn: SyncCaseBody[T], /) -> SyncCaseBody[T]: ...
+    @overload
+    def __call__(self, fn: AsyncCaseBody[T], /) -> AsyncCaseBody[T]: ...
+
+    def __call__(self, fn: Callable[..., Any], /) -> Any:
+        self._register(fn)
+        return fn
+
+
 def evaluate_each(
-    cases: list[Any] | tuple[Any, ...],
+    cases: Sequence[T],
     name_template: str,
-    options: dict[str, Any] | None = None,
+    options: EvalOptions | None = None,
     *,
     pool: bool = True,
-) -> Callable[[Body], Body]:
+) -> _Each[T]:
     """One eval per case; the body gets `(c, case)`. Its cases pool into one family unless
     `pool=False` or there's only one.
 
@@ -267,8 +310,13 @@ def evaluate_each(
             'evaluate_each([{"n": 1}, {"n": 2}], "case $n")'
         )
     opts = dict[str, Any](options or {})
+    hint = (
+        f" For evaluate_each, put $key, %s or %# in the name ({name_template!r}) so each case's "
+        "name differs."
+    )
 
-    def decorator(fn: Body) -> Body:
+    def decorator(fn: Callable[..., Any]) -> None:
+        _refuse_generator(fn, f"evaluate_each({name_template!r})")
         try:
             inspect.signature(fn).bind(None, None)
         except TypeError:
@@ -283,10 +331,9 @@ def evaluate_each(
             if pool and len(cases) > 1:
                 family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
             name = _case_name(name_template, case, index)
-            _register_eval(name, "run", opts, _with_case(fn, case), family)
-        return fn
+            _register_eval(name, "run", opts, _with_case(fn, case), family, hint)
 
-    return decorator
+    return _Each(decorator)
 
 
 def todo(name: str) -> None:
@@ -300,7 +347,17 @@ def _register_eval(
     options: dict[str, Any],
     fn: Callable[..., Any],
     family: DeclaredFamily | None,
+    hint: str = "",
 ) -> None:
+    path = (*(frame.name for frame in _group_stack), name)
+    where = f"evaluate({' › '.join(path)!r})"
+    _refuse_generator(fn, where)
+    if path in _names:
+        raise ValueError(
+            f"{where} is declared twice in this file. Each eval needs its own name, or its "
+            f"attempts are merged into one eval.{hint}"
+        )
+    _names.add(path)
     body = _next_body(fn)
     _declare(
         DeclaredEval(
@@ -326,10 +383,6 @@ def _tree_after_loader(loader: Callable[[], None]) -> w.DeclarationTree:
     _collect_suite_sync(_suites[0])
     assert _tree_children is not None
     return {"children": [c.as_json() for c in _tree_children]}
-
-
-async def collect_module_tree(loader: Callable[[], None]) -> w.DeclarationTree:
-    return _tree_after_loader(loader)
 
 
 def collect_module_tree_sync(loader: Callable[[], None]) -> w.DeclarationTree:

@@ -7,7 +7,7 @@ import base64
 import inspect
 from collections.abc import Awaitable, Callable, Coroutine
 from contextvars import ContextVar
-from typing import Any, Literal, cast, overload
+from typing import Any, Literal, NoReturn, Unpack, cast, overload
 
 from reeval_python._wire import (
     AttemptCall,
@@ -19,7 +19,8 @@ from reeval_python._wire import (
     MatcherSubject,
 )
 from reeval_python.errors import ReevalAssertionError, ReevalCallError
-from reeval_python.expect import bind_expect
+from reeval_python.expect import bind_expect, tracked
+from reeval_python.options import JudgeOptions
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
 from reeval_python.wire import Patterns, json_value, options_to_wire, wire_args
 
@@ -28,26 +29,64 @@ _UNSET: Any = object()
 SendFn = Callable[[AttemptCall], Awaitable[dict[str, Any]]]
 
 # Set while `expect.poll` calls its function: reads and commands are described, not made, so
-# reeval can make them again on each try.
-_describing: ContextVar[bool] = ContextVar("_describing", default=False)
+# reeval can make them again on each try. Holds each one the function described.
+_describing: ContextVar[list[MatcherSubject] | None] = ContextVar("_describing", default=None)
+
+_RETURN_IT = (
+    "expect.poll's function returns c.read_file(…) or c.exec(…) itself, which reeval reads or "
+    "runs again on each try: check its contents or output with a matcher, as in "
+    "expect.poll(lambda: c.exec('cat x')).to_contain('ok')"
+)
 
 
 class Described:
-    """What `c.read_file(…)` or `c.exec(…)` names inside `expect.poll`'s function."""
+    """What `c.read_file(…)` or `c.exec(…)` names inside `expect.poll`'s function: nothing to
+    read or compare yet, since reeval makes the call on each try."""
+
+    __slots__ = ("_subject",)
 
     def __init__(self, subject: MatcherSubject) -> None:
-        self.subject = subject
+        object.__setattr__(self, "_subject", subject)
+        described = _describing.get()
+        if described is not None:
+            described.append(subject)
+
+    def __getattr__(self, name: str) -> NoReturn:
+        raise TypeError(f"{_RETURN_IT} (it read .{name})")
+
+    def __bool__(self) -> NoReturn:
+        raise TypeError(_RETURN_IT)
+
+    def __eq__(self, other: object) -> NoReturn:
+        raise TypeError(_RETURN_IT)
+
+    __hash__ = None  # type: ignore[assignment]
 
 
 def describe(fn: Callable[[], object]) -> MatcherSubject:
     """The read or command `fn` makes, for `expect.poll` to repeat."""
-    token = _describing.set(True)
+    try:
+        inspect.signature(fn).bind()
+    except TypeError:
+        raise TypeError(
+            "expect.poll's function takes no arguments, e.g. "
+            "expect.poll(lambda: c.read_file('ready.txt'))"
+        ) from None
+    except ValueError:
+        pass
+    described: list[MatcherSubject] = []
+    token = _describing.set(described)
     try:
         out = fn()
     finally:
         _describing.reset(token)
+    if len(described) > 1:
+        raise TypeError(
+            "expect.poll's function reads one file or runs one command, which reeval makes again "
+            f"on each try; this one made {len(described)}"
+        )
     if isinstance(out, Described):
-        return out.subject
+        return out._subject  # pyright: ignore[reportPrivateUsage]
     if inspect.iscoroutine(out):
         out.close()
     raise TypeError(
@@ -57,7 +96,7 @@ def describe(fn: Callable[[], object]) -> MatcherSubject:
 
 
 def _not_describing(what: str) -> None:
-    if _describing.get():
+    if _describing.get() is not None:
         raise TypeError(f"expect.poll's function can only read a file or run a command, not {what}")
 
 
@@ -77,10 +116,14 @@ class AttemptContext:
             raise ReevalCallError(str(err.get("name", "Error")), str(err.get("message", "")))
         return reply
 
-    async def send(self, prompt: str) -> Turn:
+    def send(self, prompt: str) -> Coroutine[Any, Any, Turn]:
+        """Send the agent a prompt and wait for its turn to end."""
         _not_describing("c.send")
+        return tracked(self._send_turn(prompt), "c.send()")
+
+    async def _send_turn(self, prompt: str) -> Turn:
         reply = await self._call({"op": "send", "prompt": prompt})
-        turn = Turn(index=len(self.turns), raw=cast(dict[str, Any], reply["turn"]))
+        turn = Turn._from_wire(len(self.turns), cast(dict[str, Any], reply["turn"]))  # pyright: ignore[reportPrivateUsage]
         self.turns.append(turn)
         return turn
 
@@ -99,10 +142,10 @@ class AttemptContext:
         self, command: str, *, background: bool = False
     ) -> Coroutine[Any, Any, ExecResult | BackgroundHandle]:
         """Run a command in the sandbox; with `background=True`, leave it running."""
-        if _describing.get() and not background:
+        if _describing.get() is not None and not background:
             return cast(Any, Described({"exec": command}))
         _not_describing("c.exec(…, background=True)")
-        return self._exec(command, background)
+        return tracked(self._exec(command, background), "c.exec()")
 
     async def _exec(self, command: str, background: bool) -> ExecResult | BackgroundHandle:
         call: AttemptCallExec = {"op": "exec", "command": command}
@@ -110,16 +153,16 @@ class AttemptContext:
             call["background"] = True
         result = cast(dict[str, Any], (await self._call(call))["result"])
         return (
-            BackgroundHandle.from_wire(result)
+            BackgroundHandle._from_wire(result)  # pyright: ignore[reportPrivateUsage]
             if background
-            else ExecResult.from_wire(command, result)
+            else ExecResult._from_wire(command, result)  # pyright: ignore[reportPrivateUsage]
         )
 
     def read_file(self, path: str) -> Coroutine[Any, Any, str | None]:
         """A file's contents in the sandbox, or `None` when there's no such file."""
-        if _describing.get():
+        if _describing.get() is not None:
             return cast(Any, Described({"readFile": path}))
-        return self._read_file(path)
+        return tracked(self._read_file(path), "c.read_file()")
 
     async def _read_file(self, path: str) -> str | None:
         contents = (await self._call({"op": "readFile", "path": path})).get("contents")
@@ -128,8 +171,12 @@ class AttemptContext:
     def file(self, path: str) -> Coroutine[Any, Any, str | None]:
         return self.read_file(path)
 
-    async def write_file(self, path: str, contents: str | bytes) -> None:
+    def write_file(self, path: str, contents: str | bytes) -> Coroutine[Any, Any, None]:
+        """Write a file in the sandbox's workspace."""
         _not_describing("c.write_file")
+        return tracked(self._write_file(path, contents), "c.write_file()")
+
+    async def _write_file(self, path: str, contents: str | bytes) -> None:
         if isinstance(contents, bytes):
             encoded = base64.b64encode(contents).decode()
             await self._call(
@@ -138,14 +185,23 @@ class AttemptContext:
         else:
             await self._call({"op": "writeFile", "path": path, "contents": contents})
 
-    async def kill(self, handle: BackgroundHandle) -> None:
+    def kill(self, handle: BackgroundHandle) -> Coroutine[Any, Any, None]:
+        """Stop a command `c.exec(…, background=True)` left running."""
         _not_describing("c.kill")
+        return tracked(self._kill(handle), "c.kill()")
+
+    async def _kill(self, handle: BackgroundHandle) -> None:
         await self._call({"op": "kill", "handle": handle.id})
 
-    async def judge(self, question: str, *, on: Any = _UNSET, **options: Any) -> Verdict:
+    def judge(
+        self, question: str, *, on: object = _UNSET, **options: Unpack[JudgeOptions]
+    ) -> Coroutine[Any, Any, Verdict]:
         """Ask the judge a yes/no question about the latest turn, or `on` an earlier turn or
         a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included."""
         _not_describing("c.judge")
+        return tracked(self._judge(question, on, dict(options)), "c.judge()")
+
+    async def _judge(self, question: str, on: object, options: dict[str, Any]) -> Verdict:
         wire_opts = options_to_wire(options) or {}
         if on is not _UNSET:
             accepted = "judge(on=…) takes a turn, an ExecResult, a Verdict or a JSON value"
@@ -156,7 +212,7 @@ class AttemptContext:
         if wire_opts:
             call["options"] = cast(JudgeCallData, wire_opts)
         reply = await self._call(call)
-        return Verdict.from_wire(cast(dict[str, Any], reply["verdict"]))
+        return Verdict._from_wire(cast(dict[str, Any], reply["verdict"]))  # pyright: ignore[reportPrivateUsage]
 
     async def run_expect(
         self,
@@ -229,8 +285,9 @@ class SyncAttemptContext:
         return fut.result()
 
     def send(self, prompt: str) -> Turn:
+        """Send the agent a prompt and wait for its turn to end."""
         _not_describing("c.send")
-        return self._run(self._ctx.send(prompt))
+        return self._run(self._ctx._send_turn(prompt))  # pyright: ignore[reportPrivateUsage]
 
     @overload
     def exec(self, command: str) -> ExecResult: ...
@@ -242,31 +299,37 @@ class SyncAttemptContext:
     def exec(self, command: str, *, background: bool = False) -> ExecResult | BackgroundHandle:
         """Run a command in the sandbox and wait for it; with `background=True`, leave it
         running."""
-        if _describing.get() and not background:
+        if _describing.get() is not None and not background:
             return cast(Any, Described({"exec": command}))
         _not_describing("c.exec(…, background=True)")
-        return self._run(self._ctx.exec(command, background=background))
+        return self._run(self._ctx._exec(command, background))  # pyright: ignore[reportPrivateUsage]
 
     def read_file(self, path: str) -> str | None:
         """A file's contents in the sandbox, or `None` when there's no such file."""
-        if _describing.get():
+        if _describing.get() is not None:
             return cast(Any, Described({"readFile": path}))
-        return self._run(self._ctx.read_file(path))
+        return self._run(self._ctx._read_file(path))  # pyright: ignore[reportPrivateUsage]
 
     def file(self, path: str) -> str | None:
         return self.read_file(path)
 
     def write_file(self, path: str, contents: str | bytes) -> None:
+        """Write a file in the sandbox's workspace."""
         _not_describing("c.write_file")
-        self._run(self._ctx.write_file(path, contents))
+        self._run(self._ctx._write_file(path, contents))  # pyright: ignore[reportPrivateUsage]
 
     def kill(self, handle: BackgroundHandle) -> None:
+        """Stop a command `c.exec(…, background=True)` left running."""
         _not_describing("c.kill")
-        self._run(self._ctx.kill(handle))
+        self._run(self._ctx._kill(handle))  # pyright: ignore[reportPrivateUsage]
 
-    def judge(self, question: str, *, on: Any = _UNSET, **options: Any) -> Verdict:
+    def judge(
+        self, question: str, *, on: object = _UNSET, **options: Unpack[JudgeOptions]
+    ) -> Verdict:
+        """Ask the judge a yes/no question about the latest turn, or `on` an earlier turn or
+        a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included."""
         _not_describing("c.judge")
-        return self._run(self._ctx.judge(question, on=on, **options))
+        return self._run(self._ctx._judge(question, on, dict(options)))  # pyright: ignore[reportPrivateUsage]
 
     def bind_expect(self) -> None:
         def submit(**kwargs: Any) -> None:

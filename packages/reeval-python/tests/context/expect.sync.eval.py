@@ -9,6 +9,6 @@ def expect_(c):
     expect(c.exec("test -f greet.js")).to_succeed()
     expect(c.read_file("README.md")).to_be_null()
     c.exec("sh -c 'sleep 0.3; echo ready > ready.txt'", background=True)
-    expect.poll(lambda: c.read_file("ready.txt"), interval=50, timeout=10_000).to_be("ready\n")
-    expect.poll(c, "the server is ready", timeout=10_000).to_have_file("ready.txt")
+    expect.poll(lambda: c.read_file("ready.txt"), interval=0.05, timeout=10).to_be("ready\n")
+    expect.poll(c, "the server is ready", timeout=10).to_have_file("ready.txt")
     expect.soft("draft", "the copy is final").to_be("final")
