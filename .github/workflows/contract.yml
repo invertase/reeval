@@ -20,6 +20,13 @@ on:
         description: pinned (the images as built) or latest (the newest agent CLI and SDK swapped in)
         type: string
         required: true
+      harnesses:
+        description: >-
+          Only these rows, comma-separated, in the contract and e2e suites (gated rows such as
+          claude-code-gateway included); the Cursor checks after them are skipped. Empty: every
+          ungated row
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -33,8 +40,8 @@ jobs:
     env:
       REEVAL_TEST_REAL: '1'
       REEVAL_TEST_REQUIRE_DOCKER: '1'
-      # Every real row; one without its key fails, naming the variable.
-      REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build
+      # Every real row, or the ones asked for; one without its key fails, naming the variable.
+      REEVAL_CONTRACT_HARNESSES: ${{ inputs.harnesses || 'cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex,fx,grok-build' }}
       # The hard cap for this job: the contract on all eleven rows (22 attempts on Cursor and
       # Antigravity, whose plugin fields load rules; 20 on Claude Code and Grok Build, whose don't;
       # 16 on Codex and Goose, whose plugins have no hooks or subagents; 18 on OpenCode, with
@@ -85,10 +92,12 @@ jobs:
           [ "${{ inputs.versions }}" = pinned ] && files="$files test/e2e-real.test.ts"
           node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings $files
       - name: the stored conversation @cursor/sdk declares
+        if: inputs.harnesses == ''
         working-directory: packages/reeval
         run: node --test --experimental-strip-types --no-warnings test/cursor-sdk-shape.test.ts
       # Real Cursor: without its key each fixture fails, naming CURSOR_API_KEY.
       - name: real-tier fixtures on Cursor (web fetch recovery included)
+        if: inputs.harnesses == ''
         working-directory: packages/reeval
         env:
           REEVAL_FIXTURE_TIERS: real
