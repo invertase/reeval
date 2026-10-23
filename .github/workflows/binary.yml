@@ -38,6 +38,8 @@ on:
       - scripts/install-test.sh
       - scripts/install.ps1
       - scripts/install-test.ps1
+      - scripts/go-tool-smoke.sh
+      - sdks/go/cmd/reeval/**
       - packages/reeval/src/root.ts
       - packages/reeval/src/bin.ts
       - packages/reeval/src/jiti.ts
@@ -193,6 +195,7 @@ jobs:
           ref: ${{ inputs.ref }}
           sparse-checkout: |
             scripts
+            sdks/go
             examples/hello
             packages/reeval/test/features/egress/blocked-host-recorded
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -216,6 +219,17 @@ jobs:
           BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}${{ matrix.ext }}
           FLAGS: ${{ matrix.flags }}
         run: node scripts/binary-smoke.mjs "$BINARY" $FLAGS
+      # The Go SDK's launcher: go get -tool, then go tool reeval run fetches this binary.
+      - if: ${{ !matrix.alpine && !matrix.ext }}
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with: { go-version-file: sdks/go/go.mod, cache: false }
+      - if: ${{ !matrix.alpine && !matrix.ext }}
+        name: go tool reeval run
+        shell: bash
+        env:
+          BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}
+          VERSION: ${{ needs.compile.outputs.version }}
+        run: scripts/go-tool-smoke.sh "$BINARY" "$VERSION"
       # musl: Alpine, with git (which reeval needs) and Node to drive the binary.
       - if: ${{ matrix.alpine }}
         env:

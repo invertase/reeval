@@ -51,7 +51,7 @@ const PYTHON_ADAPTER: RemoteAdapter = {
 }
 
 /** The Go SDK's runner, which builds a program per package of `_eval.go` files. */
-export const GO_RUNNER_PACKAGE = 'github.com/invertase/reeval/sdks/go/cmd/reeval-runner'
+const GO_RUNNER_PACKAGE = 'github.com/invertase/reeval/sdks/go/cmd/reeval-runner'
 
 const GO_ADAPTER: RemoteAdapter = {
   id: 'go',

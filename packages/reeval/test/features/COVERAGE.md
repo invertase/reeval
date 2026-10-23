@@ -236,7 +236,7 @@
 | Eval timeouts, Ctrl-C and SIGTERM | ✓ 10 | — | — | — | — | — |
 | The packed package installs into a clean project and runs | ✓ 1 | — | — | — | — | — |
 | Python eval authoring SDK (conformance goldens and fake run) | ✓ 1 | ✓ 1 | ◐ 2 (2 without a canary) | ◐ 1 (1 without a canary) | — | ◐ 1 (1 without a canary) |
-| Go eval authoring SDK (conformance goldens and fake run) | ✓ 1 | ✓ 1 | ◐ 1 (1 without a canary) | ◐ 1 (1 without a canary) | — | — |
+| Go eval authoring SDK (conformance goldens and fake run) | ✓ 1 | ✓ 2 | ◐ 1 (1 without a canary) | ◐ 1 (1 without a canary) | — | — |
 
 ## Known gaps
 
