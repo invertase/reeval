@@ -223,23 +223,26 @@
       "additionalProperties": false
     },
     "Cell": {
-      "description": "One cell of an eval: a harness, an environment (`-` when none is set) and that environment's image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
+      "description": "A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.",
       "type": "object",
       "properties": {
         "environment": {
-          "description": "The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).",
+          "description": "The environment's own name, also on a variant cell (`with-skill`, with no prefix).",
           "type": "string"
         },
         "harness": {
+          "description": "The harness id: `id` when set, otherwise `<kind>:<model>` (`<kind>` alone without a model), with `[effort=<value>]` appended whenever `effort` is set.",
           "type": "string"
         },
         "key": {
+          "description": "The harness id, the environment name, and the sandbox id, joined with `/`.",
           "type": "string"
         },
         "role": {
           "$ref": "#/$defs/CellRole"
         },
         "sandbox": {
+          "description": "The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitised final component of `image` or `from`, or for `dockerfile` the sanitised filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.",
           "type": "string"
         },
         "variant": {
@@ -2242,7 +2245,7 @@
       ]
     },
     "SandboxWarning": {
-      "description": "A sandbox with more privilege than the default `reeval` user: `docker({ root: true })`, or `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.",
+      "description": "A `SandboxWarning` describes a sandbox with more privilege than the default `reeval` user: `docker({ root: true })` or `docker({ capabilities })`. One per level that set such a sandbox, however many evaluations inherit it.",
       "type": "object",
       "properties": {
         "capabilities": {
@@ -2253,7 +2256,7 @@
           }
         },
         "file": {
-          "description": "The eval file that sets it, for a group or eval; null for the config or a profile.",
+          "description": "The evaluation file that sets it, for a group or evaluation; null for the config or a profile.",
           "anyOf": [
             {
               "type": "null"
@@ -2275,7 +2278,7 @@
           "type": "string"
         },
         "where": {
-          "description": "That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group(\"net\")` or `evaluate(\"installs deps\")`.",
+          "description": "The value is the level as reeval names it: the `reeval.config.ts` file, `profiles.pr.defaults`, `group(\"net\")`, or `evaluate(\"installs deps\")`.",
           "type": "string"
         }
       },

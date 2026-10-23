@@ -1,70 +1,143 @@
 ---
-title: Environment variables
-description: Every environment variable reeval reads, and the flag each one stands in for.
+title: "Environment variables reference"
+description: "Every public REEVAL_* variable, provider key, and CI variable reeval uses."
 ---
 
-`reeval run` loads `.env.local`, then `.env`, from the config's directory: where the `reeval.config.ts` reeval found (or the `--config` file) lives, not the current directory. Variables already set in your shell win over both files, and `.env.local` wins over `.env`. `reeval analyze` loads them the same way, for its model key; other commands don't read env files.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Environment variables)
+[//]: # (owns: every public REEVAL_* variable; harness, judge and analysis credentials; for judge.model and analysis.model, google/* uses GOOGLE_GENERATIVE_AI_API_KEY and typesafe-ai/* uses TYPESAFE_AI_API_KEY directly when set, while every other prefix and either direct provider without its key uses AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN through Vercel AI Gateway; a direct key takes precedence; typesafe-ai/* is judge-only; CI and terminal variables)
+[//]: # (source: packages/reeval/src/judge/index.ts)
+[//]: # (excludes: REEVAL_BACKGROUND, REEVAL_FAKE_EXEC, REEVAL_PROJECT_ROOT, REEVAL_PYTHON, REEVAL_PYTHON_SDK, REEVAL_RUNNER and REEVAL_RUNNER_TOKEN -> not documented)
+[//]: # (inbound: /quickstart, /evals/running, /evals/ci, /evals/judges, /harnesses/models, /reference/harness/cursor, /reference/harness/claude-code, /reference/harness/codex, /reference/harness/antigravity, /reference/harness/opencode, /reference/harness/goose, /reference/harness/pi, /reference/harness/grok-build, /results/debugging, /results/analysis)
+[//]: # (outbound: /harnesses, /reference/options)
 
-```bash title=".env.local"
-CURSOR_API_KEY=...
-TYPESAFE_AI_API_KEY=...
-```
+Where a flag and a variable set the same thing, the flag takes precedence. `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` then take precedence over the matching config key. A variable already in the environment takes precedence over the `.env.local` file, which takes precedence over the `.env` file, from the config file's directory.
 
-## Credentials
+For more information about config keys, see [Options](/reference/options).
 
-| Variable | Used for |
-|---|---|
-| `CURSOR_API_KEY` | `cursor()`. Stays on the host: the sandbox sees a placeholder, swapped for the key only on Cursor's endpoints. |
-| `ANTHROPIC_API_KEY` | `claudeCode()`, the same way. Its adapter never reads `AI_GATEWAY_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL` or a Claude subscription. Also `anthropic/*` judges, analysis models and compare-question models, directly. |
-| `GEMINI_API_KEY` | `antigravity()`: a Gemini API key, the same way. |
-| `TYPESAFE_AI_API_KEY` | `typesafe-ai/*` judges, such as Jev, directly. |
-| `OPENAI_API_KEY` | `codex()`, and `fx()` on a bare OpenAI id: an OpenAI API key, brokered the same way. Also `openai/*` judges, analysis models and compare-question models, directly. |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | `opencode()`, `goose()` and `pi()`: a Gemini API key, brokered the same way. Also `google/*` judges, analysis models and compare-question models, directly. |
-| `XAI_API_KEY` | `grokBuild()`: an xAI API key, brokered the same way. |
-| `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN` | Any `provider/model` judge, analysis model or compare-question model whose provider's own key isn't set, through the Vercel AI Gateway. A direct key wins over these when both are set; prefixes other than `anthropic/`, `google/`, `openai/` and `typesafe-ai/` have only this route. `AI_GATEWAY_API_KEY` is also `fx()`'s key on a gateway id, brokered the same way. |
-| Any name in `secret.fromEnv('NAME')` | Read on the host and passed into the sandbox (or brokered, or to checks only), redacted everywhere |
+## Run and config
 
-A credential with whitespace or a line break in it (a key copied from a wrapped terminal line) stops the run with exit 2, naming the variable and the character. For `analysis.model`'s key it's a plan warning instead, since insights never stop a run.
+## `REEVAL_PROFILE`
 
-## reeval settings
+`REEVAL_PROFILE` names the profile (`--profile` on `reeval run` and `reeval image build`). With both unset, `defaultProfile.ci` applies when `CI` is set to a value other than `false`, and `defaultProfile.local` applies when `CI` is unset or `false`. Omitting the applicable default selects no profile. An empty or unknown profile name in `defaultProfile` stops config loading; an unknown `--profile` or `REEVAL_PROFILE` name stops the command.
 
-| Variable | Same as | Effect |
-|---|---|---|
-| `REEVAL_PROFILE` | `--profile` | The profile to size the run with (and plan `reeval image build` with); the flag wins |
-| `REEVAL_CONCURRENCY` | `--concurrency` | Beats the config's `concurrency`, loses to the flag |
-| `REEVAL_UI` | `--ui` | `live`, `plain` or `agent` |
-| `REEVAL_LOG_ORDER` | `--log-order` | `stream` or `grouped` |
-| `REEVAL_LOG_PREFIX` | `--log-prefix` | `task` or `none` |
-| `REEVAL_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none`. Default `errors-only`: only failing attempts print their detail lines (`full` with `-v`) |
-| `REEVAL_HEARTBEAT` | | Plain mode's "still running" line after silence, e.g. `30s`. Default `60s`; `0` turns it off |
-| `REEVAL_DEBUG` | | `1` streams the hidden engine's output and the Docker sandbox and image-build logs to stderr, and prints stacks for unexpected errors |
-| `REEVAL_MCP_TOKEN` | `--token` | `reeval mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |
-| `REEVAL_NO_REPORT_HINT` | | `1` hides the line suggesting `reeval report` after an infra error or a crash |
-| `REEVAL_RAW_TRANSCRIPT` | | `1` also writes the harness's unnormalised stream to `transcript.raw.jsonl` |
-| `REEVAL_CAPTURE_BROWSER` | | `0` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. Same as `capture: { browser: false }` |
-| `REEVAL_FAKE_EXEC` | | Not read from your shell: on Windows, a random id reeval sets in each fake-sandbox command's environment, so that stopping the command also stops every MSYS process it started |
-| `REEVAL_BACKGROUND` | | Not read from your shell: in `docker()`, a random id reeval sets in a `c.exec(cmd, { background: true })` or `c.serve` command's environment, so that `kill()` also stops every process it started |
-| `REEVAL_BASE` | | Not read from your shell: the build argument reeval passes to a `docker({ dockerfile })` build, naming reeval's image for the cell's harness. Start a Dockerfile `ARG REEVAL_BASE` / `FROM ${REEVAL_BASE}` |
-| `REEVAL_PYTHON` | | Overrides the Python interpreter for the runner (skips `uv run` and `.venv`) |
-| `REEVAL_PYTHON_SDK` | | Path to the `reeval-python` package on the host; prepends its `src/` to `PYTHONPATH` when the eval project does not list the dependency |
-| `REEVAL_PROJECT_ROOT` | | Not read from your shell: project root the worker passes to a remote language runner |
-| `REEVAL_RUNNER` | | Not read from your shell: loopback address of the language-runner socket |
-| `REEVAL_RUNNER_TOKEN` | | Not read from your shell: one-time token the runner must send on `hello` |
+## `REEVAL_CONCURRENCY`
 
-## CI and agent detection
+`REEVAL_CONCURRENCY` is how many attempts run together (`--concurrency`, then the `concurrency` key). Unset, the cap is 8, one per CPU and per GB of memory where the sandboxes run, and at least 1. A value that is not a whole number of at least 1 stops the command.
 
-| Variable | Effect |
-|---|---|
-| `CI` (not `false`) | Auto-records under `record: 'ci'`, refuses `.only` (exit 2), picks `defaultProfile.ci`, names runs with `ci` |
-| `BUILD_NUMBER`, `BUILD_ID`, `RUN_ID`, `TEAMCITY_VERSION`, … | Plain output with grouped logs (Turborepo's CI list). Only `CI` affects recording and `.only` |
-| `GITHUB_ACTIONS=true` | `::group::` blocks for passing attempts, `::error` annotations for failing ones, colour on |
-| `GITHUB_STEP_SUMMARY` | `summary.md` is appended to it |
-| `GITHUB_*`, `GITLAB_CI`, `CI_JOB_URL`, `CI_COMMIT_REF_NAME` | Branch, PR and CI run URL in the record |
-| `CURSOR_AGENT`, `CLAUDECODE`, `COPILOT_AGENT`, `AI_AGENT=<name>`, … | Agent output (std-env's agent detection). Set `REEVAL_UI=plain` to see everything |
-| `NO_COLOR`, `FORCE_COLOR` | Colour off or on. Otherwise on for a TTY or GitHub Actions, never in agent mode |
+## `REEVAL_CAPTURE_BROWSER`
 
-## Related
+`REEVAL_CAPTURE_BROWSER` of `0` refuses the host browser for `c.capture()`. Any other value allows it. `capture.browser` of `false` refuses it too.
 
-- [CLI overview and exit codes](/reference/cli)
-- [Output modes](/concepts/output)
-- [Secrets and egress](/guide/secrets-and-egress)
+## `REEVAL_MCP_TOKEN`
+
+`REEVAL_MCP_TOKEN` is the bearer token for `reeval mcp --http` (`--token` takes precedence). Unset, the server requires no token.
+
+## Output
+
+`reeval run` reads the variables in Output before the `.env.local` file and the `.env` file load. For `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, and `REEVAL_OUTPUT_LOGS`, `auto` or no value uses the default, and any other value stops the command.
+
+## `REEVAL_UI`
+
+`REEVAL_UI` is `live`, `plain`, or `agent` (`--ui`). With no value, a detected coding agent selects `agent`, an output CI variable or a pipe selects `plain`, and a terminal selects `live`. `live` prints as plain, and `agent` turns the heartbeat off.
+
+## `REEVAL_LOG_ORDER`
+
+`REEVAL_LOG_ORDER` is `stream` or `grouped` (`--log-order`). With no value, an output CI variable selects `grouped`, and otherwise the order is `stream`.
+
+## `REEVAL_LOG_PREFIX`
+
+`REEVAL_LOG_PREFIX` is `task` or `none` (`--log-prefix`). With no value, `none` applies when `GITHUB_ACTIONS` is a non-empty value other than `false` or `0` and the order is `grouped`. Otherwise the prefix is `task`.
+
+## `REEVAL_OUTPUT_LOGS`
+
+`REEVAL_OUTPUT_LOGS` is `full`, `errors-only`, or `none` (`--output-logs`). With no value, `--verbose` selects `full`, and otherwise the level is `errors-only`.
+
+## `REEVAL_HEARTBEAT`
+
+`REEVAL_HEARTBEAT` is the quiet wait before a still-running line. With no value, the wait is 60 seconds. `0` turns it off. A bare number is seconds, and `ms`, `s`, or `m` names the unit. Another shape stops the command. `agent` forces 0.
+
+## Debugging
+
+## `REEVAL_DEBUG`
+
+A non-empty `REEVAL_DEBUG` prints worker output, image-prepare lines, egress-gateway lines, and the crash error. With no value, those lines stay hidden.
+
+## `REEVAL_RAW_TRANSCRIPT`
+
+A non-empty `REEVAL_RAW_TRANSCRIPT` stores each turn's unnormalised stream parts. With no value, the attempt omits them.
+
+## `REEVAL_NO_REPORT_HINT`
+
+A non-empty `REEVAL_NO_REPORT_HINT` hides the `reeval report` hint after a crash or an infra error. `report`, `--json`, `agent` UI, and a detected coding agent with neither `--ui` nor `REEVAL_UI` also hide it.
+
+## Sandbox image
+
+## `REEVAL_BASE`
+
+`REEVAL_BASE` is the build argument for a `dockerfile` sandbox, passed as the harness sandbox image. The `Dockerfile` file reads `ARG REEVAL_BASE`. A shell value is unused.
+
+## Provider keys
+
+Whitespace or a control character in a harness, judge, or compare-question credential stops the run. A missing credential for a harness, a judge, or a compare question stops the run. A missing `analysis.model` credential skips insights.
+
+For more information about harnesses, see [Choose a harness](/harnesses).
+
+### Judge and analysis credentials
+
+The `provider/model` prefix selects the credential for `judge.model` and `analysis.model`. `google` uses `GOOGLE_GENERATIVE_AI_API_KEY` directly, and `typesafe-ai` uses `TYPESAFE_AI_API_KEY` directly, when that key is set. With that key unset, and for every other prefix, `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` calls Vercel AI Gateway. The direct key takes precedence when both are set. A `typesafe-ai` id scores a judge only, and `analysis.model` rejects one.
+
+### Harness credentials
+
+Each harness reads one host credential.
+
+| Harness | Credential |
+| :--- | :--- |
+| `cursor` | `CURSOR_API_KEY` |
+| `claudeCode` | `ANTHROPIC_API_KEY` |
+| `antigravity` | `GEMINI_API_KEY` |
+| `goose` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| `pi` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| `codex` | `OPENAI_API_KEY` |
+| `grokBuild` | `XAI_API_KEY` |
+| `opencode` | The model's provider variable |
+
+For `opencode`, `anthropic` reads `ANTHROPIC_API_KEY`, `google` reads `GOOGLE_GENERATIVE_AI_API_KEY`, and `openai` reads `OPENAI_API_KEY`. Any other model provider reads its own variable. For `amazon-bedrock`, `AWS_REGION` defaults to `us-east-1`.
+
+## CI and terminal
+
+## `CI`
+
+`CI` other than `false`, including `0`, selects `defaultProfile.ci`, records when `record` is `ci` (the default), refuses `evaluate.only` and `group.only`, and names the author `ci`. No value, or `false`, selects `defaultProfile.local`.
+
+### Output CI variables
+
+A non-empty value other than `false` or `0` on `BUILD_ID`, `BUILD_NUMBER`, `CI`, `CI_APP_ID`, `CI_BUILD_ID`, `CI_BUILD_NUMBER`, `CI_NAME`, `CONTINUOUS_INTEGRATION`, `RUN_ID`, `TEAMCITY_VERSION`, or `GITHUB_ACTIONS` defaults the log order to `grouped` and, when no coding agent is detected, the UI to `plain`.
+
+## `GITHUB_ACTIONS`
+
+`GITHUB_ACTIONS` with a non-empty value other than `false` or `0` wraps logs in `::group::` blocks, writes an `::error::` annotation on failure, and keeps colour on without a terminal.
+
+## `GITHUB_OUTPUT`
+
+When `GITHUB_OUTPUT` names a file, `reeval run` appends `run-id=` and the run id.
+
+## `GITHUB_STEP_SUMMARY`
+
+When `GITHUB_STEP_SUMMARY` names a file, `reeval run` appends the run id, then the `summary.md` file.
+
+## `NO_COLOR`
+
+A non-empty `NO_COLOR` turns colour off, ahead of `FORCE_COLOR`.
+
+## `FORCE_COLOR`
+
+A non-empty `FORCE_COLOR` other than `false` or `0` turns colour on. `false` and `0` turn it off. With no value, colour stays off in `agent` mode, and otherwise colour stays on for a terminal or for a non-empty `GITHUB_ACTIONS` value other than `false` or `0`.
+
+## `XDG_CACHE_HOME`
+
+`XDG_CACHE_HOME` is the parent of the host cache. With no value, Linux uses the `~/.cache/reeval` directory, macOS uses the `~/Library/Caches/reeval` directory, and Windows uses a `reeval` directory under `LOCALAPPDATA` or under the `~/AppData/Local` directory.
+
+### CI run metadata
+
+On a CI run, `GITHUB_ACTIONS` records the provider `github`, and `GITLAB_CI` records `gitlab`. `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, and `GITHUB_RUN_ID` build the run URL. `GITHUB_RUN_ATTEMPT` is the attempt. `GITHUB_REF` and `GITHUB_BASE_REF` fill the pull request. The branch is `GITHUB_HEAD_REF`, then `GITHUB_REF_NAME`, then `CI_COMMIT_REF_NAME`. `CI_JOB_URL` is the job URL. `CI_MERGE_REQUEST_IID` and `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` fill the merge request. `GITHUB_BASE_REF` is also the default branch with no `origin` HEAD and no local `main` or `master`.

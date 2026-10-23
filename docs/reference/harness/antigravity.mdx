@@ -1,146 +1,100 @@
 ---
-title: antigravity()
-description: The Antigravity harness, its options and id, its Gemini API key, plugins, prompt size limit and telemetry.
+title: "Antigravity harness"
+description: "Look up options, the key, and recorded events for the Antigravity harness."
 ---
 
-`antigravity()` runs Google's Antigravity CLI (`agy`) in the Docker sandbox, with a Gemini API key. `model` is required.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Antigravity)
+[//]: # (owns: antigravity factory options; GEMINI_API_KEY)
+[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: /harnesses)
+[//]: # (outbound: /sandboxes, /harnesses, /harnesses/models, /environments/secrets#keep-api-keys-on-the-host, /reference/env-vars#provider-keys, /environments/egress#read-blocked-requests, /environments/rules, /environments/skills, /environments/mcp, /reference/record, /reference/matchers#tohavesearched)
+
+## antigravity
+
+`antigravity()` is the Antigravity harness factory. For more information about supported sandboxes, see [Sandboxes](/sandboxes).
+
+`antigravity()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { antigravity } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: antigravity({ model: 'gemini-3.8-flash-medium' }),
+  harness: antigravity({
+    model: 'gemini-3.8-flash-medium',
+    effort: 'high',
+  }),
 })
 ```
 
-## Options
+`model` is required. The other fields are optional.
 
-<Property name="model" type="string">
-  A model slug that `agy models` lists for a Gemini API key, such as `gemini-3.8-flash-medium`. Required, since the CLI's default changes under you.
+<Property name="model" type="string" required>
+  A model slug `agy models` lists for the key, such as `<model>-medium`. A `-low`, `-medium`, or `-high` suffix sets effort in the slug. reeval refuses a missing `model` at plan time with exit code 2.
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort passed as `agy --effort`: `low`, `medium`, `high` or `max`. The slug's `-low` / `-medium` / `-high` suffix is the same knob baked into `model`. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort passed as `agy --effort`, such as `low`, `medium`, `high`, or `max`. The cell's `effort` field copies this option.
 </Property>
 
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set.
+  Cell id. Defaults to `antigravity` followed by the model, such as `antigravity:<model>`. With `effort` set to `high`, the id is `antigravity:<model>[effort=high]`. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
-  The most Antigravity attempts at once across the run, for example for your key's rate limits.
+  The most Antigravity attempts that run at the same time, across the run. A whole number of at least 1.
 </Property>
 
 <Property name="startTimeout" type="Duration" optional>
-  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `antigravity: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
-## At a glance
+For more information about choosing a harness, see [Choose a harness](/harnesses).
 
-| | |
-|---|---|
-| Import | `'{{ pkg }}/harness'` |
-| Credential | `GEMINI_API_KEY` (a Gemini API key) |
-| Adapter | `@reeval/harness-antigravity` 0.1.11, bundled with reeval |
-| Sandbox | `docker()` only |
-| Image | `reeval-sandbox:antigravity-0.1.11` |
-| Rules file | `AGENTS.md` |
-| Skills (default placement) | `~/.gemini/config/skills` |
-| Skills (`placement: 'workspace'`) | `.agents/skills` in the workspace |
-| Egress hosts added | `generativelanguage.googleapis.com` |
-| Tokens | Reported per turn |
+For more information about model ids, effort values, and served models, see [Models and providers for each harness](/harnesses/models).
 
-Build its image once with `reeval image build` in a project whose config uses `antigravity()`.
+## Credential
 
-## The key
+`antigravity()` reads `GEMINI_API_KEY` from the host. A missing key stops the harness before the session starts. The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`.
 
-The harness uses a Gemini API key only, never the CLI's Google sign-in, which Google's terms don't allow automating. reeval passes `GEMINI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request (what CLI 1.4.5 sends it on: its model, and a lite one for titles):
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-| Host | Endpoint |
-|---|---|
-| `generativelanguage.googleapis.com` | `POST /v1beta/models/<model>:streamGenerateContent` |
+For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
 
-The adapter refuses to run in a sandbox that can't broker the key, so it can't leak through a plain environment variable.
+Antigravity opens `play.googleapis.com` and `antigravity-unleash.goog` in every session. The requests are telemetry and feature flags, and no setting stops them. A restricted egress policy refuses those hosts and records them on `egress.expectedBlocked`.
 
-## Settings
+For more information about blocked requests, see [Read blocked requests](/environments/egress#read-blocked-requests).
 
-| Setting | Why |
-|---|---|
-| `enableTelemetry: false` in the CLI's settings | No telemetry it can turn off (below) |
-| `modelProvider: 'gemini'` in the CLI's settings | The Gemini API key's provider |
-| `AGY_CLI_DISABLE_AUTO_UPDATE=true` | No updates; `1` doesn't turn them off |
-| MCP servers in `~/.gemini/config/mcp_config.json` | Where the CLI reads them; remote servers take `serverUrl` |
-| The adapter's instructions appended to `~/.gemini/GEMINI.md` | How the adapter talks to the agent |
-| Home skills in `~/.gemini/config/skills` | Where the CLI reads them, not the `~/.gemini/antigravity-cli/skills` its docs give |
-| Plugins installed with `agy plugin install` | Every part (below) |
+## Rules and skills
 
-## Plugins
+The Antigravity harness reads rules from the `AGENTS.md` file in the workspace. The Antigravity harness reads skills from the `.agents/skills` directory in the workspace and from the `~/.gemini/config/skills` directory in the home directory.
 
-```text
-agy plugin install /home/reeval/.reeval/plugins/review
-```
+For more information about writing rules, see [Add project rules](/environments/rules).
 
-reeval copies each plugin to `~/.reeval/plugins/<name>/`, and the adapter installs that copy as the session starts. The CLI copies it to `~/.gemini/config/plugins/<name>/`, which `context` lists, and loads every part: its commands become skills named `<plugin>-cmd-<command>`, and its MCP tools are named `mcp__<plugin>_<server>__<tool>`.
+For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-The adapter then fixes what CLI 1.4.2 would get wrong in the installed copy:
+## MCP servers
 
-| What | Why |
-|---|---|
-| `hooks.json` rewritten in the CLI's shape, `${CLAUDE_PLUGIN_ROOT}` filled in | It copies Claude Code's file unchanged, where a `SessionStart` hook never runs, and doesn't set the variable |
-| `trigger: always_on` on a rule with no frontmatter, or `alwaysApply: true` | It leaves out a rule without a trigger |
-| `name:` on a skill without one | It lists a command it converted as `SKILL` |
+The Antigravity harness reads MCP servers from the `~/.gemini/config/mcp_config.json` file. The Antigravity harness accepts `stdio`, `http`, and `sse`. reeval writes a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `serverUrl` and `headers`.
 
-The CLI starts a plugin's MCP servers itself, from the plugin's `.mcp.json`. As for [Claude Code](/reference/harness/claude-code#plugins), reeval rewrites that file to run each through its MCP timer before the install, and a host variable can't go in it:
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-```text
-reeval: evals/review.eval.ts: evaluate("reviews the diff") on antigravity:gemini-3.8-flash-medium: Antigravity loads the review plugin's MCP server "docs" itself, so reeval can't give it DOCS_TOKEN from the host: use only: ['skills'] and declare the server in mcp, where reeval fills it in
-```
+## Recorded usage and model
 
-The CLI runs `SessionStart`, `PreToolUse`, `PostToolUse` and `Stop` hooks, so the plan refuses a plugin with any other event, or with a hook that isn't a `command`. agy installs a plugin that also has its own manifest (a root `plugin.json`, `.antigravity-plugin/plugin.json`, `.gemini-plugin/plugin.json` or `gemini-extension.json`) from that manifest instead, so the plan refuses it. Each turn is a new process, so a `SessionStart` hook runs on every turn. An install the CLI refuses fails the attempt with `agy plugin install <dir> exited <code>: …`.
+The Antigravity harness records tokens on each turn's `usage`. `input` excludes cache reads, `cacheRead` holds those reads, and `cacheWrite` is 0. `output` includes thinking tokens, and `reasoning` holds that count.
 
-## Telemetry it sends anyway
+`usage` is null when the harness reports no tokens. Each turn's `model` is the model the CLI reports at the start of the turn. Otherwise the turn uses the last brokered request's model.
 
-| Host | What |
-|---|---|
-| `play.googleapis.com` | Telemetry |
-| `antigravity-unleash.goog` | Feature flags |
+The attempt's `servedModels` lists the model id in each brokered path `/v1beta/models/<model>:streamGenerateContent`. The path names the model that served the call. The list can include a model the CLI calls for a title or a checkpoint.
 
-CLI 1.4.5 opens both in every session. No setting stops them, and neither gets the key.
+For more information about the record fields, see [Run record reference](/reference/record).
 
-Under a restricted egress policy the gateway refuses them and records them under the record's `egress.expectedBlocked`, not `blocked`. `-v` prints one `gateway` line for them at teardown, `expected blocks, not logged per request:` with each `host:port` and its connection count, instead of one line per request.
+## Web events
 
-## Tokens
+The Antigravity harness records `web-search` and `web-fetch` events in the transcript. `unreported` is empty, so `toHaveSearched()` and `toHaveFetched()` read those events.
 
-| The CLI reports | The turn records |
-|---|---|
-| `input_tokens`, without cache reads | `input` |
-| `cache_read_tokens` | `cacheRead` |
-| `output_tokens`, thinking included | `output` |
-| `thinking_tokens` | `reasoning` |
-
-Each turn also records the model that served it. A turn served mostly from the cache records more `cacheRead` than `input`: the prompt was `input + cacheRead`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
-
-## Prompt size
-
-```text
-Argument list too long
-```
-
-The CLI takes the prompt as a command-line argument, so it must stay under 128 KiB. A longer one fails the turn with the shell's error.
-
-## Errors
-
-| Situation | Message |
-|---|---|
-| No `model` | `antigravity() needs a model, e.g. antigravity({ model: 'gemini-3.8-flash-medium' })` |
-| No key when the attempt starts | `GEMINI_API_KEY isn't set, so the Antigravity harness can't authenticate. Set it in the environment or .env.local.` |
-| A non-Docker sandbox | `The Antigravity harness needs the Docker sandbox: set sandbox: docker() …` |
-| The CLI doesn't start | `Antigravity harness failed to start: …` |
-
-## Related
-
-- [Harnesses guide](/guide/harnesses)
-- [Egress](/reference/egress)
-- [Credential brokering](/concepts/credential-brokering)
-- [docker()](/reference/sandbox/docker)
+For more information about those matchers, see [toHaveSearched](/reference/matchers#tohavesearched).

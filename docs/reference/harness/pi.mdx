@@ -1,179 +1,102 @@
 ---
-title: pi()
-description: The pi harness, its options and id, its Gemini API key, the tokens it reports, and how its MCP servers are set up.
+title: "pi harness"
+description: "Look up options, the key, and recorded events for the pi harness."
 ---
 
-`pi()` runs [pi](https://github.com/earendil-works/pi) in the Docker sandbox, one `pi --mode json` process per turn, on its `google` provider with a Gemini API key. `model` is required.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: pi)
+[//]: # (owns: pi factory options; GOOGLE_GENERATIVE_AI_API_KEY)
+[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
+[//]: # (excludes: model ids and effort values across harnesses -> /harnesses/models)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: egress policies and the automatic hosts -> /environments/egress)
+[//]: # (excludes: plugins and their parts -> not documented)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: /harnesses, /harnesses/models)
+[//]: # (outbound: /harnesses, /harnesses/models, /environments/rules, /environments/skills, /environments/mcp, /environments/secrets#keep-api-keys-on-the-host, /environments/egress#block-non-automatic-hosts, /reference/env-vars#provider-keys, /reference/matchers#tohavesearched, /reference/record)
+
+## pi
+
+`pi()` is one harness factory. It runs pi in the sandbox on a Gemini API key, as one `pi --mode json` process per turn that resumes the session's conversation.
+
+`pi()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { pi } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: pi({ model: 'gemini-3.8-flash' }),
+  harness: pi({
+    model: 'gemini-3.8-flash',
+  }),
 })
 ```
 
-## Options
+`model` is required. The other fields are optional.
 
-<Property name="model" type="string">
-  A Gemini model id, such as `gemini-3.8-flash`, without a provider. Required.
+<Property name="model" type="string" required>
+  A Gemini model id with no provider prefix, which pi runs on its `google` provider. reeval refuses an id with a provider prefix at plan time with exit code 2.
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort, passed as pi's `--thinking` (the CLI's name): `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort, passed as pi's `--thinking` flag. The value is one that flag takes, such as `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 </Property>
 
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.
+  Cell id. Defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` with `effort` set. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
-  The most pi attempts at once across the run, for example for your key's rate limits.
+  The most pi attempts that run at the same time, across the run. A whole number of at least 1.
 </Property>
 
 <Property name="startTimeout" type="Duration" optional>
-  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `pi: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
-## At a glance
+In the sandbox, pi runs in print mode with the project trusted, its startup network operations off, and no extensions loaded besides its built-in `mcp` one for the environment's MCP servers.
 
-| | |
-|---|---|
-| Import | `'{{ pkg }}/harness'` |
-| Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; pi sees it as `GEMINI_API_KEY`) |
-| Adapter | `@reeval/harness-pi` 0.2.8, bundled with reeval |
-| CLI | `@earendil-works/pi-coding-agent` 1.4.0, from a pinned lockfile |
-| Sandbox | `docker()` only |
-| Image | `reeval-sandbox:pi-0.2.8` |
-| Rules file | `AGENTS.md` |
-| Skills (default placement) | `~/.pi/agent/skills` |
-| Skills (`placement: 'workspace'`) | `.pi/skills` in the workspace |
-| Egress hosts added | `generativelanguage.googleapis.com` |
-| Tokens | Reported for each model call |
-| MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
-| Plugins | Skills, commands and MCP servers ([below](#plugins)) |
+For more information about choosing a harness, see [Choose a harness](/harnesses).
 
-Build its image once with `reeval image build` in a project whose config uses `pi()`.
+For more information about model ids and effort values, see [Models and providers for each harness](/harnesses/models).
 
-## Why not `@ai-sdk/harness-pi`
+## Credential
 
-| | `@ai-sdk/harness-pi` | `@reeval/harness-pi` |
-|---|---|---|
-| pi's agent loop | In reeval's own process, on the host | The pi CLI, in the sandbox |
-| Model calls | Leave from the host with the real key | Go through the gateway like every other harness's |
-| MCP servers | Start on the host | Start in the sandbox |
-| The sandbox's files | Reached by patching Node's global `fs`, which isn't safe with attempts running side by side | The CLI's own |
+`pi()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the host. In the sandbox, pi sees a placeholder as `GEMINI_API_KEY`, and reeval swaps the real key into the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. reeval refuses the key anywhere else, and that host is the harness's automatic egress host.
 
-## The key
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives pi a placeholder as `GEMINI_API_KEY`. The gateway swaps the real key in on one kind of request, the only one pi 0.99.1 sends it on:
+For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
 
-| Host | Endpoint |
-|---|---|
-| `generativelanguage.googleapis.com` | `POST /v1beta/models/<model>:streamGenerateContent` |
+For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
 
-The adapter refuses to run in a sandbox that can't broker the key.
+## Rules and skills
 
-## Tokens
+The pi harness reads rules from the `AGENTS.md` file in the workspace. The pi harness reads skills from the `.pi/skills` directory in the workspace, which pi loads because the harness trusts the project, and from the `~/.pi/agent/skills` directory in the home directory.
 
-| pi reports, per model call | The turn records |
-|---|---|
-| Uncached input | `input` |
-| Cache reads and writes | `cacheRead`, `cacheWrite` |
-| Output and reasoning | `output`, `reasoning` |
-| A USD cost from its own price table | Nothing: reeval prices no models |
+For more information about writing rules, see [Add project rules](/environments/rules).
 
-Each model call pi makes is one step, and each turn has their sum.
+For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-## Turns and settings
+## MCP servers
 
-```bash
-pi --mode json -p --offline --approve --no-extensions \
-  --provider google --model <model> --session-id <id>
-```
+The pi harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server, or a server name with characters other than letters, digits, `_`, and `-`, at plan time with exit code 2.
 
-Each turn runs that, with the same session id every turn, so later turns continue the conversation.
+The servers go in pi's `~/.pi/agent/mcp.json` file with direct exposure, so the model and the transcript name each tool `mcp__<server>__<tool>`. reeval escapes `$` and a leading `!` in `env` and header values, so each value reaches the server as written.
 
-| Flag | Why |
-|---|---|
-| `--offline` | Stops pi's startup network operations, so a turn contacts only the Gemini API |
-| `--approve` | Trusts the workspace, which pi needs to read `.pi/skills` there |
-| `--no-extensions` | Stops pi loading extensions from the workspace or home, and its built-in ones, so what the agent can do is what the eval set up |
-| `-e builtin:mcp` | Only when the eval gives it MCP servers: loads pi's built-in MCP extension back |
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-The prompt is a command-line argument, so it must stay under 128 KiB. Instructions go to `~/.pi/agent/AGENTS.md`, which pi reads before the workspace's.
+## Recorded usage and model
 
-## MCP
+The pi harness records tokens for each model call, reasoning tokens included, and each turn's `usage` is their sum. `usage` is null when pi reports none.
 
-```json title="~/.pi/agent/mcp.json"
-{
-  "mcpServers": {
-    "stamp": {
-      "command": "node",
-      "args": ["stamp.mjs"],
-      "env": { "TOKEN": "$$STAMP" },
-      "exposure": "direct"
-    },
-    "docs": {
-      "url": "https://mcp.example.com/mcp",
-      "headers": { "x-api-key": "…" },
-      "exposure": "direct"
-    }
-  },
-  "autoEnableCodemode": false
-}
-```
+Each turn's `model` is the model pi names on its first assistant message. The attempt's `servedModels` comes from the brokered request URL, without an effort suffix.
 
-The adapter writes `mcp.stdio` servers as `command`, `args` and `env`, and `mcp.http` ones as `url` and `headers`. Each has `"exposure": "direct"`, so the model sees its tools as `mcp__<server>__<tool>`, their name in the transcript too; pi's default exposure reaches them only through its `codemode` tool, which the adapter doesn't load. pi also reads a `.pi/mcp.json` in the workspace, which `--approve` trusts.
+For more information about the record fields, see [Run record reference](/reference/record).
 
-pi expands `$NAME` and `${NAME}` in `env` and header values, and runs a value that starts with `!` as a shell command. The adapter escapes both (`$` as `$$`, a leading `!` as `$!`), so every value, a brokered placeholder included, reaches the server as written.
+## Web events
 
-pi turns every `-` in an MCP tool's name into `_`. The adapter knows the server names, so it puts the server part back, and the transcript names a `my-docs` server's tool `mcp__my-docs__…` as on other harnesses. It doesn't know the tool names, so these stay as pi wrote them:
+The pi harness records no `web-search` or `web-fetch` events. pi's built-in tools are `bash`, `read`, `write`, and `edit`, so `toHaveSearched` and `toHaveFetched` fail on a pi turn.
 
-| Configured | In the transcript |
-|---|---|
-| server `my-docs`, tool `latest_version` | `mcp__my-docs__latest_version` |
-| server `docs`, tool `latest-version` | `mcp__docs__latest_version` |
-| servers `a-b` and `a_b` | `mcp__a_b__…` for both: they can't be told apart |
-| a name over 64 characters, or two tools that sanitize alike | pi's shortened name, ending `_<hash>` |
-
-pi has no SSE transport, and skips a server whose name isn't letters, digits, `_` and `-`. An eval that gives it either is refused at plan time, naming the server: the run (and `--dry-run`) exits 2 before any attempt starts.
-
-## Plugins
-
-```text title="reeval run -v"
-env       plugin house → ~/.reeval/plugins/house/ (5 files; skills, commands, mcp)
-env       plugin part → .pi/prompts/ship.md (unpacked for the agent)
-```
-
-pi loads a plugin's skills, commands and MCP servers. pi has no subagents, and `--no-extensions` keeps its own extensions off, so a plugin's `agents/`, `hooks/` and `rules/` exit 2 at plan time; `only` leaves them out.
-
-| Part | Where it goes |
-|---|---|
-| `skills/` | `~/.pi/agent/skills`, with the environment's own skills |
-| `commands/<name>.md` | `.pi/prompts/<name>.md` in the workspace, a prompt template the agent runs as `/<name>` |
-| `.mcp.json` | `~/.pi/agent/mcp.json`, as `<plugin>_<server>` |
-
-Commands are unpacked as they are, before the snapshot, so the diff leaves them out and `context` lists them. pi takes their `description` and `argument-hint`, ignores other frontmatter, and fills in `$ARGUMENTS`. Two plugins' commands with the same name clash.
-
-pi refuses `:` in a server name, so a plugin's `docs` server is `house_docs`, and its tools `mcp__house_docs__<tool>`. A server the environment already names `house_docs` is refused at plan time.
-
-## Errors
-
-| Situation | Message |
-|---|---|
-| No model, or one with a provider | `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got …)` |
-| No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the pi harness can't authenticate. Set it in the environment or .env.local.` |
-| `mcp.sse` (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
-| An MCP server name pi skips (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the <name> server: rename it` |
-| A plugin with subagents, hooks or rules (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi can't load the <plugin> plugin's agents (agents/): use only: ['skills', 'commands', 'mcp'], or leave the plugin out of this cell` |
-| A plugin server named like one the environment has (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi names the house:docs MCP server house_docs, as it does the house_docs server, and keeps only one: rename one` |
-| A non-Docker sandbox | `The pi harness needs the Docker sandbox: set sandbox: docker() …` |
-| pi dies mid-turn | `pi exited with code <n> before ending the turn: …` |
-
-## Related
-
-- [Harnesses](/guide/harnesses)
-- [Secrets and egress](/guide/secrets-and-egress)
-- [Transcripts](/reference/transcript)
+For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).

@@ -1,0 +1,123 @@
+---
+title: "Run evaluations"
+description: "Run the evaluations in your project."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Running)
+[//]: # (owns: reeval run usage; filters and --tag; concurrency; UI and log output; --resume; REEVAL_CONCURRENCY, REEVAL_UI, REEVAL_LOG_ORDER, REEVAL_LOG_PREFIX, REEVAL_OUTPUT_LOGS and REEVAL_HEARTBEAT)
+[//]: # (excludes: exhaustive reeval run flag reference -> /reference/cli#reeval-run)
+[//]: # (excludes: reading the summary -> /results/output)
+[//]: # (excludes: profiles -> /evals/profiles)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: /, /quickstart, /reference/glossary)
+[//]: # (outbound: /reference/cli#reeval-run, /results/output, /evals/profiles, /reference/env-vars)
+
+You run the evaluations in your project with `reeval run`. The command prints a plan line, starts the attempts, and ends with one block per evaluation.
+
+For more information about the result blocks, see [Read the results summary](/results/output).
+
+## Run every evaluation
+
+Run every evaluation the config includes:
+
+```bash
+npx reeval run
+```
+
+By default, reeval includes every `.eval.ts` file under the `evals/` directory. The command writes the record in the `.reeval/runs` directory.
+
+## Filter evaluations
+
+Pass a substring of a file path, an evaluation name, or a cell key. Substrings of one kind match if any of them matches. A path substring and a name or cell substring both have to match.
+
+Select the `evals/ai-sdk.eval.ts` file:
+
+```bash
+npx reeval run ai-sdk
+```
+
+Pass one `--tag` for each tag an evaluation must carry. Quote a value that starts with `!` to exclude that tag:
+
+```bash
+npx reeval run --tag smoke --tag '!billing'
+```
+
+If a filter or tag matches nothing, reeval exits before it starts any attempt.
+
+## Preview the plan
+
+To print the plan without starting a sandbox or a harness, pass `--dry-run`:
+
+```bash
+npx reeval run --dry-run
+```
+
+The command needs no API key. If you omit the run id, the counts and the estimate look like this:
+
+```text
+plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+```
+
+A table under that line lists each evaluation. To print the same plan as one JSON document, pass `--json` as well:
+
+```bash
+npx reeval run --dry-run --json
+```
+
+The document lists every cell, and any evaluation set to `skip` or `todo`.
+
+## Choose the output
+
+reeval chooses the output from where you run the command. These flags set the mode, the line order, the prefix, and which attempts print detail lines:
+
+| Flag | Values | Default |
+| :--- | :--- | :--- |
+| `--ui` | `live`, `plain`, `agent` | `agent` for a coding agent, `plain` in CI or when stdout is not a terminal, otherwise `live` |
+| `--log-order` | `stream`, `grouped` | `grouped` in CI, otherwise `stream` |
+| `--log-prefix` | `task`, `none` | `task`, or `none` for grouped output on GitHub Actions |
+| `--output-logs` | `full`, `errors-only`, `none` | `errors-only`, or `full` with `-v` |
+
+`stream` prints each line as it happens, and `grouped` prints each attempt as one block at the end. The `task` prefix names the evaluation, the attempt, and the cell. `live` adds a status line such as `1 eval · 0/4 tries`. `plain` prints the log alone. `agent` prints the result blocks at the end without colour.
+
+Set plain output for a log without the status line:
+
+```bash
+npx reeval run --ui plain
+```
+
+`REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, and `REEVAL_OUTPUT_LOGS` take the same values. A flag overrides the variable. `auto` selects the default.
+
+Set `REEVAL_HEARTBEAT` to a duration such as `30s`, or to `0` to turn the heartbeat off. The default is `60s`. In `plain` mode, silence for that duration prints a count of the attempts in progress. `live` mode uses the status line. `agent` mode leaves the heartbeat off.
+
+## Set concurrency
+
+Pass `--concurrency` to set how many attempts reeval starts together:
+
+```bash
+npx reeval run --concurrency 4
+```
+
+The `--concurrency` flag overrides `REEVAL_CONCURRENCY`, which overrides `concurrency` in the `reeval.config.ts` file. If you set none of those three, reeval uses 8, capped at one attempt per CPU and per gigabyte of memory where the sandboxes run.
+
+## Resume a run
+
+To continue a stopped, interrupted, or budget-stopped run, pass `--resume`:
+
+```bash
+npx reeval run --resume
+```
+
+The command keeps the run id. It skips finished attempts. It runs the remaining attempts. With no id, the command continues the newest stopped, interrupted, or budget-stopped run saved under the `.reeval` directory.
+
+Pass the run id from the plan line, or a unique prefix of that id:
+
+```bash
+npx reeval run --resume 20261022T172927Z
+```
+
+For more information about attempt budgets, see [Size runs with profiles](/evals/profiles).
+
+For more information about every `reeval run` flag, see [the `reeval run` command](/reference/cli#reeval-run).
+
+For more information about every variable, see [Environment variables](/reference/env-vars).

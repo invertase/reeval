@@ -1,0 +1,122 @@
+---
+title: "Test a CLI"
+description: "See whether your harness runs a CLI and its result works."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Test a CLI)
+[//]: # (owns: the end-to-end CLI test: the CLI in the image, a task, toHaveRun and the command's result)
+[//]: # (excludes: adding a tool to the image -> /sandboxes/toolchains)
+[//]: # (excludes: matcher signatures -> /reference/matchers#tohaverun)
+[//]: # (excludes: measuring a skill that documents the CLI -> /recipes/skill-comparison)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /sandboxes/toolchains, /reference/matchers#tohaverun, /evals/checks, /results/output, /recipes/skill-comparison)
+
+You test a CLI by installing it on the sandbox image, giving your harness a task that uses it, and checking the command and its result.
+
+Before any attempt starts, reeval prepares the sandbox image and builds this `install` layer if it is missing. For more information about adding a tool to the image, see [Add toolchains](/sandboxes/toolchains).
+
+<Steps>
+<Step title="Add the CLI to the image">
+
+In the `evals/cli.eval.ts` file, install the CLI on the sandbox image:
+
+```ts title="evals/cli.eval.ts"
+import { defineEnvironment, evaluate } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+const cli = defineEnvironment('cli', {
+  sandbox: docker({
+    install: [
+      'apt-get update',
+      'apt-get install -y --no-install-recommends jq',
+      'rm -rf /var/lib/apt/lists/*',
+    ],
+  }),
+})
+
+evaluate('counts orders over 100', { environment: cli }, async (c) => {
+  await c.writeFile(
+    'orders.json',
+    '{"orders":[{"id":"a","total":40},{"id":"b","total":120}]}\n',
+  )
+})
+```
+
+reeval runs those commands when it builds the image, so every attempt has the CLI. `c.writeFile` writes the `orders.json` file into the workspace. Two orders are in the `orders.json` file, and one order's total is over 100.
+
+</Step>
+<Step title="Write the task">
+
+In the `evals/cli.eval.ts` file, write the task that uses the CLI:
+
+```diff title="evals/cli.eval.ts"
+     '{"orders":[{"id":"a","total":40},{"id":"b","total":120}]}\n',
+   )
++  await c.send(
++    'Count orders in orders.json with a total over 100. Use jq. ' +
++      'Write the number alone to over.txt.',
++  )
+```
+
+The prompt names the CLI and the `over.txt` file, so the expected number is 1.
+
+</Step>
+<Step title="Check that the harness ran the CLI">
+
+In the `evals/cli.eval.ts` file, add a check that the harness ran the CLI:
+
+```diff title="evals/cli.eval.ts"
+-import { defineEnvironment, evaluate } from '{{ pkg }}'
++import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+       'Write the number alone to over.txt.',
+   )
++  expect(c, 'ran the CLI').toHaveRun(/jq/)
+```
+
+`toHaveRun` checks shell commands the harness ran, and the pattern matches the CLI in the command. The second argument of `expect()` names the check in the result. For more information about the matcher, see [`toHaveRun`](/reference/matchers#tohaverun).
+
+</Step>
+<Step title="Check the command result">
+
+In the `evals/cli.eval.ts` file, add a check for the command result:
+
+```diff title="evals/cli.eval.ts"
+   expect(c, 'ran the CLI').toHaveRun(/jq/)
++  await expect(
++    c.exec('test "$(cat over.txt)" = 1'),
++    'wrote 1',
++  ).toSucceed()
+```
+
+`c.exec` runs the command in the sandbox after `c.send` returns. `toSucceed` passes when `exitCode` is 0. Await `toSucceed`.
+
+The `test` command passes when the text of the `over.txt` file is `1`. For more information about `c.exec` and `toSucceed`, see [Check an attempt](/evals/checks).
+
+</Step>
+<Step title="Run the evaluation">
+
+From the project root, run the evaluation in the `evals/cli.eval.ts` file. The command uses the harness named in the `reeval.config.ts` file:
+
+```bash
+npx reeval run cli
+```
+
+</Step>
+<Step title="Read the outcome">
+
+In the `reeval run` output, read the block for the evaluation. When both checks pass, the block reads `pass` and the check lines are absent:
+
+```text
+pass             counts orders over 100
+```
+
+For more information about the results summary, see [Read the results summary](/results/output).
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about measuring a skill that documents the CLI, see [Measure a skill](/recipes/skill-comparison).

@@ -1,0 +1,180 @@
+---
+title: "Measure a skill"
+description: "See whether a skill helped your harness."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: Measure a skill)
+[//]: # (owns: the end-to-end skill measurement: a plain control, a skill variant, a skill-loaded check, a minimum lift and whether it helped; two pinned versions of one skill: skill.git at two refs, the earlier one as the control)
+[//]: # (excludes: every compare key -> /reference/options#compare)
+[//]: # (excludes: placing skills -> /environments/skills)
+[//]: # (excludes: how the effect is reached -> /core-concepts#compare)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: /recipes/cli)
+[//]: # (outbound: /comparisons/compare, /environments/skills, /reference/matchers#tohavecalledskill, /comparisons/compare#gate-on-lift, /comparisons/compare#ask-which-did-better, /results/output, /reference/environment#skillgit, /reference/context#cattempt, /core-concepts#compare, /reference/options#compare)
+
+You measure a skill by running one task on a control with no skill and a variant with the skill. The effect reads `helped`, `made it worse`, or `can't tell yet`.
+
+<Steps>
+<Step title="Write the evaluation">
+
+In the `evals/environments.ts` file, define the control `plain` and the variant `withShoehorn`. The control holds the file the task tests. The variant extends `plain` and adds Matt Pocock's `migrate-to-shoehorn` skill.
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const plain = defineEnvironment('plain', {
+  files: {
+    'src/user.ts': `import type { Request } from 'express'
+export const getUserId = (req: Request) => req.params.id
+`,
+  },
+})
+
+export const withShoehorn = plain.extendEnvironment(
+  'with-shoehorn',
+  ({ skill }) => ({
+    skills: [
+      skill.git('github:mattpocock/skills', {
+        ref: '5beb35b040e3de97e54fa9e386d7e42d15c295c2',
+        path: 'skills/misc',
+        only: ['migrate-to-shoehorn'],
+      }),
+    ],
+  }),
+)
+```
+
+For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+In the `evals/shoehorn.eval.ts` file, name the control in `compare.baseline` and the variant in `compare.variants`:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain, withShoehorn } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses fromPartial').toHaveFile(
+      'src/user.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+  },
+)
+```
+
+The prompt doesn't name the skill, so `uses fromPartial` passes only when the skill leads the harness to call `fromPartial`. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect stays `can't tell yet`. For more information about how reeval reaches the effect, see [Compare](/core-concepts#compare).
+
+</Step>
+<Step title="Check that the harness loaded the skill">
+
+In the `evals/shoehorn.eval.ts` file, add the check for the variant only, after the file check. `toHaveCalledSkill` fails the attempt when the harness never loads that skill. The control has no skill, so the check would fail every control attempt and decide the effect by itself. `c.attempt.cell.role` is `'control'` or `'variant'`.
+
+```ts title="evals/shoehorn.eval.ts"
+    if (c.attempt.cell.role === 'variant') {
+      expect(c, 'loaded the skill').toHaveCalledSkill(
+        'migrate-to-shoehorn',
+      )
+    }
+```
+
+For more information about the matcher, see [`toHaveCalledSkill`](/reference/matchers#tohavecalledskill). For more information about `c.attempt`, see [`c.attempt`](/reference/context#cattempt).
+
+</Step>
+<Step title="Require a minimum lift">
+
+In the `evals/shoehorn.eval.ts` file, set `minLift` on the compare. `compare.minLift` is the smallest lift you accept, from -1 to 1.
+
+```ts title="evals/shoehorn.eval.ts"
+-  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
++  {
++    runs: 4,
++    compare: {
++      baseline: plain,
++      variants: [withShoehorn],
++      minLift: 0.25,
++    },
++  },
+```
+
+A variant whose lift may be below `0.25` fails. The row then adds `not by minLift 25`, even when the effect reads `helped`. For more information about this gate, see [Gate on lift](/comparisons/compare#gate-on-lift).
+
+</Step>
+<Step title="Run the comparison">
+
+Run the evaluation with the harness named in the `reeval.config.ts` file:
+
+```bash
+npx reeval run shoehorn
+```
+
+</Step>
+<Step title="Read whether it helped">
+
+Read the one block the run prints for the evaluation. Your counts can differ. When the variant meets `minLift`, the block uses this shape ([Read a comparison](/results/output#read-a-comparison)):
+
+```text
+pass             tests build only the request fields they read
+  arm               pass
+  plain             0 of 4
+  with-shoehorn     4 of 4  helped
+  check             plain   with-shoehorn
+  uses fromPartial  0 of 4  4 of 4
+    expected src/user.test.ts to match /fromPartial(<\w+>)?\(/
+  +1 more passed
+```
+
+`uses fromPartial` is the row that separates the cells. `loaded the skill` passed on the variant, so it prints under `+1 more passed`. When `uses fromPartial` passes on both sides, the harness already does the task, and this task can't show the skill.
+
+For more information about the other gates, see [Compare setups](/comparisons/compare). For more information about asking which attempt did better, see [Ask which did better](/comparisons/compare#ask-which-did-better).
+
+</Step>
+</Steps>
+
+## Compare skill versions
+
+The earlier commit of `migrate-to-shoehorn` is the control, and the later commit is the variant. In the `evals/environments.ts` file, replace `withShoehorn` with two environments:
+
+```ts title="evals/environments.ts"
+export const earlier = plain.extendEnvironment('earlier', ({ skill }) => ({
+  skills: [
+    skill.git('github:mattpocock/skills', {
+      ref: '62f43a18177be6ec82da242e59ffbc490a4c22ea',
+      path: 'skills/misc',
+      only: ['migrate-to-shoehorn'],
+    }),
+  ],
+}))
+
+export const later = earlier.extendEnvironment('later', ({ skill }) => ({
+  skills: [
+    skill.git('github:mattpocock/skills', {
+      ref: '697d4ce9742da558fd1ba6697c8e9775e2e302dd',
+      path: 'skills/misc',
+      only: ['migrate-to-shoehorn'],
+    }),
+  ],
+}))
+```
+
+Both environments extend `plain`, so they share its files and differ only by the pinned commit. `later` replaces the skill of the same name, so the harness gets the later commit only. A commit in `ref` keeps the cells comparable. For more information about the helper, see [the `skill.git` helper](/reference/environment#skillgit).
+
+In the `evals/shoehorn.eval.ts` file, set `compare.baseline` to `earlier` and `compare.variants` to `later`:
+
+```ts title="evals/shoehorn.eval.ts"
+-import { plain, withShoehorn } from './environments.ts'
++import { earlier, later } from './environments.ts'
+-      baseline: plain,
+-      variants: [withShoehorn],
++      baseline: earlier,
++      variants: [later],
+```
+
+The next run keeps the same command. The role guard runs `loaded the skill` on `later` only. The `uses fromPartial` row shows whether the later commit helped.
+
+## Next
+
+For more information about every compare key, see [the `compare` option](/reference/options#compare).

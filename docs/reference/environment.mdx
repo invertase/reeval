@@ -1,194 +1,322 @@
 ---
-title: defineEnvironment
-description: Every field of an environment, the order an attempt applies them in, extend and overrides, and the fields it refuses.
+title: Environment helpers reference
+description: Look up environment fields and helper signatures.
 ---
 
-`defineEnvironment(name, spec)` describes what an eval runs in: the sandbox, the code the workspace starts as, variables, secrets, files, rules, setup steps, skills, plugins, MCP servers and egress.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Environment helpers)
+[//]: # (owns: EnvironmentSpec fields; git; file; directory; skill.*; mcp.*; secret.*; extend)
+[//]: # (excludes: plugins and plugin.* -> not documented)
+[//]: # (excludes: fakeSandbox and every fake* helper -> not documented)
+[//]: # (excludes: walkthroughs -> the Environments pages)
+[//]: # (excludes: config discovery, defineConfig and profile selection -> /reference/config and /reference/profiles)
+[//]: # (excludes: sandbox helper options -> /sandboxes)
+[//]: # (excludes: egress policy behaviour beyond the field -> /environments/egress)
+[//]: # (inbound: the Environments pages, /environments, /environments/workspaces, /environments/files, /environments/rules, /environments/setup, /environments/skills, /environments/mcp, /environments/secrets, /reference/config, /reference/api, /reference/context, /recipes/skill-comparison)
+[//]: # (outbound: /environments, /harnesses#where-each-harness-reads-rules-and-skills)
+
+## Environment fields
+
+`defineEnvironment()` and `extend()` take a spec or a callback with `git`, `file`, `directory`, `skill`, `mcp`, and `secret`. Relative host paths passed to those helpers resolve against the calling file. The return is synchronous, and a `Promise` stops the run with exit code 2.
+
+A child merges `env`, `files`, and `mcp` by name and `skills` by skill name, and its value wins. `setup` appends. `sandbox`, `workspace`, `egress`, and `rules` replace when set. An omitted `sandbox` keeps the parent's, and a set `sandbox` keeps none of the parent's install steps.
+
+For more information about defining an environment, see [Environments](/environments).
 
 ```ts title="evals/environments.ts"
-import { DEFAULT_EGRESS_ALLOW, defineEnvironment } from '{{ pkg }}'
-import { docker } from '{{ pkg }}/sandbox'
+import { defineEnvironment } from '{{ pkg }}'
 
-export const base = defineEnvironment('base', ({ secret }) => ({
-  sandbox: docker({ from: 'node:24-bookworm' }),
+export const chatbot = defineEnvironment('chatbot', ({
+  git, file, secret, skill, mcp,
+}) => ({
+  workspace: git('github:vercel/ai-chatbot', { ref: 'v3.1.0' }),
+  files: {
+    'src/agent.ts': file('./fixtures/agent.ts'),
+  },
   env: {
-    NODE_ENV: 'test',
-    NPM_TOKEN: secret({ hosts: ['registry.npmjs.org'] }),
+    SDK_API_KEY: secret.fromEnv('SDK_API_KEY'),
   },
-  files: { '~/.npmrc': 'fund=false\n' },
-  setup: [{ run: 'npm ci', timeout: '5m' }],
-  egress: { allow: [...DEFAULT_EGRESS_ALLOW] },
+  skills: [skill.local('./skills/review')],
+  mcp: {
+    docs: mcp.stdio('npx', [
+      '-y',
+      '@modelcontextprotocol/server-filesystem',
+    ]),
+  },
+  setup: ['pnpm install --frozen-lockfile'],
 }))
-
-export const withSkill = base.extendEnvironment(
-  'with-skill',
-  ({ file, mcp, skill }) => ({
-    skills: [skill.local('./skills/house-style')],
-    rules: file('./rules/house.md'),
-    mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) },
-  }),
-)
 ```
-
-Use it as `environment` when the eval does not compare. For a compare, pass the variants, and the baseline unless the eval's `environment` is the control. Share layers first with `extendEnvironment`; `compare` does not layer them:
-
-```ts title="evals/style.eval.ts"
-group(
-  'house style',
-  { compare: { baseline: base, variants: [withSkill] } },
-  () => {
-    evaluate('formats with tabs', async (c) => {
-      await c.send('Format src/index.ts.')
-    })
-  },
-)
-```
-
-## Signature
-
-```ts
-defineEnvironment(name, spec)
-defineEnvironment(name, (helpers) => spec)
-```
-
-<Property name="name" type="string">
-  Letters, digits, `.`, `_`, `@`, `+` or `-`, starting with a letter or digit. It names the environment in the plan, the cell key and the record.
-</Property>
-
-<Property name="spec" type="EnvironmentSpec | ((helpers) => EnvironmentSpec)">
-  The fields below, or a callback that gets `secret`, `skill`, `plugin`, `mcp`, `file` and `git` (see [Helpers](/reference/helpers)). The callback runs once, synchronously, when the file loads; returning a `Promise` is an error. Relative paths resolve against the file that calls `defineEnvironment`.
-</Property>
-
-It returns a frozen `Environment` with `name`, `layers` and `extend` / `extendEnvironment`.
-
-## Fields
 
 <Property name="sandbox" type="SandboxDescriptor" optional>
-  Where the attempt runs: `docker()` or `fakeSandbox()`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; when the child omits it, the parent's sandbox is kept. `install` is not merged onto the parent image. A bare environment that is not an extend, and that omits `sandbox`, uses the cascaded option (`defineConfig` / profile defaults / group / eval), else implicit Docker. It does not inherit the config environment's sandbox. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and Node 24 cannot share a cell. Environments that share an image still share one preflight build.
+  Where the attempt runs. Omitted on a root environment, the cascaded sandbox or the default sandbox is used, and putting `image`, `from`, `dockerfile`, or `install` beside `sandbox` in the environment spec stops the run with exit code 2.
 </Property>
 
 <Property name="workspace" type="GitWorkspace" optional>
-  The code every attempt's workspace starts as: a git repository, or one directory of it, from the `git` helper (`git(repo, { ref, path, init, token })`; see [Helpers](/reference/helpers#git)). reeval fetches it on the host once per run, before any attempt, and copies its tree in before `files` and `setup`: without `.git`, or with a new one holding one commit of the tree when `init: true`. Submodules and Git LFS files aren't fetched. The record's `workspace` keeps the commit the ref resolved to and the tree's hash, which is in the environment's digest.
+  The tree the attempt starts from, before `files`, `rules`, and `setup`.
 </Property>
 
 <Property name="env" type="Record<string, string | Secret>" optional>
-  Variables for the sandbox. Secrets come from the `secret` helper; a literal string under a name containing `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL` is refused. A secret with `hosts` is brokered: the sandbox gets a placeholder, and the egress gateway swaps in the real value on requests to those hosts.
-</Property>
-
-<Property name="files" type="Record<string, string | HostFile>" optional>
-  Files to write before the agent starts. Keys are workspace-relative paths, or `~/` paths in the sandbox's home, with forward slashes; an absolute path or a `..` segment is refused. Values are the content, or `file(path)` for a host file, copied byte for byte. Spread `directory(path)` to seed a whole host directory; a later key overrides.
-
-  The workspace needs its own `.gitignore`: your project's isn't copied in unless you list it here or it's in the `workspace` repository. It decides what counts as the agent's change, so without one the build output and caches the agent creates land in the diff the [judge](/reference/judges#what-the-judge-is-given) reads.
-</Property>
-
-<Property name="rules" type="string | HostFile" optional>
-  Project rules, as markdown or `file(path)`. They're written where the harness's agent reads them: `CLAUDE.md` for Claude Code, `AGENTS.md` for every other agent.
-</Property>
-
-<Property name="setup" type="Array<string | { run: string, timeout?: string | number, cwd?: string }>" optional>
-  Shell commands run in every attempt, in order, after files and rules and before the agent starts. They see the environment's secrets, including those sent only `to: 'checks'`. Each step's `timeout` defaults to `'5m'`; `cwd` is the directory it runs in, relative to the workspace or absolute. A step object takes only `run`, `timeout` and `cwd`. Output goes to the attempt's `setup.log`. A failing step is an infra error, not a failed eval.
-</Property>
-
-<Property name="skills" type="SkillSource[]" optional>
-  Skills from `skill.local`, `skill.git`, `skill.npm`, `skill.registry` or `skill.inline`. By default the harness adapter installs them where its agent reads skills; `placement: 'workspace'` writes them into the repo's skill directory instead. See [Helpers](/reference/helpers#skill).
-</Property>
-
-<Property name="plugins" type="PluginSource[]" optional>
-  Experimental: which parts each harness loads, and how, may change in any release. Plugins in Claude Code's layout, from `plugin.local`, `plugin.git`, `plugin.npm` or `plugin.marketplace` (an entry in a Claude Code marketplace): a directory with `.claude-plugin/plugin.json` and any of `skills/`, `agents/`, `commands/`, `hooks/hooks.json`, `.mcp.json` and `rules/`. `only` narrows the parts placed. The plugin's MCP servers join `mcp` as `<plugin>:<server>`, so egress and secrets treat them like any other server. reeval copies each plugin to `~/.reeval/plugins/<name>/` before the snapshot. A plugin with a `build` is built first in its own cached image layer on the harness image (as root, with no secrets, from the whole source), and only its `path` is copied from that layer; see [Helpers](/reference/helpers#plugin) and [Docker](/reference/sandbox/docker#images-and-caching). Cursor and Antigravity load every part, Claude Code and Grok Build every part but `rules`, OpenCode every part but `hooks` and `rules`, pi its `skills`, `commands` and `mcp`, and Codex, Goose and fx their `skills` and `mcp`; the plan refuses a part the harness doesn't load, and the fake harness takes every part. See [Helpers](/reference/helpers#plugin).
-</Property>
-
-<Property name="mcp" type="Record<string, McpServer>" optional>
-  MCP servers, keyed by name, from `mcp.stdio`, `mcp.http` or `mcp.sse`. The agent gets them when its session starts.
+  A sandbox string or secret. The name is letters, digits, and `_`, starting with a letter or `_`, and a literal whose name contains `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, or `CREDENTIAL` stops the run with exit code 2.
 </Property>
 
 <Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }" optional>
-  Where the sandbox may connect. It replaces the policy from the config and profile `defaults`; a group's or eval's own `egress` replaces it in turn. See [Egress](/reference/egress).
+  Where the sandbox may connect. The default is the inherited policy: `'allow-all'` permits every host, `'deny-all'` the automatic hosts, and `{ allow }` extra hosts, with `*.example.com` for subdomains.
 </Property>
 
-## Phase order
+<Property name="files" type="Record<string, string | HostFile>" optional>
+  Workspace paths, or `~/` paths in the home directory. A string is the contents, `file()` is read at attempt start, and `..` or a backslash stops the run with exit code 2.
+</Property>
 
-Every attempt applies an environment in the same order:
+<Property name="rules" type="string | HostFile" optional>
+  Instructions for the harness rules file.
+</Property>
 
-<Steps>
-  <Step title="Image">
-    The sandbox's image is ready (built once and cached; see [docker()](/reference/sandbox/docker)).
-  </Step>
-  <Step title="Variables, workspace, files and rules">
-    The sandbox starts with `env`; reeval unpacks the `workspace` repository's tree, then writes `files` (over it) and `rules`.
-  </Step>
-  <Step title="Plugins">
-    Each plugin's kept parts are copied to `~/.reeval/plugins/<name>/`, with `${CLAUDE_PLUGIN_ROOT}` in its MCP servers set to that directory.
-  </Step>
-  <Step title="Setup">
-    `setup` steps run in order, outside the eval timeout.
-  </Step>
-  <Step title="Snapshot">
-    reeval snapshots the workspace, so the repository, files, rules, plugins and setup never show in the agent's diff.
-  </Step>
-  <Step title="Agent">
-    The harness starts with the environment's `skills`, `plugins` and `mcp` servers.
-  </Step>
-</Steps>
+<Property name="setup" type="Array<string | { run: string; timeout?: Duration; cwd?: string }>" optional>
+  A string or an object after `files`, before the agent. `timeout` defaults to `5m`, `cwd` defaults to the workspace, and a non-zero exit or a timeout is an infrastructure error.
+</Property>
 
-## extendEnvironment
+<Property name="skills" type="SkillSource[]" optional>
+  Skills for the agent, from `skill`.
+</Property>
 
-```ts
-parent.extendEnvironment(name, spec)
-parent.extendEnvironment(name, (helpers) => spec)
-```
+<Property name="mcp" type="Record<string, McpServer>" optional>
+  MCP servers by name, from `mcp`.
+</Property>
 
-`extendEnvironment` is how two environments share setup. The child's spec layers on its parent's:
+## `git()`
 
-| Field | When both set it |
-|---|---|
-| `sandbox` | The child's replaces the parent's entirely; omit it and the parent's is kept |
-| `env` | Merged by variable name; the child wins |
-| `files` | Merged by path; the child wins |
-| `skills`, `plugins`, `mcp` | Merged by name (a plugin's is its manifest's `name`); the child wins |
-| `rules` | The child's replace the parent's |
-| `workspace` | The child's replaces the parent's |
-| `egress` | The child's replaces the parent's |
-| `setup` | Concatenated, parent first |
+`git()` supplies `workspace`, fetched on the host with credentials kept there. A fetch that cannot complete fails the attempts.
 
-Every key the child replaced is listed in the environment's `overrides` in the record (`sandbox`, `env.NODE_ENV`, `files.src/a.ts`, `rules`, `workspace`, `skills.house-style`, `plugins.review`, `mcp.docs`, `egress`).
+<Property name="repo" type="string | URL" required>
+  A URL, `github:owner/repo`, a GitHub `/tree/<ref>/<path>` URL, or a local path. A `/tree/` URL sets `ref` and `path`, and a password or token in the URL stops the run with exit code 2.
+</Property>
 
-Call it before `compare`. A variant cell then runs as that environment alone. `extend` is an alias of `extendEnvironment`.
+<Property name="ref" type="string" optional>
+  A branch, tag, or commit SHA, defaulting to the remote `HEAD`. A ref other than a commit SHA or a version tag such as `v1.2.0` warns that results are not comparable over time.
+</Property>
 
-## Refused fields
+<Property name="path" type="string" optional>
+  The directory that becomes the workspace. It is relative, with forward slashes and no `.` or `..`, and any other path stops the run with exit code 2.
+</Property>
 
-Image fields belong on `sandbox: docker({ … })`, not as sibling keys:
+<Property name="init" type="boolean" optional>
+  `true` writes one commit and no remote. The default omits the `.git` directory.
+</Property>
 
-```text
-reeval: evals/e.eval.ts: "image" isn't an environment field (defineEnvironment("e")). Put the image on the sandbox: sandbox: docker({ from: … }).
-```
+<Property name="token" type="string" optional>
+  The host variable for an `https://` fetch. The token text, or `token` on SSH or a local path, stops the run with exit code 2.
+</Property>
 
-`install`, `dockerfile` and `from` get the same message, naming their own key; `image` set to a string, such as `'node:22'`, names `docker({ from: … })`. Near misses get a hint: `steps`, `exec` and `run` point to `setup`; `vars` and `secrets` to `env`; `network` and `networkPolicy` to `egress`; `skill` to `skills`; `plugin` to `plugins`; `file` to `files`; `agents` to `rules`; `use` to `extend`; `repo`, `git` and `template` to `workspace`.
+## `file()`
 
-## Errors
+`file()` is one host file for `files` or `rules`.
 
-These stop the run with exit 2, prefixed by the eval file.
+<Property name="path" type="string | URL" required>
+  A path relative to the calling file, or absolute, read at attempt start. A missing file ends the attempt as an infrastructure error, and an owner execute bit stays executable.
+</Property>
 
-| Mistake | Message |
-|---|---|
-| A bad name | `defineEnvironment needs a name of letters, digits, ".", "_", "@", "+" or "-" (got "my env")` |
-| An unknown field | `Unknown field "steps" in defineEnvironment("e"). Did you mean "setup"?` |
-| A `Promise` | `defineEnvironment("e") returned a Promise. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead.` |
-| A literal secret | `env.GITHUB_TOKEN in defineEnvironment("e") is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` |
-| `setup` not a list | `setup in defineEnvironment("e") must be a list (got "npm ci")` |
-| A bad step | `setup[0] in defineEnvironment("e") must be a command string or { run, timeout?, cwd? } (got 3)`; an unknown key gets `setup step "npm ci" in defineEnvironment("e") has an unknown key "env"; a step is a string or { run, timeout?, cwd? }.` |
-| A skill path string | `skills in defineEnvironment("e") must come from the skill helper, e.g. skills: [skill.local('./skills')] (got "./skills")` |
-| A plugin path string | `plugins in defineEnvironment("e") must come from the plugin helper, e.g. plugins: [plugin.local('./plugins/review')] (got "./plugins/review")` |
-| An MCP object | `mcp.docs in defineEnvironment("e") must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server']) (got {"command":"npx"})` |
-| A bad file value | `files["a.txt"] in defineEnvironment("e") must be a string or file(path) (got 1)` |
-| Bad rules | `rules in defineEnvironment("e") must be markdown or file(path) (got 3)` |
-| A `workspace` that isn't from `git()` | `workspace in defineEnvironment("e") must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got "https://github.com/acme/app")` |
-| A list as `environment` | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.` |
+## `directory()`
 
-A `workspace` whose repository, ref, directory or token doesn't work is reported before any attempt starts and fails only the attempts that use it, as infra errors (exit 3), like a sandbox image that failed to prepare; see [Errors](/reference/errors#git-workspaces). The plan refuses a plugin it can't place with exit 2, naming the eval and the harness: on a harness that can't load it or one of its kept parts, a plugin MCP server that reads a host variable on Claude Code, Antigravity, Grok Build or Codex (or shares a name with another server on Grok Build, Codex or pi), a hook event or type the harness doesn't run, a plugin with ChatGPT apps on Codex, a plugin with a manifest Antigravity or Codex reads in place of `.claude-plugin/plugin.json`, two plugin items that clash on Cursor, a local plugin with no manifest, `only` naming a part the plugin lacks, a `build` on `fakeSandbox()`, or an MCP server or hook that runs `npx`, `bunx`, `uvx` or `pipx run` under an egress policy that doesn't allow the registry (see [Errors](/reference/errors#plugins)). When an attempt starts, a missing secret, a skill directory without `SKILL.md`, a git, npm or marketplace plugin with one of those problems, a marketplace without `.claude-plugin/marketplace.json` or without the entry named, or a failing setup step is an infra error for that attempt. See [Errors](/reference/errors).
+`directory()` walks a host directory at the call, reads those files at attempt start, and skips empty directories. A missing path, a non-directory, no match, or a broken or cyclic symlink stops the run with exit code 2.
 
-## Related
+<Property name="path" type="string | URL" required>
+  The host directory, relative to the calling file or absolute.
+</Property>
 
-- [Environments guide](/guide/environments)
-- [Helpers](/reference/helpers)
-- [Egress](/reference/egress)
-- [Credential brokering](/concepts/credential-brokering)
+<Property name="into" type="string" optional>
+  A directory relative to the workspace, or a home-directory path starting with `~/`. Forward slashes only, and no `..`.
+</Property>
+
+<Property name="glob" type="string[]" optional>
+  Ordered gitignore-style patterns. The last match wins; `!` excludes; a slash other than a trailing `/` anchors the pattern; a pattern with no other slash matches a name at any depth; a trailing `/` matches a directory; with no including pattern, every file starts included; and the default ignores win.
+</Property>
+
+<Property name="defaultIgnores" type="boolean" optional>
+  Defaults to `true` and skips paths such as the `node_modules/` directory and the top-level `/build/` and `/target/` directories. `false` walks those paths; the `vendor/` directory is copied either way; and the `.git` directory stays out.
+</Property>
+
+## `rules`
+
+`rules` is written after `files` and replaces a rules file from the workspace. A string is copied, `file()` is read at attempt start, and a missing file ends the attempt as an infrastructure error.
+
+For more information about the file each harness reads, see [Harnesses](/harnesses#where-each-harness-reads-rules-and-skills).
+
+## `skill.local()`
+
+A host directory with a `SKILL.md` file, or one whose immediate child directories have one. `name` defaults to the directory name and must be kebab-case; a missing `description` or a non-kebab-case name ends the attempt as an infrastructure error.
+
+<Property name="path" type="string | URL" required>
+  The host directory, relative to the calling file or absolute. A missing path ends the attempt as an infrastructure error.
+</Property>
+
+<Property name="only" type="string[]" optional>
+  Names to keep. The default is every skill, and a missing name ends the attempt as an infrastructure error.
+</Property>
+
+<Property name="exclude" type="string[]" optional>
+  Paths left out of each skill. Setting `exclude` replaces the default path patterns: `/evals/`, `.history/`, and `*.eval.ts`; `*` matches within one name; a leading or inner `/` anchors to the skill root; a trailing `/` matches directories; any other pattern matches a name at any depth; and the `.git` directory is always left out.
+</Property>
+
+<Property name="placement" type="'harness' | 'workspace'" optional>
+  `harness`, the default, places the skill through the harness. `workspace` places it in the repository's skill directory.
+</Property>
+
+## `skill.git()`
+
+A Git repository of skills. `only`, `exclude`, `placement`, and the rules for the `SKILL.md` file match `skill.local()`.
+
+<Property name="repo" type="string" required>
+  An `https://` URL, an SSH URL, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. A `/tree/` URL sets `ref` and `path` when they are omitted.
+</Property>
+
+<Property name="ref" type="string" optional>
+  A branch, tag, or commit SHA. The default and the warning match `ref` on `git()`.
+</Property>
+
+<Property name="path" type="string" optional>
+  One skill, or a directory of them. With no `path`, the `skills/` directory is read when it exists and the root has no `SKILL.md` file, and the root is read otherwise.
+</Property>
+
+## `skill.npm()`
+
+An npm package of skills. `only`, `exclude`, and `placement` match `skill.local()`.
+
+<Property name="spec" type="string" required>
+  A package spec pinned to a version. A relative path or a `file:` URL resolves against the calling file, and any other spec is passed to `npm pack`.
+</Property>
+
+<Property name="path" type="string" optional>
+  The directory to read. The default is the `skills` directory.
+</Property>
+
+## `skill.registry()`
+
+One skills.sh skill. reeval clones the repository at `https://github.com/<owner>/<repo>.git` and reads the `skills/` directory when present, otherwise the repository root. `placement` matches `skill.local()`.
+
+<Property name="id" type="string" required>
+  `owner/repo@skill`, the name after `@`. Any other id stops the run with exit code 2.
+</Property>
+
+<Property name="version" type="string" optional>
+  A Git ref. Omitting it warns that results are not comparable over time.
+</Property>
+
+## `skill.inline()`
+
+A skill written in the spec. A missing `description`, or a name other than kebab-case, ends the attempt as an infrastructure error, and `placement` matches `skill.local()`.
+
+<Property name="name" type="string" required>
+  The skill name.
+</Property>
+
+<Property name="description" type="string" required>
+  The description.
+</Property>
+
+<Property name="content" type="string" required>
+  The body of the `SKILL.md` file.
+</Property>
+
+<Property name="files" type="Record<string, string>" optional>
+  Extra files by relative path. The default is none.
+</Property>
+
+## `mcp.stdio()`
+
+A sandbox command on stdin and stdout. The `mcp` key is the server name.
+
+<Property name="command" type="string" required>
+  The command. An empty command stops the run with exit code 2.
+</Property>
+
+<Property name="args" type="string[]" optional>
+  Arguments before the options. The default is none.
+</Property>
+
+<Property name="env" type="Record<string, string | Secret>" optional>
+  Process variables. A secret with `hosts` is brokered, and one without `hosts` is the process value.
+</Property>
+
+## `mcp.http()`
+
+An MCP server over streamable HTTP. The `mcp` key is the server name.
+
+<Property name="url" type="string" required>
+  The server URL. Any other value stops the run with exit code 2.
+</Property>
+
+<Property name="headers" type="Record<string, string | Secret | SecretTemplate>" optional>
+  Request headers. A secret with `hosts` is brokered to them, one without is brokered to an `https` host and sent raw on `http`, and `secret.template()` fills a header from host variables.
+</Property>
+
+## `mcp.sse()`
+
+An MCP server over SSE. `url`, `headers`, and the `mcp` key match `mcp.http()`.
+
+## `secret()`
+
+`secret()` reads the host variable named by its `env` key, so `env: { API_KEY: secret() }` reads `API_KEY`. Options match `secret.fromEnv()`.
+
+## `secret.fromEnv()`
+
+A named host variable for `env` or an MCP header. The record keeps the name and redacts the value.
+
+<Property name="name" type="string" required>
+  Letters, digits, and `_`, starting with a letter or `_`. Any other name stops the run with exit code 2.
+</Property>
+
+<Property name="optional" type="boolean" optional>
+  `true` skips the entry when the host variable is unset, and the record says so. The default ends the attempt as an infrastructure error.
+</Property>
+
+<Property name="to" type="'agent' | 'checks'" optional>
+  `agent`, the default, sets the sandbox variable. `checks` limits it to `setup` and `c.exec()`.
+</Property>
+
+<Property name="hosts" type="readonly string[]" optional>
+  Hosts the value is brokered to, with `*.example.com` for subdomains and `secret.hosts` for presets; a brokering sandbox gets a placeholder that its egress gateway fills on HTTPS. Without `hosts`, the value passes through except in an HTTPS MCP header, which brokers it to the server's host.
+</Property>
+
+<Property name="in" type="Array<'header' | 'query' | 'body'>" optional>
+  Where the value is substituted, defaulting to `['header']`. `in` requires `hosts`, and whitespace or a line break in a header value ends the attempt as an infrastructure error.
+</Property>
+
+## `secret.template()`
+
+One MCP header built from host variables.
+
+<Property name="template" type="string" required>
+  A string of `${NAME}` host variables. An unset name ends the attempt as an infrastructure error, an `https` URL brokers the result to that host, and any other URL uses the host value.
+</Property>
+
+## `secret.hosts`
+
+Host lists for `hosts` on `secret()` and `secret.fromEnv()`.
+
+<Property name="gemini" type="readonly string[]" required>
+  `generativelanguage.googleapis.com`.
+</Property>
+
+<Property name="openai" type="readonly string[]" required>
+  `api.openai.com`.
+</Property>
+
+<Property name="anthropic" type="readonly string[]" required>
+  `api.anthropic.com`.
+</Property>
+
+<Property name="github" type="readonly string[]" required>
+  `api.github.com` and `uploads.github.com`.
+</Property>
+
+## `extend()`
+
+`extend()` is `extendEnvironment()` on a `defineEnvironment()` parent. `compare` runs the control and each variant as its own environment, so shared fields are an `extend()` chain. Merging is described under Environment fields.
+
+<Property name="name" type="string" required>
+  The cell-key name. It starts with a letter or a digit, then letters, digits, `.`, `_`, `@`, `+`, or `-`, and any other name stops the run with exit code 2.
+</Property>
+
+<Property name="spec" type="EnvironmentSpec | ((helpers) => EnvironmentSpec)" required>
+  The child fields, or a synchronous callback. A returned `Promise` stops the run with exit code 2.
+</Property>

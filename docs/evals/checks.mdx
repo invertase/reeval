@@ -1,0 +1,125 @@
+---
+title: "Check an attempt"
+description: "Fail the attempt when the agent's work misses a check."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: Checks)
+[//]: # (owns: expect; expect.soft and expect.poll; c.exec; c.readFile and c.writeFile; HarnessCapabilityError; one line pointing at Overview's Verify with reeval run --dry-run step: a check is only as good as a run you have seen, and reeval run --dry-run is how you see the plan first; it prints the evaluations, cells, attempts and estimate, and runs no check and no harness)
+[//]: # (excludes: matcher signatures -> /reference/matchers)
+[//]: # (excludes: LLM scoring -> /evals/judges)
+[//]: # (excludes: how checks become an outcome -> /core-concepts#check)
+[//]: # (inbound: /core-concepts, /evals/evaluate, /evals/turns, /evals/judges, /environments/rules, /recipes/sdk, /recipes/cli, /reference/matchers, /reference/glossary)
+[//]: # (outbound: /reference/matchers, /evals/judges, /core-concepts#check, /reference/context#cexec, /evals/evaluate)
+
+You call `expect` in the evaluation body. A failing check fails the attempt. For more information about how a check becomes an outcome, see [Check](/core-concepts#check).
+
+Before you rely on a check, verify the plan with the `reeval run --dry-run` command, as [Write an evaluation](/evals/evaluate) shows. The command prints the evaluations, cells, attempts, and estimate, and runs no check and no harness.
+
+## Check a file the agent wrote
+
+`toHaveFile` reads a file in the sandbox. Await it. The second argument to `expect` is the label in the result. The `plain` environment comes from the `evals/environments.ts` file.
+
+In the `evals/shoehorn.eval.ts` file, send the task and check the test file:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { environment: plain },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses fromPartial').toHaveFile(
+      'src/user.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+  },
+)
+```
+
+`c.readFile` returns the file text, or `null` when the path is missing. In the `evals/shoehorn.eval.ts` file, add a text check:
+
+```ts title="evals/shoehorn.eval.ts"
+    const source = await c.readFile('src/user.test.ts')
+    expect(source, 'mentions getUserId').toContain('getUserId')
+```
+
+`c.writeFile` writes a file into the sandbox. The diff leaves that write out, and it shows a later edit to the file. In the `evals/shoehorn.eval.ts` file, place a file in the sandbox:
+
+```ts title="evals/shoehorn.eval.ts"
+    await c.writeFile(
+      'src/note.ts',
+      'export const hint = "Cover getUserId."\n',
+    )
+```
+
+## Run the project's tests
+
+`c.exec` runs a command in the sandbox and returns `exitCode`, `stdout`, and `stderr`. `toSucceed` passes when `exitCode` is 0. Await it.
+
+In the `evals/shoehorn.eval.ts` file, add the test command:
+
+```ts title="evals/shoehorn.eval.ts"
+    await expect(c.exec('npm test'), 'tests pass').toSucceed()
+```
+
+For more information about `c.exec`, see [the `c.exec` method](/reference/context#cexec).
+
+## Check what the agent did
+
+`toHaveEdited` checks file edits in the transcript. `toHaveRun` checks shell commands the harness ran. Pass `c` or the turn that `c.send` returns.
+
+In the `evals/shoehorn.eval.ts` file, keep the turn and add both checks:
+
+```ts title="evals/shoehorn.eval.ts"
+    const turn = await c.send(
+      'Add a Vitest test for getUserId in src/user.test.ts.',
+    )
+    expect(turn, 'edited the test').toHaveEdited('src/user.test.ts')
+    expect(turn, 'ran vitest').toHaveRun(/vitest/)
+```
+
+`toHaveCalledTool`, `toHaveCalledMcp`, and `toHaveCalledSkill` read the same transcript. For more information about their arguments, see [Matchers](/reference/matchers).
+
+`toHaveSearched` and `toHaveFetched` throw `HarnessCapabilityError` when the harness does not report web searches or web fetches. Check the reply or a file, or use a harness that reports those events.
+
+## Use soft and polled checks
+
+`expect.soft` records a failure and runs the later checks. The attempt fails at the end on the first soft check that did not pass.
+
+In the `evals/shoehorn.eval.ts` file, replace the file check:
+
+```ts title="evals/shoehorn.eval.ts"
+    await expect.soft(c, 'uses fromPartial').toHaveFile(
+      'src/user.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+```
+
+`expect.poll` calls a function until the matcher passes, every 50 milliseconds, for at most 1000 milliseconds. It then fails with the last error. Await it. Pass `{ interval, timeout }` in milliseconds to change the wait. `message` sets the label.
+
+In the `evals/shoehorn.eval.ts` file, poll `c` until the test file exists:
+
+```ts title="evals/shoehorn.eval.ts"
+    await expect
+      .poll(() => c, { timeout: 5000 })
+      .toHaveFile('src/user.test.ts')
+```
+
+## Troubleshooting
+
+Match the attempt error to a fix:
+
+| Symptom | Check | Next action |
+|---|---|---|
+| `expected file src/user.test.ts to exist` | `toHaveFile` found no file at that path. | Use the path the prompt names. |
+| `expected command to succeed, exit code 1` | `exitCode` was not 0. The message includes the tail of `stderr` and `stdout`. | Read that tail, then change the command or the task. |
+| `expect(…).toHaveFile() wasn't awaited` | An async matcher ran without `await`. | Put `await` before `toHaveFile`, `toSucceed`, or `expect.poll`. |
+| `toHaveSearched() can't check this turn: its harness doesn't report web searches` | The matcher threw `HarnessCapabilityError`. | Check the reply or a file, or use a harness that reports web searches. |
+| `toHaveEdited() expects a turn from c.send(), or c` | The matcher did not receive `c` or a turn. | Pass `c` or the turn that `c.send` returned. |
+
+## Reference
+
+For more information about scoring the reply with a model, see [Judges](/evals/judges).

@@ -28,10 +28,10 @@ export const SCHEMA_VERSION = 1
 export type ArtifactLevel = 'all' | 'failures' | 'none'
 export type RecordMode = 'manual' | 'ci' | 'always'
 
-/** `path` is relative to the run's artifact directory; `sha256` is of the bytes on disk. */
+/** `path` is relative to the run's artefact directory; `sha256` is of the bytes on disk. */
 export type FileRef = { path: string; sha256: string; bytes: number }
 
-/** A generic attempt file from `c.capture()` (and later video). */
+/** A generic attempt file from `c.capture()`. */
 export type ArtifactRef = FileRef & {
   name: string
   mediaType: 'image/png'
@@ -56,15 +56,18 @@ export type GitInfo = {
    */
   sha: string
   branch: string | null
-  /** Uncommitted changes, outside `.reeval/` and the history folder, when the run started. */
+  /** Uncommitted changes, outside the `.reeval/` directory and the history folder, when the run started. */
   dirty: boolean
   /** sha256 of the uncommitted changes (tracked and untracked, as a binary patch), when dirty. */
   diffHash: string | null
-  /** Those changes as `worktree.patch` in the artifact dir; apply on `sha` to reproduce. */
+  /**
+   * Those changes are stored as the `worktree.patch` file in the artefact directory. Applying it
+   * to `sha` reproduces the workspace.
+   */
   worktreePatch: FileRef | null
   /**
-   * Why a dirty run has no `worktree.patch`: too large, artifacts: 'none', or it looked like it held
-   * a secret (then where, and which rule, never the value).
+   * This explains why a dirty run has no `worktree.patch` file: it was too large, `artifacts` was
+   * `'none'`, or it looked like it held a secret (then where, and which rule, never the value).
    */
   worktreePatchNote: string | null
   commitTime: string
@@ -96,7 +99,7 @@ export type JudgementRecord = {
   /** The model id the provider says served the call, when it reports one. */
   resolvedModel?: string
   /**
-   * `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a
+   * `<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a
    * verdict can be followed across runs (and an edited question starts a new series).
    */
   key: string
@@ -107,14 +110,14 @@ export type JudgementRecord = {
 }
 
 export type AttemptFiles = {
-  /** Each environment setup step's command, exit code, duration and output. */
+  /** Each environment setup step's command, exit code, duration, and output. */
   setupLog?: FileRef
   transcript?: FileRef
   /** Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`. */
   rawTranscript?: FileRef
   diff?: FileRef
   judgeInput?: FileRef
-  /** PNGs from `c.capture()`, under `artifacts/<name>.png`. */
+  /** PNGs from `c.capture()`, under the `artifacts/<name>.png` path. */
   artifacts?: ArtifactRef[]
 }
 
@@ -123,7 +126,7 @@ export type ContextFile = { path: string; sha256: string }
 export type AttemptRecord = {
   /** `<eval key> # <cell key>#<n>`: unique in the run. */
   key: string
-  /** `<cell key>#<n>`: unique in its eval. */
+  /** `<cell key>#<n>`: unique in its evaluation. */
   id: string
   /** The cell's key; see `EvalEntry.cells`. */
   cell: string
@@ -132,20 +135,18 @@ export type AttemptRecord = {
   /** Start order across the run, from 1; null for attempts that never started. */
   seq: number | null
   startedAt: string | null
-  /** The image the container started from, in `stack.images`; null for the fake sandbox. */
+  /** The image the container started from, in `stack.images`; null when the sandbox doesn't start from an image. */
   imageId: string | null
   /** Names of the variables and secrets set in the sandbox, and the brokered ones; never values. */
   env: { vars: string[]; secrets: string[]; brokered: string[] }
-  /** Skills, rules and MCP config visible to the agent in its sandbox, by content hash. */
+  /** Skills, rules, and MCP config visible to the agent in its sandbox, by content hash. */
   context: ContextFile[]
   /** The egress policy and, when the sandbox records it, the hosts contacted and refused; null if it never ran. */
   egress: EgressRecord | null
   /**
-   * The models the harness's own API calls were served by, as the egress gateway saw them: named
-   * in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent
-   * uses on the side) or, for Codex, in the response, with its effort
-   * (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing
-   * recorded them.
+   * The models served by the harness's API calls, as observed by the egress gateway. Values may
+   * come from requests or responses and include reported effort; null when no model was named or
+   * recorded.
    */
   servedModels: string[] | null
   /**
@@ -154,7 +155,7 @@ export type AttemptRecord = {
    */
   effort: string | null
   /**
-   * The reasoning effort the harness's API said it ran at, from `servedModels` /
+   * The reasoning effort the harness's API said it ran at, from `servedModels` or
    * each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those
    * labels name none. Fast (`[fast=true]`) is not this.
    */
@@ -163,7 +164,8 @@ export type AttemptRecord = {
   error: AttemptError | null
   durationMs: number
   /**
-   * `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.
+   * `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl`
+   * file.
    * `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
    */
   turns: Array<{
@@ -186,12 +188,12 @@ export type AttemptRecord = {
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null
   /**
-   * Tokens the capture vision loop used. Infrastructure only: never folded
-   * into `usage`, effort, compare or lift.
+   * Tokens the capture vision loop used. Infrastructure only: never included
+   * in `usage`, effort, compare, or lift.
    */
   captureUse?: { model: string; moves: number; usage: TokenUsage | null }
   timings: PhaseTimings
-  /** Counts from the transcript, so a run's shape is visible without reading it. `webSearches` includes refused searches. */
+  /** Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches. */
   activity: {
     tools: number
     fileEdits: number
@@ -210,7 +212,7 @@ export type AttemptRecord = {
   checks: Array<{ command: string; exitCode: number; durationMs: number; log?: FileRef }>
   /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
-  /** Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`. */
+  /** Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`. */
   changedFiles: Array<FileChange & { count?: number }>
   files: AttemptFiles
 }
@@ -218,24 +220,24 @@ export type AttemptRecord = {
 export type EvalEntry = {
   /** `file › group › … › name`, as shown. */
   id: string
-  /** What the eval is matched on across runs; currently the same as `id`. */
+  /** Used to match an evaluation across runs; equal to `id`. */
   key: string
-  /** Directory name inside the artifact directory, from `key`. */
+  /** Directory name inside the artefact directory, from `key`. */
   slug: string
   file: string
   group: string[]
   name: string
   /** Results are comparable only when fingerprints match. */
   fingerprint: string
-  /** The eval file and every local file it imports, directly or not, by content hash. */
+  /** The evaluation file and every local file it imports, directly or not, by content hash. */
   sources: Array<{ path: string; sha256: string }>
   tags: string[]
-  /** The baseline environment, when the eval uses `compare`. */
+  /** The baseline environment, when the evaluation uses `compare`. */
   compare?: EvalCompareMeta
   /**
-   * Over gated cells: `fail` if any failed, else `infra_error` if any is (a cell is `infra_error`
-   * only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's
-   * failures don't fail the eval.
+   * Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is
+   * `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated
+   * cell's failures don't fail the evaluation.
    */
   outcome: Outcome
   /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
@@ -248,9 +250,9 @@ export type EvalEntry = {
    * The compare's questions, answered after its attempts by pairwise votes, one per question;
    * unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote
    * may include a short `reason` (capped). `reeval analyze` includes each answer in the digest
-   * (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is
-   * `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets
-   * masked and screenshots as refs; unset where the eval's files weren't kept.
+   * (rates by cut, votes, ties, a failed call, and a sample of reasons). Each answer's `input` is
+   * the `<eval-slug>/questions/<n>.json` file: every call its model was sent, per pair and order,
+   * with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.
    */
   answers?: CompareAnswer[]
   /** Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite. */
@@ -263,7 +265,7 @@ export type FamilyInterval = {
   hi: number
   level: 0.95
   /**
-   * `wilson` / `newcombe-paired`: one counted attempt a case and side, so each case is one
+   * `wilson` or `newcombe-paired`: one counted attempt a case and side, so each case is one
    * Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with
    * attempts within a case never counted as independent.
    */
@@ -341,17 +343,17 @@ export type FamilyLift = {
   effort?: FamilyEffort
 }
 
-/** A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an eval. */
+/** A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation. */
 export type FamilyRecord = {
   /** `file › group › … › template`. */
   id: string
   file: string
   group: string[]
-  /** The name template, e.g. `fixes $id`. */
+  /** The name template, for example `fixes $id`. */
   name: string
   /** Cases in the list. */
   cases: number
-  /** Cases with an eval in this run; fewer when a filter or tag left some out. */
+  /** Cases with an evaluation in this run; fewer when a filter or tag left some out. */
   ran: number
   /** One per cell. */
   rates: FamilyRate[]
@@ -387,13 +389,13 @@ export type FingerprintParts = {
   environment: string | null
   image: string | null
   agentCli: string | null
-  /** Over the judge's model, threshold and version, and the config's `state` when it sets one. */
+  /** Over the judge's model, threshold, and version, and the config's `state` when it sets one. */
   judge: string
   /** Over the attempt's context files. */
   context: string
 }
 
-/** One harness and environment of an eval, and how its attempts went. */
+/** One harness and environment of an evaluation, and how its attempts went. */
 export type CellRecord = Cell & {
   /** `sha256` of `fingerprintParts`; results are comparable only when it matches. */
   fingerprint: string
@@ -408,7 +410,7 @@ export type CellRecord = Cell & {
    * Fast is not this.
    */
   effort: string | null
-  /** How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval. */
+  /** How the attempts decide the cell's outcome; `'none'` when it doesn't fail the evaluation. */
   gate: CellGate
   /** Environment keys the variant replaced on the control's (or a child on its parent's). */
   overrides: string[]
@@ -427,7 +429,7 @@ export type CellRecord = Cell & {
   outcome: Outcome
   lift?: Lift
   /**
-   * Each check (assertion label) seen in any attempt of the eval, over this cell's counted
+   * Each check (assertion label) seen in any attempt of the evaluation, over this cell's counted
    * attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
    */
   checks?: CellCheck[]
@@ -437,10 +439,10 @@ export type CellRecord = Cell & {
 export type CheckTally = { pass: number; fail: number; error: number; notRun: number }
 
 /**
- * One check over a cell's counted attempts. `verdict` (variant cells), over the attempts that
- * reached the check: `discriminates` when it passes on every one of one side and none of the
- * other; `both-pass` or `both-fail` when it does the same on both sides, so it can't tell them
- * apart; `mixed` otherwise. No verdict when a side never reached it: not run is not a fail.
+ * One check over a cell's counted attempts. `verdict` (variant cells) is `discriminates` when
+ * every answered instance passes on one side and fails on the other, `both-pass` when every
+ * answered instance passes on both sides, `both-fail` when every answered instance fails on both
+ * sides, or `mixed` otherwise. It is absent when either side has no pass or fail.
  */
 export type CellCheck = CheckTally & {
   label: string
@@ -539,7 +541,7 @@ export type RunRecord = {
     configHash: string
   }
   cost: Cost
-  /** Which artifacts sit next to this record. Refs to files that weren't kept are removed. */
+  /** Which artefacts sit next to this record. Refs to files that weren't kept are removed. */
   artifacts: ArtifactLevel
   redaction: { version: 1 }
   summary: RunSummary
@@ -547,38 +549,37 @@ export type RunRecord = {
   /** Each pooled `evaluate.each` that ran; unset when none did. */
   families?: FamilyRecord[]
   /**
-   * Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no
-   * attempt awaited, a worker that died. Any one fails the run. Unset when there were none.
+   * These are redacted errors outside any attempt: an evaluation file that didn't load, a rejection
+   * or throw no attempt awaited, or a worker that died. Any one fails the run. Unset when there
+   * were none.
    */
   errors?: string[]
 }
 
-/** What ran and graded the agents: the machine, images, harnesses and judge. */
+/** These fields describe what ran and graded the agents: the machine, images, harnesses, and judge. */
 export type Stack = {
   /** The reeval version that wrote the run. */
   reeval: string
-  /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
+  /** `process.versions.node`, or the compatible Node version reported by another runtime. */
   node: string
-  /**
-   * The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in
-   * runs recorded before it, which ran on Node.
-   */
+  /** The runtime reeval ran on, `node`, `bun`, `deno`, or another, and its version. */
   runtime?: { name: string; version: string }
   /**
-   * The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its
-   * toolchain when the runner reports one. Absent in runs recorded before it.
+   * The evaluation language, `typescript` for `*.eval.ts` files, and the version of its toolchain
+   * when the runner reports one.
    */
   language?: { name: string; version?: string }
   os: string
   arch: string
-  /** Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed. */
+  /** Every image an attempt started from. `id` is content-addressed; `repoDigests` exist only after the image is pushed. */
   images: Array<AttemptImage & { repoDigests: string[] }>
   /** Exact versions of the packages that run and grade the agent. */
   packages: Record<string, string>
   /**
-   * Each harness: its configured `model` and requested `effort`, `resolvedModels` (what it
-   * reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort
-   * suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.
+   * For each harness, the record includes its configured `model` and requested `effort`,
+   * `resolvedModels` (what it reported serving, with the variant it resolved), and
+   * `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not
+   * `resolvedEffort`.
    */
   harnesses: Array<{
     id: string
@@ -619,7 +620,7 @@ export type Stack = {
   }
   /** Union of every attempt's context files. */
   context: ContextFile[]
-  /** What eval fingerprints hash; fingerprints from different scopes aren't comparable. */
+  /** What evaluation fingerprints hash; fingerprints from different scopes aren't comparable. */
   fingerprintScope: string[]
 }
 

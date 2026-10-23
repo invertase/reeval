@@ -2,10 +2,14 @@
   "$schema": "https://docs.page/schema.json",
   "name": "reeval",
   "description": "Evals for coding agents: does an agent use your SDK, skills and docs correctly?",
+  "theme": {
+    "preset": "b2fA"
+  },
   "variables": {
     "pkg": "reeval",
     "cli": "reeval",
-    "node": "22.13"
+    "node": "22.13",
+    "podman": "4"
   },
   "content": {
     "zoomImages": true
@@ -22,223 +26,331 @@
       "href": "https://www.npmjs.com/package/reeval"
     }
   ],
-  "tabs": [
-    { "id": "guide", "title": "Guide", "href": "/" },
-    { "id": "concepts", "title": "Concepts", "href": "/concepts" },
-    { "id": "recipes", "title": "Recipes", "href": "/recipes" },
-    { "id": "reference", "title": "Reference", "href": "/reference" }
-  ],
   "sidebar": [
     {
-      "group": "Start here",
-      "tab": "guide",
+      "group": "Getting started",
       "pages": [
-        { "title": "Introduction", "href": "/" },
-        { "title": "Quickstart", "href": "/quickstart" },
-        { "title": "Your first real run", "href": "/guide/first-real-run" }
+        {
+          "title": "Overview",
+          "href": "/"
+        },
+        {
+          "title": "Quickstart",
+          "href": "/quickstart"
+        },
+        {
+          "title": "Core concepts",
+          "href": "/core-concepts"
+        }
       ]
     },
     {
-      "group": "Write evals",
-      "tab": "guide",
+      "group": "Evaluations",
       "pages": [
-        { "title": "Evals and checks", "href": "/guide/writing-evals" },
-        { "title": "Multi-turn evals", "href": "/guide/multi-turn" },
-        { "title": "Compare and lift", "href": "/guide/compare" },
-        { "title": "Compare questions", "href": "/guide/questions" },
-        { "title": "Environments and skills", "href": "/guide/environments" }
-      ]
-    },
-    {
-      "group": "Run anywhere",
-      "tab": "guide",
-      "pages": [
-        { "title": "Harnesses", "href": "/guide/harnesses" },
-        { "title": "Sandboxes and toolchains", "href": "/guide/sandboxes" },
-        { "title": "Secrets and egress", "href": "/guide/secrets-and-egress" },
-        { "title": "Sizing runs", "href": "/guide/profiles" }
+        {
+          "title": "Overview",
+          "href": "/evals/evaluate"
+        },
+        {
+          "title": "Compare",
+          "href": "/comparisons/compare"
+        },
+        {
+          "title": "Checks",
+          "href": "/evals/checks"
+        },
+        {
+          "title": "Statistics",
+          "href": "/comparisons/statistics"
+        },
+        {
+          "title": "Turns",
+          "href": "/evals/turns"
+        },
+        {
+          "title": "Judges",
+          "href": "/evals/judges"
+        },
+        {
+          "title": "Groups",
+          "href": "/evals/groups"
+        },
+        {
+          "title": "Cases",
+          "href": "/evals/cases"
+        },
+        {
+          "title": "Apps",
+          "href": "/evals/servers"
+        }
       ]
     },
     {
       "group": "Results",
-      "tab": "guide",
       "pages": [
-        { "title": "History", "href": "/guide/history" },
-        { "title": "The studio", "href": "/guide/studio" },
-        { "title": "CI", "href": "/guide/ci" },
-        { "title": "Analysis", "href": "/guide/analysis" },
-        { "title": "Explaining a run", "href": "/guide/analyze" },
-        { "title": "Debugging a run", "href": "/guide/debugging" }
+        {
+          "title": "Output",
+          "href": "/results/output"
+        },
+        {
+          "title": "Debugging",
+          "href": "/results/debugging"
+        },
+        {
+          "title": "Analysis",
+          "href": "/results/analysis"
+        },
+        {
+          "title": "Regressions",
+          "href": "/results/regressions"
+        },
+        {
+          "title": "Studio",
+          "href": "/history/studio"
+        },
+        {
+          "title": "Queries",
+          "href": "/history/queries"
+        }
       ]
     },
     {
-      "group": "How reeval works",
-      "tab": "concepts",
+      "group": "Environments",
       "pages": [
-        { "title": "Overview", "href": "/concepts" },
-        { "title": "The matrix", "href": "/concepts/matrix" },
-        { "title": "Options and inheritance", "href": "/concepts/options" },
-        { "title": "Attempt lifecycle", "href": "/concepts/attempt-lifecycle" }
+        {
+          "title": "Overview",
+          "href": "/environments"
+        },
+        {
+          "title": "Workspaces",
+          "href": "/environments/workspaces"
+        },
+        {
+          "title": "Files",
+          "href": "/environments/files"
+        },
+        {
+          "title": "Rules",
+          "href": "/environments/rules"
+        },
+        {
+          "title": "Setup commands",
+          "href": "/environments/setup"
+        },
+        {
+          "title": "Skills",
+          "href": "/environments/skills"
+        },
+        {
+          "title": "MCP servers",
+          "href": "/environments/mcp"
+        },
+        {
+          "title": "Secrets",
+          "href": "/environments/secrets"
+        },
+        {
+          "title": "Egress",
+          "href": "/environments/egress"
+        }
       ]
     },
     {
-      "group": "Measuring",
-      "tab": "concepts",
+      "group": "Runs",
       "pages": [
-        { "title": "Gates and lift", "href": "/concepts/lift" },
-        { "title": "Judges", "href": "/concepts/judges" },
-        { "title": "Fingerprints and drift", "href": "/concepts/fingerprints" }
+        {
+          "title": "Running",
+          "href": "/evals/running"
+        },
+        {
+          "title": "Profiles",
+          "href": "/evals/profiles"
+        },
+        {
+          "title": "Recording",
+          "href": "/history"
+        },
+        {
+          "title": "CI",
+          "href": "/evals/ci"
+        }
       ]
     },
     {
-      "group": "Isolation",
-      "tab": "concepts",
+      "group": "Integrations",
       "pages": [
-        { "title": "Credential brokering", "href": "/concepts/credential-brokering" },
-        { "title": "Egress policies", "href": "/concepts/egress" }
-      ]
-    },
-    {
-      "group": "Running",
-      "tab": "concepts",
-      "pages": [
-        { "title": "Output modes", "href": "/concepts/output" },
-        { "title": "Insights and remarks", "href": "/concepts/insights" },
-        { "title": "Concurrency", "href": "/concepts/concurrency" }
+        {
+          "group": "Harnesses",
+          "pages": [
+            {
+              "title": "Overview",
+              "href": "/harnesses"
+            },
+            {
+              "title": "Models",
+              "href": "/harnesses/models"
+            },
+            {
+              "title": "Cursor",
+              "href": "/reference/harness/cursor"
+            },
+            {
+              "title": "Claude Code",
+              "href": "/reference/harness/claude-code"
+            },
+            {
+              "title": "Codex",
+              "href": "/reference/harness/codex"
+            },
+            {
+              "title": "Antigravity",
+              "href": "/reference/harness/antigravity"
+            },
+            {
+              "title": "OpenCode",
+              "href": "/reference/harness/opencode"
+            },
+            {
+              "title": "Goose",
+              "href": "/reference/harness/goose"
+            },
+            {
+              "title": "pi",
+              "href": "/reference/harness/pi"
+            },
+            {
+              "title": "Grok Build",
+              "href": "/reference/harness/grok-build"
+            }
+          ]
+        },
+        {
+          "group": "Sandboxes",
+          "pages": [
+            {
+              "title": "Overview",
+              "href": "/sandboxes"
+            },
+            {
+              "title": "Toolchains",
+              "href": "/sandboxes/toolchains"
+            },
+            {
+              "title": "Docker",
+              "href": "/reference/sandbox/docker"
+            },
+            {
+              "title": "Podman",
+              "href": "/reference/sandbox/podman"
+            }
+          ]
+        }
       ]
     },
     {
       "group": "Recipes",
-      "tab": "recipes",
-      "pages": [{ "title": "Overview", "href": "/recipes" }]
-    },
-    {
-      "group": "Skills and docs",
-      "tab": "recipes",
       "pages": [
-        { "title": "Prove a skill helps", "href": "/recipes/skill-lift" },
-        { "title": "Evaluate an MCP server", "href": "/recipes/mcp-server" },
-        { "title": "Check a recommendation", "href": "/recipes/recommendation" },
-        { "title": "Suites of cases", "href": "/recipes/eval-each" }
+        {
+          "title": "Measure a skill",
+          "href": "/recipes/skill-comparison"
+        },
+        {
+          "title": "Measure your docs",
+          "href": "/recipes/docs-comparison"
+        },
+        {
+          "title": "Measure MCP servers",
+          "href": "/recipes/mcp-comparison"
+        },
+        {
+          "title": "Test recommendations",
+          "href": "/recipes/recommendation"
+        },
+        {
+          "title": "Test an SDK",
+          "href": "/recipes/sdk"
+        },
+        {
+          "title": "Test a CLI",
+          "href": "/recipes/cli"
+        },
+        {
+          "title": "Compare harnesses",
+          "href": "/recipes/agent-comparison"
+        },
+        {
+          "title": "Gate pull requests",
+          "href": "/recipes/ci-gate"
+        },
+        {
+          "title": "Track results",
+          "href": "/recipes/results-over-time"
+        },
+        {
+          "title": "Judge an app",
+          "href": "/recipes/app-check"
+        }
       ]
     },
     {
-      "group": "Agents and toolchains",
-      "tab": "recipes",
       "pages": [
-        { "title": "Compare agents", "href": "/recipes/compare-agents" },
-        { "title": "Python, Flutter and more", "href": "/recipes/toolchains" },
-        { "title": "Offline evals", "href": "/recipes/offline" },
-        { "title": "Start from an existing codebase", "href": "/recipes/existing-codebase" },
-        { "title": "Capturing UI", "href": "/recipes/capturing-ui" }
-      ]
-    },
-    {
-      "group": "Workflow",
-      "tab": "recipes",
-      "pages": [
-        { "title": "Evals without Docker or keys", "href": "/recipes/fake-harness" },
-        { "title": "PR gate in GitHub Actions", "href": "/recipes/github-pr-gate" },
-        { "title": "Lift of a pull request", "href": "/recipes/pr-lift" },
-        { "title": "Nightly matrix and Pages", "href": "/recipes/nightly-pages" },
-        { "title": "Query history from your agent", "href": "/recipes/agent-mcp" }
-      ]
-    },
-    {
-      "group": "Case studies",
-      "tab": "recipes",
-      "pages": [{ "title": "reeval evaluating reeval", "href": "/recipes/case-study-dogfood" }]
-    },
-    {
-      "group": "Overview",
-      "tab": "reference",
-      "pages": [{ "title": "Reference", "href": "/reference" }]
-    },
-    {
-      "group": "Configuration",
-      "tab": "reference",
-      "pages": [
-        { "title": "defineConfig", "href": "/reference/config" },
-        { "title": "Options", "href": "/reference/options" },
-        { "title": "Profiles and budgets", "href": "/reference/profiles" }
-      ]
-    },
-    {
-      "group": "Authoring API",
-      "tab": "reference",
-      "pages": [
-        { "title": "group and evaluate", "href": "/reference/group-evaluate" },
-        { "title": "defineEnvironment", "href": "/reference/environment" },
-        { "title": "The attempt context", "href": "/reference/attempt-context" },
-        { "title": "Matchers", "href": "/reference/matchers" },
-        { "title": "secret, skill, mcp, file, git", "href": "/reference/helpers" }
-      ]
-    },
-    {
-      "group": "Harnesses",
-      "tab": "reference",
-      "pages": [
-        { "title": "cursor()", "href": "/reference/harness/cursor" },
-        { "title": "claudeCode()", "href": "/reference/harness/claude-code" },
-        { "title": "antigravity()", "href": "/reference/harness/antigravity" },
-        { "title": "opencode()", "href": "/reference/harness/opencode" },
-        { "title": "goose()", "href": "/reference/harness/goose" },
-        { "title": "pi()", "href": "/reference/harness/pi" },
-        { "title": "codex()", "href": "/reference/harness/codex" },
-        { "title": "fx()", "href": "/reference/harness/fx" },
-        { "title": "grokBuild()", "href": "/reference/harness/grok-build" },
-        { "title": "fakeHarness()", "href": "/reference/harness/fake" }
-      ]
-    },
-    {
-      "group": "Sandboxes",
-      "tab": "reference",
-      "pages": [
-        { "title": "docker()", "href": "/reference/sandbox/docker" },
-        { "title": "podman()", "href": "/reference/sandbox/podman" },
-        { "title": "fakeSandbox()", "href": "/reference/sandbox/fake" },
-        { "title": "Sandbox providers", "href": "/reference/sandbox/providers" },
-        { "title": "Egress", "href": "/reference/egress" }
-      ]
-    },
-    {
-      "group": "Judges",
-      "tab": "reference",
-      "pages": [{ "title": "Judges", "href": "/reference/judges" }]
-    },
-    {
-      "group": "CLI",
-      "tab": "reference",
-      "pages": [
-        { "title": "Overview and exit codes", "href": "/reference/cli" },
-        { "title": "reeval init", "href": "/reference/cli/init" },
-        { "title": "reeval doctor", "href": "/reference/cli/doctor" },
-        { "title": "reeval run", "href": "/reference/cli/run" },
-        { "title": "reeval record", "href": "/reference/cli/record" },
-        { "title": "reeval history, show, compare", "href": "/reference/cli/history" },
-        { "title": "reeval query", "href": "/reference/cli/query" },
-        { "title": "reeval analyze", "href": "/reference/cli/analyze" },
-        { "title": "reeval mcp", "href": "/reference/cli/mcp" },
-        { "title": "reeval studio", "href": "/reference/cli/studio" },
-        { "title": "reeval image build, reeval clean", "href": "/reference/cli/image-clean" },
-        { "title": "reeval report", "href": "/reference/cli/report" }
-      ]
-    },
-    {
-      "group": "Formats",
-      "tab": "reference",
-      "pages": [
-        { "title": "The run record", "href": "/reference/record" },
-        { "title": "Transcripts", "href": "/reference/transcript" },
-        { "title": "Debug data", "href": "/reference/debug-data" }
-      ]
-    },
-    {
-      "group": "Environment",
-      "tab": "reference",
-      "pages": [
-        { "title": "Environment variables", "href": "/reference/env-vars" },
-        { "title": "Errors", "href": "/reference/errors" }
+        {
+          "group": "Reference",
+          "pages": [
+            {
+              "title": "CLI",
+              "href": "/reference/cli"
+            },
+            {
+              "title": "Configuration",
+              "href": "/reference/config"
+            },
+            {
+              "title": "Options",
+              "href": "/reference/options"
+            },
+            {
+              "title": "Profiles",
+              "href": "/reference/profiles"
+            },
+            {
+              "title": "Authoring API",
+              "href": "/reference/api"
+            },
+            {
+              "title": "Attempt context",
+              "href": "/reference/context"
+            },
+            {
+              "title": "Environment helpers",
+              "href": "/reference/environment"
+            },
+            {
+              "title": "Matchers",
+              "href": "/reference/matchers"
+            },
+            {
+              "title": "Run record",
+              "href": "/reference/record"
+            },
+            {
+              "title": "Query views",
+              "href": "/reference/query"
+            },
+            {
+              "title": "Run history",
+              "href": "/reference/mcp-tools"
+            },
+            {
+              "title": "Environment variables",
+              "href": "/reference/env-vars"
+            },
+            {
+              "title": "Glossary",
+              "href": "/reference/glossary"
+            }
+          ]
+        }
       ]
     }
   ]

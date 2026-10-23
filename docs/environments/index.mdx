@@ -1,0 +1,118 @@
+---
+title: "Define an environment"
+description: "Give each harness attempt the files, rules, skills, and servers it needs."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Overview)
+[//]: # (owns: defineEnvironment; extend and extendEnvironment; the environment option; giving every evaluation the same skills, MCP servers, files and rules from reeval.config.ts with the config helpers)
+[//]: # (excludes: workspace -> /environments/workspaces)
+[//]: # (excludes: files -> /environments/files)
+[//]: # (excludes: rules -> /environments/rules)
+[//]: # (excludes: setup -> /environments/setup)
+[//]: # (excludes: skills -> /environments/skills)
+[//]: # (excludes: mcp -> /environments/mcp)
+[//]: # (excludes: env and secrets -> /environments/secrets)
+[//]: # (excludes: egress -> /environments/egress)
+[//]: # (excludes: sandbox -> /sandboxes)
+[//]: # (excludes: plugins -> not documented)
+[//]: # (excludes: helper signatures -> /reference/environment)
+[//]: # (inbound: /, /reference/environment, /reference/glossary, /core-concepts, /comparisons/compare, /evals/servers)
+[//]: # (outbound: /environments/workspaces, /environments/files, /environments/rules, /environments/setup, /environments/skills, /environments/mcp, /environments/secrets, /environments/egress, /sandboxes, /reference/environment, /reference/environment#environment-fields, /reference/environment#extend, /reference/options#environment, /reference/config#config-helpers)
+
+An environment is what your harness gets in an attempt. `defineEnvironment()` defines an environment, and its `.extendEnvironment()` method derives a variant from it. Define environments in the `evals/environments.ts` file that `reeval init` writes.
+
+<Steps>
+<Step title="Define an environment">
+
+In the `evals/environments.ts` file, pass `defineEnvironment()` a name and a spec. The name becomes the environment segment of the cell key.
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const plain = defineEnvironment('plain', {
+  files: {
+    'src/user.ts': `import type { Request } from 'express'
+export const getUserId = (req: Request) => req.params.id
+`,
+  },
+})
+```
+
+For more information about each environment field, see [Workspaces](/environments/workspaces), [Files](/environments/files), [Rules](/environments/rules), [Setup commands](/environments/setup), [MCP servers](/environments/mcp), [Secrets](/environments/secrets), [Egress](/environments/egress), [Sandboxes](/sandboxes), and [Environment fields](/reference/environment#environment-fields).
+
+</Step>
+<Step title="Extend an environment">
+
+In the `evals/environments.ts` file, call `.extendEnvironment()` on `plain` to derive `with-shoehorn`. The child keeps the parent's fields and adds its own, so the control and the variant differ by one change.
+
+```ts title="evals/environments.ts"
+export const withShoehorn = plain.extendEnvironment('with-shoehorn', ({
+  skill,
+}) => ({
+  skills: [
+    skill.git('github:mattpocock/skills', {
+      path: 'skills/misc',
+      only: ['migrate-to-shoehorn'],
+    }),
+  ],
+}))
+```
+
+The callback receives `skill`, `mcp`, `secret`, `file`, `directory`, and `git`. `defineEnvironment()` accepts the same callback. Relative paths resolve against the file that calls the helper.
+
+For more information about skill sources, see [Skills](/environments/skills).
+
+A child merges `files`, `env`, `skills`, and `mcp` with its parent's by name, and runs its `setup` commands after its parent's. A child that sets `sandbox`, `workspace`, `rules`, or `egress` replaces the parent's value. `extend` is an alias of `.extendEnvironment()`.
+
+For more information about the merge rules, see [`extend`](/reference/environment#extend).
+
+</Step>
+<Step title="Use an environment in an evaluation">
+
+In the `evals/shoehorn.eval.ts` file, pass `plain` and `withShoehorn` to `compare`. reeval names each cell by its harness, environment, and sandbox.
+
+```ts title="evals/shoehorn.eval.ts"
+import { plain, withShoehorn } from './environments.ts'
+// ...
+evaluate(
+  'tests build only the request fields they read',
+  { compare: { baseline: plain, variants: [withShoehorn] } },
+  // ...
+)
+```
+
+For more information about where you can set the option, see [the `environment` option](/reference/options#environment).
+
+</Step>
+<Step title="Verify with the `reeval run --dry-run` command">
+
+Print the plan as JSON. The `reeval run --dry-run --json` command plans the run without starting a sandbox or a harness, so it needs no API key.
+
+```bash
+npx reeval run --dry-run --json
+```
+
+Each cell in an evaluation's `cells` list names its environment and the files it writes. The `with-shoehorn` cell, trimmed here to the fields that matter, lists the `src/user.ts` file from `plain`, which shows that the child kept the parent's files:
+
+```json
+{
+  "key": "cursor:composer-2.5/with-shoehorn/docker",
+  "environment": "with-shoehorn",
+  "role": "variant",
+  "files": [
+    "src/user.ts"
+  ]
+}
+```
+
+</Step>
+</Steps>
+
+## Give every evaluation an environment from the config
+
+For more information about config helpers, see [Config helpers](/reference/config#config-helpers).
+
+## Reference
+
+For more information about every field and helper signature, see [Environment helpers reference](/reference/environment).

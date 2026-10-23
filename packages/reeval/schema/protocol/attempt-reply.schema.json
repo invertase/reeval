@@ -13,7 +13,7 @@
           "type": "number"
         },
         "label": {
-          "description": "`expect`'s second argument, or `<matcher> <first argument>` (or the command `c.exec` ran, or the judge's question), cut at 60 characters; ` #2`, ` #3` on repeats within the attempt.",
+          "description": "`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes.",
           "type": "string"
         },
         "labelled": {
@@ -444,7 +444,7 @@
       "additionalProperties": false
     },
     "JudgeArtifactRef": {
-      "description": "A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.",
+      "description": "A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file.",
       "type": "object",
       "properties": {
         "bytes": {
@@ -458,7 +458,7 @@
           "type": "string"
         },
         "path": {
-          "description": "`artifacts/<name>.png` under the attempt directory.",
+          "description": "The `artifacts/<name>.png` path under the attempt directory.",
           "type": "string"
         },
         "sha256": {

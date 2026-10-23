@@ -1,0 +1,102 @@
+---
+title: "Keep history in Git"
+description: "Save each run in Git so you can return to the code it used."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Recording)
+[//]: # (owns: the record option; the history option; reeval record; reeval checkout)
+[//]: # (excludes: listing recorded runs with reeval history -> /history/queries#browse-history)
+[//]: # (excludes: showing one run with reeval show -> /results/output#show-one-run)
+[//]: # (excludes: diffing runs -> /results/regressions)
+[//]: # (excludes: SQL over history -> /history/queries)
+[//]: # (excludes: record fields -> /reference/record)
+[//]: # (inbound: /core-concepts, /environments/workspaces, /results/regressions, /history/studio, /recipes/ci-gate, /reference/record, /history/queries, /recipes/results-over-time, /reference/glossary)
+[//]: # (outbound: /reference/record, /results/regressions, /history/queries#browse-history, /results/output#show-one-run, /recipes/results-over-time, /reference/cli#reeval-record, /reference/config, /core-concepts#record)
+
+Recording copies a run from the `.reeval/runs/` directory into the history folder so you can commit it with your evaluations.
+
+## Record a run
+
+The `reeval.config.ts` file uses these defaults:
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  record: 'ci',
+  history: {
+    dir: 'evals/.history',
+    artifacts: 'all',
+  },
+})
+```
+
+For more information about the `record` and `history` options, see [Configuration](/reference/config).
+
+Record the most recent run and commit the history folder:
+
+1. Copy the most recent run from the `.reeval/runs/` directory.
+
+   ```bash
+   npx reeval record
+   ```
+
+   The command prints the record path and the size:
+
+   ```text
+   recorded evals/.history/<run-id>.json + <n> artifact files in evals/.history/<run-id>/ (<kb> KB). Commit it with git.
+   ```
+
+2. Stage the history folder.
+
+   ```bash
+   git add evals/.history
+   ```
+
+3. Commit the history folder.
+
+   ```bash
+   git commit -m "Record the latest evaluation run"
+   ```
+
+The copy leaves the commit to you. When `dir` names another folder, stage that folder in step 2. The copy writes a `.gitignore` file in the history folder that un-ignores recorded `*.json`, `*.jsonl`, `*.md`, `*.patch`, and `*.log` files.
+
+For more information about `reeval record`, see [the `reeval record` command](/reference/cli#reeval-record).
+
+## Check out a run
+
+The `reeval checkout` command creates a detached Git worktree at the commit from the start of the run. The commit that adds the history folder is a different commit.
+
+When the record includes a `worktree.patch` file, the command applies it. The `worktree.patch` file holds the repository's uncommitted changes from the start of the run.
+
+Check out the most recent run:
+
+```bash
+npx reeval checkout
+```
+
+The command prints the commit, the directory, and how to remove the worktree:
+
+```text
+checked out <sha> into .reeval/checkouts/<run-id>.
+Remove it with: git worktree remove .reeval/checkouts/<run-id>
+```
+
+The `reeval checkout` command refuses a directory that already exists. The commit must be in this clone. Fetch the commit when the command says it is missing, then run `reeval checkout` again.
+
+When a dirty run has no `worktree.patch` file, the first line says the uncommitted changes were not saved. When the record kept the `worktree.patch` file, the first line includes `and applied worktree.patch`.
+
+To choose the directory, pass the run and then the path:
+
+```bash
+npx reeval checkout <run-id> ../that-run
+```
+
+Name a run with `latest`, `latest~N`, a run id or a unique prefix, or a Git SHA prefix. For more information about listing recorded runs, see [Browse history](/history/queries#browse-history).
+
+## Reference
+
+For more information about what a record holds, see [Record](/core-concepts#record). For more information about every field, see [Run record](/reference/record).
+
+For more information, see [Show one run](/results/output#show-one-run) to print one run, [Find run regressions](/results/regressions) to diff two runs, and [Track results over time](/recipes/results-over-time) to follow recorded runs.

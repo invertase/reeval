@@ -1,0 +1,117 @@
+---
+title: "Control sandbox egress"
+description: "Limit which hosts the sandbox reaches, and see what was blocked."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: Egress)
+[//]: # (owns: egress; allow-all, deny-all and allow lists; automatic hosts; blocked requests in the record)
+[//]: # (excludes: DEFAULT_EGRESS_ALLOW as an import -> not documented; never present a registry list as the egress default, which is allow-all)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: egress option table -> /reference/options#egress)
+[//]: # (excludes: how the egress gateway enforces the policy -> /core-concepts#egress)
+[//]: # (inbound: /environments, /environments/secrets, /recipes/sdk, /reference/sandbox/docker)
+[//]: # (outbound: /reference/options#egress, /environments/secrets#keep-api-keys-on-the-host, /reference/record, /results/debugging, /core-concepts)
+
+The `egress` option sets which hosts the sandbox can reach. The default is `'allow-all'`. Set `'deny-all'` to block every host except automatic hosts, or `{ allow: [...] }` to allow selected hosts in addition to them. API keys stay on the host either way. For more information about keeping API keys on the host, see [Secrets](/environments/secrets#keep-api-keys-on-the-host).
+
+## Block non-automatic hosts
+
+In the `evals/egress.eval.ts` file, set `egress` to `'deny-all'` on an environment:
+
+```ts title="evals/egress.eval.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+
+const offline = defineEnvironment('offline', {
+  files: {
+    'src/user.ts': `import type { Request } from 'express'
+export const getUserId = (req: Request) => req.params.id
+`,
+  },
+  egress: 'deny-all',
+})
+
+evaluate(
+  'adds a test without installing anything',
+  { environment: offline },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'writes the test').toHaveFile('src/user.test.ts')
+  },
+)
+```
+
+A restricted policy still lets through the hosts an attempt can't run without: your harness's own API, the `hosts` of each brokered secret, and each `http` or `sse` MCP server. reeval adds these automatic hosts to every policy except `'allow-all'`, and the plan prints them:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `notes` column shows each evaluation's policy and its automatic hosts:
+
+```text
+egress: deny-all + auto: api2.cursor.sh, *.cursor.sh
+```
+
+An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and your checks decide what that means.
+
+## Allow a list of hosts
+
+To let the agent install packages, list the hosts it installs from. In the `evals/egress.eval.ts` file, extend the environment with an allow list:
+
+```ts title="evals/egress.eval.ts"
+const withRegistry = offline.extendEnvironment('with-registry', {
+  egress: {
+    allow: ['registry.npmjs.org', 'github.com', '*.github.com'],
+  },
+})
+```
+
+Pass `withRegistry` as the evaluation's `environment`.
+
+```ts title="evals/egress.eval.ts"
+{ environment: withRegistry },
+```
+
+A plain entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The automatic hosts join the list, so the plan prints `allow registry.npmjs.org, github.com, *.github.com + auto: api2.cursor.sh, *.cursor.sh`.
+
+## Read blocked requests
+
+Run the evaluation to create a record.
+
+```bash
+npx reeval run
+```
+
+Each attempt's record holds its policy, the hosts it contacted, and the hosts the gateway refused. Print the record of the latest run and pick out the `egress` field of each attempt:
+
+```bash
+npx reeval show --json | jq '.evals[].attempts[].egress'
+```
+
+A refused request names the host and why it was blocked:
+
+```json
+{
+  "policy": "deny-all",
+  "allowed": ["api.anthropic.com", "*.anthropic.com"],
+  "recorded": true,
+  "contacted": [
+    { "host": "api.anthropic.com", "port": 443, "connections": 3,
+      "sent": 180882, "received": 25526 }
+  ],
+  "blocked": [
+    { "host": "example.com", "port": 443, "connections": 1,
+      "reason": "example.com isn't in the allowlist" }
+  ],
+  "expectedBlocked": []
+}
+```
+
+The `allowed` list is every host the policy let through, your own and the automatic ones; it is `null` under `'allow-all'`. Hosts your harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
+
+For more information about egress enforcement, see [Core concepts](/core-concepts).
+
+## Reference
+
+For more information about the `egress` option's shape and where it is accepted, see [Options](/reference/options#egress). For more information about the `egress` record's fields, see [Run record](/reference/record).

@@ -1,163 +1,102 @@
 ---
-title: cursor()
-description: The Cursor harness, its options and id, the key it needs, how reeval brokers that key, the tokens it reports and where plugins go.
+title: "Cursor harness"
+description: "Look up options, the key, and recorded events for the Cursor harness."
 ---
 
-`cursor({ model })` runs Cursor's agent in the Docker sandbox, through the Cursor TypeScript SDK. `model` is required.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Cursor)
+[//]: # (owns: cursor factory options; CURSOR_API_KEY; params)
+[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: /harnesses)
+[//]: # (outbound: /harnesses, /harnesses/models, /environments/rules, /environments/skills, /environments/mcp, /environments/secrets#keep-api-keys-on-the-host, /reference/env-vars, /sandboxes, /reference/matchers#tohavesearched, /reference/record)
+
+## cursor
+
+`cursor()` is one harness factory. It reports each turn's tokens. For more information about supported sandboxes, see [Sandboxes](/sandboxes).
+
+`cursor()` is exported from `{{ pkg }}/harness`. The following configuration passes it as the `harness` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: cursor({ model: 'composer-2.5' }),
+  harness: cursor({
+    model: 'composer-2.5',
+    params: { fast: 'true' },
+  }),
 })
 ```
 
-With no `harness` in the config, reeval uses that harness.
+`model` is required. The other fields are optional.
 
-## Options
-
-<Property name="model" type="string">
-  The model the agent uses, as Cursor names it (`composer-2.5`). Required: the SDK has no default for local agents.
+<Property name="model" type="string" required>
+  A model id `Cursor.models.list()` returns for the key. reeval refuses a missing `model` at plan time with exit code 2.
 </Property>
 
 <Property name="params" type="Record<string, string>" optional>
-  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. `fast` defaults to `'false'` on every model that takes it, so `composer-2.5` runs as `composer-2.5[fast=false]` at the standard price, even though Cursor's catalogue marks Fast as its default variant. Pass `{ fast: 'true' }` to run Fast, at several times the price. Any other parameter you don't set takes the default variant in Cursor's model catalogue, which reeval sends explicitly. Cursor can change that default, so pin every parameter for reproducible evals. Fast is not reasoning effort.
+  Parameter ids mapped to string values, such as `{ fast: 'true' }`. An unset parameter takes the default variant in Cursor's model catalogue, which reeval sends on the request. `fast` is `'false'` when the model accepts it and `params` leaves it unset.
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort, mapped onto the catalogue param `Cursor.models.list()` names for this model (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`. The catalogue names the id; reeval does not hard-code it. If the catalogue lists no effort param, the attempt fails, saying so. Values are whatever that param takes. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort, mapped onto the catalogue parameter this model names, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`.
 </Property>
 
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `cursor:<model>`, such as `cursor:composer-2.5`, or `cursor:<model>[effort=<value>]` when `effort` is set. Letters, digits and `.`, `_`, `:`, `@`, `+`, `-`, `[`, `]`, `=`.
+  Cell id. Defaults to `cursor` followed by the model, such as `cursor:<model>`. With `effort` set to `high`, the id is `cursor:<model>[effort=high]`. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
-  The most Cursor attempts at once across the run, for example to stay under your account's rate limits. A whole number of at least 1.
+  The most Cursor attempts that run at the same time, across the run. A whole number of at least 1.
 </Property>
 
 <Property name="startTimeout" type="Duration" optional>
-  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `cursor: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
-## At a glance
+Every harness factory takes `model`, `effort`, `id`, `maxConcurrent`, and `startTimeout`. `params` belongs to `cursor()`. With no `harness` option, reeval uses `cursor()` with its default model.
 
-| | |
-|---|---|
-| Import | `'{{ pkg }}/harness'` |
-| Credential | `CURSOR_API_KEY` (a user or service-account API key) |
-| Adapter | `@reeval/harness-cursor-sdk` 0.1.6, bundled with reeval |
-| Sandbox | `docker()` only |
-| Image | `reeval-sandbox:cursor-0.1.6` |
-| Rules file | `AGENTS.md` |
-| Skills (default placement) | `~/.agents/skills` |
-| Skills (`placement: 'workspace'`) | `.cursor/skills` in the workspace |
-| Egress hosts added | `api2.cursor.sh`, `*.cursor.sh` |
-| Tokens | Reported per turn |
+For more information about choosing a harness, see [Choose a harness](/harnesses).
 
-## How it runs
+For more information about model ids, effort values, and served models, see [Models and providers for each harness](/harnesses/models).
 
-| Part | Where it runs |
-|---|---|
-| The agent loop and its tools | In the sandbox, in one Node runner per attempt, acting on the workspace |
-| Inference | Cursor's hosted models |
-| The model catalogue | Fetched on the host and handed to the runner, so the sandbox only talks to `api2.cursor.sh` |
-| The agent's stream | Over HTTP/1.1, through the sandbox's proxy and egress gateway like every other request |
+## Credential
 
-The runner serves all of an attempt's turns and keeps the agent loaded between them, so a follow-up turn starts quickly and keeps the conversation. If the runner stops, or a turn is aborted, the next turn resumes the same agent. The agent runs every tool without asking, inside the sandbox.
+`cursor()` reads `CURSOR_API_KEY` from the host. reeval exchanges that key for `accessToken` and `refreshToken` at `api2.cursor.sh`, on `POST /auth/exchange_user_api_key`. Requests to `cursor.sh` and `*.cursor.sh` carry those tokens.
 
-## The key
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-reeval reads `CURSOR_API_KEY` on the host and passes it to the adapter explicitly: a host AI Gateway key, subscription or keychain is never used. The key never enters the container, and the adapter refuses a sandbox that can't broker it. The agent sees a placeholder (`aisdkhc_…`), and the egress gateway swaps in the real key on one endpoint only:
+For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
 
-| Host | Endpoint |
-|---|---|
-| `api2.cursor.sh` | `POST /auth/exchange_user_api_key` |
+## Rules and skills
 
-The SDK exchanges the key for session tokens. The gateway replaces the `accessToken` and `refreshToken` in that response with placeholders too, and swaps the real ones back, in headers only, on `cursor.sh` and its subdomains, including the agent's `BidiService/BidiAppend` stream. With `-v`, the attempt's log shows it:
+The Cursor harness reads rules from the `AGENTS.md` file in the workspace. The Cursor harness reads skills from the `.cursor/skills` directory in the workspace and from the `~/.agents/skills` directory in the home directory.
 
-```text
-broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
-…
-gateway   POST https://api2.cursor.sh/auth/exchange_user_api_key → 200 · allowed · ↑2 B ↓956 B · 76ms · substituted CURSOR_API_KEY (authorization)
-broker    substituted CURSOR_API_KEY (authorization) for api2.cursor.sh (POST https://api2.cursor.sh/auth/exchange_user_api_key)
-…
-gateway   POST https://api2.cursor.sh/aiserver.v1.BidiService/BidiAppend → 200 · allowed · ↑437 B ↓0 B · 57ms · substituted CURSOR_API_KEY accessToken
-```
+For more information about writing rules, see [Add project rules](/environments/rules).
 
-A request carrying the placeholder anywhere else gets a 403, and the attempt prints `warning: the egress gateway refused …`. See [Credential brokering](/concepts/credential-brokering).
+For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-## Tokens and transcripts
+## MCP servers
 
-Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=false]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The line under the result blocks totals the tokens. From `reeval run hello` in `examples/hello`:
+The Cursor harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `url` and `headers`.
 
-```text
-23s · 137k in (63k cached) · 819 out · results .reeval/runs/…/summary.md
-```
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+## Recorded usage and model
 
-File edits are reported relative to the workspace, with line counts. Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. reeval's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
+The Cursor harness records tokens on each turn's `usage`. `input` excludes cache reads and writes, so the prompt total is `input` plus `cacheRead` plus `cacheWrite`. `reasoning` is part of `output`.
 
-When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`. The record's `activity.webSearches` and `webFetches` are then `null` rather than 0, and the web matchers refuse the turn.
+`usage` is null when the harness reports no tokens. Each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
 
-## Skills, rules and MCP
+For more information about the record fields, see [Run record reference](/reference/record).
 
-| What | Where |
-|---|---|
-| Rules | `AGENTS.md` in the workspace |
-| Skills | `~/.agents/skills`, or `.cursor/skills` in the workspace with `placement: 'workspace'`. The SDK loads both, as the Cursor CLI does |
-| MCP servers | Passed to the agent on every turn |
-| Plugins | Every part, unpacked into the workspace's `.cursor/` and Cursor's own skill and MCP config (below) |
+## Web events
 
-## Plugins
+The Cursor harness records `web-search` and `web-fetch` events. The Cursor SDK's stream leaves web search and web fetch calls out. reeval recovers those calls from the stored conversation.
 
-```text
-env       plugin house → ~/.reeval/plugins/house/ (7 files; skills, agents, commands, hooks, rules)
-env       plugin part → .cursor/agents/reviewer.md (unpacked for the agent)
-env       plugin part → .cursor/commands/ship.md (unpacked for the agent)
-env       plugin part → .cursor/rules/house-codeword.mdc (unpacked for the agent)
-env       plugin part → .cursor/hooks.json (unpacked for the agent)
-```
+A turn reeval cannot recover lists `web-search` and `web-fetch` on `unreported`. `toHaveSearched()` and `toHaveFetched()` refuse that turn.
 
-reeval copies each plugin to `~/.reeval/plugins/<name>/`, then unpacks it where the SDK reads project settings, before the workspace snapshot, so the diff leaves those files out and `context` lists them. Cursor's own plugin loading (`settingSources: 'plugins'`) is never used: it would load the account's plugins too.
-
-| Part | Where it goes |
-|---|---|
-| `skills/` | `~/.agents/skills`, with the environment's own skills |
-| `agents/<name>.md` | `.cursor/agents/<name>.md` |
-| `commands/<name>.md` | `.cursor/commands/<name>.md` |
-| `rules/<name>.md` | `.cursor/rules/<plugin>-<name>.mdc`, with `alwaysApply: true` when it has no frontmatter |
-| `hooks/hooks.json` | Merged into `.cursor/hooks.json`, after the workspace's own hooks |
-| `.mcp.json` | Cursor's MCP config, as `<plugin>:<server>` |
-
-Items are flat, not namespaced, so two with the same name clash, and `${CLAUDE_PLUGIN_ROOT}` in a hook command or part is filled in with the plugin's copy. Hooks get Cursor's event names (`PreToolUse` as `preToolUse`, `UserPromptSubmit` as `beforeSubmitPrompt`) and tool matchers (`Bash` as `Shell`, `mcp__docs__search` as `MCP:search`); a group matching only tools Cursor lacks (`Glob`) is dropped. A built plugin's parts are unpacked from its build's output. The plan refuses a hook event Cursor doesn't run, and a hook that isn't a `command` (such as a `prompt` hook):
-
-```text
-reeval: evals/review.eval.ts: evaluate("reviews the diff") on cursor:composer-2.5: Cursor can't run the review plugin's Notification hooks (hooks/hooks.json): it runs SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, SubagentStop, PreCompact, Stop hooks; use only: ['skills', 'mcp'], or leave the plugin out of this cell
-```
-
-A workspace file a plugin part would replace fails the attempt as an infra error, naming it.
-
-## Errors
-
-| Situation | Message |
-|---|---|
-| No `model` | `cursor() needs a model, e.g. cursor({ model: 'composer-2.5' })` |
-| Bad `params` | `cursor({ params }) maps parameter ids to string values, e.g. { fast: 'false' } (got …)` |
-| Bad `effort` | `cursor({ effort }) is the value that CLI takes, e.g. cursor({ effort: 'high' }) (got …)` |
-| Catalog has no effort param | `Cursor's model catalog has no effort parameter for <model>. Fast is params.fast, not effort.` |
-| No key, before the run | `Missing credentials: CURSOR_API_KEY, … Set them in the environment or .env.local.` |
-| A key with a line break | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). …` |
-| A non-Docker sandbox | `The Cursor harness needs the Docker sandbox: set sandbox: docker() …` |
-| The agent doesn't start | `Cursor harness failed to start: …` |
-| Its image can't be built | `Baking the Cursor CLI onto reeval-sandbox-base:latest failed: …` (`reeval run` builds a missing image before the run) |
-
-## Related
-
-- [Harnesses guide](/guide/harnesses)
-- [docker()](/reference/sandbox/docker)
-- [Credential brokering](/concepts/credential-brokering)
-- [Egress](/reference/egress)
+For more information about those matchers, see [toHaveSearched](/reference/matchers#tohavesearched).

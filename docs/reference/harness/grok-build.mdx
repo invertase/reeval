@@ -1,120 +1,103 @@
 ---
-title: grokBuild()
-description: The Grok Build harness, its options and id, its xAI API key, the requests it's brokered on, and how its settings, MCP servers and skills are set up.
+title: "Grok Build harness"
+description: "Look up options, the key, and recorded events for the Grok Build harness."
 ---
 
-`grokBuild()` runs xAI's [Grok Build](https://www.npmjs.com/package/@xai-official/grok) CLI in the Docker sandbox over its ACP server (`grok agent stdio`), on an xAI API key. `model` is required.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Grok Build)
+[//]: # (owns: grokBuild factory options; XAI_API_KEY)
+[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: egress policies and the automatic hosts -> /environments/egress)
+[//]: # (excludes: plugins -> not documented)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: /harnesses)
+[//]: # (outbound: /harnesses, /harnesses/models, /environments/rules, /environments/skills, /environments/mcp, /environments/secrets#keep-api-keys-on-the-host, /environments/egress#block-non-automatic-hosts, /reference/env-vars#provider-keys, /reference/matchers#tohavecalledmcp, /reference/matchers#tohavesearched, /reference/record)
+
+## `grokBuild()` factory
+
+`grokBuild()` is one harness factory. It runs Grok Build in the sandbox on an xAI API key. The factory comes from `{{ pkg }}/harness`, and its return value sets the `harness` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { grokBuild } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: grokBuild({ model: 'grok-4.6' }),
+  harness: grokBuild({
+    model: 'grok-4.6',
+  }),
 })
 ```
 
-## Options
+`model` is required. The other fields are optional.
 
-<Property name="model" type="string">
-  An xAI model id, such as `grok-4.6`, without a provider. Required: it's the model the session starts on and the one Grok names the session with.
+<Property name="model" type="string" required>
+  An xAI model id, with no provider prefix, using letters, digits, and `._-`. reeval refuses a missing or other id at plan time with exit code 2.
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort as Grok's `default_reasoning_effort`, such as `low`, `medium` or `high`, for a model that takes one. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort, for a model that takes one, such as `low`, `medium`, or `high`. reeval sets it as `default_reasoning_effort` in Grok Build's `config.toml` file.
 </Property>
 
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set.
+  Cell id. Defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
-  The most Grok Build attempts at once across the run, for example for your key's rate limits.
+  The most Grok Build attempts that run at the same time, across the run. A whole number of at least 1.
 </Property>
 
 <Property name="startTimeout" type="Duration" optional>
-  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt.
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `3m`. Defaults to `90s`.
 </Property>
 
-## At a glance
+In the sandbox, Grok Build runs with a private home, whose `config.toml` file puts the session and its title on the run's model and turns off telemetry, self-update, and the summary, recap, and title-refresh calls, so a turn contacts only `api.x.ai`.
 
-| | |
-|---|---|
-| Import | `'{{ pkg }}/harness'` |
-| Credential | `XAI_API_KEY` (an xAI API key) |
-| Adapter | `@reeval/harness-grok-build` 0.1.2 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | Grok Build 1.0.67, from npm's `@xai-official/grok-linux-*`, checked against its sha512 |
-| Sandbox | `docker()` only |
-| Image | `reeval-sandbox:grok-build-0.1.2` |
-| Rules file | `AGENTS.md` |
-| Skills (default placement) | `.grok/skills` in Grok's own home (below) |
-| Skills (`placement: 'workspace'`) | `.grok/skills` in the workspace |
-| Plugins | Every part but `rules`, with `--plugin-dir` (below) |
-| Egress hosts added | `api.x.ai` |
-| Tokens | The turn's, from Grok's prompt response |
+For more information about choosing a harness, see [Choose a harness](/harnesses).
 
-Build its image once with `reeval image build` in a project whose config uses `grokBuild()`.
+For more information about model ids and effort values, see [Models and providers for each harness](/harnesses/models).
 
-## The key
+## Credential
 
-reeval passes `XAI_API_KEY` to the adapter explicitly, and Grok gets a placeholder in its place; the real key never enters the container. The gateway swaps it into the `Authorization` header on the requests Grok 1.0.67 sends it on:
+`grokBuild()` reads `XAI_API_KEY` from the host. reeval swaps it into the `Authorization: Bearer` header on Grok Build's requests to `api.x.ai`, `GET /v1/models`, `GET /v1/api-key`, `POST /v1/chat/completions`, and `POST /v1/responses`, and refuses it anywhere else.
 
-| Host | Endpoint |
-|---|---|
-| `api.x.ai` | `GET /v1/models` and `GET /v1/api-key`, as a session starts |
-| `api.x.ai` | `POST /v1/responses` and `POST /v1/chat/completions`, its model calls |
+When xAI refuses the key, Grok Build drops its `xai.api_key` sign-in, and reeval reports that the API rejected `XAI_API_KEY`.
 
-The served model comes from each model call's response, which the gateway reads: Grok's ACP server doesn't name it. The adapter refuses to run in a sandbox that can't broker the key.
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-## Settings
+For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
 
-```toml title="~/.grok/config.toml (in Grok's own home)"
-[models]
-default = "grok-4.6"
-session_summary = "grok-4.6"
+## Rules and skills
 
-[features]
-telemetry = false
-feedback = false
-managed_config = false
-campaigns = false
-title_refresh = false
-turn_summary = false
-session_recap = false
+The Grok Build harness reads rules from the `AGENTS.md` file in the workspace. It reads skills from the workspace's `.grok/skills` directory, the private home's `.grok/skills` directory under the `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home` path, and the `.agents/skills` and `.claude/skills` directories.
 
-[cli]
-auto_update = false
-```
+reeval marks the workspace trusted, since Grok Build ignores an untrusted folder's rules and skills.
 
-Every call, the session's title included, is on the run's model, and Grok makes no telemetry, summary or recap calls, so a turn contacts only `api.x.ai`. Its process also gets `GROK_FOLDER_TRUST=false`, so it reads the workspace's `AGENTS.md` and skills without asking, and `GROK_DISABLE_AUTOUPDATER=1`.
+For more information about writing rules, see [Add project rules](/environments/rules).
 
-Grok runs with a private home, `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home`, so its config and home skills live there, not in the sandbox user's `~/.grok`. The attempt's `context` lists them under that path.
+For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-MCP servers go to Grok over ACP's `session/new`, as stdio, `http` or `sse` servers. Grok offers them to the model through its `search_tool` and `use_tool` tools; the transcript names each call `mcp__<server>__<tool>`, with the tool's own input.
+## MCP servers
 
-## Plugins
+The Grok Build harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes them on the ACP `session/new` call: a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `type`, `url`, and `headers`.
 
-```sh
-grok agent --no-leader --plugin-dir /home/reeval/.reeval/plugins/review stdio
-```
+Grok Build calls a server's tool through its `use_tool` tool, which the transcript names `mcp__<server>__<tool>`, so [`toHaveCalledMcp()`](/reference/matchers#tohavecalledmcp) matches it.
 
-reeval copies each plugin to `~/.reeval/plugins/<name>/` and starts Grok with a `--plugin-dir` for each, which Grok trusts, so its hooks and MCP servers start unprompted. `--no-leader` keeps the session in its own process, which is the one that reads the flag. Grok loads each plugin whole, namespaced: the subagent `review:reviewer`.
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-Grok starts a plugin's MCP servers itself, under the plugin's own server names, so reeval leaves them out of `session/new`; the transcript still names a call `mcp__<server>__<tool>`. Grok keeps only one of two servers with the same name, so the plan refuses a plugin server named like one in `mcp` or in another plugin. As for [Claude Code](/reference/harness/claude-code#plugins), the placed `.mcp.json` runs each through reeval's MCP timer, and a host variable can't go in it, so a plugin server that reads one is refused at plan time; declare that server in `mcp`. Grok doesn't read a plugin's `rules/`, so the plan refuses a plugin that keeps them, as for [Claude Code](/reference/harness/claude-code#plugins).
+## Recorded usage and model
 
-## Errors
+The Grok Build harness records tokens on each turn's `usage`, summed over the turn's model calls. `input` excludes cache reads, so the prompt total is `input` plus `cacheRead`. `cacheWrite` records cache creation tokens, and `reasoning` is part of `output`. `usage` is null when Grok Build reports none.
 
-| Situation | Message |
-|---|---|
-| No model, or one with a provider | `grokBuild() needs an xAI model id, without a provider, since it runs on an xAI API key, e.g. grokBuild({ model: 'grok-4.6' }) (got …)` |
-| An empty `effort` | `grokBuild({ effort }) is the value that CLI takes, e.g. grokBuild({ effort: 'high' }) (got "")` |
-| No key when the attempt starts | `XAI_API_KEY isn't set, so the Grok Build harness can't authenticate. Set it in the environment or .env.local.` |
-| xAI refuses the key | The turn fails with `The API rejected XAI_API_KEY: set a valid key in the environment or .env.local` |
-| A non-Docker sandbox | `The Grok Build harness needs the Docker sandbox: set sandbox: docker() …` |
-| Grok doesn't start | `Grok Build harness failed to start: …` |
+Grok Build's stream names no model, so each turn's `model` and the attempt's `servedModels` come from the model xAI's responses name.
 
-## Related
+For more information about the record fields, see [Run record reference](/reference/record).
 
-- [Harnesses](/guide/harnesses)
-- [Secrets and egress](/guide/secrets-and-egress)
-- [Transcripts](/reference/transcript)
+## Web events
+
+The Grok Build harness records `web-search` events. A search runs through Grok Build's `web_search` tool on xAI's Responses API at `api.x.ai`, one of the harness's automatic egress hosts. The harness records no `web-fetch` events.
+
+For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
+
+For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).

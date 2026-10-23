@@ -1,142 +1,160 @@
 ---
-title: Quickstart
-description: Scaffold a project, then run your first eval on a real agent in Docker.
+title: "Quick start"
+description: "Install reeval and see whether a change helped your coding agent."
 ---
 
-`reeval init` sets up a project with a real agent configured, one environment and an eval that runs in it. Then you build the agent's sandbox image, add its key and run.
+[//]: # (quadrant: Tutorial)
+[//]: # (sidebar: Quickstart)
+[//]: # (owns: Node requirement; the setup skill as one alternative sentence; package install with npm; Docker with Linux containers as the example sandbox; reeval init --harness; the harness key in .env.local; building the sandbox image as one step; reeval doctor; the golden path from install to a variant that helped: the migrate-to-shoehorn skill, a control and a variant, a labelled check, runs: 4, and the helped result)
+[//]: # (terms: runs and --runs mean attempts per cell)
+[//]: # (excludes: project defaults, config discovery and the config helpers -> /reference/config)
+[//]: # (excludes: every reeval init flag -> /reference/cli#reeval-init)
+[//]: # (excludes: every environment variable -> /reference/env-vars)
+[//]: # (excludes: other harnesses -> /harnesses)
+[//]: # (excludes: Podman, and Docker on macOS and Windows -> /sandboxes)
+[//]: # (excludes: image builds -> /sandboxes/toolchains)
+[//]: # (excludes: every doctor flag and the first-run problems -> /reference/cli#reeval-doctor)
+[//]: # (excludes: insights and the analysis model -> /results/analysis)
+[//]: # (excludes: compare options, gates and gate: { passRate } -> /comparisons/compare)
+[//]: # (excludes: how the effect is reached and why four attempts -> /comparisons/statistics)
+[//]: # (excludes: troubleshooting -> not on a Tutorial)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: /, /reference/config, /comparisons/compare, /evals/evaluate, /evals/cases, /evals/judges, /results/analysis, /harnesses)
+[//]: # (outbound: /reference/config, /comparisons/compare, /comparisons/compare#read-the-result, /comparisons/compare#add-more-variants, /core-concepts, /core-concepts#compare, /environments/skills, /results/output, /results/analysis#set-an-analysis-model, /evals/running, /sandboxes, /reference/cli#reeval-doctor, /reference/cli#reeval-init, /reference/env-vars, /comparisons/statistics, /comparisons/statistics#why-four-attempts-a-side, /harnesses, /sandboxes/toolchains, /environments/secrets)
 
-**Before you begin:** Node {{ node }} or later and [Docker](https://docs.docker.com/get-docker/), on Linux, macOS or Windows (Docker Desktop with Linux containers), and a key for the agent you pick.
+reeval runs a coding agent in a sandbox and checks the outcome. Here you run the same harness as a control without the skill and a variant with the skill, then see whether the skill helped.
 
-<Steps>
-  <Step title="Scaffold the project">
-    ```bash
-    npx {{ pkg }} init
-    ```
+To have a coding agent follow these steps, use the [setup skill](https://github.com/invertase/reeval/tree/main/skills/setup).
 
-    It asks which agent to configure. Press Enter for Cursor, or pick Claude Code, Antigravity, OpenCode, Goose, pi, Codex, fx or Grok Build. It ends by checking Docker:
+## Before you begin
 
-    ```text
-    reeval init · .
-      create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
-      create    evals/environments.ts  environment greeter: a package.json and rules
-      create    evals/greet.eval.ts    one eval, in greeter
-      create    .gitignore             node_modules/, .reeval/, .env*
-      create    package.json           script eval, devDependency {{ pkg }}
-      create    tsconfig.json          for editors and tsc: the evals' .ts imports, no emit
-    Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
-    Next:
-      npm install
-      npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
-      npx reeval run          the eval on Cursor, with CURSOR_API_KEY in .env.local
-    Docker is running: ready for npx reeval image build
-    ```
+This example uses Docker with Linux containers for its sandbox. You need these:
 
-    The config also sets `analysis.model`, the model that writes [insights](/concepts/insights): a sentence under each eval's result. In a script, pass `--harness <name>` or `--yes`; `--bare` writes only the config. In an existing project it only adds files and merges into `package.json` and `.gitignore`: see [reeval init](/reference/cli/init).
-  </Step>
-  <Step title="Install">
-    ```bash
-    npm install
-    ```
+| You need | For |
+|---|---|
+| Node {{ node }} or later | reeval's CLI |
+| Docker with Linux containers | the sandbox |
+| An API key for your agent harness | the harness |
 
-    npm, pnpm and Yarn (Plug'n'Play too) all work.
+For more information about other harnesses and their keys, see [Harnesses](/harnesses).
 
-    pnpm's `minimumReleaseAge` refuses a release younger than the policy, with `The latest release of {{ pkg }} is … Published at …`. List {{ pkg }} in `minimumReleaseAgeExclude`, or install it once with `--config.minimum-release-age=0`:
+For more information about Podman or Docker on macOS or Windows, see [Sandboxes](/sandboxes).
 
-    ```bash
-    pnpm add -D {{ pkg }} --config.minimum-release-age=0
-    ```
-  </Step>
-  <Step title="Read the environment and the eval">
-    The environment is what every attempt starts in:
+## 1. Set up reeval
 
-    ```ts title="evals/environments.ts"
-    import { defineEnvironment } from '{{ pkg }}'
+Install reeval in your project:
 
-    /** What every attempt of greet.eval.ts starts in, before the agent's first turn. */
-    export const greeter = defineEnvironment('greeter', {
-      // Written into the workspace.
-      files: { 'package.json': '{ "type": "module" }\n' },
-      // The project's rules: AGENTS.md, or CLAUDE.md for Claude Code.
-      rules: 'Write ES modules with named exports. Add no dependencies.\n',
-    })
-    ```
+```bash
+npm install -D {{ pkg }}
+```
 
-    The eval imports it and runs in it. reeval finds `evals/**/*.eval.ts` by default:
+Create a project for your harness:
 
-    ```ts title="evals/greet.eval.ts"
-    import { evaluate, expect } from '{{ pkg }}'
-    import { greeter } from './environments.ts'
+```bash
+npx reeval init --harness cursor
+```
 
-    const greetsAda = `node -e "import('./greet.js').then((m) =>
-      process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
+The command writes the `reeval.config.ts` and `evals/environments.ts` files and names the key your harness needs:
 
-    evaluate('creates greet.js', { environment: greeter }, async (c) => {
-      const turn = await c.send(
-        'Create greet.js, an ES module exporting greet(name) that returns ' +
-          '"Hello, <name>!". No dependencies.',
-      )
+```text
+  npx reeval run          the eval on Cursor, with CURSOR_API_KEY in .env.local
+```
 
-      await expect(turn).toHaveFile('greet.js', /greet/)
-      await expect(c.exec(greetsAda)).toSucceed()
-    })
-    ```
+Add the key to the `.env.local` file next to the `reeval.config.ts` file:
 
-    `c.send` runs an agent turn. `c.exec` runs a command in the sandbox, and `toSucceed` checks its exit code.
-  </Step>
-  <Step title="Check the plan">
-    `--dry-run` needs no keys and runs nothing:
+```bash title=".env.local"
+CURSOR_API_KEY=replace-with-your-key
+```
 
-    ```bash
-    npx reeval run --dry-run
-    ```
+Build the image your harness runs in:
 
-    ```text
-    plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
-    eval                                    harnesses  variants  runs  attempts  notes
-    evals/greet.eval.ts › creates greet.js  1          —         1     1
-    images  1 sandbox image: 1 to build
-      + docker · cursor  to build: base, not built yet
-    insights  google/gemini-3.8-flash · up to 250k tokens
-    ```
-  </Step>
-  <Step title="Build, add your key and run">
-    ```bash
-    npx reeval image build
-    printf 'CURSOR_API_KEY=...\nGOOGLE_GENERATIVE_AI_API_KEY=...\n' > .env.local
-    npx reeval doctor
-    npx reeval run
-    ```
+```bash
+npx reeval image build
+```
 
-    ```text
-    plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
-    preparing 1 sandbox: docker
-    reeval run: … · 1 eval file
+For more information about image builds, see [Toolchains](/sandboxes/toolchains).
 
-    pass             creates greet.js
-      Yes, the agent passed 1 of 1 tries creating greet.js.
+Check Node, Docker, the image, and your key with the `reeval doctor` command:
 
-    All 1 result passed, successfully creating greet.js.
-    17s · 72k in (31k cached) · 383 out · results .reeval/runs/…/summary.md
-    1 pass
-    ```
+```bash
+npx reeval doctor
+```
 
-    `reeval doctor` names anything missing, such as Docker not running or an unset key, with its fix. The Google key is for insights only: without it the run passes or fails the same, and warns at the start and prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY, or analysis: { insights: false }` above the tally.
-  </Step>
-</Steps>
+The output ends with this line when the machine is ready:
 
-Your first eval passes. reeval saved the run under `.reeval/runs/`, which `reeval init` gitignored with `.env*`.
+```text
+No problems.
+```
 
-<Warning>
-  `reeval run` reads `.env.local` and `.env` from the config's directory, not the current one. Keep them next to `reeval.config.ts`.
-</Warning>
+## 2. Write the evaluation
 
-## Next
+The variant adds Matt Pocock's `migrate-to-shoehorn` skill. Add the control and the variant to the end of the `evals/environments.ts` file:
 
-<CardGroup cols={2}>
-  <Card title="Your first real run" icon="play" href="/guide/first-real-run">
-    What happens in Docker, and how your key stays out of the sandbox.
-  </Card>
-  <Card title="Compare and lift" icon="chart-line" href="/guide/compare">
-    Run with and without a skill and read the lift.
-  </Card>
-</CardGroup>
+```ts title="evals/environments.ts"
+export const plain = defineEnvironment('plain', {
+  files: {
+    'src/user.ts': `import type { Request } from 'express'
+export const getUserId = (req: Request) => req.params.id
+`,
+  },
+})
+
+export const withShoehorn = plain.extendEnvironment(
+  'with-shoehorn',
+  ({ skill }) => ({
+    skills: [
+      skill.git('github:mattpocock/skills', {
+        ref: '5beb35b040e3de97e54fa9e386d7e42d15c295c2',
+        path: 'skills/misc',
+        only: ['migrate-to-shoehorn'],
+      }),
+    ],
+  }),
+)
+```
+
+The prompt doesn't name shoehorn, so the labelled check passes only when the harness uses the skill. Create the evaluation:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain, withShoehorn } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses shoehorn').toHaveFile(
+      'src/user.test.ts',
+      /shoehorn/,
+    )
+  },
+)
+```
+
+For more information about why this evaluation uses four attempts, see [Statistics](/comparisons/statistics#why-four-attempts-a-side).
+
+## 3. Run the compare
+
+Run the eight attempts:
+
+```bash
+npx reeval run shoehorn
+```
+
+For this example on `composer-2.5`, reeval's output code renders the result instead of copying a terminal capture:
+
+```text
+pass             tests build only the request fields they read
+  arm              pass
+  plain            0 of 4
+  with-shoehorn    4 of 4  helped
+  check            plain   with-shoehorn
+  uses shoehorn    0 of 4  4 of 4
+```
+
+The variant passed `uses shoehorn` in 4 of 4 attempts and the control in 0 of 4, so the effect reads `helped`. Your counts can differ.
+
+## Next steps
+
+For more information about adding variants or gates, see [Compare](/comparisons/compare).

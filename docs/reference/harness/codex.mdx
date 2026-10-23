@@ -1,163 +1,105 @@
 ---
-title: codex()
-description: The Codex harness, its options and id, its OpenAI API key, the tokens and served model it records, and the settings that keep it quiet.
+title: "Codex harness"
+description: "Look up options, the key, and recorded events for the Codex harness."
 ---
 
-`codex()` runs OpenAI's [Codex CLI](https://github.com/openai/codex) in the Docker sandbox, one `codex exec --json` process per turn, on an OpenAI API key. `model` is required.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Codex)
+[//]: # (owns: codex factory options; OPENAI_API_KEY)
+[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: plugins -> not documented)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /sandboxes, /harnesses, /harnesses/models, /environments/secrets#keep-api-keys-on-the-host, /reference/env-vars#provider-keys, /environments/rules, /environments/skills, /environments/mcp, /reference/record, /environments/egress#block-non-automatic-hosts, /reference/matchers#tohavesearched)
+
+## codex
+
+`codex()` is one harness factory. It runs OpenAI's Codex CLI as one `codex exec --json` process for each turn, and a later turn resumes the same thread. The turn bypasses approval prompts.
+
+`codex()` runs in the sandbox. For more information about supported sandboxes, see [Choose a sandbox](/sandboxes).
+
+`codex()` is exported from `{{ pkg }}/harness`. The `reeval.config.ts` file passes it as the `harness` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { codex } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: codex({ model: 'gpt-5.6-luna' }),
+  harness: codex({
+    model: 'gpt-5.6-luna',
+    effort: 'medium',
+  }),
 })
 ```
 
-## Options
+The prompt is a shell argument under 128 KiB.
 
-<Property name="model" type="string">
-  An OpenAI model id that runs on the Responses API, such as `gpt-5.6-luna`, without a provider. Required: Codex's own default changes between releases.
+`model` is required. The other fields are optional.
+
+<Property name="model" type="string" required>
+  An OpenAI model id with no provider prefix, passed as `--model`. A missing id, or a provider prefix, fails at plan time with exit code 2.
 </Property>
 
 <Property name="effort" type="string" optional>
-  Reasoning effort as Codex's `model_reasoning_effort`: `low`, `medium`, `high`, `xhigh`, `max` or `ultra`, depending on the model. The record keeps this requested value next to the served `[effort=…]` suffix. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort, written as `model_reasoning_effort` in the `~/.codex/config.toml` file. Values include `low`, `medium`, `high`, `xhigh`, `max`, and `ultra`.
 </Property>
 
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.
+  Cell id. Defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
-  The most Codex attempts at once across the run, for example for your key's rate limits.
+  The most Codex attempts at the same time, across the run.
 </Property>
 
 <Property name="startTimeout" type="Duration" optional>
-  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `codex: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+  How long the session may take to become ready before the attempt is an infra error, after one retry. Defaults to `90s`. A duration, such as `3m`.
 </Property>
 
-## At a glance
+For more information about choosing a harness, see [Choose a harness](/harnesses).
 
-| | |
-|---|---|
-| Import | `'{{ pkg }}/harness'` |
-| Credential | `OPENAI_API_KEY` (an OpenAI API key) |
-| Adapter | `@reeval/harness-codex` 0.1.7, bundled with reeval |
-| CLI | `@openai/codex` 0.163.0, its native Linux build, checked against npm's sha512 |
-| Sandbox | `docker()` only |
-| Image | `reeval-sandbox:codex-0.1.7` |
-| Rules file | `AGENTS.md` |
-| Skills (default placement) | `~/.agents/skills` |
-| Skills (`placement: 'workspace'`) | `.agents/skills` in the workspace |
-| Egress hosts added | `api.openai.com` |
-| Tokens | Reported for each turn, reasoning included |
-| Served model | The dated model and reasoning effort, from each API response |
-| MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
-| Plugins | `skills` and `mcp`, added with `codex plugin add` (below) |
+For more information about model ids and effort values, see [Find harness model settings](/harnesses/models).
 
-Build its image once with `reeval image build` in a project whose config uses `codex()`. `gpt-5.6-luna` is in Codex's catalogue and passes the harness contract; pin the model you mean to measure.
+## Credential
 
-## Why not `@ai-sdk/harness-codex`
+`codex()` reads `OPENAI_API_KEY` from the host. reeval brokers that key on `POST https://api.openai.com/v1/responses` only, over HTTP.
 
-| | `@ai-sdk/harness-codex` | `@reeval/harness-codex` |
-|---|---|---|
-| Runs | Codex 0.155.0 behind `@openai/codex-sdk`, in the release that matches reeval's `@ai-sdk/harness` | `codex exec --json` directly, which that SDK wraps |
-| Codex's own events | None in its stream, so reeval couldn't check Codex's output format or replay real runs | Every one |
-| Reasoning tokens | Dropped | Recorded |
+A missing key, or a key with whitespace or a line break, stops the run with exit code 2 and names `OPENAI_API_KEY`. A rejected key names `OPENAI_API_KEY` on the turn error.
 
-## The key
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-reeval passes `OPENAI_API_KEY` to the adapter explicitly, and Codex gets a placeholder. The adapter gives Codex its own provider for the OpenAI API, with WebSockets off, so every model call is one HTTP request the gateway can read. The gateway swaps the real key in on that request only:
+For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
 
-| Host | Endpoint |
-|---|---|
-| `api.openai.com` | `POST /v1/responses` |
+## Rules and skills
 
-The adapter refuses to run in a sandbox that can't broker the key.
+The Codex harness reads rules from the `AGENTS.md` file in the workspace. Codex reads the `~/.codex/AGENTS.md` file before the workspace file.
 
-## Tokens and the served model
+The Codex harness reads skills from the `.agents/skills` directory in the workspace, from the working directory up to the repo root, and from the `~/.agents/skills` directory in the home directory.
 
-| `model` | Served model recorded |
-|---|---|
-| `gpt-5.6-luna` | `gpt-5.6-luna[effort=medium]` |
-| `gpt-5.4-mini` | `gpt-5.4-mini-2026-03-17[effort=none]` |
+For more information about writing rules, see [Add project rules](/environments/rules).
 
-Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens.
+For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
+## MCP servers
 
-## Turns and settings
+The Codex harness accepts MCP servers on `stdio` and `http`. An `sse` server fails at plan time with exit code 2. reeval writes a `stdio` server as `command`, `args`, and `env`, and an `http` server as `url` and `http_headers`, under `[mcp_servers]` in the `~/.codex/config.toml` file. A call is named `mcp__<server>__<tool>`.
 
-```bash
-codex exec --json --skip-git-repo-check \
-  --dangerously-bypass-approvals-and-sandbox --model <model>
-```
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-Each turn runs that, and later turns add `resume <thread>`, so they continue the conversation. The Docker sandbox is the isolation, so Codex's own sandbox and approvals are off. The prompt is a command-line argument, so it must stay under 128 KiB.
+## Recorded usage and model
 
-Instructions go to `~/.codex/AGENTS.md`, which Codex reads before the workspace's. Codex takes each model's tools and default reasoning effort from the catalogue bundled in its release (`codex debug models --bundled` lists it).
+The Codex harness records one `usage` for the turn. `input` is uncached input, and `cacheRead` and `cacheWrite` hold cached input. `reasoning` is part of `output`. `usage` is null when Codex reports no tokens.
 
-A model the catalogue doesn't list, such as `gpt-5.4-mini` since Codex 0.158.0, runs on fallback settings: no `apply_patch` tool and no reasoning effort. The agent then edits files from the shell, and the served model records `[effort=none]`.
+The egress gateway reads the served model and effort from the response body. The turn's `model` and the attempt's `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the effort in that label. `effort` is the factory value, or null when unset.
 
-The adapter writes `~/.codex/config.toml` with Codex's defaults but for what it sends besides model requests:
+For more information about the record fields, see [Run record reference](/reference/record).
 
-| Setting | Stops |
-|---|---|
-| `analytics.enabled = false` | Analytics to `ab.chatgpt.com` |
-| `features.plugins = false` | The plugin sync from `github.com` and `chatgpt.com`, in a session without [plugins](#plugins) |
+## Web events
 
-With them, a turn contacts only `api.openai.com`, so `egress: 'deny-all'` needs nothing else. Codex's web search and the pages it opens run on OpenAI's side: a restricted policy doesn't limit them, and each is a `web-search` or `web-fetch` event in the [transcript](/reference/transcript).
+The Codex harness records `web-search` and `web-fetch` events. A search stores its text on `query`. An `open_page` or `find_in_page` action with a URL is `web-fetch`. Searches and page opens run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
 
-## MCP
+For more information about a restricted egress policy, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
 
-| Server | In `config.toml` under `mcp_servers` |
-|---|---|
-| `mcp.stdio` | `command`, `args` and `env` |
-| `mcp.http` | `url` and `http_headers` |
-| `mcp.sse` | Refused at plan time, naming the server: Codex has no SSE transport |
-
-## Plugins
-
-```json title="~/.agents/plugins/marketplace.json"
-{
-  "name": "reeval",
-  "plugins": [
-    {
-      "name": "review",
-      "source": { "source": "local", "path": "./.reeval/plugins/review" }
-    }
-  ]
-}
-```
-
-reeval copies each plugin to `~/.reeval/plugins/<name>/` and lists it in Codex's home marketplace. Before the first turn the adapter runs `codex plugin add review@reeval`, offline, which copies the plugin into `~/.codex/plugins/cache/reeval/` and enables it in `config.toml`. Codex loads each plugin namespaced, so its skills don't clash with yours.
-
-A session with plugins sets `features.plugins = true`, and Codex then syncs its plugin catalogue on every turn. Under a restricted policy, its calls to `github.com`, `api.github.com` and `chatgpt.com` are refused and recorded under `egress.expectedBlocked`. In a session without plugins, a refused call to those hosts is the agent's own, so it stays in `egress.blocked`.
-
-Codex starts a plugin's MCP servers itself, so reeval leaves them out of `mcp_servers`. It names them by their own keys, so the transcript names a call `mcp__docs__<tool>`, and the plan refuses a plugin server named like one in the environment's `mcp`, which Codex would drop. As for [Claude Code](/reference/harness/claude-code#plugins), the placed `.mcp.json` runs each through reeval's MCP timer, and a plugin server that reads a host secret is refused at plan time; declare that server in `mcp`. The plan refuses any part Codex doesn't load:
-
-```text
-reeval: evals/p.eval.ts: evaluate("reviews") on codex:gpt-5.4-mini: Codex can't load the review plugin's hooks (hooks/hooks.json): use only: ['skills'], or leave the plugin out of this cell
-reeval: evals/p.eval.ts: evaluate("reviews") on codex:gpt-5.4-mini: Codex can't load the chat plugin's apps: they need a ChatGPT login
-```
-
-A plugin has apps when its manifest names `apps` or it has an `.app.json`. Codex reads a plugin's `.codex-plugin/plugin.json`, or a root `plugin.json` with an Agent Plugins `$schema`, in place of its `.claude-plugin/plugin.json`, so the plan refuses a plugin that has either: reeval couldn't hold Codex to the parts it places.
-
-## Errors
-
-| Situation | Message |
-|---|---|
-| No model, or one with a provider | `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got …)` |
-| No key when the attempt starts | `OPENAI_API_KEY isn't set, so the Codex harness can't authenticate. Set it in the environment or .env.local.` |
-| OpenAI refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. unexpected status 401 Unauthorized: …` |
-| `mcp.sse` (at plan time, exit 2) | `evaluate("<eval>") on codex:<model>: Codex has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
-| A non-Docker sandbox | `The Codex harness needs the Docker sandbox: set sandbox: docker() …` |
-| Codex dies mid-turn | `codex exited with code <n> before ending the turn: …` |
-
-A refused key is retried five times by Codex before the turn fails; each retry is a `retry` event in the transcript.
-
-## Related
-
-- [Harnesses](/guide/harnesses)
-- [Secrets and egress](/guide/secrets-and-egress)
-- [Transcripts](/reference/transcript)
+For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).

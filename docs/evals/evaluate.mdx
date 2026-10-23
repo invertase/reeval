@@ -1,0 +1,120 @@
+---
+title: "Write an evaluation"
+description: "Declare an evaluation that gives your harness one task and checks the outcome."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: Overview)
+[//]: # (owns: evaluate; a name that states the question, which the results and insights lead with; one prompt that asks for the outcome and doesn't name the rule or use its terms, naming the file the task is about rather than the files the rule decides; where evaluation files live, evals/*.eval.ts; pointers to Compare and Checks, since a first evaluation is evaluate plus those two; reeval run --dry-run as the verify step; at the bottom, .skip, .only and .todo, and the timeout option)
+[//]: # (excludes: matchers -> /evals/checks)
+[//]: # (excludes: the control and the variant -> /comparisons/compare)
+[//]: # (excludes: several turns -> /evals/turns)
+[//]: # (excludes: shared options -> /evals/groups)
+[//]: # (excludes: evaluate signature -> /reference/api#evaluate)
+[//]: # (excludes: *.eval.py and reeval.yaml -> not documented)
+[//]: # (inbound: /, /core-concepts, /reference/glossary, /evals/checks, /evals/groups, /environments/mcp)
+[//]: # (outbound: /evals/checks, /evals/turns, /evals/groups, /reference/api#evaluate, /reference/options#timeout, /core-concepts#evaluation, /comparisons/compare, /quickstart)
+
+An evaluation is one `evaluate()` call that gives your harness a task and checks the outcome. For more information about how an evaluation fits into a run, see [Core concepts](/core-concepts#evaluation).
+
+reeval loads every `*.eval.ts` file under the `evals/` folder. This page uses the `plain` and `withShoehorn` environments from [Quick start](/quickstart), which live in the `evals/environments.ts` file.
+
+<Steps>
+<Step title="Name the question">
+
+Pass the evaluation name as the first argument to `evaluate()`. The name states the question the evaluation answers. Results and insights lead with the name, so you know what a pass means before reading any check. In the `evals/shoehorn.eval.ts` file, declare the evaluation:
+
+```ts title="evals/shoehorn.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { plain } from './environments.ts'
+
+evaluate(
+  'tests build only the request fields they read',
+  { environment: plain },
+  async (c) => {
+    await c.send('Add a Vitest test for getUserId in src/user.test.ts.')
+    await expect(c, 'uses fromPartial').toHaveFile(
+      'src/user.test.ts',
+      /fromPartial(<\w+>)?\(/,
+    )
+  },
+)
+```
+
+A name such as `shoehorn test 2` says nothing about what passed. Renaming an evaluation starts its history again, so settle the name before you record runs.
+
+</Step>
+<Step title="Write one prompt">
+
+Ask for the outcome you want in `c.send()`. The checks then decide whether the harness reached it.
+
+Name the file the task is about, such as `src/user.test.ts`. Leave out the rule and its terms, such as shoehorn or `fromPartial`, so a pass shows that the harness found the rule. Don't name a file the rule decides, because the prompt then makes that choice for the harness.
+
+For more information about sending several prompts in one attempt, see [Turns](/evals/turns).
+
+</Step>
+<Step title="Add a compare">
+
+In the `evals/shoehorn.eval.ts` file, replace `environment` with `compare` to measure a change:
+
+```ts title="evals/shoehorn.eval.ts"
+import { plain, withShoehorn } from './environments.ts'
+// ...
+  { compare: { baseline: plain, variants: [withShoehorn] } },
+```
+
+Each `expect` line is a check. The label, such as `'uses fromPartial'`, names the check's row in the result. For more information about every kind of check, see [Checks](/evals/checks).
+
+For more information about the control, the variant, and the effect, see [Compare](/comparisons/compare).
+
+</Step>
+<Step title="Verify with the `reeval run --dry-run` command">
+
+Plan the run with the `reeval run --dry-run` command:
+
+```bash
+npx reeval run --dry-run
+```
+
+The `reeval run --dry-run` command plans the run without starting a sandbox or a harness, so it needs no API key. The `plan` line counts the evaluations, cells, and attempts, and estimates the time:
+
+```text
+plan  run 20261022T172927Z_58d8a94_ada_t5w2 · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+```
+
+A table below the `plan` line lists each evaluation by its file and name. If your evaluation is missing, check that its file ends in `.eval.ts` and is in the `evals/` folder.
+
+</Step>
+</Steps>
+
+To start the attempts, run the same command without `--dry-run`.
+
+## Skip, focus, or plan evaluations
+
+The `evaluate.skip`, `evaluate.only`, and `evaluate.todo` functions change which evaluations run. In the `evals/shoehorn.eval.ts` file, focus one evaluation and plan another:
+
+```ts title="evals/shoehorn.eval.ts"
+evaluate.only(
+  'tests build only the request fields they read',
+  // ...
+)
+evaluate.todo('tests mock only the services they call')
+```
+
+`evaluate.skip` keeps an evaluation in the file without running it. `evaluate.only` runs only the marked evaluations in its own file, and other files still run. reeval refuses `evaluate.only` when the environment contains the `CI` variable. `evaluate.todo` takes a name and no body, and the plan lists it as `todo`.
+
+For more information about sharing options across several evaluations, see [Groups](/evals/groups).
+
+## Set a timeout
+
+The `timeout` option limits each attempt, and it defaults to `'15m'`. The clock starts after the setup commands finish. An attempt that reaches the timeout fails. In the `evals/shoehorn.eval.ts` file, add `timeout` to the options:
+
+```ts title="evals/shoehorn.eval.ts"
+  { compare: { baseline: plain, variants: [withShoehorn] }, timeout: '30m' },
+```
+
+For more information about the accepted durations, see [the `timeout` option](/reference/options#timeout).
+
+## Reference
+
+For more information about every argument `evaluate()` takes, see [Authoring API](/reference/api#evaluate).

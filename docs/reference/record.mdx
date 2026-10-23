@@ -1,72 +1,24 @@
 ---
-title: The run record
-description: Every field of a run's JSON record, and the history folder layout.
+title: "Run record reference"
+description: "Look up every field of the run record."
 ---
 
-Each run is one JSON file, `<runId>.json`, plus optional artifacts in `<runId>/`. The record is immutable once written. `reeval show <run> --json` prints it.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Run record)
+[//]: # (owns: RunRecord and its nested types; record value types)
+[//]: # (excludes: PluginRecord and the plugins field -> not documented)
+[//]: # (excludes: reeval/view helpers -> not documented)
+[//]: # (excludes: querying records -> /reference/query)
+[//]: # (inbound: /core-concepts, /environments/egress, /history, /harnesses/models, /reference/api, /reference/query, /reference/harness/antigravity, /reference/harness/claude-code, /reference/harness/codex, /reference/harness/cursor, /reference/harness/goose, /reference/harness/grok-build, /reference/harness/opencode, /reference/harness/pi)
+[//]: # (outbound: /history, /core-concepts#record, /reference/query, /environments/egress, /reference/options#judge, /reference/options#question)
 
-A record written before a field existed still loads everywhere: reeval reads the missing field as empty (`[]`, or `false` for `todo`). A record from a newer reeval loads too, ignoring fields this reeval doesn't know, unless its `schemaVersion` is higher: then reeval skips it with a warning to upgrade.
+The `reeval show --json` command prints one run's record. The record is the `<runId>.json` file in the `.reeval/runs/` directory, or the same name in the history folder, with artefacts in the `<runId>` directory.
 
-```bash
-npx reeval show latest --json | jq '.evals[] | select(.outcome != "pass") | .id'
-```
+For more information about saving a record, see [Recording](/history). For more information about the saved result, see [Record](/core-concepts#record). For more information about querying recorded runs, see [Query views](/reference/query).
 
-## Layout
+## Value types
 
-```text
-evals/.history/                            commit this
-  .gitignore                               un-ignores recorded files (`*.log` and the rest)
-  <runId>.json                             the record
-  <runId>/summary.md                       the run as Markdown
-  <runId>/insights.json                    insights and remarks (see Insights)
-  <runId>/worktree.patch                   uncommitted changes, when the run was dirty
-  <runId>/<eval-slug>/questions/<n>.json   what compare question n's model was sent
-  <runId>/<eval-slug>/<cell-slug>/<n>/     one directory per attempt
-    transcript.jsonl                       timed agent events (see Transcripts)
-    diff.patch                             the agent's changes, dependency noise dropped
-    judge-input.json                       what each judge call saw
-    setup.log                              each environment setup step's output
-    checks/<n>.log                         each c.exec: command, exit code, stdout, stderr
-    artifacts/<name>.png                   each c.capture() PNG (`history.artifacts` keeps it)
-.reeval/                                       scratch: gitignore it
-  current                                  the run id minted (or resumed) this session
-  staging/<runId>/                         a run in progress, until assemble
-  runs/<runId>.json + <runId>/             every reeval run, same shape
-  debug/<runId>/…                          local debug data, never recorded
-  history.db                               reeval query's projection
-```
-
-The record is `kind: "reeval-run"`, `schemaVersion: 1`. The schema only grows: a newer reeval reads an older record, and an older reeval skips a record with a higher `schemaVersion`, saying to upgrade.
-
-Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
-
-## Reading one
-
-Start at `evals[]` where `outcome != "pass"`, then its `cells[]` for pass@1 (`passRate`), roles and lift, then each failing attempt's `error` and `judgements`. Open the files its `files` points to.
-
-```json title="evals/.history/<runId>.json (trimmed)"
-{
-  "kind": "reeval-run",
-  "schemaVersion": 1,
-  "runId": "20260926T170558Z_bd6205e_ada-lovelace_sycz",
-  "status": "complete",
-  "summary": {
-    "evals": 1, "attempts": 4, "pass": 2, "fail": 2,
-    "notGated": 2, "infraError": 0, "skipped": 0
-  },
-  "evals": [{
-    "id": "evals/skill.eval.ts › house greeting › greets in the house style",
-    "outcome": "pass",
-    "…": "…"
-  }]
-}
-```
-
-## Fields
-
-The type definitions are in `packages/reeval/src/history/types.ts`; the environment, egress and image records are in `src/types.ts`. This section is generated from them.
-
-### Value types
+Each row is one closed alias. `RecordMode` is the `record` option.
 
 [//]: # (generated:record-values)
 
@@ -81,21 +33,19 @@ The type definitions are in `packages/reeval/src/history/types.ts`; the environm
 
 [//]: # (/generated:record-values)
 
-`runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
+`CellRole` is `control` or `variant`. `CellGate` is `all`, `{ passRate: number }`, or `none`. `CheckVerdict` is `discriminates`, `both-pass`, `both-fail`, or `mixed`. `EgressPolicy` is `allow-all`, `deny-all`, or `{ allow: string[] }`. `SkillPlacement` is `harness` or `workspace`. `WebEventType` is `web-search` or `web-fetch`. `CompareCut` is `within` or `across`.
 
-An attempt's `error` is `{ kind, message, prepare?, resource? }`:
+For more information about which hosts a sandbox can reach, see [Egress](/environments/egress).
 
-| Field | Set when | Shape |
-|---|---|---|
-| `prepare` | Its sandbox couldn't be prepared before the run (see [Sandbox providers](/reference/sandbox/providers)), the same on every attempt that needed it | `{ class, stage, ref, cause, log, setBy }`, `class` one of `config`, `transient` or `resource` |
-| `prepare` | A git `workspace` couldn't be fetched | `stage: "workspace"`, the workspace as `ref`, such as `../repo#v9` |
-| `resource` | The kernel killed `kills` processes at the sandbox's memory limit | `{ cause: 'oom', kills }` |
+## Record types
 
-An attempt with `prepare` never started, so it has no artifacts directory. One with `resource` has `kind: infra` and outcome `infra_error`, whatever its checks said, so it's left out of pass rates and lift.
+`kind` is `reeval-run`, and `schemaVersion` is `1`. `git` is null outside a Git repository, or when that repository has no commits. `author` is `ci` on a CI run, and otherwise a slug of the Git user name. `config.concurrency` is how many attempts run together, and `config.configHash` omits it.
+
+For more information about the keys on `stack.judge.state`, see [the `judge` option](/reference/options#judge).
 
 [//]: # (generated:record-types)
 
-### RunRecord
+### `RunRecord`
 
 <Property name="kind" type="'reeval-run'"></Property>
 
@@ -146,7 +96,7 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
 <Property name="cost" type="Cost"></Property>
 
 <Property name="artifacts" type="ArtifactLevel">
-  Which artifacts sit next to this record. Refs to files that weren't kept are removed.
+  Which artefacts sit next to this record. Refs to files that weren't kept are removed.
 </Property>
 
 <Property name="redaction" type="{version: 1}"></Property>
@@ -160,10 +110,10 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
 </Property>
 
 <Property name="errors" type="string[]" optional>
-  Errors outside any attempt, redacted: an eval file that didn't load, a rejection or throw no attempt awaited, a worker that died. Any one fails the run. Unset when there were none.
+  These are redacted errors outside any attempt: an evaluation file that didn't load, a rejection or throw no attempt awaited, or a worker that died. Any one fails the run. Unset when there were none.
 </Property>
 
-### GitInfo
+### `GitInfo`
 
 <Property name="sha" type="string">
   The commit the run executed at: HEAD when `reeval run` started. The later commit that adds the history file is a different, descendant commit.
@@ -172,7 +122,7 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
 <Property name="branch" type="string | null"></Property>
 
 <Property name="dirty" type="boolean">
-  Uncommitted changes, outside `.reeval/` and the history folder, when the run started.
+  Uncommitted changes, outside the `.reeval/` directory and the history folder, when the run started.
 </Property>
 
 <Property name="diffHash" type="string | null">
@@ -180,11 +130,11 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
 </Property>
 
 <Property name="worktreePatch" type="FileRef | null">
-  Those changes as `worktree.patch` in the artifact dir; apply on `sha` to reproduce.
+  Those changes are stored as the `worktree.patch` file in the artefact directory. Applying it to `sha` reproduces the workspace.
 </Property>
 
 <Property name="worktreePatchNote" type="string | null">
-  Why a dirty run has no `worktree.patch`: too large, artifacts: 'none', or it looked like it held a secret (then where, and which rule, never the value).
+  This explains why a dirty run has no `worktree.patch` file: it was too large, `artifacts` was `'none'`, or it looked like it held a secret (then where, and which rule, never the value).
 </Property>
 
 <Property name="commitTime" type="string"></Property>
@@ -195,24 +145,24 @@ An attempt with `prepare` never started, so it has no artifacts directory. One w
   The `origin` URL with any credentials removed.
 </Property>
 
-### Stack
+### `Stack`
 
-What ran and graded the agents: the machine, images, harnesses and judge.
+These fields describe what ran and graded the agents: the machine, images, harnesses, and judge.
 
 <Property name="reeval" type="string">
   The reeval version that wrote the run.
 </Property>
 
 <Property name="node" type="string">
-  `process.versions.node`: under Bun or Deno, the Node version they're compatible with.
+  `process.versions.node`, or the compatible Node version reported by another runtime.
 </Property>
 
 <Property name="runtime" type="{name: string; version: string}" optional>
-  The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in runs recorded before it, which ran on Node.
+  The runtime reeval ran on, `node`, `bun`, `deno`, or another, and its version.
 </Property>
 
 <Property name="language" type="{name: string; version?: string}" optional>
-  The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its toolchain when the runner reports one. Absent in runs recorded before it.
+  The evaluation language, `typescript` for `*.eval.ts` files, and the version of its toolchain when the runner reports one.
 </Property>
 
 <Property name="os" type="string"></Property>
@@ -220,7 +170,7 @@ What ran and graded the agents: the machine, images, harnesses and judge.
 <Property name="arch" type="string"></Property>
 
 <Property name="images" type="Array<AttemptImage &amp; {repoDigests: string[]}>">
-  Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed.
+  Every image an attempt started from. `id` is content-addressed; `repoDigests` exist only after the image is pushed.
 </Property>
 
 <Property name="packages" type="Record<string, string>">
@@ -228,7 +178,7 @@ What ran and graded the agents: the machine, images, harnesses and judge.
 </Property>
 
 <Property name="harnesses" type="Array<{id: string; kind: string; model: string | null; effort: string | null; resolvedModels: string[]; resolvedEffort: string[]}>">
-  Each harness: its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.
+  For each harness, the record includes its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.
 </Property>
 
 <Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string; state?: ResolvedJudgeStateOptions}">
@@ -240,10 +190,10 @@ What ran and graded the agents: the machine, images, harnesses and judge.
 </Property>
 
 <Property name="fingerprintScope" type="string[]">
-  What eval fingerprints hash; fingerprints from different scopes aren't comparable.
+  What evaluation fingerprints hash; fingerprints from different scopes aren't comparable.
 </Property>
 
-### RunSummary
+### `RunSummary`
 
 Counts attempts, except `evals`.
 
@@ -265,9 +215,9 @@ Counts attempts, except `evals`.
 
 <Property name="skipped" type="number"></Property>
 
-### SandboxWarning
+### `SandboxWarning`
 
-A sandbox with more privilege than the default `reeval` user: `docker({ root: true })`, or `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.
+A `SandboxWarning` describes a sandbox with more privilege than the default `reeval` user: `docker({ root: true })` or `docker({ capabilities })`. One per level that set such a sandbox, however many evaluations inherit it.
 
 <Property name="kind" type="'root' | 'capabilities'"></Property>
 
@@ -276,11 +226,11 @@ A sandbox with more privilege than the default `reeval` user: `docker({ root: tr
 </Property>
 
 <Property name="where" type="string">
-  That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`.
+  The value is the level as reeval names it: the `reeval.config.ts` file, `profiles.pr.defaults`, `group("net")`, or `evaluate("installs deps")`.
 </Property>
 
 <Property name="file" type="string | null">
-  The eval file that sets it, for a group or eval; null for the config or a profile.
+  The evaluation file that sets it, for a group or evaluation; null for the config or a profile.
 </Property>
 
 <Property name="capabilities" type="string[]" optional>
@@ -291,7 +241,7 @@ A sandbox with more privilege than the default `reeval` user: `docker({ root: tr
   The line reeval prints, after `WARNING: ` (root) or `warning: ` (capabilities).
 </Property>
 
-### Cost
+### `Cost`
 
 The tokens the run used, as the harnesses count them; reeval prices nothing.
 
@@ -307,18 +257,18 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 
 <Property name="source" type="'reported' | 'unreported'"></Property>
 
-### EvalEntry
+### `EvalEntry`
 
 <Property name="id" type="string">
   `file › group › … › name`, as shown.
 </Property>
 
 <Property name="key" type="string">
-  What the eval is matched on across runs; currently the same as `id`.
+  Used to match an evaluation across runs; equal to `id`.
 </Property>
 
 <Property name="slug" type="string">
-  Directory name inside the artifact directory, from `key`.
+  Directory name inside the artefact directory, from `key`.
 </Property>
 
 <Property name="file" type="string"></Property>
@@ -332,17 +282,17 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="sources" type="Array<{path: string; sha256: string}>">
-  The eval file and every local file it imports, directly or not, by content hash.
+  The evaluation file and every local file it imports, directly or not, by content hash.
 </Property>
 
 <Property name="tags" type="string[]"></Property>
 
 <Property name="compare" type="EvalCompareMeta" optional>
-  The baseline environment, when the eval uses `compare`.
+  The baseline environment, when the evaluation uses `compare`.
 </Property>
 
 <Property name="outcome" type="Outcome">
-  Over gated cells: `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.
+  Over gated cells, the outcome is `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the evaluation.
 </Property>
 
 <Property name="todo" type="boolean">
@@ -358,16 +308,16 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 <Property name="attempts" type="AttemptRecord[]"></Property>
 
 <Property name="answers" type="CompareAnswer[]" optional>
-  The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons). Each answer's `input` is `<eval-slug>/questions/<n>.json`: every call its model was sent, per pair and order, secrets masked and screenshots as refs; unset where the eval's files weren't kept.
+  The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, and a sample of reasons). Each answer's `input` is the `<eval-slug>/questions/<n>.json` file: every call its model was sent, per pair and order, with secrets masked and screenshots as refs; unset where the evaluation's files weren't kept.
 </Property>
 
 <Property name="family" type="{id: string; name: string; case: number; cases: number}" optional>
   Set on each case of a pooled `evaluate.each`; `RunRecord.families` has the suite.
 </Property>
 
-### CellRecord
+### `CellRecord`
 
-One harness and environment of an eval, and how its attempts went.
+One harness and environment of an evaluation, and how its attempts went.
 
 Also has every field of `Cell`.
 
@@ -392,7 +342,7 @@ Also has every field of `Cell`.
 </Property>
 
 <Property name="gate" type="CellGate">
-  How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval.
+  How the attempts decide the cell's outcome; `'none'` when it doesn't fail the evaluation.
 </Property>
 
 <Property name="overrides" type="string[]">
@@ -420,10 +370,10 @@ Also has every field of `Cell`.
 <Property name="lift" type="Lift" optional></Property>
 
 <Property name="checks" type="CellCheck[]" optional>
-  Each check (assertion label) seen in any attempt of the eval, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
+  Each check (assertion label) seen in any attempt of the evaluation, over this cell's counted attempts; on a variant cell, the control's beside it. Unset when no attempt recorded any.
 </Property>
 
-### Lift
+### `Lift`
 
 A variant cell's pass@1 against the control's, on the same harness and sandbox.
 
@@ -453,9 +403,9 @@ A variant cell's pass@1 against the control's, on the same harness and sandbox.
   Set when the compare has a `minLift`; the cell fails when `interval.lo` is below it.
 </Property>
 
-### FamilyRecord
+### `FamilyRecord`
 
-A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an eval.
+A pooled `evaluate.each`: its cases as samples of one suite. Each case is also an evaluation.
 
 <Property name="id" type="string">
   `file › group › … › template`.
@@ -466,7 +416,7 @@ A pooled `evaluate.each`: its cases as samples of one suite. Each case is also a
 <Property name="group" type="string[]"></Property>
 
 <Property name="name" type="string">
-  The name template, e.g. `fixes $id`.
+  The name template, for example `fixes $id`.
 </Property>
 
 <Property name="cases" type="number">
@@ -474,7 +424,7 @@ A pooled `evaluate.each`: its cases as samples of one suite. Each case is also a
 </Property>
 
 <Property name="ran" type="number">
-  Cases with an eval in this run; fewer when a filter or tag left some out.
+  Cases with an evaluation in this run; fewer when a filter or tag left some out.
 </Property>
 
 <Property name="rates" type="FamilyRate[]">
@@ -489,7 +439,7 @@ A pooled `evaluate.each`: its cases as samples of one suite. Each case is also a
   `fail` when a lift is below its `minLift`. The cases still pass or fail on their own.
 </Property>
 
-### FamilyRate
+### `FamilyRate`
 
 One cell's pass@1 over a family's cases.
 
@@ -513,7 +463,7 @@ One cell's pass@1 over a family's cases.
 
 <Property name="interval" type="FamilyInterval"></Property>
 
-### FamilyLift
+### `FamilyLift`
 
 A variant cell against its control over a family's cases, paired by case.
 
@@ -565,7 +515,7 @@ A variant cell against its control over a family's cases, paired by case.
 
 <Property name="effort" type="FamilyEffort" optional></Property>
 
-### FamilyInterval
+### `FamilyInterval`
 
 A 95% interval on a pooled rate or difference.
 
@@ -576,10 +526,10 @@ A 95% interval on a pooled rate or difference.
 <Property name="level" type="0.95"></Property>
 
 <Property name="method" type="'wilson' | 'newcombe-paired' | 't-cases'">
-  `wilson` / `newcombe-paired`: one counted attempt a case and side, so each case is one Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with attempts within a case never counted as independent.
+  `wilson` or `newcombe-paired`: one counted attempt a case and side, so each case is one Bernoulli trial (or pair). `t-cases`: several, so a t interval over the cases' pass@1, with attempts within a case never counted as independent.
 </Property>
 
-### FamilyEffort
+### `FamilyEffort`
 
 The variant's effort against the control's, paired by case.
 
@@ -591,7 +541,7 @@ The variant's effort against the control's, paired by case.
   Over the cases where every counted attempt reported usage; omitted when none did.
 </Property>
 
-### FamilyEffortMetric
+### `FamilyEffortMetric`
 
 One effort metric over a family's paired cases.
 
@@ -611,7 +561,7 @@ One effort metric over a family's paired cases.
   `insufficient` below 6 non-zero differences, where the exact test can't reach 0.05. `fewer` and `more` are the test's direction (which side's differences rank higher), not the median's.
 </Property>
 
-### FingerprintParts
+### `FingerprintParts`
 
 Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
@@ -630,21 +580,21 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="agentCli" type="string | null"></Property>
 
 <Property name="judge" type="string">
-  Over the judge's model, threshold and version, and the config's `state` when it sets one.
+  Over the judge's model, threshold, and version, and the config's `state` when it sets one.
 </Property>
 
 <Property name="context" type="string">
   Over the attempt's context files.
 </Property>
 
-### AttemptRecord
+### `AttemptRecord`
 
 <Property name="key" type="string">
   `<eval key> # <cell key>#<n>`: unique in the run.
 </Property>
 
 <Property name="id" type="string">
-  `<cell key>#<n>`: unique in its eval.
+  `<cell key>#<n>`: unique in its evaluation.
 </Property>
 
 <Property name="cell" type="string">
@@ -662,7 +612,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="startedAt" type="string | null"></Property>
 
 <Property name="imageId" type="string | null">
-  The image the container started from, in `stack.images`; null for the fake sandbox.
+  The image the container started from, in `stack.images`; null when the sandbox doesn't start from an image.
 </Property>
 
 <Property name="env" type="{vars: string[]; secrets: string[]; brokered: string[]}">
@@ -670,7 +620,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="context" type="ContextFile[]">
-  Skills, rules and MCP config visible to the agent in its sandbox, by content hash.
+  Skills, rules, and MCP config visible to the agent in its sandbox, by content hash.
 </Property>
 
 <Property name="egress" type="EgressRecord | null">
@@ -678,7 +628,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="servedModels" type="string[] | null">
-  The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.
+  The models served by the harness's API calls, as observed by the egress gateway. Values may come from requests or responses and include reported effort; null when no model was named or recorded.
 </Property>
 
 <Property name="effort" type="string | null">
@@ -686,7 +636,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="servedEffort" type="string | null">
-  The reasoning effort the harness's API said it ran at, from `servedModels` / each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those labels name none. Fast (`[fast=true]`) is not this.
+  The reasoning effort the harness's API said it ran at, from `servedModels` or each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those labels name none. Fast (`[fast=true]`) is not this.
 </Property>
 
 <Property name="outcome" type="Outcome"></Property>
@@ -696,7 +646,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="durationMs" type="number"></Property>
 
 <Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null; mcpStartup?: McpStartup[]}>">
-  `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
+  `text` is the agent's final message, cut at 8 KB; the whole of it is in the `transcript.jsonl` file. `mcpStartup` times each stdio MCP server's start in the turn (`McpStartup`).
 </Property>
 
 <Property name="usage" type="TokenUsage | null">
@@ -704,13 +654,13 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="captureUse" type="{model: string; moves: number; usage: TokenUsage | null}" optional>
-  Tokens the capture vision loop used. Infrastructure only: never folded into `usage`, effort, compare or lift.
+  Tokens the capture vision loop used. Infrastructure only: never included in `usage`, effort, compare, or lift.
 </Property>
 
 <Property name="timings" type="PhaseTimings"></Property>
 
 <Property name="activity" type="{tools: number; fileEdits: number; webSearches: number | null; webFetches: number | null; reasoningMs: number; stalledTools: number; maxToolMs: number | null}">
-  Counts from the transcript, so a run's shape is visible without reading it. `webSearches` includes refused searches.
+  Counts from the transcript, so the attempt's activity is available without reading the transcript. `webSearches` includes refused searches.
 </Property>
 
 <Property name="judgements" type="JudgementRecord[]"></Property>
@@ -726,15 +676,15 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="changedFiles" type="Array<FileChange &amp; {count?: number}>">
-  Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`.
+  Files under a dependency directory, such as the `node_modules/` directory or `.venv/` directory, collapse to one entry with `count`.
 </Property>
 
 <Property name="files" type="AttemptFiles"></Property>
 
-### AttemptFiles
+### `AttemptFiles`
 
 <Property name="setupLog" type="FileRef" optional>
-  Each environment setup step's command, exit code, duration and output.
+  Each environment setup step's command, exit code, duration, and output.
 </Property>
 
 <Property name="transcript" type="FileRef" optional></Property>
@@ -748,12 +698,12 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="judgeInput" type="FileRef" optional></Property>
 
 <Property name="artifacts" type="ArtifactRef[]" optional>
-  PNGs from `c.capture()`, under `artifacts/<name>.png`.
+  PNGs from `c.capture()`, under the `artifacts/<name>.png` path.
 </Property>
 
-### ArtifactRef
+### `ArtifactRef`
 
-A generic attempt file from `c.capture()` (and later video).
+A generic attempt file from `c.capture()`.
 
 Also has every field of `FileRef`.
 
@@ -765,7 +715,7 @@ Also has every field of `FileRef`.
   Set when the file came from `c.capture()`.
 </Property>
 
-### JudgementRecord
+### `JudgementRecord`
 
 <Property name="question" type="string"></Property>
 
@@ -782,7 +732,7 @@ Also has every field of `FileRef`.
 </Property>
 
 <Property name="key" type="string">
-  `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series).
+  `<index>:<sha256(question) prefix>`: the same question at the same place in the evaluation, so a verdict can be followed across runs (and an edited question starts a new series).
 </Property>
 
 <Property name="retries" type="JudgeRetry[]" optional>
@@ -793,14 +743,14 @@ Also has every field of `FileRef`.
   Captures this call sent the judge as file parts, when any.
 </Property>
 
-### JudgeArtifactRef
+### `JudgeArtifactRef`
 
-A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.png`.
+A capture this judge call sent as a file part. Bytes live in the `artifacts/<name>.png` file.
 
 <Property name="name" type="string"></Property>
 
 <Property name="path" type="string">
-  `artifacts/<name>.png` under the attempt directory.
+  The `artifacts/<name>.png` path under the attempt directory.
 </Property>
 
 <Property name="sha256" type="string"></Property>
@@ -809,7 +759,7 @@ A capture this judge call sent as a file part. Bytes live in `artifacts/<name>.p
 
 <Property name="mediaType" type="'image/png'"></Property>
 
-### JudgeRetry
+### `JudgeRetry`
 
 One failed judge try that was retried, and the backoff before the next.
 
@@ -817,9 +767,9 @@ One failed judge try that was retried, and the backoff before the next.
 
 <Property name="delayMs" type="number"></Property>
 
-### FileRef
+### `FileRef`
 
-`path` is relative to the run's artifact directory; `sha256` is of the bytes on disk.
+`path` is relative to the run's artefact directory; `sha256` is of the bytes on disk.
 
 <Property name="path" type="string"></Property>
 
@@ -827,25 +777,31 @@ One failed judge try that was retried, and the backoff before the next.
 
 <Property name="bytes" type="number"></Property>
 
-### ContextFile
+### `ContextFile`
 
 <Property name="path" type="string"></Property>
 
 <Property name="sha256" type="string"></Property>
 
-### Cell
+### `Cell`
 
-One cell of an eval: a harness, an environment (`-` when none is set) and that environment's image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.
+A cell of an evaluation combines a harness, an environment (`-` when none is set), and that environment's sandbox id. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.
 
-<Property name="key" type="string"></Property>
-
-<Property name="harness" type="string"></Property>
-
-<Property name="environment" type="string">
-  The environment's own name, also on a variant cell (`with-house-greeting`, with no prefix).
+<Property name="key" type="string">
+  The harness id, the environment name, and the sandbox id, joined with `/`.
 </Property>
 
-<Property name="sandbox" type="string"></Property>
+<Property name="harness" type="string">
+  The harness id: `id` when set, otherwise `<kind>:<model>` (`<kind>` alone without a model), with `[effort=<value>]` appended whenever `effort` is set.
+</Property>
+
+<Property name="environment" type="string">
+  The environment's own name, also on a variant cell (`with-skill`, with no prefix).
+</Property>
+
+<Property name="sandbox" type="string">
+  The sandbox id is `id` when set, or `fake` for the fake sandbox. A Docker sandbox starts with the engine (`docker` by default). It adds `:` and the sanitised final component of `image` or `from`, or for `dockerfile` the sanitised filename (the parent directory name when that filename is `Dockerfile` and a parent is present). Non-empty `install` steps append `+` and an eight-character hash.
+</Property>
 
 <Property name="role" type="CellRole"></Property>
 
@@ -853,7 +809,7 @@ One cell of an eval: a harness, an environment (`-` when none is set) and that e
   The variant's name, for variant cells.
 </Property>
 
-### EnvironmentRecord
+### `EnvironmentRecord`
 
 An environment as it was applied, without secret values.
 
@@ -864,23 +820,19 @@ An environment as it was applied, without secret values.
 </Property>
 
 <Property name="overrides" type="string[]">
-  Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`.
+  Keys a later layer replaced, for example `env.KEY`, `skills.typescript`, `mcp.docs`, or `rules`.
 </Property>
 
 <Property name="digest" type="string">
-  Covers every field but the rules file's path; secret names are included, values never are. The image is the sandbox's.
+  Covers every field but the rules file's path; secret names are included; values never are. The image is the sandbox's.
 </Property>
 
 <Property name="setup" type="string[]"></Property>
 
-<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]; plugin?: string}>"></Property>
+<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]}>"></Property>
 
 <Property name="mcp" type="string[]">
-  Every MCP server, a plugin's as `<plugin>:<server>`.
-</Property>
-
-<Property name="plugins" type="PluginRecord[]" optional>
-  The plugins placed, each with what it placed; in the digest. Unset when there are none.
+  The names of the MCP servers the agent was given.
 </Property>
 
 <Property name="files" type="Array<{path: string; sha256: string}>"></Property>
@@ -902,44 +854,12 @@ An environment as it was applied, without secret values.
 </Property>
 
 <Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
-  The git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to and the hash of the tree that was copied in, which is in the digest.
+  This records the Git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to, and the hash of the tree that was copied in, which is in the digest.
 </Property>
 
-### PluginRecord
+### `EgressRecord`
 
-A plugin as an attempt placed it.
-
-<Property name="name" type="string">
-  The manifest's `name`.
-</Property>
-
-<Property name="source" type="string">
-  Where it came from, e.g. `local:plugins/review`, `github:acme/agent-plugins#v1:plugins/review` or `npm:@acme/review@1.2.0`; for a marketplace entry, the entry's own source.
-</Property>
-
-<Property name="marketplace" type="{name: string; source: string; commit: string | null} | null">
-  The marketplace it was listed in, with its `marketplace.json` name, its source as written (`github:acme/agent-plugins#v3`, `npm:@acme/plugins@2.0.0`) and the commit a git one resolved to (null for npm); null when the plugin was named directly.
-</Property>
-
-<Property name="commit" type="string | null">
-  The commit a git source resolved to (the marketplace's, for an entry inside it); null for a local or npm one.
-</Property>
-
-<Property name="sha256" type="string">
-  The hash of the files placed.
-</Property>
-
-<Property name="build" type="string | null">
-  The tag of the image layer its build ran in (`reeval-plugin:…`); null without a build.
-</Property>
-
-<Property name="parts" type="{skills: string[]; agents: string[]; commands: string[]; hooks: string[]; mcp: string[]; rules: boolean}">
-  What it placed: skill, agent, command and MCP server names, hook events, and whether it had rules.
-</Property>
-
-### EgressRecord
-
-An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.
+An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked`, so `blocked` contains only unexpected refusals.
 
 <Property name="policy" type="EgressPolicy"></Property>
 
@@ -953,7 +873,7 @@ An attempt's network traffic. `allowed` is every host a restricted policy let th
 
 <Property name="expectedBlocked" type="Array<{host: string; port: number; connections: number; reason: string}>"></Property>
 
-### AttemptImage
+### `AttemptImage`
 
 The image an attempt's container started from, and how reeval made it.
 
@@ -966,7 +886,7 @@ The image an attempt's container started from, and how reeval made it.
 <Property name="agentCli" type="string | null"></Property>
 
 <Property name="base" type="string">
-  The harness image `install` and plugin builds were baked onto: `ref` itself without either.
+  The harness image the `install` layers were baked onto: `ref` itself without any.
 </Property>
 
 <Property name="install" type="string[]">
@@ -981,9 +901,9 @@ The image an attempt's container started from, and how reeval made it.
   `docker({ from })`: the base as written and the digest the image was built on (a local-only base's image id); `reeval image build` rebuilds it when the tag has moved since.
 </Property>
 
-### PhaseTimings
+### `PhaseTimings`
 
-Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes.
+The duration of each evaluation phase, in ms. `agentMs` is the harness turns; `diffMs` reading changes.
 
 <Property name="setupMs" type="number"></Property>
 
@@ -995,15 +915,15 @@ Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` readi
 
 <Property name="judgeMs" type="number"></Property>
 
-### FileChange
+### `FileChange`
 
 <Property name="path" type="string"></Property>
 
 <Property name="status" type="'added' | 'modified' | 'deleted'"></Property>
 
-### McpStartup
+### `McpStartup`
 
-One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that runs a process per turn (Antigravity, pi, Codex) starts its servers on every turn; one that keeps a session starts them once, on the first. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.
+One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start order), timed by reeval's MCP timer, which every stdio server runs through. An agent CLI that starts one process per turn starts its servers on every turn; a CLI that keeps a session starts them on the first turn only. A server that doesn't answer within 60s fails the attempt as an infra error naming it; one whose client closes it first doesn't. `mcpStartup` is absent when the environment has no stdio MCP server, or the sandbox has no `node` to run the timer.
 
 <Property name="server" type="string">
   The server's name in the environment's `mcp`.
@@ -1015,81 +935,58 @@ One start of a stdio MCP server during a turn (`turns[].mcpStartup`, in start or
 
 [//]: # (/generated:record-types)
 
-## Insights
+## `RunnerInfo`
 
-`reeval run` writes `<runId>/insights.json` beside the record once its attempts finish, when `analysis.model` is set, and `reeval record` copies it; `reeval analyze <run> --insights` writes it for a run without one, and finishes one with `stopped`, `failed` or `budget.skipped` evals, replacing it whole. A complete one is written once: delete it to write new ones. `reeval show` prints it with the run, on one line a sentence. It's `kind: "reeval-insights"`, `schemaVersion: 1`, and grows like the record. One from a newer reeval, or one that isn't valid JSON (a merge conflict), is skipped with a warning and the run prints without it.
+On a CI run, `RunRecord.runner` has `kind` `ci` and `provider` `github`, `gitlab`, or `unknown`. `runUrl`, `attempt`, and `pr` (`{ number, baseRef }`) are what that provider reports, or null. A local run has `kind` `local` and `hostHash`, a hash of the host name.
 
-A run's [remarks](/reference/cli/run#remarks) go in the same file. A run that raises remarks but writes no insights (no `analysis.model`, `--no-insights`, or insights that fail or are skipped) writes one with no model's words (`model` and `promptVersion` `"none"`, `headline` `null`, `evals` empty), and `reeval analyze --insights` replaces it, keeping its remarks. `reeval record` copies a model's file byte for byte, so one written for other facts is still left out; a remarks-only one gets the recorded record's `factsHash`.
+## `TokenUsage`
 
-```json title="evals/.history/<runId>/insights.json (trimmed)"
-{
-  "kind": "reeval-insights",
-  "schemaVersion": 1,
-  "runId": "20261020T231903Z_2e69951_cursor-agent_8s1m",
-  "model": "fake",
-  "promptVersion": "insights-v6-9a7a2325",
-  "factsHash": "sha256:0d56643daa2ea23e32a66492facca73fc5b3a85c6051d4f8690abec7c5281a18",
-  "usage": { "inputTokens": 0, "outputTokens": 0, "costUsd": null },
-  "headline": {
-    "text": "9 fail; start with \"recommends Genkit for $task\".",
-    "cites": ["evals%2Fchoose.eval.ts › recommends Genkit for $task"]
-  },
-  "evals": [{
-    "evalId": "evals%2Fchoose.eval.ts › recommends Genkit for $task",
-    "intent": {
-      "job": "choose", "across": "none",
-      "question": "Does the agent pick Genkit?",
-      "subject": { "tool": "Genkit" },
-      "name": "states-intent", "key": "2c0c59de…"
-    },
-    "answer": {
-      "text": "Not for a Python agent: 0 of 2 tries passed.",
-      "cites": ["evals%2Fchoose.eval.ts › recommends Genkit for $task/a Python agent"]
-    },
-    "findings": [],
-    "rows": [{ "row": "…/a Python agent", "text": "It also names LangChain, …", "cites": ["…"] }],
-    "namedTools": [{ "attempt": "…/a chat app/advisor+-+fake#1", "tools": ["Genkit", "LangChain"] }]
-  }],
-  "remarks": [],
-  "validation": { "dropped": 0, "regenerated": 0, "drops": [] }
-}
-```
+`TokenUsage` is the counts on `Cost.usage`, an attempt's `usage`, and a turn's `usage`. `input` excludes `cacheRead` and `cacheWrite`. The prompt total adds both. `reasoning` is part of `output`, or null when none are reported.
 
-| Field | What it holds |
-|---|---|
-| `model`, `promptVersion` | The analysis model and the prompts' version that wrote it: their revision and the first 8 hex characters of the eval rubric's sha256 |
-| `factsHash` | `sha256:` of the run's facts as canonical JSON; when the facts no longer match, `reeval show` leaves the insights out with a note |
-| `usage` | Tokens over every call; `outputTokens` includes `reasoningTokens`, the model's thinking, when it reports them; `costUsd` is `null`, since reeval has no prices |
-| `budget` | `maxTokens`, the `analysis.maxTokens` of the `reeval run` or `reeval analyze --insights` that wrote the file, and `skipped`, the evals it ran out before |
-| `failed` | The evals whose calls failed twice (an error, a reply cut off at the output cap, or a call past its timeout), each with `evalId` and the last `error`; they print their facts. Absent when none failed |
-| `stopped` | Set when Ctrl-C or SIGTERM stopped insights before every eval had finished: `signal` (`SIGINT` or `SIGTERM`) and `skipped`, the evals that hadn't. Absent otherwise; a stop during the headline call only leaves `headline` `null` |
-| `headline` | One sentence on the run, printed before the tally, or `null` |
-| `evals[].evalId` | The eval's or family's path: its file and name, `›` between them |
-| `evals[].intent` | The classification: `job` (`choose`, `finish` or `other`), `across`, `question`, `subject` (`tool`, `change`), `name` (`states-intent`, `no-intent` or `contradicts`) and `key`, the hash of what it read |
-| `evals[].answer` | Its answer, at most two sentences, or `null` |
-| `evals[].findings` | At most three sentences under a choose or finish eval that measures a change |
-| `evals[].rows` | A sentence under each row it names (`row`, a fact path) |
-| `evals[].namedTools` | On a choose eval, the tools each attempt's final message names (`<cell path>#<n>`) |
-| `remarks` | Each remark the run raised, including ones an earlier run printed first: `id` (one per kind and eval: for reeval's own, per eval version and, for `slow-mcp-start`, server; for a model's, per quote), `evalId`, `kind`, `severity` (`concern` or `suggestion`), `text`, `source` (a model's: `at`, `source:<file>#L<n>`, and `quote`, copied exactly from that line), `evidence` (fact paths, or `<cell path>#<n>` for an attempt), `fix` (`at`, `source:<file>#L<n>`, and `edit`; a model's `edit` is empty when it gave none, and its `at` the quoted line when it named no line), `origin` (`deterministic` or `model`), `firstSeenRun` (the first run that printed it, else this run) and `printed` (whether this run's `reeval run` output printed it; `false` when an earlier run printed it, or when the cap or a run without `-v` left it out, so a later run prints it; missing in files from an older reeval, read as printed in `firstSeenRun` only) |
-| `validation` | `dropped`, the sentences the checks dropped, and `regenerated`, those asked for again |
-| `validation.drops` | Each dropped sentence or model remark: `slot` (`<eval> › answer`, `› finding <n>`, `› row <path>`, `› named tools <attempt>`, `› remark <kind>` or `headline`), `text` and `reason`; absent in files written before it |
-| `error` | Set when writing the insights failed; `reeval show` prints it instead |
+## `AttemptError`
 
-Each sentence is `{ text, cites }`. A cite is a fact path (`<eval>`, `<eval>/<cell>`, `<eval>/<cell>/checks/<label>`, `<eval>/<cell>/effort`, `<family>/<case>`) or a transcript line, `transcript:<cell path>#<n>#L<line>`. Paths percent-encode `%`, `/` and `+` inside each part.
+`AttemptRecord.error` is why an attempt failed, or null. `kind` is an `ErrorKind`. `message` is the text. `prepare` is set when sandbox preparation fails. `resource` is set when the sandbox runs out of a resource.
 
-## What a record can't pin down
+## `PrepareFailureRecord`
 
-| Not pinned | Why |
-|---|---|
-| The agent's output | It's sampled |
-| The model behind a name | Providers update models in place |
-| Web search, package registries | Network-dependent |
-| Locally built images | They have an image id but no registry digest |
+`AttemptError.prepare` records a sandbox preparation that failed. `class` is `config`, `transient` after the retries, or `resource`. `stage` is `image`, `from`, `dockerfile`, `harness`, `install`, or `workspace`. `ref` is what was prepared, `repo#ref:path` for a Git workspace. `cause` is `enospc`, `oom`, or null. `log` is the build log or null, and `setBy` names the levels that set the sandbox.
 
-A rerun can differ on any of these even when every fingerprint matches.
+## `ResourceFailureRecord`
 
-## Related
+`AttemptError.resource` means the sandbox ran out of memory, and the outcome is `infra_error`. `cause` is `oom`. `kills` is how many processes the kernel killed.
 
-- [reeval show, compare](/reference/cli/history)
-- [Transcripts](/reference/transcript)
-- [Fingerprints and drift](/concepts/fingerprints)
+## `AssertionRecord`
+
+An `AssertionRecord` is one settled `expect` or `expect.soft` call on `AttemptRecord.assertions`. `checks` on that attempt lists each `c.exec` command.
+
+`label` is the supplied `expect` label. Without one, it is the matcher plus its first argument or named subject, cut at 60 characters. Repeats get ` #2`, ` #3`, and later suffixes. `labelled` is true when the evaluation supplies a label. `matcher` is the matcher path. `status` is `pass`, `fail`, or `error`. `soft` marks `expect.soft`. `message` is cut at 1 KB. `durationMs` is set on async matchers only.
+
+## `StartRetry`
+
+A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harness kind>: session did not become ready within <startTimeout>`. `waitedMs` is how long that start waited.
+
+## `CellCheck`
+
+`CellRecord.checks` tallies one label over the cell's counted attempts. `pass`, `fail`, `error`, and `notRun` are those counts, and `control` repeats them for the control. `verdict` is `discriminates` when every answered instance passes on one side and fails on the other, `both-pass` when every answered instance passes on both sides, `both-fail` when every answered instance fails on both sides, or `mixed` otherwise. It is absent when either side has no pass or fail.
+
+## `EvalCompareMeta`
+
+`EvalEntry.compare` names the control when the evaluation uses `compare`. `baseline` is that environment's name. When `compare.baseline` was omitted, `from` is `environment` for the cascaded environment, or `empty` for an empty environment named `baseline`.
+
+## `CompareAnswer`
+
+`EvalEntry.answers` holds one `CompareAnswer` per compare question. `outcome` and `passRate` do not depend on it. `question`, `model`, and `resolvedModel` identify the question and the model. `votes` holds `PairVote` values, and `rates` holds `wins` out of `n` per `cut` and `name`. `error` is set when the model call fails. `artifacts` is `true` or capture names. `input` is a `FileRef` for the `questions/<n>.json` file. `stateOptions` is the state each side showed.
+
+For more information about `stateOptions`, see [the `question` option](/reference/options#question).
+
+## `PairVote`
+
+A `PairVote` judges one pair in one order. `cut` is `within` (two environments, one harness) or `across` (two harnesses, one environment). `harness` is set on `within`, and `arm` names the environment on `across`. `run` starts at 1. `a` and `b` name the sides, and `winner` is `a`, `b`, or `tie`. `swapped` is true when `b` was shown first. `reason` and `artifacts` are omitted when absent.
+
+## `AttemptRecord.turns`
+
+A turn's `usage` and `model` are null when the harness reports neither. `error` is the first error, cut at 1 KB, or null. `unreported` lists `web-search` or `web-fetch` when that event cannot be reported.
+
+## `AttemptRecord.activity`
+
+`webSearches` and `webFetches` are null when a turn cannot report them. `stalledTools` counts stalled tool events, and `maxToolMs` is the longest tool duration, or null.

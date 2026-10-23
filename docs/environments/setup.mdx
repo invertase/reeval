@@ -1,0 +1,72 @@
+---
+title: "Run setup commands"
+description: "Install dependencies or seed data in the sandbox before the agent starts."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: Setup commands)
+[//]: # (owns: setup; setup timeout and cwd)
+[//]: # (excludes: toolchains baked into the image -> /sandboxes/toolchains)
+[//]: # (excludes: setup field reference -> /reference/environment#environment-fields)
+[//]: # (inbound: /environments, /sandboxes/toolchains, /recipes/sdk)
+[//]: # (outbound: /sandboxes/toolchains, /reference/environment#environment-fields, /environments/secrets, /results/debugging)
+
+The `setup` field lists shell commands that run in the sandbox before the agent's first turn, such as installing dependencies or seeding a database. For a tool that every attempt needs and that never changes, install it in the image instead. For more information about installing tools in an image, see [Toolchains](/sandboxes/toolchains).
+
+## Run a setup command
+
+In the `evals/environments.ts` file, add `setup` to an environment. reeval runs each command in the workspace, in order, after it has copied the repository and written `files`:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const chatbot = defineEnvironment('chatbot', ({ git }) => ({
+  workspace: git('github:vercel/ai-chatbot', { ref: 'v3.1.0' }),
+  setup: ['pnpm install --frozen-lockfile'],
+}))
+```
+
+A child made with `chatbot.extendEnvironment(...)` runs its own commands after its parent's. A command sees the environment's `env` variables, and a secret with `to: 'checks'` reaches `setup` and `c.exec()` but never the agent. For more information about secret visibility, see [Secrets](/environments/secrets).
+
+reeval snapshots the workspace after the last command, so the files `setup` writes never count as the agent's change. The time `setup` takes doesn't count against the evaluation's `timeout`.
+
+To see each command run, print the phase trace with the `-v` flag:
+
+```bash
+npx reeval run -v
+```
+
+Each command prints one line under the `env` phase with its exit code and duration:
+
+```text
+12:50:01 env       setup 1/1 $ pnpm install --frozen-lockfile → exit 0 · 38s
+```
+
+## Set a timeout and directory
+
+Each command has its own timeout, `5m` by default. To change it, or to run a command in a subdirectory, write the command as an object. In the `evals/environments.ts` file, run the migration from the `lib/db` directory with a longer timeout:
+
+```ts title="evals/environments.ts"
+  setup: [
+    'pnpm install --frozen-lockfile',
+    { run: 'npx tsx migrate.ts', timeout: '10m', cwd: 'lib/db' },
+  ],
+```
+
+The `cwd` path is relative to the workspace, or absolute. reeval adds every command's timeout to the attempt's limit, so a long `setup` never reduces the agent's available time.
+
+## Troubleshooting
+
+A command that exits non-zero or times out ends the attempt with an infrastructure error, not a failed check. The message names the command and ends with the last lines of its output.
+
+Use the symptom to choose what to check and what to do next:
+
+| Symptom | Check | Next action |
+| :--- | :--- | :--- |
+| `setup step 1/1 "pnpm install --frozen-lockfile" in environment chatbot exited 1 after 38s (see setup.log)` | Open the attempt's `setup.log` file in the recorded run, or the attempt's trace in the `.reeval/debug` directory | Fix the command for the pinned ref it runs against. For more information about attempt traces, see [Debugging](/results/debugging). |
+| `command not found` in the message's last lines | The sandbox image lacks the tool | Add an install layer or a Dockerfile. For more information about installing tools, see [Toolchains](/sandboxes/toolchains). |
+| `… timed out after 5m (see setup.log)` | The command needs longer than its timeout | Raise `timeout` on that command, or move the slow install into the image |
+
+## Reference
+
+For more information about the `setup` field's shape and the other environment fields, see [Environment fields](/reference/environment#environment-fields). For more information about installs that belong in the image, see [Toolchains](/sandboxes/toolchains).

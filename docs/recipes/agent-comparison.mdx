@@ -1,0 +1,113 @@
+---
+title: "Compare harnesses"
+description: "Run one task on each harness and read each one's pass rate and effort."
+---
+
+[//]: # (quadrant: How-To Guide)
+[//]: # (sidebar: Compare harnesses)
+[//]: # (owns: one evaluation across several harnesses, read side by side: the harness rows' pass counts in the block and the effort view's medians per harness)
+[//]: # (excludes: harness options -> /harnesses)
+[//]: # (excludes: the add, only and function forms of the harness option -> /reference/options#harness)
+[//]: # (excludes: each harness's key and options -> /reference/harness/cursor and siblings)
+[//]: # (excludes: model ids, providers and effort values per harness -> /harnesses/models)
+[//]: # (excludes: harnesses as a compare's control and variants -> /comparisons/compare#compare-harnesses)
+[//]: # (excludes: the effort view's columns -> /reference/query)
+[//]: # (excludes: fake* helpers of any kind -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /harnesses, /harnesses/models, /comparisons/compare#compare-harnesses, /results/output#read-a-comparison, /reference/options#harness, /reference/options#gate, /reference/query, /history/queries)
+
+You compare harnesses by running one task on each harness in one run. Each harness is its own cell with the same prompt, checks, and attempts, so the block reads side by side. For more information about choosing a harness and its key, see [Harnesses](/harnesses).
+
+To measure a change on each harness instead, add `compare` ([Compare harnesses](/comparisons/compare#compare-harnesses)).
+
+<Steps>
+<Step title="Write the evaluation">
+
+In the `evals/stream.eval.ts` file, list the harnesses in `harness` and give each one four attempts with `runs`:
+
+```ts title="evals/stream.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { claudeCode, codex, cursor } from '{{ pkg }}/harness'
+
+evaluate(
+  'streams with Vercel AI SDK',
+  {
+    harness: [
+      cursor({ model: 'composer-2.5' }),
+      claudeCode({ model: 'claude-sonnet-5' }),
+      codex({ model: 'gpt-5.6-luna' }),
+    ],
+    runs: 4,
+  },
+  async (c) => {
+    await c.send(
+      'Add src/stream.ts with a streamChat(prompt) function that ' +
+        'streams a reply with Vercel AI SDK.',
+    )
+    await expect(c, 'adds the ai package').toHaveFile('package.json', /"ai"/)
+    await expect(c, 'uses streamText').toHaveFile(
+      'src/stream.ts',
+      /streamText\(/,
+    )
+  },
+)
+```
+
+A list in `harness` replaces the harnesses the evaluation inherits from the `reeval.config.ts` file. Each harness reads its API key from the `.env.local` file. For more information about the `add`, `only`, and function forms, see [the `harness` option](/reference/options#harness). For more information about model ids per harness, see [Models](/harnesses/models).
+
+</Step>
+<Step title="Run the evaluation">
+
+Run the evaluation on every harness it lists:
+
+```bash
+npx reeval run stream
+```
+
+To list the cells without starting a harness, pass `--dry-run`.
+
+</Step>
+<Step title="Read the pass rate per harness">
+
+Read the block the run prints for the evaluation. Rows print under `harness`, one per cell, with passed attempts out of counted attempts. A harness that failed an attempt lists the checks it failed under its row. Your counts can differ:
+
+```text
+fail             streams with Vercel AI SDK
+  harness                      pass
+  cursor:composer-2.5          4 of 4
+  claude-code:claude-sonnet-5  4 of 4
+  codex:gpt-5.6-luna           3 of 4
+    adds the ai package        3 of 4
+      expected file package.json to exist
+    +1 more passed
+```
+
+Every harness cell is gated, so one harness that fails an attempt fails the evaluation. To pass a cell on a share of its attempts, set [the `gate` option](/reference/options#gate). For more information about the rows, see [Read a comparison](/results/output#read-a-comparison).
+
+</Step>
+<Step title="Read the effort per harness">
+
+Read each harness's effort from the `effort` view, because the block prints no effort for harness cells. The view holds each cell's median tool calls, agent seconds, and tokens. Select the last run's rows:
+
+```bash
+npx reeval query "SELECT harness, tools_median, agent_s_median
+  FROM effort WHERE run_id = :run" --run last
+```
+
+The rows print one harness per line. Your numbers differ:
+
+```text
+harness                      tools_median  agent_s_median
+cursor:composer-2.5          12            0.4
+claude-code:claude-sonnet-5  9             0.3
+codex:gpt-5.6-luna           21            0.9
+```
+
+A harness that passes with fewer tool calls and seconds did the task with less work. To add tokens, select `tokens_median`. For more information about the `reeval query` command, see [Query run history](/history/queries).
+
+</Step>
+</Steps>
+
+## Next
+
+For more information about every view and its columns, see [Query views](/reference/query).

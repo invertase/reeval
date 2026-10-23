@@ -1,0 +1,155 @@
+---
+title: "Find harness model settings"
+description: "Find the model IDs, keys, and effort values each harness accepts."
+---
+
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Models)
+[//]: # (owns: model id format per harness; provider and key per harness; effort values per harness; served-model recording per harness)
+[//]: # (excludes: OpenCode's refused providers -> not documented; the refusal error states its own reason)
+[//]: # (excludes: the OpenCode supported-provider table -> /reference/harness/opencode#opencode-providers)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: setting the model in an evaluation -> /harnesses#set-the-model-and-effort)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: /harnesses, /reference/harness/cursor, /reference/harness/claude-code, /reference/harness/codex, /reference/harness/antigravity, /reference/harness/opencode, /reference/harness/goose, /reference/harness/pi, /reference/harness/grok-build, /recipes/agent-comparison)
+[//]: # (outbound: /harnesses#set-the-model-and-effort, /environments/secrets#keep-api-keys-on-the-host, /reference/harness/opencode, /reference/env-vars#provider-keys, /reference/record)
+
+Every harness factory takes a `model` and an optional `effort`. For more information about setting the model and effort on an evaluation, see [Set the model and effort](/harnesses#set-the-model-and-effort).
+
+## Models by harness
+
+`model` is the ID the harness's own CLI or SDK accepts. For more information about how each key stays on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host). For more information about every provider variable, see [Provider keys](/reference/env-vars#provider-keys).
+
+reeval refuses a prefixed ID on a harness that takes a bare ID, or a bare ID on `opencode`, at plan time with exit code 2.
+
+### `cursor` model
+
+<Property name="cursor" type="string" required>
+  A model ID `Cursor.models.list()` returns for the key. Key: `CURSOR_API_KEY`.
+</Property>
+
+### `claudeCode` model
+
+<Property name="claudeCode" type="string" required>
+  A model ID or alias the `claude` CLI accepts. Key: `ANTHROPIC_API_KEY`.
+</Property>
+
+### `antigravity` model
+
+<Property name="antigravity" type="string" required>
+  A model slug `agy models` lists for the key, such as `<model>-medium`. The `-low`, `-medium`, and `-high` suffixes set effort in the slug. Key: `GEMINI_API_KEY`.
+</Property>
+
+### `opencode` model
+
+<Property name="opencode" type="string" required>
+  `<provider>/<model>`. The provider picks the key.
+</Property>
+
+For more information about supported providers, see [the `opencode` harness reference](/reference/harness/opencode).
+
+### `goose` model
+
+<Property name="goose" type="string" required>
+  A model ID with no provider prefix. Key: `GOOGLE_GENERATIVE_AI_API_KEY`.
+</Property>
+
+### `pi` model
+
+<Property name="pi" type="string" required>
+  A model ID with no provider prefix. Key: `GOOGLE_GENERATIVE_AI_API_KEY`.
+</Property>
+
+### `codex` model
+
+<Property name="codex" type="string" required>
+  A model ID with no provider prefix. Key: `OPENAI_API_KEY`.
+</Property>
+
+### `grokBuild` model
+
+<Property name="grokBuild" type="string" required>
+  A model ID with no provider prefix. Key: `XAI_API_KEY`.
+</Property>
+
+## Effort values
+
+`effort` is a reasoning-effort value the harness's own CLI or SDK takes. reeval passes it through, records it as `effort` on the cell, and names the cell `<kind>:<model>[effort=<value>]`. Only `claudeCode` checks the value at plan time.
+
+### `cursor` effort
+
+<Property name="cursor" type="string" optional>
+  A value of the effort parameter the harness's model catalogue names for the model, `reasoning_effort` or `effort`. A model with no such parameter refuses `effort`. Fast is `params.fast`, not `effort`.
+</Property>
+
+### `claudeCode` effort
+
+<Property name="claudeCode" type="'low' | 'medium' | 'high' | 'xhigh' | 'max'" optional>
+  The Agent SDK's `/effort` control. The harness UI displays `xhigh` as **Extra**. reeval refuses any other value at plan time.
+</Property>
+
+### `antigravity` effort
+
+<Property name="antigravity" type="string" optional>
+  The harness passes `low`, `medium`, `high`, or `max` as the `agy --effort` value. A slug suffix such as `-low` sets the same effort through `model`.
+</Property>
+
+### `opencode` effort
+
+<Property name="opencode" type="string" optional>
+  A value the model's provider takes. reeval sets it as `options.thinking` on an `anthropic/` model and as `options.reasoningEffort` on every other provider.
+</Property>
+
+### `goose` effort
+
+<Property name="goose" type="string" optional>
+  The harness sets `GOOSE_THINKING_EFFORT` to `off`, `low`, `medium`, `high`, or `max`.
+</Property>
+
+### `pi` effort
+
+<Property name="pi" type="string" optional>
+  The harness passes `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` to `--thinking`.
+</Property>
+
+### `codex` effort
+
+<Property name="codex" type="string" optional>
+  The harness sets `model_reasoning_effort` to `low`, `medium`, `high`, `xhigh`, `max`, or `ultra`.
+</Property>
+
+### `grokBuild` effort
+
+<Property name="grokBuild" type="string" optional>
+  The harness sets `default_reasoning_effort` to `low`, `medium`, or `high` for a model that accepts it.
+</Property>
+
+## Served model
+
+The record keeps the model that served each turn beside the configured `model`.
+
+### The turn `model` field
+
+Each turn's `model` holds the corresponding served value. The `cursor` harness also includes parameters, such as `<model>[fast=false]`.
+
+### The attempt `servedModels` field
+
+The attempt's `servedModels` is null for `cursor` and `claudeCode` because their API requests name no model.
+
+The egress gateway reads the request URL into `servedModels` for `antigravity`, `goose`, `pi`, and `opencode` on a `google/` model. The harness sends `<model>-low` but the provider serves `<model>`.
+
+The gateway reads the API response into `servedModels` for `codex`, `grokBuild`, and `opencode` on another provider.
+
+### The attempt `servedEffort` field
+
+The `codex` response also names the resolved effort, such as `<model>[effort=medium]`. The attempt records it as `servedEffort`.
+
+### The harness `resolvedModels` field
+
+The run record's `harnesses[]` entries collect those served models as `resolvedModels`.
+
+### The harness `resolvedEffort` field
+
+The run record's `harnesses[]` entries collect those effort suffixes as `resolvedEffort`.
+
+For more information about every run record field, see [Run record reference](/reference/record).

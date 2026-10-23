@@ -1,0 +1,142 @@
+---
+title: Quickstart
+description: Scaffold a project, then run your first eval on a real agent in Docker.
+---
+
+`reeval init` sets up a project with a real agent configured, one environment and an eval that runs in it. Then you build the agent's sandbox image, add its key and run.
+
+**Before you begin:** Node {{ node }} or later and [Docker](https://docs.docker.com/get-docker/), on Linux, macOS or Windows (Docker Desktop with Linux containers), and a key for the agent you pick.
+
+<Steps>
+  <Step title="Scaffold the project">
+    ```bash
+    npx {{ pkg }} init
+    ```
+
+    It asks which agent to configure. Press Enter for Cursor, or pick Claude Code, Antigravity, OpenCode, Goose, pi, Codex, fx or Grok Build. It ends by checking Docker:
+
+    ```text
+    reeval init · .
+      create    reeval.config.ts       harness cursor:composer-2.5; insights google/gemini-3.8-flash; profiles pr, nightly
+      create    evals/environments.ts  environment greeter: a package.json and rules
+      create    evals/greet.eval.ts    one eval, in greeter
+      create    .gitignore             node_modules/, .reeval/, .env*
+      create    package.json           script eval, devDependency {{ pkg }}
+      create    tsconfig.json          for editors and tsc: the evals' .ts imports, no emit
+    Insights: google/gemini-3.8-flash explains each eval after a run, with GOOGLE_GENERATIVE_AI_API_KEY; analysis.insights: false or --no-insights turns them off
+    Next:
+      npm install
+      npx reeval image build  bakes Cursor into its sandbox image (needs Docker)
+      npx reeval run          the eval on Cursor, with CURSOR_API_KEY in .env.local
+    Docker is running: ready for npx reeval image build
+    ```
+
+    The config also sets `analysis.model`, the model that writes [insights](/concepts/insights): a sentence under each eval's result. In a script, pass `--harness <name>` or `--yes`; `--bare` writes only the config. In an existing project it only adds files and merges into `package.json` and `.gitignore`: see [reeval init](/reference/cli/init).
+  </Step>
+  <Step title="Install">
+    ```bash
+    npm install
+    ```
+
+    npm, pnpm and Yarn (Plug'n'Play too) all work.
+
+    pnpm's `minimumReleaseAge` refuses a release younger than the policy, with `The latest release of {{ pkg }} is … Published at …`. List {{ pkg }} in `minimumReleaseAgeExclude`, or install it once with `--config.minimum-release-age=0`:
+
+    ```bash
+    pnpm add -D {{ pkg }} --config.minimum-release-age=0
+    ```
+  </Step>
+  <Step title="Read the environment and the eval">
+    The environment is what every attempt starts in:
+
+    ```ts title="evals/environments.ts"
+    import { defineEnvironment } from '{{ pkg }}'
+
+    /** What every attempt of greet.eval.ts starts in, before the agent's first turn. */
+    export const greeter = defineEnvironment('greeter', {
+      // Written into the workspace.
+      files: { 'package.json': '{ "type": "module" }\n' },
+      // The project's rules: AGENTS.md, or CLAUDE.md for Claude Code.
+      rules: 'Write ES modules with named exports. Add no dependencies.\n',
+    })
+    ```
+
+    The eval imports it and runs in it. reeval finds `evals/**/*.eval.ts` by default:
+
+    ```ts title="evals/greet.eval.ts"
+    import { evaluate, expect } from '{{ pkg }}'
+    import { greeter } from './environments.ts'
+
+    const greetsAda = `node -e "import('./greet.js').then((m) =>
+      process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
+
+    evaluate('creates greet.js', { environment: greeter }, async (c) => {
+      const turn = await c.send(
+        'Create greet.js, an ES module exporting greet(name) that returns ' +
+          '"Hello, <name>!". No dependencies.',
+      )
+
+      await expect(turn).toHaveFile('greet.js', /greet/)
+      await expect(c.exec(greetsAda)).toSucceed()
+    })
+    ```
+
+    `c.send` runs an agent turn. `c.exec` runs a command in the sandbox, and `toSucceed` checks its exit code.
+  </Step>
+  <Step title="Check the plan">
+    `--dry-run` needs no keys and runs nothing:
+
+    ```bash
+    npx reeval run --dry-run
+    ```
+
+    ```text
+    plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+    eval                                    harnesses  variants  runs  attempts  notes
+    evals/greet.eval.ts › creates greet.js  1          —         1     1
+    images  1 sandbox image: 1 to build
+      + docker · cursor  to build: base, not built yet
+    insights  google/gemini-3.8-flash · up to 250k tokens
+    ```
+  </Step>
+  <Step title="Build, add your key and run">
+    ```bash
+    npx reeval image build
+    printf 'CURSOR_API_KEY=...\nGOOGLE_GENERATIVE_AI_API_KEY=...\n' > .env.local
+    npx reeval doctor
+    npx reeval run
+    ```
+
+    ```text
+    plan  run … · 1 eval · 1 cell · 1 attempt · ~3m 00s serial
+    preparing 1 sandbox: docker
+    reeval run: … · 1 eval file
+
+    pass             creates greet.js
+      Yes, the agent passed 1 of 1 tries creating greet.js.
+
+    All 1 result passed, successfully creating greet.js.
+    17s · 72k in (31k cached) · 383 out · results .reeval/runs/…/summary.md
+    1 pass
+    ```
+
+    `reeval doctor` names anything missing, such as Docker not running or an unset key, with its fix. The Google key is for insights only: without it the run passes or fails the same, and prints `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY in .env.local, or analysis: { insights: false }` above the tally.
+  </Step>
+</Steps>
+
+Your first eval passes. reeval saved the run under `.reeval/runs/`, which `reeval init` gitignored with `.env*`.
+
+<Warning>
+  `reeval run` reads `.env.local` and `.env` from the config's directory, not the current one. Keep them next to `reeval.config.ts`.
+</Warning>
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Your first real run" icon="play" href="/guide/first-real-run">
+    What happens in Docker, and how your key stays out of the sandbox.
+  </Card>
+  <Card title="Compare and lift" icon="chart-line" href="/guide/compare">
+    Run with and without a skill and read the lift.
+  </Card>
+</CardGroup>

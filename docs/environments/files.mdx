@@ -1,0 +1,107 @@
+---
+title: "Place files"
+description: "Give the agent the files an evaluation starts from."
+---
+
+[//]: # (quadrant: How-to)
+[//]: # (sidebar: Files)
+[//]: # (owns: files; file; directory; the default directory ignores)
+[//]: # (excludes: DEFAULT_DIRECTORY_IGNORES as an import -> not documented)
+[//]: # (excludes: rules files -> /environments/rules)
+[//]: # (excludes: helper signatures -> /reference/environment#directory)
+[//]: # (inbound: /environments, /environments/workspaces, /recipes/docs-comparison)
+[//]: # (outbound: /reference/environment#file, /reference/environment#directory, /environments/rules)
+
+You set `files` on an environment to put source in the workspace before the agent starts. A destination path is relative to the workspace, uses forward slashes, and never contains `..`. To write into the home directory, start a path with `~/`.
+
+## Write a file
+
+Set `files` to an object of destination paths and text. reeval writes each string into the sandbox as that file.
+
+In the `evals/environments.ts` file, define the environment:
+
+```ts title="evals/environments.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+export const app = defineEnvironment('app', () => ({
+  files: {
+    'src/agent.ts': "export const systemPrompt = 'Use the SDK docs.'\n",
+    '~/.config/agent.json': '{ "maxSteps": 20 }\n',
+  },
+}))
+```
+
+The `src/agent.ts` file is written to the workspace. The `~/.config/agent.json` file is written to the home directory.
+
+## Copy a host file
+
+When the content already exists on your machine, pass a host path to `file`. A relative path resolves from the file that calls `file`. reeval uses an absolute path as given.
+
+In the `evals/environments.ts` file, replace the string for the `src/agent.ts` file with `file`:
+
+```diff title="evals/environments.ts"
+-export const app = defineEnvironment('app', () => ({
++export const app = defineEnvironment('app', ({ file }) => ({
+-    'src/agent.ts': "export const systemPrompt = 'Use the SDK docs.'\n",
++    'src/agent.ts': file('./fixtures/agent.ts'),
+```
+
+reeval reads the host bytes when the attempt starts. A host file with its executable bit set stays executable in the sandbox.
+
+## Copy a directory
+
+Pass a host directory to `directory` to copy the files in it. `directory` chooses the files when you call it, and reeval reads each host file when the attempt starts. A relative path resolves from the file that calls `directory`.
+
+In the `evals/environments.ts` file, copy the TypeScript files from the `fixtures` directory into the `src` directory, and replace the copied `src/agent.ts` file:
+
+```diff title="evals/environments.ts"
+-export const app = defineEnvironment('app', ({ file }) => ({
++export const app = defineEnvironment('app', ({ directory }) => ({
+-    'src/agent.ts': file('./fixtures/agent.ts'),
++    ...directory('./fixtures', { into: 'src', glob: ['*.ts', '!*.test.ts'] }),
++    'src/agent.ts': "export const systemPrompt = 'Use the SDK docs.'\n",
+```
+
+`into` is the destination directory. A value that starts with `~/` places the files under the home directory. `into` uses forward slashes and doesn't contain `..`.
+
+`glob` is an ordered list of gitignore-style patterns over paths relative to the host directory. The last pattern that matches a path decides. A pattern that starts with `!` excludes that path. When a pattern includes files, reeval leaves out a file that no pattern matches. With only `!` patterns, or with `glob` omitted, every file starts included.
+
+`directory` anchors a pattern that contains a `/`, other than at the end, to the host directory. Without a `/`, a pattern matches a name at any depth. A trailing `/` matches a directory and everything in it.
+
+By default, `directory` leaves out these paths:
+
+```text
+node_modules/
+.DS_Store
+dist/
+.next/
+.turbo/
+coverage/
+.cache/
+__pycache__/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.pyc
+.dart_tool/
+/build/
+/target/
+.gradle/
+.idea/
+.vscode/
+```
+
+A leading `/` anchors a pattern to the top of the host directory. The `/build/` and `/target/` patterns don't match a nested directory of that name. The other patterns match that name at any depth. `directory` copies a `vendor/` directory because an offline build needs it.
+
+To switch the default ignores off, set `defaultIgnores` to `false`. `directory` always leaves out the `.git` directory. A `glob` pattern can't include a path excluded by the defaults.
+
+`directory` doesn't copy an empty directory. Calling `directory` fails when the directory is missing, or when no file matches. A later entry in `files` replaces a copied file, as the string for the `src/agent.ts` file does above. A host file with its executable bit set stays executable in the sandbox.
+
+## Reference
+
+For more information about `file`, see [the file helper](/reference/environment#file).
+
+For more information about `directory`, see [the directory helper](/reference/environment#directory).
+
+For more information about rules files, see [Rules](/environments/rules).

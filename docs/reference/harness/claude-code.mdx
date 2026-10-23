@@ -1,157 +1,109 @@
 ---
-title: claudeCode()
-description: The Claude Code harness, its options and id, the key it needs, and the endpoints reeval brokers it on.
+title: "Claude Code harness"
+description: "Look up options, the key, and recorded events for the Claude Code harness."
 ---
 
-`claudeCode()` runs the Claude Code CLI in the Docker sandbox. `model` is required.
+[//]: # (quadrant: Reference)
+[//]: # (sidebar: Claude Code)
+[//]: # (owns: claudeCode factory options; ANTHROPIC_API_KEY)
+[//]: # (excludes: choosing between harnesses and the support matrix -> /harnesses)
+[//]: # (excludes: placing skills and MCP servers -> /environments/skills and /environments/mcp)
+[//]: # (excludes: placing rules -> /environments/rules)
+[//]: # (excludes: how keys stay on the host -> /environments/secrets#keep-api-keys-on-the-host)
+[//]: # (excludes: plugins -> not documented)
+[//]: # (excludes: the fx harness and every fake* helper -> not documented)
+[//]: # (inbound: every page via the sidebar)
+[//]: # (outbound: /harnesses, /harnesses/models, /sandboxes, /environments/rules, /environments/skills, /environments/mcp, /environments/secrets#keep-api-keys-on-the-host, /reference/env-vars#provider-keys, /reference/record, /reference/matchers#tohavesearched)
+
+## claudeCode
+
+`claudeCode()` is the Claude Code harness factory. For more information about the sandbox, see [Choose a sandbox](/sandboxes).
+
+`claudeCode()` is exported from `{{ pkg }}/harness`. The `reeval.config.ts` file passes it as the `harness` option:
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { claudeCode, cursor } from '{{ pkg }}/harness'
+import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: [
-    cursor({ model: 'composer-2.5' }),
-    claudeCode({ model: 'claude-sonnet-5' }),
-  ],
+  harness: claudeCode({
+    model: 'claude-sonnet-5',
+    effort: 'high',
+  }),
 })
 ```
 
-## Options
+`model` is required. reeval exits with code 2 for a missing `model`, an `effort` outside the allowed values, or an unknown option.
 
-<Property name="model" type="string">
-  A model id or alias the `claude` CLI accepts, such as `claude-sonnet-5` or `sonnet`. Required, since the CLI's default changes under you.
+<Property name="model" type="string" required>
+  A model id or alias the `claude` CLI accepts.
 </Property>
 
 <Property name="effort" type="'low' | 'medium' | 'high' | 'xhigh' | 'max'" optional>
-  Reasoning effort the Agent SDK `/effort` control takes: `low`, `medium`, `high`, `xhigh` (Extra in the UI) or `max`. Adaptive thinking stays on. A value outside that set is refused. It isn't the measured [effort](/concepts/lift#effort-next-to-lift).
+  Reasoning effort for the Agent SDK `/effort` control. The Claude Code UI labels `xhigh` as **Extra**.
 </Property>
 
 <Property name="id" type="string" optional>
-  The harness's id in cell keys, filters and the record. Default `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.
+  Cell id. Defaults to `claude-code` followed by the model, such as `claude-code:<model>`. With `effort` set to `high`, the id is `claude-code:<model>[effort=high]`. The id uses letters, digits, and `._:@+-=[]`.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
-  The most Claude Code attempts at once across the run, for example for your account's rate limits.
+  The most Claude Code attempts that run at the same time, across the run. A whole number of at least 1.
 </Property>
 
 <Property name="startTimeout" type="Duration" optional>
-  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `claude-code: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+  How long the session may take to become ready before the attempt is an infra error, after one retry. A duration, such as `90s`. Defaults to `90s`.
 </Property>
 
-## At a glance
+reeval turns `askUserQuestions` off, so Claude Code asks in its reply. reeval sets `IS_SANDBOX` to `1`, so Claude Code skips permission prompts as root. The adapter also sets `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` to `1`, so a turn sends no telemetry, error reports, or feature-flag requests.
 
-| | |
-|---|---|
-| Import | `'{{ pkg }}/harness'` |
-| Credential | `ANTHROPIC_API_KEY` |
-| Adapter | `@ai-sdk/harness-claude-code` 1.0.160, with a fix reeval patches in (below) |
-| Sandbox | `docker()` only |
-| Image | `reeval-sandbox:claude-code-1.0.160-patch.b17cde50` |
-| Rules file | `CLAUDE.md` |
-| Skills (default placement) | `~/.claude/skills` |
-| Skills (`placement: 'workspace'`) | `.claude/skills` in the workspace |
-| Egress hosts added | `api.anthropic.com`, `*.anthropic.com` |
+For more information about choosing a harness, see [Choose a harness](/harnesses).
 
-Build its image once with `reeval image build` in a project whose config uses `claudeCode()`.
+For more information about model ids, effort values, and served models, see [Find harness model settings](/harnesses/models).
 
-reeval ships the adapter with one fix, which its image bakes: 1.0.160 never reports the served model, because its bridge starts the stream on the first message, and the `command_lifecycle` message and a plugin's `SessionStart` hook messages come before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.b17cde50` names that patch.
+## Credential
 
-## The key
+`claudeCode()` reads `ANTHROPIC_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
 
-| Method | Path on `api.anthropic.com` |
-|---|---|
-| `POST` | `/v1/messages` |
-| `POST` | `/v1/messages/count_tokens` |
-| `GET` | `/api/claude_code/settings` |
-| `GET` | `/api/claude_code/policy_limits` |
+The gateway swaps the key in only on these requests to `api.anthropic.com`:
 
-The harness authenticates only with `ANTHROPIC_API_KEY`, passed to the adapter explicitly. A host `AI_GATEWAY_API_KEY`, a Claude subscription login or a keychain entry is never used, so a run can't quietly bill a different account.
+- `POST /v1/messages`
+- `POST /v1/messages/count_tokens`
+- `GET /api/claude_code/settings`
+- `GET /api/claude_code/policy_limits`
 
-The key never enters the container. The gateway swaps it in on the endpoints above, the ones CLI 2.1.281 sends it on, and nowhere else.
+The gateway answers HTTP 403 when a request carries the key and is not one of those endpoints. A restricted egress policy allows `api.anthropic.com` and `*.anthropic.com`.
 
-A request carrying the placeholder anywhere else gets a 403 and a `warning: the egress gateway refused …` line, so a CLI update that needs a new endpoint fails loudly.
+When the API rejects the key, the attempt error begins with `The API rejected ANTHROPIC_API_KEY: set a valid key in the environment or .env.local`.
 
-## Environment
+For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-reeval starts the CLI with two variables:
+For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
 
-| Variable | Why |
-|---|---|
-| `IS_SANDBOX=1` | The CLI refuses to skip permission prompts as root otherwise. |
-| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` | No telemetry, error reporting or feature-flag fetches, so flags can't change between runs. |
+## Rules and skills
 
-The agent runs with every permission granted, inside the sandbox.
+The Claude Code harness reads rules from the `CLAUDE.md` file in the workspace. The Claude Code harness reads skills from the `.claude/skills` directory in the workspace and from the `~/.claude/skills` directory in the home directory.
 
-Its `AskUserQuestion` tool is off, because it waits for a person to answer. Claude Code asks in its reply instead, and the eval's next `c.send()` answers it.
+For more information about writing rules, see [Add project rules](/environments/rules).
 
-## Skills, rules and MCP
+For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-| What | Where |
-|---|---|
-| Rules | `CLAUDE.md` in the workspace |
-| Skills | `~/.claude/skills`, or `.claude/skills` in the workspace with `placement: 'workspace'` |
-| MCP servers | Passed to the CLI in the `.mcp.json` shape |
-| Plugins | Every part but `rules`, enabled from `~/.claude/settings.json` (below) |
+## MCP servers
 
-## Plugins
+The Claude Code harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes each server in the shape of the `.mcp.json` file: a `stdio` server is `{ type: 'stdio', command, args, env }`, and an `http` or `sse` server is `{ type, url, headers }`.
 
-```json title="~/.claude/settings.json"
-{
-  "extraKnownMarketplaces": {
-    "reeval": {
-      "source": { "source": "directory", "path": "/home/reeval/.reeval/plugins" }
-    }
-  },
-  "enabledPlugins": { "review@reeval": true }
-}
-```
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-reeval copies each plugin to `~/.reeval/plugins/<name>/`, lists them in a `reeval` marketplace there (`.claude-plugin/marketplace.json`) and enables them in Claude Code's settings. When the environment's `files` already write `~/.claude/settings.json`, reeval merges these keys into it. Claude Code loads each whole, namespaced: the subagent `review:reviewer`, the MCP tool `mcp__plugin_review_docs__<tool>`.
+## Recorded usage and model
 
-Claude Code starts a plugin's MCP servers itself, so reeval leaves them out of the config it passes. reeval rewrites the placed plugin's `.mcp.json` to run each through its MCP timer, so each start is in `turns[].mcpStartup` as `<plugin>:<server>`. That file can't hold a host secret, so a plugin server that reads one is refused at plan time; declare that server in `mcp`.
+The Claude Code harness records tokens on each turn's `usage`. `usage` is null when the harness reports no tokens. Each turn's `model` is the model id Claude Code reports. The attempt's `servedModels` is null, because the API requests name no model.
 
-A plugin's `rules/` aren't read by Claude Code, so the plan refuses a plugin that keeps them:
+For more information about the record fields, see [Run record reference](/reference/record).
 
-```text
-reeval: evals/review.eval.ts: evaluate("reviews the diff") on claude-code:claude-sonnet-5: Claude Code can't load the review plugin's rules (rules/): use only: ['skills', 'mcp'], or leave the plugin out of this cell
-```
+## Web events
 
-## Tokens
+The Claude Code harness records `web-search` and `web-fetch` events. A `webSearch` call records `query` and `references`. A `webFetch` or `WebFetch` call records `url`. `ok` is false when the call fails.
 
-| The CLI reports, per model call | The turn records |
-|---|---|
-| Input tokens | `input` |
-| Cache reads | `cacheRead` |
-| Cache creation | `cacheWrite` |
-| Output tokens | `output` |
+The turn's `unreported` list stays empty. `toHaveSearched()` and `toHaveFetched()` read those events.
 
-The line under the result blocks totals them, and the record keeps them per turn, per attempt and for the run. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
-
-## Errors
-
-| Situation | Message |
-|---|---|
-| No `model` | `claudeCode() needs a model, e.g. claudeCode({ model: 'claude-sonnet-5' })` |
-| No key when the attempt starts | `ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate. Set it in the environment or .env.local.` |
-| A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox: set sandbox: docker() …` |
-| The CLI doesn't start | `Claude Code harness failed to start: …` |
-| `files` write `~/.claude/settings.json` as something other than a JSON object, with plugins | `~/.claude/settings.json isn't a JSON object, so reeval can't enable the session's plugins in it: write it as one in files, or leave it out` |
-
-A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the eval's result block and `summary.md` show the API's message, without `-v`. Scripted on the fake harness, the same failure prints:
-
-```text
-[creates#1 fake]  +0:00 turn 1 error: Credit balance is too low to access the Anthropic API 0ms · 0 tool calls, 0 file edits
-…
-fail             greet module › creates a tested greet module
-  toHaveFile greet.js  failed
-    expected file greet.js to exist
-  turn error           Credit balance is too low to access the Anthropic API
-```
-
-## Related
-
-- [Harnesses guide](/guide/harnesses)
-- [cursor()](/reference/harness/cursor)
-- [Credential brokering](/concepts/credential-brokering)
-- [docker()](/reference/sandbox/docker)
+For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
