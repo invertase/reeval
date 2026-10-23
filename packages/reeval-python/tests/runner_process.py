@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from reeval_python.runner import RUNNER_PROTOCOL
+
 SRC = Path(__file__).resolve().parents[1] / "src"
 
 ATTEMPT: dict[str, Any] = {
@@ -26,7 +28,12 @@ ATTEMPT: dict[str, Any] = {
 
 class Runner:
     def __init__(self, root: Path) -> None:
-        env = {**os.environ, "REEVAL_RUNNER": "stdio", "REEVAL_PROJECT_ROOT": str(root)}
+        env = {
+            **os.environ,
+            "REEVAL_RUNNER": "stdio",
+            "REEVAL_RUNNER_PROTOCOL": str(RUNNER_PROTOCOL),
+            "REEVAL_PROJECT_ROOT": str(root),
+        }
         env["PYTHONPATH"] = os.pathsep.join([str(SRC), env.get("PYTHONPATH", "")])
         self.proc = subprocess.Popen(
             [sys.executable, "-m", "reeval_python"],
