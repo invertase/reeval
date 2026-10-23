@@ -20,7 +20,7 @@ export default defineConfig({
 })
 ```
 
-For more information about the harness's options and key, see [the harness reference](/reference/harness/cursor).
+For more information about the harness's options and key, see [the harness reference](/harnesses/cursor).
 
 ## Set the model and effort
 
@@ -69,14 +69,14 @@ This table lists what each harness supports. For more information about each har
 
 | Harness | Key | Key brokered | Rules file | Skills: workspace | Skills: home | MCP stdio | MCP `http` | MCP `sse` | Tokens | Served model | Web search events | Web fetch events | Sandbox |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| [Cursor](/reference/harness/cursor) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Claude Code](/reference/harness/claude-code) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Antigravity](/reference/harness/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [OpenCode](/reference/harness/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Goose](/reference/harness/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
-| [pi](/reference/harness/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
-| [Codex](/reference/harness/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Grok Build](/reference/harness/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
+| [Cursor](/harnesses/cursor) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Claude Code](/harnesses/claude-code) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Antigravity](/harnesses/antigravity) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [OpenCode](/harnesses/opencode) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Goose](/harnesses/goose) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
+| [pi](/harnesses/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
+| [Codex](/harnesses/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Grok Build](/harnesses/grok-build) | `XAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | `docker()` |
 
 - **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
 - **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.

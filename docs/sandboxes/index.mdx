@@ -7,7 +7,7 @@ A sandbox is the container an attempt runs in. reeval starts one container per a
 
 ## Choose Docker or Podman
 
-reeval uses `docker()` by default. For more information about using `podman()`, see [Podman sandbox](/reference/sandbox/podman).
+reeval uses `docker()` by default. For more information about using `podman()`, see [Podman sandbox](/sandboxes/podman).
 
 ## Set the sandbox
 
@@ -49,7 +49,7 @@ Each limit applies to one container. These defaults apply:
 | `cpus` | `2` | CPUs the container may use, capped at the host's; fractions allowed |
 | `pids` | `1024` | Concurrent processes and threads |
 
-The agent, the setup commands, and the checks run as an unprivileged user with every capability dropped. For more information about `root`, `capabilities`, and `maxConcurrent`, see [Docker sandbox](/reference/sandbox/docker).
+The agent, the setup commands, and the checks run as an unprivileged user with every capability dropped. For more information about `root`, `capabilities`, and `maxConcurrent`, see [Docker sandbox](/sandboxes/docker).
 
 ## Verify with reeval doctor
 
@@ -69,4 +69,4 @@ A `!` on that line means the engine has under 4 GB of memory. Give it more, or l
 
 ## Reference
 
-For more information about every option the factories accept, see [Docker sandbox](/reference/sandbox/docker). For more information about how `podman()` differs from `docker()`, see [Podman sandbox](/reference/sandbox/podman).
+For more information about every option the factories accept, see [Docker sandbox](/sandboxes/docker). For more information about how `podman()` differs from `docker()`, see [Podman sandbox](/sandboxes/podman).

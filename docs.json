@@ -192,35 +192,35 @@
             },
             {
               "title": "Cursor",
-              "href": "/reference/harness/cursor"
+              "href": "/harnesses/cursor"
             },
             {
               "title": "Claude Code",
-              "href": "/reference/harness/claude-code"
+              "href": "/harnesses/claude-code"
             },
             {
               "title": "Codex",
-              "href": "/reference/harness/codex"
+              "href": "/harnesses/codex"
             },
             {
               "title": "Antigravity",
-              "href": "/reference/harness/antigravity"
+              "href": "/harnesses/antigravity"
             },
             {
               "title": "OpenCode",
-              "href": "/reference/harness/opencode"
+              "href": "/harnesses/opencode"
             },
             {
               "title": "Goose",
-              "href": "/reference/harness/goose"
+              "href": "/harnesses/goose"
             },
             {
               "title": "pi",
-              "href": "/reference/harness/pi"
+              "href": "/harnesses/pi"
             },
             {
               "title": "Grok Build",
-              "href": "/reference/harness/grok-build"
+              "href": "/harnesses/grok-build"
             }
           ]
         },
@@ -237,11 +237,11 @@
             },
             {
               "title": "Docker",
-              "href": "/reference/sandbox/docker"
+              "href": "/sandboxes/docker"
             },
             {
               "title": "Podman",
-              "href": "/reference/sandbox/podman"
+              "href": "/sandboxes/podman"
             }
           ]
         }

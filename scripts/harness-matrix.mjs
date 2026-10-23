@@ -142,7 +142,7 @@ export async function harnessFacts() {
       continue
     }
     const excluded = EXCLUDED_KINDS.includes(kind)
-    const page = `reference/harness/${kind}`
+    const page = `harnesses/${kind}`
     if (!excluded && !existsSync(join(root, 'docs', `${page}.mdx`)))
       problems.push(`harness ${kind} has no docs/${page}.mdx`)
     const credential = agentFor({ kind, model: row.model }).credential
@@ -190,7 +190,7 @@ export async function harnessFacts() {
 const yes = (ok) => (ok ? '✓' : '✗')
 
 /**
- * The matrix and its notes. `href` turns a docs page (`reference/harness/pi`) into a link for
+ * The matrix and its notes. `href` turns a docs page (`harnesses/pi`) into a link for
  * the file it goes in; `text` escapes a note for it.
  */
 export function renderMatrix(facts, { href, text = (s) => s }) {
