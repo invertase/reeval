@@ -13,7 +13,6 @@ from reeval_python._wire import (
     AttemptCallExpect,
     AttemptCallJudge,
     JudgeCallData,
-    MatcherArg,
     MatcherSubject,
 )
 from reeval_python.errors import ReevalAssertionError
@@ -96,7 +95,7 @@ class AttemptContext:
         *,
         subject: MatcherSubject,
         matcher: str,
-        args: list[MatcherArg],
+        args: list[Any],
         label: str | None,
         not_: bool,
         soft: bool,

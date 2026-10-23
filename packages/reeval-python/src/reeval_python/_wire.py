@@ -16,6 +16,16 @@ from __future__ import annotations
 
 from typing import Any, Literal, NotRequired, TypeAlias, TypedDict
 
+# A pattern the runner matches in its own language. reeval runs the matcher with it, and when
+# the matcher tests a string not in `answers` replies with those strings (`untested`) instead of
+# a record; the runner matches them and makes the call again with them in `answers`.
+class AnsweredPattern(TypedDict):
+    # Whether it matches each string the runner has been asked about.
+    answers: dict[str, bool]
+    # The pattern as the runner's language writes it, e.g. `re.compile('npm t')`.
+    matchedBy: str
+
+
 # The Antigravity CLI through `@reeval/harness-antigravity`, made by `antigravity()`.
 class AntigravityHarnessDescriptor(TypedDict):
     # Reasoning effort passed as `agy --effort`, e.g. `low`, `medium`, `high` or `max`. The
@@ -296,6 +306,16 @@ class AttemptReplyJudge(TypedDict):
     verdict: Verdict | JudgeFailure
 
 
+class AttemptReplyExpect2(TypedDict):
+    # Pairs a reply with its request.
+    id: str
+    ok: Literal[True]
+    op: Literal["expect"]
+    # The strings the matcher tested that a `{ matchedBy, answers }` argument has no answer for,
+    # by its `matchedBy`. Nothing was recorded: answer them and make the call again.
+    untested: dict[str, list[str]]
+
+
 class AttemptReplyError(TypedDict):
     error: AttemptError
     # Pairs a reply with its request.
@@ -306,7 +326,7 @@ class AttemptReplyError(TypedDict):
 
 # reeval's reply to a call: its result, or the error it threw. A failed matcher is a result (its
 # record says `fail`), not an error, unless the matcher couldn't run.
-AttemptReply: TypeAlias = "AttemptReplySend | AttemptReplyExec | AttemptReplyServe | AttemptReplyKill | AttemptReplyCapture | AttemptReplyReadFile | AttemptReplyWriteFile | AttemptReplyExpect | AttemptReplyRecord | AttemptReplyJudge | AttemptReplyError"
+AttemptReply: TypeAlias = "AttemptReplySend | AttemptReplyExec | AttemptReplyServe | AttemptReplyKill | AttemptReplyCapture | AttemptReplyReadFile | AttemptReplyWriteFile | AttemptReplyExpect | AttemptReplyRecord | AttemptReplyJudge | AttemptReplyExpect2 | AttemptReplyError"
 
 
 # A call, numbered so its reply can find it.
@@ -1238,8 +1258,9 @@ class JudgeStateOptions(TypedDict):
     turns: NotRequired[Literal["last", "all"]]
 
 
-# One argument to a matcher: a JSON value, or a regular expression as `{ regexp, flags? }`.
-MatcherArg: TypeAlias = "Pattern | JSONValue"
+# One argument to a matcher: a JSON value, a regular expression as `{ regexp, flags? }`, or a
+# pattern in the runner's own language as `{ matchedBy, answers }`.
+MatcherArg: TypeAlias = "Pattern | AnsweredPattern | JSONValue"
 
 
 class MatcherSubjectTurn(TypedDict):

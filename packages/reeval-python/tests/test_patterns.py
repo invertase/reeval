@@ -19,8 +19,7 @@ class Host:
         self.strings = strings
         self.calls: list[dict[str, Any]] = []
 
-    async def send(self, msg: dict[str, Any]) -> dict[str, Any]:
-        call = msg["call"]
+    async def send(self, call: Any) -> dict[str, Any]:
         self.calls.append({**call, "args": _copy(call["args"])})
         patterns = _patterns(call["args"])
         untested = {
