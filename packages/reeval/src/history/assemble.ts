@@ -665,6 +665,7 @@ async function addAttempt(
     context,
     egress: record?.egress ?? null,
     servedModels: record?.servedModels ?? null,
+    ...(record?.askedModels?.length ? { askedModels: record.askedModels } : {}),
     effort: e.attempt ? (harnessEffort(e.attempt.harness) ?? null) : null,
     servedEffort:
       servedEffortOf([

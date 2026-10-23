@@ -8,4 +8,4 @@ image docker · opencode · 1 evals
 image docker · pi · 1 evals
   base  reeval-sandbox:pi-0.2.8  (reeval's image: built when missing or when its base changed)
 image docker · fx · 1 evals
-  base  reeval-sandbox:fx-0.1.0  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:fx-0.1.1  (reeval's image: built when missing or when its base changed)

@@ -43,6 +43,7 @@ export async function catalogOf(row: HarnessRow): Promise<Catalog> {
   const adapter = await agent.adapter({
     auth: { [agent.credential]: 'probe' },
     descriptor: { kind, model: row.model ?? '' },
+    model: row.model ?? '',
     plugins: [],
   } as never)
   const builtins = (adapter.builtinTools ?? {}) as Record<

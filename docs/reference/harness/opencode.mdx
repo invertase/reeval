@@ -94,6 +94,15 @@ OpenCode's ACP server names no model, so each turn records the one the gateway s
 
 reeval runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCode's default for OpenAI and xAI is a WebSocket, whose frames the gateway doesn't read.
 
+## On Vercel AI Gateway
+
+```ts title="reeval.config.ts"
+harness: opencode({ model: 'google/gemini-3.8-flash' }),
+gateway: [vercel(), direct()],
+```
+
+With [`vercel()`](/reference/gateway#vercel-ai-gateway) in the config's `gateway`, OpenCode runs on its own `vercel` provider, as `vercel/<model>`, on `vercel()`'s key. Write the model as its provider's id: a `vercel/…` id would skip the gateway list, so it exits 2 at plan time. On Vercel any `<provider>/<model>` Vercel serves runs; the provider table below gates `direct()` only, where a provider reeval can't run stops the plan with exit 2. `effort` isn't taken on `vercel()` yet: nothing checks the model gets it, so such a cell falls through to the next gateway.
+
 ## Amazon Bedrock
 
 ```bash title=".env.local"
@@ -242,9 +251,10 @@ Items are flat, not namespaced, so two plugins' subagents or commands with the s
 |---|---|
 | No model | `opencode(): needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got …)` |
 | A model without a provider (at plan time, exit 2) | `opencode(): an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got "gemini-3.8-flash")` |
-| A provider OpenCode doesn't know (exit 2) | `opencode(): OpenCode has no provider "…" (in "…"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'` |
-| A provider reeval refuses (exit 2) | `opencode(): reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox` |
-| A malformed `AWS_REGION` on Bedrock (exit 2) | `opencode(): AWS_REGION is "…", which isn't one Amazon Bedrock (amazon-bedrock) takes: OpenCode builds its API's host from it, so it must match /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, such as "us-east-1"` |
+| A provider OpenCode doesn't know, on `direct()` (exit 2) | `evaluate("<eval>") on opencode:<model>: no gateway in the list can serve it (direct: OpenCode has no provider "…" (in "…"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'). Add vercel() to gateway.` |
+| A `vercel/…` model (exit 2) | `opencode(): a vercel/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add vercel() to gateway (got "vercel/anthropic/claude-haiku-4.5")` |
+| A provider reeval refuses, on `direct()` (exit 2) | `… (direct: reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox). …` |
+| A malformed `AWS_REGION` on Bedrock, on `direct()` (exit 2) | `… (direct: AWS_REGION is "…", which isn't one Amazon Bedrock (amazon-bedrock) takes: OpenCode builds its API's host from it, so it must match /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, such as "us-east-1"). …` |
 | No key for the run's providers | `Missing credentials: ANTHROPIC_API_KEY. Set them in the environment or .env.local.` |
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox: set sandbox: docker() …` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |

@@ -37,14 +37,18 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     FX_PROVIDER: 'openai',
     FX_MODEL: 'gpt-4.1-mini',
     FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
+    FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://api.openai.com',
   })
   assert.deepEqual(
     Object.keys(fxEnv('openai/gpt-5.6')).sort(),
     Object.keys(fxEnv('gpt-4.1')).sort(),
   )
-  assert.deepEqual(fxSettings('openai/gpt-5.6'), [])
+  assert.deepEqual(fxSettings('openai/gpt-5.6'), [
+    { path: '.fx/settings.json', content: '{\n  "session_titles": false\n}\n' },
+  ])
   const [file] = fxSettings('gpt-4.1-mini')
+  assert.equal(JSON.parse(file?.content ?? '').session_titles, false)
   assert.equal(file?.path, '.fx/settings.json')
   assert.deepEqual(JSON.parse(file?.content ?? '').providers.openai.auth, {
     type: 'bearer',
@@ -90,6 +94,27 @@ test("MCP calls are renamed from fx's mcp_<server>_<tool>, longest server first"
   assert.deepEqual(t.push({ type: 'tool-call', toolName: 'bash' }), {
     type: 'tool-call',
     toolName: 'bash',
+  })
+})
+
+test("the turn's finish usage counts fx's reasoningTokens, which ACP calls thoughtTokens", () => {
+  const finish = {
+    type: 'finish',
+    totalUsage: {
+      inputTokens: { total: 26447 },
+      outputTokens: { total: 551, text: undefined, reasoning: undefined },
+    },
+  }
+  assert.deepEqual(new FxStreamTranslator().push(finish), finish, 'nothing to add')
+  const t = new FxStreamTranslator()
+  const usage = { inputTokens: 26447, outputTokens: 551, reasoningTokens: 391 }
+  t.push({ type: 'raw', rawValue: { stopReason: 'end_turn', usage } })
+  assert.deepEqual(t.push(finish), {
+    type: 'finish',
+    totalUsage: {
+      inputTokens: { total: 26447 },
+      outputTokens: { total: 551, text: undefined, reasoning: 391 },
+    },
   })
 })
 

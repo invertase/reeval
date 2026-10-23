@@ -79,6 +79,8 @@ reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gi
 
 The adapter refuses to run in a sandbox that can't broker the key.
 
+pi doesn't run on [`vercel()`](/reference/gateway#vercel-ai-gateway). pi's route there, its `vercel-ai-gateway` provider, reaches a Gemini model only through Anthropic's Messages API, sending Anthropic's thinking budget in place of Gemini's thinking level, and it doesn't behave as it does on Gemini's API. So the plan resolves pi past `vercel()` to the next gateway in the list, and stops with exit 2 when `vercel()` is the only one.
+
 ## Tokens
 
 | pi reports, per model call | The turn records |

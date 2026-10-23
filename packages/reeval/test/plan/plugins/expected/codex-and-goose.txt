@@ -5,4 +5,4 @@ excluded: —
 image docker · codex · 1 evals
   base  reeval-sandbox:codex-0.1.7  (reeval's image: built when missing or when its base changed)
 image docker · goose · 1 evals
-  base  reeval-sandbox:goose-0.1.3  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:goose-0.1.4  (reeval's image: built when missing or when its base changed)

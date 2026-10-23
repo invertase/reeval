@@ -52,10 +52,15 @@ export const OPENCODE_DENIED_TOOLS = ['question', 'browser'] as const
  */
 export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as const
 
-/** Provider thinking option: Anthropic's `thinking`, everyone else's `reasoningEffort`. */
+/**
+ * Provider thinking option: Anthropic's `thinking`, everyone else's `reasoningEffort`, keyed on
+ * the model's own provider, which follows `vercel/` for a model on Vercel AI Gateway (OpenCode
+ * passes the options on under that provider's name).
+ */
 export function openCodeEffortOptions(model: string, effort: string) {
   const parts = splitModel(model)
-  return parts?.provider === 'anthropic' ? { thinking: effort } : { reasoningEffort: effort }
+  const upstream = parts?.provider === 'vercel' ? splitModel(parts.model) : parts
+  return upstream?.provider === 'anthropic' ? { thinking: effort } : { reasoningEffort: effort }
 }
 
 /**

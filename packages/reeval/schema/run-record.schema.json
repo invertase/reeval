@@ -224,6 +224,13 @@
             "webSearches"
           ]
         },
+        "askedModels": {
+          "description": "The models the harness's successful API calls asked for, when nothing named the one that served them (fx on Vercel AI Gateway with a Gemini model): the agent's word, not the gateway's, so never part of `servedModels`. Absent when there's none.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "assertions": {
           "description": "Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none.",
           "type": "array",

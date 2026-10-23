@@ -103,6 +103,8 @@ ${FX_LAUNCH}FX_LAUNCH
 chmod +x "$HOME/.local/bin/fx-acp"`
 
 const relayUrl = `http://127.0.0.1:${FX_RELAY_PORT}`
+/** AI Gateway's language-model path, where fx 0.0.14 sends each model call. */
+export const FX_GATEWAY_CHAT_PATH = '/v4/ai/language-model'
 
 export type FxHarnessSettings = {
   /** The model's provider's key only (see {@link FX_PROVIDERS}). The host environment is never read. */
@@ -126,24 +128,29 @@ export function fxEnv(model: string) {
     FX_PROVIDER: provider,
     FX_MODEL: model,
     FX_GATEWAY_BASE_URL: relayUrl,
+    // The model calls' own URL: unset, fx sends them to AI Gateway directly, past the relay.
+    FX_GATEWAY_CHAT_URL: `${relayUrl}${FX_GATEWAY_CHAT_PATH}`,
     FX_RELAY_UPSTREAM: FX_PROVIDERS[provider].url,
   }
 }
 
 /**
- * fx's `settings.json`, with OpenAI's Chat Completions API as the configured provider `openai`
- * for a bare OpenAI id; the gateway needs none.
+ * fx's `settings.json`: no session titles, which fx otherwise generates on its own model
+ * (`openai/gpt-5.6-luna`) with each first prompt, so the run's model is the only one called; and
+ * for a bare OpenAI id, OpenAI's Chat Completions API as the configured provider `openai`.
  */
 export function fxSettings(model: string) {
-  if (fxProviderOf(model) !== 'openai') return []
   const settings = {
-    providers: {
-      openai: {
-        protocol: 'openai-chat-completions',
-        base_url: `${relayUrl}/v1`,
-        auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+    session_titles: false,
+    ...(fxProviderOf(model) === 'openai' && {
+      providers: {
+        openai: {
+          protocol: 'openai-chat-completions',
+          base_url: `${relayUrl}/v1`,
+          auth: { type: 'bearer', env: FX_PROVIDERS.openai.credential },
+        },
       },
-    },
+    }),
   }
   return [{ path: '.fx/settings.json', content: `${JSON.stringify(settings, null, 2)}\n` }]
 }
@@ -151,7 +158,8 @@ export function fxSettings(model: string) {
 /**
  * fx (`fx acp`) as an AI SDK harness, on Vercel AI Gateway or OpenAI's API by the model id. Thin
  * config over `@ai-sdk/harness-acp`: fx names its tool calls, and its ACP `PromptResponse.usage`
- * is the turn's summed tokens, so only MCP calls need renaming ({@link FxStreamTranslator}).
+ * is the turn's summed tokens, so {@link FxStreamTranslator} only renames MCP calls, rebuilds
+ * command output and keeps the reasoning tokens.
  */
 export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools> {
   const provider = FX_PROVIDERS[fxProviderOf(settings.model)]

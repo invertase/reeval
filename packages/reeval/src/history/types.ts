@@ -151,6 +151,12 @@ export type AttemptRecord = {
    */
   servedModels: string[] | null
   /**
+   * The models the harness's successful API calls asked for, when nothing named the one that
+   * served them (fx on Vercel AI Gateway with a Gemini model): the agent's word, not the
+   * gateway's, so never part of `servedModels`. Absent when there's none.
+   */
+  askedModels?: string[]
+  /**
    * The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`);
    * null when the factory left it unset. Fast is not this.
    */

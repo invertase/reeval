@@ -40,11 +40,14 @@ export type HarnessRow = {
     | 'fx-gateway'
     | 'claude-code-gateway'
     | 'codex-gateway'
+    | 'opencode-gateway'
+    | 'goose-gateway'
+    | 'grok-build-gateway'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's, and the rows on AI Gateway.
    */
-  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex'
+  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
   gateway?: 'vercel'
   /**
@@ -99,9 +102,15 @@ export type HarnessRow = {
   servedModelGap?: string
   /**
    * What `servedModels` (the models its API requests named, seen by the gateway) must include;
-   * null when its requests don't name one, so the record says it's unknown.
+   * null when its requests don't name one, so the record says it's unknown; `'none named'` when the
+   * gateway reads its responses but they name no model, so the record has `[]`.
    */
-  wireModel: RegExp | null
+  wireModel: RegExp | null | 'none named'
+  /**
+   * What `askedModels` (the models its calls asked the gateway for, in the agent's own words) must
+   * include; unset when the harness records none.
+   */
+  askedModel?: RegExp
 }
 
 export const harnesses: HarnessRow[] = [
@@ -306,11 +315,11 @@ export const harnesses: HarnessRow[] = [
     wireModel: /^gpt-4\.1-\d{4}-\d{2}-\d{2}$/,
   },
   {
-    // And on Vercel AI Gateway, fx's own provider, with a gateway model id.
+    // And on Vercel AI Gateway through `gateway: [vercel()]`: fx's own provider, with a gateway
+    // model id.
     id: 'fx-gateway',
     harness: 'fx',
-    gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name fx-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    gateway: 'vercel',
     model: 'google/gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'fx',
@@ -319,8 +328,11 @@ export const harnesses: HarnessRow[] = [
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
     tokens: true,
-    servedModel: /gemini-3\.8-flash/,
-    wireModel: /gemini-3\.8-flash/,
+    // Gemini's stream through fx's provider names no model, so nothing proves what served it; the
+    // record keeps the model each call asked for apart, in `askedModels`.
+    servedModel: null,
+    wireModel: 'none named',
+    askedModel: /^google\/gemini-3\.8-flash$/,
   },
   {
     // Claude Code on Vercel AI Gateway through `gateway: [vercel()]`: its base URL on Vercel, and
@@ -328,8 +340,6 @@ export const harnesses: HarnessRow[] = [
     id: 'claude-code-gateway',
     harness: 'claude-code',
     gateway: 'vercel',
-    gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name claude-code-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'claude-haiku-4-5',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'claude-code',
@@ -345,8 +355,6 @@ export const harnesses: HarnessRow[] = [
     id: 'codex-gateway',
     harness: 'codex',
     gateway: 'vercel',
-    gated:
-      'no AI_GATEWAY_API_KEY repository secret yet; name codex-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'gpt-5.6-luna',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'codex',
@@ -356,6 +364,40 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /gpt-5\.6-luna/,
     wireModel: /gpt-5\.6-luna/,
+  },
+  {
+    // OpenCode on Vercel AI Gateway: its own vercel provider, the model as vercel/<id>.
+    id: 'opencode-gateway',
+    harness: 'opencode',
+    gateway: 'vercel',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh', 'mcp.exa.ai'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+  },
+  {
+    // Goose on Vercel AI Gateway: its vercel_ai_gateway provider (OpenAI-compatible, a Bearer
+    // key), the Gemini id as google/<id>, and the served model from Vercel's response.
+    id: 'goose-gateway',
+    harness: 'goose',
+    gateway: 'vercel',
+    model: 'gemini-3.8-flash',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
   },
   {
     id: 'grok-build',
@@ -371,6 +413,23 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one xAI's Responses API answered with.
     servedModel: /^grok-4\.6/,
     wireModel: /^grok-4\.6/,
+  },
+  {
+    // Grok Build on Vercel AI Gateway: the model as a [model."xai/<id>"] table on Vercel's Chat
+    // Completions API, keyed by env_key, so nothing reaches xAI's API.
+    id: 'grok-build-gateway',
+    harness: 'grok-build',
+    gateway: 'vercel',
+    model: 'grok-4.6',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /grok-4\.6/,
+    wireModel: /grok-4\.6/,
   },
 ]
 

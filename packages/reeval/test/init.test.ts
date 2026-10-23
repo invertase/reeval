@@ -10,7 +10,7 @@ import { delimiter, join } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { describe, test } from 'node:test'
 import { UsageError } from '../src/errors.ts'
-import { AGENTS } from '../src/harness/agents.ts'
+import { agentFor } from '../src/harness/agents.ts'
 import { askHarness, INIT_HARNESSES, initCommand, planInit } from '../src/init.ts'
 import { pkgRoot, runCli, tempDir } from './helpers.ts'
 
@@ -154,7 +154,8 @@ describe('reeval init', () => {
       const p = await empty(`init-${h.kind}`)
       const init = await runCli(p.dir, ['init', '--harness', h.kind])
       assert.equal(init.code, 0, init.stderr)
-      assert.match(init.stdout, new RegExp(`with ${AGENTS[h.kind].credential} in \\.env\\.local`))
+      const key = agentFor({ kind: h.kind, model: h.model } as never).credential
+      assert.match(init.stdout, new RegExp(`with ${key} in \\.env\\.local`))
       const written = FILES.map(p.read).join('\n')
       assert.doesNotMatch(`${init.stdout}${init.stderr}${written}`, /fake/i)
       const cell = (doc: { evals: Array<{ cells: Array<{ harness: string }> }> }) =>

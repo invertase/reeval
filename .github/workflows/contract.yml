@@ -22,9 +22,9 @@ on:
         required: true
       harnesses:
         description: >-
-          Only these rows, comma-separated, in the contract and e2e suites (gated rows such as
-          claude-code-gateway included); the Cursor checks after them are skipped. Empty: every
-          ungated row
+          Only these rows, comma-separated, in the contract and e2e suites (the *-gateway rows,
+          which the default list leaves out, included); the Cursor checks after them are skipped.
+          Empty: the default list
         type: string
         default: ''
 
@@ -56,7 +56,7 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-      # The gated *-gateway rows, when REEVAL_CONTRACT_HARNESSES names them.
+      # The *-gateway rows, when REEVAL_CONTRACT_HARNESSES names them.
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.

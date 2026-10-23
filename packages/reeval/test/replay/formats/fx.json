@@ -8,6 +8,8 @@
   "prompt-response .usage",
   "prompt-response .usage.inputTokens",
   "prompt-response .usage.outputTokens",
+  "prompt-response .usage.reasoningTokens",
+  "session_info_update ._meta",
   "session_info_update .sessionUpdate",
   "session_info_update .title",
   "session_info_update .updatedAt",
@@ -37,5 +39,8 @@
   "tool_call_update .content",
   "tool_call_update .sessionUpdate",
   "tool_call_update .status",
-  "tool_call_update .toolCallId"
+  "tool_call_update .toolCallId",
+  "usage_update .sessionUpdate",
+  "usage_update .size",
+  "usage_update .used"
 ]

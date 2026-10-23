@@ -47,6 +47,7 @@ async function webEvents(kind, agent, model) {
   const adapter = await agent.adapter({
     auth: { [agent.credential]: 'probe' },
     descriptor: { kind, model },
+    model,
     plugins: [],
   })
   const tools = Object.keys(adapter.builtinTools ?? {})

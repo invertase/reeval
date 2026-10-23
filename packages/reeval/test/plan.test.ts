@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
+import { VERCEL_REFUSALS } from '../src/gateway/vercel.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
@@ -266,6 +267,12 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
             skipped: [{ gateway: 'vercel', why: "Cursor's agent only calls Cursor's own API" }],
           },
         ],
+        ['goose:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
+        [
+          'pi:gemini-3.8-flash',
+          { name: 'direct', skipped: [{ gateway: 'vercel', why: VERCEL_REFUSALS.pi }] },
+        ],
+        ['grok-build:grok-4.6', { name: 'vercel', skipped: [] }],
       ],
     )
   })
@@ -343,23 +350,23 @@ evaluate('judged', async () => {})
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
   })
 
-  test("OpenCode on a provider reeval can't broker exits 2 at plan time, naming it and why", async () => {
+  test("OpenCode on a provider direct() can't broker exits 2 at plan time, naming it and why", async () => {
     for (const [where, model, refusal, env] of [
       [
         'config',
         'google-vertex/gemini-3.8-flash',
-        /opencode\(\): reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account \(Vertex refuses API keys for most models\), not a key in a header, so the gateway can't keep its key out of the sandbox/,
+        /on opencode:gemini-3\.8-flash: no gateway in the list can serve it \(direct: reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account \(Vertex refuses API keys for most models\), not a key in a header, so the gateway can't keep its key out of the sandbox/,
       ],
       [
         'config',
         'amazon-bedrock/global.anthropic.claude-haiku-4-5',
-        /opencode\(\): AWS_REGION is "evil\.example\.com\/x", which isn't one Amazon Bedrock \(amazon-bedrock\) takes: OpenCode builds its API's host from it, so it must match/,
+        /\(direct: AWS_REGION is "evil\.example\.com\/x", which isn't one Amazon Bedrock \(amazon-bedrock\) takes: OpenCode builds its API's host from it, so it must match/,
         { AWS_REGION: 'evil.example.com/x' },
       ],
       [
         'eval',
         'lmstudio/qwen3-coder',
-        /opencode\(\): reeval can't run OpenCode on LMStudio \(lmstudio\): it runs on your machine, and the sandbox can't reach the host's localhost/,
+        /\(direct: reeval can't run OpenCode on LMStudio \(lmstudio\): it runs on your machine, and the sandbox can't reach the host's localhost/,
       ],
       [
         'eval',

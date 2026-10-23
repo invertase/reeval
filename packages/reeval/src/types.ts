@@ -779,7 +779,7 @@ export type DirectGatewayDescriptor = {
 
 /**
  * Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
- * `reeval/gateway`. It serves Claude Code and Codex.
+ * `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
  */
 export type VercelGatewayDescriptor = {
   kind: 'vercel'
@@ -2310,6 +2310,8 @@ export type EvalRecord = {
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null
+  /** See `AttemptRecord.askedModels`. */
+  askedModels?: string[]
   /**
    * PNGs from `c.capture()`. Bytes live in a sidecar next to this JSON
    * (`<stem>.artifacts/<name>.png`) so redact never touches them.
