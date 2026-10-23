@@ -20,7 +20,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, BinaryIO, TextIO, cast
 
-from reeval_python.checks import RecordedAssertionError, bind_recorder, unrecorded_failure
+from reeval_python.checks import bind_recorder, is_recorded, unrecorded_failure
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
 from reeval_python.errors import AttemptAborted, ReevalAssertionError
@@ -145,6 +145,7 @@ class _Connection:
         self._frames = frames
         self._pending: dict[tuple[str, str], asyncio.Future[dict[str, Any]]] = {}
         self.aborted: dict[str, AttemptAborted] = {}
+        self._records: set[tuple[str, str]] = set()
 
     def write(self, msg: dict[str, Any]) -> None:
         self._frames.write(msg)
@@ -162,9 +163,24 @@ class _Connection:
         req_id = msg.get("id")
         if attempt is None or req_id is None:
             return
-        fut = self._pending.pop((str(attempt), str(req_id)), None)
+        key = (str(attempt), str(req_id))
+        if key in self._records:
+            self._records.discard(key)
+            if not msg.get("ok"):
+                error: dict[str, Any] = msg.get("error") or {}
+                text = f"reeval refused a check: {error.get('name')}: {error.get('message')}"
+                self.write({"t": "log", "key": key[0], "stream": "stderr", "text": text})
+            return
+        fut = self._pending.pop(key, None)
         if fut is not None and not fut.done():
             fut.set_result(msg)
+
+    def record(self, attempt_id: str, req_id: str, call: dict[str, Any]) -> None:
+        """Sends a check without waiting for reeval's answer, which only a refusal is shown of."""
+        if attempt_id in self.aborted:
+            raise self.aborted[attempt_id]
+        self._records.add((attempt_id, req_id))
+        self.write({"id": req_id, "call": call, "key": attempt_id})
 
     async def request(self, attempt_id: str, req_id: str, call: dict[str, Any]) -> dict[str, Any]:
         if attempt_id in self.aborted:
@@ -222,9 +238,7 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
     error: dict[str, Any] | None = None
 
     def record(call: dict[str, Any]) -> None:
-        if attempt_id in conn.aborted:
-            raise conn.aborted[attempt_id]
-        conn.write({"id": str(next(ids)), "call": call, "key": attempt_id})
+        conn.record(attempt_id, str(next(ids)), call)
 
     bind_recorder(record)
     try:
@@ -240,11 +254,14 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         raise
     except AttemptAborted as exc:
         error = {"name": exc.name, "message": str(exc)}
-    except (ReevalAssertionError, RecordedAssertionError) as exc:
+    except ReevalAssertionError as exc:
         error = {"name": "AssertionError", "message": str(exc), "stack": traceback.format_exc()}
     except AssertionError as exc:
-        call = unrecorded_failure(exc)
-        record(call)
+        if is_recorded(exc):
+            call = {"message": str(exc)}
+        else:
+            call = unrecorded_failure(exc)
+            record(call)
         error = {
             "name": "AssertionError",
             "message": call["message"],

@@ -1,7 +1,8 @@
 """Plain `assert` in an eval file: each one, passing or failing, is a check in the attempt record.
 
-Eval files are compiled with their `assert` statements rewritten (as pytest does) into a call
-that records the outcome on the attempt, then raises `AssertionError` as `assert` would.
+Eval files are compiled with their `assert` statements rewritten (as pytest does): the test and,
+when it fails, the message are evaluated in the eval's own frame, a call records the outcome on
+the attempt, and the eval's frame raises the `AssertionError` it returns, as `assert` would.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import ast
 import itertools
 import linecache
 import traceback
+import warnings
 from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
@@ -34,12 +36,18 @@ _OPS: dict[type[ast.cmpop], str] = {
 }
 
 
-class RecordedAssertionError(AssertionError):
-    """An `assert` that failed and is already in the attempt record."""
+_RECORDED = "_reeval_recorded"
+
+SUBJECT_LIMIT = 200
 
 
 def bind_recorder(recorder: Recorder) -> None:
     _recorder.set(recorder)
+
+
+def is_recorded(exc: BaseException) -> bool:
+    """Whether a failed `assert` is already in the attempt record."""
+    return getattr(exc, _RECORDED, False)
 
 
 def _shown(value: Any) -> str:
@@ -50,14 +58,24 @@ def _shown(value: Any) -> str:
     return text if len(text) <= 200 else f"{text[:200]}…"
 
 
+def _subject(source: str) -> str:
+    """A check's subject on one line, short enough to be its name."""
+    text = " ".join(source.split())
+    return text if len(text) <= SUBJECT_LIMIT else f"{text[: SUBJECT_LIMIT - 1]}…"
+
+
 def check(
     value: Any,
     subject: str,
     label: str | None,
-    message: Callable[[], Any] | None,
+    message: tuple[Any] | BaseException | None,
     compared: tuple[Any, str, Any] | None,
-) -> None:
-    """What a rewritten `assert` calls: records its outcome, and raises when it failed."""
+) -> AssertionError | None:
+    """What a rewritten `assert` calls: records its outcome, and returns the error to raise.
+
+    `message` is the assert's message in a 1-tuple, the exception evaluating it raised (which
+    the eval's frame raises instead, once this has recorded the failure), or `None`.
+    """
     passed = bool(value)
     call: dict[str, Any] = {"op": "record", "matcher": "assert", "subject": subject}
     if label is not None:
@@ -71,7 +89,10 @@ def check(
             detail = f"assert {subject}"
         else:
             detail = f"assert {subject} ({_shown(value)} is falsy)"
-        extra = message() if message is not None else None
+        if isinstance(message, BaseException):
+            extra: Any = f"<the message raised {type(message).__name__}: {message}>"
+        else:
+            extra = message[0] if message is not None else None
         prefix = label if label is not None else (str(extra) if extra is not None else None)
         reason = f"{prefix}: {detail}" if prefix else detail
         call["message"] = reason
@@ -79,78 +100,129 @@ def check(
     recorder = _recorder.get()
     if recorder is not None:
         recorder(call)
-    if not passed:
-        raise RecordedAssertionError(reason) if recorder is not None else AssertionError(reason)
+    if passed:
+        return None
+    error = AssertionError(reason)
+    setattr(error, _RECORDED, recorder is not None)
+    return error
+
+
+def _assert_at(filename: str, lineno: int) -> ast.Assert | None:
+    """The innermost `assert` statement in a file that spans a line, if there is one."""
+    source = "".join(linecache.getlines(filename))
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return None
+    found: ast.Assert | None = None
+    for node in ast.walk(tree):
+        end = node.end_lineno if isinstance(node, ast.Assert) else None
+        if isinstance(node, ast.Assert) and end is not None and node.lineno <= lineno <= end:
+            if found is None or node.lineno >= found.lineno:
+                found = node
+    return found
 
 
 def unrecorded_failure(exc: AssertionError) -> dict[str, Any]:
-    """The `record` call for an `AssertionError` raised outside an eval file's own asserts."""
-    frames = traceback.extract_tb(exc.__traceback__)
-    line = ""
-    if frames:
-        last = frames[-1]
-        line = (last.line or linecache.getline(last.filename, last.lineno or 0)).strip()
-    subject = line.removeprefix("assert ").split(",")[0].strip() or "AssertionError"
+    """The `record` call for an `AssertionError` raised outside an eval file's own asserts.
+
+    Its subject is the failing `assert`'s test when an `assert` statement raised it, and
+    `AssertionError` otherwise (`raise AssertionError`, unittest's `assertEqual`).
+    """
+    frames = [f for f in traceback.extract_tb(exc.__traceback__) if f.filename != __file__]
+    subject = "AssertionError"
+    if frames and frames[-1].lineno is not None:
+        node = _assert_at(frames[-1].filename, frames[-1].lineno)
+        source = "".join(linecache.getlines(frames[-1].filename))
+        if node is not None:
+            subject = _subject(ast.get_source_segment(source, node.test) or ast.unparse(node.test))
+    message = str(exc) or (f"assert {subject}" if subject != "AssertionError" else subject)
     return {
         "op": "record",
         "matcher": "assert",
         "subject": subject,
         "status": "fail",
-        "message": str(exc) or f"assert {subject}",
+        "message": message,
     }
 
 
+def _name(name: str, ctx: ast.expr_context | None = None) -> ast.Name:
+    return ast.Name(name, ctx or ast.Load())
+
+
 class _Rewrite(ast.NodeTransformer):
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str, filename: str) -> None:
         self._source = source
+        self._filename = filename
         self._names = itertools.count(1)
 
     def visit_Assert(self, node: ast.Assert) -> list[ast.stmt]:
         self.generic_visit(node)
-        subject = ast.get_source_segment(self._source, node.test) or ast.unparse(node.test)
+        if isinstance(node.test, ast.Tuple) and node.test.elts:
+            warnings.warn_explicit(
+                "assertion is always true, perhaps remove parentheses?",
+                SyntaxWarning,
+                self._filename,
+                node.lineno,
+            )
+        n = next(self._names)
+        value, message, error, raised = (f"@reeval_{x}{n}" for x in ("value", "msg", "err", "exc"))
+        temps = [value, message, error]
+        subject = _subject(
+            ast.get_source_segment(self._source, node.test) or ast.unparse(node.test)
+        )
         label: ast.expr = ast.Constant(None)
-        message: ast.expr = ast.Constant(None)
+        test = node.test
+        compared: ast.expr = ast.Constant(None)
+        before: list[ast.stmt] = []
+        if isinstance(test, ast.Compare) and len(test.ops) == 1 and type(test.ops[0]) in _OPS:
+            left, right = f"@reeval_left{n}", f"@reeval_right{n}"
+            temps += [left, right]
+            before = [
+                ast.Assign(targets=[_name(left, ast.Store())], value=test.left),
+                ast.Assign(targets=[_name(right, ast.Store())], value=test.comparators[0]),
+            ]
+            test = ast.Compare(left=_name(left), ops=test.ops, comparators=[_name(right)])
+            op = ast.Constant(_OPS[type(node.test.ops[0])])  # type: ignore[union-attr]
+            compared = ast.Tuple(elts=[_name(left), op, _name(right)], ctx=ast.Load())
+        before.append(ast.Assign(targets=[_name(value, ast.Store())], value=test))
+        before.append(ast.Assign(targets=[_name(message, ast.Store())], value=ast.Constant(None)))
+
+        def hook(msg: ast.expr) -> ast.Call:
+            args = [_name(value), ast.Constant(subject), label, msg, compared]
+            return ast.Call(func=_name(ASSERT_HOOK), args=args, keywords=[])
+
         if isinstance(node.msg, ast.Constant) and isinstance(node.msg.value, str):
             label = node.msg
         elif node.msg is not None:
-            message = ast.Lambda(
-                args=ast.arguments(
-                    posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]
-                ),
-                body=node.msg,
-            )
-        before: list[ast.stmt] = []
-        value = node.test
-        compared: ast.expr = ast.Constant(None)
-        test = node.test
-        if isinstance(test, ast.Compare) and len(test.ops) == 1 and type(test.ops[0]) in _OPS:
-            n = next(self._names)
-            left, right = f"@reeval_left{n}", f"@reeval_right{n}"
-            before = [
-                ast.Assign(targets=[ast.Name(left, ast.Store())], value=test.left),
-                ast.Assign(targets=[ast.Name(right, ast.Store())], value=test.comparators[0]),
-            ]
-            value = ast.Compare(
-                left=ast.Name(left, ast.Load()),
-                ops=test.ops,
-                comparators=[ast.Name(right, ast.Load())],
-            )
-            compared = ast.Tuple(
-                elts=[
-                    ast.Name(left, ast.Load()),
-                    ast.Constant(_OPS[type(test.ops[0])]),
-                    ast.Name(right, ast.Load()),
+            # Evaluated here, in the eval's frame, and only when the test failed, as Python
+            # does: `await`, `yield` and class-scope names work in it.
+            boxed = ast.Tuple(elts=[node.msg], ctx=ast.Load())
+            evaluate = ast.Try(
+                body=[ast.Assign(targets=[_name(message, ast.Store())], value=boxed)],
+                handlers=[
+                    ast.ExceptHandler(
+                        type=_name("BaseException"),
+                        name=raised,
+                        body=[ast.Expr(hook(_name(raised))), ast.Raise()],
+                    )
                 ],
-                ctx=ast.Load(),
+                orelse=[],
+                finalbody=[],
             )
-        call = ast.Expr(
-            ast.Call(
-                func=ast.Name(ASSERT_HOOK, ast.Load()),
-                args=[value, ast.Constant(subject), label, message, compared],
-                keywords=[],
+            before.append(
+                ast.If(test=ast.UnaryOp(ast.Not(), _name(value)), body=[evaluate], orelse=[])
             )
-        )
-        out = [*before, call]
+        out: list[ast.stmt] = [
+            *before,
+            ast.Assign(targets=[_name(error, ast.Store())], value=hook(_name(message))),
+            ast.If(
+                test=ast.Compare(_name(error), [ast.IsNot()], [ast.Constant(None)]),
+                body=[ast.Raise(exc=_name(error))],
+                orelse=[],
+            ),
+            ast.Delete(targets=[_name(t, ast.Del()) for t in temps]),
+        ]
         for stmt in out:
             ast.copy_location(stmt, node)
         return out
@@ -158,5 +230,5 @@ class _Rewrite(ast.NodeTransformer):
 
 def compile_eval(source: str, filename: str) -> Any:
     """Compiles an eval file with its asserts recorded."""
-    tree = _Rewrite(source).visit(ast.parse(source, filename))
-    return compile(ast.fix_missing_locations(tree), filename, "exec")
+    tree = _Rewrite(source, filename).visit(ast.parse(source, filename))
+    return compile(ast.fix_missing_locations(tree), filename, "exec", dont_inherit=True)

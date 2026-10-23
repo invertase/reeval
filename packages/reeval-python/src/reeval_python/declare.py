@@ -260,6 +260,7 @@ def collect_eval_file(path: Path) -> dict[str, Any]:
             raise ImportError(f"can't load {path}")
         module = importlib.util.module_from_spec(spec)
         module.__dict__[ASSERT_HOOK] = check
-        exec(compile_eval(path.read_text(encoding="utf-8"), str(path)), module.__dict__)  # noqa: S102
+        source = importlib.util.decode_source(path.read_bytes())
+        exec(compile_eval(source, str(path)), module.__dict__)  # noqa: S102
 
     return collect_module_tree_sync(loader)
