@@ -21,6 +21,10 @@ on:
         description: Only build and smoke-test the binaries, and list what would be uploaded to the release; publish nothing
         type: boolean
         default: false
+      replace_binaries:
+        description: Replace binaries the release already has (otherwise a release with any binaries is left alone)
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -98,6 +102,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/ci.yml
 
+  # Built from the release's tag, whichever ref the run was dispatched on.
   binaries:
     name: binaries
     needs: [release-please, republish-gate, test]
@@ -110,6 +115,8 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/binary.yml
+    with:
+      ref: v${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
 
   upload-binaries:
     name: upload binaries
@@ -124,6 +131,9 @@ jobs:
         with:
           name: ${{ needs.binaries.outputs.artifact }}
           path: out
+      # SHA256SUMS goes up after the binaries, so it never lists binaries the release doesn't have.
+      # A release that has any binaries keeps them unless replace_binaries is set: a rebuild isn't
+      # byte-identical, so replacing them changes their published checksums.
       - name: Upload to the release
         working-directory: out
         env:
@@ -132,6 +142,7 @@ jobs:
           TAG: v${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
           VERSION: ${{ needs.binaries.outputs.version }}
           DRY_RUN: ${{ inputs.dry_run || false }}
+          REPLACE: ${{ inputs.replace_binaries || false }}
         run: |
           set -euo pipefail
           if [ "$TAG" != "v$VERSION" ]; then
@@ -140,15 +151,29 @@ jobs:
           fi
           sha256sum -c SHA256SUMS
           gh release view "$TAG" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/assets"
-          files=(reeval-* SHA256SUMS)
-          for f in "${files[@]}"; do
-            if grep -qxF "$f" "$RUNNER_TEMP/assets"; then echo "$TAG has $f: replace it"; else echo "$TAG: add $f"; fi
+          binaries=(reeval-*)
+          present=()
+          for f in "${binaries[@]}" SHA256SUMS; do
+            if grep -qxF "$f" "$RUNNER_TEMP/assets"; then present+=("$f"); fi
+          done
+          if [ ${#present[@]} -gt 0 ] && [ "$REPLACE" != true ]; then
+            level=error
+            [ "$DRY_RUN" = true ] && level=notice
+            echo "::$level::$TAG already has ${present[*]}; dispatch with replace_binaries=true to replace them."
+            [ "$DRY_RUN" = true ] && exit 0
+            exit 1
+          fi
+          for f in "${binaries[@]}" SHA256SUMS; do
+            if grep -qxF "$f" "$RUNNER_TEMP/assets"; then echo "$TAG: replace $f"; else echo "$TAG: add $f"; fi
           done
           if [ "$DRY_RUN" = true ]; then
             echo "::notice::Dry run: nothing uploaded to $TAG"
             exit 0
           fi
-          gh release upload "$TAG" "${files[@]}" --clobber
+          clobber=()
+          [ "$REPLACE" = true ] && clobber=(--clobber)
+          gh release upload "$TAG" "${binaries[@]}" "${clobber[@]}"
+          gh release upload "$TAG" SHA256SUMS "${clobber[@]}"
 
   publish:
     name: publish to npm

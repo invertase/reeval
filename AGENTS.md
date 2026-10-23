@@ -380,7 +380,8 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   its `lint, typecheck and docs` job built to PyPI, in the `pypi` environment, and uploads the
   binaries `binary.yml` builds, with their `SHA256SUMS`, to the release. A manual dispatch with
   `-f dry_run=true` builds and smoke-tests the binaries and lists what it would upload to the
-  current release, publishing nothing. If a flake fails it,
+  current release, publishing nothing. The binaries are always built from the release's tag, and a
+  release that already has binaries keeps them unless the dispatch sets `-f replace_binaries=true`. If a flake fails it,
   re-run the failed jobs. Provenance is automatic once the repository is public. Don't publish
   by hand, and don't edit versions or `CHANGELOG.md`.
 - **Dependabot** (`.github/dependabot.yml`) opens weekly version updates, titled `build(deps): …`,

@@ -7,6 +7,11 @@ name: binary
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: The tag or commit to compile; the install scripts tested are still this run's
+        type: string
+        default: ''
     outputs:
       version:
         description: The version the binaries were built from
@@ -53,6 +58,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
       - uses: ./.github/actions/setup
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -113,10 +119,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ inputs.ref }}
           sparse-checkout: |
             scripts
             examples/hello
             packages/reeval/test/features/egress/blocked-host-recorded
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: current
+          sparse-checkout: scripts
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: ${{ needs.compile.outputs.artifact }}
@@ -149,10 +161,10 @@ jobs:
         run: |
           if [ "$ALPINE" = true ]; then
             docker run --rm -v "$PWD:/repo" -w /repo -e REEVAL_VERSION node:22-alpine sh -c \
-              'apk add -q curl && REEVAL_DOWNLOAD=file:///repo/out REEVAL_INSTALL_DIR=/tmp/bin sh scripts/install.sh &&
+              'apk add -q curl && REEVAL_DOWNLOAD=file:///repo/out REEVAL_INSTALL_DIR=/tmp/bin sh current/scripts/install.sh &&
                 test "$(/tmp/bin/reeval --version)" = "$REEVAL_VERSION"'
           else
-            REEVAL_DOWNLOAD="file://$PWD/out" REEVAL_INSTALL_DIR="$RUNNER_TEMP/bin" sh scripts/install.sh
+            REEVAL_DOWNLOAD="file://$PWD/out" REEVAL_INSTALL_DIR="$RUNNER_TEMP/bin" sh current/scripts/install.sh
             test "$("$RUNNER_TEMP/bin/reeval" --version)" = "$REEVAL_VERSION"
           fi
       - name: install.ps1
@@ -166,7 +178,7 @@ jobs:
           $env:REEVAL_DOWNLOAD = 'http://127.0.0.1:8765'
           foreach ($shell in 'powershell', 'pwsh') {
             $env:REEVAL_INSTALL_DIR = "$env:RUNNER_TEMP\$shell\bin"
-            & $shell -NoProfile -ExecutionPolicy Bypass -File scripts/install.ps1
+            & $shell -NoProfile -ExecutionPolicy Bypass -File current/scripts/install.ps1
             if ($LASTEXITCODE -ne 0) { throw "install.ps1 failed under $shell" }
             $installed = & "$env:REEVAL_INSTALL_DIR\reeval.exe" --version
             if ($installed -ne $env:REEVAL_VERSION) { throw "$shell installed $installed" }
