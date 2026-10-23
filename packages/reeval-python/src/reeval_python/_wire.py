@@ -1814,6 +1814,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
         "failWith",
         "flakeRate",
         "ignoreAbort",
+        "matchedBy",
         "maxConcurrent",
         "mediaType",
         "minLift",
@@ -1834,6 +1835,7 @@ CAMEL_KEYS: frozenset[str] = frozenset(
 # Fields whose keys are the eval's own (env, headers, …), which keep their spelling.
 RECORD_FIELDS: frozenset[str] = frozenset(
     {
+        "answers",
         "env",
         "files",
         "headers",
@@ -1841,6 +1843,7 @@ RECORD_FIELDS: frozenset[str] = frozenset(
         "params",
         "providerOptions",
         "score",
+        "untested",
         "value",
         "write",
     }

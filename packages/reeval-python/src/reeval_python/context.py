@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import sys
-import warnings
-from collections.abc import Awaitable, Callable, Coroutine, Generator
+import inspect
+from collections.abc import Awaitable, Callable, Coroutine
+from contextvars import ContextVar
 from typing import Any, Literal, cast, overload
 
 from reeval_python._wire import (
@@ -26,71 +26,39 @@ from reeval_python.wire import Patterns, json_value, options_to_wire, wire_args
 _UNSET: Any = object()
 
 SendFn = Callable[[AttemptCall], Awaitable[dict[str, Any]]]
-CallFn = SendFn
+
+# Set while `expect.poll` calls its function: reads and commands are described, not made, so
+# reeval can make them again on each try.
+_describing: ContextVar[bool] = ContextVar("_describing", default=False)
 
 
-class _Lazy:
-    """A call that runs when it's awaited or handed to `expect`; one dropped unused warns where
-    it was made, since it never ran."""
+class Described:
+    """What `c.read_file(…)` or `c.exec(…)` names inside `expect.poll`'s function."""
 
-    def __init__(self, what: str) -> None:
-        self._what = what
-        self._used = False
-        # Three frames up: the eval's line that called c.exec(…) or c.read_file(…).
-        frame = sys._getframe(3)  # pyright: ignore[reportPrivateUsage]
-        self._where = (frame.f_code.co_filename, frame.f_lineno)
-
-    def used(self) -> None:
-        self._used = True
-
-    def __del__(self) -> None:
-        if not getattr(self, "_used", True):
-            filename, lineno = self._where
-            message = f"{self._what} was never awaited, so it didn't run"
-            warnings.warn_explicit(message, RuntimeWarning, filename, lineno)
+    def __init__(self, subject: MatcherSubject) -> None:
+        self.subject = subject
 
 
-class PendingExec(_Lazy):
-    """`c.exec(command)` before it's awaited: `await` it for its result, or hand it to `expect`,
-    which runs it (once per poll) and names the check by its command."""
-
-    def __init__(self, call: CallFn, command: str) -> None:
-        super().__init__(f"c.exec({command!r})")
-        self._call = call
-        self.command = command
-
-    def result(self) -> Coroutine[Any, Any, ExecResult]:
-        self.used()
-        return self._result()
-
-    async def _result(self) -> ExecResult:
-        reply = await self._call({"op": "exec", "command": self.command})
-        return ExecResult.from_wire(self.command, cast(dict[str, Any], reply["result"]))
-
-    def __await__(self) -> Generator[Any, None, ExecResult]:
-        return self.result().__await__()
+def describe(fn: Callable[[], object]) -> MatcherSubject:
+    """The read or command `fn` makes, for `expect.poll` to repeat."""
+    token = _describing.set(True)
+    try:
+        out = fn()
+    finally:
+        _describing.reset(token)
+    if isinstance(out, Described):
+        return out.subject
+    if inspect.iscoroutine(out):
+        out.close()
+    raise TypeError(
+        "expect.poll's function must return c.read_file(…) or c.exec(…), which reeval reads "
+        "or runs again on each try"
+    )
 
 
-class PendingRead(_Lazy):
-    """`c.read_file(path)` before it's awaited: `await` it for the contents (`None` when there's
-    no file), or hand it to `expect`, which reads it (once per poll)."""
-
-    def __init__(self, call: CallFn, path: str) -> None:
-        super().__init__(f"c.read_file({path!r})")
-        self._call = call
-        self.path = path
-
-    def result(self) -> Coroutine[Any, Any, str | None]:
-        self.used()
-        return self._result()
-
-    async def _result(self) -> str | None:
-        reply = await self._call({"op": "readFile", "path": self.path})
-        contents = reply.get("contents")
-        return None if contents is None else str(contents)
-
-    def __await__(self) -> Generator[Any, None, str | None]:
-        return self.result().__await__()
+def _not_describing(what: str) -> None:
+    if _describing.get():
+        raise TypeError(f"expect.poll's function can only read a file or run a command, not {what}")
 
 
 PATTERN_ROUNDS = 5
@@ -110,13 +78,14 @@ class AttemptContext:
         return reply
 
     async def send(self, prompt: str) -> Turn:
+        _not_describing("c.send")
         reply = await self._call({"op": "send", "prompt": prompt})
         turn = Turn(index=len(self.turns), raw=cast(dict[str, Any], reply["turn"]))
         self.turns.append(turn)
         return turn
 
     @overload
-    def exec(self, command: str) -> PendingExec: ...
+    def exec(self, command: str) -> Coroutine[Any, Any, ExecResult]: ...
     @overload
     def exec(
         self, command: str, *, background: Literal[True]
@@ -124,28 +93,43 @@ class AttemptContext:
     @overload
     def exec(
         self, command: str, *, background: bool
-    ) -> PendingExec | Coroutine[Any, Any, BackgroundHandle]: ...
+    ) -> Coroutine[Any, Any, ExecResult | BackgroundHandle]: ...
 
     def exec(
         self, command: str, *, background: bool = False
-    ) -> PendingExec | Coroutine[Any, Any, BackgroundHandle]:
+    ) -> Coroutine[Any, Any, ExecResult | BackgroundHandle]:
         """Run a command in the sandbox; with `background=True`, leave it running."""
+        if _describing.get() and not background:
+            return cast(Any, Described({"exec": command}))
+        _not_describing("c.exec(…, background=True)")
+        return self._exec(command, background)
+
+    async def _exec(self, command: str, background: bool) -> ExecResult | BackgroundHandle:
+        call: AttemptCallExec = {"op": "exec", "command": command}
         if background:
-            return self._background(command)
-        return PendingExec(self._call, command)
+            call["background"] = True
+        result = cast(dict[str, Any], (await self._call(call))["result"])
+        return (
+            BackgroundHandle.from_wire(result)
+            if background
+            else ExecResult.from_wire(command, result)
+        )
 
-    async def _background(self, command: str) -> BackgroundHandle:
-        call: AttemptCallExec = {"op": "exec", "command": command, "background": True}
-        reply = await self._call(call)
-        return BackgroundHandle.from_wire(cast(dict[str, Any], reply["result"]))
+    def read_file(self, path: str) -> Coroutine[Any, Any, str | None]:
+        """A file's contents in the sandbox, or `None` when there's no such file."""
+        if _describing.get():
+            return cast(Any, Described({"readFile": path}))
+        return self._read_file(path)
 
-    def read_file(self, path: str) -> PendingRead:
-        return PendingRead(self._call, path)
+    async def _read_file(self, path: str) -> str | None:
+        contents = (await self._call({"op": "readFile", "path": path})).get("contents")
+        return None if contents is None else str(contents)
 
-    def file(self, path: str) -> PendingRead:
-        return PendingRead(self._call, path)
+    def file(self, path: str) -> Coroutine[Any, Any, str | None]:
+        return self.read_file(path)
 
     async def write_file(self, path: str, contents: str | bytes) -> None:
+        _not_describing("c.write_file")
         if isinstance(contents, bytes):
             encoded = base64.b64encode(contents).decode()
             await self._call(
@@ -155,11 +139,13 @@ class AttemptContext:
             await self._call({"op": "writeFile", "path": path, "contents": contents})
 
     async def kill(self, handle: BackgroundHandle) -> None:
+        _not_describing("c.kill")
         await self._call({"op": "kill", "handle": handle.id})
 
     async def judge(self, question: str, *, on: Any = _UNSET, **options: Any) -> Verdict:
         """Ask the judge a yes/no question about the latest turn, or `on` an earlier turn or
         a value: an `ExecResult`, a `Verdict` or any JSON value, `None` included."""
+        _not_describing("c.judge")
         wire_opts = options_to_wire(options) or {}
         if on is not _UNSET:
             accepted = "judge(on=…) takes a turn, an ExecResult, a Verdict or a JSON value"
@@ -243,6 +229,7 @@ class SyncAttemptContext:
         return fut.result()
 
     def send(self, prompt: str) -> Turn:
+        _not_describing("c.send")
         return self._run(self._ctx.send(prompt))
 
     @overload
@@ -253,23 +240,32 @@ class SyncAttemptContext:
     def exec(self, command: str, *, background: bool) -> ExecResult | BackgroundHandle: ...
 
     def exec(self, command: str, *, background: bool = False) -> ExecResult | BackgroundHandle:
-        if background:
-            return self._run(self._ctx.exec(command, background=True))
-        return self._run(self._ctx.exec(command).result())
+        """Run a command in the sandbox and wait for it; with `background=True`, leave it
+        running."""
+        if _describing.get() and not background:
+            return cast(Any, Described({"exec": command}))
+        _not_describing("c.exec(…, background=True)")
+        return self._run(self._ctx.exec(command, background=background))
 
     def read_file(self, path: str) -> str | None:
-        return self._run(self._ctx.read_file(path).result())
+        """A file's contents in the sandbox, or `None` when there's no such file."""
+        if _describing.get():
+            return cast(Any, Described({"readFile": path}))
+        return self._run(self._ctx.read_file(path))
 
     def file(self, path: str) -> str | None:
         return self.read_file(path)
 
     def write_file(self, path: str, contents: str | bytes) -> None:
+        _not_describing("c.write_file")
         self._run(self._ctx.write_file(path, contents))
 
     def kill(self, handle: BackgroundHandle) -> None:
+        _not_describing("c.kill")
         self._run(self._ctx.kill(handle))
 
     def judge(self, question: str, *, on: Any = _UNSET, **options: Any) -> Verdict:
+        _not_describing("c.judge")
         return self._run(self._ctx.judge(question, on=on, **options))
 
     def bind_expect(self) -> None:

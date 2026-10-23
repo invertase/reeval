@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { DEFAULT_EGRESS_ALLOW } from '../src/egress.ts'
+import { MATCHERS } from '../src/matchers.ts'
 import { testDir } from './support/fixture.ts'
 
 const pkg = join(testDir, '..', '..', 'reeval-python')
@@ -31,4 +32,21 @@ test("the Python SDK's DEFAULT_EGRESS_ALLOW is reeval's", () => {
   assert.ok(tuple, 'DEFAULT_EGRESS_ALLOW is a tuple literal in environment.py')
   const hosts = [...tuple.matchAll(/"([^"]+)"/g)].map((m) => m[1])
   assert.deepEqual(hosts, [...DEFAULT_EGRESS_ALLOW])
+})
+
+test("the Python SDK's matchers are reeval's, each under its snake_case name", () => {
+  const source = readFileSync(join(pkg, 'src/reeval_python/expect.py'), 'utf8')
+  const methods = [...source.matchAll(/def (to_\w+)\(self[^]*?self\._match\("(\w+)"/g)].map(
+    ([, method, matcher]) => [method, matcher],
+  )
+  assert.deepEqual(
+    methods.map(([, matcher]) => matcher),
+    Object.keys(MATCHERS),
+  )
+  for (const [method, matcher] of methods) {
+    assert.equal(
+      method,
+      matcher?.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`),
+    )
+  }
 })

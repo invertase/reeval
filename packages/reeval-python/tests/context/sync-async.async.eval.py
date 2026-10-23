@@ -1,4 +1,5 @@
-from reeval_python import evaluate, expect
+from reeval_python import evaluate
+from reeval_python.aio import expect
 
 
 @evaluate("sync-async")

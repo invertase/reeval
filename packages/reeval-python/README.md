@@ -67,12 +67,51 @@ expect(c.turns[0]).to_have_run(re.compile(r"^(npm|pnpm) t(est)?$"))
 ```
 
 Use snake_case on the context (`read_file`, `write_file`, `file`) and on matchers (`to_succeed`,
-`to_pass`, `to_equal`, `to_contain`, …). Matcher failures raise `ReevalAssertionError`. Async bodies use
-`async def`, `await c.send(...)`, and `await expect(await c.exec(...)).to_succeed()`; sync bodies
-use plain `def` and block on the runner loop. In an async body a matcher left unawaited fails the
-attempt, and a `c.exec(...)` left unawaited warns, since neither ran. Options take reeval's keys
-in snake_case at any depth (`min_lift`, `delay_ms`); the keys of `env`, `headers` and the other
-maps of your own keep their spelling.
+`to_pass`, `to_equal`, `to_contain`, …). Matcher failures raise `ReevalAssertionError`. Options take
+reeval's keys in snake_case at any depth (`min_lift`, `delay_ms`); the keys of `env`, `headers`
+and the other maps of your own keep their spelling.
+
+### `def` and `async def` bodies
+
+A `def` body gets a blocking context: `c.exec(…)` runs the command and returns its `ExecResult`,
+and `c.read_file(…)` returns the contents. Use `expect` from `reeval_python`, whose matchers check
+at once.
+
+An `async def` body gets the async context: `c.exec(…)` and `c.read_file(…)` are coroutines, and
+`expect` comes from `reeval_python.aio`, whose matchers you await. Pyright reports a matcher or a
+command you forgot to await, and at run time an unawaited matcher fails the attempt while an
+unawaited command gets Python's "never awaited" warning. Each `expect` refuses to run in the other
+kind of body.
+
+```python
+from reeval_python import evaluate
+from reeval_python.aio import expect
+
+
+@evaluate("lands, async")
+async def lands(c):
+    await c.send("Create greet.py that prints hi")
+    await expect(await c.exec("python greet.py")).to_succeed()
+```
+
+`expect.poll` retries a matcher until it passes. Hand it a function that reads a file or runs a
+command, and reeval reads or runs it again on each try; it works the same in both kinds of body.
+
+```python
+expect.poll(lambda: c.read_file("ready.txt"), timeout=10_000).to_be("ready\n")
+expect.poll(c, "the server wrote its log").to_have_file("server.log")
+```
+
+### Names of `evaluate_each` cases
+
+`evaluate_each(cases, name)` names each eval from `name`: `%#` is the case's index, `%s` the case
+as `str()` writes it, and `$field` a dict case's field. Each placeholder is filled once, so a value
+that contains `$` or `%` stays as it is, and a `$field` the case doesn't have is left as written.
+
+```python
+@evaluate_each([{"lang": "en"}, {"lang": "fr"}], "greets in $lang (#%#)")
+def greets(c, case): ...
+```
 
 ## Examples
 

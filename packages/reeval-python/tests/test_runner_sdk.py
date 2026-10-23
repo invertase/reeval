@@ -15,7 +15,8 @@ from reeval_python.runner import _Connection  # pyright: ignore[reportPrivateUsa
 EVAL = """
 import contextlib
 import functools
-from reeval_python import evaluate, expect
+from reeval_python import evaluate
+from reeval_python.aio import expect
 
 
 def traced(fn):
@@ -31,6 +32,12 @@ def unwrapped(fn):
     return inner
 
 
+@evaluate("sync expect in an async body")
+async def mixes(c):
+    import reeval_python
+    reeval_python.expect(1).to_be(1)
+
+
 @evaluate("forgets an await")
 async def forgets(c):
     expect(1).to_be(2)
@@ -39,13 +46,13 @@ async def forgets(c):
 @evaluate("wrapped async")
 @traced
 async def wrapped(c):
-    await expect(c.exec("true")).to_succeed()
+    await expect(await c.exec("true")).to_succeed()
 
 
 @evaluate("wrapped without wraps")
 @unwrapped
 async def bare(c):
-    await expect(c.exec("true")).to_succeed()
+    await expect(await c.exec("true")).to_succeed()
 
 
 @evaluate("judges an exec result")
@@ -110,10 +117,17 @@ def test_a_matcher_never_awaited_fails_the_body(host: Host) -> None:
     assert host.calls() == []
 
 
+def test_the_sync_expect_in_an_async_body_says_which_to_use(host: Host) -> None:
+    host.start("sync expect in an async body")
+    error = host.done()["error"]
+    assert "use reeval_python.aio's and await the matcher" in error["message"]
+    assert host.calls() == []
+
+
 def test_an_async_body_under_a_wrapping_decorator_runs(host: Host) -> None:
     host.start("wrapped async")
     assert "error" not in host.done()
-    assert [c["op"] for c in host.calls()] == ["expect"]
+    assert [c["op"] for c in host.calls()] == ["exec", "expect"]
 
 
 def test_a_sync_wrapper_that_returns_a_coroutine_fails_the_body(host: Host) -> None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -201,13 +202,24 @@ def evaluate(
     return decorator
 
 
+_PLACEHOLDER = re.compile(r"%#|%s|\$([A-Za-z_]\w*)")
+
+
 def _case_name(template: str, case: Any, index: int) -> str:
-    name = template.replace("%#", str(index)).replace("%s", str(cast(object, case)))
-    if isinstance(case, dict):
-        fields = cast(dict[str, Any], case)
-        for key in sorted(fields, key=len, reverse=True):
-            name = name.replace(f"${key}", str(fields[key]))
-    return name
+    """A case's eval name: `%#` is its index, `%s` the case as `str()` writes it, and `$field`
+    the field of a dict case (left as written when the case has no such field). One pass, so a
+    value that contains a placeholder stays as it is."""
+    fields = cast(dict[str, Any], case) if isinstance(case, dict) else {}
+
+    def fill(m: re.Match[str]) -> str:
+        if m.group(0) == "%#":
+            return str(index)
+        if m.group(0) == "%s":
+            return str(cast(object, case))
+        key = m.group(1)
+        return str(fields[key]) if key in fields else m.group(0)
+
+    return _PLACEHOLDER.sub(fill, template)
 
 
 def is_async(fn: Callable[..., Any]) -> bool:
@@ -242,8 +254,13 @@ def evaluate_each(
     *,
     pool: bool = True,
 ) -> Callable[[Body], Body]:
-    """One eval per case, named from `name_template` (`%s`, `%#`, `$field`); the body gets
-    `(c, case)`. Its cases pool into one family unless `pool=False` or there's only one."""
+    """One eval per case; the body gets `(c, case)`. Its cases pool into one family unless
+    `pool=False` or there's only one.
+
+    Each eval is named from `name_template`: `%#` is the case's index, `%s` the case as `str()`
+    writes it, and `$field` a dict case's field (`"greets $name"`), left as written when the
+    case has no such field.
+    """
     if not isinstance(cast(object, cases), list | tuple):
         raise TypeError(
             f"evaluate_each takes a list of cases (got {type(cases).__name__}), e.g. "

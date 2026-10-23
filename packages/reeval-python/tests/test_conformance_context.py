@@ -58,8 +58,12 @@ def test_context_golden(mirror: Path, tmp_path: Path) -> None:
     assert runner.finish() == [], "the runner sent nothing after the golden's last line"
 
 
+# JavaScript regular expressions on the wire: Python sends its own patterns ({ matchedBy }).
+NOT_PYTHON = {"expect-regexp"}
+
+
 def test_every_golden_has_a_mirror() -> None:
-    goldens = {p.stem for p in GOLDENS.glob("*.ndjson")}
+    goldens = {p.stem for p in GOLDENS.glob("*.ndjson")} - NOT_PYTHON
     mirrored = {m.name.split(".")[0] for m in MIRRORS}
     assert mirrored == goldens, (
         f"unmirrored {sorted(goldens - mirrored)}, extra {sorted(mirrored - goldens)}"

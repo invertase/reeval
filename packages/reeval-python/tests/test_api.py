@@ -89,30 +89,32 @@ def test_evaluate_each_refuses_a_body_without_the_case_where_it_is_declared() ->
         collect_module_tree_sync(load)
 
 
-def test_a_command_never_awaited_warns_where_it_was_made() -> None:
+def test_an_async_command_is_a_coroutine_that_warns_if_never_awaited() -> None:
     async def send(call: Any) -> dict[str, Any]:
         return {"ok": True}
 
     c = AttemptContext("k1", send)
-    with pytest.warns(RuntimeWarning, match=r"c.exec\('npm install'\) was never awaited") as seen:
+    with pytest.warns(RuntimeWarning, match="was never awaited"):
         c.exec("npm install")
         gc.collect()
-    assert seen[0].filename == __file__
 
 
-def test_a_command_handed_to_expect_or_awaited_does_not_warn(
-    recwarn: pytest.WarningsRecorder,
-) -> None:
+def test_expect_refuses_a_coroutine_and_poll_a_value() -> None:
+    from reeval_python.context import describe
     from reeval_python.wire import subject_for_matcher
 
     async def send(call: Any) -> dict[str, Any]:
         return {"ok": True}
 
     c = AttemptContext("k1", send)
-    subject_for_matcher(c.exec("true"))
-    subject_for_matcher(c.read_file("a.txt"))
-    gc.collect()
-    assert [str(w.message) for w in recwarn] == []
+    with pytest.raises(TypeError, match="await it first"):
+        subject_for_matcher(c.exec("true"))
+    assert describe(lambda: c.read_file("a.txt")) == {"readFile": "a.txt"}
+    assert describe(lambda: c.exec("npm test")) == {"exec": "npm test"}
+    with pytest.raises(TypeError, match="must return c.read_file"):
+        describe(lambda: "ready")
+    with pytest.raises(TypeError, match="must return c.read_file"):
+        describe(lambda: c.send("hi"))
 
 
 USER_EVAL = """
@@ -160,3 +162,13 @@ def test_a_user_eval_type_checks_under_strict_pyright(tmp_path: Path) -> None:
         d["message"] for d in report["generalDiagnostics"] if d["severity"] == "information"
     ]
     assert "Coroutine" in revealed, revealed
+
+
+def test_case_names_fill_each_placeholder_once() -> None:
+    from reeval_python.declare import _case_name  # pyright: ignore[reportPrivateUsage]
+
+    assert _case_name("case %# is %s", "ada", 2) == "case 2 is ada"
+    assert _case_name("$name and $names", {"name": "a", "names": "b"}, 0) == "a and b"
+    assert _case_name("$name", {"name": "$other", "other": "x"}, 0) == "$other"
+    assert _case_name("$missing %s", {"a": 1}, 0) == "$missing {'a': 1}"
+    assert _case_name("%s", "100%#", 7) == "100%#"

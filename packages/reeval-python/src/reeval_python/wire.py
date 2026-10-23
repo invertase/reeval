@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 from collections.abc import Iterable
@@ -9,14 +10,6 @@ from typing import Any, cast
 
 from reeval_python._wire import CAMEL_KEYS, RECORD_FIELDS, MatcherSubject
 from reeval_python.types import ExecResult, Turn, Verdict
-
-
-def matcher_to_wire(name: str) -> str:
-    """A matcher method's name as reeval's (`to_have_edited` -> `toHaveEdited`); reeval refuses
-    a matcher it doesn't have."""
-    head, *rest = name.split("_")
-    return head + "".join(part.capitalize() for part in rest)
-
 
 _SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+")
 
@@ -130,16 +123,16 @@ def wire_args(args: Iterable[Any], patterns: Patterns) -> list[Any]:
 
 def subject_for_matcher(actual: Any) -> MatcherSubject:
     """What `expect` checks: reeval reads the attempt, a turn, a command or a file itself."""
-    from reeval_python.context import AttemptContext, PendingExec, PendingRead, SyncAttemptContext
+    from reeval_python.context import AttemptContext, SyncAttemptContext
 
     if isinstance(actual, AttemptContext | SyncAttemptContext):
         return {"attempt": True}
-    if isinstance(actual, PendingExec):
-        actual.used()
-        return {"exec": actual.command}
-    if isinstance(actual, PendingRead):
-        actual.used()
-        return {"readFile": actual.path}
+    if inspect.iscoroutine(actual):
+        actual.close()
+        raise TypeError(
+            "expect() takes a result, not a coroutine: await it first, as in "
+            "expect(await c.exec(…)), or poll it with expect.poll(lambda: c.read_file(…))"
+        )
     if isinstance(actual, ExecResult):
         result = {"exitCode": actual.exit_code, "stdout": actual.stdout, "stderr": actual.stderr}
         return cast(MatcherSubject, {"exec": actual.command, "result": result})

@@ -25,8 +25,12 @@ lifecycle stay shared.
   its `AssertionError` escapes the body, so a failure the body catches isn't a failed check. The
   message is the failure's reason. Use `expect(…).to_succeed()` and the other matchers for
   reeval-specific checks.
-  Plain `def` bodies run on a worker thread with a sync context; `async def` uses the same asyncio
-  implementation.
+  Follow the language's own sync and async idioms rather than TypeScript's promises: in Python a
+  `def` body runs on a worker thread with a blocking context (`c.exec` returns its result) and
+  `reeval_python.expect`, and an `async def` body gets coroutines and `reeval_python.aio.expect`,
+  whose typed matchers return coroutines so the type checker reports a missing `await`. A poll
+  takes a function that reads or runs something (`expect.poll(lambda: c.read_file(p))`), which the
+  SDK calls once to learn the subject for reeval to re-read.
 - **TypeScript stays in-process.** Never send `.eval.ts` through the runner transport; records,
   stacks and matcher behaviour must stay unchanged.
 - **No per-language branches in the engine.** The worker calls `loadEvalModule()` only; do not
