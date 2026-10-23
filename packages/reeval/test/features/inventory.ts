@@ -329,6 +329,23 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'gateway.vercel',
+    area: 'Config and selection',
+    name: '`vercel()`: Claude Code and Codex on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin',
+    plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
+    tests: [
+      'reeval/test/plan.test.ts › a judge model no listed gateway serves exits 2 at plan time',
+      'reeval/test/gateway.test.ts › a fake harness calls no model, so any gateway serves it',
+      'reeval/test/gateway.test.ts › on a list, a model takes the first gateway that serves it, and only its keys',
+      'reeval/test/gateway.test.ts › a model nothing in the list serves exits 2, naming the gateway that would',
+      "reeval/test/gateway.test.ts › the egress gateway swaps Vercel's key in only on Vercel's model paths",
+      'reeval/test/gateway.test.ts › Claude Code takes the key as AI_GATEWAY_API_KEY and is brokered only on Vercel',
+      "reeval/test/gateway.test.ts › Codex reads the served model from Vercel's responses and names OpenAI's models",
+      "reeval/test/gateway.test.ts › an expired project token is refused before the run; a live one, or a key, isn't",
+      'reeval/test/doctor.test.ts › gateway: where each harness resolves, its keys, and an expired Vercel token',
+    ],
+  },
+  {
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',
@@ -1656,13 +1673,13 @@ export const inventory: InventoryFeature[] = [
       engine(
         "anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's",
       ),
-      unit('judge strings use the provider package when its key is set, else the AI Gateway'),
+      unit('judge strings use the provider package on direct, and the AI Gateway only on vercel'),
       questions("a question's own model needs its key, and a malformed one exits 2"),
       options(
         'a judge model without its key exits 2 naming the keys that work, before any attempt',
       ),
       secrets("masks every direct model provider's key by its value, whatever its shape"),
-      'reeval/test/doctor.test.ts › analysis: an anthropic/* or openai/* model takes its own key, which wins over the Gateway',
+      "reeval/test/doctor.test.ts › analysis: an anthropic/* or openai/* model takes its own key, never the Gateway's",
     ],
   },
   {

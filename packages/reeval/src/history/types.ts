@@ -95,6 +95,8 @@ export type JudgementRecord = {
   model: string
   /** The model id the provider says served the call, when it reports one. */
   resolvedModel?: string
+  /** The gateway from the config's `gateway` list the call went through; unset without one. */
+  gateway?: string
   /**
    * `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a
    * verdict can be followed across runs (and an edited question starts a new series).

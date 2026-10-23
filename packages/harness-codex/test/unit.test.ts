@@ -8,6 +8,7 @@ import {
   getCodexBootstrap,
 } from '../src/codex-bootstrap.ts'
 import {
+  AI_GATEWAY_PROVIDER,
   buildCodexCommand,
   buildCodexConfig,
   buildCodexMarketplace,
@@ -259,4 +260,36 @@ test("a session counts each turn's tokens once, its running total kept in the re
     resumeFrom: state,
   } as never)
   assert.equal(await input(resumed), 53821)
+})
+
+test('on Vercel AI Gateway, Codex calls its Responses API with the gateway key, brokered there only', async () => {
+  const config = buildCodexConfig({ provider: AI_GATEWAY_PROVIDER })
+  assert.match(config, /"base_url" = "https:\/\/ai-gateway\.vercel\.sh\/v1"/)
+  assert.match(config, /"env_key" = "AI_GATEWAY_API_KEY"/)
+  assert.throws(
+    () => createCodex({ auth: { [CODEX_CREDENTIAL_ENV]: 'sk-k' }, provider: AI_GATEWAY_PROVIDER }),
+    /Codex auth must be an environment object with AI_GATEWAY_API_KEY \(a Vercel AI Gateway key\)/,
+  )
+  const rules: Array<{
+    match: Record<string, unknown>
+    transform: { headers: Record<string, string> }
+  }> = []
+  const writes: Array<{ path: string; content: string }> = []
+  const harness = createCodex({
+    auth: { AI_GATEWAY_API_KEY: 'vck-real' },
+    provider: AI_GATEWAY_PROVIDER,
+  })
+  await harness.doStart({
+    sessionId: 's1',
+    sessionWorkDir: '/reeval/workspace',
+    sandboxSession: {
+      addRequestTransformations: async (r: typeof rules) => void rules.push(...r),
+      run: async () => ({ exitCode: 0, stdout: '/home/reeval', stderr: '' }),
+      writeTextFile: async (w: { path: string; content: string }) => void writes.push(w),
+    },
+  } as never)
+  assert.equal(rules[0]?.match.host, 'ai-gateway.vercel.sh')
+  assert.equal(rules[0]?.transform.headers.Authorization, 'Bearer vck-real')
+  assert.doesNotMatch(writes[0]?.content ?? '', /vck-real/)
+  assert.match(writes[0]?.content ?? '', /ai-gateway\.vercel\.sh/)
 })

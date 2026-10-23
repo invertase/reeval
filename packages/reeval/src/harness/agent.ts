@@ -135,7 +135,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           if (part.type === 'stream-start' && part.modelId) servedModel = part.modelId
           if (part.type === 'finish') finishMetadata = part.harnessMetadata
         }),
-        model: descriptor.model,
+        model: catalog.modelId?.(descriptor.model) ?? descriptor.model,
         permissionMode: 'allow-all',
         ...(off.length ? { inactiveTools: off } : {}),
         sandboxConfig: { workDir: WORKSPACE_DIR },

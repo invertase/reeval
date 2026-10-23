@@ -685,7 +685,7 @@ evaluate('judged', async (c) => {
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
     assert.match(
       missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "google\/gemini-3\.8-flash"\./,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(for direct\(\)\) for the judge model, "google\/gemini-3\.8-flash"\./,
     )
     const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
       env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
@@ -701,17 +701,17 @@ evaluate('judged', async (c) => {
     [
       'anthropic/claude-sonnet-5',
       'ANTHROPIC_API_KEY',
-      /Missing credentials: ANTHROPIC_API_KEY \(to call Anthropic directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "anthropic\/claude-sonnet-5"\. Set them in the environment or \.env\.local\./,
+      /Missing credentials: ANTHROPIC_API_KEY \(for direct\(\)\) for the judge model, "anthropic\/claude-sonnet-5"\. Set them in the environment or \.env\.local\.$/m,
     ],
     [
       'openai/gpt-6-luna',
       'OPENAI_API_KEY',
-      /Missing credentials: OPENAI_API_KEY \(to call OpenAI directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for the judge model, "openai\/gpt-6-luna"\./,
+      /Missing credentials: OPENAI_API_KEY \(for direct\(\)\) for the judge model, "openai\/gpt-6-luna"\./,
     ],
     [
       'mistral/mistral-large',
       'AI_GATEWAY_API_KEY',
-      /Missing credentials: AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway, the only route for mistral\/\* models; reeval calls anthropic\/\*, google\/\*, openai\/\*, typesafe-ai\/\* directly\) for the judge model, "mistral\/mistral-large"\./,
+      /the judge model "mistral\/mistral-large": no gateway in the list can serve it \(direct: reeval calls only anthropic\/\*, google\/\*, openai\/\*, typesafe-ai\/\* models on their own keys\)\. Add vercel\(\) to gateway\./,
     ],
   ]
   test('a judge model without its key exits 2 naming the keys that work, before any attempt', async () => {
@@ -737,6 +737,14 @@ evaluate('judged', async (c) => {
       assert.equal(missing.code, 2, missing.stdout + missing.stderr)
       assert.match(missing.stderr, message)
       if (key === 'AI_GATEWAY_API_KEY') continue
+      const unused = await runCli(p.dir, ['run', '--profile', 'real'], {
+        env: { ...noKeys, AI_GATEWAY_API_KEY: 'vck_test' },
+      })
+      assert.equal(unused.code, 2, 'no gateway by default: the Gateway key never stands in')
+      assert.match(
+        unused.stderr,
+        /Set them in the environment or \.env\.local\. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel\(\) to gateway to call the model through Vercel AI Gateway\./,
+      )
       const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
         env: { ...noKeys, [key]: 'sk-test\nrest' },
       })

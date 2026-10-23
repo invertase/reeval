@@ -102,7 +102,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
     assert.match(
       missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(to go through the Vercel AI Gateway\) for compare questions, "google\/gemini-3\.8-flash"\./,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(for direct\(\)\) for compare questions, "google\/gemini-3\.8-flash"\./,
     )
     const malformed = await runCli(p.dir, ['run'], {
       env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
@@ -137,7 +137,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
     assert.match(
       missing.stderr,
-      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(to call Google directly\) or AI_GATEWAY/,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY \(for direct\(\)\) for compare questions/,
     )
   })
 

@@ -46,6 +46,27 @@ export const CODEX_WORKSPACE_SKILLS_DIR = '.agents/skills'
 /** The provider the adapter gives Codex, so its requests are HTTP and it reads no login. */
 export const CODEX_PROVIDER_ID = 'openai-http'
 
+/** A Responses API Codex calls: its name, base URL, and the variable its key is in. */
+export type CodexProvider = {
+  readonly name: string
+  readonly baseUrl: string
+  readonly credentialEnv: string
+}
+
+/** OpenAI's API with an OpenAI API key: the default. */
+export const OPENAI_PROVIDER: CodexProvider = {
+  name: 'OpenAI',
+  baseUrl: OPENAI_API_URL,
+  credentialEnv: CODEX_CREDENTIAL_ENV,
+}
+
+/** Vercel AI Gateway's Responses API, whose model ids name their provider (`openai/…`). */
+export const AI_GATEWAY_PROVIDER: CodexProvider = {
+  name: 'Vercel AI Gateway',
+  baseUrl: 'https://ai-gateway.vercel.sh/v1',
+  credentialEnv: 'AI_GATEWAY_API_KEY',
+}
+
 /**
  * The one request Codex sends the key on, `POST /v1/responses`, on its own provider (with
  * WebSockets off, so it's always HTTP). A gateway that enforces it refuses the key anywhere else.
@@ -77,8 +98,13 @@ export const CODEX_PLUGIN_MARKETPLACE = 'reeval'
 export type CodexPlugin = { readonly name: string; readonly dir: string }
 
 export type CodexHarnessSettings = {
-  /** `{ OPENAI_API_KEY }`, the only key used. The host environment is never read. */
+  /**
+   * The provider's key under its `credentialEnv` (`{ OPENAI_API_KEY }` by default), the only key
+   * used. The host environment is never read.
+   */
   readonly auth: HarnessV1AuthenticationEnvironment
+  /** The Responses API Codex calls; default OpenAI's. */
+  readonly provider?: CodexProvider
   /** MCP servers in Codex's `[mcp_servers]` shape, keyed by name. */
   readonly mcpServers?: Record<string, Record<string, unknown>>
   /**
@@ -154,7 +180,9 @@ export function buildCodexConfig(options: {
   mcpServers?: Record<string, Record<string, unknown>>
   effort?: string
   plugins?: boolean
+  provider?: CodexProvider
 }): string {
+  const provider = options.provider ?? OPENAI_PROVIDER
   const config: Record<string, TomlValue> = {
     ...CODEX_QUIET_CONFIG,
     ...(options.plugins ? { features: { ...CODEX_QUIET_CONFIG.features, plugins: true } } : {}),
@@ -162,9 +190,9 @@ export function buildCodexConfig(options: {
     model_provider: CODEX_PROVIDER_ID,
     model_providers: {
       [CODEX_PROVIDER_ID]: {
-        name: 'OpenAI',
-        base_url: OPENAI_API_URL,
-        env_key: CODEX_CREDENTIAL_ENV,
+        name: provider.name,
+        base_url: provider.baseUrl,
+        env_key: provider.credentialEnv,
         wire_api: 'responses',
         supports_websockets: false,
       },
@@ -247,12 +275,13 @@ export function buildCodexCommand(options: {
  * reeval runs.
  */
 export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuiltinTools> {
+  const provider = settings.provider ?? OPENAI_PROVIDER
   const key = isHarnessAuthenticationEnvironment(settings.auth)
-    ? settings.auth[CODEX_CREDENTIAL_ENV]
+    ? settings.auth[provider.credentialEnv]
     : undefined
   if (!key) {
     throw new Error(
-      `Codex auth must be an environment object with ${CODEX_CREDENTIAL_ENV} (an OpenAI API key)`,
+      `Codex auth must be an environment object with ${provider.credentialEnv} (a ${provider.name} key)`,
     )
   }
   return {
@@ -261,12 +290,13 @@ export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuil
     builtinTools: CODEX_BUILTIN_TOOLS,
     lifecycleStateSchema: lifecycleData,
     getBootstrap: getCodexBootstrap,
-    doStart: (options) => startSession(settings, key, options),
+    doStart: (options) => startSession(settings, provider, key, options),
   }
 }
 
 async function startSession(
   settings: CodexHarnessSettings,
+  provider: CodexProvider,
   key: string,
   options: HarnessV1StartOptions,
 ): Promise<HarnessV1Session> {
@@ -276,14 +306,14 @@ async function startSession(
     sandboxKey = generateSandboxCredentialPlaceholder()
     await sandbox.addRequestTransformations([
       createCredentialRequestTransformation({
-        matchUrl: OPENAI_API_URL,
+        matchUrl: provider.baseUrl,
         matchHeaders: { Authorization: `Bearer ${sandboxKey}` },
         transformHeaders: { ...options.headers, Authorization: `Bearer ${key}` },
       }),
     ])
   } else if (settings.requireCredentialBrokering) {
     throw new Error(
-      `The sandbox can't broker ${CODEX_CREDENTIAL_ENV} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
+      `The sandbox can't broker ${provider.credentialEnv} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
     )
   }
 
@@ -301,6 +331,7 @@ async function startSession(
       ...(settings.mcpServers ? { mcpServers: settings.mcpServers } : {}),
       ...(settings.effort ? { effort: settings.effort } : {}),
       ...(plugins.length ? { plugins: true } : {}),
+      provider,
     }),
     abortSignal,
   })
@@ -320,7 +351,7 @@ async function startSession(
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   let threadId = resumed.success ? resumed.data.threadId : undefined
   let threadUsage: CodexUsage | undefined = resumed.success ? resumed.data.usage : undefined
-  const env = { [CODEX_CREDENTIAL_ENV]: sandboxKey }
+  const env = { [provider.credentialEnv]: sandboxKey }
   let turns = 0
   let running: { kill(): PromiseLike<void> } | undefined
   let ended = false

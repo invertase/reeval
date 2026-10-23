@@ -19,6 +19,9 @@ import { ciRunner, DEFAULT_EGRESS, directOnCloud, isDirect, unenforceable } from
 import { DEFAULT_EXCLUDE, findEvalFiles } from './engine/files.ts'
 import { loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox } from './environment.ts'
+import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
+import { resolveGateway, routedHarness } from './gateway/resolve.ts'
+import { VERCEL_KEY, vercelCredentialProblem } from './gateway/vercel.ts'
 import { credentialOf } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
@@ -29,19 +32,30 @@ import {
   modelKeyOptions,
   RECOMMENDED_ANALYSIS_MODEL,
   RECOMMENDED_JUDGE_MODEL,
+  setGatewayKey,
 } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
 import { badCharacterAt, redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { ImageTarget, ImageUse } from './sandbox/images.ts'
-import type { EgressPolicy, HarnessDescriptor, ResolvedConfig, SandboxDescriptor } from './types.ts'
+import type {
+  EgressPolicy,
+  FakeJudgeModel,
+  GatewayName,
+  HarnessDescriptor,
+  ResolvedConfig,
+  SandboxDescriptor,
+} from './types.ts'
 import { colors } from './ui/colors.ts'
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip'
 
 type Runtime = NonNullable<Stack['runtime']>
 
 export type Check = {
-  /** The area: runtime, config, docker, image, key, judge, analysis, egress, gitignore or env-files. */
+  /**
+   * The area: runtime, config, docker, image, key, judge, analysis, gateway, egress, gitignore or
+   * env-files.
+   */
   id: string
   status: CheckStatus
   summary: string
@@ -201,7 +215,7 @@ export function checkRuntime(runtime: Runtime, nodeVersion: string): Check {
 export function configuredUses(config: ResolvedConfig) {
   const uses: Array<{ harness: HarnessDescriptor; sandbox: SandboxDescriptor; profile?: string }> =
     config.harness.map((harness) => ({
-      harness,
+      harness: routedHarness(harness, config.gateway),
       sandbox: environmentSandbox(config.environment, config.sandbox),
     }))
   for (const [name, profile] of Object.entries(config.profiles)) {
@@ -211,7 +225,10 @@ export function configuredUses(config: ResolvedConfig) {
         ? config.harness
         : []
     const sandbox = profileSandbox(config, profile.defaults)
-    for (const harness of harnesses) uses.push({ harness, sandbox, profile: name })
+    const gateways = profile.gateway ?? config.gateway
+    for (const harness of harnesses) {
+      uses.push({ harness: routedHarness(harness, gateways), sandbox, profile: name })
+    }
   }
   return uses
 }
@@ -566,17 +583,16 @@ async function keyCheck(
   online: boolean,
   envFile: string,
   model?: string,
+  gateway?: GatewayName,
 ): Promise<Check> {
   const name = names.find((n) => deps.env[n])
   if (!name) {
+    const unused = model && (gateway ?? 'direct') === 'direct' ? setGatewayKey(deps.env) : undefined
     return {
       id,
       status: required ? 'fail' : 'warn',
-      summary: `${model ? modelKeyOptions(model) : names.join(' or ')} for ${who}: not set`,
-      fix:
-        model && names.length > 2
-          ? `add ${names[0]}=... to ${envFile}, or ${names[1]}=... to go through the Vercel AI Gateway`
-          : `add ${names[0]}=... to ${envFile}`,
+      summary: `${model ? modelKeyOptions(model, gateway) : names.join(' or ')} for ${who}: not set`,
+      fix: `add ${names[0]}=... to ${envFile}${unused ? `, or add vercel() to gateway to use the ${unused} that's set` : ''}`,
     }
   }
   const value = deps.env[name] as string
@@ -641,6 +657,14 @@ export async function checkKeys(
   )
 }
 
+/** A model no gateway in the list serves: the plan refuses it, so the check names why. */
+const unservedModel = (id: string, error: unknown, required: boolean): Check => ({
+  id,
+  status: required ? 'fail' : 'warn',
+  summary: (error as Error).message,
+  fix: 'add vercel() to gateway in the config',
+})
+
 export async function checkJudge(
   config: ResolvedConfig,
   deps: DoctorDeps,
@@ -656,6 +680,11 @@ export async function checkJudge(
       return model !== undefined ? [{ model, profile: name }] : []
     }),
   ]
+  const gatewayOf = (model: string | FakeJudgeModel, profile: string | undefined) => {
+    const p = profile === undefined ? undefined : config.profiles[profile]
+    const pin = p?.defaults?.judge?.gateway ?? p?.judge?.gateway ?? config.judge.gateway
+    return resolveModelGateway(model, pin, gatewayScope(config, p), 'the judge model')
+  }
   if (!models.length) {
     const callers = await judgeCallers(config)
     if (!callers.length) return []
@@ -673,10 +702,16 @@ export async function checkJudge(
     models.map(({ model, profile }) => {
       const label = typeof model === 'string' ? model : 'fakeJudge()'
       const who = profile ? `${label} in profile ${profile}` : label
-      const keys = judgeCredentials(model)
+      let gateway: GatewayName | undefined
+      try {
+        gateway = gatewayOf(model, profile)
+      } catch (error) {
+        return unservedModel('judge', error, !profile)
+      }
+      const keys = judgeCredentials(model, gateway)
       if (!keys.length)
         return { id: 'judge', status: 'ok', summary: `${who} needs no key` } as Check
-      return keyCheck('judge', keys, who, !profile, deps, online, envFile, model as string)
+      return keyCheck('judge', keys, who, !profile, deps, online, envFile, model as string, gateway)
     }),
   )
 }
@@ -732,10 +767,59 @@ export async function checkAnalysis(
   if (typeof model !== 'string') {
     return [{ id: 'analysis', status: 'ok', summary: 'fakeAnalysis() needs no key' }]
   }
-  const keys = judgeCredentials(model)
+  let gateway: GatewayName | undefined
+  try {
+    gateway = resolveModelGateway(model, undefined, gatewayScope(config), 'analysis.model')
+  } catch (error) {
+    return [unservedModel('analysis', error, false)]
+  }
+  const keys = judgeCredentials(model, gateway)
   const who = `${model} (analysis.model)`
   if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: `${who} needs no key` }]
-  return [await keyCheck('analysis', keys, who, false, deps, online, envFile, model)]
+  return [await keyCheck('analysis', keys, who, false, deps, online, envFile, model, gateway)]
+}
+
+/**
+ * The gateway lists the config and its profiles set: where each harness they run resolves, and
+ * whether Vercel's project token has expired. Nothing when no list is set. Each gateway's key is
+ * the key check's, since a harness on a gateway needs that gateway's.
+ */
+export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile: string): Check[] {
+  const lists = [
+    ...(config.gatewaySet ? [{ gateways: config.gateway, profile: undefined }] : []),
+    ...Object.entries(config.profiles).flatMap(([name, p]) =>
+      p.gateway ? [{ gateways: p.gateway, profile: name }] : [],
+    ),
+  ]
+  if (!lists.length) return []
+  const checks: Check[] = []
+  if (lists.some((l) => l.gateways.some((g) => g.kind === 'vercel'))) {
+    const expired = vercelCredentialProblem(deps.env)
+    if (expired) {
+      checks.push({
+        id: 'gateway',
+        status: 'fail',
+        summary: expired,
+        fix: `run vercel env pull, or add ${VERCEL_KEY}=... to ${envFile}`,
+      })
+    }
+  }
+  for (const { gateways, profile } of lists) {
+    const harnesses = [
+      (profile && config.profiles[profile]?.defaults?.harness) || config.harness,
+    ].flat()
+    const where = profile ? `profile ${profile}` : config.file
+    const list = `gateway ${gateways.map((g) => g.kind).join(', ')}${profile ? ` in profile ${profile}` : ''}`
+    try {
+      const routes = harnesses.map(
+        (h) => `${harnessId(h)} → ${resolveGateway(gateways, h, where).name}`,
+      )
+      checks.push({ id: 'gateway', status: 'ok', summary: `${list}: ${routes.join(', ')}` })
+    } catch (error) {
+      checks.push({ id: 'gateway', status: 'fail', summary: (error as Error).message })
+    }
+  }
+  return checks
 }
 
 // ---- Egress and git ------------------------------------------------------------------------
@@ -953,6 +1037,7 @@ export async function doctor(
     checks.push(...(await checkKeys(config, deps, online, envFile, planned)))
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...(await checkAnalysis(config, deps, online, envFile)))
+    checks.push(...checkGateways(config, deps, envFile))
     const cloud = configuredEgress(config).some(isDirect) ? await deps.cloudHost() : null
     checks.push(...checkEgress(config, cloud))
     checks.push(await checkGitignore(config.root, deps))

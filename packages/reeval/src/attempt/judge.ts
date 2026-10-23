@@ -4,6 +4,7 @@ import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { workspaceFiles } from '../diff.ts'
 import { getRunContext, SUBJECT } from '../engine/runtime.ts'
 import { globFilter } from '../environment.ts'
+import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
 import {
   artifactRefsOf,
   badJudgeArtifacts,
@@ -235,11 +236,19 @@ export function judgeCaller(
 
     const provider = name.split('/')[0]
     try {
+      const { config, profile } = getRunContext()
+      const gateway = resolveModelGateway(
+        model,
+        judgeOptions.gateway,
+        gatewayScope(config, profile),
+        'judge model',
+      )
+      const { gateway: _pin, ...unpinned } = judgeOptions
+      const routed = gateway ? { ...unpinned, gateway } : unpinned
       const { verdict, retries } = await a.timed('judgeMs', () =>
         withLease(
           maxConcurrent ? { [`judge:${provider}`]: maxConcurrent } : {},
-          () =>
-            runJudge(question, decide, { ...judgeOptions, model, threshold: atLeast }, a.signal),
+          () => runJudge(question, decide, { ...routed, model, threshold: atLeast }, a.signal),
           a.signal,
         ),
       )

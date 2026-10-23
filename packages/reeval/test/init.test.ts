@@ -127,8 +127,8 @@ describe('reeval init', () => {
     const run = await runCli(p.dir, ['run', '--config', 'fake.config.ts'])
     const skipped = (run.stdout + run.stderr).split('\n').filter((l) => /insights/.test(l))
     assert.deepEqual(skipped, [
-      'warning: insights will be skipped: set GOOGLE_GENERATIVE_AI_API_KEY (to call Google directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for analysis.model, "google/gemini-3.8-flash", in .env.local, or analysis: { insights: false }',
-      'insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY, or analysis: { insights: false }',
+      'warning: insights will be skipped: set GOOGLE_GENERATIVE_AI_API_KEY (for direct()) for analysis.model, "google/gemini-3.8-flash", in .env.local, or analysis: { insights: false }',
+      'insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: false }',
     ])
     assert.ok((skipped[1] ?? '').length <= 110, 'the closing line fits 110 columns, whole')
     const off = await runCli(p.dir, ['run', '--config', 'fake.config.ts', '--no-insights'])

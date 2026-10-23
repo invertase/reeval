@@ -168,7 +168,7 @@ Ctrl-C (or SIGTERM) while insights run stops the calls in flight and starts no m
 | The budget runs out | `insights skipped for N evals: analysis.maxTokens (250k) reached — raise it in reeval.config.ts, or reeval analyze <run> --insights to finish` |
 | Some evals' calls fail twice | `insights failed for N evals (<reason>), so they print their facts: reeval analyze <run> --insights to finish` |
 | Every eval's calls fail twice | `insights failed (<reason>): reeval analyze <run> --insights to retry` |
-| The model's key isn't set | A plan warning, `insights will be skipped: set GOOGLE_GENERATIVE_AI_API_KEY (to call Google directly) or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (to go through the Vercel AI Gateway) for analysis.model, …`, then `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY, or analysis: { insights: false }` above the tally, naming the model's provider key first |
+| The model's key isn't set | A plan warning, `insights will be skipped: set GOOGLE_GENERATIVE_AI_API_KEY (for direct()) for analysis.model, …`, then `insights skipped: set GOOGLE_GENERATIVE_AI_API_KEY, or analysis: { insights: false }` above the tally. With `vercel()` first in `gateway`, it names `AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN (for vercel())` instead |
 | `analysis.model` can't write them (an evaluation model) | `insights skipped: <why>` |
 
 ### The caps
@@ -215,7 +215,7 @@ export default defineConfig({
 ```
 
 <Property name="analysis.model" type="string" optional>
-  A `provider/model` language model. `anthropic/*`, `google/*` and `openai/*` go direct with `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `OPENAI_API_KEY`; that key wins when a Gateway key is set too. Anything else, or one of those without its key, goes through the Vercel AI Gateway (`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`). Defaults to the judge's model when that's a language model, except for `--insights`, which takes `analysis.model` only. Evaluation models such as `typesafe-ai/*` only score yes/no questions, so they exit 2 and point at `--context`.
+  A `provider/model` language model. `anthropic/*`, `google/*` and `openai/*` go direct with `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `OPENAI_API_KEY`. Any other prefix needs [`vercel()` in `gateway`](/reference/gateway#the-judge-analysis-and-captures), which takes `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`. Defaults to the judge's model when that's a language model, except for `--insights`, which takes `analysis.model` only. Evaluation models such as `typesafe-ai/*` only score yes/no questions, so they exit 2 and point at `--context`.
 </Property>
 
 <Property name="analysis.insights" type="boolean" optional>

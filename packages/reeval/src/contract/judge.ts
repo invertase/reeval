@@ -16,6 +16,7 @@ import type {
   JudgeStateOptions,
   Turn,
 } from '../types.ts'
+import { GATEWAY_NAMES, gatewayDescriptorSchema, gatewayNameSchema } from './gateway.ts'
 import { type Assert, type Issue, jsonValueSchema, nonEmpty, type Same } from './shared.ts'
 
 export const judgeStateSchema = z
@@ -87,6 +88,12 @@ export const judgeFields = {
     .optional()
     .describe(
       "The judge's state: what the judge is given beside the question, not the workspace's or the attempt's state. Merged key by key down the cascade.",
+    ),
+  gateway: z
+    .union([gatewayNameSchema, gatewayDescriptorSchema])
+    .optional()
+    .describe(
+      "The gateway the judge's calls go through, by name or by its helper. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.",
     ),
 }
 
@@ -279,8 +286,19 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
       : undefined
   const artifactsProblem = () =>
     at('artifacts') ? `c.judge() artifacts ${badJudgeArtifacts(value.artifacts)}` : undefined
+  const gatewayProblem = () =>
+    at('gateway')
+      ? `${field('gateway')} names a gateway in the config's gateway list: ${GATEWAY_NAMES.map((g) => `'${g}'`).join(' or ')}, or is its helper (got ${shown(value.gateway)})`
+      : undefined
   if (site.at === 'config') {
-    order.push(modelProblem, keyProblem, stateProblem, providerOptionsProblem, thresholdProblem)
+    order.push(
+      modelProblem,
+      keyProblem,
+      stateProblem,
+      providerOptionsProblem,
+      thresholdProblem,
+      gatewayProblem,
+    )
   } else if (site.at === 'call') {
     order.push(
       thresholdProblem,
@@ -289,6 +307,7 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
       stateProblem,
       providerOptionsProblem,
       artifactsProblem,
+      gatewayProblem,
     )
   } else {
     order.push(
@@ -297,6 +316,7 @@ export function judgeProblem(judge: unknown, site: JudgeSite): string | undefine
       keyProblem,
       stateProblem,
       providerOptionsProblem,
+      gatewayProblem,
     )
   }
   for (const check of order) {

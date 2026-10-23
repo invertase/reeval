@@ -226,7 +226,11 @@ export async function harnessFacts() {
     if (row.id !== 'fake' && !AGENTS[row.harness ?? row.id])
       problems.push(`contract row ${row.id} isn't in AGENTS`)
     if (row.harness) {
-      const credential = agentFor({ kind: row.harness, model: row.model }).credential
+      const credential = agentFor({
+        kind: row.harness,
+        model: row.model,
+        ...(row.gateway ? { gateway: row.gateway } : {}),
+      }).credential
       if (row.key?.name !== credential)
         problems.push(
           `${row.id}: the contract row's key is ${row.key?.name}, the catalog's ${credential}`,

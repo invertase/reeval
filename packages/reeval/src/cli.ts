@@ -26,9 +26,11 @@ import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { environmentSandbox, profileSandbox, workspaceLabel } from './environment.ts'
+import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
+import { unusedGatewayKey } from './judge/index.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
@@ -805,15 +807,21 @@ async function executeRun(
     checkAttemptBudget(plan, setup.force, config.file)
     const questionModels = new Set<string>()
     const asked: EvalQuestions[] = []
+    const scope = gatewayScope(config, profile)
     for (const row of plan.rows) {
       if (row.plan.skip || !models) continue
-      const questions = (row.plan.questions ?? []).map((q) => ({
-        question: q.question,
-        model: models.questionModel(config, q, row.id),
-        ...(q.across ? { across: q.across } : {}),
-        ...(q.state ? { state: q.state } : {}),
-        ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
-      }))
+      const questions = (row.plan.questions ?? []).map((q) => {
+        const model = models.questionModel(config, q, row.id)
+        const gateway = resolveModelGateway(model, undefined, scope, 'the compare question model')
+        return {
+          question: q.question,
+          model,
+          ...(gateway ? { gateway } : {}),
+          ...(q.across ? { across: q.across } : {}),
+          ...(q.state ? { state: q.state } : {}),
+          ...(q.artifacts !== undefined ? { artifacts: q.artifacts } : {}),
+        }
+      })
       for (const q of questions) if (typeof q.model === 'string') questionModels.add(q.model)
       if (questions.length) asked.push({ row, questions })
     }
@@ -823,8 +831,11 @@ async function executeRun(
       questionModels: [...questionModels],
     })
     if (missing.length) {
+      const hint = missing.some((m) => m.includes('(for direct())'))
+        ? unusedGatewayKey(process.env)
+        : ''
       throw new UsageError(
-        `Missing credentials: ${missing.join('; ')}. Set them in the environment or .env.local.`,
+        `Missing credentials: ${missing.join('; ')}. Set them in the environment or .env.local.${hint}`,
       )
     }
     const malformed = malformedCredentials(config, process.env, {

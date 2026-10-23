@@ -103,7 +103,7 @@ CURSOR_API_KEY=...
 GOOGLE_GENERATIVE_AI_API_KEY=...
 ```
 
-`reeval run` reads `.env.local` and `.env` from the directory that holds `reeval.config.ts`, wherever you run it from. The judge's and `analysis.model`'s keys depend on the model's prefix: `google/*` uses `GOOGLE_GENERATIVE_AI_API_KEY`, `anthropic/*` uses `ANTHROPIC_API_KEY`, `openai/*` uses `OPENAI_API_KEY` and `typesafe-ai/jev-1.14.0` uses `TYPESAFE_AI_API_KEY`. `AI_GATEWAY_API_KEY` works for any prefix, through the Vercel AI Gateway; when both are set, the provider's own key wins.
+`reeval run` reads `.env.local` and `.env` from the directory that holds `reeval.config.ts`, wherever you run it from. The judge's and `analysis.model`'s keys depend on the model's prefix: `google/*` uses `GOOGLE_GENERATIVE_AI_API_KEY`, `anthropic/*` uses `ANTHROPIC_API_KEY`, `openai/*` uses `OPENAI_API_KEY` and `typesafe-ai/jev-1.14.0` uses `TYPESAFE_AI_API_KEY`. reeval uses no gateway unless you configure one: `AI_GATEWAY_API_KEY` is read only when the config lists [`vercel()` in `gateway`](/reference/gateway#the-judge-analysis-and-captures), and then for any prefix.
 
 <Warning>
   Put `.env.local` next to `reeval.config.ts`. A key in another directory, the current one included, isn't read.

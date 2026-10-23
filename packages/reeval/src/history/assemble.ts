@@ -167,10 +167,16 @@ const passRateOf = (outcomes: Outcome[]) => {
   return counted ? pass / counted : null
 }
 
-/** Without the operational limits (`maxConcurrent`, `startTimeout`), which don't change results. */
-const withoutCaps = <T extends { maxConcurrent?: number; startTimeout?: unknown }>({
+/**
+ * The harness as the measurement sees it: without the operational limits (`maxConcurrent`,
+ * `startTimeout`), which don't change results, and without the route, which `gateway` holds.
+ */
+const withoutCaps = <
+  T extends { maxConcurrent?: number; startTimeout?: unknown; gateway?: unknown },
+>({
   maxConcurrent: _,
   startTimeout: __,
+  gateway: ___,
   ...rest
 }: T) => rest
 

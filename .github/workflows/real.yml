@@ -8,7 +8,8 @@
 #                        OpenCode, Goose and pi, and the newest OpenCode's providers re-probed
 #   real agents (Cursor) examples/hello's smoke profile, then its compare questions on a real
 #                        model (test/questions-real.test.ts)
-# PRs get the pinned contract only. Budgets: each reeval run's budget.attempts, a ledger per job
+# PRs get the pinned contract only. A dispatch's `harnesses` input (e.g.
+# claude-code-gateway,codex-gateway) runs only those rows' pinned contract and e2e, nothing else. Budgets: each reeval run's budget.attempts, a ledger per job
 # (contract.yml) and the timeouts below.
 name: real
 
@@ -21,6 +22,12 @@ on:
         description: Also run the contract on the newest agent CLI and SDK (the drift leg)
         type: boolean
         default: true
+      harnesses:
+        description: >-
+          Only these contract rows, comma-separated (e.g. claude-code-gateway,codex-gateway), on the
+          pinned versions; skips the drift leg, the real-tier fixtures and the Cursor smoke
+        type: string
+        default: ''
   pull_request:
     types: [labeled, synchronize, reopened]
 
@@ -51,19 +58,24 @@ jobs:
           HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
           HAS_OPENAI: ${{ secrets.OPENAI_API_KEY != '' }}
           HAS_XAI: ${{ secrets.XAI_API_KEY != '' }}
+          HAS_GATEWAY: ${{ secrets.AI_GATEWAY_API_KEY != '' }}
+          HARNESSES: ${{ inputs.harnesses }}
         run: |
           [ "$HAS_CURSOR" = true ] || echo "::error::No CURSOR_API_KEY repository secret: the Cursor rows and the example smoke fail"
           [ "$HAS_GEMINI" = true ] || echo "::error::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode, Goose and pi rows and the example smoke fail"
           [ "$HAS_ANTHROPIC" = true ] || echo "::error::No ANTHROPIC_API_KEY repository secret: the Claude Code rows fail"
           [ "$HAS_OPENAI" = true ] || echo "::error::No OPENAI_API_KEY repository secret: the Codex and fx rows fail"
           [ "$HAS_XAI" = true ] || echo "::error::No XAI_API_KEY repository secret: the Grok Build rows fail"
+          case "$HARNESSES" in *gateway*) [ "$HAS_GATEWAY" = true ] || echo "::error::No AI_GATEWAY_API_KEY repository secret: the *-gateway rows fail" ;; esac
           true
 
   pinned:
     name: contract (pinned)
     needs: gate
     uses: ./.github/workflows/contract.yml
-    with: { versions: pinned }
+    with:
+      versions: pinned
+      harnesses: ${{ inputs.harnesses || '' }}
     secrets: inherit
 
   latest:
@@ -72,7 +84,8 @@ jobs:
     # After the pinned leg, pass or fail, so the two never spend at once.
     if: >-
       !cancelled() && needs.gate.result == 'success' &&
-      (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.latest))
+      (github.event_name == 'schedule' ||
+       (github.event_name == 'workflow_dispatch' && inputs.latest && inputs.harnesses == ''))
     uses: ./.github/workflows/contract.yml
     with: { versions: latest }
     secrets: inherit
@@ -81,7 +94,8 @@ jobs:
     name: real agents (Cursor)
     needs: [gate, latest]
     if: >-
-      !cancelled() && needs.gate.result == 'success' && github.event_name != 'pull_request'
+      !cancelled() && needs.gate.result == 'success' && github.event_name != 'pull_request' &&
+      (github.event_name != 'workflow_dispatch' || inputs.harnesses == '')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:

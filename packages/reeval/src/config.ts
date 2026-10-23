@@ -18,6 +18,7 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { gatewayScope, modelGatewayOrNone } from './gateway/models.ts'
 import { DEFAULT_GATEWAYS, gatewayHelper } from './gateway/resolve.ts'
 import {
   AGENTS,
@@ -45,6 +46,7 @@ import type {
   ConfigHelpers,
   EnvVars,
   FakeAnalysisModel,
+  FakeJudgeModel,
   GatewayDescriptor,
   GatewayName,
   HarnessDescriptor,
@@ -828,6 +830,21 @@ function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null |
   return profile ? (profileJudge(profile).model ?? config.judge.model) : config.judge.model
 }
 
+/** The gateway a model the run calls itself goes through, as the plan resolves it. */
+function runModelGateway(
+  config: ResolvedConfig,
+  profile: ResolvedProfile | null | undefined,
+  model: string | FakeJudgeModel,
+  judge = false,
+) {
+  const pin = judge
+    ? profile
+      ? (profileJudge(profile).gateway ?? config.judge.gateway)
+      : config.judge.gateway
+    : undefined
+  return modelGatewayOrNone(model, pin, gatewayScope(config, profile))
+}
+
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
  * plans (default: the config's), the run's judge, the models that answer compare questions,
@@ -849,15 +866,20 @@ export function missingCredentials(
   for (const key of keys) if (!env[key]) missing.push(key)
   const judge = runJudgeModel(config, options.profile)
   const models = [
-    ...(judge !== undefined ? [{ model: judge, what: 'the judge model' }] : []),
-    ...(options.questionModels ?? []).map((model) => ({ model, what: 'compare questions' })),
+    ...(judge !== undefined ? [{ model: judge, what: 'the judge model', judge: true }] : []),
+    ...(options.questionModels ?? []).map((model) => ({
+      model,
+      what: 'compare questions',
+      judge: false,
+    })),
   ]
   const named = new Set<string>()
-  for (const { model, what } of models) {
+  for (const { model, what, judge: isJudge } of models) {
     if (typeof model !== 'string' || named.has(model)) continue
     named.add(model)
-    if (!judgeCredentials(model).some((k) => env[k])) {
-      missing.push(`${modelKeyOptions(model)} for ${what}, "${model}"`)
+    const gateway = runModelGateway(config, options.profile, model, isJudge)
+    if (!judgeCredentials(model, gateway).some((k) => env[k])) {
+      missing.push(`${modelKeyOptions(model, gateway)} for ${what}, "${model}"`)
     }
   }
   const vars = { ...config.env, ...options.profile?.defaults.env }
@@ -885,8 +907,12 @@ export function malformedCredentials(
 ): string[] {
   const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
   const judge = runJudgeModel(config, options.profile)
-  if (judge !== undefined) names.push(...judgeCredentials(judge))
-  for (const model of options.questionModels ?? []) names.push(...judgeCredentials(model))
+  if (judge !== undefined) {
+    names.push(...judgeCredentials(judge, runModelGateway(config, options.profile, judge, true)))
+  }
+  for (const model of options.questionModels ?? []) {
+    names.push(...judgeCredentials(model, runModelGateway(config, options.profile, model)))
+  }
   return [...new Set(names)].flatMap((name) => {
     const at = badCharacterAt(env[name] ?? '')
     return at ? [`${name} (character ${at})`] : []

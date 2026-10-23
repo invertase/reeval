@@ -79,6 +79,8 @@ reeval passes `OPENAI_API_KEY` to the adapter explicitly, and Codex gets a place
 
 The adapter refuses to run in a sandbox that can't broker the key.
 
+On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), Codex's provider is Vercel's Responses API (`https://ai-gateway.vercel.sh/v1`), and the gateway brokers `POST /v1/responses` on `ai-gateway.vercel.sh` instead. A model id without a provider is sent as `openai/<model>`.
+
 ## Tokens and the served model
 
 | `model` | Served model recorded |
@@ -88,7 +90,7 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens.
 
-Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
+Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`. On `vercel()` it's Vercel's id, such as `openai/gpt-5.6-luna[effort=medium]`.
 
 ## Turns and settings
 

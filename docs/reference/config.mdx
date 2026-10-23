@@ -149,7 +149,7 @@ A project without TypeScript can write its config as YAML. It takes the same key
 | `file('./notes.md')` | `{ kind: file, path: ./notes.md }` |
 | `skill.local('./skills')` | `{ kind: skill, source: local, path: ./skills, placement: harness }` |
 | `git('../app')` | `{ kind: git, repo: ../app, url: ../app }` |
-| `gateway: [direct()]` | `gateway: [direct]` |
+| `gateway: [vercel(), direct()]` | `gateway: [vercel, direct]` |
 | `fakeJudge({ score: 0.9 })` | `{ kind: fake-judge, score: 0.9 }` |
 | `fakeAnalysis({ note, vote })` | `{ kind: fake-analysis, note, vote }`, with fixed values |
 
@@ -209,7 +209,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 </Property>
 
 <Property name="gateway" type="Gateway[]">
-  The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it, unless it pins one with its own `gateway`. Default `[direct()]`, each provider's own key. An empty list, an unknown gateway or one listed twice is an error. See [Gateways](/reference/gateway).
+  The gateways model calls may go through, in the order you prefer them: each harness, the judge and analysis take the first that can serve them, unless they pin one with their own `gateway`. Default `[direct()]`, each provider's own key. An empty list, an unknown gateway or one listed twice is an error. See [Gateways](/reference/gateway).
 </Property>
 
 <Property name="concurrency" type="number">
@@ -245,7 +245,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 </Property>
 
 <Property name="analysis" type="{ model?, insights?, maxTokens?, instructions?, maxInputTokens?, maxOutputTokens? }">
-  Settings for `reeval analyze` and the run's insights. `model` is a `provider/model` language model (default: the judge's, when it's a language model, except for insights, which use `analysis.model` only); `instructions` add your own guidance, placed first in the prompt as the question the analysis answers; `maxInputTokens` caps `reeval analyze`'s digest (default `20000`, at least 1000) and `maxOutputTokens` its answer (default `8000`, at least 500); insights have their own fixed caps. `model` also answers a [compare `question`](/reference/options#compare) that names no model of its own. `anthropic/*`, `google/*` and `openai/*` models call their provider directly with `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `OPENAI_API_KEY`, which wins over a Gateway key; any other prefix goes through the Vercel AI Gateway with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` ([Providers and keys](/reference/judges#providers-and-keys)). Without a key that works, the plan warns that insights will be skipped. See [reeval analyze](/reference/cli/analyze).
+  Settings for `reeval analyze` and the run's insights. `model` is a `provider/model` language model (default: the judge's, when it's a language model, except for insights, which use `analysis.model` only); `instructions` add your own guidance, placed first in the prompt as the question the analysis answers; `maxInputTokens` caps `reeval analyze`'s digest (default `20000`, at least 1000) and `maxOutputTokens` its answer (default `8000`, at least 500); insights have their own fixed caps. `model` also answers a [compare `question`](/reference/options#compare) that names no model of its own. `anthropic/*`, `google/*` and `openai/*` models call their provider directly with `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `OPENAI_API_KEY`; any other prefix needs `vercel()` in [`gateway`](/reference/gateway), which takes `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` ([Providers and keys](/reference/judges#providers-and-keys)). Without a key that works, the plan warns that insights will be skipped. See [reeval analyze](/reference/cli/analyze).
 
   With `model` set, `reeval run` writes [insights](/reference/cli/analyze#insights) once its attempts finish: `insights: false` (default `true`) or `--no-insights` turns them off. `maxTokens` (default `250000`) caps the tokens, in and out, of every insight call in one run. It's spent on failing evals first, then on changes that made something worse, then on compares, each eval reserving an estimate before it starts, so no call starts once the budget is spent; the evals it doesn't reach print their facts, and the run prints `insights skipped for N evals`. Insights run to the end with no overall time limit, within fixed caps per eval and per call: [the caps](/reference/cli/analyze#the-caps). Ctrl-C while they run skips the rest and keeps the run's exit code. Insights never change the exit code.
 </Property>

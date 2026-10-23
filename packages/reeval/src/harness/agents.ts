@@ -18,6 +18,7 @@ import {
   pluginServerName,
 } from '../environment/plugins.ts'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
+import { VERCEL_KEY, VERCEL_ROUTES } from '../gateway/vercel.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type {
   AgentHarnessDescriptor,
@@ -74,6 +75,10 @@ export type Agent = Layout & {
   factory: string
   /** The host variable the harness authenticates with. It never enters the sandbox. */
   credential: string
+  /** The variable the adapter takes the credential as, when not its own name (a gateway's key). */
+  authAs?: string
+  /** The model id the agent asks for, from the harness's own; unset when they're the same. */
+  modelId?: (model: string) => string
   /**
    * The only requests the egress gateway swaps the credential into, whatever rules the adapter
    * asks for. Anything else carrying the placeholder gets a 403 from the gateway.
@@ -978,6 +983,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
       (await import('@reeval/harness-codex')).createCodex({
         auth,
+        ...(auth[VERCEL_KEY]
+          ? { provider: (await import('@reeval/harness-codex')).AI_GATEWAY_PROVIDER }
+          : {}),
         ...(descriptor.kind === 'codex' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
@@ -1265,7 +1273,11 @@ export function refusedPlugins(
 /** A real agent's catalog entry, with what its model's provider decides. */
 export function agentFor(h: AgentHarnessDescriptor): Agent {
   const agent = AGENTS[h.kind]
-  return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
+  const own = agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
+  if (h.gateway !== 'vercel') return own
+  const route = VERCEL_ROUTES[h.kind]
+  if (!route) throw new InfraError(`reeval doesn't run ${agent.name} on Vercel AI Gateway`)
+  return { ...own, ...route(process.env) }
 }
 
 /** The catalog entry for a harness's agent; undefined for the fake harness. */
@@ -1326,7 +1338,7 @@ export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
       `${agent.credential} isn't set, so the ${agent.name} harness can't authenticate. Set it in the environment or .env.local.`,
     )
   }
-  return { [agent.credential]: value }
+  return { [agent.authAs ?? agent.credential]: value }
 }
 
 /**

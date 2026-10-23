@@ -9,6 +9,7 @@ import type {
   HarnessDescriptor,
   ResolvedGateway,
 } from '../types.ts'
+import { VERCEL_REFUSALS, VERCEL_ROUTES } from './vercel.ts'
 
 /** The config's list when it sets none: each provider's own key, as reeval has always run. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -21,6 +22,14 @@ export type GatewayEntry = {
 /** Every gateway reeval can route through, by name. */
 export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
   direct: { cantServe: () => undefined },
+  vercel: {
+    // A fake agent calls no model, so any gateway serves it.
+    cantServe: (h) =>
+      h.kind === 'fake' || VERCEL_ROUTES[h.kind]
+        ? undefined
+        : (VERCEL_REFUSALS[h.kind] ??
+          `reeval doesn't run ${agentName(h)} on Vercel AI Gateway yet`),
+  },
 }
 
 /** The `reeval/gateway` helper that makes the gateway `name`, as messages name it. */
@@ -67,6 +76,22 @@ export function resolveGateway(
   throw new UsageError(
     `${on}: no gateway in the list can serve it (${skipped.map((s) => `${s.gateway}: ${s.why}`).join('; ')}). Add direct() to the end of gateway to use ${agentName(harness)}'s own key.`,
   )
+}
+
+/**
+ * `harness` carrying the gateway it resolves to in `gateways`, as the plan gives it to the
+ * worker; as written on `direct`, or when nothing serves it (the plan says why).
+ */
+export function routedHarness(
+  harness: HarnessDescriptor,
+  gateways: readonly { kind: string }[],
+): HarnessDescriptor {
+  try {
+    const { name } = resolveGateway(gateways, harness, '')
+    return name === 'direct' ? harness : { ...harness, gateway: name }
+  } catch {
+    return harness
+  }
 }
 
 /** `gateway: claude-code:… → direct (vercel can't serve it: …)`, for the plan's hints. */
