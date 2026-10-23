@@ -23,7 +23,8 @@ case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) target=darwin-arm64 ;;
   *) echo "go-tool-smoke: no target for $(uname -sm)" >&2; exit 2 ;;
 esac
-if [ "${target%%-*}" = linux ] && { [ -e /etc/alpine-release ] || compgen -G '/lib/ld-musl-*' >/dev/null; }; then
+# The libc in use, not a musl loader on disk: Debian's musl package puts one beside glibc.
+if [ "${target%%-*}" = linux ] && ldd --version 2>&1 | grep -qi musl; then
   target=$target-musl
 fi
 
@@ -85,7 +86,7 @@ func EvalGreet(e *reeval.E) {
 }
 EOF
 
-go tool reeval run 2> "$work/stderr" | tee "$work/stdout"
+go tool reeval run 2> "$work/stderr" | tee "$work/stdout" || { cat "$work/stderr" >&2; exit 1; }
 grep -q "^reeval: downloading $asset$" "$work/stderr" || { cat "$work/stderr" >&2; exit 1; }
 cached=$XDG_CACHE_HOME/reeval/bin/$version/$asset
 cmp -s "$cached" "$binary"
