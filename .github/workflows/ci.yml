@@ -199,6 +199,9 @@ jobs:
       - name: persisted shapes (schema/ snapshots)
         if: ${{ !cancelled() }}
         run: pnpm --filter reeval schema:check
+      - name: SDK wire types (generated from schema/)
+        if: ${{ !cancelled() }}
+        run: pnpm --filter reeval sdk-types:check
       # Stale generated blocks, reference coverage, sidebar links and the package name.
       - if: ${{ !cancelled() }}
         run: pnpm docs:check

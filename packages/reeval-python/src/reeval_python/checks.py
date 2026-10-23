@@ -18,9 +18,10 @@ from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any, cast
 
+from reeval_python._wire import AttemptCallRecord
 from reeval_python.errors import ReevalAssertionError
 
-Recorder = Callable[[dict[str, Any]], None]
+Recorder = Callable[[AttemptCallRecord], None]
 
 _recorder: ContextVar[Recorder | None] = ContextVar("_recorder", default=None)
 
@@ -49,7 +50,7 @@ def bind_recorder(recorder: Recorder) -> None:
     _recorder.set(recorder)
 
 
-def failed_check(exc: BaseException) -> dict[str, Any] | None:
+def failed_check(exc: BaseException) -> AttemptCallRecord | None:
     """The `record` call an eval file's failed `assert` raised `exc` with."""
     return getattr(exc, _CHECK, None)
 
@@ -79,9 +80,13 @@ def check(
     `message` is the assert's message in a 1-tuple, the exception evaluating it raised (which
     the eval's frame raises instead), or `None`.
     """
-    call: dict[str, Any] = {"op": "record", "matcher": "assert", "subject": subject}
+    call: AttemptCallRecord = {
+        "op": "record",
+        "matcher": "assert",
+        "subject": subject,
+        "status": "pass",
+    }
     if value:
-        call["status"] = "pass"
         recorder = _recorder.get()
         if recorder is not None:
             recorder(call)
@@ -99,7 +104,7 @@ def check(
         extra = message[0] if message is not None else None
     reason = f"{extra}: {detail}" if extra is not None else detail
     error = AssertionError(reason)
-    failed = {**call, "status": "fail", "message": reason}
+    failed: AttemptCallRecord = {**call, "status": "fail", "message": reason}
     setattr(error, _CHECK, failed)
     if isinstance(message, BaseException):
         setattr(message, _CHECK, failed)
@@ -122,7 +127,7 @@ def _assert_at(filename: str, lineno: int) -> ast.Assert | None:
     return found
 
 
-def unrecorded_failure(exc: AssertionError) -> dict[str, Any]:
+def unrecorded_failure(exc: AssertionError) -> AttemptCallRecord:
     """The `record` call for an `AssertionError` raised outside an eval file's own asserts.
 
     Its subject is the failing `assert`'s test when an `assert` statement raised it, and
@@ -145,11 +150,11 @@ def unrecorded_failure(exc: AssertionError) -> dict[str, Any]:
     }
 
 
-def escaped_failures(exc: BaseException) -> list[dict[str, Any]]:
+def escaped_failures(exc: BaseException) -> list[AttemptCallRecord]:
     """The `record` calls for the failures that escape a body with `exc`: its own, its group's
     (a `TaskGroup`'s) and those it was raised from or while handling. An `expect` failure isn't
     one: reeval recorded it when it failed."""
-    out: list[dict[str, Any]] = []
+    out: list[AttemptCallRecord] = []
     seen: set[int] = set()
 
     def walk(e: BaseException) -> None:

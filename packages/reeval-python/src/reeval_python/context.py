@@ -7,12 +7,20 @@ import base64
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, cast
 
+from reeval_python._wire import (
+    AttemptCall,
+    AttemptCallExec,
+    AttemptCallExpect,
+    AttemptCallJudge,
+    JudgeCallData,
+    MatcherSubject,
+)
 from reeval_python.errors import ReevalAssertionError
 from reeval_python.expect import bind_expect
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
 from reeval_python.wire import Patterns, options_to_wire, wire_args
 
-SendFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+SendFn = Callable[[AttemptCall], Awaitable[dict[str, Any]]]
 
 
 PATTERN_ROUNDS = 5
@@ -25,17 +33,16 @@ class AttemptContext:
         self._seq = 0
         self.turns: list[Turn] = []
 
-    async def _call(self, op: str, **fields: Any) -> dict[str, Any]:
+    async def _call(self, call: AttemptCall) -> dict[str, Any]:
         self._seq += 1
-        call: dict[str, Any] = {"op": op, **fields}
-        reply = await self._send({"call": call})
+        reply = await self._send(call)
         if not reply.get("ok", False):
             err = reply.get("error") or {"name": "Error", "message": "call failed"}
             raise RuntimeError(f"{err.get('name')}: {err.get('message')}")
         return reply
 
     async def send(self, prompt: str) -> Turn:
-        reply = await self._call("send", prompt=prompt)
+        reply = await self._call({"op": "send", "prompt": prompt})
         turn = Turn(index=len(self.turns), raw=cast(dict[str, Any], reply["turn"]))
         self.turns.append(turn)
         return turn
@@ -46,17 +53,17 @@ class AttemptContext:
         *,
         background: bool = False,
     ) -> ExecResult | BackgroundHandle:
-        fields: dict[str, Any] = {"command": command}
+        call: AttemptCallExec = {"op": "exec", "command": command}
         if background:
-            fields["background"] = True
-        reply = await self._call("exec", **fields)
+            call["background"] = True
+        reply = await self._call(call)
         result = cast(dict[str, Any], reply["result"])
         if background:
             return BackgroundHandle.from_wire(result)
         return ExecResult.from_wire(command, result)
 
     async def read_file(self, path: str) -> str | None:
-        reply = await self._call("readFile", path=path)
+        reply = await self._call({"op": "readFile", "path": path})
         contents = reply.get("contents")
         return None if contents is None else str(contents)
 
@@ -66,23 +73,27 @@ class AttemptContext:
     async def write_file(self, path: str, contents: str | bytes) -> None:
         if isinstance(contents, bytes):
             encoded = base64.b64encode(contents).decode()
-            await self._call("writeFile", path=path, contents=encoded, encoding="base64")
+            await self._call(
+                {"op": "writeFile", "path": path, "contents": encoded, "encoding": "base64"}
+            )
         else:
-            await self._call("writeFile", path=path, contents=contents)
+            await self._call({"op": "writeFile", "path": path, "contents": contents})
 
     async def kill(self, handle: BackgroundHandle) -> None:
-        await self._call("kill", handle=handle.id)
+        await self._call({"op": "kill", "handle": handle.id})
 
     async def judge(self, question: str, **options: Any) -> Verdict:
         wire_opts = options_to_wire(options)
-        fields: dict[str, Any] = {"options": wire_opts} if wire_opts else {}
-        reply = await self._call("judge", question=question, **fields)
+        call: AttemptCallJudge = {"op": "judge", "question": question}
+        if wire_opts:
+            call["options"] = cast(JudgeCallData, wire_opts)
+        reply = await self._call(call)
         return Verdict.from_wire(cast(dict[str, Any], reply["verdict"]))
 
     async def run_expect(
         self,
         *,
-        subject: dict[str, Any],
+        subject: MatcherSubject,
         matcher: str,
         args: list[Any],
         label: str | None,
@@ -90,7 +101,7 @@ class AttemptContext:
         soft: bool,
     ) -> None:
         patterns = Patterns()
-        call: dict[str, Any] = {
+        call: AttemptCallExpect = {
             "op": "expect",
             "subject": subject,
             "matcher": matcher,
@@ -100,7 +111,7 @@ class AttemptContext:
         }
         if label is not None:
             call["label"] = label
-        reply = await self._send({"call": call})
+        reply = await self._send(call)
         # reeval asks for the strings it tested the patterns on; each round answers more. A
         # subject that changes on every read never runs out of new strings, so the rounds stop.
         # A pattern is answered off the event loop, where a slow one can't hold up other bodies.
@@ -109,7 +120,7 @@ class AttemptContext:
                 break
             untested = cast(dict[str, list[str]], reply["untested"])
             await asyncio.to_thread(patterns.answer, untested)
-            reply = await self._send({"call": call})
+            reply = await self._send(call)
         else:
             if reply.get("ok", False) and "untested" in reply:
                 names = ", ".join(cast(dict[str, Any], reply["untested"]))
