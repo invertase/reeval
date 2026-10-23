@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { costLine, type UsdRange } from '../../src/cost.ts'
+import { type CostPart, costLine, type Range } from '../../src/cost.ts'
 import type { PlanDocument } from '../../src/plan.ts'
 import { runCli } from '../helpers.ts'
 import { fixture, testDir } from './fixture.ts'
@@ -140,14 +140,20 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
   ].join('\n')
 }
 
-const usd = (r: UsdRange | null) => (r ? `$${r.low}–${r.high}` : 'unpriced')
+const range = (r: Range | null) => (r ? `${r.low}–${r.high}` : '—')
+const part = (p: CostPart) => `${range(p.tokens)} tokens $${range(p.usd)}`
 
-/** The plain cost line, then each cell's model, basis and range. */
+/** The plain cost line, then each cell's model, basis and ranges. */
 function costLines(plan: PlanDocument): string[] {
   const { cost } = plan
+  if (!cost) return ['cost  (none in the JSON plan)']
+  const prices =
+    cost.prices.source === null
+      ? `no prices: ${cost.prices.why}`
+      : `prices ${cost.prices.source}${cost.prices.stale ? ' (stale)' : ''}`
   return [
     costLine(cost) ?? 'cost  (no line)',
-    `prices ${cost.prices.date} · past ${cost.pastRuns} runs, ${cost.pastAttempts} attempts`,
+    `${prices} · unpriced ${cost.unpriced.join(', ') || '—'} · past ${cost.pastRuns} runs, ${cost.pastAttempts} attempts`,
     ...table(
       cost.cells.map((c) => [
         `  ${c.eval}`,
@@ -155,8 +161,8 @@ function costLines(plan: PlanDocument): string[] {
         c.model ?? 'fake',
         `${c.basis}${c.basis === 'history' ? ` ×${c.samples}` : ''}`,
         `×${c.attempts}`,
-        `agent ${usd(c.agent)}`,
-        `judge ${usd(c.judge)}`,
+        `agent ${part(c.agent)}`,
+        `judge ${part(c.judge)}`,
       ]),
     ),
   ]

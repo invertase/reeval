@@ -188,6 +188,15 @@ async function run(argv: string[]): Promise<number> {
 }
 
 /** Asks a yes/no question on the terminal; anything but y or yes is no. */
+/** The dry run's prices, fetched only when a planned attempt or the judge has anything to price. */
+async function dryRunPrices(planned: PlannedItem[], judgeModel: string | null) {
+  const { needsPrices } = await import('./cost.ts')
+  const harnesses = planned.filter((p) => !p.attempt.plan.skip).map((p) => p.attempt.harness)
+  if (!needsPrices(harnesses, judgeModel)) return { table: null, why: 'nothing to price' }
+  const { loadPrices } = await import('./prices.ts')
+  return loadPrices()
+}
+
 async function confirm(question: string): Promise<boolean> {
   const { createInterface } = await import('node:readline/promises')
   const rl = createInterface({ input: process.stdin, output: process.stdout })
@@ -716,6 +725,8 @@ async function executeRun(
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
     const asks = skipped.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
     const models = asks ? await import('./analysis/model.ts') : undefined
+    const judge = runJudgeModel(config, profile)
+    const judgeModel = judge === undefined ? null : judgeModelName(judge)
     plan = await buildPlan({
       planned: skipped,
       profile,
@@ -725,9 +736,8 @@ async function executeRun(
       historyDir: config.history.dir,
       questionModel: models?.questionModelLabel(config) ?? null,
       insights: await planInsights(config, setup.insights),
-      judgeModel: ((m) => (m === undefined ? null : judgeModelName(m)))(
-        runJudgeModel(config, profile),
-      ),
+      judgeModel,
+      ...(setup.dryRun ? { prices: await dryRunPrices(skipped, judgeModel) } : {}),
     })
     plan.runId = runId
     if (plan.insights) {
@@ -793,7 +803,7 @@ async function executeRun(
         lines.push(`images  not checked: ${names} ${down.length === 1 ? 'is' : 'are'} not running`)
       }
       const { costLine } = await import('./cost.ts')
-      const cost = costLine(plan.cost)
+      const cost = plan.cost && costLine(plan.cost)
       if (cost) lines.push(cost)
     }
     if (setup.dryRun && plan.insights) {

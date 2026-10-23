@@ -75,7 +75,6 @@
     "sdk-types": "node --experimental-strip-types --no-warnings scripts/sdk-types.ts",
     "sdk-types:check": "node --experimental-strip-types --no-warnings scripts/sdk-types.ts --check",
     "corpus:add": "node --experimental-strip-types --no-warnings scripts/corpus/add.ts",
-    "prices:update": "node --experimental-strip-types --no-warnings scripts/prices.ts",
     "output:preview": "node --experimental-strip-types --no-warnings scripts/output/preview.ts",
     "test": "node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/*.test.ts",
     "test:plan": "node --test --experimental-strip-types --no-warnings test/plan.test.ts",

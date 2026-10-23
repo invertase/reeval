@@ -67,9 +67,9 @@ npx reeval run
    exits 2 before asking; `--force` replaces only `reeval.config.ts`. Otherwise it only adds:
    it merges into `package.json` and `.gitignore` and skips any other file that exists. Or write
    `reeval.config.ts` and `evals/**/*.eval.ts` (the default `include`) yourself.
-3. `npx reeval run --dry-run` prints the plan (evals, cells, attempts, time and a cost range at
-   list prices) without running anything and needs no credentials or Docker. `--dry-run --json`
-   for a program to read.
+3. `npx reeval run --dry-run` prints the plan (evals, cells, attempts, time and a cost range)
+   without running anything and needs no credentials or Docker. `--dry-run --json` for a program
+   to read.
 4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in
    `.env.local` next to `reeval.config.ts` (not the directory you run from), `npx reeval doctor`
    (exit 1 names each problem and its fix; a missing `analysis.model` or its key,

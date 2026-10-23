@@ -97,24 +97,32 @@ images  4 sandbox images: 1 ready, 3 to build
 ## The cost estimate
 
 ```text
-cost  estimated $0.05–0.27 at list prices, judge included · from 1 past run
-cost  estimated $1–13 at list prices, judge included · 4 of 27 attempts from 2 past runs, the rest rough
-cost  estimated $3–26 at list prices, judge included · no history, rough
+cost  estimated $0.77–6.12 at models.dev list prices, judge included · plus 1–13M tokens with no list price (composer-2.5) · no history, rough
+cost  estimated $1–13 at prices from prices.json, judge included · 4 of 27 attempts from 2 past runs, the rest rough
+cost  estimated 7–49M tokens, judge included · no prices: models.dev unreachable · 4 of 27 attempts from 2 past runs, the rest rough
 ```
 
-`--dry-run` ends its plan with what the run should cost, as a range in USD at list prices. It's an estimate for deciding whether to run, not your bill: subscriptions and included usage, negotiated prices and re-runs aren't in it.
+`--dry-run` ends its plan with what the run should cost: tokens, priced in USD where it has a price for the model. It's an estimate for deciding whether to run, not your bill: subscriptions and included usage, negotiated prices and re-runs aren't in it.
 
 | Part | Where its tokens come from |
 |---|---|
 | Agent | The same eval and cell's counted attempts in the last 30 runs (recorded and scratch), else the same eval on that harness: their middle half, never narrower than −20% / +25% of the median. With neither, a typical coding attempt: 300k–2M prompt tokens, mostly cached, and 3–20k out |
 | Judge | As many calls an attempt as the eval's past attempts made, on their model, else 0–1 calls on the run's `judge.model`; 5–60k tokens in and 0.5–2k out a call |
 
-- **Prices** come from a table built from [models.dev](https://models.dev) and Cursor's pricing page when reeval was released, dated in the JSON plan.
-- **A model id** matches without its `provider/` prefix or a trailing effort (`gemini-3.8-flash-medium`). Cursor's `params: { fast: 'true' }` is priced as `composer-2.5-fast`.
-- **A model with no price** is left out and named (`2 attempts left out: no list price for my-model`), never guessed. The fake agent and judge cost nothing.
-- **Not counted:** compare questions and insights, which cost cents.
+reeval keeps no prices of its own, and never writes one to a record. The dry run looks them up as it prints:
 
-`--dry-run --json` has the detail under `cost`: `usd`, `agent` and `judge` as `{ low, high }`, `attempts` by basis (`history`, `typical`, `unpriced`, `free`), `pastRuns` and `pastAttempts`, `unpriced` models, `prices` (`date`, `source`), and `cells`, each with its `model`, `basis`, `samples`, `attempts`, `agent` and `judge`.
+- **[models.dev](https://models.dev)**, by default: the Anthropic, OpenAI, Google and xAI list prices, cached for a day in reeval's host cache directory. Offline, it uses an older copy and says so (`models.dev list prices of 2026-10-20 (offline)`); with none, the line is tokens only.
+- **Your own**, with `REEVAL_PRICES=prices.json` instead: USD per million tokens by model id, in models.dev's field names. Cursor's models aren't on models.dev, so this is how they get a price. `REEVAL_PRICES=none` is tokens only.
+- **Model ids** match without a `provider/` prefix or a trailing effort (`gemini-3.8-flash-medium`), and Cursor's `params: { fast: 'true' }` looks up `composer-2.5-fast`. Tokens with no price stay out of the dollars, named (`plus 1–13M tokens with no list price (composer-2.5)`). The fake agent and judge cost nothing, and compare questions and insights, cents, aren't counted.
+
+```json title="prices.json"
+{
+  "composer-2.5": { "input": 0.5, "cache_read": 0.2, "output": 2.5 },
+  "gemini-3.8-flash": { "input": 0.75, "cache_read": 0.075, "output": 3.75 }
+}
+```
+
+`--dry-run --json` has the detail under `cost`: `tokens` and `usd` as `{ low, high }` (`usd` null without prices), `agent` and `judge` each with `tokens` and `usd`, `unpricedTokens`, `attempts` by basis (`history`, `typical`, `free`), `pastRuns`, `pastAttempts`, `unpriced` models, `prices` (`source`, `fetchedAt`, `stale`, or `why` there are none), and `cells`, each with its `model`, `basis`, `samples`, `attempts`, `agent` and `judge`.
 
 ## Results as JSON
 

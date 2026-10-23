@@ -13,6 +13,8 @@ import { syncPythonFixtureProject } from './support/python-fixture.ts'
 
 /** The plan as on a host without Docker, whose image stages name the tags they'd build. */
 const NO_DOCKER = { DOCKER_HOST: 'unix:///nonexistent/reeval-plan.sock' }
+/** The cost cases' own list prices, so the estimate never fetches models.dev. */
+const PRICES = { REEVAL_PRICES: 'prices.json' }
 
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
@@ -183,18 +185,26 @@ export const cases: PlanCase[] = [
     name: 'empty-control',
     args: ['--config', 'reeval.empty.config.ts', 'evals/empty.eval.ts'],
   },
-  { dir: 'cost', name: 'no-history', args: [], cost: true },
+  { dir: 'cost', name: 'no-history', args: [], cost: true, env: PRICES },
   {
     dir: 'cost',
     name: 'history',
     args: [],
     cost: true,
+    env: PRICES,
     async prepare(dir) {
       const { writePastCostRuns } = await import('./support/cost.ts')
       writePastCostRuns(dir)
     },
   },
-  { dir: 'cost', name: 'unpriced', args: ['--config', 'reeval.unpriced.config.ts'], cost: true },
+  {
+    dir: 'cost',
+    name: 'unpriced',
+    args: ['--config', 'reeval.unpriced.config.ts'],
+    cost: true,
+    env: PRICES,
+  },
+  { dir: 'cost', name: 'tokens-only', args: [], cost: true },
   {
     dir: 'resume',
     name: 'stopped-staging',

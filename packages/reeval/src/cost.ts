@@ -1,16 +1,20 @@
-// What a planned run should cost, as a range at list prices: each attempt's tokens from the same
-// eval and cell in recent history, else a typical coding attempt's, priced from the dated table in
-// prices.ts, plus its judge calls. An estimate for deciding whether to run, never a bill: it
-// ignores subscriptions, negotiated prices and retries, and leaves out models it has no price for.
+// What a planned run should cost: each attempt's tokens from the same eval and cell in recent
+// history, else a typical coding attempt's, plus its judge calls, as a range. Priced at the list
+// prices loaded for the view (prices.ts), or tokens only without them. An estimate for deciding
+// whether to run, never a bill: it ignores subscriptions, negotiated prices and retries, and
+// leaves out of the dollars any model it has no price for.
 import type { RunRecord } from './history/types.ts'
-import { PRICES, PRICES_DATE, PRICES_SOURCE } from './prices.ts'
+import type { Price, Prices } from './prices.ts'
 import { quantile } from './stats.ts'
 import type { Cell, HarnessDescriptor, TokenUsage } from './types.ts'
+import { totalTokens } from './usage.ts'
 
-export type UsdRange = { low: number; high: number }
+export type Range = { low: number; high: number }
+/** Tokens, and USD where every model in it has a price; `usd` is null otherwise. */
+export type CostPart = { tokens: Range; usd: Range | null }
 
-/** Where a cell's agent tokens came from: its own past attempts, a typical attempt, or neither. */
-export type CostBasis = 'history' | 'typical' | 'unpriced' | 'free'
+/** Where a cell's agent tokens came from: its own past attempts, a typical attempt, or none. */
+export type CostBasis = 'history' | 'typical' | 'free'
 
 export type PlanCostCell = {
   eval: string
@@ -19,31 +23,36 @@ export type PlanCostCell = {
   model: string | null
   attempts: number
   basis: CostBasis
-  /** Past attempts whose tokens priced it, when `basis` is `history`. */
+  /** Past attempts whose tokens it's based on, when `basis` is `history`. */
   samples: number
-  /** Over all its attempts; null when unpriced. */
-  agent: UsdRange | null
-  /** Its attempts' judge calls; null when the judge has no price. */
-  judge: UsdRange | null
+  /** Over all its attempts. */
+  agent: CostPart
+  judge: CostPart
 }
 
 export type PlanCost = {
-  /** Agent and judge together, in USD at list prices; null when nothing could be priced. */
-  usd: UsdRange | null
-  agent: UsdRange | null
-  judge: UsdRange | null
+  /** Agent and judge tokens over every attempt. */
+  tokens: Range
+  /** USD over the parts with a price; null when none has one, or there are no prices. */
+  usd: Range | null
+  agent: CostPart
+  judge: CostPart
+  /** Tokens left out of `usd` for want of a price. */
+  unpricedTokens: Range
   /** Planned attempts by where their tokens came from. */
   attempts: Record<CostBasis, number>
   /** Recorded runs, and attempts in them, whose tokens fed the estimate. */
   pastRuns: number
   pastAttempts: number
-  /** Models left out for want of a list price. */
-  unpriced: { agent: string[]; judge: string[] }
-  prices: { date: string; source: string }
+  /** Models with no price in the loaded prices. */
+  unpriced: string[]
+  /** Where the prices came from, or why there are none. Never stored in a record. */
+  prices:
+    | { source: string; fetchedAt: string | null; stale: boolean }
+    | { source: null; why: string }
   cells: PlanCostCell[]
 }
 
-type Price = readonly [number, number, number, number]
 type Tokens = Pick<TokenUsage, 'input' | 'cacheRead' | 'cacheWrite' | 'output'> & {
   reasoning?: number | null
 }
@@ -66,14 +75,14 @@ export const TYPICAL_JUDGE_CALL: { low: Tokens; high: Tokens } = {
 const EFFORT_SUFFIX = /-(none|minimal|low|medium|high|xhigh|max|thinking)$/
 
 /**
- * A model's list price by its id, without a `provider/` prefix, `[param=…]` labels or a trailing
- * effort (`gemini-3.8-flash-medium`); null when the table has no exact match.
+ * A model's price by its id, without a `provider/` prefix, `[param=…]` labels or a trailing
+ * effort (`gemini-3.8-flash-medium`); null when `table` has no exact match.
  */
-export function priceOf(model: string): Price | null {
+export function priceFor(model: string, table: Record<string, Price>): Price | null {
   let id = model.toLowerCase().replace(/\[.*\]$/, '')
   id = id.slice(id.lastIndexOf('/') + 1)
   for (;;) {
-    const price = PRICES[id]
+    const price = table[id]
     if (price) return price
     const shorter = id.replace(EFFORT_SUFFIX, '')
     if (shorter === id) return null
@@ -89,6 +98,8 @@ export const usdOf = (t: Tokens, [input, cacheRead, cacheWrite, output]: Price) 
     (t.output + (t.reasoning ?? 0)) * output) /
   1e6
 
+const tokensOf = (t: Tokens) => totalTokens({ reasoning: null, ...t })
+
 /** The model a harness's attempts are billed as; null for the fake agent, which costs nothing. */
 export function harnessModel(h: HarnessDescriptor): string | null {
   if (h.kind === 'fake') return null
@@ -96,7 +107,9 @@ export function harnessModel(h: HarnessDescriptor): string | null {
   return h.model
 }
 
-const isFreeModel = (model: string) => model === 'fake'
+/** Whether the plan has anything to price: a real agent, or a judge that isn't the fake one. */
+export const needsPrices = (harnesses: HarnessDescriptor[], judgeModel: string | null) =>
+  harnesses.some((h) => h.kind !== 'fake') || (judgeModel !== null && judgeModel !== 'fake')
 
 type Sample = { usage: TokenUsage; key: string; runId: string }
 type JudgeSample = { calls: number; models: string[] }
@@ -129,18 +142,31 @@ function indexHistory(records: RunRecord[]) {
   return { byCell, byHarness, judges }
 }
 
-const scale = (r: UsdRange, n: number): UsdRange => ({ low: r.low * n, high: r.high * n })
-const round = (r: UsdRange | null): UsdRange | null =>
-  r && { low: Math.round(r.low * 1e4) / 1e4, high: Math.round(r.high * 1e4) / 1e4 }
-const add = (a: UsdRange | null, b: UsdRange | null): UsdRange | null =>
-  a && b ? { low: a.low + b.low, high: a.high + b.high } : (a ?? b)
+const ZERO: Range = { low: 0, high: 0 }
+const scale = (r: Range, n: number): Range => ({ low: r.low * n, high: r.high * n })
+const add = (a: Range, b: Range): Range => ({ low: a.low + b.low, high: a.high + b.high })
+const addOrNull = (a: Range | null, b: Range | null): Range | null =>
+  a && b ? add(a, b) : (a ?? b)
+const scalePart = (p: CostPart, n: number): CostPart => ({
+  tokens: scale(p.tokens, n),
+  usd: p.usd && scale(p.usd, n),
+})
+const round = (r: Range | null, digits: number): Range | null =>
+  r && {
+    low: Math.round(r.low * 10 ** digits) / 10 ** digits,
+    high: Math.round(r.high * 10 ** digits) / 10 ** digits,
+  }
+const roundPart = (p: CostPart): CostPart => ({
+  tokens: round(p.tokens, 0) as Range,
+  usd: round(p.usd, 4),
+})
 
-/** A range around past costs: their middle half, and never narrower than -20%/+25% of the median. */
-function rangeOf(costs: number[]): UsdRange {
-  const median = quantile(costs, 0.5) ?? 0
+/** A range around past values: their middle half, never narrower than -20%/+25% of the median. */
+function rangeOf(values: number[]): Range {
+  const median = quantile(values, 0.5) ?? 0
   return {
-    low: Math.min(quantile(costs, 0.25) ?? 0, median * 0.8),
-    high: Math.max(quantile(costs, 0.75) ?? 0, median * 1.25),
+    low: Math.min(quantile(values, 0.25) ?? 0, median * 0.8),
+    high: Math.max(quantile(values, 0.75) ?? 0, median * 1.25),
   }
 }
 
@@ -161,12 +187,20 @@ export function planCost(
   attempts: CostedAttempt[],
   records: RunRecord[],
   judgeModel: string | null,
+  prices: Prices,
 ): PlanCost {
   const history = indexHistory(records)
+  const table = prices.table
   const cells = new Map<string, PlanCostCell>()
   const used = new Map<string, string>()
-  const unpriced = { agent: new Set<string>(), judge: new Set<string>() }
-  const judgeOf = (id: string): UsdRange | null => {
+  const unpriced = new Set<string>()
+  const priced = (model: string) => {
+    if (!table) return null
+    const price = priceFor(model, table)
+    if (!price) unpriced.add(model)
+    return price
+  }
+  const judgeOf = (id: string): CostPart => {
     const past = history.judges.get(id)
     const calls = past?.length
       ? (quantile(
@@ -174,37 +208,42 @@ export function planCost(
           0.5,
         ) ?? 0)
       : null
-    if (calls === 0) return { low: 0, high: 0 }
     const model = past?.length ? mostCommon(past.flatMap((j) => j.models)) : judgeModel
-    if (!model || isFreeModel(model)) return { low: 0, high: 0 }
-    const price = priceOf(model)
-    if (!price) {
-      unpriced.judge.add(model)
-      return null
+    if (calls === 0 || !model || model === 'fake') return { tokens: ZERO, usd: table && ZERO }
+    const price = priced(model)
+    const { low, high } = TYPICAL_JUDGE_CALL
+    const call: CostPart = {
+      tokens: { low: tokensOf(low), high: tokensOf(high) },
+      usd: price && { low: usdOf(low, price), high: usdOf(high, price) },
     }
-    const call = {
-      low: usdOf(TYPICAL_JUDGE_CALL.low, price),
-      high: usdOf(TYPICAL_JUDGE_CALL.high, price),
+    if (calls !== null) return scalePart(call, calls)
+    return {
+      tokens: { low: 0, high: call.tokens.high },
+      usd: call.usd && { low: 0, high: call.usd.high },
     }
-    return calls === null ? { low: 0, high: call.high } : scale(call, calls)
   }
   for (const { id, cell, harness } of attempts) {
     const key = `${id}\0${cell.key}`
     let c = cells.get(key)
     if (!c) {
       const model = harnessModel(harness)
-      const price = model ? priceOf(model) : null
       const samples = history.byCell.get(key) ?? history.byHarness.get(`${id}\0${cell.harness}`)
-      const basis: CostBasis = !model
-        ? 'free'
-        : !price
-          ? 'unpriced'
-          : samples?.length
-            ? 'history'
-            : 'typical'
-      if (model && !price) unpriced.agent.add(model)
-      if (basis === 'history')
-        for (const s of samples ?? []) used.set(`${s.runId}\0${s.key}`, s.runId)
+      const basis: CostBasis = !model ? 'free' : samples?.length ? 'history' : 'typical'
+      const price = model ? priced(model) : null
+      let agent: CostPart = { tokens: ZERO, usd: table && ZERO }
+      if (basis === 'history' && samples) {
+        for (const s of samples) used.set(`${s.runId}\0${s.key}`, s.runId)
+        agent = {
+          tokens: rangeOf(samples.map((s) => totalTokens(s.usage))),
+          usd: price && rangeOf(samples.map((s) => usdOf(s.usage, price))),
+        }
+      } else if (basis === 'typical') {
+        const { low, high } = TYPICAL_ATTEMPT
+        agent = {
+          tokens: { low: tokensOf(low), high: tokensOf(high) },
+          usd: price && { low: usdOf(low, price), high: usdOf(high, price) },
+        }
+      }
       c = {
         eval: id,
         cell: cell.key,
@@ -212,17 +251,7 @@ export function planCost(
         attempts: 0,
         basis,
         samples: basis === 'history' ? (samples?.length ?? 0) : 0,
-        agent:
-          basis === 'free'
-            ? { low: 0, high: 0 }
-            : !price
-              ? null
-              : basis === 'history'
-                ? rangeOf((samples ?? []).map((s) => usdOf(s.usage, price)))
-                : {
-                    low: usdOf(TYPICAL_ATTEMPT.low, price),
-                    high: usdOf(TYPICAL_ATTEMPT.high, price),
-                  },
+        agent,
         judge: judgeOf(id),
       }
       cells.set(key, c)
@@ -231,33 +260,41 @@ export function planCost(
   }
   const list = [...cells.values()].map((c) => ({
     ...c,
-    agent: c.agent && scale(c.agent, c.attempts),
-    judge: c.judge && scale(c.judge, c.attempts),
+    agent: scalePart(c.agent, c.attempts),
+    judge: scalePart(c.judge, c.attempts),
   }))
-  const tally: Record<CostBasis, number> = { history: 0, typical: 0, unpriced: 0, free: 0 }
-  for (const c of list) tally[c.basis] += c.attempts
-  const agent = list
-    .filter((c) => c.basis === 'history' || c.basis === 'typical')
-    .reduce<UsdRange | null>((sum, c) => add(sum, c.agent), null)
-  const judge = list.reduce<UsdRange | null>(
-    (sum, c) => (c.judge && c.judge.high > 0 ? add(sum, c.judge) : sum),
-    null,
+  const sum = (part: (c: PlanCostCell) => CostPart): CostPart => ({
+    tokens: list.reduce((t, c) => add(t, part(c).tokens), ZERO),
+    usd: list.reduce<Range | null>((t, c) => addOrNull(t, part(c).usd), null),
+  })
+  const agent = sum((c) => c.agent)
+  const judge = sum((c) => c.judge)
+  const unpricedTokens = list.reduce(
+    (t, c) => add(add(t, c.agent.usd ? ZERO : c.agent.tokens), c.judge.usd ? ZERO : c.judge.tokens),
+    ZERO,
   )
+  const tally: Record<CostBasis, number> = { history: 0, typical: 0, free: 0 }
+  for (const c of list) tally[c.basis] += c.attempts
+  const usd = addOrNull(agent.usd, judge.usd)
   return {
-    usd: round(add(agent, judge)),
-    agent: round(agent),
-    judge: round(judge),
+    tokens: round(add(agent.tokens, judge.tokens), 0) as Range,
+    usd: usd && (usd.high > 0 || unpricedTokens.high === 0) ? round(usd, 4) : null,
+    agent: roundPart(agent),
+    judge: roundPart(judge),
+    unpricedTokens: round(unpricedTokens, 0) as Range,
     attempts: tally,
     pastRuns: new Set(used.values()).size,
     pastAttempts: used.size,
-    unpriced: { agent: [...unpriced.agent].sort(), judge: [...unpriced.judge].sort() },
-    prices: { date: PRICES_DATE, source: PRICES_SOURCE },
-    cells: list.map((c) => ({ ...c, agent: round(c.agent), judge: round(c.judge) })),
+    unpriced: [...unpriced].sort(),
+    prices: prices.table
+      ? { source: prices.source, fetchedAt: prices.fetchedAt, stale: prices.stale }
+      : { source: null, why: prices.why },
+    cells: list.map((c) => ({ ...c, agent: roundPart(c.agent), judge: roundPart(c.judge) })),
   }
 }
 
 /** `$0.40–2.10`, `$12–40`, `up to $0.02`, `under $0.01`: the low end rounded down, the high end up. */
-export function formatUsdRange({ low, high }: UsdRange): string {
+export function formatUsdRange({ low, high }: Range): string {
   if (high < 0.01) return 'under $0.01'
   const digits = high < 10 ? 2 : 0
   const at = (n: number, round: (n: number) => number) => {
@@ -269,30 +306,55 @@ export function formatUsdRange({ low, high }: UsdRange): string {
   return lo === hi ? `about $${hi}` : `$${lo}–${hi}`
 }
 
+/** `0.6–4.2M tokens`, `120–900k tokens`, `up to 62k tokens`. */
+export function formatTokenRange({ low, high }: Range): string {
+  const [unit, div] = high >= 1e6 ? ['M', 1e6] : ['k', 1e3]
+  const digits = unit === 'M' && high < 10e6 ? 1 : 0
+  const at = (n: number, round: (n: number) => number) =>
+    (round((n / div) * 10 ** digits) / 10 ** digits).toFixed(digits)
+  const [lo, hi] = [at(low, Math.floor), at(high, Math.ceil)]
+  if (Number(lo) === 0) return `up to ${hi}${unit} tokens`
+  return lo === hi ? `about ${hi}${unit} tokens` : `${lo}–${hi}${unit} tokens`
+}
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
- * `cost  estimated $3.10–8.40 at list prices, judge included · from 4 past runs`; null when
- * every attempt is the fake agent's, which costs nothing.
+ * `models.dev list prices`, `models.dev list prices of 2026-10-20 (offline)` from an old copy, or
+ * `prices from prices.json` for a `REEVAL_PRICES` file.
+ */
+const priceLabel = (p: Extract<PlanCost['prices'], { source: string }>) =>
+  p.fetchedAt === null
+    ? `prices from ${p.source}`
+    : `${p.source} list prices${p.stale ? ` of ${p.fetchedAt.slice(0, 10)} (offline)` : ''}`
+
+/**
+ * `cost  estimated $3.10–8.40 at models.dev list prices, judge included · from 4 past runs`, or
+ * tokens alone without prices; null when every attempt is the fake agent's, which costs nothing.
  */
 export function costLine(c: PlanCost): string | null {
+  if (c.tokens.high === 0 && (c.usd === null || c.usd.high === 0)) return null
+  const judged = c.judge.tokens.high > 0 ? ', judge included' : ''
   const parts: string[] = []
-  if (c.usd) {
-    const judged = c.judge && c.judge.high > 0 ? ', judge included' : ''
-    parts.push(`estimated ${formatUsdRange(c.usd)} at list prices${judged}`)
-    const { history, typical } = c.attempts
-    const runs = plural(c.pastRuns, 'past run')
-    if (typical === 0 && history > 0) parts.push(`from ${runs}`)
-    else if (history === 0) parts.push('no history, rough')
-    else parts.push(`${history} of ${history + typical} attempts from ${runs}, the rest rough`)
-  }
-  if (c.unpriced.agent.length) {
+  if (c.usd && c.prices.source !== null) {
+    parts.push(`estimated ${formatUsdRange(c.usd)} at ${priceLabel(c.prices)}${judged}`)
+    if (c.unpricedTokens.high > 0) {
+      parts.push(
+        `plus ${formatTokenRange(c.unpricedTokens)} with no list price (${c.unpriced.join(', ')})`,
+      )
+    }
+  } else {
+    parts.push(`estimated ${formatTokenRange(c.tokens)}${judged}`)
     parts.push(
-      `${plural(c.attempts.unpriced, 'attempt')} left out: no list price for ${c.unpriced.agent.join(', ')}`,
+      c.prices.source === null
+        ? `no prices: ${c.prices.why}`
+        : `no price in ${c.prices.source} for ${c.unpriced.join(', ')}`,
     )
   }
-  if (c.unpriced.judge.length) {
-    parts.push(`judge left out: no list price for ${c.unpriced.judge.join(', ')}`)
-  }
-  return parts.length ? `cost  ${parts.join(' · ')}` : null
+  const { history, typical } = c.attempts
+  const runs = plural(c.pastRuns, 'past run')
+  if (typical === 0 && history > 0) parts.push(`from ${runs}`)
+  else if (history === 0) parts.push('no history, rough')
+  else parts.push(`${history} of ${history + typical} attempts from ${runs}, the rest rough`)
+  return `cost  ${parts.join(' · ')}`
 }

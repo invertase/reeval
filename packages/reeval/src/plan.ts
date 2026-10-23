@@ -7,6 +7,7 @@ import { UsageError } from './errors.ts'
 import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
+import type { Prices } from './prices.ts'
 import { clip, formatDuration } from './text.ts'
 import type {
   Budget,
@@ -55,8 +56,8 @@ export type RunPlan = {
   attempts: number
   /** Serial: every attempt one after another. */
   estimateMs: number
-  /** Agent and judge cost at list prices, as a range. */
-  cost: PlanCost
+  /** Agent and judge tokens, and their cost when there are prices; only for `--dry-run`. */
+  cost?: PlanCost
   concurrency: number
   budget: Budget
   warnings: string[]
@@ -125,6 +126,8 @@ export async function buildPlan(options: {
   insights?: PlanInsights | null
   /** The run's judge model, `fake` for a fake judge; null or unset when there's none. */
   judgeModel?: string | null
+  /** Prices for the cost estimate, which only `--dry-run` shows; unset leaves it out. */
+  prices?: Prices
 }): Promise<RunPlan> {
   const { planned } = options
   const records = await recentRecords([options.historyDir, scratchDir(options.root)], HISTORY_RUNS)
@@ -201,7 +204,9 @@ export async function buildPlan(options: {
     cells: cells.size,
     attempts,
     estimateMs,
-    cost: planCost(costed, records, options.judgeModel ?? null),
+    ...(options.prices
+      ? { cost: planCost(costed, records, options.judgeModel ?? null, options.prices) }
+      : {}),
     concurrency: options.concurrency,
     budget: options.budget,
     warnings: [...warnings],
@@ -474,8 +479,8 @@ export type PlanDocument = {
   budget: { attempts: number | null; duration: Duration | null; fits: boolean }
   concurrency: number
   estimateMs: number
-  /** What the run should cost at list prices: a range, how it was reached, and each cell's part. */
-  cost: PlanCost
+  /** What the run should cost: token and USD ranges, how they were reached, and each cell's part. */
+  cost?: PlanCost
   warnings: string[]
   /** Sandboxes that run as root or with capabilities added back, one per level that set them. */
   sandboxWarnings: SandboxWarning[]
@@ -559,7 +564,7 @@ export function planDocument(
     },
     concurrency: plan.concurrency,
     estimateMs: plan.estimateMs,
-    cost: plan.cost,
+    ...(plan.cost ? { cost: plan.cost } : {}),
     warnings: plan.warnings,
     sandboxWarnings: plan.sandboxWarnings,
     hints: plan.hints,

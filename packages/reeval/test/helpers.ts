@@ -107,6 +107,8 @@ export const baseEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_GLOBAL: join(tmpRoot, '.gitconfig-empty'),
   NO_COLOR: '1',
   REEVAL_UI: 'plain',
+  // The dry run's cost estimate would fetch models.dev; a test that wants prices supplies a file.
+  REEVAL_PRICES: 'none',
 }
 
 export type Project = { dir: string; sandboxes: string }

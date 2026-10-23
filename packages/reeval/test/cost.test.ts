@@ -1,8 +1,30 @@
 import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
-import { costLine, formatUsdRange, type PlanCost, planCost, priceOf } from '../src/cost.ts'
-import { PRICES } from '../src/prices.ts'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { after, describe, test } from 'node:test'
+import {
+  costLine,
+  formatTokenRange,
+  formatUsdRange,
+  type PlanCost,
+  planCost,
+  priceFor,
+} from '../src/cost.ts'
+import { loadPrices, type Price } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
+
+const FLASH: Price = [0.75, 0.075, 0.75, 3.75]
+const TABLE: Record<string, Price> = {
+  'gemini-3.8-flash': FLASH,
+  'composer-2.5-fast': [3, 0.5, 3, 15],
+}
+const PRICES = {
+  table: TABLE,
+  source: 'models.dev',
+  fetchedAt: '2026-10-23T00:00:00Z',
+  stale: false,
+}
 
 const cell = (harness: string): Cell => ({
   key: `${harness}/-/docker`,
@@ -12,19 +34,17 @@ const cell = (harness: string): Cell => ({
   role: 'control',
 })
 
-describe('priceOf', () => {
+describe('priceFor', () => {
   test('matches the id without a provider prefix, param labels or a trailing effort', () => {
-    const flash = PRICES['gemini-3.8-flash']
-    assert.ok(flash)
-    assert.deepEqual(priceOf('gemini-3.8-flash'), flash)
-    assert.deepEqual(priceOf('google/gemini-3.8-flash'), flash)
-    assert.deepEqual(priceOf('gemini-3.8-flash-medium'), flash)
-    assert.deepEqual(priceOf('gemini-3.8-flash[effort=high]'), flash)
+    assert.deepEqual(priceFor('gemini-3.8-flash', TABLE), FLASH)
+    assert.deepEqual(priceFor('google/gemini-3.8-flash', TABLE), FLASH)
+    assert.deepEqual(priceFor('gemini-3.8-flash-medium', TABLE), FLASH)
+    assert.deepEqual(priceFor('gemini-3.8-flash[effort=high]', TABLE), FLASH)
   })
 
   test('is null for a model without an exact price, rather than a near one', () => {
-    assert.equal(priceOf('my-model'), null)
-    assert.equal(priceOf('gemini-3.8-flash-lite-preview-99'), null)
+    assert.equal(priceFor('my-model', TABLE), null)
+    assert.equal(priceFor('gemini-3.8-flash-lite', TABLE), null)
   })
 
   test("Cursor's Fast is priced as its own model", () => {
@@ -38,13 +58,36 @@ describe('priceOf', () => {
       ],
       [],
       null,
+      PRICES,
     )
     assert.equal(cost.cells[0]?.model, 'composer-2.5-fast')
+    assert.ok(cost.usd)
+  })
+
+  test('without prices, the estimate is tokens alone and says why', () => {
+    const cost = planCost(
+      [
+        {
+          id: 'e',
+          cell: cell('pi:gemini-3.8-flash'),
+          harness: { kind: 'pi', model: 'gemini-3.8-flash' },
+        },
+      ],
+      [],
+      null,
+      { table: null, why: 'models.dev unreachable' },
+    )
+    assert.equal(cost.usd, null)
+    assert.deepEqual(cost.tokens, { low: 303_000, high: 2_020_000 })
+    assert.equal(
+      costLine(cost),
+      'cost  estimated 0.3–2.1M tokens · no prices: models.dev unreachable · no history, rough',
+    )
   })
 })
 
-describe('formatUsdRange', () => {
-  test('cents under $10, whole dollars above, the low end down and the high end up', () => {
+describe('formatting', () => {
+  test('dollars: cents under $10, whole dollars above, the low end down and the high end up', () => {
     assert.equal(formatUsdRange({ low: 0.0712, high: 0.4801 }), '$0.07–0.49')
     assert.equal(formatUsdRange({ low: 3.67, high: 27.26 }), '$3–28')
     assert.equal(formatUsdRange({ low: 1200.4, high: 3400.2 }), '$1,200–3,401')
@@ -52,57 +95,163 @@ describe('formatUsdRange', () => {
     assert.equal(formatUsdRange({ low: 0.003, high: 0.018 }), 'up to $0.02')
     assert.equal(formatUsdRange({ low: 0.5, high: 0.5 }), 'about $0.50')
   })
+
+  test('tokens: k under a million, M above', () => {
+    assert.equal(formatTokenRange({ low: 120_400, high: 899_100 }), '120–900k tokens')
+    assert.equal(formatTokenRange({ low: 606_000, high: 4_040_000 }), '0.6–4.1M tokens')
+    assert.equal(formatTokenRange({ low: 0, high: 62_000 }), 'up to 62k tokens')
+  })
 })
 
 describe('costLine', () => {
   const base: PlanCost = {
+    tokens: { low: 1_000_000, high: 9_000_000 },
     usd: { low: 1, high: 4 },
-    agent: { low: 1, high: 3.8 },
-    judge: { low: 0, high: 0.2 },
-    attempts: { history: 0, typical: 6, unpriced: 0, free: 0 },
+    agent: { tokens: { low: 1_000_000, high: 8_000_000 }, usd: { low: 1, high: 3.8 } },
+    judge: { tokens: { low: 0, high: 1_000_000 }, usd: { low: 0, high: 0.2 } },
+    unpricedTokens: { low: 0, high: 0 },
+    attempts: { history: 0, typical: 6, free: 0 },
     pastRuns: 0,
     pastAttempts: 0,
-    unpriced: { agent: [], judge: [] },
-    prices: { date: '2026-10-23', source: 'models.dev' },
+    unpriced: [],
+    prices: { source: 'models.dev', fetchedAt: '2026-10-23T00:00:00Z', stale: false },
     cells: [],
   }
 
-  test('says what the range is based on', () => {
+  test('says what the range is based on, and where the prices came from', () => {
     assert.equal(
       costLine(base),
-      'cost  estimated $1.00–4.00 at list prices, judge included · no history, rough',
+      'cost  estimated $1.00–4.00 at models.dev list prices, judge included · no history, rough',
     )
     assert.equal(
       costLine({ ...base, attempts: { ...base.attempts, history: 6, typical: 0 }, pastRuns: 12 }),
-      'cost  estimated $1.00–4.00 at list prices, judge included · from 12 past runs',
+      'cost  estimated $1.00–4.00 at models.dev list prices, judge included · from 12 past runs',
     )
     assert.equal(
-      costLine({ ...base, attempts: { ...base.attempts, history: 2, typical: 4 }, pastRuns: 1 }),
-      'cost  estimated $1.00–4.00 at list prices, judge included · 2 of 6 attempts from 1 past run, the rest rough',
+      costLine({
+        ...base,
+        attempts: { ...base.attempts, history: 2, typical: 4 },
+        pastRuns: 1,
+        prices: { ...base.prices, stale: true, fetchedAt: '2026-10-20T08:00:00Z' },
+      }),
+      'cost  estimated $1.00–4.00 at models.dev list prices of 2026-10-20 (offline), judge included · 2 of 6 attempts from 1 past run, the rest rough',
     )
   })
 
-  test('names what it left out, and prints nothing for the fake agent alone', () => {
+  test('adds the tokens it could not price, naming the models', () => {
     assert.equal(
       costLine({
         ...base,
-        usd: null,
-        agent: null,
-        judge: null,
-        attempts: { history: 0, typical: 0, unpriced: 3, free: 0 },
-        unpriced: { agent: ['my-model'], judge: [] },
+        unpricedTokens: { low: 600_000, high: 4_000_000 },
+        unpriced: ['my-model'],
       }),
-      'cost  3 attempts left out: no list price for my-model',
+      'cost  estimated $1.00–4.00 at models.dev list prices, judge included · plus 0.6–4.0M tokens with no list price (my-model) · no history, rough',
     )
+  })
+
+  test('prints nothing for the fake agent and judge alone', () => {
     assert.equal(
       costLine({
         ...base,
+        tokens: { low: 0, high: 0 },
         usd: null,
-        agent: null,
-        judge: null,
-        attempts: { history: 0, typical: 0, unpriced: 0, free: 4 },
+        attempts: { history: 0, typical: 0, free: 4 },
       }),
       null,
     )
+  })
+})
+
+describe('loadPrices', () => {
+  const cache = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-prices-'))
+    process.env.XDG_CACHE_HOME = dir
+    return { dir, env: {} }
+  }
+  const before = process.env.XDG_CACHE_HOME
+  after(() => {
+    if (before === undefined) delete process.env.XDG_CACHE_HOME
+    else process.env.XDG_CACHE_HOME = before
+  })
+  const now = Date.parse('2026-10-23T12:00:00Z')
+
+  test('REEVAL_PRICES=none is tokens only, and a file is used instead of models.dev', async () => {
+    assert.deepEqual(await loadPrices({ REEVAL_PRICES: 'none' }), {
+      table: null,
+      why: 'REEVAL_PRICES=none',
+    })
+    const { dir } = cache()
+    const file = join(dir, 'prices.json')
+    writeFileSync(
+      file,
+      JSON.stringify({ 'composer-2.5': { input: 0.5, cache_read: 0.2, output: 2.5 } }),
+    )
+    const prices = await loadPrices({ REEVAL_PRICES: file })
+    assert.deepEqual(prices.table, { 'composer-2.5': [0.5, 0.2, 0.5, 2.5] })
+    writeFileSync(file, JSON.stringify({ 'composer-2.5': { input: 0.5 } }))
+    const bad = await loadPrices({ REEVAL_PRICES: file })
+    assert.equal(bad.table, null)
+    assert.match('why' in bad ? bad.why : '', /composer-2\.5 needs at least input and output/)
+  })
+
+  const seed = (dir: string, fetchedAt: string) => {
+    mkdirSync(join(dir, 'reeval'), { recursive: true })
+    writeFileSync(
+      join(dir, 'reeval', 'models-dev-prices.json'),
+      JSON.stringify({ fetchedAt, table: TABLE }),
+    )
+  }
+
+  test('a cache under a day old is used without fetching', async (t) => {
+    const { dir, env } = cache()
+    seed(dir, '2026-10-23T06:00:00Z')
+    const fetch = t.mock.method(globalThis, 'fetch', async () => {
+      throw new Error('fetched')
+    })
+    const prices = await loadPrices(env, now)
+    assert.equal(fetch.mock.callCount(), 0)
+    assert.deepEqual(prices, {
+      table: TABLE,
+      source: 'models.dev',
+      fetchedAt: '2026-10-23T06:00:00Z',
+      stale: false,
+    })
+  })
+
+  test('offline, an older cache is used and marked stale; with none, there are no prices', async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => {
+      throw new Error('offline')
+    })
+    const { dir, env } = cache()
+    seed(dir, '2026-10-01T00:00:00Z')
+    const stale = await loadPrices(env, now)
+    assert.equal('stale' in stale && stale.stale, true)
+    cache()
+    assert.deepEqual(await loadPrices({}, now), {
+      table: null,
+      why: 'models.dev unreachable',
+    })
+  })
+
+  test("a fetch keeps the direct providers' priced models and caches them", async (t) => {
+    t.mock.method(globalThis, 'fetch', async () =>
+      Response.json({
+        google: {
+          models: {
+            'gemini-3.8-flash': { cost: { input: 0.75, output: 3.75, cache_read: 0.075 } },
+          },
+        },
+        openrouter: { models: { other: { cost: { input: 1, output: 1 } } } },
+        openai: { models: { 'no-cost': {} } },
+      }),
+    )
+    const { env } = cache()
+    const prices = await loadPrices(env, now)
+    assert.deepEqual(prices.table, { 'gemini-3.8-flash': FLASH })
+    t.mock.restoreAll()
+    t.mock.method(globalThis, 'fetch', async () => {
+      throw new Error('fetched again')
+    })
+    assert.deepEqual((await loadPrices(env, now)).table, { 'gemini-3.8-flash': FLASH })
   })
 })
