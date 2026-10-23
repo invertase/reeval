@@ -362,8 +362,6 @@ export const harnesses: HarnessRow[] = [
     id: 'opencode-gateway',
     harness: 'opencode',
     gateway: 'vercel',
-    gated:
-      'not yet passed on the real CLI; name opencode-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'google/gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'opencode',
@@ -380,8 +378,6 @@ export const harnesses: HarnessRow[] = [
     id: 'goose-gateway',
     harness: 'goose',
     gateway: 'vercel',
-    gated:
-      'not yet passed on the real CLI; name goose-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'gemini-3.8-flash',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'goose',
@@ -433,8 +429,6 @@ export const harnesses: HarnessRow[] = [
     id: 'grok-build-gateway',
     harness: 'grok-build',
     gateway: 'vercel',
-    gated:
-      'not yet passed on the real CLI; name grok-build-gateway in REEVAL_CONTRACT_HARNESSES to run it',
     model: 'grok-4.6',
     key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
     image: 'grok-build',

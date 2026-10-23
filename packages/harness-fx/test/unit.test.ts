@@ -37,6 +37,7 @@ test('a gateway id runs on AI Gateway, a bare id on OpenAI', () => {
     FX_PROVIDER: 'openai',
     FX_MODEL: 'gpt-4.1-mini',
     FX_GATEWAY_BASE_URL: 'http://127.0.0.1:47823',
+    FX_GATEWAY_CHAT_URL: 'http://127.0.0.1:47823/v4/ai/language-model',
     FX_RELAY_UPSTREAM: 'https://api.openai.com',
   })
   assert.deepEqual(

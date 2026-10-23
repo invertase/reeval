@@ -103,6 +103,8 @@ ${FX_LAUNCH}FX_LAUNCH
 chmod +x "$HOME/.local/bin/fx-acp"`
 
 const relayUrl = `http://127.0.0.1:${FX_RELAY_PORT}`
+/** AI Gateway's language-model path, where fx 0.0.14 sends each model call. */
+export const FX_GATEWAY_CHAT_PATH = '/v4/ai/language-model'
 
 export type FxHarnessSettings = {
   /** The model's provider's key only (see {@link FX_PROVIDERS}). The host environment is never read. */
@@ -126,6 +128,8 @@ export function fxEnv(model: string) {
     FX_PROVIDER: provider,
     FX_MODEL: model,
     FX_GATEWAY_BASE_URL: relayUrl,
+    // The model calls' own URL: unset, fx sends them to AI Gateway directly, past the relay.
+    FX_GATEWAY_CHAT_URL: `${relayUrl}${FX_GATEWAY_CHAT_PATH}`,
     FX_RELAY_UPSTREAM: FX_PROVIDERS[provider].url,
   }
 }
