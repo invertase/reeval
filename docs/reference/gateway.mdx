@@ -23,32 +23,25 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 | Helper | YAML | Serves | Key |
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness | each harness's own, such as `CURSOR_API_KEY` |
-| `fakeGateway({ serves? })` from `'{{ pkg }}/testing'` | `{ fake: { serves: [...] } }` | the harness kinds in `serves`, default `['fake']` | none |
-
-`fakeGateway()` is for tests: it routes nothing, so a fake harness behaves as under `direct()`. `serves: []` makes a gateway that serves no harness, to see the fallback in a dry run.
 
 ## Fallback
 
-```ts title="reeval.config.ts"
-gateway: [fakeGateway({ serves: [] }), direct()],
-```
-
 ```text title="reeval run --dry-run"
-hint: gateway: a → direct (fake can't serve it: fakeGateway() serves no harness, not the fake harness)
 evals/g.eval.ts › greets  a/-/fake  control  gated  ×1  gateway: a → direct
 ```
 
-A harness the first gateway can't serve falls through to the next. The plan prints one hint per harness that fell past an entry, and each eval notes where its harnesses resolved. `--dry-run --json` has it as each cell's `gateway`: `{ name, skipped: [{ gateway, why }] }`.
+A harness the first gateway can't serve falls through to the next, and each eval notes where its harnesses resolved. When a harness falls past an entry, the plan prints one hint for it, naming the gateway and why. `--dry-run --json` has it as each cell's `gateway`: `{ name, skipped: [{ gateway, why }] }`.
 
-When no entry can serve a harness, the plan stops with exit 2 before anything runs, naming every gateway it tried.
+When no entry can serve a harness, the plan stops with exit 2 before anything runs, naming every gateway it tried. Keep `direct()` last to fall back to each harness's own key.
 
 ## Pinning a harness
 
 ```ts title="evals/g.eval.ts"
 import { direct } from '{{ pkg }}/gateway'
-import { fakeHarness } from '{{ pkg }}/harness'
+import { cursor } from '{{ pkg }}/harness'
 
-evaluate('pinned', { harness: fakeHarness({ id: 'b', gateway: direct() }) }, async () => {})
+const harness = cursor({ model: 'composer-2.5', gateway: direct() })
+evaluate('pinned', { harness }, async () => {})
 ```
 
 Every harness factory takes `gateway`: the helper, or its name (`'direct'`). A pin skips the fallback. It must name a gateway in the list, and one that can serve the harness; a pin never falls back to another.
@@ -57,7 +50,7 @@ Every harness factory takes `gateway`: the helper, or its name (`'direct'`). A p
 
 ```ts title="reeval.config.ts"
 profiles: {
-  faked: { gateway: [fakeGateway(), direct()] },
+  listed: { gateway: [direct()] },
 },
 ```
 
@@ -72,11 +65,10 @@ Each cell resolved under a configured `gateway` or a pin records its gateway as 
 | Mistake | Message |
 |---|---|
 | An empty list | `gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])` |
-| An unknown gateway | `gateway[0] in reeval.yaml is "vercell", which isn't a gateway reeval knows: 'direct' or 'fake'.` |
+| An unknown gateway | `gateway[0] in reeval.yaml is "dirct", which isn't a gateway reeval knows: 'direct'. Did you mean 'direct'?` |
 | A gateway listed twice | `gateway[1] in reeval.config.ts lists direct a second time. Each gateway is listed once, where you prefer it.` |
-| A pin not in the list | `… on a: it pins gateway 'fake', which isn't in the gateway list (direct). Add fakeGateway() to gateway, or pin one that's there.` |
-| A pin that can't serve | `… on cursor:composer-2.5: it pins gateway 'fake', which can't serve it (fakeGateway() serves fake, not Cursor). A pin never falls back; …` |
-| Nothing in the list serves | `… on cursor:composer-2.5: no gateway in the list can serve it (fake: fakeGateway() serves fake, not Cursor). Add direct() to the end of gateway to use Cursor's own key.` |
+| Settings a gateway doesn't take | `gateway[0] in reeval.yaml isn't a valid direct(): Unrecognized key: "apiKey" (got {"direct":{"apiKey":"x"}})` |
+| A harness pin that isn't a gateway | `cursor({ gateway }) names a gateway in the config's gateway list: 'direct' (got "vercell")` |
 
 ## Related
 

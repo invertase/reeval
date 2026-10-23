@@ -180,7 +180,9 @@ const harnessModel = (h: HarnessDescriptor) => (h.kind === 'fake' ? null : (h.mo
 export const fingerprintOf = (parts: FingerprintParts) => sha256(JSON.stringify(parts))
 
 /** The gateway's part of a fingerprint: none on `direct`, so a cell without a gateway keeps its fingerprint. */
-const gatewayPart = (gateway: ResolvedGateway | undefined): Pick<FingerprintParts, 'gateway'> =>
+export const gatewayPart = (
+  gateway: ResolvedGateway | undefined,
+): Pick<FingerprintParts, 'gateway'> =>
   gateway && gateway.name !== 'direct' ? { gateway: gateway.name } : {}
 
 /** `<index>:<question hash>`, which follows one verdict across runs. */

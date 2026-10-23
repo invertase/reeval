@@ -149,7 +149,7 @@ A project without TypeScript can write its config as YAML. It takes the same key
 | `file('./notes.md')` | `{ kind: file, path: ./notes.md }` |
 | `skill.local('./skills')` | `{ kind: skill, source: local, path: ./skills, placement: harness }` |
 | `git('../app')` | `{ kind: git, repo: ../app, url: ../app }` |
-| `gateway: [fakeGateway({ serves: [] }), direct()]` | `gateway: [{ fake: { serves: [] } }, direct]` |
+| `gateway: [direct()]` | `gateway: [direct]` |
 | `fakeJudge({ score: 0.9 })` | `{ kind: fake-judge, score: 0.9 }` |
 | `fakeAnalysis({ note, vote })` | `{ kind: fake-analysis, note, vote }`, with fixed values |
 

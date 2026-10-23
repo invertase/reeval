@@ -18,7 +18,7 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { DEFAULT_GATEWAYS, GATEWAY_HELPERS } from './gateway/resolve.ts'
+import { DEFAULT_GATEWAYS, gatewayHelper } from './gateway/resolve.ts'
 import {
   AGENTS,
   credentialOf,
@@ -496,7 +496,7 @@ export function checkGateways(value: unknown, where: string, file: string): Gate
       const kind = isRecord(descriptor) ? descriptor.kind : undefined
       throw new UsageError(
         isGatewayName(kind)
-          ? `${at} isn't a valid ${GATEWAY_HELPERS[kind]}: ${parsed.error.issues[0]?.message ?? 'unknown settings'} (got ${JSON.stringify(entry)})`
+          ? `${at} isn't a valid ${gatewayHelper(kind)}: ${parsed.error.issues[0]?.message ?? 'unknown settings'} (got ${JSON.stringify(entry)})`
           : `${at} must be a gateway, e.g. direct() from 'reeval/gateway' (got ${describeValue(entry)})`,
       )
     }

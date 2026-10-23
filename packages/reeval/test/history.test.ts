@@ -542,12 +542,11 @@ describe('recording runs into evals/.history', () => {
     assert.deepEqual(narrowed.stack.judge.state?.diff, ['src/'])
   })
 
-  test("the cell's gateway is in the record, and in the fingerprint unless it's direct", async () => {
+  test("the cell's gateway is in the record, and direct leaves the fingerprint as it was", async () => {
     const run = async (name: string, gateway?: string) => {
       const p = await project(name, {
         'evals/agent.eval.ts': agent(),
         'reeval.config.ts': `import { direct } from 'reeval/gateway'
-import { fakeGateway } from 'reeval/testing'
 ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},` } : {}) })}`,
       })
       const r = await runCli(p.dir)
@@ -556,15 +555,10 @@ ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},`
     }
     const unset = await run('gateway-unset')
     const direct = await run('gateway-direct', '[direct()]')
-    const faked = await run('gateway-fake', '[fakeGateway(), direct()]')
     assert.equal(unset?.gateway, undefined)
     assert.equal(direct?.gateway, 'direct')
-    assert.equal(faked?.gateway, 'fake')
-    assert.equal(unset?.fingerprintParts.gateway, undefined)
     assert.equal(direct?.fingerprintParts.gateway, undefined)
-    assert.equal(faked?.fingerprintParts.gateway, 'fake')
     assert.equal(direct?.fingerprint, unset?.fingerprint, 'direct() is how reeval always ran')
-    assert.notEqual(faked?.fingerprint, unset?.fingerprint, 'another gateway is a new measurement')
   })
 
   test('a project reached through another spelling of its path records like any other', async () => {

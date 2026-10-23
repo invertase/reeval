@@ -311,18 +311,21 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway',
     area: 'Config and selection',
-    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, a harness `gateway` pin, a profile override, the plan hint and refusals, and the cell and fingerprint in the record',
+    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, a harness `gateway` pin, a profile override, the plan notes and refusals, and the cell and fingerprint in the record',
     plan: [
       'gateway/default',
-      'gateway/fallback',
+      'gateway/listed',
       'gateway/profile-list',
       'gateway/profile-pin',
       'gateway/yaml',
     ],
     tests: [
-      "reeval/test/plan.test.ts › each cell's gateway, and what it fell past, are in the JSON plan",
-      'reeval/test/plan.test.ts › a harness no listed gateway can serve exits 2 at plan time',
-      history("the cell's gateway is in the record, and in the fingerprint unless it's direct"),
+      "reeval/test/plan.test.ts › each cell's gateway is in the JSON plan when the config lists one",
+      'reeval/test/plan.test.ts › a gateway reeval does not know exits 2 at plan time',
+      'reeval/test/gateway.test.ts › each harness takes the first gateway that can serve it',
+      'reeval/test/gateway.test.ts › a pin skips the fallback, and must be listed and able to serve',
+      'reeval/test/gateway.test.ts › only a gateway other than direct joins the fingerprint',
+      history("the cell's gateway is in the record, and direct leaves the fingerprint as it was"),
     ],
   },
   {

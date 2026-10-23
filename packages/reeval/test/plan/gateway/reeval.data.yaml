@@ -1,4 +1,4 @@
 # The gateway list as data: a name, or a one-key map of the helper's options.
 harness: { kind: fake, id: a }
 sandbox: { kind: fake }
-gateway: [{ fake: { serves: [] } }, direct]
+gateway: [{ direct: {} }]

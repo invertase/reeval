@@ -760,25 +760,15 @@ export type GrokBuildHarnessDescriptor = {
   startTimeout?: Duration
 }
 /** A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`. */
-export type GatewayName = 'direct' | 'fake'
+export type GatewayName = 'direct'
 
 /** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
 export type DirectGatewayDescriptor = {
   kind: 'direct'
 }
 
-/**
- * A gateway for tests that serves only the harness kinds it lists, made by `fakeGateway()` in
- * `reeval/testing`. Nothing changes inside an attempt it serves.
- */
-export type FakeGatewayDescriptor = {
-  kind: 'fake'
-  /** The harness kinds it serves; default `['fake']`. */
-  serves?: Array<HarnessDescriptor['kind']>
-}
-
 /** One entry of the config's `gateway` list. */
-export type GatewayDescriptor = DirectGatewayDescriptor | FakeGatewayDescriptor
+export type GatewayDescriptor = DirectGatewayDescriptor
 
 /**
  * A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its
@@ -787,7 +777,6 @@ export type GatewayDescriptor = DirectGatewayDescriptor | FakeGatewayDescriptor
 export type GatewayEntryData =
   | GatewayName
   | { direct: Omit<DirectGatewayDescriptor, 'kind'> }
-  | { fake: Omit<FakeGatewayDescriptor, 'kind'> }
   | GatewayDescriptor
 
 /** A real coding agent, driven through its AI SDK harness adapter. */

@@ -1,4 +1,4 @@
-profile faked (--profile) · 2 evals · 2 cells · 2 attempts
-evals/g.eval.ts › greets  a/-/fake  control  gated  ×1  gateway: a → fake
+profile listed (--profile) · 2 evals · 2 cells · 2 attempts
+evals/g.eval.ts › greets  a/-/fake  control  gated  ×1  gateway: a → direct
 evals/g.eval.ts › pinned  b/-/fake  control  gated  ×1  gateway: b → direct
 excluded: —

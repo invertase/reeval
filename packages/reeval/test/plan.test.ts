@@ -93,8 +93,12 @@ export const cases: PlanCase[] = [
     prepare: (dir) => syncPythonFixtureProject(dir),
   },
   { dir: 'gateway', name: 'default', args: ['--config', 'reeval.default.config.ts'] },
-  { dir: 'gateway', name: 'fallback', args: [] },
-  { dir: 'gateway', name: 'profile-list', args: ['--profile', 'faked'] },
+  { dir: 'gateway', name: 'listed', args: [] },
+  {
+    dir: 'gateway',
+    name: 'profile-list',
+    args: ['--config', 'reeval.default.config.ts', '--profile', 'listed'],
+  },
   { dir: 'gateway', name: 'profile-pin', args: ['--profile', 'pinned'] },
   { dir: 'gateway', name: 'yaml', args: ['--config', 'reeval.data.yaml'] },
   { dir: 'selection', name: 'only-local', args: [] },
@@ -234,31 +238,23 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     assert.deepEqual(plan.profile, { name: 'nightly', reason: 'REEVAL_PROFILE' })
   })
 
-  test("each cell's gateway, and what it fell past, are in the JSON plan", async () => {
+  test("each cell's gateway is in the JSON plan when the config lists one", async () => {
     const plan = await planJson({ dir: 'gateway', args: [] })
-    const greets = plan.evals.find((e) => e.name === 'greets')
-    assert.deepEqual(greets?.cells[0]?.gateway, {
-      name: 'direct',
-      skipped: [{ gateway: 'fake', why: 'fakeGateway() serves no harness, not the fake harness' }],
-    })
-    const pinned = plan.evals.find((e) => e.name === 'pinned')
-    assert.deepEqual(pinned?.cells[0]?.gateway, { name: 'direct', skipped: [] })
+    for (const e of plan.evals) {
+      assert.deepEqual(e.cells[0]?.gateway, { name: 'direct', skipped: [] }, e.name)
+    }
     const unset = await planJson({ dir: 'gateway', args: ['--config', 'reeval.default.config.ts'] })
     assert.equal(unset.evals.find((e) => e.name === 'greets')?.cells[0]?.gateway, undefined)
   })
 
-  test('a harness no listed gateway can serve exits 2 at plan time, naming what it tried', async () => {
-    const p = await project('gateway-unserved', {
+  test('a gateway reeval does not know exits 2 at plan time, naming the ones it does', async () => {
+    const p = await project('gateway-unknown', {
       'reeval.config.ts': `import { defineConfig } from 'reeval'
-import { cursor } from 'reeval/harness'
-import { fakeGateway } from 'reeval/testing'
-export default defineConfig({
-  harness: cursor({ model: 'composer-2.5' }),
-  gateway: [fakeGateway()],
-})
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({ harness: fakeHarness(), gateway: [{ kind: 'vercell' }] })
 `,
       'evals/g.eval.ts': `import { evaluate } from 'reeval'
-evaluate('unserved', async () => {})
+evaluate('unknown', async () => {})
 `,
     })
     for (const args of [['run', '--dry-run'], ['run']]) {
@@ -266,7 +262,7 @@ evaluate('unserved', async () => {})
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(
         r.stderr,
-        /evaluate\("unserved"\) on cursor:composer-2\.5: no gateway in the list can serve it \(fake: fakeGateway\(\) serves fake, not Cursor\)\. Add direct\(\) to the end of gateway to use Cursor's own key\./,
+        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct'\./,
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
