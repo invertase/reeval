@@ -49,6 +49,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_PYTHON_SDK` | | Path to the `reeval-python` package on the host; prepends its `src/` to `PYTHONPATH` when the eval project does not list the dependency |
 | `REEVAL_PROJECT_ROOT` | | Not read from your shell: project root the worker passes to a remote language runner |
 | `REEVAL_RUNNER` | | Not read from your shell: `stdio` in a language runner reeval started, which talks to reeval on its stdin and stdout |
+| `REEVAL_RUNNER_PROTOCOL` | | Not read from your shell: the runner protocol reeval speaks, set beside `REEVAL_RUNNER`. A runner on another protocol stops and names both versions |
 
 ## CI and agent detection
 
