@@ -263,7 +263,7 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.10
+        specifier: workspace:0.1.11
         version: link:../harness-antigravity
       '@reeval/harness-codex':
         specifier: workspace:0.1.7
@@ -284,7 +284,7 @@ importers:
         specifier: workspace:0.2.9
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.2.7
+        specifier: workspace:0.2.8
         version: link:../harness-pi
       '@reeval/sandbox-docker':
         specifier: workspace:*
@@ -310,7 +310,7 @@ importers:
         specifier: 1.0.160
         version: 1.0.160(patch_hash=b17cde509b136b4f78b4c87a51841cc4348f6a0c0bd18e748b127dbbd9f1e514)(zod@4.6.7)
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.10
+        specifier: workspace:0.1.11
         version: link:../harness-antigravity
       '@reeval/harness-codex':
         specifier: workspace:0.1.7
@@ -331,7 +331,7 @@ importers:
         specifier: workspace:0.2.9
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.2.7
+        specifier: workspace:0.2.8
         version: link:../harness-pi
       ws:
         specifier: 8.22.0
