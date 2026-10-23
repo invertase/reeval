@@ -53,24 +53,25 @@ export function vercelCredentialProblem(
 const onVercel = (path: string, method: 'GET' | 'POST') =>
   ({ host: VERCEL_HOST, path: { exact: path }, method: [method] }) as const satisfies EndpointMatch
 
-/** The response names the model that served it, on Vercel's host. */
-const servedOnVercel: ModelSpecific['servedModel'] = ({ host, responseModel }) =>
-  host === VERCEL_HOST ? responseModel : undefined
+/**
+ * The response names the model that served it on Vercel's host, in Vercel's form
+ * (`openai/gpt-5.6-luna`), with the reasoning effort when it says one.
+ */
+const servedOnVercel: ModelSpecific['servedModel'] = ({ host, responseModel, responseEffort }) =>
+  host === VERCEL_HOST && responseModel
+    ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
+    : undefined
 
 /**
- * Claude Code with `ANTHROPIC_BASE_URL` on Vercel: its adapter switches to it when given the key as
- * `AI_GATEWAY_API_KEY`, and the CLI sends it on Anthropic's paths there.
+ * Claude Code with `ANTHROPIC_BASE_URL` at Vercel's host: its adapter switches to it when given
+ * the key as `AI_GATEWAY_API_KEY`, and the CLI sends it in `x-api-key` on Anthropic's message
+ * paths. On another base URL it makes none of its `/api/claude_code/*` calls.
  */
 function claudeCode(env: NodeJS.ProcessEnv): VercelRoute {
   return {
     credential: vercelCredential(env),
     authAs: VERCEL_KEY,
-    endpoints: [
-      onVercel('/v1/messages', 'POST'),
-      onVercel('/v1/messages/count_tokens', 'POST'),
-      onVercel('/api/claude_code/settings', 'GET'),
-      onVercel('/api/claude_code/policy_limits', 'GET'),
-    ],
+    endpoints: [onVercel('/v1/messages', 'POST'), onVercel('/v1/messages/count_tokens', 'POST')],
     hosts: [VERCEL_HOST],
   }
 }

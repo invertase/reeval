@@ -187,8 +187,6 @@ describe('Vercel AI Gateway routes', () => {
       [
         [['POST'], { exact: '/v1/messages' }],
         [['POST'], { exact: '/v1/messages/count_tokens' }],
-        [['GET'], { exact: '/api/claude_code/settings' }],
-        [['GET'], { exact: '/api/claude_code/policy_limits' }],
       ],
     )
     assert.equal(agent.modelId, undefined, "Claude Code's ids are Vercel's")
@@ -208,6 +206,15 @@ describe('Vercel AI Gateway routes', () => {
       'openai/gpt-5',
     )
     assert.equal(
+      agent.servedModel?.({
+        host: 'ai-gateway.vercel.sh',
+        responseModel: 'openai/gpt-5.6-luna',
+        responseEffort: 'medium',
+      } as never),
+      'openai/gpt-5.6-luna[effort=medium]',
+      'the effort, as on OpenAI',
+    )
+    assert.equal(
       agent.servedModel?.({ host: 'api.openai.com', responseModel: 'gpt-5' } as never),
       undefined,
     )
@@ -223,6 +230,7 @@ describe('Vercel AI Gateway routes', () => {
       onEndpoint(brokering?.endpoints ?? [], { method, host, path, headers: {} })
     assert.equal(on('POST', 'ai-gateway.vercel.sh', '/v1/messages?beta=true'), true)
     assert.equal(on('POST', 'ai-gateway.vercel.sh', '/v1/messages/count_tokens'), true)
+    assert.equal(on('GET', 'ai-gateway.vercel.sh', '/api/claude_code/settings'), false)
     assert.equal(on('GET', 'ai-gateway.vercel.sh', '/v1/messages'), false)
     assert.equal(on('GET', 'ai-gateway.vercel.sh', '/v1/models'), false)
     assert.equal(on('POST', 'api.anthropic.com', '/v1/messages'), false)

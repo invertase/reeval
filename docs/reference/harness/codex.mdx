@@ -90,7 +90,7 @@ On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the ha
 
 Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens.
 
-Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
+Codex doesn't say which model served a turn, so the gateway reads it from each response: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for. The same value is in the attempt's `servedModels` and the run's `resolvedModels`. On `vercel()` it's Vercel's id, such as `openai/gpt-5.6-luna[effort=medium]`.
 
 ## Turns and settings
 

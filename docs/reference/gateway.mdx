@@ -37,10 +37,10 @@ AI_GATEWAY_API_KEY=vck_...
 
 One key serves every harness and model on `vercel()`. The egress gateway swaps it in only on Vercel's model paths (`ai-gateway.vercel.sh`), so it never enters the sandbox, as with any [brokered credential](/concepts/credential-brokering).
 
-| Harness | How it reaches Vercel | Model ids |
-|---|---|---|
-| Claude Code | `ANTHROPIC_BASE_URL` on Vercel, the key as `AI_GATEWAY_API_KEY` | as written, e.g. `claude-sonnet-4-5` |
-| Codex | a Responses API provider on Vercel in `config.toml` | `openai/` prefixed unless the id names a provider |
+| Harness | How it reaches Vercel | Brokered on | Model ids | Served model |
+|---|---|---|---|---|
+| Claude Code | `ANTHROPIC_BASE_URL` on Vercel, the key as `AI_GATEWAY_API_KEY` | `POST /v1/messages`, `POST /v1/messages/count_tokens` | as written, e.g. `claude-haiku-4-5` | as the harness reports it, e.g. `claude-haiku-4-5` |
+| Codex | a Responses API provider on Vercel in `config.toml` | `POST /v1/responses` | `openai/` prefixed unless the id names a provider | Vercel's, from each response, e.g. `openai/gpt-5.6-luna[effort=medium]` |
 
 A Vercel project's token from `vercel env pull` (`VERCEL_OIDC_TOKEN`) works when `AI_GATEWAY_API_KEY` isn't set. It lasts about 12 hours, so the plan refuses an expired one before anything runs, and `reeval doctor` fails on it.
 
