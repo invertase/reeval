@@ -134,6 +134,16 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         out.write(event.slice(0, cut))
         return setTimeout(() => out.end(`${event.slice(cut)}data: [DONE]\n\n`), 20)
       }
+      if (req.url === '/language-model') {
+        // Vercel AI Gateway's language-model protocol streams AI SDK stream parts.
+        out.writeHead(200, { 'content-type': 'text/event-stream' })
+        const parts = [
+          { type: 'stream-start', warnings: [] },
+          { type: 'response-metadata', id: 'gen_1', modelId: 'google/gemini-3.8-flash' },
+          { type: 'text-delta', id: '0', delta: 'hi' },
+        ]
+        return out.end(parts.map((p) => `data: ${JSON.stringify(p)}\n\n`).join(''))
+      }
       if (req.url === '/denied') {
         // An error page echoing the key, as a WAF or a debug handler might, compressed unasked.
         const auth = String(req.headers.authorization ?? '')
@@ -1564,6 +1574,28 @@ describe('the model a response names, on a modelResponses endpoint', () => {
       const e = await requestEvent(events)
       assert.equal(e?.type === 'request' && e.responseModel, 'gpt-5.4-mini-2026-03-17')
       assert.equal(e?.type === 'request' && e.responseEffort, 'medium')
+    } finally {
+      gw.close()
+    }
+  })
+
+  test("an AI SDK stream's response-metadata modelId", async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: '/language-model' } }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/language-model',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: '{}',
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.equal(e?.type === 'request' && e.responseModel, 'google/gemini-3.8-flash')
     } finally {
       gw.close()
     }

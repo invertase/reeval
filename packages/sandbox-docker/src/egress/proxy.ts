@@ -68,8 +68,9 @@ export type EgressProxyOptions = {
    */
   derivedTokens?: readonly DerivedTokens[]
   /**
-   * Requests whose response names the model that served them in its body (a `"model"` field, and
-   * a `"reasoning"` object's `"effort"`, as OpenAI's Responses API does): the gateway asks for it
+   * Requests whose response names the model that served them in its body (a `"model"` field, or
+   * the `"modelId"` of an AI SDK stream's `response-metadata` part, and a `"reasoning"` object's
+   * `"effort"`, as OpenAI's Responses API does): the gateway asks for it
    * uncompressed and records them as the request's `responseModel` and `responseEffort`.
    */
   modelResponses?: readonly EndpointMatch[]
@@ -775,7 +776,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const MODEL_WINDOW = 512 * 1024
 
   /**
-   * Records the first `"model"` value in the response body, and the `"effort"` of the
+   * Records the first `"model"` or `"modelId"` value in the response body, and the `"effort"` of the
    * `"reasoning"` object after it, reading alongside its flow. Inside a JSON string the quotes are
    * escaped, so text that merely mentions them doesn't match.
    */
@@ -783,7 +784,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     let seen = ''
     const onData = (chunk: Buffer) => {
       seen += chunk.toString('utf8')
-      const model = /"model"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
+      const model = /"model(?:Id)?"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
       const effort = model
         ? /"reasoning"\s*:\s*\{[^{}]*?"effort"\s*:\s*"(\w{1,40})"/.exec(seen.slice(model.index))
         : null
