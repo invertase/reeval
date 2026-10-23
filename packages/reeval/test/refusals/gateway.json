@@ -21,7 +21,7 @@
   "yaml: vercel then direct": null,
   "route: cursor on vercel alone": "UsageError: evals/a.eval.ts › e on cursor:composer-2.5: no gateway in the list can serve it (vercel: Cursor's agent only calls Cursor's own API). Add direct() to the end of gateway to use Cursor's own key.",
   "route: antigravity on vercel alone": "UsageError: evals/a.eval.ts › e on antigravity:m: no gateway in the list can serve it (vercel: Antigravity's CLI only calls Google's API, with a Gemini key). Add direct() to the end of gateway to use Antigravity's own key.",
-  "route: grok build on vercel alone": "UsageError: evals/a.eval.ts › e on grok-build:m: no gateway in the list can serve it (vercel: reeval doesn't run Grok Build on Vercel AI Gateway yet). Add direct() to the end of gateway to use Grok Build's own key.",
+  "route: grok build on vercel": null,
   "route: opencode on vercel": null,
   "route: an fx gateway id on direct alone": "UsageError: evals/a.eval.ts › e on fx:m: no gateway in the list can serve it (direct: fx runs a gateway id such as \"google/m\" only through Vercel AI Gateway). Add vercel() to gateway.",
   "route: an fx gateway id falls through to vercel": null,

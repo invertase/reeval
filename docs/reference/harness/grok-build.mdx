@@ -45,11 +45,11 @@ export default defineConfig({
 | | |
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
-| Credential | `XAI_API_KEY` (an xAI API key) |
-| Adapter | `@reeval/harness-grok-build` 0.1.2 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| Credential | `XAI_API_KEY` (an xAI API key), or `vercel()`'s on Vercel AI Gateway |
+| Adapter | `@reeval/harness-grok-build` 0.1.3 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | Grok Build 1.0.67, from npm's `@xai-official/grok-linux-*`, checked against its sha512 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:grok-build-0.1.2` |
+| Image | `reeval-sandbox:grok-build-0.1.3` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.grok/skills` in Grok's own home (below) |
 | Skills (`placement: 'workspace'`) | `.grok/skills` in the workspace |
@@ -69,6 +69,8 @@ reeval passes `XAI_API_KEY` to the adapter explicitly, and Grok gets a placehold
 | `api.x.ai` | `POST /v1/responses` and `POST /v1/chat/completions`, its model calls |
 
 The served model comes from each model call's response, which the gateway reads: Grok's ACP server doesn't name it. The adapter refuses to run in a sandbox that can't broker the key.
+
+On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`). Grok's `config.toml` gets a `[model."xai/<model>"]` table on Vercel's Chat Completions API (`base_url = "https://ai-gateway.vercel.sh/v1"`, `env_key = "AI_GATEWAY_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /v1/chat/completions` at `ai-gateway.vercel.sh` only, and reads the served model from each response.
 
 ## Settings
 

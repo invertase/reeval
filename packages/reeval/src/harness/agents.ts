@@ -1029,10 +1029,13 @@ export const AGENTS: Record<AgentKind, Agent> = {
     modelResponses: XAI_MODEL_RESPONSES,
     servedModel: xaiServedModel,
     mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers, descriptor, plugins }) =>
+    adapter: async ({ auth, mcpServers, descriptor, plugins, model }) =>
       (await import('@reeval/harness-grok-build')).createGrokBuild({
         auth,
-        model: descriptor.model,
+        ...(auth[VERCEL_KEY]
+          ? { provider: (await import('@reeval/harness-grok-build')).AI_GATEWAY_PROVIDER }
+          : {}),
+        model,
         ...(plugins.length
           ? {
               pluginDirs: plugins.map((p) => p.dir),

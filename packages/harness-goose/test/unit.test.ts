@@ -87,6 +87,16 @@ test("on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel'
   assert.equal(harness.harnessId, 'goose')
 })
 
+test('the image bakes one bootstrap for every provider and model', async () => {
+  const gemini = createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'unused' })
+  const vercel = createGoose({
+    auth: { AI_GATEWAY_API_KEY: 'vck_k' },
+    provider: AI_GATEWAY_PROVIDER,
+    model: 'google/gemini-3-flash',
+  })
+  assert.deepEqual(await vercel.getBootstrap?.({}), await gemini.getBootstrap?.({}))
+})
+
 test("MCP servers are enabled extensions in Goose's config.yaml", () => {
   const file = gooseConfig({ stamp: { type: 'stdio', cmd: 'node', args: ['s.mjs'], envs: {} } })
   assert.equal(file.path, '.config/goose/config.yaml')

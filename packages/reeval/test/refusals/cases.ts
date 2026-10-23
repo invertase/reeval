@@ -1187,7 +1187,7 @@ environment:
     ['yaml: vercel then direct', yaml('gateway: [vercel, direct]\n')],
     ['route: cursor on vercel alone', route([VERCEL], cursor({ model: 'composer-2.5' }))],
     ['route: antigravity on vercel alone', route([VERCEL], antigravity({ model: 'm' }))],
-    ['route: grok build on vercel alone', route([VERCEL], grokBuild({ model: 'm' }))],
+    ['route: grok build on vercel', route([VERCEL], grokBuild({ model: 'm' }))],
     ['route: opencode on vercel', route([VERCEL], opencode({ model: 'anthropic/m' }))],
     ['route: an fx gateway id on direct alone', route([DIRECT], fx({ model: 'google/m' }))],
     [

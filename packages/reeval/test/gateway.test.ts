@@ -318,6 +318,28 @@ describe('Vercel AI Gateway routes', () => {
     assert.equal(agent.modelId?.('google/gemini-3-flash'), 'google/gemini-3-flash')
   })
 
+  test("Grok Build runs the model on Vercel's Chat Completions API, as xai/<id>", async () => {
+    const descriptor = { kind: 'grok-build', model: 'grok-4.6', gateway: 'vercel' } as never
+    const agent = agentFor(descriptor)
+    assert.equal(agent.credential, 'AI_GATEWAY_API_KEY')
+    assert.deepEqual(agent.hosts, ['ai-gateway.vercel.sh'])
+    assert.deepEqual(
+      agent.endpoints.map((e) => [e.host, e.method, e.path]),
+      [['ai-gateway.vercel.sh', ['POST'], { exact: '/v1/chat/completions' }]],
+    )
+    assert.deepEqual(agent.modelResponses, agent.endpoints)
+    assert.equal(agent.modelId?.('grok-4.6'), 'xai/grok-4.6')
+    assert.equal(agent.modelId?.('openai/gpt-5'), 'openai/gpt-5')
+    process.env.AI_GATEWAY_API_KEY = 'vck_test'
+    const adapter = (await agent.adapter({
+      auth: agentAuth(agent),
+      descriptor,
+      model: 'xai/grok-4.6',
+      plugins: [],
+    })) as { harnessId: string }
+    assert.equal(adapter.harnessId, 'grok-build')
+  })
+
   test("a gateway id isn't fx on direct: it falls through to Vercel, or names it", () => {
     const fx = { kind: 'fx', model: 'google/gemini-3-flash' } as HarnessDescriptor
     const why =

@@ -177,6 +177,23 @@ function opencode(env: NodeJS.ProcessEnv): VercelRoute {
   }
 }
 
+/**
+ * Grok Build with the model as a `[model.<id>]` table on Vercel's Chat Completions API, keyed by
+ * `env_key`; it then calls nothing on xAI's API.
+ */
+function grokBuild(env: NodeJS.ProcessEnv): VercelRoute {
+  const endpoints = [onVercel('/v1/chat/completions', 'POST')]
+  return {
+    credential: vercelCredential(env),
+    authAs: VERCEL_KEY,
+    endpoints,
+    modelResponses: endpoints,
+    servedModel: servedOnVercel,
+    hosts: [VERCEL_HOST],
+    modelId: (model) => (model.includes('/') ? model : `xai/${model}`),
+  }
+}
+
 /** The harnesses reeval runs on Vercel, and what each needs there. */
 export const VERCEL_ROUTES: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => VercelRoute>> = {
   'claude-code': claudeCode,
@@ -185,6 +202,7 @@ export const VERCEL_ROUTES: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) =
   pi,
   opencode,
   fx,
+  'grok-build': grokBuild,
 }
 
 /** Why Vercel can't serve an agent reeval doesn't route there, for the plan's messages. */

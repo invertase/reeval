@@ -43,11 +43,12 @@ export type HarnessRow = {
     | 'opencode-gateway'
     | 'goose-gateway'
     | 'pi-gateway'
+    | 'grok-build-gateway'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's, and the rows on AI Gateway.
    */
-  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi'
+  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
   gateway?: 'vercel'
   /**
@@ -425,6 +426,25 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one xAI's Responses API answered with.
     servedModel: /^grok-4\.6/,
     wireModel: /^grok-4\.6/,
+  },
+  {
+    // Grok Build on Vercel AI Gateway: the model as a [model."xai/<id>"] table on Vercel's Chat
+    // Completions API, keyed by env_key, so nothing reaches xAI's API.
+    id: 'grok-build-gateway',
+    harness: 'grok-build',
+    gateway: 'vercel',
+    gated:
+      'not yet passed on the real CLI; name grok-build-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'grok-4.6',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /grok-4\.6/,
+    wireModel: /grok-4\.6/,
   },
 ]
 

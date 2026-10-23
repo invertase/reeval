@@ -5,4 +5,4 @@ excluded: —
 image docker · claude-code · 1 evals
   base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
 image docker · grok-build · 1 evals
-  base  reeval-sandbox:grok-build-0.1.2  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:grok-build-0.1.3  (reeval's image: built when missing or when its base changed)

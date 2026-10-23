@@ -16,9 +16,27 @@ export const GROK_CLI_INTEGRITY = {
   arm64:
     'sha512-TFh6pUVx6eDQ9XCDwjyjq6usYW8b67rcO/A7N2XYMfHC05puuqgh5k3IASplvI+PPd1yCnnDhTZ9hhcIYH4Bbg==',
 } as const
-/** The only credential the adapter uses: an xAI API key. */
+/** The credential the adapter uses by default: an xAI API key. */
 export const GROK_CREDENTIAL_ENV = 'XAI_API_KEY'
 export const XAI_API_URL = 'https://api.x.ai'
+
+/**
+ * An OpenAI-compatible endpoint Grok runs the model on through a `[model.<id>]` table in its
+ * `config.toml`, keyed from `credentialEnv` (its `env_key`) as a Bearer token.
+ */
+export type GrokProvider = {
+  readonly name: string
+  readonly credentialEnv: string
+  /** The API base, `base_url`, ending in `/v1`. */
+  readonly baseUrl: string
+}
+
+/** Vercel AI Gateway's Chat Completions API, whose model ids name their provider (`xai/grok-4.6`). */
+export const AI_GATEWAY_PROVIDER: GrokProvider = {
+  name: 'Vercel AI Gateway',
+  credentialEnv: 'AI_GATEWAY_API_KEY',
+  baseUrl: 'https://ai-gateway.vercel.sh/v1',
+}
 /**
  * Where harness-placed skills go, under Grok's home. The bootstrap gives Grok a private home,
  * `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home`, so this is under that.
@@ -88,8 +106,13 @@ chmod +x "$HOME/.local/bin/grok-acp"
 grok --version`
 
 export type GrokBuildHarnessSettings = {
-  /** `{ XAI_API_KEY }`, the only key used. The host environment is never read. */
+  /**
+   * The key under its variable, `{ XAI_API_KEY }` by default (the provider's `credentialEnv` with
+   * one), the only key used. The host environment is never read.
+   */
   readonly auth: HarnessV1AuthenticationEnvironment
+  /** Another endpoint for the model calls; xAI's API by default. */
+  readonly provider?: GrokProvider
   /**
    * The model a session starts on, and the one Grok names sessions with (`[models] default` and
    * `session_summary` in its `config.toml`), so every call is on the run's model.
@@ -126,13 +149,26 @@ export type GrokBuildHarnessSettings = {
  * effort when set, and no telemetry, feedback, remote config or campaigns, and no summary, recap
  * or title refresh calls after a turn.
  */
-export function grokConfig(settings: Pick<GrokBuildHarnessSettings, 'model' | 'effort'>) {
+export function grokConfig(
+  settings: Pick<GrokBuildHarnessSettings, 'model' | 'effort' | 'provider'>,
+) {
+  const model = JSON.stringify(settings.model)
   const lines = [
     '[models]',
-    `default = ${JSON.stringify(settings.model)}`,
-    `session_summary = ${JSON.stringify(settings.model)}`,
+    `default = ${model}`,
+    `session_summary = ${model}`,
     ...(settings.effort ? [`default_reasoning_effort = ${JSON.stringify(settings.effort)}`] : []),
     '',
+    ...(settings.provider
+      ? [
+          `[model.${model}]`,
+          `model = ${model}`,
+          `base_url = ${JSON.stringify(settings.provider.baseUrl)}`,
+          `env_key = ${JSON.stringify(settings.provider.credentialEnv)}`,
+          'api_backend = "chat_completions"',
+          '',
+        ]
+      : []),
     '[features]',
     'telemetry = false',
     'feedback = false',
@@ -149,17 +185,18 @@ export function grokConfig(settings: Pick<GrokBuildHarnessSettings, 'model' | 'e
 }
 
 /**
- * Grok Build (`grok agent stdio`) as an AI SDK harness, on an xAI API key: a model is an xAI id
- * such as `grok-4.6`. Thin config over `@ai-sdk/harness-acp`.
+ * Grok Build (`grok agent stdio`) as an AI SDK harness, on an xAI API key (a model is an xAI id
+ * such as `grok-4.6`) or another {@link GrokProvider}. Thin config over `@ai-sdk/harness-acp`.
  */
 export function createGrokBuild(
   settings: GrokBuildHarnessSettings,
 ): HarnessV1<GrokBuildBuiltinTools> {
-  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[GROK_CREDENTIAL_ENV]) {
-    throw new Error(
-      `Grok Build auth must be an environment object with ${GROK_CREDENTIAL_ENV} (an xAI API key)`,
-    )
+  const credential = settings.provider?.credentialEnv ?? GROK_CREDENTIAL_ENV
+  const keyFor = settings.provider ? `a ${settings.provider.name} key` : 'an xAI API key'
+  if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[credential]) {
+    throw new Error(`Grok Build auth must be an environment object with ${credential} (${keyFor})`)
   }
+  const apiUrl = settings.provider ? new URL(settings.provider.baseUrl).origin : XAI_API_URL
   const mcpServers = [
     ...Object.keys(settings.mcpServers ?? {}),
     ...(settings.pluginMcpServers ?? []),
@@ -174,14 +211,16 @@ export function createGrokBuild(
     auth: settings.auth,
     authentication: { methodId: 'xai.api_key' },
     env: { ...GROK_QUIET_ENV, [GROK_PLUGIN_DIRS_ENV]: (settings.pluginDirs ?? []).join(':') },
-    credentialEnv: [GROK_CREDENTIAL_ENV],
+    // Every provider's, not just this one's: the bootstrap is keyed on these names, so the image's
+    // bootstrap serves each provider.
+    credentialEnv: [GROK_CREDENTIAL_ENV, AI_GATEWAY_PROVIDER.credentialEnv],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
-      const key = env[GROK_CREDENTIAL_ENV]
-      const placeholder = sandboxEnv?.[GROK_CREDENTIAL_ENV]
+      const key = env[credential]
+      const placeholder = sandboxEnv?.[credential]
       if (!key || !placeholder) return []
       return [
         createCredentialRequestTransformation({
-          matchUrl: XAI_API_URL,
+          matchUrl: apiUrl,
           matchHeaders: { Authorization: `Bearer ${placeholder}` },
           transformHeaders: { ...headers, Authorization: `Bearer ${key}` },
         }),
@@ -202,7 +241,7 @@ export function createGrokBuild(
         typeof sandbox.addRequestTransformations !== 'function'
       ) {
         throw new Error(
-          `The sandbox can't broker ${GROK_CREDENTIAL_ENV} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
+          `The sandbox can't broker ${credential} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
         )
       }
       return translated(await acp.doStart(options), mcpServers)

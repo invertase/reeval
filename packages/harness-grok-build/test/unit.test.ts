@@ -5,12 +5,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import {
+  AI_GATEWAY_PROVIDER,
   createGrokBuild,
   GROK_CLI_INTEGRITY,
   GROK_CLI_VERSION,
   GROK_CREDENTIAL_ENV,
   GROK_INSTALL_COMMAND,
   GROK_PLUGIN_DIRS_ENV,
+  type GrokProvider,
   grokConfig,
 } from '../src/grok-build-harness.ts'
 import { GROK_BUILD_BUILTIN_TOOLS } from '../src/grok-build-tools.ts'
@@ -120,6 +122,31 @@ test('plugin directories leave the bootstrap an image bakes unchanged', async ()
       ...(pluginDirs ? { pluginDirs } : {}),
     }).getBootstrap?.({})
   assert.deepEqual(await bootstrap(['/h/.reeval/plugins/probe']), await bootstrap())
+})
+
+test("on Vercel AI Gateway, the model is a [model.<id>] table on Vercel's key", async () => {
+  assert.throws(
+    () =>
+      createGrokBuild({ auth: { XAI_API_KEY: 'k' }, model: 'm', provider: AI_GATEWAY_PROVIDER }),
+    /with AI_GATEWAY_API_KEY \(a Vercel AI Gateway key\)/,
+  )
+  const file = grokConfig({ model: 'xai/grok-4.6', provider: AI_GATEWAY_PROVIDER })
+  assert.match(
+    file.content,
+    /\n\[model\."xai\/grok-4\.6"\]\nmodel = "xai\/grok-4\.6"\nbase_url = "https:\/\/ai-gateway\.vercel\.sh\/v1"\nenv_key = "AI_GATEWAY_API_KEY"\napi_backend = "chat_completions"\n/,
+  )
+  assert.equal(grokConfig({ model: 'grok-4.6' }).content.includes('[model.'), false)
+  const bootstrap = (provider?: GrokProvider) =>
+    createGrokBuild({
+      auth: { [provider?.credentialEnv ?? GROK_CREDENTIAL_ENV]: 'k' },
+      model: 'm',
+      ...(provider ? { provider } : {}),
+    }).getBootstrap?.({})
+  assert.deepEqual(
+    await bootstrap(AI_GATEWAY_PROVIDER),
+    await bootstrap(),
+    'the image bakes one bootstrap for both',
+  )
 })
 
 test("effort is the config's default_reasoning_effort", () => {
