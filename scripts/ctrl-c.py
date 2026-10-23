@@ -28,12 +28,13 @@ def ctrl_c(process: subprocess.Popen[bytes]) -> None:
         return
     import ctypes
 
-    kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
     kernel32.FreeConsole()
     if not kernel32.AttachConsole(process.pid):
-        sys.exit(f"ctrl-c: couldn't attach to {process.pid}'s console")
+        sys.exit(f"ctrl-c: couldn't attach to {process.pid}'s console ({ctypes.get_last_error()})")
     kernel32.SetConsoleCtrlHandler(None, True)
-    kernel32.GenerateConsoleCtrlEvent(0, 0)
+    if not kernel32.GenerateConsoleCtrlEvent(0, 0):
+        sys.exit(f"ctrl-c: couldn't send CTRL_C_EVENT ({ctypes.get_last_error()})")
 
 
 def main() -> None:
@@ -44,6 +45,12 @@ def main() -> None:
         if sys.platform == "win32"
         else {"start_new_session": True}
     )
+    if sys.platform == "win32":
+        import ctypes
+
+        # A process started with Ctrl-C ignored (as CI runners start jobs) passes that on to every
+        # child; a terminal doesn't, so the command gets it enabled.
+        ctypes.windll.kernel32.SetConsoleCtrlHandler(None, False)  # type: ignore[attr-defined]
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **flags)
     assert process.stdout
 
