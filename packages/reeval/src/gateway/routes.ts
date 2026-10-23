@@ -27,9 +27,10 @@ export type RoutingGateway = {
   unprovenEffort: readonly AgentKind[]
 }
 
-export type RoutingGatewayName = Exclude<GatewayName, 'direct'>
+/** Vertex AI takes a minted token, not a brokered key, so it has a catalog of its own. */
+export type RoutingGatewayName = Exclude<GatewayName, 'direct' | 'vertex'>
 
-/** Every gateway but `direct`, by name. */
+/** Every gateway that brokers a key, by name. */
 export const ROUTING_GATEWAYS: Readonly<Record<RoutingGatewayName, RoutingGateway>> = {
   vercel: VERCEL_GATEWAY,
   openrouter: OPENROUTER_GATEWAY,

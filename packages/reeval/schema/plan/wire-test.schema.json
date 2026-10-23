@@ -93,7 +93,7 @@
           "type": "object",
           "properties": {
             "gateway": {
-              "enum": ["direct", "openrouter", "vercel"]
+              "enum": ["direct", "openrouter", "vercel", "vertex"]
             },
             "model": {
               "type": "string"
@@ -1029,9 +1029,9 @@
       "additionalProperties": false
     },
     "GatewayName": {
-      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.",
+      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is Google Cloud's Vertex AI.",
       "type": "string",
-      "enum": ["direct", "vercel", "openrouter"]
+      "enum": ["direct", "vercel", "openrouter", "vertex"]
     },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",

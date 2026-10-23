@@ -1,4 +1,5 @@
 import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
+import type { RoutingGatewayName } from '../gateway/routes.ts'
 import { VERCEL_KEY, VERCEL_OIDC, vercelCredentialProblem } from '../gateway/vercel.ts'
 import type { JudgeRetry } from '../history/types.ts'
 import { badCharacterAt, redactSecrets } from '../redact.ts'
@@ -23,7 +24,7 @@ export const DEFAULT_THRESHOLD = 0.8
 const GATEWAY_KEYS = [VERCEL_KEY, VERCEL_OIDC]
 
 /** Each routing gateway's keys, in the order reeval prefers them. */
-const ROUTED_KEYS: Readonly<Record<Exclude<GatewayName, 'direct'>, readonly string[]>> = {
+const ROUTED_KEYS: Readonly<Record<RoutingGatewayName, readonly string[]>> = {
   vercel: GATEWAY_KEYS,
   openrouter: [OPENROUTER_KEY],
 }
@@ -75,13 +76,14 @@ const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 /**
  * Environment variables a model needs on `gateway`, in the order reeval prefers them; any one is
  * enough. On direct, its provider's own key (none for a prefix reeval can't call directly); on
- * another gateway, that gateway's.
+ * vertex none, since its token comes from Application Default Credentials; on another gateway,
+ * that gateway's.
  */
 export function judgeCredentials(
   model: string | FakeJudgeModel,
   gateway: GatewayName = 'direct',
 ): string[] {
-  if (isFakeJudge(model)) return []
+  if (isFakeJudge(model) || gateway === 'vertex') return []
   if (gateway !== 'direct') return [...ROUTED_KEYS[gateway]]
   const direct = DIRECT_PROVIDERS[providerOf(model)]
   return direct ? [direct.key] : []
@@ -89,6 +91,7 @@ export function judgeCredentials(
 
 /** The keys that would work for a model on `on`: `ANTHROPIC_API_KEY (for direct())`. */
 export function modelKeyOptions(model: string, on: GatewayName = 'direct'): string {
+  if (on === 'vertex') return 'Application Default Credentials (for vertex())'
   if (on !== 'direct') return `${ROUTED_KEYS[on].join(' or ')} (for ${on}())`
   const direct = DIRECT_PROVIDERS[providerOf(model)]
   return direct
@@ -101,10 +104,10 @@ export function modelKeyOptions(model: string, on: GatewayName = 'direct'): stri
 /** A gateway's credential set in `env`, if any, with the gateway it's for. */
 export function setGatewayKey(
   env: NodeJS.ProcessEnv,
-): { key: string; gateway: Exclude<GatewayName, 'direct'> } | undefined {
+): { key: string; gateway: RoutingGatewayName } | undefined {
   for (const [gateway, keys] of Object.entries(ROUTED_KEYS)) {
     const key = keys.find((k) => env[k])
-    if (key) return { key, gateway: gateway as Exclude<GatewayName, 'direct'> }
+    if (key) return { key, gateway: gateway as RoutingGatewayName }
   }
   return undefined
 }

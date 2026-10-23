@@ -502,7 +502,7 @@ class CodexHarnessDescriptor(TypedDict):
 class ConfigJudgeOptions(TypedDict):
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
-    gateway: NotRequired[DirectGatewayDescriptor | OpenRouterGatewayDescriptor | VercelGatewayDescriptor | Literal["direct", "openrouter", "vercel"]]
+    gateway: NotRequired[DirectGatewayDescriptor | OpenRouterGatewayDescriptor | VercelGatewayDescriptor | VertexGatewayDescriptor | Literal["direct", "openrouter", "vercel", "vertex"]]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[float]
     # `'provider/model'`, or a fake judge.
@@ -1072,8 +1072,9 @@ class FxHarnessDescriptor(TypedDict):
 
 
 # A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
-# `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.
-GatewayName: TypeAlias = "Literal[\"direct\", \"vercel\", \"openrouter\"]"
+# `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is Google Cloud's Vertex
+# AI.
+GatewayName: TypeAlias = "Literal[\"direct\", \"vercel\", \"openrouter\", \"vertex\"]"
 
 
 # A git repository (or one directory of it) the workspace starts as, from the `git` helper.
@@ -1196,6 +1197,19 @@ class JudgeCallDataGatewayOpenrouter(TypedDict):
     kind: Literal["openrouter"]
 
 
+# Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in
+# `reeval/gateway`.
+class JudgeCallDataGatewayVertex(TypedDict):
+    kind: Literal["vertex"]
+    # The region the models are called in, e.g. `us-east5`; defaults to `global`.
+    location: NotRequired[str]
+    # The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`.
+    project: NotRequired[str]
+    # A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5'
+    # }`.
+    regions: NotRequired[dict[str, str]]
+
+
 class JudgeCallDataOnTurn(TypedDict):
     # The turn's index, from 0.
     turn: int
@@ -1215,7 +1229,7 @@ class JudgeCallData(TypedDict):
     artifacts: NotRequired[Literal[True] | list[str | Capture]]
     # The gateway the judge's calls go through, by name or by its helper. It skips the config's
     # `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
-    gateway: NotRequired[Literal["direct", "vercel", "openrouter"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel | JudgeCallDataGatewayOpenrouter]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"] | JudgeCallDataGatewayDirect | JudgeCallDataGatewayVercel | JudgeCallDataGatewayOpenrouter | JudgeCallDataGatewayVertex]
     # The most judge calls to this model's provider at once, across the run.
     maxConcurrent: NotRequired[int]
     # `'provider/model'`, or a fake judge with a numeric score.
@@ -1239,7 +1253,7 @@ class JudgeFailure(TypedDict):
     artifacts: NotRequired[list[JudgeArtifactRef]]
     error: str
     # The gateway from the config's `gateway` list the call went through; unset without one.
-    gateway: NotRequired[Literal["direct", "vercel", "openrouter"]]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"]]
     model: str
     question: str
     score: None
@@ -1839,7 +1853,7 @@ class Verdict(TypedDict):
     # it names none.
     costUsd: NotRequired[float]
     # The gateway from the config's `gateway` list the call went through; unset without one.
-    gateway: NotRequired[Literal["direct", "vercel", "openrouter"]]
+    gateway: NotRequired[Literal["direct", "vercel", "openrouter", "vertex"]]
     model: str
     question: str
     # The model id the provider says served the call, when it reports one.
@@ -1851,6 +1865,19 @@ class Verdict(TypedDict):
     # none.
     upstream: NotRequired[str]
     verdict: Literal["pass", "fail"]
+
+
+# Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in
+# `reeval/gateway`.
+class VertexGatewayDescriptor(TypedDict):
+    kind: Literal["vertex"]
+    # The region the models are called in, e.g. `us-east5`; defaults to `global`.
+    location: NotRequired[str]
+    # The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`.
+    project: NotRequired[str]
+    # A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5'
+    # }`.
+    regions: NotRequired[dict[str, str]]
 
 
 class WaitMs(TypedDict):
@@ -1906,6 +1933,7 @@ RECORD_FIELDS: frozenset[str] = frozenset(
         "mcp",
         "params",
         "providerOptions",
+        "regions",
         "score",
         "untested",
         "value",

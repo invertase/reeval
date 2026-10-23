@@ -12,6 +12,7 @@ import type {
   ResolvedGateway,
 } from '../types.ts'
 import { ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
+import { VERTEX_REFUSALS } from './vertex.ts'
 
 /** The config's list when it sets none: each provider's own key, as reeval has always run. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -37,6 +38,12 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
   },
   vercel: routingEntry('vercel'),
   openrouter: routingEntry('openrouter'),
+  vertex: {
+    cantServe: (h) =>
+      h.kind === 'fake'
+        ? undefined
+        : (VERTEX_REFUSALS[h.kind] ?? `reeval doesn't run ${agentName(h)} on Vertex AI yet`),
+  },
 }
 
 /** A routing gateway's entry: its route table decides whom it serves, and with what effort. */

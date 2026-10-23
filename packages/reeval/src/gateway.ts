@@ -3,6 +3,7 @@ import type {
   DirectGatewayDescriptor,
   OpenRouterGatewayDescriptor,
   VercelGatewayDescriptor,
+  VertexGatewayDescriptor,
 } from './types.ts'
 
 /**
@@ -31,6 +32,15 @@ export const openrouter = (
   ...(options.fallbacks !== undefined ? { fallbacks: options.fallbacks } : {}),
 })
 
+/**
+ * Google Cloud's Vertex AI, on Application Default Credentials: `project` defaults to
+ * `GOOGLE_CLOUD_PROJECT` and `location` to `global`, and `regions` names a publisher's own region
+ * where it differs.
+ */
+export const vertex = (
+  options: Omit<VertexGatewayDescriptor, 'kind'> = {},
+): VertexGatewayDescriptor => ({ kind: 'vertex', ...options })
+
 export type {
   DirectGatewayDescriptor,
   GatewayDescriptor,
@@ -38,4 +48,6 @@ export type {
   OpenRouterGatewayDescriptor,
   ResolvedGateway,
   VercelGatewayDescriptor,
+  VertexGatewayDescriptor,
+  VertexPublisher,
 } from './types.ts'

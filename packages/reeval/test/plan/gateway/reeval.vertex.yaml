@@ -1,0 +1,7 @@
+# Vertex first with its settings: nothing routes there yet, so each harness falls through.
+harness:
+  - { kind: claude-code, model: claude-sonnet-4-5 }
+  - { kind: codex, model: gpt-5.4-mini }
+gateway:
+  - { vertex: { project: reeval-ci, location: global, regions: { anthropic: us-east5 } } }
+  - direct

@@ -799,9 +799,10 @@ export type GrokBuildHarnessDescriptor = {
 }
 /**
  * A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
- * `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.
+ * `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter; `vertex` is
+ * Google Cloud's Vertex AI.
  */
-export type GatewayName = 'direct' | 'vercel' | 'openrouter'
+export type GatewayName = 'direct' | 'vercel' | 'openrouter' | 'vertex'
 
 /** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
 export type DirectGatewayDescriptor = {
@@ -831,11 +832,29 @@ export type OpenRouterGatewayDescriptor = {
   fallbacks?: boolean
 }
 
+/** A model publisher on Vertex AI, which may serve its models in a region of its own. */
+export type VertexPublisher = 'anthropic' | 'google' | 'xai'
+
+/**
+ * Google Cloud's Vertex AI, on Application Default Credentials: made by `vertex()` in
+ * `reeval/gateway`.
+ */
+export type VertexGatewayDescriptor = {
+  kind: 'vertex'
+  /** The Google Cloud project the calls are billed to; defaults to `GOOGLE_CLOUD_PROJECT`. */
+  project?: string
+  /** The region the models are called in, e.g. `us-east5`; defaults to `global`. */
+  location?: string
+  /** A region per publisher, where it differs from `location`, e.g. `{ anthropic: 'us-east5' }`. */
+  regions?: Partial<Record<VertexPublisher, string>>
+}
+
 /** One entry of the config's `gateway` list. */
 export type GatewayDescriptor =
   | DirectGatewayDescriptor
   | VercelGatewayDescriptor
   | OpenRouterGatewayDescriptor
+  | VertexGatewayDescriptor
 
 /**
  * A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its
@@ -846,6 +865,7 @@ export type GatewayEntryData =
   | { direct: Omit<DirectGatewayDescriptor, 'kind'> }
   | { vercel: Omit<VercelGatewayDescriptor, 'kind'> }
   | { openrouter: Omit<OpenRouterGatewayDescriptor, 'kind'> }
+  | { vertex: Omit<VertexGatewayDescriptor, 'kind'> }
   | GatewayDescriptor
 
 /** A real coding agent, driven through its AI SDK harness adapter. */
