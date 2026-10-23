@@ -43,7 +43,7 @@ reeval: Unknown profile "nigthly". Profiles in reeval.config.ts: smoke, nightly.
 
 ## Profile keys
 
-A profile takes `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. Anything else is an error.
+A profile takes `defaults`, `limit`, `judge`, `budget`, `record`, `tags` and `gateway`. Anything else is an error.
 
 <Property name="defaults" type="object" optional>
   Options that fill in what the config set and the eval files didn't. Accepts `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge` and `timeout`, with the same types as on [Options](/reference/options). `sandbox` is the default machine when the resolved environment omits one. They sit above the config and below every group and eval. When `defaults.harness` is set and an eval sets its own, the plan notes `harness set by the eval`.
@@ -67,6 +67,10 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. Any
 
 <Property name="tags" type="string[]" optional>
   Tag filters added to any `--tag` flags. Every filter must match: `smoke` keeps evals tagged `smoke`, `!slow` drops evals tagged `slow`.
+</Property>
+
+<Property name="gateway" type="Gateway[]" optional>
+  Replaces the config's `gateway` list while this profile runs. See [Gateways](/reference/gateway).
 </Property>
 
 ## limit
@@ -142,7 +146,7 @@ reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Na
 
 | Mistake | Message |
 |---|---|
-| An unknown profile key | `Unknown option "x" in profiles.pr in reeval.config.ts. Use defaults, limit, judge, budget, record, tags.` (a near miss gets `Did you mean "limit"?`) |
+| An unknown profile key | `Unknown option "x" in profiles.pr in reeval.config.ts. Use defaults, limit, judge, budget, record, tags, gateway.` (a near miss gets `Did you mean "limit"?`) |
 | `compare` in a profile | `… compare only goes on a group or eval; a profile can narrow it with limit.compare.` |
 | An unknown `defaultProfile` key | `Unknown option "remote" in defaultProfile in reeval.config.ts. Use ci, local.` |
 | A default that isn't a profile | `defaultProfile.ci in reeval.config.ts names "pr", which isn't a profile (it defines none). Add it under profiles, or name one that's there.` |

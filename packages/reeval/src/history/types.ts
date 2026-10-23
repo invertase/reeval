@@ -391,6 +391,8 @@ export type FingerprintParts = {
   judge: string
   /** Over the attempt's context files. */
   context: string
+  /** The gateway its model calls went through; unset on `direct`, each provider's own key. */
+  gateway?: string
 }
 
 /** One harness and environment of an eval, and how its attempts went. */
@@ -401,6 +403,11 @@ export type CellRecord = Cell & {
   /** The environment's digest: the join key into `RunRecord.environments`; null for none. */
   environmentDigest: string | null
   harnessKind: string
+  /**
+   * The gateway in the config's `gateway` list its harness resolved to (`direct` is each
+   * provider's own key); unset when no config, profile or pin named one.
+   */
+  gateway?: string
   /** The configured harness model, when it has one. */
   model: string | null
   /**

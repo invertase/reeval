@@ -68,6 +68,7 @@ const virtualModules = {
   'reeval/harness': await import('../src/harness.ts'),
   'reeval/sandbox': await import('../src/sandbox.ts'),
   'reeval/judge': await import('../src/judge.ts'),
+  'reeval/gateway': await import('../src/gateway.ts'),
 }
 
 /** Body ids count up across the files this process collects; a worker's start at b1. */

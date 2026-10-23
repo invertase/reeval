@@ -36,6 +36,10 @@ npx reeval run --config reeval.fake.config.ts
   The harness's id in cell keys. Default `fake`. Give two fakes different ids to run both.
 </Property>
 
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
+</Property>
+
 <Property name="files" type="Record<string, string>" optional>
   Files the agent writes on every turn, keyed by workspace path (or `~/` for the home directory), after its `script`. Each shows as a `file-edit` event.
 </Property>

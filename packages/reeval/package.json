@@ -38,6 +38,10 @@
       "types": "./dist/judge.d.ts",
       "default": "./dist/judge.js"
     },
+    "./gateway": {
+      "types": "./dist/gateway.d.ts",
+      "default": "./dist/gateway.js"
+    },
     "./view": {
       "types": "./dist/view/index.d.ts",
       "default": "./dist/view/index.js"

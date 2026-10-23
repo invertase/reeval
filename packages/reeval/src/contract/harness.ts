@@ -17,6 +17,7 @@ import type {
   OpenCodeHarnessDescriptor,
   PiHarnessDescriptor,
 } from '../types.ts'
+import { GATEWAY_NAMES, gatewayNameSchema } from './gateway.ts'
 import {
   type Assert,
   closest,
@@ -40,12 +41,19 @@ const id = (kind: string) =>
     )
 const maxConcurrent = (description: string) => z.number().optional().describe(description)
 const startTimeout = () => durationSchema.optional().describe(START_TIMEOUT)
+const gateway = () =>
+  gatewayNameSchema
+    .optional()
+    .describe(
+      "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+    )
 /** A model id with no provider prefix. */
 const BARE_MODEL = /^[\w.-]+$/
 
 export const cursorHarnessSchema = z
   .strictObject({
     kind: z.literal('cursor'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -78,6 +86,7 @@ export const claudeCodeEffortSchema = z
 export const claudeCodeHarnessSchema = z
   .strictObject({
     kind: z.literal('claude-code'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -100,6 +109,7 @@ export const claudeCodeHarnessSchema = z
 export const antigravityHarnessSchema = z
   .strictObject({
     kind: z.literal('antigravity'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -120,6 +130,7 @@ export const antigravityHarnessSchema = z
 export const opencodeHarnessSchema = z
   .strictObject({
     kind: z.literal('opencode'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -142,6 +153,7 @@ export const opencodeHarnessSchema = z
 export const gooseHarnessSchema = z
   .strictObject({
     kind: z.literal('goose'),
+    gateway: gateway(),
     model: z
       .string()
       .regex(BARE_MODEL)
@@ -162,6 +174,7 @@ export const gooseHarnessSchema = z
 export const fxHarnessSchema = z
   .strictObject({
     kind: z.literal('fx'),
+    gateway: gateway(),
     model: z
       .string()
       .min(1)
@@ -181,6 +194,7 @@ export const fxHarnessSchema = z
 export const piHarnessSchema = z
   .strictObject({
     kind: z.literal('pi'),
+    gateway: gateway(),
     model: z
       .string()
       .regex(BARE_MODEL)
@@ -201,6 +215,7 @@ export const piHarnessSchema = z
 export const codexHarnessSchema = z
   .strictObject({
     kind: z.literal('codex'),
+    gateway: gateway(),
     model: z
       .string()
       .regex(BARE_MODEL)
@@ -221,6 +236,7 @@ export const codexHarnessSchema = z
 export const grokBuildHarnessSchema = z
   .strictObject({
     kind: z.literal('grok-build'),
+    gateway: gateway(),
     model: z
       .string()
       .regex(BARE_MODEL)
@@ -265,6 +281,7 @@ export const FAKE_LAYOUTS = [
 export const fakeHarnessSchema = z
   .strictObject({
     kind: z.literal('fake'),
+    gateway: gateway(),
     id: nonEmpty().optional().describe('Cell id; defaults to `fake`.'),
     files: z
       .record(z.string(), z.string())
@@ -463,6 +480,9 @@ function explain(kind: HarnessDescriptor['kind']) {
       return `fakeHarness({ layout }) is one of ${FAKE_LAYOUTS.map((l) => `'${l}'`).join(', ')} (got ${got(v)})`
     }
     if (key === 'id') return `${factory}({ id }) must be a non-empty string (got ${got(v)})`
+    if (key === 'gateway') {
+      return `${factory}({ gateway }) names a gateway in the config's gateway list: ${GATEWAY_NAMES.map((g) => `'${g}'`).join(' or ')} (got ${got(v)})`
+    }
     return genericProblem(factory, issue, value)
   }
 }

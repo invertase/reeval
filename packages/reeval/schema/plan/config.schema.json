@@ -57,6 +57,11 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
+        },
         "id": {
           "description": "Cell id; defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -162,6 +167,11 @@
           "type": "string",
           "enum": ["low", "medium", "high", "xhigh", "max"]
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
+        },
         "id": {
           "description": "Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -196,6 +206,11 @@
           "description": "Reasoning effort as Codex's `model_reasoning_effort`, e.g. `low`, `medium`, `high`, `xhigh`, `max` or `ultra`.",
           "type": "string",
           "pattern": "\\S"
+        },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
         },
         "id": {
           "description": "Cell id; defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.",
@@ -282,6 +297,11 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
+        },
         "id": {
           "description": "Cell id; defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -316,6 +336,18 @@
         }
       },
       "required": ["kind", "model"],
+      "additionalProperties": false
+    },
+    "DirectGatewayDescriptor": {
+      "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "direct"
+        }
+      },
+      "required": ["kind"],
       "additionalProperties": false
     },
     "DockerSandboxDescriptor": {
@@ -686,6 +718,11 @@
           "description": "Chance (0–1) that an attempt writes no files and says so, for flaky pass rates.",
           "type": "number"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
+        },
         "id": {
           "description": "Cell id; defaults to `fake`.",
           "type": "string",
@@ -912,6 +949,11 @@
       "description": "fx through `@reeval/harness-fx` (`fx acp`), made by `fx()`. It runs on Vercel AI Gateway or OpenAI's API by the model id, and reports each turn's tokens.",
       "type": "object",
       "properties": {
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
+        },
         "id": {
           "description": "Cell id; defaults to `fx:<model>`.",
           "type": "string",
@@ -956,6 +998,36 @@
           },
           "required": ["passRate"],
           "additionalProperties": false
+        }
+      ]
+    },
+    "GatewayEntryData": {
+      "description": "A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its settings, or the descriptor itself.",
+      "anyOf": [
+        {
+          "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`.",
+          "type": "string",
+          "enum": ["direct"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "direct": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": ["direct"],
+          "additionalProperties": false
+        },
+        {
+          "description": "One entry of the config's `gateway` list.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DirectGatewayDescriptor"
+            }
+          ]
         }
       ]
     },
@@ -1006,6 +1078,11 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
+        },
         "id": {
           "description": "Cell id; defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -1040,6 +1117,11 @@
           "description": "Reasoning effort as Grok's `default_reasoning_effort`, e.g. `low`, `medium` or `high`, for a model that takes one.",
           "type": "string",
           "pattern": "\\S"
+        },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
         },
         "id": {
           "description": "Cell id; defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set.",
@@ -1348,6 +1430,11 @@
           "type": "string",
           "pattern": "\\S"
         },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
+        },
         "id": {
           "description": "Cell id; defaults to `opencode:<model>`, or `opencode:<model>[effort=<value>]` when `effort` is set.",
           "type": "string",
@@ -1382,6 +1469,11 @@
           "description": "Reasoning effort, passed as pi's `--thinking` (the CLI's name). Values are whatever that flag takes, e.g. `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.",
           "type": "string",
           "pattern": "\\S"
+        },
+        "gateway": {
+          "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
+          "type": "string",
+          "enum": ["direct"]
         },
         "id": {
           "description": "Cell id; defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.",
@@ -1800,6 +1892,14 @@
           "description": "What evals get when they don't say otherwise: under groups and evals.",
           "$ref": "#/$defs/ProfileDefaultsData"
         },
+        "gateway": {
+          "description": "Replaces the config's `gateway` list for this profile's runs.",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GatewayEntryData"
+          }
+        },
         "judge": {
           "description": "Judge settings for this profile, the same as `defaults.judge`, which wins field by field.",
           "$ref": "#/$defs/ConfigJudgeData"
@@ -2093,6 +2193,14 @@
         "gate": {
           "description": "How each cell's attempts decide its outcome; default `'all'`.",
           "$ref": "#/$defs/GatePolicy"
+        },
+        "gateway": {
+          "description": "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. Default `[direct]`, each provider's own key.",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GatewayEntryData"
+          }
         },
         "harness": {
           "description": "The agents every eval runs on, unless a group or eval replaces them; default Cursor.",

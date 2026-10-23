@@ -160,7 +160,8 @@
       "pages": [
         { "title": "defineConfig", "href": "/reference/config" },
         { "title": "Options", "href": "/reference/options" },
-        { "title": "Profiles and budgets", "href": "/reference/profiles" }
+        { "title": "Profiles and budgets", "href": "/reference/profiles" },
+        { "title": "Gateways", "href": "/reference/gateway" }
       ]
     },
     {

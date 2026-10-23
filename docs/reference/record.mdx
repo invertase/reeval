@@ -383,6 +383,10 @@ Also has every field of `Cell`.
 
 <Property name="harnessKind" type="string"></Property>
 
+<Property name="gateway" type="string" optional>
+  The gateway in the config's `gateway` list its harness resolved to (`direct` is each provider's own key); unset when no config, profile or pin named one.
+</Property>
+
 <Property name="model" type="string | null">
   The configured harness model, when it has one.
 </Property>
@@ -635,6 +639,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="context" type="string">
   Over the attempt's context files.
+</Property>
+
+<Property name="gateway" type="string" optional>
+  The gateway its model calls went through; unset on `direct`, each provider's own key.
 </Property>
 
 ### AttemptRecord

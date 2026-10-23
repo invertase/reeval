@@ -37,6 +37,7 @@ import {
   sandboxDescriptorSchema,
   setupStepSchema,
 } from './environment.ts'
+import { directGatewaySchema, gatewayEntryDataSchema } from './gateway.ts'
 import {
   antigravityHarnessSchema,
   claudeCodeHarnessSchema,
@@ -93,6 +94,8 @@ export const CONTRACT_SCHEMAS: Record<string, z.ZodType> = {
   CodexHarnessDescriptor: codexHarnessSchema,
   FxHarnessDescriptor: fxHarnessSchema,
   GrokBuildHarnessDescriptor: grokBuildHarnessSchema,
+  DirectGatewayDescriptor: directGatewaySchema,
+  GatewayEntryData: gatewayEntryDataSchema,
   JudgeStateOptions: judgeStateSchema,
   CompareQuestion: compareQuestionSchema,
   QuestionStateOptions: questionStateSchema,

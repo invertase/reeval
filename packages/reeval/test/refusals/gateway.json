@@ -1,0 +1,18 @@
+{
+  "ts: an empty list": "UsageError: gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])",
+  "ts: not a list": "UsageError: gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got {\"kind\":\"direct\"})",
+  "ts: an unknown kind": "UsageError: gateway[0] in reeval.config.ts is \"vercell\", which isn't a gateway reeval knows: 'direct'.",
+  "ts: a near miss": "UsageError: gateway[0] in reeval.config.ts is \"dirct\", which isn't a gateway reeval knows: 'direct'. Did you mean 'direct'?",
+  "ts: a duplicate": "UsageError: gateway[1] in reeval.config.ts lists direct a second time. Each gateway is listed once, where you prefer it.",
+  "ts: direct with a typo": "UsageError: gateway[0] in reeval.config.ts isn't a valid direct(): Unrecognized key: \"apiKey\" (got {\"kind\":\"direct\",\"apiKey\":\"x\"})",
+  "ts: a profile with an empty list": "UsageError: profiles.pr.gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])",
+  "ts: good": null,
+  "yaml: an unknown name": "UsageError: gateway[0] in reeval.yaml is \"vercell\", which isn't a gateway reeval knows: 'direct'.",
+  "yaml: a map with two keys": "UsageError: gateway[0] in reeval.yaml must be a gateway's name or a map from one name to its settings, e.g. { direct: {} } (got {\"direct\":{},\"vercel\":{}})",
+  "yaml: direct with options": "UsageError: gateway[0] in reeval.yaml isn't a valid direct(): Unrecognized key: \"apiKey\" (got {\"direct\":{\"apiKey\":\"x\"}})",
+  "yaml: a number": "UsageError: gateway[0] in reeval.yaml must be a gateway, e.g. direct() from 'reeval/gateway' (got 3)",
+  "yaml: good": null,
+  "harness: a pin not a name": "UsageError: fakeHarness({ gateway }) names a gateway in the config's gateway list: 'direct' (got \"vercell\")",
+  "harness: a pin a number": "UsageError: cursor({ gateway }) names a gateway in the config's gateway list: 'direct' (got 3)",
+  "harness: a helper pin": null
+}

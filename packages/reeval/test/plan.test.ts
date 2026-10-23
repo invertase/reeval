@@ -92,6 +92,15 @@ export const cases: PlanCase[] = [
     args: [],
     prepare: (dir) => syncPythonFixtureProject(dir),
   },
+  { dir: 'gateway', name: 'default', args: ['--config', 'reeval.default.config.ts'] },
+  { dir: 'gateway', name: 'listed', args: [] },
+  {
+    dir: 'gateway',
+    name: 'profile-list',
+    args: ['--config', 'reeval.default.config.ts', '--profile', 'listed'],
+  },
+  { dir: 'gateway', name: 'profile-pin', args: ['--profile', 'pinned'] },
+  { dir: 'gateway', name: 'yaml', args: ['--config', 'reeval.data.yaml'] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
@@ -227,6 +236,36 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
   test('REEVAL_PROFILE picks a profile, as --profile does', async () => {
     const plan = await planJson({ dir: 'profiles', args: [], env: { REEVAL_PROFILE: 'nightly' } })
     assert.deepEqual(plan.profile, { name: 'nightly', reason: 'REEVAL_PROFILE' })
+  })
+
+  test("each cell's gateway is in the JSON plan when the config lists one", async () => {
+    const plan = await planJson({ dir: 'gateway', args: [] })
+    for (const e of plan.evals) {
+      assert.deepEqual(e.cells[0]?.gateway, { name: 'direct', skipped: [] }, e.name)
+    }
+    const unset = await planJson({ dir: 'gateway', args: ['--config', 'reeval.default.config.ts'] })
+    assert.equal(unset.evals.find((e) => e.name === 'greets')?.cells[0]?.gateway, undefined)
+  })
+
+  test('a gateway reeval does not know exits 2 at plan time, naming the ones it does', async () => {
+    const p = await project('gateway-unknown', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({ harness: fakeHarness(), gateway: [{ kind: 'vercell' }] })
+`,
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('unknown', async () => {})
+`,
+    })
+    for (const args of [['run', '--dry-run'], ['run']]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct'\./,
+      )
+    }
+    assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
   })
 
   test('.only in CI exits 2 before any plan prints', async () => {
