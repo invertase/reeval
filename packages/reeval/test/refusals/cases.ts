@@ -15,6 +15,8 @@ import { declarationProblem } from '../../src/contract/declaration.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { resolveGateway } from '../../src/gateway/resolve.ts'
+import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
 import {
   antigravity,
   claudeCode,
@@ -29,7 +31,13 @@ import {
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
 import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
-import type { EnvironmentHelpers, PluginSource, SandboxDescriptor } from '../../src/types.ts'
+import type {
+  EnvironmentHelpers,
+  GatewayDescriptor,
+  HarnessDescriptor,
+  PluginSource,
+  SandboxDescriptor,
+} from '../../src/types.ts'
 
 export type Case = [name: string, run: () => unknown]
 
@@ -58,6 +66,19 @@ const any =
     (f: (...args: any[]) => unknown, ...args: unknown[]) =>
     () =>
       f(...args)
+
+/** Which gateway a harness resolves to in a list, with reeval's own gateways. */
+const route = (gateways: GatewayDescriptor[], harness: HarnessDescriptor) => () =>
+  resolveGateway(gateways, harness, WHERE)
+const VERCEL: GatewayDescriptor = { kind: 'vercel' }
+const DIRECT: GatewayDescriptor = { kind: 'direct' }
+/** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
+const oidc = (env: NodeJS.ProcessEnv) => () => {
+  const problem = vercelCredentialProblem(env, new Date('2026-01-01T12:00:00Z'))
+  if (problem) throw new UsageError(problem)
+}
+const jwt = (expiresMs: number) =>
+  `e30.${Buffer.from(JSON.stringify({ exp: expiresMs / 1000 })).toString('base64url')}.sig`
 
 /** A directory with one file and an empty subdirectory, for `directory()`, and a Dockerfile. */
 export const DIR = mkdtempSync(join(tmpdir(), 'reeval-refusals-'))
@@ -1154,6 +1175,27 @@ environment:
     ['harness: a pin not a name', any(fakeHarness, { gateway: 'vercell' })],
     ['harness: a pin a number', any(cursor, { model: 'm', gateway: 3 })],
     ['harness: a helper pin', any(fakeHarness, { gateway: { kind: 'direct' } })],
+    ['ts: vercel with a typo', config({ gateway: [{ kind: 'vercel', apikey: 'x' }] })],
+    ['ts: vercel then direct', config({ gateway: [{ kind: 'vercel' }, { kind: 'direct' }] })],
+    ['yaml: vercel with options', yaml('gateway: [{ vercel: { apikey: x } }]\n')],
+    ['yaml: vercel then direct', yaml('gateway: [vercel, direct]\n')],
+    ['route: cursor on vercel alone', route([VERCEL], cursor({ model: 'composer-2.5' }))],
+    ['route: antigravity on vercel alone', route([VERCEL], antigravity({ model: 'm' }))],
+    ['route: opencode on vercel alone', route([VERCEL], opencode({ model: 'anthropic/m' }))],
+    [
+      'route: cursor pinned to vercel',
+      route([VERCEL, DIRECT], cursor({ model: 'composer-2.5', gateway: 'vercel' })),
+    ],
+    ['route: a pin not in the list', route([DIRECT], codex({ model: 'm', gateway: 'vercel' }))],
+    ['route: codex on vercel', route([VERCEL, DIRECT], codex({ model: 'm' }))],
+    ['route: claude code on vercel', route([VERCEL], claudeCode({ model: 'm' }))],
+    ['oidc: expired', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) })],
+    ['oidc: live', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T13:00:00Z')) })],
+    [
+      'oidc: expired but a key is set',
+      oidc({ AI_GATEWAY_API_KEY: 'k', VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) }),
+    ],
+    ['oidc: not a JWT', oidc({ VERCEL_OIDC_TOKEN: 'opaque' })],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

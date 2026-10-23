@@ -9,6 +9,7 @@ import type {
   HarnessDescriptor,
   ResolvedGateway,
 } from '../types.ts'
+import { VERCEL_REFUSALS, VERCEL_ROUTES } from './vercel.ts'
 
 /** The config's list when it sets none: each provider's own key, as reeval has always run. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -21,6 +22,14 @@ export type GatewayEntry = {
 /** Every gateway reeval can route through, by name. */
 export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
   direct: { cantServe: () => undefined },
+  vercel: {
+    // A fake agent calls no model, so any gateway serves it.
+    cantServe: (h) =>
+      h.kind === 'fake' || VERCEL_ROUTES[h.kind]
+        ? undefined
+        : (VERCEL_REFUSALS[h.kind] ??
+          `reeval doesn't run ${agentName(h)} on Vercel AI Gateway yet`),
+  },
 }
 
 /** The `reeval/gateway` helper that makes the gateway `name`, as messages name it. */

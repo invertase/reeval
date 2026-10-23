@@ -759,16 +759,27 @@ export type GrokBuildHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
-/** A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`. */
-export type GatewayName = 'direct'
+/**
+ * A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
+ * `vercel` is Vercel AI Gateway.
+ */
+export type GatewayName = 'direct' | 'vercel'
 
 /** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
 export type DirectGatewayDescriptor = {
   kind: 'direct'
 }
 
+/**
+ * Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
+ * `reeval/gateway`. It serves Claude Code and Codex.
+ */
+export type VercelGatewayDescriptor = {
+  kind: 'vercel'
+}
+
 /** One entry of the config's `gateway` list. */
-export type GatewayDescriptor = DirectGatewayDescriptor
+export type GatewayDescriptor = DirectGatewayDescriptor | VercelGatewayDescriptor
 
 /**
  * A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its
@@ -777,6 +788,7 @@ export type GatewayDescriptor = DirectGatewayDescriptor
 export type GatewayEntryData =
   | GatewayName
   | { direct: Omit<DirectGatewayDescriptor, 'kind'> }
+  | { vercel: Omit<VercelGatewayDescriptor, 'kind'> }
   | GatewayDescriptor
 
 /** A real coding agent, driven through its AI SDK harness adapter. */

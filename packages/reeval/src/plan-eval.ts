@@ -23,6 +23,7 @@ import {
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { resolveGateway } from './gateway/resolve.ts'
+import { vercelCredentialProblem } from './gateway/vercel.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
@@ -130,25 +131,33 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   if (!matchesTags(resolved.tags, ctx.tags)) return null
   const timeoutMs =
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
-  const plannedAttempts = resolvedEval.skip ? [] : expand(resolved)
+  const gateways = ctx.profile?.gateway ?? ctx.config.gateway
+  const gatewaySet = ctx.config.gatewaySet || ctx.profile?.gateway !== undefined
+  const routes = new Map<string, ResolvedGateway>()
+  const gatewayNotes: string[] = []
+  // Each harness carries the gateway it resolved to, so the worker, egress and brokering read it
+  // from the descriptor; direct leaves the descriptor as written.
+  const routed = resolvedEval.skip
+    ? resolved.harness
+    : resolved.harness.map((harness) => {
+        const route = resolveGateway(gateways, harness, where)
+        const hid = harnessId(harness)
+        if (gatewaySet || harness.gateway !== undefined) {
+          routes.set(hid, route)
+          gatewayNotes.push(`gateway: ${hid} → ${route.name}`)
+        }
+        if (route.name === 'direct') return harness
+        const problem = harness.kind === 'fake' ? undefined : vercelCredentialProblem()
+        if (problem) throw new UsageError(`${where} on ${hid}: ${problem}`)
+        return { ...harness, gateway: route.name }
+      })
+  const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed })
   if (ctx.config.secrets.unbrokered === 'error') {
     const [first] = unbrokered(resolved.env, plannedAttempts)
     if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))
   }
   const pluginNotes: string[] = []
   const pluginLabels = new Map<PlannedAttempt, string[]>()
-  const gateways = ctx.profile?.gateway ?? ctx.config.gateway
-  const gatewaySet = ctx.config.gatewaySet || ctx.profile?.gateway !== undefined
-  const gatewayOf = new Map<PlannedAttempt, ResolvedGateway>()
-  const gatewayNotes: string[] = []
-  for (const planned of plannedAttempts) {
-    const resolvedGateway = resolveGateway(gateways, planned.harness, where)
-    if (gatewaySet || planned.harness.gateway !== undefined) {
-      gatewayOf.set(planned, resolvedGateway)
-      const note = `gateway: ${harnessId(planned.harness)} → ${resolvedGateway.name}`
-      if (!gatewayNotes.includes(note)) gatewayNotes.push(note)
-    }
-  }
   for (const planned of plannedAttempts) {
     const why = unenforceable(planned.egress, planned.sandbox, where)
     if (why) throw new UsageError(why)
@@ -233,7 +242,9 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       plan: skip ? { ...plan, skip } : plan,
       ...(skip ? { skip } : {}),
       ...(family ? { family } : {}),
-      ...(gatewayOf.has(planned) ? { gateway: gatewayOf.get(planned) } : {}),
+      ...(routes.has(harnessId(planned.harness))
+        ? { gateway: routes.get(harnessId(planned.harness)) }
+        : {}),
     }
     return {
       name: `${name} [${attemptId(planned.cell.key, planned.n)}]`,

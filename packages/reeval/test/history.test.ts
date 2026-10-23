@@ -546,7 +546,7 @@ describe('recording runs into evals/.history', () => {
     const run = async (name: string, gateway?: string) => {
       const p = await project(name, {
         'evals/agent.eval.ts': agent(),
-        'reeval.config.ts': `import { direct } from 'reeval/gateway'
+        'reeval.config.ts': `import { direct, vercel } from 'reeval/gateway'
 ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},` } : {}) })}`,
       })
       const r = await runCli(p.dir)
@@ -559,6 +559,11 @@ ${fakeConfig({ harness: harness(), ...(gateway ? { extra: `gateway: ${gateway},`
     assert.equal(direct?.gateway, 'direct')
     assert.equal(direct?.fingerprintParts.gateway, undefined)
     assert.equal(direct?.fingerprint, unset?.fingerprint, 'direct() is how reeval always ran')
+    const vercel = await run('gateway-vercel', '[vercel(), direct()]')
+    assert.equal(vercel?.gateway, 'vercel')
+    assert.equal(vercel?.fingerprintParts.gateway, 'vercel')
+    assert.equal(vercel?.fingerprintParts.harness, unset?.fingerprintParts.harness)
+    assert.notEqual(vercel?.fingerprint, unset?.fingerprint, 'another route is another measurement')
   })
 
   test('a project reached through another spelling of its path records like any other', async () => {

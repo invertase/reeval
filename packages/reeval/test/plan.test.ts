@@ -101,6 +101,13 @@ export const cases: PlanCase[] = [
   },
   { dir: 'gateway', name: 'profile-pin', args: ['--profile', 'pinned'] },
   { dir: 'gateway', name: 'yaml', args: ['--config', 'reeval.data.yaml'] },
+  { dir: 'gateway', name: 'vercel', args: ['--config', 'reeval.vercel.config.ts'] },
+  {
+    dir: 'gateway',
+    name: 'vercel-pin',
+    args: ['--config', 'reeval.vercel.config.ts', '--profile', 'codex-pin'],
+  },
+  { dir: 'gateway', name: 'vercel-yaml', args: ['--config', 'reeval.vercel.yaml'] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
@@ -245,6 +252,22 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     }
     const unset = await planJson({ dir: 'gateway', args: ['--config', 'reeval.default.config.ts'] })
     assert.equal(unset.evals.find((e) => e.name === 'greets')?.cells[0]?.gateway, undefined)
+    const vercel = await planJson({ dir: 'gateway', args: ['--config', 'reeval.vercel.config.ts'] })
+    const cells = vercel.evals.find((e) => e.name === 'greets')?.cells ?? []
+    assert.deepEqual(
+      cells.map((c) => [c.harness, c.gateway]),
+      [
+        ['claude-code:claude-sonnet-4-5', { name: 'vercel', skipped: [] }],
+        ['codex:gpt-5.4-mini', { name: 'vercel', skipped: [] }],
+        [
+          'cursor:composer-2.5',
+          {
+            name: 'direct',
+            skipped: [{ gateway: 'vercel', why: "Cursor's agent only calls Cursor's own API" }],
+          },
+        ],
+      ],
+    )
   })
 
   test('a gateway reeval does not know exits 2 at plan time, naming the ones it does', async () => {
@@ -262,7 +285,7 @@ evaluate('unknown', async () => {})
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(
         r.stderr,
-        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct'\./,
+        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel'\. Did you mean 'vercel'\?/,
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
