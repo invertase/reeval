@@ -66,7 +66,7 @@ class AnsweredPattern extends RegExp {
   override exec(value: string): RegExpExecArray | null {
     const text = String(value)
     return this.test(text)
-      ? Object.assign([text], { index: 0, input: text, groups: undefined })
+      ? (Object.assign([text], { index: 0, input: text }) as RegExpExecArray)
       : null
   }
 
