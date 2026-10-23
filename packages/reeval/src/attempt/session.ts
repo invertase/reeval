@@ -411,7 +411,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
     signal: a.signal,
     env: env.vars,
     image: a.image,
-    brokering: brokeringFor(spec.harness),
+    brokering: brokeringFor(spec.harness, spec.vertex),
     expectedBlocked: expectedBlockedFor(spec.harness, env.plugins.length > 0)?.hosts,
     substitutions: env.substitutions,
     egress: spec.egress,
@@ -497,7 +497,7 @@ export async function startSession(a: Attempt, runId: string): Promise<[Sandbox,
   if (layout.pluginPlacement === 'namespaced') {
     await writePluginMcp(box, env, plugins, timed.servers)
   }
-  const harness = await createHarness(spec.harness)
+  const harness = await createHarness(spec.harness, spec.vertex)
   const harnessStart = performance.now()
   debugLog('harness', `starting ${harnessId(spec.harness)}: bootstrap and session`)
   const session = await startHarness(a, harness, box, {

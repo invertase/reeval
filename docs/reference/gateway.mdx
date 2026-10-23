@@ -29,7 +29,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
 | `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
-| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | nothing yet ([below](#vertex-ai)) | Application Default Credentials |
+| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code ([below](#vertex-ai)) | Application Default Credentials |
 
 ## Vercel AI Gateway
 
@@ -105,7 +105,15 @@ gateway: [
 ],
 ```
 
-`vertex()` takes the Google Cloud project the calls are billed to (`project`, default `GOOGLE_CLOUD_PROJECT`), the region they're made in (`location`, default `global`), and a region per publisher where it differs (`regions`, keyed `anthropic`, `google` or `xai`). The plan checks the shape, but reeval doesn't route any harness or model to Vertex AI yet, so each falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
+`vertex()` takes the Google Cloud project the calls are billed to (`project`, default `GOOGLE_CLOUD_PROJECT`), the region they're made in (`location`, default `global`), and a region per publisher where it differs (`regions`, keyed `anthropic`, `google` or `xai`). The plan checks the shape, and stops with exit 2 when neither `project` nor `GOOGLE_CLOUD_PROJECT` names a project.
+
+There's no key. reeval mints a Google Cloud access token on the host from Application Default Credentials (`gcloud auth application-default login`, or a credentials file in `GOOGLE_APPLICATION_CREDENTIALS`), and the egress gateway adds it to the agent's model calls only. The token never enters the sandbox, and reeval swaps in a fresh one five minutes before each expires. An attempt whose first token can't be minted fails as an infrastructure error.
+
+| Harness | How it reaches Vertex | Brokered on | Model ids | Served model |
+|---|---|---|---|---|
+| Claude Code | `CLAUDE_CODE_USE_VERTEX`, with `ANTHROPIC_VERTEX_PROJECT_ID` and `CLOUD_ML_REGION` from the entry, and `CLAUDE_CODE_SKIP_VERTEX_AUTH` | `POST /v1/projects/<project>/locations/<region>/publishers/anthropic/models/<id>:streamRawPredict` (and `:rawPredict`) on the region's host | Vertex's, e.g. `claude-haiku-4-5@20251001`; an `anthropic/` prefix is dropped | from each call's path |
+
+Every other harness and model falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
 
 ## Fallback
 

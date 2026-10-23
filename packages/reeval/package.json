@@ -102,6 +102,7 @@
     "ai": "7.0.145",
     "commander": "15.0.0",
     "get-tsconfig": "4.14.3",
+    "google-auth-library": "^10.9.1",
     "hono": "4.13.13",
     "jiti": "2.7.0",
     "picomatch": "4.0.7",

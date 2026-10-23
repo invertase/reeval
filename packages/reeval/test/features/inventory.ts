@@ -279,9 +279,16 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'gateway.vertex',
     area: 'Config and selection',
-    name: '`vertex({ project, location, regions })`: its shape checked at plan time, and every harness and model falling through it until reeval routes them to Vertex AI',
+    name: '`vertex({ project, location, regions })`: its shape and project checked at plan time, Claude Code on Vertex AI with a host-minted access token the egress gateway adds and refreshes, and the other harnesses and models falling through it',
     plan: ['gateway/vertex-yaml'],
-    tests: [],
+    tests: [
+      'reeval/test/gateway.test.ts › vertex() takes its project from the entry, else GOOGLE_CLOUD_PROJECT, else refuses',
+      'reeval/test/gateway.test.ts › Claude Code on Vertex is pointed at the project and brokered only on its model calls',
+      'reeval/test/gateway.test.ts › the gateway serves Claude Code on Vertex, not the agents it has no route for',
+      'reeval/test/gateway.test.ts › a cached source shares one mint and one token until near its expiry',
+      'reeval/test/gateway.test.ts › the session gets fresh rules before each token expires, and none after stop',
+      'reeval/test/gateway.test.ts › a failed refresh is retried while the current token works; a failed first mint throws',
+    ],
   },
   {
     id: 'profiles.max-variants',

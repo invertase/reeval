@@ -23,6 +23,7 @@ import { declareTree } from '../../src/evaluate.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
+import { vertexSettings } from '../../src/gateway/vertex.ts'
 import { refusedMcp } from '../../src/harness/agents.ts'
 import {
   antigravity,
@@ -112,6 +113,9 @@ const oidc = (env: NodeJS.ProcessEnv) => () => {
   const problem = vercelCredentialProblem(env, new Date('2026-01-01T12:00:00Z'))
   if (problem) throw new UsageError(problem)
 }
+/** What the plan takes from a `vertex()` entry, with these host variables. */
+const vertexEntry = (entry: { project?: string }, env: NodeJS.ProcessEnv) => () =>
+  vertexSettings(entry, env)
 const jwt = (expiresMs: number) =>
   `e30.${Buffer.from(JSON.stringify({ exp: expiresMs / 1000 })).toString('base64url')}.sig`
 
@@ -1735,6 +1739,12 @@ environment:
     ['route: codex on vertex alone', route([VERTEX], codex({ model: 'm' }))],
     ['route: cursor on vertex alone', route([VERTEX], cursor({ model: 'composer-2.5' }))],
     ['route: claude code on vertex alone', route([VERTEX], claudeCode({ model: 'm' }))],
+    ['route: goose on vertex alone', route([VERTEX], goose({ model: 'gemini-3.8-flash' }))],
+    ['vertex: no project', vertexEntry({}, {})],
+    [
+      'vertex: the project from GOOGLE_CLOUD_PROJECT',
+      vertexEntry({}, { GOOGLE_CLOUD_PROJECT: 'p' }),
+    ],
     [
       'route: claude code on vertex then direct',
       route([VERTEX, DIRECT], claudeCode({ model: 'm' })),

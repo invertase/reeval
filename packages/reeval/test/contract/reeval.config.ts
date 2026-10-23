@@ -1,5 +1,5 @@
 import { defineConfig } from 'reeval'
-import { openrouter, vercel } from 'reeval/gateway'
+import { openrouter, vercel, vertex } from 'reeval/gateway'
 import {
   antigravity,
   claudeCode,
@@ -50,6 +50,7 @@ export default defineConfig({
   // REEVAL_CONTRACT_GATEWAY: the row's gateway alone, so the plan refuses rather than falls back.
   ...(process.env.REEVAL_CONTRACT_GATEWAY === 'vercel' ? { gateway: [vercel()] } : {}),
   ...(process.env.REEVAL_CONTRACT_GATEWAY === 'openrouter' ? { gateway: [openrouter()] } : {}),
+  ...(process.env.REEVAL_CONTRACT_GATEWAY === 'vertex' ? { gateway: [vertex()] } : {}),
   // No retries, one attempt per cell: a failure is a failure (see README, flake policy).
   runs: 1,
   timeout: '4m',
