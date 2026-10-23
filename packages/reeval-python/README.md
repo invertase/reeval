@@ -11,7 +11,9 @@ Import as `reeval_python` (`from reeval_python import evaluate`). The PyPI distr
 With reeval installed, default discovery includes `evals/**/*.eval.py`. When your project has
 `pyproject.toml` or `uv.lock` and [uv](https://docs.astral.sh/uv/) is on `PATH`, reeval starts the
 runner with `uv run --project <root> python -m reeval_python`. Otherwise it uses `<root>/.venv/bin/python`
-when present, then `python3`. Set `REEVAL_PYTHON` to override the interpreter.
+when present, then `python3` (`python` on Windows). Set `REEVAL_PYTHON` to override the interpreter.
+The standalone `reeval` binary works the same way and needs only uv besides; install the
+reeval-python release made for your reeval, since a runner on another protocol stops the run.
 
 ## Install
 

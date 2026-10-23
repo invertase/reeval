@@ -1,9 +1,9 @@
 // One interface for every eval language: discovery, collection and attempt bodies.
 import { existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { delimiter, join, resolve } from 'node:path'
 import { loadEvalFile } from '../engine/loader.ts'
 import { ownFile } from '../root.ts'
-import { resolvePythonRunnerCommand } from './python-runner.ts'
+import { PYTHON_RUNNER_HINT, resolvePythonRunnerCommand } from './python-runner.ts'
 import type { RunnerCommand } from './transport.ts'
 
 type AdapterBase = {
@@ -20,6 +20,8 @@ export type InProcessAdapter = AdapterBase & { remote: false; runnerCommand?: ne
 export type RemoteAdapter = AdapterBase & {
   remote: true
   runnerCommand: (root: string) => RunnerCommand
+  /** Appended when the runner can't start or stops before its hello: how to install the SDK. */
+  setupHint: string
 }
 
 export type LanguageAdapter = InProcessAdapter | RemoteAdapter
@@ -45,6 +47,7 @@ const PYTHON_ADAPTER: RemoteAdapter = {
   remote: true,
   load: (file, root) => import('./remote.ts').then((m) => m.collectLanguageFile(file, root)),
   runnerCommand: (root) => resolvePythonRunnerCommand(root),
+  setupHint: PYTHON_RUNNER_HINT,
 }
 
 /** Every adapter; TypeScript is first and the in-process default. */
@@ -65,7 +68,7 @@ export function runnerEnv(root: string, adapter: LanguageAdapter): NodeJS.Proces
   const src = join(sdk, 'src')
   return {
     ...process.env,
-    PYTHONPATH: [src, sdk, process.env.PYTHONPATH].filter(Boolean).join(':'),
+    PYTHONPATH: [src, sdk, process.env.PYTHONPATH].filter(Boolean).join(delimiter),
     REEVAL_PROJECT_ROOT: resolve(root),
   }
 }

@@ -1,4 +1,4 @@
-// How reeval starts the Python SDK runner for a project root (uv, venv, or system python3).
+// How reeval starts the Python SDK runner for a project root (uv, venv, or the system Python).
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -45,5 +45,14 @@ export function resolvePythonRunnerCommand(root: string): RunnerCommand {
   const venv = venvPython(root)
   if (venv) return [venv, ...MODULE_ARGS]
 
-  return ['python3', ...MODULE_ARGS]
+  // Windows' python3 is usually the Microsoft Store stub, which opens the Store instead of running.
+  return [process.platform === 'win32' ? 'python' : 'python3', ...MODULE_ARGS]
 }
+
+/** What a failed Python runner start tells the user, after the runner's own output. */
+export const PYTHON_RUNNER_HINT = [
+  `reeval runs *.eval.py with the ${REEVAL_PYTHON_MODULE} module from the project's Python:`,
+  '`uv run` when the project has a pyproject.toml and uv is on PATH, else .venv, else',
+  'python3 (REEVAL_PYTHON names another interpreter). Install the reeval-python release made',
+  'for this reeval there, e.g. `uv add reeval-python`.',
+].join(' ')

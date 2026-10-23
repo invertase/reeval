@@ -75,6 +75,25 @@ reeval image build  # the agent's sandbox image
 reeval run
 ```
 
+## Python evals
+
+```bash
+uv init --bare        # a pyproject.toml
+uv add reeval-python  # the Python SDK
+reeval run            # runs evals/**/*.eval.py with it
+```
+
+The binary doesn't carry the Python SDK: it runs each `*.eval.py` with the `reeval_python` module from your project's Python. With a `pyproject.toml` and [uv](https://docs.astral.sh/uv/) on your `PATH` that's `uv run`, which picks Python 3.11 or later (`UV_PYTHON` chooses one); otherwise `.venv`'s Python, then `python3` (`python` on Windows). `REEVAL_PYTHON` names another interpreter.
+
+```text
+reeval: evals/greet.eval.py: The language runner (uv run --project … python -m
+reeval_python) stopped before it said hello: it exited (code 1):
+…/.venv/bin/python: No module named reeval_python
+reeval runs *.eval.py with the reeval_python module from the project's Python: …
+```
+
+Install the reeval-python release made for your reeval. A project without it, or with one that speaks another runner protocol, stops with exit 2 and says so, as above.
+
 ## Next
 
 <CardGroup cols={2}>
