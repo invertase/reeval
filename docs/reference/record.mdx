@@ -689,6 +689,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.
 </Property>
 
+<Property name="askedModels" type="string[]" optional>
+  The models the harness's successful API calls asked for, when nothing named the one that served them (fx on Vercel AI Gateway with a Gemini model): the agent's word, not the gateway's, so never part of `servedModels`. Absent when there's none.
+</Property>
+
 <Property name="effort" type="string | null">
   The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`); null when the factory left it unset. Fast is not this.
 </Property>

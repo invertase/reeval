@@ -100,20 +100,30 @@ export async function createDockerSandbox(
   const debug = attemptDebug()
   const policy = gatewayPolicy(options.egress)
   const served: string[] = []
+  const asked: string[] = []
+  const brokeredStatuses: number[] = []
   const servedModel = brokering?.servedModel
+  const askedModel = brokering?.askedModel
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
   const onEvent = (event: EgressEvent) => {
     logEvent?.(event)
-    if (!servedModel || event.type === 'dns' || event.credentials.length === 0) return
-    const model = servedModel({
+    if (event.type === 'dns' || event.credentials.length === 0) return
+    if (event.status !== undefined) brokeredStatuses.push(event.status)
+    // A refused or failed call was served by nothing, whatever it names.
+    if (event.status !== undefined && (event.status < 200 || event.status > 299)) return
+    const request = {
       method: event.method,
       host: event.host,
       path: URL.canParse(event.url) ? new URL(event.url).pathname : event.url,
+      ...(event.status !== undefined ? { status: event.status } : {}),
       ...(event.responseModel ? { responseModel: event.responseModel } : {}),
       ...(event.responseEffort ? { responseEffort: event.responseEffort } : {}),
       ...(event.requestHeaders ? { headers: event.requestHeaders } : {}),
-    })
+    }
+    const model = servedModel?.(request)
     if (model) served.push(model)
+    const wanted = askedModel?.(request)
+    if (wanted) asked.push(wanted)
   }
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
@@ -208,6 +218,8 @@ export async function createDockerSandbox(
       servedModels: () => [...new Set(served)],
       servedRequests: () => [...served],
     }),
+    ...(askedModel && { askedModels: () => [...new Set(asked)] }),
+    ...(brokering && { brokeredStatuses: () => [...brokeredStatuses] }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),

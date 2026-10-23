@@ -111,6 +111,15 @@ export function interactiveTools(adapter: HarnessV1): string[] {
   return INTERACTIVE_TOOLS.filter((name) => Object.hasOwn(adapter.builtinTools, name))
 }
 
+/**
+ * The turn's error when every model call the egress gateway brokered in it got an HTTP error,
+ * naming the statuses; undefined when one succeeded or none was brokered.
+ */
+export function everyCallFailed(name: string, statuses: readonly number[]): string | undefined {
+  if (statuses.length === 0 || statuses.some((s) => s < 400)) return undefined
+  return `every ${name} model call in the turn failed (HTTP ${[...new Set(statuses)].join(', ')})`
+}
+
 /** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
 export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness {
   const catalog = agentFor(descriptor)
@@ -148,6 +157,8 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           `The ${catalog.name} harness needs the Docker sandbox: set sandbox: docker() for this eval, or use fakeHarness() with fakeSandbox()`,
         )
       }
+      const refusedSince = (from: number) =>
+        (sandbox.brokeredStatuses?.() ?? []).slice(from).includes(401)
       let session: Awaited<ReturnType<typeof agent.createSession>>
       try {
         session = await agent.createSession({
@@ -157,7 +168,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
       } catch (error) {
         if (signal.aborted) throw error
         const message = (error as Error).message
-        const hint = authHint(catalog, message)
+        const hint = authHint(catalog, message, refusedSince(0))
         throw new InfraError(
           `${hint ? `${hint}. ` : ''}${catalog.name} harness failed to start: ${message}`,
         )
@@ -167,6 +178,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           const startedAt = Date.now()
           const parts: StampedPart[] = []
           const servedBefore = sandbox.servedRequests?.().length ?? 0
+          const brokeredBefore = sandbox.brokeredStatuses?.().length ?? 0
           servedModel = null
           finishMetadata = undefined
           let stepUsage: TokenUsage | null = null
@@ -175,22 +187,39 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
             status: TurnStatus,
             extra: TranscriptEvent[] = [],
             usage: TokenUsage | null = stepUsage,
-          ) => ({
-            text,
-            status,
-            usage,
-            // An adapter that doesn't say takes the gateway's word: the turn's last brokered call.
-            model: servedModel ?? sandbox.servedRequests?.().slice(servedBefore).at(-1) ?? null,
-            unreported: catalog.unreported?.(finishMetadata) ?? [],
-            startedAt: new Date(startedAt).toISOString(),
-            durationMs: Date.now() - startedAt,
-            transcript: [...normaliseStream(parts, startedAt), ...extra].map((e) => {
-              if (e.type !== 'error') return e
-              const hint = authHint(catalog, e.message)
-              return hint ? { ...e, message: `${hint}. ${e.message}` } : e
-            }),
-            ...(process.env.REEVAL_RAW_TRANSCRIPT ? { raw: parts } : {}),
-          })
+          ) => {
+            const statuses = sandbox.brokeredStatuses?.().slice(brokeredBefore) ?? []
+            const refused = statuses.includes(401)
+            const events = [...normaliseStream(parts, startedAt), ...extra]
+            const failed = everyCallFailed(catalog.name, statuses)
+            // A CLI can end a turn as if it worked when its API refused every call (fx does).
+            if (status === 'completed' && failed && !events.some((e) => e.type === 'error')) {
+              const at = Date.now() - startedAt
+              status = 'error'
+              events.push({
+                type: 'error',
+                message: failed,
+                ts: new Date(startedAt + at).toISOString(),
+                atMs: at,
+              })
+            }
+            return {
+              text,
+              status,
+              usage,
+              // An adapter that doesn't say takes the gateway's word: the turn's last brokered call.
+              model: servedModel ?? sandbox.servedRequests?.().slice(servedBefore).at(-1) ?? null,
+              unreported: catalog.unreported?.(finishMetadata) ?? [],
+              startedAt: new Date(startedAt).toISOString(),
+              durationMs: Date.now() - startedAt,
+              transcript: events.map((e) => {
+                if (e.type !== 'error') return e
+                const hint = authHint(catalog, e.message, refused)
+                return hint ? { ...e, message: `${hint}. ${e.message}` } : e
+              }),
+              ...(process.env.REEVAL_RAW_TRANSCRIPT ? { raw: parts } : {}),
+            }
+          }
           try {
             // stream(), not generate(): only the stream says when each event happened.
             const result = await agent.stream({ session, prompt, abortSignal: turnSignal })

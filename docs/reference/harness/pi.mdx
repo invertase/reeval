@@ -79,7 +79,7 @@ reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gi
 
 The adapter refuses to run in a sandbox that can't broker the key.
 
-On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), and the turn runs `--provider vercel-ai-gateway` with the model as `google/<model>`. That provider speaks Anthropic's Messages API, so the gateway brokers the key in `x-api-key` on `POST /v1/messages` at `ai-gateway.vercel.sh` only, and reads the served model from each response.
+pi doesn't run on [`vercel()`](/reference/gateway#vercel-ai-gateway). pi's route there, its `vercel-ai-gateway` provider, reaches a Gemini model only through Anthropic's Messages API, sending Anthropic's thinking budget in place of Gemini's thinking level, and it doesn't behave as it does on Gemini's API. So the plan resolves pi past `vercel()` to the next gateway in the list, and stops with exit 2 when `vercel()` is the only one.
 
 ## Tokens
 

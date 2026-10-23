@@ -33,7 +33,7 @@
 | `reeval.yaml`: the config as data, with profiles, `--config` and one config per directory | ✓ 2 | ✓ 4 | — | — | — | — |
 | One path rule for reeval.yaml, TypeScript and declaration trees: a relative host path (files, rules, skills, a local repository, a Dockerfile, a fake sandbox's `dir`), from a helper or its data form, resolves against the directory of the file it's written in | ✓ 6 | ✓ 6 | — | — | — | — |
 | `gateway`: the ordered gateway list, fallback to the first that can serve a harness, a harness `gateway` pin, a profile override, the plan notes and refusals, and the cell and fingerprint in the record | ✓ 6 | ✓ 5 | — | — | — | — |
-| `vercel()`: Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin | ✓ 19 | ✓ 3 | — | — | — | — |
+| `vercel()`: Claude Code, Codex, Goose, OpenCode, fx and Grok Build on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve (pi among them) and for `effort` it does not carry yet, fx's asked model kept apart from the served one, a brokered 401 hinted as a refused key, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin | ✓ 23 | ✓ 3 | — | — | — | — |
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — | — |
 | `limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare | — | ✓ 3 | — | — | — | — |
 | `reeval run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — | — |

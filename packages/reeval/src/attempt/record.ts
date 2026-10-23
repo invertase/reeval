@@ -88,6 +88,8 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
     debugLog('gateway', `expected blocks, not logged per request: ${hosts} · ${expected.why}`)
   }
   a.record.servedModels = sandbox?.servedModels?.() ?? null
+  const asked = sandbox?.askedModels?.() ?? []
+  if (asked.length) a.record.askedModels = asked
 }
 
 /** Writes the attempt's record, redacted, and returns what the runner reports. */

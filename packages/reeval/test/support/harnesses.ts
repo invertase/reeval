@@ -42,7 +42,6 @@ export type HarnessRow = {
     | 'codex-gateway'
     | 'opencode-gateway'
     | 'goose-gateway'
-    | 'pi-gateway'
     | 'grok-build-gateway'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
@@ -106,6 +105,11 @@ export type HarnessRow = {
    * null when its requests don't name one, so the record says it's unknown.
    */
   wireModel: RegExp | null
+  /**
+   * What `askedModels` (the models its calls asked the gateway for, in the agent's own words) must
+   * include; unset when the harness records none.
+   */
+  askedModel?: RegExp
 }
 
 export const harnesses: HarnessRow[] = [
@@ -323,8 +327,11 @@ export const harnesses: HarnessRow[] = [
     autoHosts: ['ai-gateway.vercel.sh'],
     apiHost: 'ai-gateway.vercel.sh',
     tokens: true,
-    servedModel: /gemini-3\.8-flash/,
-    wireModel: /gemini-3\.8-flash/,
+    // Gemini's stream through fx's provider names no model, so nothing proves what served it; the
+    // record keeps the model each call asked for apart, in `askedModels`.
+    servedModel: null,
+    wireModel: null,
+    askedModel: /^google\/gemini-3\.8-flash$/,
   },
   {
     // Claude Code on Vercel AI Gateway through `gateway: [vercel()]`: its base URL on Vercel, and
@@ -388,27 +395,6 @@ export const harnesses: HarnessRow[] = [
     tokens: false,
     tokensWhy:
       "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
-    servedModel: /gemini-3\.8-flash/,
-    wireModel: /gemini-3\.8-flash/,
-  },
-  {
-    // pi on Vercel AI Gateway: its vercel-ai-gateway provider (Anthropic's Messages API, the key
-    // in x-api-key), the Gemini id as google/<id>.
-    id: 'pi-gateway',
-    harness: 'pi',
-    gateway: 'vercel',
-    // Every behaviour passes, but Gemini 3.8 Flash here can find the codeword and then spend the
-    // rules eval's whole timeout probing the sandbox instead of writing it: a model's flake, not
-    // the route's, so the row stays out of the default run until it holds.
-    gated:
-      'Gemini 3.8 Flash on AI Gateway sometimes times out the rules eval exploring the sandbox; name pi-gateway in REEVAL_CONTRACT_HARNESSES to run it',
-    model: 'gemini-3.8-flash',
-    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
-    image: 'pi',
-    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
-    autoHosts: ['ai-gateway.vercel.sh'],
-    apiHost: 'ai-gateway.vercel.sh',
-    tokens: true,
     servedModel: /gemini-3\.8-flash/,
     wireModel: /gemini-3\.8-flash/,
   },

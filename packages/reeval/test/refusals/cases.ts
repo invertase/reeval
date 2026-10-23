@@ -1201,6 +1201,35 @@ environment:
     ['route: a pin not in the list', route([DIRECT], codex({ model: 'm', gateway: 'vercel' }))],
     ['route: codex on vercel', route([VERCEL, DIRECT], codex({ model: 'm' }))],
     ['route: claude code on vercel', route([VERCEL], claudeCode({ model: 'm' }))],
+    ['route: pi on vercel alone', route([VERCEL], pi({ model: 'gemini-3.8-flash' }))],
+    [
+      'route: pi falls through to direct',
+      route([VERCEL, DIRECT], pi({ model: 'gemini-3.8-flash' })),
+    ],
+    [
+      'route: opencode with effort on vercel alone',
+      route([VERCEL], opencode({ model: 'anthropic/m', effort: 'high' })),
+    ],
+    [
+      'route: goose with effort on vercel alone',
+      route([VERCEL], goose({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: grok build with effort on vercel alone',
+      route([VERCEL], grokBuild({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: claude code with effort on vercel',
+      route([VERCEL], claudeCode({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: opencode with an unknown provider on direct alone',
+      route([DIRECT], opencode({ model: 'nope/m' })),
+    ],
+    [
+      'route: opencode with an unknown provider on vercel',
+      route([VERCEL], opencode({ model: 'nope/m' })),
+    ],
     ['oidc: expired', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) })],
     ['oidc: live', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T13:00:00Z')) })],
     [

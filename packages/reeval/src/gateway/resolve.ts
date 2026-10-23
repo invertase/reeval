@@ -1,7 +1,9 @@
 // Which gateway in the config's `gateway` list each harness's model calls go through: the first
 // entry that can serve it, or the one it pins. Pure, so the plan refuses before anything starts.
+import { resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
 import { UsageError } from '../errors.ts'
 import { AGENTS, isAgentKind } from '../harness/agents.ts'
+import { harnessEffort } from '../harness/effort.ts'
 import { harnessId } from '../options.ts'
 import type {
   GatewayDescriptor,
@@ -9,7 +11,7 @@ import type {
   HarnessDescriptor,
   ResolvedGateway,
 } from '../types.ts'
-import { VERCEL_REFUSALS, VERCEL_ROUTES } from './vercel.ts'
+import { VERCEL_REFUSALS, VERCEL_ROUTES, VERCEL_UNPROVEN_EFFORT } from './vercel.ts'
 
 /** The config's list when it sets none: each provider's own key, as reeval has always run. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -22,18 +24,31 @@ export type GatewayEntry = {
 /** Every gateway reeval can route through, by name. */
 export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
   direct: {
-    cantServe: (h) =>
-      h.kind === 'fx' && h.model.includes('/')
-        ? `fx runs a gateway id such as ${JSON.stringify(h.model)} only through Vercel AI Gateway`
-        : undefined,
+    cantServe: (h) => {
+      if (h.kind === 'fx' && h.model.includes('/')) {
+        return `fx runs a gateway id such as ${JSON.stringify(h.model)} only through Vercel AI Gateway`
+      }
+      if (h.kind === 'opencode') {
+        const resolved = resolveOpenCodeProvider(h.model, process.env)
+        if ('error' in resolved) return resolved.error
+      }
+      return undefined
+    },
   },
   vercel: {
     // A fake agent calls no model, so any gateway serves it.
-    cantServe: (h) =>
-      h.kind === 'fake' || VERCEL_ROUTES[h.kind]
-        ? undefined
-        : (VERCEL_REFUSALS[h.kind] ??
-          `reeval doesn't run ${agentName(h)} on Vercel AI Gateway yet`),
+    cantServe: (h) => {
+      if (h.kind !== 'fake' && !VERCEL_ROUTES[h.kind]) {
+        return (
+          VERCEL_REFUSALS[h.kind] ?? `reeval doesn't run ${agentName(h)} on Vercel AI Gateway yet`
+        )
+      }
+      const effort = harnessEffort(h)
+      if (effort !== undefined && h.kind !== 'fake' && VERCEL_UNPROVEN_EFFORT.includes(h.kind)) {
+        return `reeval doesn't send ${agentName(h)}'s effort (${JSON.stringify(effort)}) through Vercel AI Gateway yet: nothing checks the model gets it as its own setting, so drop effort or run ${agentName(h)} on another gateway`
+      }
+      return undefined
+    },
   },
 }
 

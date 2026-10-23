@@ -8,7 +8,7 @@ import {
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
-import type { AgentKind, ModelSpecific } from '../harness/agents.ts'
+import type { AgentKind, ExpectedBlocked, ModelSpecific } from '../harness/agents.ts'
 
 export const VERCEL_HOST = 'ai-gateway.vercel.sh'
 
@@ -23,6 +23,8 @@ export type VercelRoute = ModelSpecific & {
   authAs: string
   /** The model id Vercel serves for the harness's own id. */
   modelId?: (model: string) => string
+  /** The hosts the agent tries on Vercel and is refused, in place of its catalog entry's. */
+  expectedBlocked?: ExpectedBlocked
 }
 
 /** The host variable the key comes from: `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN`. */
@@ -64,7 +66,11 @@ const onVercel = (path: string, method: 'GET' | 'POST') =>
  * The response names the model that served it on Vercel's host, in Vercel's form
  * (`openai/gpt-5.6-luna`), with the reasoning effort when it says one.
  */
-const servedOnVercel: ModelSpecific['servedModel'] = ({ host, responseModel, responseEffort }) =>
+export const servedOnVercel: ModelSpecific['servedModel'] = ({
+  host,
+  responseModel,
+  responseEffort,
+}) =>
   host === VERCEL_HOST && responseModel
     ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
     : undefined
@@ -105,13 +111,13 @@ export const FX_VERCEL_CALL = {
 } as const satisfies EndpointMatch
 
 /**
- * fx's served model: the response's when its stream names one, else the model the call asked
- * the gateway for in `ai-language-model-id`, since a provider's stream (Gemini's) can name none.
+ * The model an fx call asked the gateway for, in `ai-language-model-id`: what reeval records when
+ * a provider's stream (Gemini's) names no served model. Only a call that succeeded asked anything.
  */
-export const fxServedModel: ModelSpecific['servedModel'] = (request) => {
-  const served = servedOnVercel(request)
-  if (served || request.host !== VERCEL_HOST) return served
-  if (!new RegExp(FX_VERCEL_CALL.path.regex).test(request.path)) return undefined
+export const fxAskedModel: ModelSpecific['servedModel'] = (request) => {
+  if (request.host !== VERCEL_HOST || !new RegExp(FX_VERCEL_CALL.path.regex).test(request.path))
+    return undefined
+  if (request.status === undefined || request.status < 200 || request.status > 299) return undefined
   const asked = request.headers?.['ai-language-model-id']
   return (typeof asked === 'string' ? asked : asked?.[0]) || undefined
 }
@@ -129,7 +135,8 @@ function fx(env: NodeJS.ProcessEnv): VercelRoute {
     authAs: VERCEL_KEY,
     endpoints: FX_VERCEL_ENDPOINTS,
     modelResponses: [FX_VERCEL_CALL],
-    servedModel: fxServedModel,
+    servedModel: servedOnVercel,
+    askedModel: fxAskedModel,
     hosts: [VERCEL_HOST],
     modelId: (model) => (model.includes('/') ? model : `openai/${model}`),
   }
@@ -149,20 +156,6 @@ function goose(env: NodeJS.ProcessEnv): VercelRoute {
     authAs: VERCEL_KEY,
     endpoints: [...calls, onVercel('/v1/models', 'GET')],
     modelResponses: calls,
-    servedModel: servedOnVercel,
-    hosts: [VERCEL_HOST],
-    modelId: googleId,
-  }
-}
-
-/** pi on its `vercel-ai-gateway` provider, Anthropic's Messages API at Vercel's host. */
-function pi(env: NodeJS.ProcessEnv): VercelRoute {
-  const endpoints = [onVercel('/v1/messages', 'POST')]
-  return {
-    credential: vercelCredential(env),
-    authAs: VERCEL_KEY,
-    endpoints,
-    modelResponses: endpoints,
     servedModel: servedOnVercel,
     hosts: [VERCEL_HOST],
     modelId: googleId,
@@ -202,6 +195,11 @@ function grokBuild(env: NodeJS.ProcessEnv): VercelRoute {
     modelResponses: endpoints,
     servedModel: servedOnVercel,
     hosts: [VERCEL_HOST],
+    // Grok probes its base URL's root without a credential, and Vercel redirects that to its site.
+    expectedBlocked: {
+      hosts: ['vercel.com'],
+      why: "Grok Build's probe of the gateway's root, which Vercel redirects to its site",
+    },
     modelId: (model) => (model.includes('/') ? model : `xai/${model}`),
   }
 }
@@ -211,7 +209,6 @@ export const VERCEL_ROUTES: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) =
   'claude-code': claudeCode,
   codex,
   goose,
-  pi,
   opencode,
   fx,
   'grok-build': grokBuild,
@@ -221,4 +218,12 @@ export const VERCEL_ROUTES: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) =
 export const VERCEL_REFUSALS: Partial<Record<AgentKind, string>> = {
   cursor: "Cursor's agent only calls Cursor's own API",
   antigravity: "Antigravity's CLI only calls Google's API, with a Gemini key",
+  pi: "pi reaches a Gemini model on Vercel AI Gateway only through Anthropic's Messages API, with Anthropic's thinking budget for Gemini's own thinking level, and doesn't behave as it does on Gemini's API; reeval runs pi on its Gemini key",
 }
+
+/**
+ * The harnesses on Vercel whose `effort` reaches the model by a path no real run has checked: the
+ * plan refuses `effort` with them on `vercel()`. Claude Code's goes as on Anthropic's API, and
+ * Codex's response names the effort it ran at.
+ */
+export const VERCEL_UNPROVEN_EFFORT: readonly AgentKind[] = ['goose', 'opencode', 'grok-build']

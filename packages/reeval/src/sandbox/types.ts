@@ -37,6 +37,13 @@ export interface Sandbox {
   /** The same, one entry per brokered request that named its model, in order. */
   servedRequests?(): string[]
   /**
+   * When the harness's successful requests say which model they asked for but nothing names the
+   * one that served them: each model asked for so far, in first-seen order.
+   */
+  askedModels?(): string[]
+  /** With credential brokering: the HTTP status of each brokered request so far, in order. */
+  brokeredStatuses?(): number[]
+  /**
    * When the sandbox has a memory limit: how many processes the kernel killed at it so far, and
    * the limit and the swap on top as the eval set them (`swap` is `null` without any). `null`
    * when it can't tell.

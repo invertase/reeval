@@ -347,6 +347,13 @@ export const behaviours: Behaviour[] = [
             a.servedModels?.some((m) => wire.test(m)),
             `${a.key}: servedModels ${JSON.stringify(a.servedModels)}, expected one to match ${wire}`,
           )
+        const asked = row.askedModel
+        if (!asked) assert.equal(a.askedModels, undefined, `${row.id} records no asked model`)
+        else
+          assert.ok(
+            a.askedModels?.some((m) => asked.test(m)),
+            `${a.key}: askedModels ${JSON.stringify(a.askedModels)}, expected one to match ${asked}`,
+          )
       }
     },
   },

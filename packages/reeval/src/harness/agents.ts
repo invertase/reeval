@@ -21,7 +21,8 @@ import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import {
   FX_VERCEL_CALL,
   FX_VERCEL_ENDPOINTS,
-  fxServedModel,
+  fxAskedModel,
+  servedOnVercel,
   VERCEL_HOST,
   VERCEL_KEY,
   VERCEL_ROUTES,
@@ -125,6 +126,11 @@ export type Agent = Layout & {
    * requests don't say (Cursor's are protobuf), so the record says it's unknown.
    */
   servedModel?: ServedModel
+  /**
+   * The model a successful request asked for, when neither it nor its response names the one that
+   * served it; recorded as `askedModels`, never as served.
+   */
+  askedModel?: ServedModel
   /** Requests whose response body names the model that served them, for `servedModel`. */
   modelResponses?: readonly EndpointMatch[]
   /**
@@ -163,7 +169,10 @@ export type Agent = Layout & {
 }
 
 /** The part of an agent's catalog entry its model's provider decides. */
-export type ModelSpecific = Pick<Agent, 'credential' | 'endpoints' | 'servedModel'> & {
+export type ModelSpecific = Pick<
+  Agent,
+  'credential' | 'endpoints' | 'servedModel' | 'askedModel'
+> & {
   modelResponses?: readonly EndpointMatch[]
   hosts: readonly string[]
 }
@@ -185,11 +194,15 @@ export function cursorUnreported(harnessMetadata: unknown): WebEventType[] {
   return Array.isArray(tools) ? tools.flatMap((t) => (WEB_EVENTS[t] ? [WEB_EVENTS[t]] : [])) : []
 }
 
-/** The model a request names, from its method, host and path; undefined when it names none. */
+/**
+ * The model a successful brokered request names, from its method, host and path; undefined when
+ * it names none.
+ */
 export type ServedModel = (request: {
   method: string
   host: string
   path: string
+  status?: number
   /** What the response body said served it, on a `modelResponses` endpoint. */
   responseModel?: string
   /** The reasoning effort the response body said it ran at, on a `modelResponses` endpoint. */
@@ -484,7 +497,8 @@ export function fxForModel(model: string): ModelSpecific {
     credential: VERCEL_KEY,
     endpoints: FX_VERCEL_ENDPOINTS,
     modelResponses: [FX_VERCEL_CALL],
-    servedModel: fxServedModel,
+    servedModel: servedOnVercel,
+    askedModel: fxAskedModel,
     hosts: [VERCEL_HOST],
   }
 }
@@ -950,10 +964,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     mcpServers: piMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@reeval/harness-pi')).createPi({
-        ...(auth[VERCEL_KEY]
-          ? { auth, provider: (await import('@reeval/harness-pi')).AI_GATEWAY_PROVIDER }
-          : // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
-            { auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' } }),
+        // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
+        auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
         ...(descriptor.kind === 'pi' && descriptor.effort ? { effort: descriptor.effort } : {}),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
@@ -1319,8 +1331,12 @@ export function expectedBlockedFor(
   descriptor: HarnessDescriptor,
   plugins: boolean,
 ): ExpectedBlocked | undefined {
-  const kind = descriptor.kind === 'fake' ? descriptor.layout : descriptor.kind
-  const expected = kind ? AGENTS[kind].expectedBlocked : undefined
+  const expected =
+    descriptor.kind !== 'fake'
+      ? agentFor(descriptor).expectedBlocked
+      : descriptor.layout
+        ? AGENTS[descriptor.layout].expectedBlocked
+        : undefined
   return expected?.withPlugins && !plugins ? undefined : expected
 }
 
@@ -1334,9 +1350,13 @@ export function expectedBlockedFor(
 const REFUSED_KEY =
   /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b|\bauthentication method "xai\.api_key" is not advertised\b/i
 
-/** What to do when a harness error says its API refused the key, naming the variable; else undefined. */
-export function authHint(agent: Agent, message: string): string | undefined {
-  if (!REFUSED_KEY.test(message)) return undefined
+/**
+ * What to do when the harness's API refused its key, naming the variable; else undefined. The
+ * error's wording says so for some CLIs; `refused` is the egress record's word for every one: a
+ * brokered request the API answered with 401, whatever the CLI made of it.
+ */
+export function authHint(agent: Agent, message: string, refused = false): string | undefined {
+  if (!refused && !REFUSED_KEY.test(message)) return undefined
   return `The API rejected ${agent.credential}: set a valid key in the environment or .env.local`
 }
 
@@ -1360,18 +1380,20 @@ export type Brokering = {
   endpoints: readonly EndpointMatch[]
   tokens?: DerivedTokens
   servedModel?: ServedModel
+  askedModel?: ServedModel
   modelResponses?: readonly EndpointMatch[]
 }
 
 export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
   const agent = agentOf(h)
   if (!agent) return undefined
-  const { credential, endpoints, tokens, servedModel, modelResponses } = agent
+  const { credential, endpoints, tokens, servedModel, askedModel, modelResponses } = agent
   return {
     credential,
     endpoints,
     ...(tokens ? { tokens: { name: credential, ...tokens } } : {}),
     ...(servedModel ? { servedModel } : {}),
+    ...(askedModel ? { askedModel } : {}),
     ...(modelResponses ? { modelResponses } : {}),
   }
 }

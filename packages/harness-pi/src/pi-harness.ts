@@ -33,41 +33,11 @@ import { PiStreamTranslator } from './pi-stream.ts'
 import { PI_BUILTIN_TOOLS, type PiBuiltinTools } from './pi-tools.ts'
 
 export const PI_HARNESS_ID = 'pi'
-/** The credential the adapter uses by default: a Gemini API key, for pi's `google` provider. */
+/** The only credential the adapter uses: a Gemini API key, for pi's `google` provider. */
 export const PI_CREDENTIAL_ENV = 'GEMINI_API_KEY'
 export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
 /** The header pi's `google` provider sends the key in. */
 export const GEMINI_API_KEY_HEADER = 'x-goog-api-key'
-
-/** A pi provider (`--provider`): the variable its key is in, and the header it sends it in where. */
-export type PiProvider = {
-  readonly name: string
-  readonly id: string
-  readonly credentialEnv: string
-  readonly baseUrl: string
-  readonly header: string
-}
-
-/** Google's Gemini API with a Gemini API key: the default. */
-export const GEMINI_PROVIDER: PiProvider = {
-  name: 'Gemini API',
-  id: 'google',
-  credentialEnv: PI_CREDENTIAL_ENV,
-  baseUrl: GEMINI_API_URL,
-  header: GEMINI_API_KEY_HEADER,
-}
-
-/**
- * pi's built-in Vercel AI Gateway provider, on Anthropic's Messages API at Vercel's host (the key
- * in `x-api-key`), whose model ids name their provider (`google/gemini-3-flash`).
- */
-export const AI_GATEWAY_PROVIDER: PiProvider = {
-  name: 'Vercel AI Gateway',
-  id: 'vercel-ai-gateway',
-  credentialEnv: 'AI_GATEWAY_API_KEY',
-  baseUrl: 'https://ai-gateway.vercel.sh',
-  header: 'x-api-key',
-}
 /** pi's agent directory under the home: its sessions, settings, global skills and rules. */
 export const PI_AGENT_DIR = '.pi/agent'
 /** Where harness-placed skills go, under the sandbox home. */
@@ -98,13 +68,8 @@ export type PiMcpServer =
   | { url: string; headers?: Record<string, string> }
 
 export type PiHarnessSettings = {
-  /**
-   * The provider's key under its `credentialEnv` (`{ GEMINI_API_KEY }` by default), the only key
-   * used. The host environment is never read.
-   */
+  /** `{ GEMINI_API_KEY }`, the only key used. The host environment is never read. */
   readonly auth: HarnessV1AuthenticationEnvironment
-  /** The provider pi calls; Google's Gemini API ({@link GEMINI_PROVIDER}) by default. */
-  readonly provider?: PiProvider
   /** MCP servers by name, written to pi's `mcp.json` with their tools declared to the model. */
   readonly mcpServers?: Record<string, PiMcpServer>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
@@ -204,13 +169,12 @@ export function buildPiCommand(options: {
   sessionDir: string
   mcp?: boolean
   thinking?: string
-  provider?: string
 }): string {
   return [
     `cd ${shellQuote(options.workDir)} &&`,
     `exec ${shellQuote(options.cli)} --mode json -p --offline --approve --no-extensions`,
     ...(options.mcp ? ['-e builtin:mcp'] : []),
-    `--provider ${options.provider ?? GEMINI_PROVIDER.id}`,
+    '--provider google',
     ...(options.model ? [`--model ${shellQuote(options.model)}`] : []),
     ...(options.thinking ? [`--thinking ${shellQuote(options.thinking)}`] : []),
     `--session-id ${shellQuote(options.sessionId)} --session-dir ${shellQuote(options.sessionDir)}`,
@@ -225,13 +189,12 @@ export function buildPiCommand(options: {
  * all in the sandbox, MCP servers included.
  */
 export function createPi(settings: PiHarnessSettings): HarnessV1<PiBuiltinTools> {
-  const provider = settings.provider ?? GEMINI_PROVIDER
   const key = isHarnessAuthenticationEnvironment(settings.auth)
-    ? settings.auth[provider.credentialEnv]
+    ? settings.auth[PI_CREDENTIAL_ENV]
     : undefined
   if (!key) {
     throw new Error(
-      `pi auth must be an environment object with ${provider.credentialEnv} (a ${provider.name} key)`,
+      `pi auth must be an environment object with ${PI_CREDENTIAL_ENV} (a Gemini API key)`,
     )
   }
   return {
@@ -250,20 +213,19 @@ async function startSession(
   options: HarnessV1StartOptions,
 ): Promise<HarnessV1Session> {
   const { sandboxSession: sandbox, sessionWorkDir, abortSignal } = options
-  const provider = settings.provider ?? GEMINI_PROVIDER
   let sandboxKey = key
   if (canBroker(sandbox)) {
     sandboxKey = generateSandboxCredentialPlaceholder()
     await sandbox.addRequestTransformations([
       createCredentialRequestTransformation({
-        matchUrl: provider.baseUrl,
-        matchHeaders: { [provider.header]: sandboxKey },
-        transformHeaders: { ...options.headers, [provider.header]: key },
+        matchUrl: GEMINI_API_URL,
+        matchHeaders: { [GEMINI_API_KEY_HEADER]: sandboxKey },
+        transformHeaders: { ...options.headers, [GEMINI_API_KEY_HEADER]: key },
       }),
     ])
   } else if (settings.requireCredentialBrokering) {
     throw new Error(
-      `The sandbox can't broker ${provider.credentialEnv} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
+      `The sandbox can't broker ${PI_CREDENTIAL_ENV} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
     )
   }
 
@@ -276,7 +238,7 @@ async function startSession(
   })
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   const piSession = resumed.success ? resumed.data.sessionId : randomUUID()
-  const env = { [provider.credentialEnv]: sandboxKey, PI_OFFLINE: '1' }
+  const env = { [PI_CREDENTIAL_ENV]: sandboxKey, PI_OFFLINE: '1' }
   const mcp = Object.keys(settings.mcpServers ?? {}).length > 0
   if (mcp) {
     await sandbox.writeTextFile({
@@ -336,7 +298,6 @@ async function startSession(
         sessionId: piSession,
         sessionDir: posix.join(home, PI_AGENT_DIR, 'sessions'),
         mcp,
-        provider: provider.id,
         ...(settings.effort ? { thinking: settings.effort } : {}),
       })
       const translator = new PiStreamTranslator({

@@ -2310,6 +2310,8 @@ export type EvalRecord = {
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null
+  /** See `AttemptRecord.askedModels`. */
+  askedModels?: string[]
   /**
    * PNGs from `c.capture()`. Bytes live in a sidecar next to this JSON
    * (`<stem>.artifacts/<name>.png`) so redact never touches them.

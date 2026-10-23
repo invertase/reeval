@@ -56,6 +56,7 @@ import { malformedCredentials, missingCredentials, resolveConfig } from '../src/
 import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment } from '../src/environment.ts'
+import { resolveGateway } from '../src/gateway/resolve.ts'
 import { interactiveTools, observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
@@ -339,7 +340,7 @@ describe('the Antigravity harness', () => {
 })
 
 describe('the OpenCode harness', () => {
-  test('is plain data with its own cell id, and needs a model on a provider it can broker', () => {
+  test('is plain data with its own cell id, and needs a <provider>/<model>', () => {
     const h = opencode({ model: 'google/gemini-3.8-flash' })
     assert.deepEqual(h, { kind: 'opencode', model: 'google/gemini-3.8-flash' })
     assert.equal(harnessId(h), 'opencode:gemini-3.8-flash')
@@ -358,19 +359,18 @@ describe('the OpenCode harness', () => {
       () => opencode({ model: 'gemini-3.8-flash' }),
       /^UsageError: opencode\(\): an OpenCode model id names its provider, <provider>\/<model>/,
     )
-    assert.throws(
-      () => opencode({ model: 'google-vertex/gemini-3.8-flash' }),
-      /^UsageError: opencode\(\): reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
-    )
-    assert.throws(() => opencode({ model: 'nope/m' }), /OpenCode has no provider "nope"/)
   })
 
-  test("the config refuses a hand-made descriptor on a provider it can't broker", () => {
+  test("direct() refuses a provider it can't broker; vercel() takes any <provider>/<model>", () => {
+    const onDirect = (model: string) =>
+      resolveGateway([{ kind: 'direct' }], opencode({ model }), 'evaluate("e")')
     assert.throws(
-      () =>
-        resolveConfig({ harness: [{ kind: 'opencode', model: 'google-vertex/x' }] } as never, '/p'),
-      /^UsageError: opencode\(\) in reeval\.config\.ts: reeval can't run OpenCode on Vertex/,
+      () => onDirect('google-vertex/gemini-3.8-flash'),
+      /\(direct: reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
     )
+    assert.throws(() => onDirect('nope/m'), /\(direct: OpenCode has no provider "nope"/)
+    const vertex = opencode({ model: 'google-vertex/x' })
+    assert.equal(resolveGateway([{ kind: 'vercel' }], vertex, 'evaluate("e")').name, 'vercel')
   })
 
   test("needs only the model's provider's key", () => {
@@ -438,8 +438,8 @@ describe('the OpenCode harness', () => {
       )
       process.env.AWS_REGION = 'evil.example.com'
       assert.throws(
-        () => opencode({ model: bedrock.model }),
-        /^UsageError: opencode\(\): AWS_REGION is "evil\.example\.com"/,
+        () => resolveGateway([{ kind: 'direct' }], bedrock, 'evaluate("e")'),
+        /\(direct: AWS_REGION is "evil\.example\.com"/,
       )
       assert.throws(
         () => brokeringFor(bedrock),

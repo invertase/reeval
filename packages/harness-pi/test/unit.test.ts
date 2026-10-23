@@ -4,14 +4,12 @@ import { test } from 'node:test'
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import { getPiBootstrap, PI_CLI_VERSION } from '../src/pi-bootstrap.ts'
 import {
-  AI_GATEWAY_PROVIDER,
   buildPiCommand,
   buildPiMcpConfig,
   createPi,
   escapePiConfigValue,
   PI_CREDENTIAL_ENV,
   PI_MCP_FILE,
-  type PiHarnessSettings,
   type PiMcpServer,
 } from '../src/pi-harness.ts'
 import { VERSION } from '../src/version.ts'
@@ -146,8 +144,6 @@ test('mcp.json declares every server directly, with literal env and headers, and
 function recordingSandbox(stdout: string[] = []) {
   const writes: Array<{ path: string; content: string }> = []
   const spawned: string[] = []
-  const envs: Array<Record<string, string>> = []
-  const rules: unknown[] = []
   const stream = (lines: string[] = []) =>
     new ReadableStream<Uint8Array>({
       start: (c) => {
@@ -156,17 +152,14 @@ function recordingSandbox(stdout: string[] = []) {
       },
     })
   const sandbox = {
-    addRequestTransformations: async (added: unknown[]) => {
-      rules.push(...added)
-    },
+    addRequestTransformations: async () => {},
     run: async () => ({ exitCode: 0, stdout: '/root\n', stderr: '' }),
     readTextFile: async () => null,
     writeTextFile: async (o: { path: string; content: string }) => {
       writes.push({ path: o.path, content: o.content })
     },
-    spawn: async (o: { command: string; env: Record<string, string> }) => {
+    spawn: async (o: { command: string }) => {
       spawned.push(o.command)
-      envs.push(o.env)
       return {
         stdout: stream(stdout),
         stderr: stream(),
@@ -175,19 +168,14 @@ function recordingSandbox(stdout: string[] = []) {
       }
     },
   }
-  return { sandbox, writes, spawned, envs, rules }
+  return { sandbox, writes, spawned }
 }
 
-async function oneTurn(
-  mcpServers?: Record<string, PiMcpServer>,
-  stdout?: string[],
-  settings: Partial<PiHarnessSettings> = { auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' } },
-) {
-  const { sandbox, writes, spawned, envs, rules } = recordingSandbox(stdout)
+async function oneTurn(mcpServers?: Record<string, PiMcpServer>, stdout?: string[]) {
+  const { sandbox, writes, spawned } = recordingSandbox(stdout)
   const parts: HarnessV1StreamPart[] = []
   const harness = createPi({
-    auth: {},
-    ...settings,
+    auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' },
     ...(mcpServers ? { mcpServers } : {}),
     requireCredentialBrokering: true,
   })
@@ -203,27 +191,8 @@ async function oneTurn(
     emit: (part: HarnessV1StreamPart) => parts.push(part),
   } as never)
   await control.done
-  return { writes, spawned, parts, envs, rules }
+  return { writes, spawned, parts }
 }
-
-test("on Vercel AI Gateway, pi runs its vercel-ai-gateway provider, brokered on Vercel's host", async () => {
-  const { spawned, envs, rules } = await oneTurn(undefined, [], {
-    auth: { AI_GATEWAY_API_KEY: 'vck_k' },
-    provider: AI_GATEWAY_PROVIDER,
-  })
-  assert.match(spawned[0] ?? '', / --provider vercel-ai-gateway /)
-  const placeholder = envs[0]?.AI_GATEWAY_API_KEY
-  assert.ok(placeholder && placeholder !== 'vck_k', 'pi sees a placeholder, not the key')
-  assert.equal(envs[0]?.GEMINI_API_KEY, undefined)
-  const rule = JSON.stringify(rules)
-  assert.match(rule, /ai-gateway\.vercel\.sh/)
-  assert.match(rule, /x-api-key/)
-  assert.doesNotMatch(rule, /generativelanguage/)
-  assert.throws(
-    () => createPi({ auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' }, provider: AI_GATEWAY_PROVIDER }),
-    /with AI_GATEWAY_API_KEY \(a Vercel AI Gateway key\)/,
-  )
-})
 
 test('a session with MCP servers writes mcp.json under the home and loads the mcp extension', async () => {
   const { writes, spawned } = await oneTurn({ stamp: { command: 'node', args: ['stamp.mjs'] } })
