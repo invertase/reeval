@@ -100,7 +100,7 @@ export function traceEnvironment(
       `${s.name} is a placeholder in the sandbox · swapped in on HTTPS to ${s.hosts.join(', ')} in the ${s.in.join(', ')} · for ${s.phase === 'checks' ? 'checks and setup only' : 'the agent and checks'}`,
     )
   }
-  const brokering = brokeringFor(spec.harness)
+  const brokering = brokeringFor(spec.harness, spec.vertex)
   if (brokering) {
     const endpoints = brokering.endpoints.map(endpointLabel).join(', ')
     debug.log(

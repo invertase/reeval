@@ -55,7 +55,10 @@
   "yaml: vertex with settings": null,
   "route: codex on vertex alone": "UsageError: evals/a.eval.ts › e on codex:m: no gateway in the list can serve it (vertex: Codex only calls OpenAI's Responses API, which Vertex AI doesn't serve). Add direct() to the end of gateway to use Codex's own key.",
   "route: cursor on vertex alone": "UsageError: evals/a.eval.ts › e on cursor:composer-2.5: no gateway in the list can serve it (vertex: Cursor's agent only calls Cursor's own API). Add direct() to the end of gateway to use Cursor's own key.",
-  "route: claude code on vertex alone": "UsageError: evals/a.eval.ts › e on claude-code:m: no gateway in the list can serve it (vertex: reeval doesn't run Claude Code on Vertex AI yet). Add direct() to the end of gateway to use Claude Code's own key.",
+  "route: claude code on vertex alone": null,
+  "route: goose on vertex alone": "UsageError: evals/a.eval.ts › e on goose:gemini-3.8-flash: no gateway in the list can serve it (vertex: reeval doesn't run Goose on Vertex AI yet). Add direct() to the end of gateway to use Goose's own key.",
+  "vertex: no project": "UsageError: vertex() has no project: set vertex({ project: '<id>' }) or GOOGLE_CLOUD_PROJECT",
+  "vertex: the project from GOOGLE_CLOUD_PROJECT": null,
   "route: claude code on vertex then direct": null,
   "model: anthropic on vertex alone": "UsageError: the judge model \"anthropic/m\": no gateway in the list can serve it (vertex: reeval doesn't call models on Vertex AI yet). Add direct() to gateway."
 }

@@ -10,6 +10,7 @@ import {
 } from '@reeval/sandbox-docker'
 import { localPluginServers } from './environment/plugins.ts'
 import { plannedSecrets } from './environment.ts'
+import type { VertexSettings } from './gateway/vertex.ts'
 import { agentFor, isAgentKind } from './harness/agents.ts'
 import { FAKE_EGRESS } from './sandbox/fake.ts'
 import type {
@@ -50,9 +51,9 @@ export const isDirect = (policy: EgressPolicy) => policy === 'allow-all'
  * The hosts the harness needs: a real agent's own API (its model's provider's, for OpenCode), or
  * a fake agent's with `layout` (it behaves like that agent). A plain fake agent talks to nothing.
  */
-function harnessHosts(harness: HarnessDescriptor): readonly string[] {
+function harnessHosts(harness: HarnessDescriptor, vertex?: VertexSettings): readonly string[] {
   if (harness.kind !== 'fake' && isAgentKind(harness.kind)) {
-    return agentFor(harness).hosts ?? HARNESS_HOSTS[harness.kind]
+    return agentFor(harness, vertex).hosts ?? HARNESS_HOSTS[harness.kind]
   }
   return harness.kind === 'fake' && harness.layout ? HARNESS_HOSTS[harness.layout] : []
 }
@@ -82,13 +83,14 @@ export function plannedEgress(
   harness: HarnessDescriptor,
   env: EnvVars,
   layers: readonly EnvironmentLayer[],
+  vertex?: VertexSettings,
 ): PlannedEgress {
   const fromLayers = layers.findLast((l) => l.spec.egress !== undefined)?.spec.egress
   const policy = egress.own ?? fromLayers ?? egress.inherited ?? DEFAULT_EGRESS
   if (!isRestricted(policy)) return { policy, auto: [] }
   const own = policy === 'deny-all' ? [] : policy.allow
   const auto = [
-    ...harnessHosts(harness),
+    ...harnessHosts(harness, vertex),
     ...plannedSecrets(env, layers).flatMap((s) => s.hosts ?? []),
     ...mcpServerHosts(layers),
   ]

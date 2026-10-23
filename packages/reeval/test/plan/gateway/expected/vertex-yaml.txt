@@ -1,7 +1,6 @@
 no profile · 2 evals · 3 cells · 3 attempts
-hint: gateway: claude-code:claude-sonnet-4-5 → direct (vertex can't serve it: reeval doesn't run Claude Code on Vertex AI yet)
 hint: gateway: codex:gpt-5.4-mini → direct (vertex can't serve it: Codex only calls OpenAI's Responses API, which Vertex AI doesn't serve)
-evals/g.eval.ts › greets  claude-code:claude-sonnet-4-5/-/docker  control  gated  ×1  gateway: claude-code:claude-sonnet-4-5 → direct · gateway: codex:gpt-5.4-mini → direct
+evals/g.eval.ts › greets  claude-code:claude-sonnet-4-5/-/docker  control  gated  ×1  gateway: claude-code:claude-sonnet-4-5 → vertex · gateway: codex:gpt-5.4-mini → direct
                           codex:gpt-5.4-mini/-/docker             control  gated  ×1
 evals/g.eval.ts › pinned  b/-/docker                              control  gated  ×1  gateway: b → direct
 excluded: —

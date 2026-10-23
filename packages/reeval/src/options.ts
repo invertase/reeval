@@ -30,6 +30,7 @@ import {
   workspaceOf,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import type { VertexSettings } from './gateway/vertex.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
@@ -741,6 +742,8 @@ export type PlannedAttempt = {
   minLift?: number
   n: number
   label: string
+  /** The `vertex()` settings its harness runs on, when it resolved to Vertex AI. */
+  vertex?: VertexSettings
 }
 
 /**
@@ -795,8 +798,11 @@ export function sandboxSetBy(
   return resolved.sources?.environment ?? configFile
 }
 
-/** Per harness: the control, then each variant it compares on; then run numbers. */
-export function expand(resolved: Resolved): PlannedAttempt[] {
+/**
+ * Per harness: the control, then each variant it compares on; then run numbers. `vertex` is the
+ * run's `vertex()` settings, for each harness that resolved to Vertex AI.
+ */
+export function expand(resolved: Resolved, vertex?: VertexSettings): PlannedAttempt[] {
   const { compare } = resolved
   // A compare's control is its baseline, which `cascade` resolved when it was omitted. An
   // environment from another level is not applied beside it.
@@ -806,6 +812,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
   const attempts: PlannedAttempt[] = []
   for (const harness of resolved.harness) {
     const hid = harnessId(harness)
+    const onVertex = harness.gateway === 'vertex' && harness.kind !== 'fake' ? vertex : undefined
     const cells: Array<{
       env: AppliedEnvironment
       sandbox: SandboxDescriptor
@@ -863,13 +870,14 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
           harness,
           sandbox,
           environment: env,
-          egress: plannedEgress(resolved.egress, harness, resolved.env, env.layers),
+          egress: plannedEgress(resolved.egress, harness, resolved.env, env.layers, onVertex),
           gate,
           ...(cell.role === 'variant' && compare?.minLift !== undefined
             ? { minLift: compare.minLift }
             : {}),
           n,
           label,
+          ...(onVertex ? { vertex: onVertex } : {}),
         })
       }
     }
