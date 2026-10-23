@@ -323,6 +323,11 @@ export const matcherSubjectSchema = z
         .string()
         .regex(/\S/)
         .describe('A command reeval runs, for its `ExecResult`; again on each try when polled.'),
+      result: execResultSchema
+        .optional()
+        .describe(
+          "The command's `ExecResult` when the runner already ran it: reeval checks that instead of running it again, and the check is still named by the command.",
+        ),
     }),
     z.strictObject({
       readFile: z
@@ -500,6 +505,13 @@ export const attemptCallSchema = z
               "can't be polled: reeval can't re-read a value. Poll the attempt, an exec or a readFile",
           })
         }
+        if (call.poll && 'exec' in call.subject && call.subject.result) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['subject', 'result'],
+            message: "can't be polled: drop result so reeval runs the command on each try",
+          })
+        }
       })
       .describe(
         'A matcher call: `expect(subject, label).not?.matcher(...args)`. Replies with its record.',
@@ -671,6 +683,7 @@ const OTHER_KEYS = [
   'port',
   'handle',
   'exec',
+  'result',
   'readFile',
   'interval',
   'timeout',

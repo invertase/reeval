@@ -5,6 +5,7 @@ import { describe, test } from 'node:test'
 import { assertionRecords, softFailure } from '../src/attempt/assertions.ts'
 import {
   attemptExpectError,
+  attemptRecordings,
   createExpect,
   type ExpectTask,
   expect,
@@ -77,6 +78,20 @@ describe('standalone expect', () => {
     assert.equal(attemptExpectError(own)?.message, 'expected any number of assertion, but got none')
     own(true).toBe(true)
     assert.equal(attemptExpectError(own), undefined)
+  })
+
+  test("calls made outside expect join the running attempt's records", async () => {
+    const t = task()
+    const own = createExpect(t)
+    await withAttemptExpect(own, [], async () => {
+      own(1).toBe(1)
+      attemptRecordings().push({ matcher: 'assert', args: [], soft: false, status: 'pass' })
+    })
+    assert.deepEqual(
+      records(t).map((r) => r.label),
+      ['toBe 1', 'assert'],
+    )
+    fails(() => attemptRecordings(), /only called inside an attempt/)
   })
 
   test('expect.soft records a failure on the attempt and carries on', () => {

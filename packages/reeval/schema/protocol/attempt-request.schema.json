@@ -412,6 +412,22 @@
         }
       ]
     },
+    "ExecResult": {
+      "type": "object",
+      "properties": {
+        "exitCode": {
+          "type": "number"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        }
+      },
+      "required": ["exitCode", "stderr", "stdout"],
+      "additionalProperties": false
+    },
     "FakeJudgeData": {
       "description": "`fakeJudge()` as data: the score every call gets.",
       "type": "object",
@@ -736,6 +752,10 @@
               "description": "A command reeval runs, for its `ExecResult`; again on each try when polled.",
               "type": "string",
               "pattern": "\\S"
+            },
+            "result": {
+              "description": "The command's `ExecResult` when the runner already ran it: reeval checks that instead of running it again, and the check is still named by the command.",
+              "$ref": "#/$defs/ExecResult"
             }
           },
           "required": ["exec"],

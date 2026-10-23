@@ -8,7 +8,7 @@ import type { DebugLine } from '../view/debug.ts'
 
 import type { RawAssertion } from './expect.ts'
 
-export { isUnanswerable, type RawAssertion, SUBJECT } from './expect.ts'
+export { attemptRecordings, isUnanswerable, type RawAssertion, SUBJECT } from './expect.ts'
 
 export type TestHandle = {
   file: string

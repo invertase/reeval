@@ -45,8 +45,19 @@ def options_to_wire(options: dict[str, Any] | None) -> dict[str, Any] | None:
     return out
 
 
-def _pattern_arg(value: re.Pattern[str]) -> Any:
-    return {"regexp": value.pattern, "flags": value.flags and int(value.flags) or None}
+_FLAGS = {re.IGNORECASE: "i", re.MULTILINE: "m", re.DOTALL: "s"}
+
+
+def _pattern_arg(value: re.Pattern[str]) -> dict[str, str]:
+    flags = value.flags & ~re.UNICODE
+    letters = "".join(letter for flag, letter in _FLAGS.items() if flags & flag)
+    unsupported = flags & ~(re.IGNORECASE | re.MULTILINE | re.DOTALL)
+    if unsupported:
+        raise ValueError(
+            f"{value.pattern!r}: only re.IGNORECASE, re.MULTILINE and re.DOTALL carry over to "
+            "reeval's matchers"
+        )
+    return {"regexp": value.pattern, **({"flags": letters} if letters else {})}
 
 
 def wire_args(args: tuple[Any, ...]) -> list[Any]:
@@ -60,16 +71,9 @@ def wire_args(args: tuple[Any, ...]) -> list[Any]:
 
 
 def subject_for_matcher(actual: Any, matcher: str) -> dict[str, Any]:
-    if isinstance(actual, ExecResult) and matcher == "toSucceed":
-        return {"exec": actual.command}
     if isinstance(actual, ExecResult):
-        return {
-            "value": {
-                "exitCode": actual.exit_code,
-                "stdout": actual.stdout,
-                "stderr": actual.stderr,
-            }
-        }
+        result = {"exitCode": actual.exit_code, "stdout": actual.stdout, "stderr": actual.stderr}
+        return {"exec": actual.command, "result": result}
     if isinstance(actual, Verdict):
         return {"value": actual.raw}
     if isinstance(actual, Turn):

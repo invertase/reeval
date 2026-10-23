@@ -2,7 +2,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { relative } from 'node:path'
 import type { AttemptDone, AttemptStart } from '../contract/attempt.ts'
-import type { RawAssertion } from '../engine/runtime.ts'
+import { attemptRecordings } from '../engine/runtime.ts'
 import { declareTree } from '../evaluate.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AttemptContext, BackgroundHandle, EvalFn } from '../types.ts'
@@ -74,7 +74,7 @@ function remoteBody(
   return (t) =>
     new Promise<void>((resolve, reject) => {
       const attemptKey = t.attempt.id
-      const matcherCalls: RawAssertion[] = []
+      const matcherCalls = attemptRecordings()
       const handles = new Map<string, BackgroundHandle>()
       const inAttempt = AsyncLocalStorage.snapshot()
       const finish = (settle: () => void) => {
@@ -88,6 +88,7 @@ function remoteBody(
           reason instanceof Error ? reason.message : String(reason ?? 'The run was cancelled')
         runner.send({
           type: 'abort',
+          attempt: attemptKey,
           reason:
             reason instanceof Error && reason.name === 'TimeoutError' ? 'timeout' : 'cancelled',
           message,

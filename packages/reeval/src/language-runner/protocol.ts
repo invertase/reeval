@@ -37,7 +37,10 @@ export type SessionFromRunner =
 
 export type RunnerAttemptReply = AttemptReply & { attempt: string }
 
-export type ToRunner = SessionToRunner | AttemptStart | AttemptAbort | RunnerAttemptReply
+/** `attempt` names the body to stop: one runner runs every attempt of its files. */
+export type RunnerAttemptAbort = AttemptAbort & { attempt: string }
+
+export type ToRunner = SessionToRunner | AttemptStart | RunnerAttemptAbort | RunnerAttemptReply
 
 /** Attempt traffic from a remote runner: `attempt` multiplexes concurrent bodies on one socket. */
 export type RunnerAttemptRequest = AttemptRequest & { attempt: string }

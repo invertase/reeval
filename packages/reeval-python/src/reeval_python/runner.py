@@ -134,7 +134,7 @@ async def serve() -> None:
     writer.write((json.dumps(hello) + "\n").encode())
     await writer.drain()
 
-    tasks: set[asyncio.Task[None]] = set()
+    tasks: dict[str, asyncio.Task[None]] = {}
     buf = b""
     while True:
         chunk = await reader.read(65536)
@@ -171,11 +171,12 @@ async def serve() -> None:
                 attempt_id = str(msg["attempt"]["id"])
                 body_id = str(msg["body"])
                 task = asyncio.create_task(_run_body(conn, attempt_id, body_id))
-                tasks.add(task)
-                task.add_done_callback(tasks.discard)
+                tasks[attempt_id] = task
+                task.add_done_callback(lambda _, key=attempt_id: tasks.pop(key, None))
             elif msg.get("type") == "abort":
-                for task in list(tasks):
-                    task.cancel()
+                aborted = tasks.get(str(msg.get("attempt")))
+                if aborted is not None:
+                    aborted.cancel()
             elif "id" in msg and "ok" in msg:
                 conn.complete_reply(msg)
 

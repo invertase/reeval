@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, cast
 
@@ -59,15 +60,20 @@ class AttemptContext:
     async def file(self, path: str) -> str | None:
         return await self.read_file(path)
 
-    async def write_file(self, path: str, content: str) -> None:
-        await self._call("writeFile", path=path, content=content)
+    async def write_file(self, path: str, contents: str | bytes) -> None:
+        if isinstance(contents, bytes):
+            encoded = base64.b64encode(contents).decode()
+            await self._call("writeFile", path=path, contents=encoded, encoding="base64")
+        else:
+            await self._call("writeFile", path=path, contents=contents)
 
     async def kill(self, handle: BackgroundHandle) -> None:
         await self._call("kill", handle=handle.id)
 
     async def judge(self, question: str, **options: Any) -> Verdict:
-        wire_opts = options_to_wire(options) if options else None
-        reply = await self._call("judge", question=question, options=wire_opts)
+        wire_opts = options_to_wire(options)
+        fields: dict[str, Any] = {"options": wire_opts} if wire_opts else {}
+        reply = await self._call("judge", question=question, **fields)
         return Verdict.from_wire(cast(dict[str, Any], reply["verdict"]))
 
     async def run_expect(
@@ -146,8 +152,8 @@ class SyncAttemptContext:
     def file(self, path: str) -> str | None:
         return self._run(self._ctx.file(path))
 
-    def write_file(self, path: str, content: str) -> None:
-        self._run(self._ctx.write_file(path, content))
+    def write_file(self, path: str, contents: str | bytes) -> None:
+        self._run(self._ctx.write_file(path, contents))
 
     def kill(self, handle: BackgroundHandle) -> None:
         self._run(self._ctx.kill(handle))

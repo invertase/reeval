@@ -2924,6 +2924,19 @@ export const features: Feature[] = [
     env: '-',
     canary: /expected.*to succeed/i,
     prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const [canary] = run.evals.find((e) => e.name === 'canary')?.attempts ?? []
+      assert.deepEqual(
+        canary?.assertions?.map(({ label, status }) => [label, status]),
+        [['toSucceed test -f missing-greet.py', 'fail']],
+        "a Python body's expect lands in its record",
+      )
+      assert.deepEqual(
+        canary?.checks.map((c) => c.command),
+        ['test -f missing-greet.py'],
+        'the command expect checks runs once',
+      )
+    },
   },
   {
     dir: 'run/resume',
