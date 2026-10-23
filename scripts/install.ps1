@@ -6,6 +6,7 @@
 # REEVAL_VERSION     a version (0.13.0) instead of the newest release
 # REEVAL_INSTALL_DIR where to put reeval.exe (default %LOCALAPPDATA%\reeval\bin)
 # REEVAL_DOWNLOAD    where the release's files are, instead of its GitHub release (needs REEVAL_VERSION)
+# GITHUB_TOKEN       sent to the GitHub API when it looks up the newest release, if set
 #
 # It all runs in a script block, so under `irm | iex` none of its variables, functions or
 # preferences outlive it in your session.
@@ -29,11 +30,16 @@
   $version = "$env:REEVAL_VERSION" -replace '^v', ''
   if (-not $version) {
     if ($env:REEVAL_DOWNLOAD) { Fail 'REEVAL_DOWNLOAD needs REEVAL_VERSION' }
-    # The newest reeval release: the repository's other releases are tagged <component>-v<version>.
-    try { $releases = Invoke-RestMethod "https://api.github.com/repos/$repo/releases?per_page=30" }
-    catch { Fail "couldn't list the releases of ${repo}: $_" }
-    $tag = $releases | Where-Object { $_.tag_name -match '^v\d' } | Select-Object -First 1 -ExpandProperty tag_name
-    if (-not $tag) { Fail "no release of $repo found" }
+    # The newest published reeval release that has its binaries: they upload after the release is
+    # created, and the repository's other releases are tagged <component>-v<version>.
+    $headers = @{}
+    if ($env:GITHUB_TOKEN) { $headers.Authorization = "Bearer $env:GITHUB_TOKEN" }
+    try { $releases = Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$repo/releases?per_page=30" }
+    catch { Fail "couldn't list the releases of $repo (set GITHUB_TOKEN if you're rate-limited): $_" }
+    $tag = $releases |
+      Where-Object { $_.tag_name -match '^v\d' -and -not $_.draft -and -not $_.prerelease -and @($_.assets.name) -contains 'SHA256SUMS' } |
+      Select-Object -First 1 -ExpandProperty tag_name
+    if (-not $tag) { Fail "no release of $repo has binaries yet" }
     $version = $tag.Substring(1)
   }
   $base = if ($env:REEVAL_DOWNLOAD) { $env:REEVAL_DOWNLOAD } else { "https://github.com/$repo/releases/download/v$version" }

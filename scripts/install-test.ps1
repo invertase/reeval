@@ -22,8 +22,8 @@ function Release($dir, [switch] $Tamper, [switch] $Unlisted) {
 }
 # Runs install.ps1 through Invoke-Expression in the caller's scope (call it dot-sourced, as
 # `. Install`), as `irm | iex` runs it at a prompt; the error it threw, if any.
-function Install($download, $dir) {
-  $env:REEVAL_VERSION = $Version
+function Install($download, $dir, [switch] $Latest) {
+  $env:REEVAL_VERSION = if ($Latest) { '' } else { $Version }
   $env:REEVAL_DOWNLOAD = $download
   $env:REEVAL_INSTALL_DIR = $dir
   try { Get-Content -Raw $script | Invoke-Expression *> $null; $null } catch { "$_" }
@@ -51,6 +51,37 @@ try {
 
   $err = . Install (Release (Join-Path $work 'unlisted') -Unlisted) (Join-Path $work 'c')
   Check "refuses a binary SHA256SUMS doesn't list" ("$err" -match "doesn't list") $err
+
+  # The newest release with SHA256SUMS: these stand in for the GitHub API and release downloads,
+  # with a newer release still without binaries, a prerelease, a draft and another component's.
+  $script:requests = @()
+  $script:releases = @(
+    @{ tag_name = 'v99.0.0'; draft = $false; prerelease = $false; assets = @() }
+    @{ tag_name = 'v98.0.0'; draft = $false; prerelease = $true; assets = @(@{ name = 'SHA256SUMS' }) }
+    @{ tag_name = 'v97.0.0'; draft = $true; prerelease = $false; assets = @(@{ name = 'SHA256SUMS' }) }
+    @{ tag_name = 'reeval-python-v96.0.0'; draft = $false; prerelease = $false; assets = @(@{ name = 'SHA256SUMS' }) }
+    @{ tag_name = "v$Version"; draft = $false; prerelease = $false; assets = @(@{ name = $name }, @{ name = 'SHA256SUMS' }) }
+  ) | ForEach-Object { [pscustomobject]$_ }
+  function Invoke-RestMethod($Uri, $Headers) {
+    $script:requests += "$($Headers.Authorization) $Uri"
+    $script:releases
+  }
+  function Invoke-WebRequest([switch] $UseBasicParsing, $Uri, $OutFile, $Headers) {
+    $script:requests += "$($Headers.Authorization) $Uri"
+    Copy-Item (Join-Path $Release ($Uri -replace '.*/')) $OutFile
+  }
+  $env:GITHUB_TOKEN = 'secret-token'
+  $err = . Install '' (Join-Path $work 'd') -Latest
+  $exe = Join-Path $work 'd/reeval.exe'
+  $installed = if (Test-Path $exe) { & $exe --version }
+  Check 'installs the newest published release that has SHA256SUMS' ($null -eq $err -and $installed -eq $Version) "$err $installed"
+  Check 'sends GITHUB_TOKEN to the GitHub API only' (
+    $requests[0] -eq 'Bearer secret-token https://api.github.com/repos/invertase/reeval/releases?per_page=30' -and
+    -not ($requests | Select-Object -Skip 1 | Where-Object { $_ -match 'secret' })) ($requests -join '; ')
+  $script:releases = @([pscustomobject]@{ tag_name = 'v99.0.0'; draft = $false; prerelease = $false; assets = @() })
+  $err = . Install '' (Join-Path $work 'e') -Latest
+  Check 'says when no release has binaries yet' ("$err" -match 'has binaries yet') $err
+  Remove-Item Function:\Invoke-RestMethod, Function:\Invoke-WebRequest, Env:\GITHUB_TOKEN
 
   # Over HTTP, as from a GitHub release, and run with -File in a shell of its own.
   $python = (Get-Command python, python3 -ErrorAction SilentlyContinue | Select-Object -First 1).Source
