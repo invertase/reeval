@@ -19,7 +19,9 @@
           "type": "toml",
           "path": "packages/reeval-python/uv.lock",
           "jsonpath": "$.package[?(@.name.value=='reeval-python')].version"
-        }
+        },
+        { "type": "generic", "path": "packages/reeval-dart/pubspec.yaml" },
+        { "type": "generic", "path": "packages/reeval-dart/lib/src/version.dart" }
       ]
     }
   }

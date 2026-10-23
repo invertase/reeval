@@ -120,8 +120,10 @@ jobs:
               esac
               case $f in
                 packages/reeval-python/* | \
+                packages/reeval-dart/* | \
                 packages/reeval/src/language-runner/* | \
                 packages/reeval/test/python-sdk.test.ts | \
+                packages/reeval/test/dart-sdk.test.ts | \
                 packages/reeval/test/language-runner.test.ts)
                   unit=true
                   features=true ;;
@@ -267,6 +269,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with: { sdk: stable }
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
@@ -311,6 +315,8 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with: { sdk: stable }
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
@@ -380,6 +386,9 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with: { sdk: stable }
+        if: matrix.package == 'reeval'
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           # Its default glob walks node_modules for pyproject.toml files: half a minute on Linux,
