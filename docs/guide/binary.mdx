@@ -13,7 +13,9 @@ reeval install: reeval-0.13.0-linux-x64
 reeval install: reeval 0.13.0 at /home/you/.local/bin/reeval
 ```
 
-The script picks the binary for your OS and CPU from the newest release that has binaries, checks it against the release's `SHA256SUMS` and installs it as `reeval`. It's the same reeval as the npm package, compiled with the Bun runtime inside, so it needs no Node. You still need `git`, and [Docker](https://docs.docker.com/get-docker/) for real runs. The x64 builds need a CPU with AVX2.
+The script picks the binary for your OS and CPU from the newest release that has binaries, checks it against the release's `SHA256SUMS`, checks it starts and installs it as `reeval`. It's the same reeval as the npm package, compiled with the Bun runtime inside, so it needs no Node. You still need `git`, and [Docker](https://docs.docker.com/get-docker/) for real runs.
+
+On an x64 CPU without AVX2, the scripts pick the `-baseline` build, which runs on any x64 CPU.
 
 ## Windows
 
@@ -21,7 +23,7 @@ The script picks the binary for your OS and CPU from the newest release that has
 irm https://raw.githubusercontent.com/invertase/reeval/main/scripts/install.ps1 | iex
 ```
 
-It installs `reeval.exe` in `%LOCALAPPDATA%\reeval\bin` and adds that folder to your user `PATH`; open a new terminal to use it. There's one Windows build, for x64.
+It installs `reeval.exe` in `%LOCALAPPDATA%\reeval\bin` and adds that folder to your user `PATH`; open a new terminal to use it. The Windows builds are for x64.
 
 ## Options
 
@@ -49,6 +51,7 @@ Each [release](https://github.com/invertase/reeval/releases) has one binary per 
 | Linux x64, arm64 (musl: Alpine) | `reeval-<version>-linux-x64-musl`, `reeval-<version>-linux-arm64-musl` |
 | macOS Apple silicon, Intel | `reeval-<version>-darwin-arm64`, `reeval-<version>-darwin-x64` |
 | Windows x64 | `reeval-<version>-windows-x64.exe` |
+| x64 without AVX2 | `reeval-<version>-linux-x64-baseline`, `reeval-<version>-linux-x64-musl-baseline`, `reeval-<version>-windows-x64-baseline.exe` |
 
 ```bash
 sha256sum --check --ignore-missing SHA256SUMS

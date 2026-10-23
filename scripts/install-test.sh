@@ -19,7 +19,8 @@ fail() {
 # release <dir> <binary body>: every target's binary, all with that body, and their SHA256SUMS.
 release() {
   mkdir -p "$1"
-  for target in linux-x64 linux-arm64 linux-x64-musl linux-arm64-musl darwin-x64 darwin-arm64; do
+  for target in linux-x64 linux-x64-baseline linux-arm64 linux-x64-musl linux-x64-musl-baseline \
+    linux-arm64-musl darwin-x64 darwin-arm64; do
     printf '#!/bin/sh\n%s\n' "$2" > "$1/reeval-$V-$target"
   done
   (cd "$1" && if command -v sha256sum >/dev/null; then sha256sum reeval-*; else shasum -a 256 reeval-*; fi > SHA256SUMS)
@@ -43,6 +44,16 @@ cp -R "$work/good" "$work/unlisted"
 : > "$work/unlisted/SHA256SUMS"
 if ! install "$work/unlisted" "$work/c" && [ ! -e "$work/c/reeval" ]; then pass "refuses a binary SHA256SUMS doesn't list"
 else fail "refuses a binary SHA256SUMS doesn't list: $(cat "$work/out")"; fi
+
+release "$work/sigill" 'kill -ILL $$'
+if ! install "$work/sigill" "$work/h" && [ ! -e "$work/h/reeval" ] && grep -q "doesn't start on this machine (exit 132)" "$work/out"; then
+  pass "refuses a binary that dies on start (no AVX2)"
+else fail "refuses a binary that dies on start (no AVX2): $(cat "$work/out")"; fi
+
+release "$work/nolib" 'echo "Error loading shared library libstdc++.so.6" >&2; exit 127'
+if ! install "$work/nolib" "$work/i" && [ ! -e "$work/i/reeval" ] && grep -q "exit 127), so nothing was installed: Error loading shared library" "$work/out"; then
+  pass "refuses a binary that can't load, with its error"
+else fail "refuses a binary that can't load, with its error: $(cat "$work/out")"; fi
 
 # The newest release with SHA256SUMS, from the GitHub API, which this curl answers from a fixture:
 # a newer release still without binaries, a prerelease, a draft and another component's release.

@@ -17,12 +17,17 @@ $failures = 0
 function Check($label, $ok, $detail) {
   if ($ok) { Write-Host "ok   $label" } else { Write-Host "FAIL $label $detail"; $script:failures++ }
 }
-function Release($dir, [switch] $Tamper, [switch] $Unlisted) {
+function Release($dir, [switch] $Tamper, [switch] $Unlisted, [switch] $Broken) {
   New-Item -ItemType Directory -Force -Path $dir | Out-Null
   Copy-Item (Join-Path $Release $name) $dir
   Copy-Item (Join-Path $Release 'SHA256SUMS') $dir
   if ($Tamper) { Add-Content -LiteralPath (Join-Path $dir $name) 'tampered' }
   if ($Unlisted) { Set-Content -LiteralPath (Join-Path $dir 'SHA256SUMS') '' }
+  if ($Broken) {
+    Set-Content -LiteralPath (Join-Path $dir $name) 'not a program'
+    $hash = (Get-FileHash -Algorithm SHA256 (Join-Path $dir $name)).Hash.ToLower()
+    Set-Content -LiteralPath (Join-Path $dir 'SHA256SUMS') "$hash  $name"
+  }
   ([Uri]('file:///' + ((Resolve-Path $dir).Path -replace '\\', '/').TrimStart('/'))).AbsoluteUri
 }
 # Runs install.ps1 through Invoke-Expression in the caller's scope (call it dot-sourced, as
@@ -56,6 +61,11 @@ try {
 
   $err = . Install (Release (Join-Path $work 'unlisted') -Unlisted) (Join-Path $work 'c')
   Check "refuses a binary SHA256SUMS doesn't list" ("$err" -match "doesn't list") $err
+
+  $err = . Install (Release (Join-Path $work 'broken') -Broken) (Join-Path $work 'f')
+  Check "refuses a binary that doesn't start" (
+    "$err" -match "doesn't start on this machine" -and -not (Test-Path (Join-Path $work 'f/reeval.exe'))) $err
+  Check 'leaves the session as it was after a binary that does not start' (Untouched)
 
   # The newest release with SHA256SUMS: these stand in for the GitHub API and release downloads,
   # with a newer release still without binaries, a prerelease, a draft and another component's.

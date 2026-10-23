@@ -25,8 +25,14 @@
     else { Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $out }
   }
 
-  # The only Windows build.
+  # The only Windows builds are x64. The default one needs AVX2; the baseline one runs on any x64
+  # CPU. 40 is PF_AVX2_INSTRUCTIONS_AVAILABLE.
   $target = 'windows-x64'
+  if ([Environment]::OSVersion.Platform -eq 'Win32NT') {
+    $cpu = Add-Type -PassThru -Name Cpu -Namespace ReevalInstall -MemberDefinition `
+      '[DllImport("kernel32.dll")] public static extern bool IsProcessorFeaturePresent(uint feature);'
+    if (-not $cpu::IsProcessorFeaturePresent(40)) { $target = 'windows-x64-baseline' }
+  }
   $version = "$env:REEVAL_VERSION" -replace '^v', ''
   if (-not $version) {
     if ($env:REEVAL_DOWNLOAD) { Fail 'REEVAL_DOWNLOAD needs REEVAL_VERSION' }
@@ -79,6 +85,12 @@
       Fail "$name doesn't match SHA256SUMS (got $actual, expected $expected)"
     }
 
+    $global:LASTEXITCODE = $null
+    $installed = try { & (Join-Path $tmp $name) --version 2>&1 } catch { $_ }
+    if ($LASTEXITCODE -ne 0) {
+      $code = if ($null -eq $LASTEXITCODE) { "it couldn't run" } else { "exit $LASTEXITCODE" }
+      Fail "$name doesn't start on this machine ($code), so nothing was installed: $installed"
+    }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     Move-Item -Force (Join-Path $tmp $name) (Join-Path $dir 'reeval.exe')
   } finally {
@@ -86,7 +98,7 @@
     [Net.ServicePointManager]::SecurityProtocol = $protocol
   }
   $exe = Join-Path $dir 'reeval.exe'
-  Write-Host "reeval install: reeval $(& $exe --version) at $exe"
+  Write-Host "reeval install: reeval $installed at $exe"
 
   $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
   if (($userPath -split ';') -notcontains $dir) {

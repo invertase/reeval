@@ -42,6 +42,10 @@ main() {
   if [ "$os" = linux ] && { [ -f /etc/alpine-release ] || ls /lib/ld-musl-* >/dev/null 2>&1; }; then
     target=$target-musl
   fi
+  # The default x64 builds need AVX2; the baseline ones run on any x64 CPU.
+  if [ "$os" = linux ] && [ "$arch" = x64 ] && ! grep -qw avx2 /proc/cpuinfo 2>/dev/null; then
+    target=$target-baseline
+  fi
 
   nl='
 '
@@ -106,10 +110,12 @@ main() {
   fi
   [ "$actual" = "$expected" ] || fail "$name doesn't match SHA256SUMS (got $actual, expected $expected)"
 
-  mkdir -p "$dir"
   chmod +x "$tmp/$name"
+  installed=$("$tmp/$name" --version 2>&1) ||
+    fail "$name doesn't start on this machine (exit $?), so nothing was installed${installed:+: $installed}"
+  mkdir -p "$dir"
   mv "$tmp/$name" "$dir/reeval"
-  echo "reeval install: reeval $("$dir/reeval" --version) at $dir/reeval"
+  echo "reeval install: reeval $installed at $dir/reeval"
 
   case ":$PATH:" in
     *":$dir:"*) ;;
