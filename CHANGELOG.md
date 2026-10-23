@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.13.0](https://github.com/invertase/reeval/compare/v0.12.0...v0.13.0) (2026-10-23)
+
+
+### Features
+
+* **judge:** call Anthropic and OpenAI models directly ([#481](https://github.com/invertase/reeval/issues/481)) ([06529de](https://github.com/invertase/reeval/commit/06529de9b4c9ca2a8ca4858e54ba112640ab4d9c))
+* **skills:** add setup skill ([#464](https://github.com/invertase/reeval/issues/464)) ([a8398c9](https://github.com/invertase/reeval/commit/a8398c968e9e772135be611f84526be7682ee628))
+* **workspace:** add a PR-lift recipe and flag compare arms that run one tree ([#485](https://github.com/invertase/reeval/issues/485)) ([10c1f05](https://github.com/invertase/reeval/commit/10c1f05d62bb08a9fe941afa5bbd121bde89ac98))
+
+
+### Bug Fixes
+
+* **harness:** count Antigravity tokens per turn, not agy's running total ([#495](https://github.com/invertase/reeval/issues/495)) ([3f02ff0](https://github.com/invertase/reeval/commit/3f02ff0d54780df8171c9548f2866750676ec8c7))
+* **harness:** count Codex tokens per turn, not the thread's running total ([#496](https://github.com/invertase/reeval/issues/496)) ([b032421](https://github.com/invertase/reeval/commit/b0324217f01a8cff39a2e5fb80ec57b2e4dda75d))
+* **harness:** count Cursor cache reads once in token usage ([#487](https://github.com/invertase/reeval/issues/487)) ([f087172](https://github.com/invertase/reeval/commit/f087172d3132144484d48c0dcdf6393755bfedc3))
+* **harness:** map the tools and subagent calls the nightly contract caught ([#469](https://github.com/invertase/reeval/issues/469)) ([246a78d](https://github.com/invertase/reeval/commit/246a78d8e71d8b12b99ec7d3d16775fe43ece981))
+* **judge:** stop sending temperature to Anthropic models ([#475](https://github.com/invertase/reeval/issues/475)) ([7f1dcba](https://github.com/invertase/reeval/commit/7f1dcbacae4e95a3e08bd5f8e566b2d3c34e2c1f))
+* **run:** name the planned sandbox in the run header and record ([#484](https://github.com/invertase/reeval/issues/484)) ([0468d63](https://github.com/invertase/reeval/commit/0468d632565eaa3cfcada05fbd2dc33f2182a881))
+* **sandbox:** forward absolute-form https requests through the egress gateway ([#479](https://github.com/invertase/reeval/issues/479)) ([17ad0de](https://github.com/invertase/reeval/commit/17ad0de3147e2952f9eb7f2e133d8ba3b3bd9d97))
+* **sandbox:** refuse private addresses under allow-all and harden the gateway ([#490](https://github.com/invertase/reeval/issues/490)) ([93ac6a3](https://github.com/invertase/reeval/commit/93ac6a3b79d160751412775d39fd27508ba8b63c))
+* **sandbox:** run privileged execs without --privileged ([#489](https://github.com/invertase/reeval/issues/489)) ([08240ac](https://github.com/invertase/reeval/commit/08240ac02d05fd2423fd0879581ba5de8868e870))
+* **sandbox:** stop empty file writes hanging docker exec, and fail stuck fixtures fast ([#493](https://github.com/invertase/reeval/issues/493)) ([8682621](https://github.com/invertase/reeval/commit/86826216d69771f20a1a7edb80090e6ab10cd2fd))
+* **stats:** use one minimum of 4 attempts across views ([#477](https://github.com/invertase/reeval/issues/477)) ([b55cff9](https://github.com/invertase/reeval/commit/b55cff9a0253eff5e754ebb77f2f6ce92aacaa2e))
+
 ## [0.12.0](https://github.com/invertase/reeval/compare/v0.11.0...v0.12.0) (2026-10-22)
 
 
