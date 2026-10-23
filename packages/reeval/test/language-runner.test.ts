@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -95,6 +96,46 @@ test('a JSON object on stdout that is no message is shown, not taken as one', as
   await new Promise<void>((resolve) => runner.onMessage((message) => 'key' in message && resolve()))
   runner.close()
   assert.deepEqual(seen, [{ type: 'done', key: 'k' }])
+})
+
+test('a runner that ignores its stdin closing is killed when reeval exits', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-runner-orphan-'))
+  const host = join(dir, 'host.ts')
+  const runner = fakeRunner(`
+    send({ t: 'hello', protocol: ${RUNNER_PROTOCOL}, sdk: 'fake', version: '1', runtime: String(process.pid) })
+    setInterval(() => {}, 1_000)
+  `)
+  writeFileSync(
+    host,
+    `import { startLanguageRunner } from ${JSON.stringify(new URL('../src/language-runner/transport.ts', import.meta.url).href)}
+const runner = await startLanguageRunner(${JSON.stringify(runner)}, ${JSON.stringify(dir)})
+console.log(runner.hello.runtime)
+runner.close()
+process.exit(0)
+`,
+  )
+  const result = spawnSync(
+    process.execPath,
+    ['--experimental-strip-types', '--no-warnings', host],
+    {
+      encoding: 'utf8',
+    },
+  )
+  assert.equal(result.status, 0, result.stderr)
+  const pid = Number(result.stdout.trim())
+  assert.ok(pid > 0, result.stdout)
+  const alive = () => {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+  for (let i = 0; i < 50 && alive(); i++) await new Promise((r) => setTimeout(r, 100))
+  const orphaned = alive()
+  if (orphaned) process.kill(pid, 'SIGKILL')
+  assert.equal(orphaned, false, 'the runner outlived reeval')
 })
 
 test('a runner on another protocol, or one that stops before hello, says why', async () => {

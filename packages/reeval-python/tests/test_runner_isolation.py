@@ -292,5 +292,77 @@ def test_the_runner_exits_when_reeval_goes_away_though_a_sync_body_hangs(tmp_pat
         host.start("hangs")
         time.sleep(0.3)
         assert host.close(timeout=5) == 0
+        assert host.done()["error"]["name"] == "AbortError"
+    finally:
+        host.kill()
+
+
+TASK_EXITS = """
+import asyncio
+import sys
+from reeval_python import evaluate
+
+
+@evaluate("task exit")
+async def task_exit(c):
+    async def boom():
+        sys.exit(3)
+
+    asyncio.get_running_loop().create_task(boom())
+    await asyncio.sleep(5)
+
+
+@evaluate("innocent")
+async def innocent(c):
+    await asyncio.sleep(5)
+    await c.exec("true")
+"""
+
+
+def test_a_stray_system_exit_ends_every_running_attempt_with_an_error(tmp_path: Path) -> None:
+    host = Host(tmp_path, TASK_EXITS)
+    try:
+        host.start("innocent", "k2")
+        host.start("task exit", "k1")
+        for key in ("k1", "k2"):
+            error = host.done(key)["error"]
+            assert error["name"] == "SystemExit", error
+            assert "a task a body started raised SystemExit(3)" in error["message"]
+        assert host.proc.wait(timeout=10) == 1
+    finally:
+        host.kill()
+
+
+LEAVES_A_THREAD = """
+import asyncio
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from reeval_python import evaluate
+
+
+@evaluate("to_thread")
+async def to_thread(c):
+    asyncio.get_running_loop().run_in_executor(None, time.sleep, 3600)
+
+
+@evaluate("pool")
+async def pool(c):
+    ThreadPoolExecutor().submit(time.sleep, 3600)
+
+
+@evaluate("thread")
+async def thread(c):
+    threading.Thread(target=time.sleep, args=(3600,)).start()
+"""
+
+
+@pytest.mark.parametrize("body", ["to_thread", "pool", "thread"])
+def test_the_runner_exits_at_eof_whatever_threads_a_body_left(tmp_path: Path, body: str) -> None:
+    host = Host(tmp_path, LEAVES_A_THREAD)
+    try:
+        host.start(body)
+        host.done()
+        assert host.close(timeout=5) == 0
     finally:
         host.kill()

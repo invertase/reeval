@@ -50,6 +50,11 @@ export async function startLanguageRunner(
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   })
+  // A runner whose body left threads behind may outlive its stdin closing; it never outlives reeval.
+  const killOnExit = () => child.kill()
+  process.on('exit', killOnExit)
+  child.once('exit', () => process.off('exit', killOnExit))
+  child.once('error', () => process.off('exit', killOnExit))
   let stderr = ''
   child.stderr.on('data', (chunk: Buffer) => {
     process.stderr.write(chunk)

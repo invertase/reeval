@@ -255,10 +255,23 @@ def _flush(key: str) -> None:
             stream.flush_attempt(key)
 
 
+# What stopped the runner's loop, when something did: a `SystemExit` or `KeyboardInterrupt`
+# from a task a body started gets past the body and out of the loop.
+_escaped: BaseException | None = None
+
+
 def _cancelled_done(conn: _Connection, key: str) -> None:
-    aborted = conn.aborted.get(key) or AttemptAborted(
-        "RunnerError", "the runner stopped this body without reeval aborting it"
-    )
+    aborted = conn.aborted.get(key)
+    if aborted is None and _escaped is not None:
+        aborted = AttemptAborted(
+            type(_escaped).__name__,
+            f"a task a body started raised {_escaped!r}, which stopped the runner this attempt "
+            "ran in",
+        )
+    if aborted is None:
+        aborted = AttemptAborted(
+            "RunnerError", "the runner stopped this body without reeval aborting it"
+        )
     error = {"name": aborted.name, "message": str(aborted)}
     conn.write({"type": "done", "key": key, "error": error})
 
@@ -342,6 +355,14 @@ async def serve(frames: _Frames, stdin: BinaryIO, root: Path) -> None:
     tasks: dict[str, asyncio.Task[None]] = {}
     while (msg := await inbox.get()) is not None:
         _handle(cast(dict[str, Any], msg), conn, root, tasks)
+    # reeval has gone: a body still running ends aborted rather than unreported. A sync body's
+    # thread can't be stopped, so the wait is bounded and the process ends with os._exit.
+    running = list(tasks.items())
+    for key, task in running:
+        conn.abort(key, "AbortError", "reeval closed the runner before this body ended")
+        task.cancel()
+    if running:
+        await asyncio.wait([task for _, task in running], timeout=2)
 
 
 def _mismatch(env: Mapping[str, str]) -> str | None:
@@ -380,7 +401,32 @@ def main() -> None:
     real_stderr = sys.__stderr__ or sys.stderr
     sys.stdout = cast(TextIO, _Routed(frames, "stdout", real_stderr))
     sys.stderr = cast(TextIO, _Routed(frames, "stderr", real_stderr))
-    asyncio.run(serve(frames, messages, root))
+    code = _serve_contained(frames, messages, root)
+    real_stderr.flush()
+    # Not sys.exit: a thread or executor a body left running would keep the process alive
+    # after reeval has gone.
+    os._exit(code)
+
+
+def _serve_contained(frames: _Frames, messages: BinaryIO, root: Path) -> int:
+    """Serves until reeval closes stdin (0), or something stops the loop (1): every body still
+    running then ends with an error naming it."""
+    global _escaped
+    # Never closed: closing joins the default executor's threads, which a body may have left
+    # sleeping. The process ends with os._exit instead.
+    runner = asyncio.Runner()
+    try:
+        runner.run(serve(frames, messages, root))
+    except BaseException as exc:  # noqa: BLE001
+        _escaped = exc
+        traceback.print_exception(exc)
+        loop = runner.get_loop()
+        left = asyncio.all_tasks(loop)
+        for task in left:
+            task.cancel()
+        loop.run_until_complete(asyncio.gather(*left, return_exceptions=True))
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
