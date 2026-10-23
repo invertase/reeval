@@ -225,7 +225,10 @@ jobs:
           uv run ruff check .
           uv run ruff format --check .
           uv run pyright
-          uv run pytest
+          # Every Python the classifiers name, each in its own environment.
+          for v in 3.11 3.12 3.13 3.14; do
+            UV_PROJECT_ENVIRONMENT=".venv-$v" uv run --locked --python "$v" pytest -q
+          done
       # On a release commit, release.yml publishes this sdist and wheel: the ones built from the
       # commit these checks ran on.
       - name: reeval-python (uv build)
