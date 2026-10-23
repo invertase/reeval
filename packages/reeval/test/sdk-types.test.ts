@@ -1,6 +1,6 @@
 // The SDK wire-type generator (scripts/sdk-types.ts): what each schema construct becomes in
-// Python, that its output doesn't depend on the host, and that a construct it can't map fails it
-// instead of weakening the type.
+// Python and Dart, that its output doesn't depend on the host, and that a construct it can't map
+// fails it instead of weakening the type.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -8,7 +8,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { pathToFileURL } from 'node:url'
-import { definitions, PYTHON_OUT, python, type Schema } from '../scripts/sdk-types.ts'
+import {
+  DART_OUT,
+  dart,
+  definitions,
+  PYTHON_OUT,
+  python,
+  type Schema,
+} from '../scripts/sdk-types.ts'
 
 const generate = (defs: Record<string, Schema>) => python(definitions([defs]))
 
@@ -190,4 +197,69 @@ test("the key tables name reeval's camelCase keys and the fields that are record
     out,
     /RECORD_FIELDS: frozenset\[str\] = frozenset\(\n {4}\{\n {8}"env",\n {8}"mcp",\n {4}\}\n\)/,
   )
+})
+
+const generateDart = (defs: Record<string, Schema>) => dart(definitions([defs]))
+
+test('Dart: an object is an extension type over its map, with a constructor and getters', () => {
+  const out = generateDart({
+    Exec: {
+      type: 'object',
+      description: 'A command.',
+      properties: {
+        op: { const: 'exec' },
+        command: { type: 'string' },
+        default: { type: 'boolean' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['op', 'command'],
+    },
+  })
+  assert.match(
+    out,
+    /\/\/\/ A command\.\nextension type const Exec\.fromJson\(Map<String, Object\?> json\) implements Object \{\n {2}Exec\(\{required String command, bool\? default_, List<String>\? tags\}\) : json = \{"op": "exec", "command": command, "default": \?default_, "tags": \?tags\};/,
+  )
+  assert.match(out, /String get command => json\["command"\] as String;/)
+  assert.match(out, /bool\? get default_ => json\["default"\] as bool\?;/)
+  assert.match(
+    out,
+    /List<String>\? get tags => \(json\["tags"\] as List<Object\?>\?\)\?\.cast<String>\(\);/,
+  )
+})
+
+test('Dart: a discriminated union is an extension type its variants implement', () => {
+  const out = generateDart({
+    Call: {
+      anyOf: [
+        { type: 'object', properties: { op: { const: 'exec' } }, required: ['op'] },
+        { type: 'object', properties: { op: { const: 'judge' } }, required: ['op'] },
+      ],
+    },
+  })
+  assert.match(
+    out,
+    /extension type const Call\.fromJson\(Map<String, Object\?> json\) implements Object \{\n {2}String get op => json\["op"\] as String;\n\}/,
+  )
+  assert.match(
+    out,
+    /extension type const CallExec\.fromJson\(Map<String, Object\?> json\) implements Call \{/,
+  )
+  assert.match(
+    out,
+    /extension type const CallJudge\.fromJson\(Map<String, Object\?> json\) implements Call \{/,
+  )
+})
+
+test('Dart: a def named like a dart:core type hides it, and one the file uses fails', () => {
+  assert.match(generateDart({ Duration: { type: 'string' } }), /import 'dart:core' hide Duration;/)
+  assert.throws(() => generateDart({ Map: { type: 'string' } }), /can't be a Dart name/)
+  assert.throws(() => generateDart({ lower: { type: 'string' } }), /can't be a Dart name/)
+  assert.throws(
+    () => generateDart({ A: { type: 'object', properties: { 'a-b': { type: 'string' } } } }),
+    /can't be a Dart name/,
+  )
+})
+
+test('the checked-in wire.g.dart is the generator output', () => {
+  assert.equal(readFileSync(DART_OUT, 'utf8'), dart(), 'run pnpm --filter reeval sdk-types')
 })
