@@ -94,6 +94,27 @@ test("MCP calls are renamed from fx's mcp_<server>_<tool>, longest server first"
   })
 })
 
+test("the turn's finish usage counts fx's reasoningTokens, which ACP calls thoughtTokens", () => {
+  const finish = {
+    type: 'finish',
+    totalUsage: {
+      inputTokens: { total: 26447 },
+      outputTokens: { total: 551, text: undefined, reasoning: undefined },
+    },
+  }
+  assert.deepEqual(new FxStreamTranslator().push(finish), finish, 'nothing to add')
+  const t = new FxStreamTranslator()
+  const usage = { inputTokens: 26447, outputTokens: 551, reasoningTokens: 391 }
+  t.push({ type: 'raw', rawValue: { stopReason: 'end_turn', usage } })
+  assert.deepEqual(t.push(finish), {
+    type: 'finish',
+    totalUsage: {
+      inputTokens: { total: 26447 },
+      outputTokens: { total: 551, text: undefined, reasoning: 391 },
+    },
+  })
+})
+
 test("a command's result is its streamed output and exit code, not fx's clipped summary", () => {
   const t = new FxStreamTranslator()
   const update = (status: string, extra: Record<string, unknown>) =>

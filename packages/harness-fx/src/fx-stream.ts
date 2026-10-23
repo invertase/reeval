@@ -57,11 +57,14 @@ const withSkillName = (part: Part): Part => {
  *   since a server's name can itself contain `_`.
  * - A `skill` call names its skill by `location` (`skill:<source>:<n>/<name>`); its input gains
  *   that `name`, which is how reeval reads which skill a load tool loaded.
+ * - fx's prompt response counts reasoning as `usage.reasoningTokens`, where ACP says
+ *   `thoughtTokens`, so the bridge drops it; the turn's `finish` part's `totalUsage` gets it back.
  */
 export class FxStreamTranslator {
   private readonly prefixes: ReadonlyArray<readonly [string, string]>
   private readonly outputs = new Map<string, string>()
   private readonly exitCodes = new Map<string, number>()
+  private reasoningTokens: number | undefined
 
   constructor(options: { mcpServers?: readonly string[] } = {}) {
     this.prefixes = (options.mcpServers ?? [])
@@ -74,6 +77,7 @@ export class FxStreamTranslator {
       this.observe(record(part.rawValue))
       return part
     }
+    if (part.type === 'finish') return this.withReasoning(part)
     if (
       (part.type !== 'tool-call' && part.type !== 'tool-result' && part.type !== 'tool-error') ||
       typeof part.toolName !== 'string'
@@ -95,7 +99,21 @@ export class FxStreamTranslator {
     }
   }
 
+  private withReasoning(part: Part): Part {
+    const usage = record(part.totalUsage)
+    const output = record(usage.outputTokens)
+    if (this.reasoningTokens === undefined || output.reasoning !== undefined) return part
+    return {
+      ...part,
+      totalUsage: { ...usage, outputTokens: { ...output, reasoning: this.reasoningTokens } },
+    }
+  }
+
   private observe(update: Record<string, unknown>) {
+    const reasoning = record(update.usage).reasoningTokens
+    if (typeof update.stopReason === 'string' && typeof reasoning === 'number') {
+      this.reasoningTokens = reasoning
+    }
     const id = update.toolCallId
     if (typeof id !== 'string' || update.sessionUpdate !== 'tool_call_update') return
     if (update.status === 'in_progress') {

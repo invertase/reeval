@@ -155,7 +155,8 @@ export function fxSettings(model: string) {
 /**
  * fx (`fx acp`) as an AI SDK harness, on Vercel AI Gateway or OpenAI's API by the model id. Thin
  * config over `@ai-sdk/harness-acp`: fx names its tool calls, and its ACP `PromptResponse.usage`
- * is the turn's summed tokens, so only MCP calls need renaming ({@link FxStreamTranslator}).
+ * is the turn's summed tokens, so {@link FxStreamTranslator} only renames MCP calls, rebuilds
+ * command output and keeps the reasoning tokens.
  */
 export function createFx(settings: FxHarnessSettings): HarnessV1<FxBuiltinTools> {
   const provider = FX_PROVIDERS[fxProviderOf(settings.model)]
