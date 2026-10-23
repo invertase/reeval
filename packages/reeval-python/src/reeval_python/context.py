@@ -4,23 +4,58 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from collections.abc import Awaitable, Callable, Coroutine
-from typing import Any, cast
+from collections.abc import Awaitable, Callable, Coroutine, Generator
+from typing import Any, Literal, cast, overload
 
 from reeval_python._wire import (
     AttemptCall,
     AttemptCallExec,
     AttemptCallExpect,
+    AttemptCallExpectPoll,
     AttemptCallJudge,
     JudgeCallData,
     MatcherSubject,
 )
-from reeval_python.errors import ReevalAssertionError
+from reeval_python.errors import ReevalAssertionError, ReevalCallError
 from reeval_python.expect import bind_expect
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
 from reeval_python.wire import Patterns, options_to_wire, wire_args
 
 SendFn = Callable[[AttemptCall], Awaitable[dict[str, Any]]]
+CallFn = SendFn
+
+
+class PendingExec:
+    """`c.exec(command)` before it's awaited: `await` it for its result, or hand it to `expect`,
+    which runs it (once per poll) and names the check by its command."""
+
+    def __init__(self, call: CallFn, command: str) -> None:
+        self._call = call
+        self.command = command
+
+    async def result(self) -> ExecResult:
+        reply = await self._call({"op": "exec", "command": self.command})
+        return ExecResult.from_wire(self.command, cast(dict[str, Any], reply["result"]))
+
+    def __await__(self) -> Generator[Any, None, ExecResult]:
+        return self.result().__await__()
+
+
+class PendingRead:
+    """`c.read_file(path)` before it's awaited: `await` it for the contents (`None` when there's
+    no file), or hand it to `expect`, which reads it (once per poll)."""
+
+    def __init__(self, call: CallFn, path: str) -> None:
+        self._call = call
+        self.path = path
+
+    async def result(self) -> str | None:
+        reply = await self._call({"op": "readFile", "path": self.path})
+        contents = reply.get("contents")
+        return None if contents is None else str(contents)
+
+    def __await__(self) -> Generator[Any, None, str | None]:
+        return self.result().__await__()
 
 
 PATTERN_ROUNDS = 5
@@ -30,15 +65,13 @@ class AttemptContext:
     def __init__(self, attempt_id: str, send: SendFn) -> None:
         self._attempt = attempt_id
         self._send = send
-        self._seq = 0
         self.turns: list[Turn] = []
 
     async def _call(self, call: AttemptCall) -> dict[str, Any]:
-        self._seq += 1
         reply = await self._send(call)
         if not reply.get("ok", False):
-            err = reply.get("error") or {"name": "Error", "message": "call failed"}
-            raise RuntimeError(f"{err.get('name')}: {err.get('message')}")
+            err = cast(dict[str, Any], reply.get("error") or {})
+            raise ReevalCallError(str(err.get("name", "Error")), str(err.get("message", "")))
         return reply
 
     async def send(self, prompt: str) -> Turn:
@@ -47,28 +80,31 @@ class AttemptContext:
         self.turns.append(turn)
         return turn
 
-    async def exec(
-        self,
-        command: str,
-        *,
-        background: bool = False,
-    ) -> ExecResult | BackgroundHandle:
-        call: AttemptCallExec = {"op": "exec", "command": command}
+    @overload
+    def exec(self, command: str) -> PendingExec: ...
+    @overload
+    def exec(
+        self, command: str, *, background: Literal[True]
+    ) -> Coroutine[Any, Any, BackgroundHandle]: ...
+
+    def exec(
+        self, command: str, *, background: bool = False
+    ) -> PendingExec | Coroutine[Any, Any, BackgroundHandle]:
+        """Run a command in the sandbox; with `background=True`, leave it running."""
         if background:
-            call["background"] = True
+            return self._background(command)
+        return PendingExec(self._call, command)
+
+    async def _background(self, command: str) -> BackgroundHandle:
+        call: AttemptCallExec = {"op": "exec", "command": command, "background": True}
         reply = await self._call(call)
-        result = cast(dict[str, Any], reply["result"])
-        if background:
-            return BackgroundHandle.from_wire(result)
-        return ExecResult.from_wire(command, result)
+        return BackgroundHandle.from_wire(cast(dict[str, Any], reply["result"]))
 
-    async def read_file(self, path: str) -> str | None:
-        reply = await self._call({"op": "readFile", "path": path})
-        contents = reply.get("contents")
-        return None if contents is None else str(contents)
+    def read_file(self, path: str) -> PendingRead:
+        return PendingRead(self._call, path)
 
-    async def file(self, path: str) -> str | None:
-        return await self.read_file(path)
+    def file(self, path: str) -> PendingRead:
+        return self.read_file(path)
 
     async def write_file(self, path: str, contents: str | bytes) -> None:
         if isinstance(contents, bytes):
@@ -82,8 +118,12 @@ class AttemptContext:
     async def kill(self, handle: BackgroundHandle) -> None:
         await self._call({"op": "kill", "handle": handle.id})
 
-    async def judge(self, question: str, **options: Any) -> Verdict:
-        wire_opts = options_to_wire(options)
+    async def judge(self, question: str, *, on: Any = None, **options: Any) -> Verdict:
+        """Ask the judge a yes/no question about the latest turn, or `on` an earlier turn or
+        a value."""
+        wire_opts = options_to_wire(options) or {}
+        if on is not None:
+            wire_opts["on"] = {"turn": on.index} if isinstance(on, Turn) else {"value": on}
         call: AttemptCallJudge = {"op": "judge", "question": question}
         if wire_opts:
             call["options"] = cast(JudgeCallData, wire_opts)
@@ -99,6 +139,7 @@ class AttemptContext:
         label: str | None,
         not_: bool,
         soft: bool,
+        poll: AttemptCallExpectPoll | None = None,
     ) -> None:
         patterns = Patterns()
         call: AttemptCallExpect = {
@@ -111,28 +152,26 @@ class AttemptContext:
         }
         if label is not None:
             call["label"] = label
-        reply = await self._send(call)
+        if poll is not None:
+            call["poll"] = {**poll}
+        reply = await self._call(call)
         # reeval asks for the strings it tested the patterns on; each round answers more. A
         # subject that changes on every read never runs out of new strings, so the rounds stop.
         # A pattern is answered off the event loop, where a slow one can't hold up other bodies.
         for _ in range(PATTERN_ROUNDS):
-            if not (reply.get("ok", False) and "untested" in reply):
+            if "untested" not in reply:
                 break
             untested = cast(dict[str, list[str]], reply["untested"])
             await asyncio.to_thread(patterns.answer, untested)
-            reply = await self._send(call)
+            reply = await self._call(call)
         else:
-            if reply.get("ok", False) and "untested" in reply:
+            if "untested" in reply:
                 names = ", ".join(cast(dict[str, Any], reply["untested"]))
                 raise RuntimeError(
                     f"UsageError: {matcher}'s subject changed while reeval matched {names} on it, "
                     f"{PATTERN_ROUNDS} times over: check it once it has stopped changing"
                 )
-        if not reply.get("ok", False):
-            err = reply.get("error") or {"name": "Error", "message": "call failed"}
-            raise RuntimeError(f"{err.get('name')}: {err.get('message')}")
-        assertion_raw = reply.get("assertion")
-        assertion = cast(dict[str, Any], assertion_raw) if isinstance(assertion_raw, dict) else {}
+        assertion = cast(dict[str, Any], reply.get("assertion") or {})
         if assertion.get("status") == "fail" and not soft:
             raise ReevalAssertionError(str(assertion.get("message") or "expect failed"))
 
@@ -151,6 +190,10 @@ class SyncAttemptContext:
         self._ctx = async_ctx
         self._loop = loop
 
+    @property
+    def turns(self) -> list[Turn]:
+        return self._ctx.turns
+
     def _run(self, coro: Coroutine[Any, Any, Any]) -> Any:
         import asyncio
 
@@ -160,17 +203,21 @@ class SyncAttemptContext:
     def send(self, prompt: str) -> Turn:
         return self._run(self._ctx.send(prompt))
 
+    @overload
+    def exec(self, command: str) -> ExecResult: ...
+    @overload
+    def exec(self, command: str, *, background: Literal[True]) -> BackgroundHandle: ...
+
     def exec(self, command: str, *, background: bool = False) -> ExecResult | BackgroundHandle:
-        return cast(
-            ExecResult | BackgroundHandle,
-            self._run(self._ctx.exec(command, background=background)),  # type: ignore[arg-type]
-        )
+        if background:
+            return self._run(self._ctx.exec(command, background=True))
+        return self._run(self._ctx.exec(command).result())
 
     def read_file(self, path: str) -> str | None:
-        return self._run(self._ctx.read_file(path))
+        return self._run(self._ctx.read_file(path).result())
 
     def file(self, path: str) -> str | None:
-        return self._run(self._ctx.file(path))
+        return self.read_file(path)
 
     def write_file(self, path: str, contents: str | bytes) -> None:
         self._run(self._ctx.write_file(path, contents))
@@ -178,8 +225,8 @@ class SyncAttemptContext:
     def kill(self, handle: BackgroundHandle) -> None:
         self._run(self._ctx.kill(handle))
 
-    def judge(self, question: str, **options: Any) -> Verdict:
-        return self._run(self._ctx.judge(question, **options))
+    def judge(self, question: str, *, on: Any = None, **options: Any) -> Verdict:
+        return self._run(self._ctx.judge(question, on=on, **options))
 
     def bind_expect(self) -> None:
         def submit(**kwargs: Any) -> None:

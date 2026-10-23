@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -187,21 +188,55 @@ def evaluate(
     return decorator
 
 
-def evaluate_each(cases: Sequence[Any], name_template: str, options: dict[str, Any] | None = None):
+def _case_name(template: str, case: Any, index: int) -> str:
+    name = template.replace("%#", str(index)).replace("%s", str(cast(object, case)))
+    if isinstance(case, dict):
+        fields = cast(dict[str, Any], case)
+        for key in sorted(fields, key=len, reverse=True):
+            name = name.replace(f"${key}", str(fields[key]))
+    return name
+
+
+def _with_case(fn: Callable[..., Any], case: Any) -> Callable[..., Any]:
+    if inspect.iscoroutinefunction(fn):
+
+        async def body_async(c: Any) -> Any:
+            return await fn(c, case)
+
+        return body_async
+
+    def body(c: Any) -> Any:
+        return fn(c, case)
+
+    return body
+
+
+def evaluate_each(
+    cases: Sequence[Any],
+    name_template: str,
+    options: dict[str, Any] | None = None,
+    *,
+    pool: bool = True,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """One eval per case, named from `name_template` (`%s`, `%#`, `$field`); the body gets
+    `(c, case)`. Its cases pool into one family unless `pool=False` or there's only one."""
     opts = dict[str, Any](options or {})
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         for index, case in enumerate(cases):
-            family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
-            case_value: Any = case
-            if isinstance(case_value, dict) and "n" in case_value:
-                display = name_template.replace("$n", str(cast(Any, case_value["n"])))
-            else:
-                display = name_template.replace("$n", str(index + 1)).replace("%#", str(index))
-            _register_eval(display, "run", opts, fn, family)
+            family = None
+            if pool and len(cases) > 1:
+                family = DeclaredFamily(name=name_template, case=index, cases=len(cases))
+            name = _case_name(name_template, case, index)
+            _register_eval(name, "run", opts, _with_case(fn, case), family)
         return fn
 
     return decorator
+
+
+def todo(name: str) -> None:
+    """An eval or group still to write: listed in the plan, never run."""
+    _declare(DeclaredTodo(name=name))
 
 
 def _register_eval(

@@ -24,7 +24,7 @@ from reeval_python._wire import AttemptCall, AttemptCallRecord
 from reeval_python.checks import bind_recorder, escaped_failures, only_assertions
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
-from reeval_python.errors import AttemptAborted, ReevalAssertionError
+from reeval_python.errors import AttemptAborted, ReevalAssertionError, ReevalCallError
 
 RUNNER_PROTOCOL = 3
 
@@ -263,6 +263,8 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
         raise
     except AttemptAborted as exc:
         error = {"name": exc.name, "message": str(exc)}
+    except ReevalCallError as exc:
+        error = {"name": exc.name, "message": str(exc), "stack": traceback.format_exc()}
     except BaseException as exc:  # noqa: BLE001
         # SystemExit and the like end this body only: the runner serves other attempts too.
         failures = escaped_failures(exc)

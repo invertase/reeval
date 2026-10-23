@@ -60,4 +60,6 @@ def test_context_golden(mirror: Path, tmp_path: Path) -> None:
 def test_every_golden_has_a_mirror() -> None:
     goldens = {p.stem for p in GOLDENS.glob("*.ndjson")}
     mirrored = {m.name.split(".")[0] for m in MIRRORS}
-    assert mirrored <= goldens, f"mirrors without a golden: {sorted(mirrored - goldens)}"
+    assert mirrored == goldens, (
+        f"unmirrored {sorted(goldens - mirrored)}, extra {sorted(mirrored - goldens)}"
+    )

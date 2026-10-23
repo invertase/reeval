@@ -6,44 +6,55 @@ import re
 from collections.abc import Iterable
 from typing import Any, cast
 
+from reeval_python._wire import MatcherSubject
 from reeval_python.types import ExecResult, Turn, Verdict
 
-# Python snake_case matcher method -> wire matcher name (Vitest + reeval table).
-MATCHER_TO_WIRE: dict[str, str] = {
-    "to_succeed": "toSucceed",
-    "to_pass": "toPass",
-    "to_equal": "toEqual",
-    "to_contain": "toContain",
-    "to_be_truthy": "toBeTruthy",
-    "to_be": "toBe",
-    "to_be_null": "toBeNull",
-    "to_have_file": "toHaveFile",
-    "to_have_edited": "toHaveEdited",
-    "to_have_run": "toHaveRun",
-    "to_have_searched": "toHaveSearched",
-    "to_have_fetched": "toHaveFetched",
-    "to_have_called_skill": "toHaveCalledSkill",
-    "to_have_called_mcp": "toHaveCalledMcp",
-    "to_have_called_tool": "toHaveCalledTool",
-    "to_have_changed": "toHaveChanged",
-}
 
-# Judge / evaluate options: snake_case kwargs -> camelCase keys on the wire.
-OPTION_KEY_TO_WIRE: dict[str, str] = {
-    "max_retries": "maxRetries",
-    "max_tokens": "maxTokens",
-    "read_only": "readOnly",
-}
+def matcher_to_wire(name: str) -> str:
+    """A matcher method's name as reeval's (`to_have_edited` -> `toHaveEdited`); reeval refuses
+    a matcher it doesn't have."""
+    head, *rest = name.split("_")
+    return head + "".join(part.capitalize() for part in rest)
+
+
+_SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+")
+
+
+def camel_keys(options: dict[str, Any]) -> dict[str, Any]:
+    """An options dict's own snake_case keys (`min_lift`) as reeval's (`minLift`).
+
+    One level only: nested dicts such as `env` hold the user's own keys.
+    """
+    out: dict[str, Any] = {}
+    for key, value in options.items():
+        if _SNAKE.fullmatch(key):
+            head, *rest = key.split("_")
+            key = head + "".join(part.capitalize() for part in rest)
+        out[key] = value
+    return out
+
+
+def value_to_wire(value: Any) -> Any:
+    """A value with the SDK's objects in it (environments) as plain data."""
+    to_wire = getattr(value, "to_wire", None)
+    if callable(to_wire):
+        return to_wire()
+    if isinstance(value, dict):
+        return {k: value_to_wire(v) for k, v in cast(dict[str, Any], value).items()}
+    if isinstance(value, list | tuple):
+        return [value_to_wire(v) for v in cast(list[Any], value)]
+    return value
 
 
 def options_to_wire(options: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Eval, group or judge options as reeval's data."""
     if not options:
         return None
-    out: dict[str, Any] = {}
-    for key, value in options.items():
-        wire_key = OPTION_KEY_TO_WIRE.get(key, key)
-        out[wire_key] = value
-    return out
+    out = camel_keys(options)
+    compare = out.get("compare")
+    if isinstance(compare, dict):
+        out["compare"] = camel_keys(cast(dict[str, Any], compare))
+    return cast(dict[str, Any], value_to_wire(out))
 
 
 class Patterns:
@@ -105,16 +116,21 @@ def wire_args(args: Iterable[Any], patterns: Patterns) -> list[Any]:
     return [value(a) for a in args]
 
 
-def subject_for_matcher(actual: Any, matcher: str) -> dict[str, Any]:
+def subject_for_matcher(actual: Any) -> MatcherSubject:
+    """What `expect` checks: reeval reads the attempt, a turn, a command or a file itself."""
+    from reeval_python.context import AttemptContext, PendingExec, PendingRead, SyncAttemptContext
+
+    if isinstance(actual, AttemptContext | SyncAttemptContext):
+        return {"attempt": True}
+    if isinstance(actual, PendingExec):
+        return {"exec": actual.command}
+    if isinstance(actual, PendingRead):
+        return {"readFile": actual.path}
     if isinstance(actual, ExecResult):
         result = {"exitCode": actual.exit_code, "stdout": actual.stdout, "stderr": actual.stderr}
-        return {"exec": actual.command, "result": result}
-    if isinstance(actual, Verdict):
-        return {"value": actual.raw}
+        return cast(MatcherSubject, {"exec": actual.command, "result": result})
     if isinstance(actual, Turn):
         return {"turn": actual.index}
-    if isinstance(actual, dict):
-        wire_keys = ("exec", "turn", "attempt", "readFile", "value")
-        if any(k in actual for k in wire_keys):
-            return cast(dict[str, Any], actual)
+    if isinstance(actual, Verdict):
+        return cast(MatcherSubject, {"value": actual.raw})
     return {"value": actual}

@@ -1,4 +1,4 @@
-// Runs the Python SDK's declare conformance tests when uv is available.
+// Runs the Python SDK's tests, the conformance goldens through its runner among them.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -14,7 +14,7 @@ function uv(): string | undefined {
   return undefined
 }
 
-test('Python SDK declare conformance', () => {
+test('Python SDK tests and conformance goldens', () => {
   const bin = uv()
   if (!bin) {
     assert.fail('uv is required for the Python SDK tier (install from https://docs.astral.sh/uv/)')
