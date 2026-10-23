@@ -1,8 +1,10 @@
 # Compiles reeval into standalone binaries with Bun, all cross-compiled on one Linux runner, then
-# smoke-tests each on its own OS from an empty directory (scripts/binary-smoke.mjs), runs *.eval.py
-# with it on Python 3.11 to 3.14 with only uv besides (scripts/binary-python-smoke.mjs), and
-# installs it with scripts/install.sh or install.ps1 from those files. Uploads the binaries and
-# SHA256SUMS as one artifact, `reeval-<version>-binaries`, which release.yml uploads to the release.
+# smoke-tests each on its own OS from an empty directory (scripts/binary-smoke.mjs). It runs
+# *.eval.py with it on Python 3.11 to 3.14 with only uv besides (scripts/binary-python-smoke.mjs),
+# through reeval-python's `reeval` command too, which downloads the binary or finds it in a
+# platform wheel (scripts/python-wheels.py, artifact `reeval-python-wheels`). Then it installs it
+# with scripts/install.sh or install.ps1 from those files. Uploads the binaries and SHA256SUMS as
+# one artifact, `reeval-<version>-binaries`, which release.yml uploads to the release.
 name: binary
 
 on:
@@ -26,6 +28,7 @@ on:
       - scripts/bun-compile.mjs
       - scripts/binary-smoke.mjs
       - scripts/binary-python-smoke.mjs
+      - scripts/python-wheels.py
       - scripts/install.sh
       - scripts/install-test.sh
       - scripts/install.ps1
@@ -104,6 +107,20 @@ jobs:
           path: out/
           if-no-files-found: error
           retention-days: 14
+      # reeval-python's pure wheel, and a platform wheel per target that carries its binary.
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+      - name: reeval-python wheels
+        run: |
+          uv build --wheel --out-dir wheels packages/reeval-python
+          uv run --no-project python scripts/python-wheels.py wheels/*-any.whl out wheels
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reeval-python-wheels
+          path: wheels/
+          if-no-files-found: error
+          retention-days: 14
 
   # No pnpm install and no build: the runner's preinstalled Node drives the binary.
   smoke:
@@ -115,13 +132,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: linux-x64, os: ubuntu-24.04, flags: --docker }
-          - { target: linux-arm64, os: ubuntu-24.04-arm }
-          - { target: linux-x64-musl, os: ubuntu-24.04, alpine: true }
-          - { target: linux-arm64-musl, os: ubuntu-24.04-arm, alpine: true }
-          - { target: darwin-arm64, os: macos-15 }
-          - { target: darwin-x64, os: macos-15-intel }
-          - { target: windows-x64, os: windows-2025, ext: .exe }
+          - { target: linux-x64, os: ubuntu-24.04, flags: --docker, wheel: manylinux_2_17_x86_64 }
+          - { target: linux-arm64, os: ubuntu-24.04-arm, wheel: manylinux_2_17_aarch64 }
+          - { target: linux-x64-musl, os: ubuntu-24.04, alpine: true, wheel: musllinux_1_2_x86_64 }
+          - { target: linux-arm64-musl, os: ubuntu-24.04-arm, alpine: true, wheel: musllinux_1_2_aarch64 }
+          - { target: darwin-arm64, os: macos-15, wheel: macosx_13_0_arm64 }
+          - { target: darwin-x64, os: macos-15-intel, wheel: macosx_13_0_x86_64 }
+          - { target: windows-x64, os: windows-2025, ext: .exe, wheel: win_amd64 }
           # x64 without AVX2, which the install scripts pick on such a CPU; smoke-tested only.
           - { target: linux-x64-baseline, os: ubuntu-24.04, baseline: true }
           - { target: linux-x64-musl-baseline, os: ubuntu-24.04, alpine: true, baseline: true }
@@ -136,7 +153,6 @@ jobs:
             scripts
             examples/hello
             packages/reeval/test/features/egress/blocked-host-recorded
-            packages/reeval-python
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -165,27 +181,33 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo -e BINARY node:22-alpine \
             sh -c 'apk add -q git && node scripts/binary-smoke.mjs "$BINARY"'
-      # The Python SDK from this commit, as a wheel the Python smoke's project depends on.
+      # reeval-python from this commit: the pure wheel, and this target's platform wheel.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: reeval-python-wheels
+          path: wheels
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: false
-      - name: Build the reeval-python wheel
-        shell: bash
-        run: uv build --wheel --out-dir "$RUNNER_TEMP/wheel" packages/reeval-python
       - name: Python evals
         if: ${{ !matrix.alpine }}
         shell: bash
         env:
           BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}${{ matrix.ext }}
-        run: node scripts/binary-python-smoke.mjs "$BINARY" --wheel "$(ls "$RUNNER_TEMP"/wheel/*.whl)"
+          WHEEL: ${{ matrix.wheel }}
+        run: |
+          node scripts/binary-python-smoke.mjs "$BINARY" --wheel "$(ls wheels/*-any.whl)" \
+            --platform-wheel "$(ls wheels/*"$WHEEL"*.whl)"
       # musl: uv from Alpine's packages, and Python from uv's musl builds.
       - name: Python evals (Alpine)
         if: ${{ matrix.alpine }}
         env:
           BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}
+          WHEEL: ${{ matrix.wheel }}
         run: |
-          docker run --rm -v "$PWD:/repo" -v "$RUNNER_TEMP/wheel:/wheel" -w /repo -e BINARY node:22-alpine \
-            sh -c 'apk add -q git uv && node scripts/binary-python-smoke.mjs "$BINARY" --wheel /wheel/*.whl'
+          docker run --rm -v "$PWD:/repo" -w /repo -e BINARY -e WHEEL node:22-alpine sh -c \
+            'apk add -q git uv && node scripts/binary-python-smoke.mjs "$BINARY" --wheel wheels/*-any.whl \
+              --platform-wheel wheels/*"$WHEEL"*.whl'
       - name: install-test.sh
         if: ${{ !matrix.ext && !matrix.baseline }}
         env:

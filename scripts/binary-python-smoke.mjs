@@ -2,6 +2,8 @@
 // the binary and uv: no Node project, no reeval-python on the machine. binary.yml runs it on each OS.
 //
 //   node scripts/binary-python-smoke.mjs <binary> --wheel <reeval_python-*.whl> [--python 3.11,3.14]
+//     [--release <dir with the binaries and SHA256SUMS; default the binary's directory>]
+//     [--platform-wheel <reeval_python-*-<platform>.whl, which carries the binary>]
 //
 // In an empty directory it writes a project with a reeval.yml and a pyproject.toml that depends on
 // the wheel (built from the same commit as the binary). For each Python version it runs three
@@ -9,11 +11,14 @@
 // one with the fake judge, and a canary that must fail. Then it runs the project from its .venv
 // with no pyproject.toml, so reeval starts .venv's python rather than uv, and checks that a
 // reeval-python too old for the binary (0.10.0, from PyPI) and a project without reeval-python
-// both stop with how to install it rather than hang.
+// both stop with how to install it rather than hang. It also runs `uv run reeval`, the SDK's shim,
+// which downloads the binary from --release, checks it against SHA256SUMS and caches it, and,
+// given --platform-wheel, the same command from a wheel that carries the binary, offline.
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
@@ -21,13 +26,16 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { parseArgs, stripVTControlCharacters } from 'node:util'
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
     wheel: { type: 'string' },
+    release: { type: 'string' },
+    'platform-wheel': { type: 'string' },
     python: { type: 'string', default: '3.11,3.12,3.13,3.14' },
   },
 })
@@ -37,6 +45,8 @@ if (positionals.length !== 1 || !values.wheel) {
 }
 const versions = values.python.split(',').map((v) => v.trim())
 const wheel = resolve(values.wheel).replaceAll('\\', '/')
+// The directory with the binaries and SHA256SUMS, as a release has them, for the SDK's shim.
+const release = resolve(values.release ?? dirname(positionals[0]))
 // The first run of a version downloads it; a hung runner fails here instead of the job's timeout.
 const TIMEOUT = 240_000
 
@@ -99,7 +109,7 @@ def canary(c):
 `,
 }
 
-function project(name, dependency) {
+function project(name, dependency, from = wheel) {
   const dir = join(alone, name)
   mkdirSync(join(dir, 'evals'), { recursive: true })
   writeFileSync(join(dir, 'reeval.yml'), CONFIG)
@@ -113,7 +123,7 @@ function project(name, dependency) {
       'requires-python = ">=3.11"',
       `dependencies = [${dependency ? `"${dependency}"` : ''}]`,
       ...(dependency === 'reeval-python'
-        ? ['', '[tool.uv.sources]', `reeval-python = { path = '${wheel}' }`]
+        ? ['', '[tool.uv.sources]', `reeval-python = { path = '${from}' }`]
         : []),
       '',
     ].join('\n'),
@@ -121,9 +131,10 @@ function project(name, dependency) {
   return dir
 }
 
-function reeval(cwd, args, env = {}) {
+/** Runs `command` in `cwd`, printing its output as it would appear in a terminal. */
+function sh(command, args, cwd, env = {}) {
   const started = performance.now()
-  const r = spawnSync(binary, args, {
+  const r = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
     windowsHide: true,
@@ -136,12 +147,15 @@ function reeval(cwd, args, env = {}) {
   console.log(
     `\n$ ${Object.entries(env)
       .map(([k, v]) => `${k}=${v} `)
-      .join('')}reeval ${args.join(' ')}  (${how}, ${seconds}s)`,
+      .join(
+        '',
+      )}${command === binary ? 'reeval' : command} ${args.join(' ')}  (${how}, ${seconds}s)`,
   )
   const out = stripVTControlCharacters(`${r.stdout ?? ''}${r.stderr ?? ''}`).trimEnd()
   console.log(args.includes('--json') ? `${out.slice(0, 300)}…` : out)
   return { ...r, out }
 }
+const reeval = (cwd, args, env) => sh(binary, args, cwd, env)
 /** The last line that says how the run went, e.g. `1 fail · 2 pass`. */
 const outcome = (r) =>
   r.out
@@ -185,6 +199,52 @@ check(
   `Python ${last} from .venv, without uv: the canary fails`,
   venv.status === 1 && outcome(venv) === '1 fail · 2 pass',
 )
+
+// The SDK's own `reeval` command: it fetches this binary from its release directory, checks it
+// against SHA256SUMS, caches it, and runs the evals on the venv's Python.
+for (const f of ['pyproject.toml', 'uv.lock']) renameSync(join(dir, `${f}.off`), join(dir, f))
+const version = reeval(alone, ['--version']).stdout.trim()
+const shimCache = join(alone, 'shim-cache')
+const shimEnv = {
+  REEVAL_DOWNLOAD: pathToFileURL(release).href,
+  REEVAL_VERSION: version,
+  XDG_CACHE_HOME: shimCache,
+  UV_PYTHON: last,
+  SMOKE_PYTHON: last,
+}
+const shim = sh('uv', ['run', 'reeval', 'run'], dir, shimEnv)
+const name = basename(positionals[0])
+check(
+  `uv run reeval: the SDK downloads ${name}, checks it and runs the evals`,
+  shim.status === 1 &&
+    outcome(shim) === '1 fail · 2 pass' &&
+    shim.out.includes(`downloading ${name}`) &&
+    existsSync(join(shimCache, 'reeval', 'bin', version, name)),
+)
+const offline = sh('uv', ['run', 'python', '-m', 'reeval_python', '--version'], dir, {
+  ...shimEnv,
+  REEVAL_OFFLINE: '1',
+})
+check(
+  'python -m reeval_python, offline: the cached binary runs',
+  offline.status === 0 && offline.stdout.trim() === version && !offline.out.includes('downloading'),
+)
+
+// The platform wheel carries the binary, so nothing is downloaded, even with an empty cache.
+if (values['platform-wheel']) {
+  const own = resolve(values['platform-wheel']).replaceAll('\\', '/')
+  const bundled = project('bundled', 'reeval-python', own)
+  const r = sh('uv', ['run', 'reeval', 'run'], bundled, {
+    XDG_CACHE_HOME: join(alone, 'empty-cache'),
+    REEVAL_OFFLINE: '1',
+    UV_PYTHON: last,
+    SMOKE_PYTHON: last,
+  })
+  check(
+    `uv run reeval from ${basename(own)}: its own binary runs the evals, offline`,
+    r.status === 1 && outcome(r) === '1 fail · 2 pass' && !r.out.includes('downloading'),
+  )
+}
 
 const stopsClearly = (r) =>
   !r.error &&
