@@ -18,6 +18,7 @@ import {
   parseDuration,
   requireConfig,
   resolveConcurrency,
+  runJudgeModel,
   selectProfile,
   UsageError,
 } from './config.ts'
@@ -30,7 +31,7 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
-import { unusedGatewayKey } from './judge/index.ts'
+import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
@@ -724,6 +725,9 @@ async function executeRun(
       historyDir: config.history.dir,
       questionModel: models?.questionModelLabel(config) ?? null,
       insights: await planInsights(config, setup.insights),
+      judgeModel: ((m) => (m === undefined ? null : judgeModelName(m)))(
+        runJudgeModel(config, profile),
+      ),
     })
     plan.runId = runId
     if (plan.insights) {
@@ -788,6 +792,9 @@ async function executeRun(
         const names = down.map((e) => engineSpec(e).name).join(' and ')
         lines.push(`images  not checked: ${names} ${down.length === 1 ? 'is' : 'are'} not running`)
       }
+      const { costLine } = await import('./cost.ts')
+      const cost = costLine(plan.cost)
+      if (cost) lines.push(cost)
     }
     if (setup.dryRun && plan.insights) {
       const { formatTokens } = await import('./usage.ts')

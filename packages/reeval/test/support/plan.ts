@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { costLine, type UsdRange } from '../../src/cost.ts'
 import type { PlanDocument } from '../../src/plan.ts'
 import { runCli } from '../helpers.ts'
 import { fixture, testDir } from './fixture.ts'
@@ -11,6 +12,8 @@ export type PlanCase = {
   name: string
   args: string[]
   env?: NodeJS.ProcessEnv
+  /** Render the cost estimate and each cell's part of it too. */
+  cost?: boolean
   /** Seed the copied project before `reeval run --dry-run --json`, e.g. leftover staging. */
   prepare?: (dir: string) => void | Promise<void>
 }
@@ -51,7 +54,7 @@ const table = (rows: string[][]) => {
  * The plan as a text matrix for review diffs: one line per cell, without the host-dependent
  * estimate and concurrency.
  */
-export function renderPlan(plan: PlanDocument): string {
+export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {}): string {
   const { totals, budget } = plan
   const head = [
     plan.profile ? `profile ${plan.profile.name} (${plan.profile.reason})` : 'no profile',
@@ -132,8 +135,31 @@ export function renderPlan(plan: PlanDocument): string {
     ...table(rows),
     `excluded: ${excluded.length ? excluded.join(', ') : '—'}`,
     ...images,
+    ...(options.cost ? costLines(plan) : []),
     '',
   ].join('\n')
+}
+
+const usd = (r: UsdRange | null) => (r ? `$${r.low}–${r.high}` : 'unpriced')
+
+/** The plain cost line, then each cell's model, basis and range. */
+function costLines(plan: PlanDocument): string[] {
+  const { cost } = plan
+  return [
+    costLine(cost) ?? 'cost  (no line)',
+    `prices ${cost.prices.date} · past ${cost.pastRuns} runs, ${cost.pastAttempts} attempts`,
+    ...table(
+      cost.cells.map((c) => [
+        `  ${c.eval}`,
+        c.cell,
+        c.model ?? 'fake',
+        `${c.basis}${c.basis === 'history' ? ` ×${c.samples}` : ''}`,
+        `×${c.attempts}`,
+        `agent ${usd(c.agent)}`,
+        `judge ${usd(c.judge)}`,
+      ]),
+    ),
+  ]
 }
 
 /** Compares with the snapshot at `test/<path>`; `REEVAL_UPDATE_SNAPSHOTS=1` writes it instead. */

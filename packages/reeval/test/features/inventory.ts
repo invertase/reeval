@@ -382,6 +382,16 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'plan.cost',
+    area: 'Config and selection',
+    name: "`reeval run --dry-run`'s cost estimate: a range at list prices from each cell's past tokens, else a typical attempt's, with judge calls; the JSON plan's `cost` has each cell's part",
+    plan: ['cost/no-history', 'cost/history', 'cost/unpriced'],
+    tests: [
+      'reeval/test/cost.test.ts › says what the range is based on',
+      'reeval/test/cost.test.ts › is null for a model without an exact price, rather than a near one',
+    ],
+  },
+  {
     id: 'budget',
     area: 'Config and selection',
     name: '`budget.attempts`, `budget.duration` and `--force`',

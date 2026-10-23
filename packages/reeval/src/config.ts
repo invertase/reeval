@@ -826,7 +826,7 @@ export const analysisModelOf = (config: ResolvedConfig): string | FakeAnalysisMo
 export const hasAnalysisModel = (config: ResolvedConfig) => analysisModelOf(config) !== undefined
 
 /** The run's judge model: the profile's when it sets one, else the config's. */
-function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null | undefined) {
+export function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null | undefined) {
   return profile ? (profileJudge(profile).model ?? config.judge.model) : config.judge.model
 }
 

@@ -18,7 +18,7 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               (parts of one kind OR; a name and a cell key are one kind)
   --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                               default: defaultProfile.ci in CI, else defaultProfile.local)
-  --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
+  --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
                               with --json, as one JSON document (every cell, and what's excluded)
   --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                               document on stdout when it ends; progress goes to stderr
@@ -93,6 +93,28 @@ images  4 sandbox images: 1 ready, 3 to build
   + python · cursor                     to build: from python:3.12-slim, on python:3.12-slim (f77ac9e44ae9)
   …
 ```
+
+## The cost estimate
+
+```text
+cost  estimated $0.05–0.27 at list prices, judge included · from 1 past run
+cost  estimated $1–13 at list prices, judge included · 4 of 27 attempts from 2 past runs, the rest rough
+cost  estimated $3–26 at list prices, judge included · no history, rough
+```
+
+`--dry-run` ends its plan with what the run should cost, as a range in USD at list prices. It's an estimate for deciding whether to run, not your bill: subscriptions and included usage, negotiated prices and re-runs aren't in it.
+
+| Part | Where its tokens come from |
+|---|---|
+| Agent | The same eval and cell's counted attempts in the last 30 runs (recorded and scratch), else the same eval on that harness: their middle half, never narrower than −20% / +25% of the median. With neither, a typical coding attempt: 300k–2M prompt tokens, mostly cached, and 3–20k out |
+| Judge | As many calls an attempt as the eval's past attempts made, on their model, else 0–1 calls on the run's `judge.model`; 5–60k tokens in and 0.5–2k out a call |
+
+- **Prices** come from a table built from [models.dev](https://models.dev) and Cursor's pricing page when reeval was released, dated in the JSON plan.
+- **A model id** matches without its `provider/` prefix or a trailing effort (`gemini-3.8-flash-medium`). Cursor's `params: { fast: 'true' }` is priced as `composer-2.5-fast`.
+- **A model with no price** is left out and named (`2 attempts left out: no list price for my-model`), never guessed. The fake agent and judge cost nothing.
+- **Not counted:** compare questions and insights, which cost cents.
+
+`--dry-run --json` has the detail under `cost`: `usd`, `agent` and `judge` as `{ low, high }`, `attempts` by basis (`history`, `typical`, `unpriced`, `free`), `pastRuns` and `pastAttempts`, `unpriced` models, `prices` (`date`, `source`), and `cells`, each with its `model`, `basis`, `samples`, `attempts`, `agent` and `judge`.
 
 ## Results as JSON
 
