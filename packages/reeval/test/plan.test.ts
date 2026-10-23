@@ -291,6 +291,29 @@ evaluate('unknown', async () => {})
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
   })
 
+  test('a judge model no listed gateway serves exits 2 at plan time, naming the one that would', async () => {
+    const p = await project('gateway-judge', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { direct } from 'reeval/gateway'
+import { fakeHarness } from 'reeval/harness'
+export default defineConfig({
+  harness: fakeHarness(),
+  gateway: [direct()],
+  judge: { model: 'mistral/large' },
+})
+`,
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('judged', async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /evals\/g\.eval\.ts: evaluate\("judged"\): the judge model "mistral\/large": no gateway in the list can serve it \(direct: .*\)\. Add vercel\(\) to gateway\./,
+    )
+  })
+
   test('.only in CI exits 2 before any plan prints', async () => {
     const p = await fixture('plan/selection')
     const r = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: { CI: 'true' } })

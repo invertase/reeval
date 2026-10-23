@@ -13,6 +13,7 @@ import {
   checkDocker,
   checkEgress,
   checkEnvFiles,
+  checkGateways,
   checkGitignore,
   checkImages,
   checkJudge,
@@ -58,6 +59,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
 async function configOf(name: string, body: string) {
   const p = await project(`doctor-${name}`, {
     'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { direct, vercel } from 'reeval/gateway'
 import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { docker, fakeSandbox, podman } from 'reeval/sandbox'
@@ -658,6 +660,63 @@ evaluate('a', async () => {})
       assert.equal(bad[0]?.status, 'fail')
       assert.match(bad[0]?.summary ?? '', /whitespace or a line break in it at character 3/)
     }
+  })
+
+  test('gateway: where each harness resolves, its keys, and an expired Vercel token', async () => {
+    const config = await configOf(
+      'gateway-vercel',
+      `{ harness: [claudeCode({ model: 'claude-sonnet-4-5' }), cursor({ model: 'composer-2.5' })],
+         gateway: [vercel(), direct()],
+         judge: { model: 'anthropic/claude-haiku-4-5' },
+         analysis: { model: 'google/gemini-3.8-flash' },
+         profiles: { local: { gateway: [direct()] } } }`,
+    )
+    const env = { AI_GATEWAY_API_KEY: SECRET, CURSOR_API_KEY: SECRET }
+    const keys = await checkKeys(config, deps({ env }), false, '.env.local')
+    assert.deepEqual(
+      keys.map((c) => c.summary),
+      [
+        'AI_GATEWAY_API_KEY for claude-code:claude-sonnet-4-5: set',
+        'CURSOR_API_KEY for cursor:composer-2.5: set',
+      ],
+      'Claude Code on Vercel needs no ANTHROPIC_API_KEY',
+    )
+    const judge = await checkJudge(config, deps({ env: {} }), false, '.env.local')
+    assert.match(
+      judge[0]?.summary ?? '',
+      /^AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(for vercel\(\)\)/,
+    )
+    const analysis = await checkAnalysis(config, deps({ env: {} }), false, '.env.local')
+    assert.match(analysis[0]?.summary ?? '', /\(for vercel\(\)\)/)
+    assert.deepEqual(
+      checkGateways(config, deps({ env }), '.env.local').map((c) => [c.status, c.summary]),
+      [
+        [
+          'ok',
+          'gateway vercel, direct: claude-code:claude-sonnet-4-5 → vercel, cursor:composer-2.5 → direct',
+        ],
+        [
+          'ok',
+          'gateway direct in profile local: claude-code:claude-sonnet-4-5 → direct, cursor:composer-2.5 → direct',
+        ],
+      ],
+    )
+    const exp = Math.floor(Date.now() / 1000) - 60
+    const token = `e30.${Buffer.from(JSON.stringify({ exp })).toString('base64url')}.s`
+    const expired = checkGateways(config, deps({ env: { VERCEL_OIDC_TOKEN: token } }), '.env.local')
+    assert.equal(expired[0]?.status, 'fail')
+    assert.match(expired[0]?.summary ?? '', /^VERCEL_OIDC_TOKEN expired at /)
+    assert.equal(
+      expired[0]?.fix,
+      'run vercel env pull, or add AI_GATEWAY_API_KEY=... to .env.local',
+    )
+    const unset = await configOf('gateway-unset', "{ harness: cursor({ model: 'composer-2.5' }) }")
+    assert.deepEqual(checkGateways(unset, deps(), '.env.local'), [])
+    const stuck = await configOf(
+      'gateway-stuck',
+      "{ harness: cursor({ model: 'composer-2.5' }), gateway: [vercel()] }",
+    )
+    assert.equal(checkGateways(stuck, deps(), '.env.local')[0]?.status, 'fail')
   })
 
   test('egress: the policy, and one the sandbox can’t enforce', async () => {

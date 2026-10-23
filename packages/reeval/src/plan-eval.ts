@@ -22,6 +22,7 @@ import {
 } from './environment/plugins.ts'
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { resolveModelGateway } from './gateway/models.ts'
 import { resolveGateway } from './gateway/resolve.ts'
 import { vercelCredentialProblem } from './gateway/vercel.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
@@ -152,6 +153,15 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
         return { ...harness, gateway: route.name }
       })
   const plannedAttempts = resolvedEval.skip ? [] : expand({ ...resolved, harness: routed })
+  if (plannedAttempts.length) {
+    const scope = { gateways, set: gatewaySet }
+    try {
+      resolveModelGateway(resolved.judge.model, resolved.judge.gateway, scope, 'the judge model')
+    } catch (error) {
+      if (error instanceof UsageError) throw new UsageError(`${where}: ${error.message}`)
+      throw error
+    }
+  }
   if (ctx.config.secrets.unbrokered === 'error') {
     const [first] = unbrokered(resolved.env, plannedAttempts)
     if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))

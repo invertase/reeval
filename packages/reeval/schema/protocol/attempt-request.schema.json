@@ -489,6 +489,45 @@
             }
           ]
         },
+        "gateway": {
+          "description": "The gateway the judge's calls go through, by name or by its helper. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.",
+          "anyOf": [
+            {
+              "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway.",
+              "type": "string",
+              "enum": ["direct", "vercel"]
+            },
+            {
+              "description": "One entry of the config's `gateway` list.",
+              "oneOf": [
+                {
+                  "description": "Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`.",
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "direct"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
+                },
+                {
+                  "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code and Codex.",
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "const": "vercel"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          ]
+        },
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "integer",

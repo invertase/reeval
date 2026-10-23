@@ -70,7 +70,7 @@ reeval ships the adapter with one fix, which its image bakes: 1.0.160 never repo
 | `GET` | `/api/claude_code/settings` |
 | `GET` | `/api/claude_code/policy_limits` |
 
-The harness authenticates only with `ANTHROPIC_API_KEY`, passed to the adapter explicitly. A host `AI_GATEWAY_API_KEY`, a Claude subscription login or a keychain entry is never used, so a run can't quietly bill a different account.
+The harness authenticates only with `ANTHROPIC_API_KEY`, passed to the adapter explicitly. A host `AI_GATEWAY_API_KEY`, a Claude subscription login or a keychain entry is never used, so a run can't quietly bill a different account. The one exception is a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`: then its key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), the CLI's `ANTHROPIC_BASE_URL` is Vercel's, and the same four paths are brokered on `ai-gateway.vercel.sh` instead.
 
 The key never enters the container. The gateway swaps it in on the endpoints above, the ones CLI 2.1.281 sends it on, and nowhere else.
 

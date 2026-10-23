@@ -1,7 +1,10 @@
-// The gateway resolver and Vercel's routes as data: fallback, pins, the plan's hint, what a
-// harness on Vercel authenticates with and is brokered on, and its credential's expiry.
+// The gateway resolver and Vercel's routes as data: fallback, pins, the plan's hint, the models
+// reeval calls itself, what a harness on Vercel authenticates with and is brokered on, and its
+// credential's expiry.
 import assert from 'node:assert/strict'
 import { afterEach, describe, test } from 'node:test'
+import { onEndpoint } from '@reeval/sandbox-docker'
+import { type GatewayScope, resolveModelGateway } from '../src/gateway/models.ts'
 import { fallbackHint, resolveGateway } from '../src/gateway/resolve.ts'
 import {
   jwtExpiry,
@@ -9,9 +12,10 @@ import {
   vercelCredential,
   vercelCredentialProblem,
 } from '../src/gateway/vercel.ts'
-import { agentAuth, agentFor } from '../src/harness/agents.ts'
+import { agentAuth, agentFor, brokeringFor } from '../src/harness/agents.ts'
 import { gatewayPart } from '../src/history/assemble.ts'
-import type { AgentHarnessDescriptor, HarnessDescriptor } from '../src/types.ts'
+import { judgeCredentials, judgeRoute } from '../src/judge/index.ts'
+import type { AgentHarnessDescriptor, GatewayName, HarnessDescriptor } from '../src/types.ts'
 
 const WHERE = 'evaluate("e")'
 const cursor = { kind: 'cursor', model: 'composer-2.5' } as HarnessDescriptor
@@ -82,6 +86,90 @@ describe('resolveGateway', () => {
   })
 })
 
+describe('the models reeval calls itself', () => {
+  const scope = (...kinds: GatewayName[]) => ({ gateways: list(...kinds), set: true })
+  const UNSET = { gateways: list('direct'), set: false }
+  const route = (model: string, pin: GatewayName | undefined, s: GatewayScope) =>
+    resolveModelGateway(model, pin, s, 'judge model')
+
+  test('without a list or a pin, a model keeps taking its own key, else Vercel’s', () => {
+    assert.equal(route('mistral/large', undefined, UNSET), undefined)
+    assert.deepEqual(judgeCredentials('anthropic/claude-x'), [
+      'ANTHROPIC_API_KEY',
+      'AI_GATEWAY_API_KEY',
+      'VERCEL_OIDC_TOKEN',
+    ])
+    assert.deepEqual(judgeRoute('anthropic/claude-x', { AI_GATEWAY_API_KEY: 'g' }), {
+      kind: 'gateway',
+    })
+  })
+
+  test('on a list, a model takes the first gateway that serves it, and only its keys', () => {
+    assert.equal(route('anthropic/claude-x', undefined, scope('vercel', 'direct')), 'vercel')
+    assert.equal(route('anthropic/claude-x', undefined, scope('direct', 'vercel')), 'direct')
+    assert.equal(route('mistral/large', undefined, scope('direct', 'vercel')), 'vercel')
+    assert.deepEqual(judgeCredentials('anthropic/claude-x', 'direct'), ['ANTHROPIC_API_KEY'])
+    assert.deepEqual(judgeCredentials('anthropic/claude-x', 'vercel'), [
+      'AI_GATEWAY_API_KEY',
+      'VERCEL_OIDC_TOKEN',
+    ])
+    assert.throws(
+      () => judgeRoute('anthropic/claude-x', { AI_GATEWAY_API_KEY: 'g' }, 'judge model', 'direct'),
+      /Set ANTHROPIC_API_KEY \(for direct\(\)\)/,
+      "direct() doesn't reach for Vercel's key",
+    )
+    const both = { ANTHROPIC_API_KEY: 'a', AI_GATEWAY_API_KEY: 'g' }
+    assert.deepEqual(judgeRoute('anthropic/claude-x', both, 'judge model', 'vercel'), {
+      kind: 'gateway',
+    })
+    assert.throws(
+      () => judgeRoute('anthropic/claude-x', { ANTHROPIC_API_KEY: 'a' }, 'judge model', 'vercel'),
+      /Set AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN \(for vercel\(\)\)/,
+    )
+  })
+
+  test('a model nothing in the list serves exits 2, naming the gateway that would', () => {
+    assert.throws(() => route('mistral/large', undefined, scope('direct')), {
+      name: 'UsageError',
+      message:
+        'judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.',
+    })
+  })
+
+  test('a pin skips the fallback, and must be listed and able to serve', () => {
+    assert.equal(route('anthropic/claude-x', 'vercel', scope('direct', 'vercel')), 'vercel')
+    assert.equal(route('anthropic/claude-x', 'direct', UNSET), 'direct')
+    assert.throws(() => route('anthropic/claude-x', 'vercel', UNSET), {
+      message:
+        "judge model \"anthropic/claude-x\" pins gateway 'vercel', which isn't in the gateway list (direct). Add vercel() to gateway, or pin one that's there.",
+    })
+    assert.throws(
+      () => route('mistral/large', 'direct', scope('direct', 'vercel')),
+      /A pin never falls back/,
+    )
+    assert.equal(
+      resolveModelGateway('anthropic/claude-x', { kind: 'vercel' }, scope('vercel'), 'judge model'),
+      'vercel',
+      'by its helper too',
+    )
+  })
+
+  test('a model object or a fake calls through itself', () => {
+    assert.equal(
+      resolveModelGateway({ kind: 'fake-judge', score: 1 }, 'vercel', scope('direct'), 'j'),
+      undefined,
+    )
+  })
+
+  test("an expired Vercel project token fails the judge's call, naming the fix", () => {
+    const token = jwt(Math.floor(Date.now() / 1000) - 60)
+    assert.throws(
+      () => judgeRoute('mistral/large', { VERCEL_OIDC_TOKEN: token }, 'judge model', 'vercel'),
+      /^Error: judge model "mistral\/large": VERCEL_OIDC_TOKEN expired at .* Run vercel env pull/,
+    )
+  })
+})
+
 describe('Vercel AI Gateway routes', () => {
   const saved = { ...process.env }
   afterEach(() => {
@@ -127,6 +215,24 @@ describe('Vercel AI Gateway routes', () => {
     )
     assert.equal(agent.modelId?.('gpt-5.4-mini'), 'openai/gpt-5.4-mini')
     assert.equal(agent.modelId?.('openai/gpt-5.4-mini'), 'openai/gpt-5.4-mini')
+  })
+
+  test("the egress gateway swaps Vercel's key in only on Vercel's model paths", () => {
+    process.env.AI_GATEWAY_API_KEY = 'vck_test'
+    const brokering = brokeringFor({ ...claude, gateway: 'vercel' } as HarnessDescriptor)
+    assert.equal(brokering?.credential, 'AI_GATEWAY_API_KEY')
+    const on = (method: string, host: string, path: string) =>
+      onEndpoint(brokering?.endpoints ?? [], { method, host, path, headers: {} })
+    assert.equal(on('POST', 'ai-gateway.vercel.sh', '/v1/messages?beta=true'), true)
+    assert.equal(on('POST', 'ai-gateway.vercel.sh', '/v1/messages/count_tokens'), true)
+    assert.equal(on('GET', 'ai-gateway.vercel.sh', '/v1/messages'), false)
+    assert.equal(on('GET', 'ai-gateway.vercel.sh', '/v1/models'), false)
+    assert.equal(on('POST', 'api.anthropic.com', '/v1/messages'), false)
+    const codexBrokering = brokeringFor({ ...codex, gateway: 'vercel' } as HarnessDescriptor)
+    const onCodex = (host: string, path: string) =>
+      onEndpoint(codexBrokering?.endpoints ?? [], { method: 'POST', host, path, headers: {} })
+    assert.equal(onCodex('ai-gateway.vercel.sh', '/v1/responses'), true)
+    assert.equal(onCodex('api.openai.com', '/v1/responses'), false)
   })
 
   test('off Vercel, a harness keeps its own credential and endpoints', () => {

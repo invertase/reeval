@@ -59,8 +59,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set.",
@@ -169,8 +168,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.",
@@ -209,8 +207,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set.",
@@ -242,6 +239,17 @@
       "description": "`ConfigJudgeOptions` as data: the model by name, or a fake judge with a fixed score.",
       "type": "object",
       "properties": {
+        "gateway": {
+          "description": "The gateway the judge's calls go through, by name or by its helper. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GatewayName"
+            },
+            {
+              "$ref": "#/$defs/GatewayDescriptor"
+            }
+          ]
+        },
         "maxConcurrent": {
           "description": "The most judge calls to this model's provider at once, across the run.",
           "type": "integer",
@@ -299,8 +307,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]` when `effort` is set.",
@@ -720,8 +727,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `fake`.",
@@ -951,8 +957,7 @@
       "properties": {
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `fx:<model>`.",
@@ -1001,13 +1006,22 @@
         }
       ]
     },
+    "GatewayDescriptor": {
+      "description": "One entry of the config's `gateway` list.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/DirectGatewayDescriptor"
+        },
+        {
+          "$ref": "#/$defs/VercelGatewayDescriptor"
+        }
+      ]
+    },
     "GatewayEntryData": {
       "description": "A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its settings, or the descriptor itself.",
       "anyOf": [
         {
-          "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         {
           "type": "object",
@@ -1022,14 +1036,26 @@
           "additionalProperties": false
         },
         {
-          "description": "One entry of the config's `gateway` list.",
-          "oneOf": [
-            {
-              "$ref": "#/$defs/DirectGatewayDescriptor"
+          "type": "object",
+          "properties": {
+            "vercel": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
             }
-          ]
+          },
+          "required": ["vercel"],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/GatewayDescriptor"
         }
       ]
+    },
+    "GatewayName": {
+      "description": "A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`; `vercel` is Vercel AI Gateway.",
+      "type": "string",
+      "enum": ["direct", "vercel"]
     },
     "GitWorkspace": {
       "description": "A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url` is what reeval fetches: the clone URL, or an absolute path for a local repository.",
@@ -1080,8 +1106,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.",
@@ -1120,8 +1145,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `grok-build:<model>`, or `grok-build:<model>[effort=<value>]` when `effort` is set.",
@@ -1432,8 +1456,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `opencode:<model>`, or `opencode:<model>[effort=<value>]` when `effort` is set.",
@@ -1472,8 +1495,7 @@
         },
         "gateway": {
           "description": "The gateway this harness's model calls go through, by name. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness.",
-          "type": "string",
-          "enum": ["direct"]
+          "$ref": "#/$defs/GatewayName"
         },
         "id": {
           "description": "Cell id; defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set.",
@@ -2581,6 +2603,18 @@
       "description": "`header` values, the `query` string, or the request `body`.",
       "type": "string",
       "enum": ["header", "query", "body"]
+    },
+    "VercelGatewayDescriptor": {
+      "description": "Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in `reeval/gateway`. It serves Claude Code and Codex.",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "vercel"
+        }
+      },
+      "required": ["kind"],
+      "additionalProperties": false
     }
   }
 }

@@ -1,8 +1,9 @@
 // The analysis model: a language model, routed like the judge (a provider key goes direct, else
-// the AI Gateway). Evaluation models (typesafe-ai/*) score yes/no questions and can't write one.
+// the AI Gateway; on the config's gateway list, the first entry that serves it). Evaluation models (typesafe-ai/*) score yes/no questions and can't write one.
 import { generateText, type LanguageModel, Output } from 'ai'
 import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
+import { gatewayScope, modelGatewayOrNone, resolveModelGateway } from '../gateway/models.ts'
 import {
   checkModelString,
   isFakeJudge,
@@ -94,13 +95,14 @@ export function analysisKeyProblem(
 ): string | null {
   const model = analysisModelOf(config)
   if (typeof model !== 'string' || isEvaluationModel(model) || checkModelString(model)) return null
-  const keys = judgeCredentials(model)
+  const gateway = modelGatewayOrNone(model, undefined, gatewayScope(config))
+  const keys = judgeCredentials(model, gateway)
   if (!keys.some((k) => env[k])) {
-    if (brief) return `set ${keys[0]} or ${keys[1]}, or analysis: { insights: false }`
-    return `set ${modelKeyOptions(model)} for analysis.model, "${model}", in .env.local, or analysis: { insights: false }`
+    if (brief) return `set ${keys.slice(0, 2).join(' or ')}, or analysis: { insights: false }`
+    return `set ${modelKeyOptions(model, gateway)} for analysis.model, "${model}", in .env.local, or analysis: { insights: false }`
   }
   try {
-    judgeRoute(model, env, 'analysis model')
+    judgeRoute(model, env, 'analysis model', gateway)
     return null
   } catch (error) {
     return (error as Error).message
@@ -116,8 +118,12 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
       `analysis.model in ${config.file} is "${model}", an evaluation model: it scores yes/no questions and can't write an analysis. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
     )
   }
+  const gateway = resolveModelGateway(model, undefined, gatewayScope(config), 'analysis.model')
   try {
-    return { name: model, route: judgeRoute(model, process.env, 'analysis model').kind }
+    return {
+      name: model,
+      route: judgeRoute(model, process.env, 'analysis model', gateway).kind,
+    }
   } catch (error) {
     throw new UsageError(
       `${(error as Error).message} Or run reeval analyze --context, which needs no key.`,

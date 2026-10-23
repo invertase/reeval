@@ -289,6 +289,11 @@ export type JudgeOptions = {
    * attempt's state. Merged key by key down the cascade.
    */
   state?: JudgeStateOptions
+  /**
+   * The gateway the judge's calls go through, by name or by its helper. It skips the config's
+   * `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve the model.
+   */
+  gateway?: GatewayName | GatewayDescriptor
 }
 
 /**
@@ -361,6 +366,8 @@ export type Verdict = {
   model: string
   /** The model id the provider says served the call, when it reports one. */
   resolvedModel?: string
+  /** The gateway from the config's `gateway` list the call went through; unset without one. */
+  gateway?: GatewayName
   /** Captures this call sent the judge as file parts, when any. */
   artifacts?: JudgeArtifactRef[]
 }

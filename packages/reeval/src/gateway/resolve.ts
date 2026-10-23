@@ -78,6 +78,22 @@ export function resolveGateway(
   )
 }
 
+/**
+ * `harness` carrying the gateway it resolves to in `gateways`, as the plan gives it to the
+ * worker; as written on `direct`, or when nothing serves it (the plan says why).
+ */
+export function routedHarness(
+  harness: HarnessDescriptor,
+  gateways: readonly { kind: string }[],
+): HarnessDescriptor {
+  try {
+    const { name } = resolveGateway(gateways, harness, '')
+    return name === 'direct' ? harness : { ...harness, gateway: name }
+  } catch {
+    return harness
+  }
+}
+
 /** `gateway: claude-code:… → direct (vercel can't serve it: …)`, for the plan's hints. */
 export const fallbackHint = (harness: string, resolved: ResolvedGateway): string =>
   `gateway: ${harness} → ${resolved.name} (${resolved.skipped.map((s) => `${s.gateway} can't serve it: ${s.why}`).join('; ')})`

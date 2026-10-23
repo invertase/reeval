@@ -329,6 +329,23 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'gateway.vercel',
+    area: 'Config and selection',
+    name: '`vercel()`: Claude Code and Codex on Vercel AI Gateway with one brokered key, fallback past it for the harnesses it cannot serve, an expired `VERCEL_OIDC_TOKEN` refused at plan time, and the judge, analysis and captures routed by the list or a judge pin',
+    plan: ['gateway/vercel', 'gateway/vercel-pin', 'gateway/vercel-yaml'],
+    tests: [
+      'reeval/test/plan.test.ts › a judge model no listed gateway serves exits 2 at plan time',
+      'reeval/test/gateway.test.ts › a fake harness calls no model, so any gateway serves it',
+      'reeval/test/gateway.test.ts › on a list, a model takes the first gateway that serves it, and only its keys',
+      'reeval/test/gateway.test.ts › a model nothing in the list serves exits 2, naming the gateway that would',
+      "reeval/test/gateway.test.ts › the egress gateway swaps Vercel's key in only on Vercel's model paths",
+      'reeval/test/gateway.test.ts › Claude Code takes the key as AI_GATEWAY_API_KEY and is brokered only on Vercel',
+      "reeval/test/gateway.test.ts › Codex reads the served model from Vercel's responses and names OpenAI's models",
+      "reeval/test/gateway.test.ts › an expired project token is refused before the run; a live one, or a key, isn't",
+      'reeval/test/doctor.test.ts › gateway: where each harness resolves, its keys, and an expired Vercel token',
+    ],
+  },
+  {
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',

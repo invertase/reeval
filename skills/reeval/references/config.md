@@ -80,14 +80,23 @@ Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway
 harness's own endpoints. Every harness but Goose reports tokens, which reeval records per turn,
 attempt and run (no prices).
 
+`gateway` (`reeval/gateway`) lists the routes model calls may take, in order: each harness, the
+judge and analysis take the first that can serve them. `gateway: [vercel(), direct()]` runs Claude
+Code and Codex on Vercel AI Gateway with one `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), and
+everything else on its own key; the plan's hint says where each harness fell through. Pin one with
+the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. Default `[direct()]`.
+
 ## Judge models and imports
 
 - Judge models: `'typesafe-ai/jev-1.14.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), `anthropic/*` (`ANTHROPIC_API_KEY`)
   and `openai/*` (`OPENAI_API_KEY`) directly; any `provider/model` via the Vercel AI Gateway
   (`AI_GATEWAY_API_KEY`), but a provider's own key wins when both are set. Always a provider prefix.
+  With a `gateway` list set, a judge model takes the first listed gateway that serves it, and only
+  that gateway's key.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
-  `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
+  `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/gateway`
+  (`direct`, `vercel`), `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,
   `DEFAULT_THRESHOLD`). There is no `test`, `describe`, `baseline`, `secret` or `skill` export.
 

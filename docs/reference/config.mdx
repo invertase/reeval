@@ -149,7 +149,7 @@ A project without TypeScript can write its config as YAML. It takes the same key
 | `file('./notes.md')` | `{ kind: file, path: ./notes.md }` |
 | `skill.local('./skills')` | `{ kind: skill, source: local, path: ./skills, placement: harness }` |
 | `git('../app')` | `{ kind: git, repo: ../app, url: ../app }` |
-| `gateway: [direct()]` | `gateway: [direct]` |
+| `gateway: [vercel(), direct()]` | `gateway: [vercel, direct]` |
 | `fakeJudge({ score: 0.9 })` | `{ kind: fake-judge, score: 0.9 }` |
 | `fakeAnalysis({ note, vote })` | `{ kind: fake-analysis, note, vote }`, with fixed values |
 
@@ -209,7 +209,7 @@ reeval: judge.model.score in reeval.yaml must be at most 1 (got 2)
 </Property>
 
 <Property name="gateway" type="Gateway[]">
-  The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it, unless it pins one with its own `gateway`. Default `[direct()]`, each provider's own key. An empty list, an unknown gateway or one listed twice is an error. See [Gateways](/reference/gateway).
+  The gateways model calls may go through, in the order you prefer them: each harness, the judge and analysis take the first that can serve them, unless they pin one with their own `gateway`. Default `[direct()]`, each provider's own key. An empty list, an unknown gateway or one listed twice is an error. See [Gateways](/reference/gateway).
 </Property>
 
 <Property name="concurrency" type="number">

@@ -39,6 +39,10 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   The most judge calls at once to this model's provider, across the run. A whole number of at least 1.
 </Property>
 
+<Property name="gateway" type="GatewayName | GatewayDescriptor" optional>
+  The gateway the judge's calls go through: a gateway's name (`'vercel'`) or its helper (`vercel()`). It skips the config's `gateway` fallback, and must name a gateway in the list that can serve the model. See [Gateways](/reference/gateway#the-judge-analysis-and-captures).
+</Property>
+
 <Property name="state" type="JudgeStateOptions" optional>
   What the judge is given beside your question: the judge's state, not the workspace's or the attempt's. An object keyed by the state's fields, described in [What the judge is given](#what-the-judge-is-given). It merges key by key, so a call's `state: { transcript: 'tools' }` keeps the config's `diff` patterns. A key's value replaces the outer one whole; lists aren't concatenated.
 </Property>
@@ -128,6 +132,8 @@ reeval calls a provider's own package when its key is set, and the Vercel AI Gat
 | `openai/` | `OPENAI_API_KEY` | `@ai-sdk/openai` |
 | `typesafe-ai/` | `TYPESAFE_AI_API_KEY` | `@ai-sdk/typesafe-ai` |
 | Any other | None | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+
+With a [`gateway` list](/reference/gateway#the-judge-analysis-and-captures) set, a model takes the first gateway that serves it instead, and only that gateway's key: `direct()` the provider's own, `vercel()` the AI Gateway's.
 
 `analysis.model`, insights and compare questions route the same way. They need a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
 

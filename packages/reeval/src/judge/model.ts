@@ -1,6 +1,6 @@
 import { experimental_decide as decide } from 'ai'
 import { debugTrace } from '../debug/attempt.ts'
-import type { JudgeModel, JudgeOptions } from '../types.ts'
+import type { GatewayName, JudgeModel, JudgeOptions } from '../types.ts'
 import { type JudgeState, judgeRoute } from './index.ts'
 
 type DecisionModel = Parameters<typeof decide>[0]['model']
@@ -8,9 +8,10 @@ type DecisionModel = Parameters<typeof decide>[0]['model']
 /** See `judgeRoute`: a known provider's own package when its key is set, else the AI Gateway. */
 async function resolveModel(
   model: Exclude<JudgeModel, { kind: 'fake-judge' }>,
+  gateway: GatewayName | undefined,
 ): Promise<DecisionModel> {
   if (typeof model !== 'string') return model as DecisionModel
-  const route = judgeRoute(model)
+  const route = judgeRoute(model, process.env, 'judge model', gateway)
   if (route.kind === 'gateway') return model
   const id = model.slice(route.provider.length + 1)
   switch (route.provider) {
@@ -31,9 +32,10 @@ export async function scoreWithModel(
   state: JudgeState,
   providerOptions: JudgeOptions['providerOptions'],
   signal: AbortSignal,
+  gateway?: GatewayName,
 ): Promise<{ score: number; resolvedModel: string | undefined }> {
   const result = await decide({
-    model: await resolveModel(model),
+    model: await resolveModel(model, gateway),
     state,
     questions: { answer: { type: 'boolean', instructions: question } },
     providerOptions,

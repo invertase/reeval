@@ -26,6 +26,7 @@ import type {
   WebEventType,
 } from '../types.ts'
 import { captureWindowSchema } from './config.ts'
+import { gatewayNameSchema } from './gateway.ts'
 import {
   fakeJudgeDataSchema,
   judgeFields,
@@ -231,6 +232,11 @@ const verdictFields = {
   threshold: z.number(),
   question: z.string(),
   model: z.string(),
+  gateway: gatewayNameSchema
+    .optional()
+    .describe(
+      "The gateway from the config's `gateway` list the call went through; unset without one.",
+    ),
   artifacts: z
     .array(judgeArtifactRefSchema)
     .optional()

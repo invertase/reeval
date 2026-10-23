@@ -38,11 +38,15 @@ export type HarnessRow = {
     | 'grok-build'
     | 'fx'
     | 'fx-gateway'
+    | 'claude-code-gateway'
+    | 'codex-gateway'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
-   * providers than Google's, and fx's on AI Gateway.
+   * providers than Google's, and the rows on AI Gateway.
    */
-  harness?: 'opencode' | 'fx'
+  harness?: 'opencode' | 'fx' | 'claude-code' | 'codex'
+  /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
+  gateway?: 'vercel'
   /**
    * Why the row is skipped unless `REEVAL_CONTRACT_HARNESSES` names it, such as a key CI doesn't
    * have yet.
@@ -319,6 +323,41 @@ export const harnesses: HarnessRow[] = [
     wireModel: /gemini-3\.8-flash/,
   },
   {
+    // Claude Code on Vercel AI Gateway through `gateway: [vercel()]`: its base URL on Vercel, and
+    // AI_GATEWAY_API_KEY brokered on Vercel's copies of Anthropic's paths.
+    id: 'claude-code-gateway',
+    harness: 'claude-code',
+    gateway: 'vercel',
+    gated:
+      'no AI_GATEWAY_API_KEY repository secret yet; name claude-code-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'claude-haiku-4-5',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'claude-code',
+    skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /claude-haiku-4-5/,
+    wireModel: null,
+  },
+  {
+    // Codex on Vercel AI Gateway: a Responses API provider on Vercel, the model as openai/<id>.
+    id: 'codex-gateway',
+    harness: 'codex',
+    gateway: 'vercel',
+    gated:
+      'no AI_GATEWAY_API_KEY repository secret yet; name codex-gateway in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'gpt-5.6-luna',
+    key: { name: 'AI_GATEWAY_API_KEY', from: ['AI_GATEWAY_API_KEY'] },
+    image: 'codex',
+    skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['ai-gateway.vercel.sh'],
+    apiHost: 'ai-gateway.vercel.sh',
+    tokens: true,
+    servedModel: /gpt-5\.6-luna/,
+    wireModel: /gpt-5\.6-luna/,
+  },
+  {
     id: 'grok-build',
     model: 'grok-4.6',
     key: { name: 'XAI_API_KEY', from: ['XAI_API_KEY'] },
@@ -384,6 +423,7 @@ export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   return {
     ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
+    ...(row.gateway ? { REEVAL_CONTRACT_GATEWAY: row.gateway } : {}),
     ...(row.plugin ? { REEVAL_CONTRACT_PLUGIN_PARTS: row.plugin.parts.join(',') } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...(process.env.REEVAL_RAW_TRANSCRIPT

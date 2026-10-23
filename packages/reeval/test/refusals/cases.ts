@@ -15,6 +15,7 @@ import { declarationProblem } from '../../src/contract/declaration.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
 import {
@@ -34,6 +35,7 @@ import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
 import type {
   EnvironmentHelpers,
   GatewayDescriptor,
+  GatewayName,
   HarnessDescriptor,
   PluginSource,
   SandboxDescriptor,
@@ -70,6 +72,9 @@ const any =
 /** Which gateway a harness resolves to in a list, with reeval's own gateways. */
 const route = (gateways: GatewayDescriptor[], harness: HarnessDescriptor) => () =>
   resolveGateway(gateways, harness, WHERE)
+/** Which gateway a model reeval calls itself (the judge's) resolves to in a list. */
+const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDescriptor[]) => () =>
+  resolveModelGateway(name, pin, { gateways, set: true }, 'the judge model')
 const VERCEL: GatewayDescriptor = { kind: 'vercel' }
 const DIRECT: GatewayDescriptor = { kind: 'direct' }
 /** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
@@ -1196,6 +1201,16 @@ environment:
       oidc({ AI_GATEWAY_API_KEY: 'k', VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) }),
     ],
     ['oidc: not a JWT', oidc({ VERCEL_OIDC_TOKEN: 'opaque' })],
+    ['judge: a pin not a name', config({ judge: { model: 'anthropic/m', gateway: 'vercell' } })],
+    [
+      'judge: a helper pin',
+      config({ judge: { model: 'anthropic/m', gateway: { kind: 'vercel' } }, gateway: [VERCEL] }),
+    ],
+    ['judge: an eval pin not a name', options({ judge: { gateway: 3 } })],
+    ['model: mistral on direct alone', model('mistral/large', undefined, [DIRECT])],
+    ['model: mistral on vercel then direct', model('mistral/large', undefined, [VERCEL, DIRECT])],
+    ['model: pinned to vercel, not listed', model('anthropic/m', 'vercel', [DIRECT])],
+    ['model: mistral pinned to direct', model('mistral/large', 'direct', [VERCEL, DIRECT])],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],
