@@ -19,7 +19,6 @@ const plain = defineEnvironment('plain', { setup: ['npm install ai zod'] })
 const withAiSdk = plain.extendEnvironment('with-ai-sdk', ({ skill }) => ({
   skills: [
     skill.git('github:vercel/ai', {
-      ref: 'c82eac3ff341f01276f514cec9224da2e2a5bb93',
       path: 'skills/use-ai-sdk',
     }),
   ],

@@ -19,7 +19,6 @@ export const withShoehorn = defineEnvironment(
   ({ skill }) => ({
     skills: [
       skill.git('github:mattpocock/skills', {
-        ref: '5beb35b040e3de97e54fa9e386d7e42d15c295c2',
         path: 'skills/misc',
         only: ['migrate-to-shoehorn'],
       }),
@@ -30,7 +29,7 @@ export const withShoehorn = defineEnvironment(
 
 In the `evals/shoehorn.eval.ts` file, import `withShoehorn` from the `./environments.ts` file. Set the evaluation's `environment` option to `withShoehorn`.
 
-Pin `ref` to a commit.
+Without `ref`, reeval reads the default branch and warns that results aren't comparable over time. Pin `ref` to a commit or a tag to keep them comparable.
 
 Pass `path` as the directory to read. It can be one skill directory or a directory whose immediate subdirectories are skills. Without `path`, reeval reads the `skills/` directory when the repository has that directory and no root `SKILL.md` file. Otherwise reeval reads the repository root.
 
