@@ -31,6 +31,10 @@ export default defineConfig({
   The harness's id in cell keys, filters and the record. Default `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set.
 </Property>
 
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
+</Property>
+
 <Property name="maxConcurrent" type="number" optional>
   The most Claude Code attempts at once across the run, for example for your account's rate limits.
 </Property>

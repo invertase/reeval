@@ -421,6 +421,11 @@ export type EvalFn = (c: AttemptContext) => Promise<void>
 /** A canned agent for tests and dry runs, made by `fakeHarness()` in `reeval/harness`. */
 export type FakeHarnessDescriptor = {
   kind: 'fake'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** Cell id; defaults to `fake`. */
   id?: string
   /** Files the fake agent writes into the sandbox on every turn. */
@@ -503,6 +508,11 @@ export type FakeScriptStep =
  */
 export type CursorHarnessDescriptor = {
   kind: 'cursor'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`. */
   model: string
   /**
@@ -531,6 +541,11 @@ export type ClaudeCodeEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 /** Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`. */
 export type ClaudeCodeHarnessDescriptor = {
   kind: 'claude-code'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`. */
   model: string
   /**
@@ -551,6 +566,11 @@ export type ClaudeCodeHarnessDescriptor = {
 /** The Antigravity CLI through `@reeval/harness-antigravity`, made by `antigravity()`. */
 export type AntigravityHarnessDescriptor = {
   kind: 'antigravity'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`. */
   model: string
   /**
@@ -575,6 +595,11 @@ export type AntigravityHarnessDescriptor = {
  */
 export type OpenCodeHarnessDescriptor = {
   kind: 'opencode'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /**
    * OpenCode's model id, `<provider>/<model>`, e.g. `google/gemini-3.8-flash` or
    * `anthropic/claude-haiku-4-5`; the provider picks the key.
@@ -601,6 +626,11 @@ export type OpenCodeHarnessDescriptor = {
  */
 export type GooseHarnessDescriptor = {
   kind: 'goose'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`. */
   model: string
   /**
@@ -624,6 +654,11 @@ export type GooseHarnessDescriptor = {
  */
 export type PiHarnessDescriptor = {
   kind: 'pi'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`. */
   model: string
   /**
@@ -647,6 +682,11 @@ export type PiHarnessDescriptor = {
  */
 export type CodexHarnessDescriptor = {
   kind: 'codex'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`. */
   model: string
   /**
@@ -671,6 +711,11 @@ export type CodexHarnessDescriptor = {
 export type FxHarnessDescriptor = {
   kind: 'fx'
   /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
+  /**
    * A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
    * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
    * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-4.1`.
@@ -692,6 +737,11 @@ export type FxHarnessDescriptor = {
  */
 export type GrokBuildHarnessDescriptor = {
   kind: 'grok-build'
+  /**
+   * The gateway this harness's model calls go through, by name. It skips the config's `gateway`
+   * fallback: the plan refuses a gateway that isn't listed or can't serve this harness.
+   */
+  gateway?: GatewayName
   /** An xAI model id Grok Build runs on the xAI API, e.g. `grok-4.6`. */
   model: string
   /**
@@ -709,6 +759,37 @@ export type GrokBuildHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
+/** A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`. */
+export type GatewayName = 'direct' | 'fake'
+
+/** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
+export type DirectGatewayDescriptor = {
+  kind: 'direct'
+}
+
+/**
+ * A gateway for tests that serves only the harness kinds it lists, made by `fakeGateway()` in
+ * `reeval/testing`. Nothing changes inside an attempt it serves.
+ */
+export type FakeGatewayDescriptor = {
+  kind: 'fake'
+  /** The harness kinds it serves; default `['fake']`. */
+  serves?: Array<HarnessDescriptor['kind']>
+}
+
+/** One entry of the config's `gateway` list. */
+export type GatewayDescriptor = DirectGatewayDescriptor | FakeGatewayDescriptor
+
+/**
+ * A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its
+ * settings, or the descriptor itself.
+ */
+export type GatewayEntryData =
+  | GatewayName
+  | { direct: Omit<DirectGatewayDescriptor, 'kind'> }
+  | { fake: Omit<FakeGatewayDescriptor, 'kind'> }
+  | GatewayDescriptor
+
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
@@ -1594,6 +1675,8 @@ export type Profile = {
   record?: RecordMode
   /** Tag filters for this profile, like `--tag` (`'!slow'` excludes). */
   tags?: string[]
+  /** Replaces the config's `gateway` list for this profile's runs. */
+  gateway?: GatewayDescriptor[]
 }
 
 /** A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`. */
@@ -1768,6 +1851,11 @@ export type ReevalConfig = {
   debug?: { keep?: number; traceBufferMb?: number }
   /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfig
+  /**
+   * The gateways model calls may go through, in the order you prefer them: each harness takes
+   * the first that can serve it. Default `[direct()]`, each provider's own key.
+   */
+  gateway?: GatewayDescriptor[]
 }
 
 /** `fakeJudge()` as data: the score every call gets. */
@@ -1810,11 +1898,13 @@ export type ProfileDefaultsData = Omit<ProfileDefaults, 'environment' | 'judge'>
 }
 
 /** `Profile` as data: its defaults and judge as data. */
-export type ProfileData = Omit<Profile, 'defaults' | 'judge'> & {
+export type ProfileData = Omit<Profile, 'defaults' | 'judge' | 'gateway'> & {
   /** What evals get when they don't say otherwise: under groups and evals. */
   defaults?: ProfileDefaultsData
   /** Judge settings for this profile, the same as `defaults.judge`, which wins field by field. */
   judge?: ConfigJudgeData
+  /** Replaces the config's `gateway` list for this profile's runs. */
+  gateway?: GatewayEntryData[]
 }
 
 /**
@@ -1824,7 +1914,7 @@ export type ProfileData = Omit<Profile, 'defaults' | 'judge'> & {
  */
 export type ReevalConfigData = Omit<
   ReevalConfig,
-  'environment' | 'judge' | 'profiles' | 'analysis'
+  'environment' | 'judge' | 'profiles' | 'analysis' | 'gateway'
 > & {
   /** What every eval runs in when it names no environment, and a baseline-less compare's control. */
   environment?: EnvironmentData
@@ -1834,6 +1924,11 @@ export type ReevalConfigData = Omit<
   profiles?: Record<string, ProfileData>
   /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
   analysis?: AnalysisConfigData
+  /**
+   * The gateways model calls may go through, in the order you prefer them: each harness takes
+   * the first that can serve it. Default `[direct]`, each provider's own key.
+   */
+  gateway?: GatewayEntryData[]
 }
 
 /** What a `defineConfig` callback gets: the environment helpers plus the run's context. */
@@ -1859,6 +1954,8 @@ export type ResolvedProfile = {
   tags: string[]
   budget: Budget
   record?: RecordMode
+  /** The profile's own `gateway` list, which replaces the config's. */
+  gateway?: GatewayDescriptor[]
 }
 
 export type ResolvedConfig = {
@@ -1900,6 +1997,10 @@ export type ResolvedConfig = {
     insights: boolean
     maxTokens: number
   }
+  /** The `gateway` list, in preference order; `[direct()]` when the config sets none. */
+  gateway: GatewayDescriptor[]
+  /** Whether the config sets `gateway`, so the plan shows where each cell resolved. */
+  gatewaySet: boolean
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
@@ -2337,6 +2438,14 @@ export type AttemptMeta = {
   skip?: string
   /** Set when the eval is a case of a pooled `evaluate.each`. */
   family?: FamilyMeta
+  /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
+  gateway?: ResolvedGateway
+}
+
+/** Where a cell's harness resolved in the `gateway` list, and the entries before it that couldn't serve it. */
+export type ResolvedGateway = {
+  name: GatewayName
+  skipped: Array<{ gateway: GatewayName; why: string }>
 }
 
 /** A case's place in its pooled `evaluate.each`. */

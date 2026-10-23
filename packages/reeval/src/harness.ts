@@ -9,6 +9,8 @@ import type {
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
   FxHarnessDescriptor,
+  GatewayDescriptor,
+  GatewayName,
   GooseHarnessDescriptor,
   GrokBuildHarnessDescriptor,
   HarnessDescriptor,
@@ -16,9 +18,19 @@ import type {
   PiHarnessDescriptor,
 } from './types.ts'
 
+/** A factory's options: the descriptor's, with `gateway` pinned by name or by its helper. */
+type Options<D extends HarnessDescriptor, Omitted extends string = never> = Omit<
+  D,
+  'kind' | 'gateway' | Omitted
+> & { gateway?: GatewayName | GatewayDescriptor }
+
 /** `options` as a descriptor of `kind`, checked; throws its factory's sentence for the first problem. */
 function make<D extends HarnessDescriptor>(kind: D['kind'], options: unknown): D {
   const descriptor = { kind, ...(options as object) } as D
+  const pin: unknown = descriptor.gateway
+  if (typeof pin === 'object' && pin !== null && 'kind' in pin) {
+    descriptor.gateway = (pin as GatewayDescriptor).kind
+  }
   const problem = harnessProblem(descriptor)
   if (problem) throw new UsageError(problem)
   return descriptor
@@ -31,7 +43,7 @@ function make<D extends HarnessDescriptor>(kind: D['kind'], options: unknown): D
  * `id` names the cell; it defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]`
  * when `effort` is set.
  */
-export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHarnessDescriptor =>
+export const cursor = (options: Options<CursorHarnessDescriptor>): CursorHarnessDescriptor =>
   make('cursor', options)
 
 /**
@@ -41,7 +53,7 @@ export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHa
  * `effort` is set.
  */
 export const claudeCode = (
-  options: Omit<ClaudeCodeHarnessDescriptor, 'kind' | 'effort'> & { effort?: string },
+  options: Options<ClaudeCodeHarnessDescriptor, 'effort'> & { effort?: string },
 ): ClaudeCodeHarnessDescriptor => make('claude-code', options)
 
 /**
@@ -51,7 +63,7 @@ export const claudeCode = (
  * when `effort` is set.
  */
 export const antigravity = (
-  options: Omit<AntigravityHarnessDescriptor, 'kind'>,
+  options: Options<AntigravityHarnessDescriptor>,
 ): AntigravityHarnessDescriptor => make('antigravity', options)
 
 /**
@@ -62,7 +74,7 @@ export const antigravity = (
  * the part after the last `/`, or `opencode:<model>[effort=<value>]` when `effort` is set.
  */
 export const opencode = (
-  options: Omit<OpenCodeHarnessDescriptor, 'kind'>,
+  options: Options<OpenCodeHarnessDescriptor>,
 ): OpenCodeHarnessDescriptor => {
   const why = opencodeModelError(options?.model)
   if (why) throw new UsageError(`opencode(): ${why}`)
@@ -83,7 +95,7 @@ export function opencodeModelError(model: unknown): string | undefined {
  * provider. `effort` is `GOOSE_THINKING_EFFORT`. `id` names the cell; it defaults to
  * `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set.
  */
-export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarnessDescriptor =>
+export const goose = (options: Options<GooseHarnessDescriptor>): GooseHarnessDescriptor =>
   make('goose', options)
 
 /**
@@ -91,7 +103,7 @@ export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarne
  * `effort` is pi's `--thinking` flag. `id` names the cell; it defaults to `pi:<model>`, or
  * `pi:<model>[effort=<value>]` when `effort` is set.
  */
-export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescriptor =>
+export const pi = (options: Options<PiHarnessDescriptor>): PiHarnessDescriptor =>
   make('pi', options)
 
 /**
@@ -100,7 +112,7 @@ export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescrip
  * names the cell; it defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when
  * `effort` is set.
  */
-export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarnessDescriptor =>
+export const codex = (options: Options<CodexHarnessDescriptor>): CodexHarnessDescriptor =>
   make('codex', options)
 
 /**
@@ -108,7 +120,7 @@ export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarne
  * `anthropic/claude-sonnet-5`, run with `AI_GATEWAY_API_KEY`, or a bare OpenAI id, e.g. `gpt-4.1`,
  * run with `OPENAI_API_KEY`. `id` names the cell; it defaults to `fx:<model>`.
  */
-export const fx = (options: Omit<FxHarnessDescriptor, 'kind'>): FxHarnessDescriptor =>
+export const fx = (options: Options<FxHarnessDescriptor>): FxHarnessDescriptor =>
   make('fx', options)
 
 /**
@@ -118,13 +130,12 @@ export const fx = (options: Omit<FxHarnessDescriptor, 'kind'>): FxHarnessDescrip
  * when `effort` is set.
  */
 export const grokBuild = (
-  options: Omit<GrokBuildHarnessDescriptor, 'kind'>,
+  options: Options<GrokBuildHarnessDescriptor>,
 ): GrokBuildHarnessDescriptor => make('grok-build', options)
 
 /** A fake agent that writes canned files and replies with canned text. For tests and dry runs. */
-export const fakeHarness = (
-  options: Omit<FakeHarnessDescriptor, 'kind'> = {},
-): FakeHarnessDescriptor => make('fake', options)
+export const fakeHarness = (options: Options<FakeHarnessDescriptor> = {}): FakeHarnessDescriptor =>
+  make('fake', options)
 
 export type {
   AgentHarnessDescriptor,

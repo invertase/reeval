@@ -1,0 +1,5 @@
+no profile · 2 evals · 2 cells · 2 attempts
+hint: gateway: a → direct (fake can't serve it: fakeGateway() serves no harness, not the fake harness)
+evals/g.eval.ts › greets  a/-/fake  control  gated  ×1  gateway: a → direct
+evals/g.eval.ts › pinned  b/-/fake  control  gated  ×1  gateway: b → direct
+excluded: —

@@ -3,6 +3,7 @@ import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { parseDocument } from 'yaml'
 import { configDataProblem } from './contract/config.ts'
+import { GATEWAY_NAMES, gatewayDescriptorSchema } from './contract/gateway.ts'
 import { judgeProblem } from './contract/judge.ts'
 import { closest, oneOf } from './contract/shared.ts'
 import { parseDuration } from './duration.ts'
@@ -17,6 +18,7 @@ import {
   sandboxPaths,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { DEFAULT_GATEWAYS, GATEWAY_HELPERS } from './gateway/resolve.ts'
 import {
   AGENTS,
   credentialOf,
@@ -43,6 +45,8 @@ import type {
   ConfigHelpers,
   EnvVars,
   FakeAnalysisModel,
+  GatewayDescriptor,
+  GatewayName,
   HarnessDescriptor,
   Profile,
   ProfileData,
@@ -56,6 +60,7 @@ export { UsageError }
 
 const CONFIG_KEYS = [
   'include',
+  'gateway',
   'harness',
   'sandbox',
   'environment',
@@ -77,7 +82,7 @@ const CONFIG_KEYS = [
   'debug',
   'analysis',
 ]
-const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags']
+const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags', 'gateway']
 const DEFAULTS_KEYS = [
   'harness',
   'sandbox',
@@ -440,7 +445,69 @@ function checkProfile(name: string, profile: unknown, file: string): Profile {
   }
   if (p.judge !== undefined) resolveJudge(p.judge, file, `${where}.judge`)
   checkBudget(p.budget, `${where}.budget`, file)
+  if (p.gateway !== undefined)
+    return { ...p, gateway: checkGateways(p.gateway, `${where}.gateway`, file) }
   return p
+}
+
+const GATEWAY_EXAMPLE = 'gateway: [direct()]'
+const isGatewayName = (v: unknown): v is GatewayName =>
+  typeof v === 'string' && (GATEWAY_NAMES as readonly string[]).includes(v)
+
+/**
+ * A `gateway` list as descriptors: each entry is a helper's descriptor, or as data its name or a
+ * one-key map from its name to its settings. Refuses an empty list, an unknown entry and a
+ * gateway listed twice.
+ */
+export function checkGateways(value: unknown, where: string, file: string): GatewayDescriptor[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new UsageError(
+      `${where} in ${file} must be a list of gateways in the order you prefer them, e.g. ${GATEWAY_EXAMPLE} (got ${JSON.stringify(value)})`,
+    )
+  }
+  const names = GATEWAY_NAMES.map((n) => `'${n}'`).join(' or ')
+  const out: GatewayDescriptor[] = []
+  value.forEach((entry: unknown, i) => {
+    const at = `${where}[${i}] in ${file}`
+    const unknownName = (name: string) => {
+      const near = closest(name, [...GATEWAY_NAMES])
+      return new UsageError(
+        `${at} is ${JSON.stringify(name)}, which isn't a gateway reeval knows: ${names}.${near ? ` Did you mean '${near}'?` : ''}`,
+      )
+    }
+    let descriptor: unknown = entry
+    if (typeof entry === 'string') {
+      if (!isGatewayName(entry)) throw unknownName(entry)
+      descriptor = { kind: entry }
+    } else if (isRecord(entry) && typeof entry.kind === 'string' && !isGatewayName(entry.kind)) {
+      throw unknownName(entry.kind)
+    } else if (isRecord(entry) && !('kind' in entry)) {
+      const keys = Object.keys(entry)
+      const [name] = keys
+      if (keys.length !== 1 || !isGatewayName(name)) {
+        throw new UsageError(
+          `${at} must be a gateway's name or a map from one name to its settings, e.g. { direct: {} } (got ${JSON.stringify(entry)})`,
+        )
+      }
+      descriptor = { kind: name, ...(isRecord(entry[name]) ? entry[name] : {}) }
+    }
+    const parsed = gatewayDescriptorSchema.safeParse(descriptor)
+    if (!parsed.success) {
+      const kind = isRecord(descriptor) ? descriptor.kind : undefined
+      throw new UsageError(
+        isGatewayName(kind)
+          ? `${at} isn't a valid ${GATEWAY_HELPERS[kind]}: ${parsed.error.issues[0]?.message ?? 'unknown settings'} (got ${JSON.stringify(entry)})`
+          : `${at} must be a gateway, e.g. direct() from 'reeval/gateway' (got ${describeValue(entry)})`,
+      )
+    }
+    if (out.some((g) => g.kind === parsed.data.kind)) {
+      throw new UsageError(
+        `${at} lists ${parsed.data.kind} a second time. Each gateway is listed once, where you prefer it.`,
+      )
+    }
+    out.push(parsed.data)
+  })
+  return out
 }
 
 /** `--profile`, then `REEVAL_PROFILE`, then `defaultProfile.ci` in CI (or `.local`), then none. */
@@ -476,6 +543,7 @@ export function selectProfile(
     tags: profile.tags ?? [],
     budget: { ...config.budget, ...profile.budget },
     ...(profile.record ? { record: profile.record } : {}),
+    ...(profile.gateway ? { gateway: profile.gateway } : {}),
   }
 }
 
@@ -569,6 +637,9 @@ export function resolveConfig(
     secrets: checkSecrets(user.secrets, file),
     debug: checkDebug(user.debug, file),
     analysis: checkAnalysis(user.analysis, file),
+    gateway:
+      user.gateway === undefined ? DEFAULT_GATEWAYS : checkGateways(user.gateway, 'gateway', file),
+    gatewaySet: user.gateway !== undefined,
   }
 }
 

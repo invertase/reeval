@@ -161,6 +161,7 @@ const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources'>, string> = 
   agentCli: 'agent CLI',
   judge: 'judge',
   context: 'agent context',
+  gateway: 'gateway',
 }
 
 /** Why two runs of an eval aren't comparable: the source files and fingerprint parts that differ. */

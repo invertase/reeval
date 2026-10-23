@@ -22,6 +22,7 @@ import {
 } from './environment/plugins.ts'
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { resolveGateway } from './gateway/resolve.ts'
 import { refusedMcp, refusedPlugins } from './harness/agents.ts'
 import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
@@ -42,7 +43,14 @@ import {
   unbrokeredError,
 } from './options.ts'
 import type { Limits } from './scheduler/core.ts'
-import type { AttemptMeta, EvalOptions, GroupOptions, ResolvedConfig, RunContext } from './types.ts'
+import type {
+  AttemptMeta,
+  EvalOptions,
+  GroupOptions,
+  ResolvedConfig,
+  ResolvedGateway,
+  RunContext,
+} from './types.ts'
 
 /** Lets the attempt's own eval timer fire before the engine's backstop, so the message and cleanup are its own. */
 const GRACE_MS = 5_000
@@ -129,6 +137,18 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   }
   const pluginNotes: string[] = []
   const pluginLabels = new Map<PlannedAttempt, string[]>()
+  const gateways = ctx.profile?.gateway ?? ctx.config.gateway
+  const gatewaySet = ctx.config.gatewaySet || ctx.profile?.gateway !== undefined
+  const gatewayOf = new Map<PlannedAttempt, ResolvedGateway>()
+  const gatewayNotes: string[] = []
+  for (const planned of plannedAttempts) {
+    const resolvedGateway = resolveGateway(gateways, planned.harness, where)
+    if (gatewaySet || planned.harness.gateway !== undefined) {
+      gatewayOf.set(planned, resolvedGateway)
+      const note = `gateway: ${harnessId(planned.harness)} → ${resolvedGateway.name}`
+      if (!gatewayNotes.includes(note)) gatewayNotes.push(note)
+    }
+  }
   for (const planned of plannedAttempts) {
     const why = unenforceable(planned.egress, planned.sandbox, where)
     if (why) throw new UsageError(why)
@@ -148,7 +168,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   }
   const harnessBy = resolved.sources?.harness ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
-  plan.notes.push(...pluginNotes)
+  plan.notes.push(...gatewayNotes, ...pluginNotes)
   const setByOf = (planned: PlannedAttempt) => ({
     sandbox: sandboxSetBy(planned, resolved, ctx.config.file),
     harness: harnessBy,
@@ -213,6 +233,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       plan: skip ? { ...plan, skip } : plan,
       ...(skip ? { skip } : {}),
       ...(family ? { family } : {}),
+      ...(gatewayOf.has(planned) ? { gateway: gatewayOf.get(planned) } : {}),
     }
     return {
       name: `${name} [${attemptId(planned.cell.key, planned.n)}]`,

@@ -15,6 +15,7 @@ import { declarationProblem } from '../../src/contract/declaration.ts'
 import { buildRefusal, readMarketplace } from '../../src/environment/plugins.ts'
 import { defineEnvironment } from '../../src/environment.ts'
 import { UsageError } from '../../src/errors.ts'
+import { resolveGateway } from '../../src/gateway/resolve.ts'
 import {
   antigravity,
   claudeCode,
@@ -29,7 +30,12 @@ import {
 } from '../../src/harness.ts'
 import { checkHarnesses, checkOptions } from '../../src/options.ts'
 import { docker, fakeSandbox, podman } from '../../src/sandbox.ts'
-import type { EnvironmentHelpers, PluginSource, SandboxDescriptor } from '../../src/types.ts'
+import type {
+  EnvironmentHelpers,
+  GatewayDescriptor,
+  PluginSource,
+  SandboxDescriptor,
+} from '../../src/types.ts'
 
 export type Case = [name: string, run: () => unknown]
 
@@ -45,6 +51,8 @@ const yaml = (text: string) => () =>
 const configIn = (c: unknown) => () => resolveConfig(c as never, DIR, 'reeval.config.ts')
 const yamlIn = (text: string) => () =>
   resolveConfigData(parseYamlConfig(text, 'reeval.yaml'), DIR, 'reeval.yaml')
+const resolve = (gateways: GatewayDescriptor[], harness: unknown) => () =>
+  resolveGateway(gateways, harness as never, WHERE)
 const env = (spec: unknown) => () => defineEnvironment('e', spec as never)
 const helpers = (use: (h: EnvironmentHelpers) => unknown) => () =>
   defineEnvironment('e', (h) => ({ files: { 'a.txt': 'a' }, ...(use(h) as object) }))
@@ -1136,6 +1144,44 @@ environment:
       }),
     ],
     ['ts: a relative fake dir as data', configIn({ sandbox: { kind: 'fake', dir: './tmp' } })],
+  ],
+  gateway: [
+    ['ts: an empty list', config({ gateway: [] })],
+    ['ts: not a list', config({ gateway: { kind: 'direct' } })],
+    ['ts: an unknown kind', config({ gateway: [{ kind: 'vercell' }] })],
+    ['ts: a duplicate', config({ gateway: [{ kind: 'direct' }, { kind: 'direct' }] })],
+    ['ts: fake serves an unknown harness', config({ gateway: [{ kind: 'fake', serves: ['x'] }] })],
+    ['ts: fake with a typo', config({ gateway: [{ kind: 'fake', serve: [] }] })],
+    ['ts: a profile with an empty list', config({ profiles: { pr: { gateway: [] } } })],
+    ['ts: good', config({ gateway: [{ kind: 'fake', serves: ['cursor'] }, { kind: 'direct' }] })],
+    ['yaml: an unknown name', yaml('gateway: [vercell]\n')],
+    ['yaml: a map with two keys', yaml('gateway: [{ fake: {}, direct: {} }]\n')],
+    ['yaml: direct with options', yaml('gateway: [{ direct: { apiKey: x } }]\n')],
+    ['yaml: a number', yaml('gateway: [3]\n')],
+    ['yaml: good', yaml('gateway: [{ fake: { serves: [] } }, direct]\n')],
+    ['harness: a pin not a name', any(fakeHarness, { gateway: 'vercell' })],
+    ['harness: a pin a number', any(cursor, { model: 'm', gateway: 3 })],
+    ['harness: a helper pin', any(fakeHarness, { gateway: { kind: 'direct' } })],
+    [
+      'plan: a pin not in the list',
+      resolve([{ kind: 'direct' }], { kind: 'fake', id: 'a', gateway: 'fake' }),
+    ],
+    [
+      'plan: a pin that cannot serve',
+      resolve([{ kind: 'fake' }, { kind: 'direct' }], {
+        kind: 'cursor',
+        model: 'composer-2.5',
+        gateway: 'fake',
+      }),
+    ],
+    [
+      'plan: nothing in the list serves',
+      resolve([{ kind: 'fake', serves: ['codex'] }], { kind: 'cursor', model: 'composer-2.5' }),
+    ],
+    [
+      'plan: falls back to direct',
+      resolve([{ kind: 'fake', serves: [] }, { kind: 'direct' }], { kind: 'fake', id: 'a' }),
+    ],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

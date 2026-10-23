@@ -1,0 +1,22 @@
+{
+  "ts: an empty list": "UsageError: gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])",
+  "ts: not a list": "UsageError: gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got {\"kind\":\"direct\"})",
+  "ts: an unknown kind": "UsageError: gateway[0] in reeval.config.ts is \"vercell\", which isn't a gateway reeval knows: 'direct' or 'fake'.",
+  "ts: a duplicate": "UsageError: gateway[1] in reeval.config.ts lists direct a second time. Each gateway is listed once, where you prefer it.",
+  "ts: fake serves an unknown harness": "UsageError: gateway[0] in reeval.config.ts isn't a valid fakeGateway(): Invalid option: expected one of \"fake\"|\"cursor\"|\"claude-code\"|\"antigravity\"|\"opencode\"|\"goose\"|\"pi\"|\"codex\"|\"fx\"|\"grok-build\" (got {\"kind\":\"fake\",\"serves\":[\"x\"]})",
+  "ts: fake with a typo": "UsageError: gateway[0] in reeval.config.ts isn't a valid fakeGateway(): Unrecognized key: \"serve\" (got {\"kind\":\"fake\",\"serve\":[]})",
+  "ts: a profile with an empty list": "UsageError: profiles.pr.gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])",
+  "ts: good": null,
+  "yaml: an unknown name": "UsageError: gateway[0] in reeval.yaml is \"vercell\", which isn't a gateway reeval knows: 'direct' or 'fake'.",
+  "yaml: a map with two keys": "UsageError: gateway[0] in reeval.yaml must be a gateway's name or a map from one name to its settings, e.g. { direct: {} } (got {\"fake\":{},\"direct\":{}})",
+  "yaml: direct with options": "UsageError: gateway[0] in reeval.yaml isn't a valid direct(): Unrecognized key: \"apiKey\" (got {\"direct\":{\"apiKey\":\"x\"}})",
+  "yaml: a number": "UsageError: gateway[0] in reeval.yaml must be a gateway, e.g. direct() from 'reeval/gateway' (got 3)",
+  "yaml: good": null,
+  "harness: a pin not a name": "UsageError: fakeHarness({ gateway }) names a gateway in the config's gateway list: 'direct' or 'fake' (got \"vercell\")",
+  "harness: a pin a number": "UsageError: cursor({ gateway }) names a gateway in the config's gateway list: 'direct' or 'fake' (got 3)",
+  "harness: a helper pin": null,
+  "plan: a pin not in the list": "UsageError: evals/a.eval.ts › e on a: it pins gateway 'fake', which isn't in the gateway list (direct). Add fakeGateway() to gateway, or pin one that's there.",
+  "plan: a pin that cannot serve": "UsageError: evals/a.eval.ts › e on cursor:composer-2.5: it pins gateway 'fake', which can't serve it (fakeGateway() serves fake, not Cursor). A pin never falls back; pin another gateway, or remove the pin to take the first in the list that can.",
+  "plan: nothing in the list serves": "UsageError: evals/a.eval.ts › e on cursor:composer-2.5: no gateway in the list can serve it (fake: fakeGateway() serves codex, not Cursor). Add direct() to the end of gateway to use Cursor's own key.",
+  "plan: falls back to direct": null
+}

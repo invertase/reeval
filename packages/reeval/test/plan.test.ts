@@ -92,6 +92,11 @@ export const cases: PlanCase[] = [
     args: [],
     prepare: (dir) => syncPythonFixtureProject(dir),
   },
+  { dir: 'gateway', name: 'default', args: ['--config', 'reeval.default.config.ts'] },
+  { dir: 'gateway', name: 'fallback', args: [] },
+  { dir: 'gateway', name: 'profile-list', args: ['--profile', 'faked'] },
+  { dir: 'gateway', name: 'profile-pin', args: ['--profile', 'pinned'] },
+  { dir: 'gateway', name: 'yaml', args: ['--config', 'reeval.data.yaml'] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
@@ -227,6 +232,44 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
   test('REEVAL_PROFILE picks a profile, as --profile does', async () => {
     const plan = await planJson({ dir: 'profiles', args: [], env: { REEVAL_PROFILE: 'nightly' } })
     assert.deepEqual(plan.profile, { name: 'nightly', reason: 'REEVAL_PROFILE' })
+  })
+
+  test("each cell's gateway, and what it fell past, are in the JSON plan", async () => {
+    const plan = await planJson({ dir: 'gateway', args: [] })
+    const greets = plan.evals.find((e) => e.name === 'greets')
+    assert.deepEqual(greets?.cells[0]?.gateway, {
+      name: 'direct',
+      skipped: [{ gateway: 'fake', why: 'fakeGateway() serves no harness, not the fake harness' }],
+    })
+    const pinned = plan.evals.find((e) => e.name === 'pinned')
+    assert.deepEqual(pinned?.cells[0]?.gateway, { name: 'direct', skipped: [] })
+    const unset = await planJson({ dir: 'gateway', args: ['--config', 'reeval.default.config.ts'] })
+    assert.equal(unset.evals.find((e) => e.name === 'greets')?.cells[0]?.gateway, undefined)
+  })
+
+  test('a harness no listed gateway can serve exits 2 at plan time, naming what it tried', async () => {
+    const p = await project('gateway-unserved', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { fakeGateway } from 'reeval/testing'
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+  gateway: [fakeGateway()],
+})
+`,
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'
+evaluate('unserved', async () => {})
+`,
+    })
+    for (const args of [['run', '--dry-run'], ['run']]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /evaluate\("unserved"\) on cursor:composer-2\.5: no gateway in the list can serve it \(fake: fakeGateway\(\) serves fake, not Cursor\)\. Add direct\(\) to the end of gateway to use Cursor's own key\./,
+      )
+    }
+    assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
   })
 
   test('.only in CI exits 2 before any plan prints', async () => {

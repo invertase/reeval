@@ -28,6 +28,7 @@ import type {
   QuestionCall,
   QuestionInput,
   QuestionScreenshot,
+  ResolvedGateway,
   ResolvedJudgeStateOptions,
   RunContext,
   TranscriptEvent,
@@ -177,6 +178,10 @@ const harnessModel = (h: HarnessDescriptor) => (h.kind === 'fake' ? null : (h.mo
 
 /** A cell fingerprint: the hash of its parts, so each part can be compared on its own. */
 export const fingerprintOf = (parts: FingerprintParts) => sha256(JSON.stringify(parts))
+
+/** The gateway's part of a fingerprint: none on `direct`, so a cell without a gateway keeps its fingerprint. */
+const gatewayPart = (gateway: ResolvedGateway | undefined): Pick<FingerprintParts, 'gateway'> =>
+  gateway && gateway.name !== 'direct' ? { gateway: gateway.name } : {}
 
 /** `<index>:<question hash>`, which follows one verdict across runs. */
 export const judgementKey = (index: number, question: string) =>
@@ -444,11 +449,13 @@ function cellOf(
   cell: Cell,
   gate: CellGate,
   harness: HarnessDescriptor | undefined,
+  gateway?: ResolvedGateway,
 ): CellRecord {
   let found = entry.cells.find((c) => c.key === cell.key)
   if (!found) {
     found = {
       ...cell,
+      ...(gateway ? { gateway: gateway.name } : {}),
       fingerprint: '',
       fingerprintParts: EMPTY_PARTS,
       environmentDigest: null,
@@ -524,7 +531,13 @@ async function addPreviousAttempt(
   }
   seen.add(null, cell, stub)
   const entry = seen.entry(stub, resolved)
-  const cellRecord = cellOf(entry, cell, e.attempt?.gate ?? 'all', e.attempt?.harness)
+  const cellRecord = cellOf(
+    entry,
+    cell,
+    e.attempt?.gate ?? 'all',
+    e.attempt?.harness,
+    e.attempt?.gateway,
+  )
   const files: AttemptFiles = {}
   for (const [name, ref] of Object.entries(kept.files) as Array<
     [keyof AttemptFiles, AttemptFiles[keyof AttemptFiles]]
@@ -569,6 +582,7 @@ async function addPreviousAttempt(
       agentCli: null,
       judge,
       context: sha256(JSON.stringify(kept.context)),
+      ...gatewayPart(e.attempt?.gateway),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -601,7 +615,13 @@ async function addAttempt(
   const context = record?.context ?? []
   seen.add(record, cell, e)
   const entry = seen.entry(e, sources)
-  const cellRecord = cellOf(entry, cell, e.attempt?.gate ?? 'all', e.attempt?.harness)
+  const cellRecord = cellOf(
+    entry,
+    cell,
+    e.attempt?.gate ?? 'all',
+    e.attempt?.harness,
+    e.attempt?.gateway,
+  )
   if (e.attempt?.minLift !== undefined) minLifts.set(cellRecord, e.attempt.minLift)
   if (record?.environment?.overrides.length && cellRecord.overrides.length === 0) {
     cellRecord.overrides = [...record.environment.overrides]
@@ -620,6 +640,7 @@ async function addAttempt(
       agentCli: record?.image?.agentCli ?? null,
       judge,
       context: sha256(JSON.stringify(context)),
+      ...gatewayPart(e.attempt?.gateway),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)

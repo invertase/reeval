@@ -309,6 +309,23 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'gateway',
+    area: 'Config and selection',
+    name: '`gateway`: the ordered gateway list, fallback to the first that can serve a harness, a harness `gateway` pin, a profile override, the plan hint and refusals, and the cell and fingerprint in the record',
+    plan: [
+      'gateway/default',
+      'gateway/fallback',
+      'gateway/profile-list',
+      'gateway/profile-pin',
+      'gateway/yaml',
+    ],
+    tests: [
+      "reeval/test/plan.test.ts › each cell's gateway, and what it fell past, are in the JSON plan",
+      'reeval/test/plan.test.ts › a harness no listed gateway can serve exits 2 at plan time',
+      history("the cell's gateway is in the record, and in the fingerprint unless it's direct"),
+    ],
+  },
+  {
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',

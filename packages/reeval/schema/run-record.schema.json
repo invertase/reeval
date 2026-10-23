@@ -673,6 +673,10 @@
           "description": "How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval.",
           "$ref": "#/$defs/CellGate"
         },
+        "gateway": {
+          "description": "The gateway in the config's `gateway` list its harness resolved to (`direct` is each provider's own key); unset when no config, profile or pin named one.",
+          "type": "string"
+        },
         "harness": {
           "type": "string"
         },
@@ -1661,6 +1665,10 @@
               "type": "string"
             }
           ]
+        },
+        "gateway": {
+          "description": "The gateway its model calls went through; unset on `direct`, each provider's own key.",
+          "type": "string"
         },
         "harness": {
           "description": "Over the harness descriptor, less concurrency caps.",

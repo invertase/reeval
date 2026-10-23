@@ -1,0 +1,85 @@
+---
+title: Gateways
+description: The config's gateway list, which gateway each harness's model calls go through, pinning one per harness, and the errors reeval raises at plan time.
+---
+
+`gateway` lists the routes model calls may take, in the order you prefer them. Each harness takes the first gateway in the list that can serve it.
+
+```ts title="reeval.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { direct } from '{{ pkg }}/gateway'
+import { cursor } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+  gateway: [direct()],
+})
+```
+
+The default is `[direct()]`: every harness calls its own provider with its own key, as on [Harnesses](/guide/harnesses). Setting it to that changes nothing but the plan's notes and the record's `gateway` field.
+
+## Helpers
+
+| Helper | YAML | Serves | Key |
+|---|---|---|---|
+| `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness | each harness's own, such as `CURSOR_API_KEY` |
+| `fakeGateway({ serves? })` from `'{{ pkg }}/testing'` | `{ fake: { serves: [...] } }` | the harness kinds in `serves`, default `['fake']` | none |
+
+`fakeGateway()` is for tests: it routes nothing, so a fake harness behaves as under `direct()`. `serves: []` makes a gateway that serves no harness, to see the fallback in a dry run.
+
+## Fallback
+
+```ts title="reeval.config.ts"
+gateway: [fakeGateway({ serves: [] }), direct()],
+```
+
+```text title="reeval run --dry-run"
+hint: gateway: a → direct (fake can't serve it: fakeGateway() serves no harness, not the fake harness)
+evals/g.eval.ts › greets  a/-/fake  control  gated  ×1  gateway: a → direct
+```
+
+A harness the first gateway can't serve falls through to the next. The plan prints one hint per harness that fell past an entry, and each eval notes where its harnesses resolved. `--dry-run --json` has it as each cell's `gateway`: `{ name, skipped: [{ gateway, why }] }`.
+
+When no entry can serve a harness, the plan stops with exit 2 before anything runs, naming every gateway it tried.
+
+## Pinning a harness
+
+```ts title="evals/g.eval.ts"
+import { direct } from '{{ pkg }}/gateway'
+import { fakeHarness } from '{{ pkg }}/harness'
+
+evaluate('pinned', { harness: fakeHarness({ id: 'b', gateway: direct() }) }, async () => {})
+```
+
+Every harness factory takes `gateway`: the helper, or its name (`'direct'`). A pin skips the fallback. It must name a gateway in the list, and one that can serve the harness; a pin never falls back to another.
+
+## In a profile
+
+```ts title="reeval.config.ts"
+profiles: {
+  faked: { gateway: [fakeGateway(), direct()] },
+},
+```
+
+A profile's `gateway` replaces the config's list for its runs. See [Profiles and budgets](/reference/profiles).
+
+## In the record
+
+Each cell resolved under a configured `gateway` or a pin records its gateway as `cells[].gateway`. A gateway other than `direct` is part of the cell's fingerprint (`fingerprintParts.gateway`), so `reeval compare` treats a change of gateway as a new measurement; `direct` leaves the fingerprint as it was without the key. See [The record](/reference/record).
+
+## Errors
+
+| Mistake | Message |
+|---|---|
+| An empty list | `gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])` |
+| An unknown gateway | `gateway[0] in reeval.yaml is "vercell", which isn't a gateway reeval knows: 'direct' or 'fake'.` |
+| A gateway listed twice | `gateway[1] in reeval.config.ts lists direct a second time. Each gateway is listed once, where you prefer it.` |
+| A pin not in the list | `… on a: it pins gateway 'fake', which isn't in the gateway list (direct). Add fakeGateway() to gateway, or pin one that's there.` |
+| A pin that can't serve | `… on cursor:composer-2.5: it pins gateway 'fake', which can't serve it (fakeGateway() serves fake, not Cursor). A pin never falls back; …` |
+| Nothing in the list serves | `… on cursor:composer-2.5: no gateway in the list can serve it (fake: fakeGateway() serves fake, not Cursor). Add direct() to the end of gateway to use Cursor's own key.` |
+
+## Related
+
+- [defineConfig](/reference/config#keys)
+- [Profiles and budgets](/reference/profiles)
+- [Credential brokering](/concepts/credential-brokering)

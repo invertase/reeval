@@ -34,6 +34,10 @@ With no `harness` in the config, reeval uses that harness.
   The harness's id in cell keys, filters and the record. Default `cursor:<model>`, such as `cursor:composer-2.5`, or `cursor:<model>[effort=<value>]` when `effort` is set. Letters, digits and `.`, `_`, `:`, `@`, `+`, `-`, `[`, `]`, `=`.
 </Property>
 
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
+</Property>
+
 <Property name="maxConcurrent" type="number" optional>
   The most Cursor attempts at once across the run, for example to stay under your account's rate limits. A whole number of at least 1.
 </Property>

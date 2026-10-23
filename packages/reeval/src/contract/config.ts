@@ -18,6 +18,7 @@ import type {
 } from '../types.ts'
 import { questionOptionsSchema } from './compare.ts'
 import { environmentDataSchema, sandboxDescriptorSchema } from './environment.ts'
+import { gatewayEntryDataSchema } from './gateway.ts'
 import { harnessDescriptorSchema } from './harness.ts'
 import { configJudgeDataSchema } from './judge.ts'
 import { egressPolicySchema, envVarsSchema, gatePolicySchema } from './plain.ts'
@@ -163,6 +164,11 @@ export const profileDataSchema = z
       .array(z.string())
       .optional()
       .describe("Tag filters for this profile, like `--tag` (`'!slow'` excludes)."),
+    gateway: z
+      .array(gatewayEntryDataSchema)
+      .min(1)
+      .optional()
+      .describe("Replaces the config's `gateway` list for this profile's runs."),
   })
   .describe('`Profile` as data: its defaults and judge as data.')
 
@@ -327,6 +333,13 @@ export const reevalConfigDataSchema = z
       .optional()
       .describe(
         'Insights during `reeval run`, `reeval analyze`, and compare questions without a model.',
+      ),
+    gateway: z
+      .array(gatewayEntryDataSchema)
+      .min(1)
+      .optional()
+      .describe(
+        "The gateways model calls may go through, in the order you prefer them: each harness takes the first that can serve it. Default `[direct]`, each provider's own key.",
       ),
   })
   .describe(

@@ -3,6 +3,7 @@ import { acrossOf, type PairAttempt, pairsOf, plannedSides } from './compare/pai
 import { questionShows, resolveQuestionState } from './compare/state.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
+import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
 import { clip, formatDuration } from './text.ts'
 import type {
@@ -17,6 +18,7 @@ import type {
   PlannedEgress,
   PlannedQuestion,
   ResolvedConfig,
+  ResolvedGateway,
   ResolvedProfile,
   SandboxDescriptor,
   SandboxWarning,
@@ -200,6 +202,7 @@ export async function buildPlan(options: {
     hints: [
       ...gateHint([...rows.values()].filter((r) => counted.get(r.id)?.gated)),
       ...effortHint([...rows.values()]),
+      ...gatewayHints(planned),
     ],
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
@@ -304,6 +307,16 @@ function effortHint(rows: PlanRow[]): string[] {
   ]
 }
 
+/** One line per harness whose cells fell past the first entries of the `gateway` list. */
+function gatewayHints(planned: PlannedItem[]): string[] {
+  const hints = new Set<string>()
+  for (const { attempt } of planned) {
+    if (attempt.skip || attempt.plan.skip || !attempt.gateway?.skipped.length) continue
+    hints.add(fallbackHint(attempt.cell.harness, attempt.gateway))
+  }
+  return [...hints]
+}
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
@@ -400,6 +413,8 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
 }
 
 export type PlanCell = Cell & {
+  /** The gateway its harness resolved to; unset when no config, profile or pin names one. */
+  gateway?: ResolvedGateway
   gate: CellGate
   minLift?: number
   runs: number
@@ -497,6 +512,7 @@ export function planDocument(
     else {
       e.cells.push({
         ...attempt.cell,
+        ...(attempt.gateway ? { gateway: attempt.gateway } : {}),
         gate: attempt.gate,
         ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
         runs: 1,

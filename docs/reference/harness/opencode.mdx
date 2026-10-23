@@ -32,6 +32,10 @@ export default defineConfig({
   The harness's id in cell keys, filters and the record. Default `opencode:<model>`, with the model's last segment: `opencode:claude-haiku-4-5`, or `opencode:<model>[effort=<value>]` when `effort` is set. Two cells whose models end the same, on different providers, need an `id` each.
 </Property>
 
+<Property name="gateway" type="'direct' | Gateway" optional>
+  The gateway this harness's model calls go through, by name or helper, such as `direct()`. It skips the config's `gateway` fallback: the plan refuses a gateway that isn't listed or can't serve this harness. See [Gateways](/reference/gateway#pinning-a-harness).
+</Property>
+
 <Property name="maxConcurrent" type="number" optional>
   The most OpenCode attempts at once across the run, for example for your key's rate limits.
 </Property>
