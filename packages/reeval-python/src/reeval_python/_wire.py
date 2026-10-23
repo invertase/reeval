@@ -1173,7 +1173,7 @@ class JudgeCallDataGatewayDirect(TypedDict):
 
 
 # Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-# `reeval/gateway`. It serves Claude Code and Codex.
+# `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
 class JudgeCallDataGatewayVercel(TypedDict):
     kind: Literal["vercel"]
 
@@ -1770,7 +1770,7 @@ TurnStatus: TypeAlias = "Literal[\"completed\", \"aborted\", \"error\"]"
 
 
 # Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
-# `reeval/gateway`. It serves Claude Code and Codex.
+# `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
 class VercelGatewayDescriptor(TypedDict):
     kind: Literal["vercel"]
 
