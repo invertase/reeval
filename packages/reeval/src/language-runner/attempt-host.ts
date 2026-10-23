@@ -1,7 +1,12 @@
 // Answers attempt-protocol calls from a language runner on the real AttemptContext.
 
 import { type ExpectCall, expectCall } from '../attempt/match.ts'
-import type { AttemptCall, AttemptReply, AttemptRequest } from '../contract/attempt.ts'
+import {
+  type AttemptCall,
+  type AttemptReply,
+  type AttemptRequest,
+  attemptRequestProblem,
+} from '../contract/attempt.ts'
 import type { RawAssertion } from '../engine/runtime.ts'
 import type { AttemptContext, BackgroundHandle, JudgeCallOptions, Turn } from '../types.ts'
 
@@ -15,6 +20,11 @@ export async function replyToAttempt(
   request: AttemptRequest,
 ): Promise<AttemptReply> {
   const { id, call } = request
+  const problem = attemptRequestProblem({ id, call })
+  if (problem) {
+    const error = { name: 'UsageError', message: problem }
+    return { id, ok: false, op: call?.op, error } as AttemptReply
+  }
   try {
     const body = await perform(c, calls, handles, call)
     return { id, ok: true, op: call.op, ...body } as AttemptReply
@@ -58,7 +68,7 @@ async function perform(
       )
       return {}
     case 'expect':
-      return { assertion: await expectCall(c, matcherCalls, call as ExpectCall) }
+      return await expectCall(c, matcherCalls, call as ExpectCall)
     case 'judge': {
       const { question, options } = call
       const opts = (options ?? {}) as JudgeCallOptions & { on?: unknown }

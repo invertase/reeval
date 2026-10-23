@@ -124,6 +124,7 @@ export const SUBJECT = Symbol.for('reeval.subject')
 type Recorded = Omit<RawAssertion, 'status'> & { status?: RawAssertion['status'] }
 
 const recordings = new WeakMap<ExpectTask, Recorded[]>()
+const ownRecordings = new WeakMap<ExpectStatic, Recorded[]>()
 
 /** Methods on an assertion that configure it or are Chai's plumbing, not checks. */
 const UNRECORDED = new Set([
@@ -242,6 +243,7 @@ export function createExpect(task?: ExpectTask): ExpectStatic {
     const assertion = chai.expect(value, message) as unknown as { withTest(t: unknown): object }
     return task ? recording(assertion.withTest(task), list) : assertion
   }) as ExpectStatic
+  if (task) ownRecordings.set(expect, list)
   Object.assign(expect, chai.expect)
   Object.assign(expect, (globalThis as Record<symbol, object>)[ASYMMETRIC_MATCHERS_OBJECT])
   expect.getState = () => getState<MatcherState>(expect)
@@ -448,6 +450,17 @@ export function withAttemptExpect<T>(
   body: () => Promise<T>,
 ): Promise<T> {
   return currentExpect.run(own, () => currentPending.run(pending, body))
+}
+
+/**
+ * The running attempt's matcher calls, which its record is made from: another language's runner
+ * adds the calls its body made over the attempt protocol here.
+ */
+export function attemptRecordings(): RawAssertion[] {
+  const own = currentExpect.getStore()
+  const list = own && ownRecordings.get(own)
+  if (!list) throw new Error('attemptRecordings() is only called inside an attempt')
+  return list as RawAssertion[]
 }
 
 /**

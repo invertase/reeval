@@ -14,7 +14,7 @@ type Subject =
   | { turn: number }
   | { attempt: true }
   | { value: Json }
-  | { exec: string }
+  | { exec: string; result?: Json }
   | {
       readFile: string
     }
@@ -26,6 +26,9 @@ export type ScriptRun = {
   file: string
   body: string
 }
+
+/** What a check's default label names its subject by, as `c.exec`'s promise names its command. */
+const NAMED_BY = Symbol.for('reeval.subject')
 
 const isPattern = (arg: Json): arg is { regexp: string; flags?: string } =>
   typeof arg === 'object' && arg !== null && !Array.isArray(arg) && 'regexp' in arg
@@ -64,6 +67,10 @@ export async function runScript(c: AttemptContext, run: ScriptRun): Promise<void
   function reader(subject: Subject): () => unknown {
     if ('turn' in subject) return () => turnAt(subject.turn)
     if ('attempt' in subject) return () => c
+    if ('exec' in subject && subject.result) {
+      const { result, exec } = subject
+      return () => Object.defineProperty(Promise.resolve(result), NAMED_BY, { value: exec })
+    }
     if ('exec' in subject) return () => c.exec(subject.exec)
     if ('readFile' in subject) return () => c.readFile(subject.readFile)
     return () => subject.value

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import base64
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any, cast
 
@@ -9,9 +11,12 @@ from reeval_python.assertion import assert_to_expect
 from reeval_python.errors import ReevalAssertionError
 from reeval_python.expect import bind_expect
 from reeval_python.types import BackgroundHandle, ExecResult, Turn, Verdict
-from reeval_python.wire import options_to_wire
+from reeval_python.wire import Patterns, options_to_wire, wire_args
 
 SendFn = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+
+
+PATTERN_ROUNDS = 5
 
 
 class AttemptContext:
@@ -59,15 +64,20 @@ class AttemptContext:
     async def file(self, path: str) -> str | None:
         return await self.read_file(path)
 
-    async def write_file(self, path: str, content: str) -> None:
-        await self._call("writeFile", path=path, content=content)
+    async def write_file(self, path: str, contents: str | bytes) -> None:
+        if isinstance(contents, bytes):
+            encoded = base64.b64encode(contents).decode()
+            await self._call("writeFile", path=path, contents=encoded, encoding="base64")
+        else:
+            await self._call("writeFile", path=path, contents=contents)
 
     async def kill(self, handle: BackgroundHandle) -> None:
         await self._call("kill", handle=handle.id)
 
     async def judge(self, question: str, **options: Any) -> Verdict:
-        wire_opts = options_to_wire(options) if options else None
-        reply = await self._call("judge", question=question, options=wire_opts)
+        wire_opts = options_to_wire(options)
+        fields: dict[str, Any] = {"options": wire_opts} if wire_opts else {}
+        reply = await self._call("judge", question=question, **fields)
         return Verdict.from_wire(cast(dict[str, Any], reply["verdict"]))
 
     async def run_expect(
@@ -80,23 +90,40 @@ class AttemptContext:
         not_: bool,
         soft: bool,
     ) -> None:
+        patterns = Patterns()
         call: dict[str, Any] = {
             "op": "expect",
             "subject": subject,
             "matcher": matcher,
-            "args": args,
+            "args": wire_args(args, patterns),
             "not": not_,
             "soft": soft,
         }
         if label is not None:
             call["label"] = label
         reply = await self._send({"call": call})
+        # reeval asks for the strings it tested the patterns on; each round answers more. A
+        # subject that changes on every read never runs out of new strings, so the rounds stop.
+        # A pattern is answered off the event loop, where a slow one can't hold up other bodies.
+        for _ in range(PATTERN_ROUNDS):
+            if not (reply.get("ok", False) and "untested" in reply):
+                break
+            untested = cast(dict[str, list[str]], reply["untested"])
+            await asyncio.to_thread(patterns.answer, untested)
+            reply = await self._send({"call": call})
+        else:
+            if reply.get("ok", False) and "untested" in reply:
+                names = ", ".join(cast(dict[str, Any], reply["untested"]))
+                raise RuntimeError(
+                    f"UsageError: {matcher}'s subject changed while reeval matched {names} on it, "
+                    f"{PATTERN_ROUNDS} times over: check it once it has stopped changing"
+                )
         if not reply.get("ok", False):
             err = reply.get("error") or {"name": "Error", "message": "call failed"}
             raise RuntimeError(f"{err.get('name')}: {err.get('message')}")
         assertion_raw = reply.get("assertion")
         assertion = cast(dict[str, Any], assertion_raw) if isinstance(assertion_raw, dict) else {}
-        if assertion.get("status") == "fail":
+        if assertion.get("status") == "fail" and not soft:
             raise ReevalAssertionError(str(assertion.get("message") or "expect failed"))
 
     async def record_plain_assert(self, exc: AssertionError) -> None:
@@ -146,8 +173,8 @@ class SyncAttemptContext:
     def file(self, path: str) -> str | None:
         return self._run(self._ctx.file(path))
 
-    def write_file(self, path: str, content: str) -> None:
-        self._run(self._ctx.write_file(path, content))
+    def write_file(self, path: str, contents: str | bytes) -> None:
+        self._run(self._ctx.write_file(path, contents))
 
     def kill(self, handle: BackgroundHandle) -> None:
         self._run(self._ctx.kill(handle))

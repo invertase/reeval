@@ -35,21 +35,35 @@ export type SessionFromRunner =
   | { t: 'load-error'; error: WireError }
   | { t: 'log'; stream: 'stdout' | 'stderr'; text: string }
 
-export type RunnerAttemptReply = AttemptReply & { attempt: string }
+/**
+ * One runner runs every body of its files, several at once, so each attempt message carries the
+ * `key` reeval gave that run of the body in its `start`. It's unique per started body, unlike
+ * `attempt.id`, which two evals on the same cell share.
+ */
+type Keyed = { key: string }
 
-export type ToRunner = SessionToRunner | AttemptStart | AttemptAbort | RunnerAttemptReply
+export type RunnerAttemptStart = AttemptStart & Keyed
 
-/** Attempt traffic from a remote runner: `attempt` multiplexes concurrent bodies on one socket. */
-export type RunnerAttemptRequest = AttemptRequest & { attempt: string }
+export type RunnerAttemptReply = AttemptReply & Keyed
 
-export type RunnerAttemptDone = AttemptDone & { attempt: string }
+export type RunnerAttemptAbort = AttemptAbort & Keyed
+
+export type ToRunner =
+  | SessionToRunner
+  | RunnerAttemptStart
+  | RunnerAttemptAbort
+  | RunnerAttemptReply
+
+export type RunnerAttemptRequest = AttemptRequest & Keyed
+
+export type RunnerAttemptDone = AttemptDone & Keyed
 
 export type FromRunner = SessionFromRunner | RunnerAttemptRequest | RunnerAttemptDone
 
 export const isSessionFrom = (message: FromRunner): message is SessionFromRunner => 't' in message
 
 export const isRunnerAttemptRequest = (message: FromRunner): message is RunnerAttemptRequest =>
-  'id' in message && 'call' in message && 'attempt' in message && !('ok' in message)
+  'id' in message && 'call' in message && 'key' in message && !('ok' in message)
 
 export const isRunnerAttemptDone = (message: FromRunner): message is RunnerAttemptDone =>
-  'type' in message && message.type === 'done' && 'attempt' in message
+  'type' in message && message.type === 'done' && 'key' in message

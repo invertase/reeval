@@ -2616,7 +2616,7 @@ export const inventory: InventoryFeature[] = [
     id: 'sdk.python',
     area: 'CLI and runner',
     name: 'Python eval authoring SDK (declare conformance and fake run)',
-    fixtures: ['python-sdk/hello'],
+    fixtures: ['python-sdk/hello', 'python-sdk/attempt-isolation'],
     plan: ['python/hello'],
     tests: ['reeval/test/python-sdk.test.ts › Python SDK declare conformance'],
   },

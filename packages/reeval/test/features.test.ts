@@ -2924,6 +2924,50 @@ export const features: Feature[] = [
     env: '-',
     canary: /expected.*to succeed/i,
     prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const [canary] = run.evals.find((e) => e.name === 'canary')?.attempts ?? []
+      assert.deepEqual(
+        canary?.assertions?.map(({ label, status }) => [label, status]),
+        [['toSucceed test -f missing-greet.py', 'fail']],
+        "a Python body's expect lands in its record",
+      )
+      assert.deepEqual(
+        canary?.checks.map((c) => c.command),
+        ['test -f missing-greet.py'],
+        'the command expect checks runs once',
+      )
+    },
+  },
+  {
+    dir: 'python-sdk/attempt-isolation',
+    tiers: ['fake'],
+    env: '-',
+    args: ['--concurrency', '1'],
+    canary: /expected.*to succeed/i,
+    evals: {
+      lands: { outcome: 'pass', attempts: ['fake/-/fake#1'] },
+      canary: {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'assertion', message: /expected.*to succeed/i },
+      },
+      'times out': {
+        outcome: 'fail',
+        attempts: ['fake/-/fake#1'],
+        error: { kind: 'timeout', message: /timed out/ },
+      },
+    },
+    prepare: (dir) => syncPythonFixtureProject(dir),
+    record: ({ run }) => {
+      const [lands] = run.evals.find((e) => e.name === 'lands')?.attempts ?? []
+      assert.deepEqual(
+        lands?.checks.map((c) => c.command),
+        ['test ! -f zombie.txt'],
+        "a timed-out body's late call doesn't run in the next attempt on its cell",
+      )
+      const [timedOut] = run.evals.find((e) => e.name === 'times out')?.attempts ?? []
+      assert.deepEqual(timedOut?.checks, [], 'nor in its own, which reeval already ended')
+    },
   },
   {
     dir: 'run/resume',

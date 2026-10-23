@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from typing import Any
 
-from reeval_python.wire import MATCHER_TO_WIRE, subject_for_matcher, wire_args
+from reeval_python.wire import MATCHER_TO_WIRE, subject_for_matcher
 
 SubmitFn = Any
 
@@ -62,7 +62,7 @@ class _Expectation:
             await self._submit(
                 subject=subject,
                 matcher=wire,
-                args=wire_args(args),
+                args=list(args),
                 label=self._label,
                 not_=self._not,
                 soft=self._soft,
@@ -73,7 +73,7 @@ class _Expectation:
             self._submit(
                 subject=subject,
                 matcher=wire,
-                args=wire_args(args),
+                args=list(args),
                 label=self._label,
                 not_=self._not,
                 soft=self._soft,

@@ -170,7 +170,7 @@ export const turnDataSchema = z
   )
 
 export const execResultSchema = z.strictObject({
-  exitCode: z.number(),
+  exitCode: z.number().int(),
   stdout: z.string(),
   stderr: z.string(),
 })
@@ -297,12 +297,33 @@ export const patternSchema = z
   })
   .describe('A regular expression, where a matcher takes a string or a `RegExp`.')
 
+/** A pattern in the runner's own language, which reeval never compiles. */
+function hasAnsweredPattern(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasAnsweredPattern)
+  if (typeof value !== 'object' || value === null) return false
+  return 'matchedBy' in value || Object.values(value).some(hasAnsweredPattern)
+}
+
+export const answeredPatternSchema = z
+  .strictObject({
+    matchedBy: z
+      .string()
+      .regex(/\S/)
+      .describe("The pattern as the runner's language writes it, e.g. `re.compile('npm t')`."),
+    answers: z
+      .record(z.string(), z.boolean())
+      .describe('Whether it matches each string the runner has been asked about.'),
+  })
+  .describe(
+    'A pattern the runner matches in its own language. reeval runs the matcher with it, and when the matcher tests a string not in `answers` replies with those strings (`untested`) instead of a record; the runner matches them and makes the call again with them in `answers`.',
+  )
+
 const isPatternLike = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) && 'regexp' in value
 
 // Any object is a JSON value, so an object with `regexp` is held to the pattern's shape here.
 export const matcherArgSchema = z
-  .union([patternSchema, jsonValueSchema])
+  .union([patternSchema, answeredPatternSchema, jsonValueSchema])
   .superRefine((value, ctx) => {
     if (!isPatternLike(value)) return
     for (const issue of patternSchema.safeParse(value).error?.issues ?? []) {
@@ -310,7 +331,7 @@ export const matcherArgSchema = z
     }
   })
   .describe(
-    'One argument to a matcher: a JSON value, or a regular expression as `{ regexp, flags? }`.',
+    "One argument to a matcher: a JSON value, a regular expression as `{ regexp, flags? }`, or a pattern in the runner's own language as `{ matchedBy, answers }`.",
   )
 
 export const matcherSubjectSchema = z
@@ -323,6 +344,11 @@ export const matcherSubjectSchema = z
         .string()
         .regex(/\S/)
         .describe('A command reeval runs, for its `ExecResult`; again on each try when polled.'),
+      result: execResultSchema
+        .optional()
+        .describe(
+          "The command's `ExecResult` when the runner already ran it: reeval checks that instead of running it again, and the check is still named by the command.",
+        ),
     }),
     z.strictObject({
       readFile: z
@@ -500,6 +526,21 @@ export const attemptCallSchema = z
               "can't be polled: reeval can't re-read a value. Poll the attempt, an exec or a readFile",
           })
         }
+        if (call.poll && 'exec' in call.subject && call.subject.result) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['subject', 'result'],
+            message: "can't be polled: drop result so reeval runs the command on each try",
+          })
+        }
+        if (call.poll && call.args.some(hasAnsweredPattern)) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['args'],
+            message:
+              "can't be polled with a { matchedBy } pattern, whose answers can't follow the subject from try to try: poll with a string, or check once",
+          })
+        }
       })
       .describe(
         'A matcher call: `expect(subject, label).not?.matcher(...args)`. Replies with its record.',
@@ -573,6 +614,16 @@ export const attemptReplySchema = z
         verdict: z.union([verdictSchema, judgeFailureSchema]),
       }),
     ]),
+    z.strictObject({
+      id,
+      ok: z.literal(true),
+      op: z.literal('expect'),
+      untested: z
+        .record(z.string(), z.array(z.string()))
+        .describe(
+          'The strings the matcher tested that a `{ matchedBy, answers }` argument has no answer for, by its `matchedBy`. Nothing was recorded: answer them and make the call again.',
+        ),
+    }),
     z.strictObject({
       id,
       ok: z.literal(false),
@@ -664,6 +715,8 @@ const OTHER_KEYS = [
   'value',
   'regexp',
   'flags',
+  'matchedBy',
+  'answers',
   ...Object.keys(judgeCallDataSchema.shape),
   ...Object.keys(judgeStateSchema.shape),
   ...Object.keys(captureSchema.shape),
@@ -671,6 +724,7 @@ const OTHER_KEYS = [
   'port',
   'handle',
   'exec',
+  'result',
   'readFile',
   'interval',
   'timeout',
@@ -713,6 +767,7 @@ export const ATTEMPT_SCHEMAS: Record<string, z.ZodType> = {
   MatcherSubject: matcherSubjectSchema,
   MatcherArg: matcherArgSchema,
   Pattern: patternSchema,
+  AnsweredPattern: answeredPatternSchema,
   JSONValue: jsonValueSchema,
   TurnData: turnDataSchema,
   TurnStatus: turnStatusSchema,

@@ -14,7 +14,7 @@ from typing import Any, cast
 
 from reeval_python.context import AttemptContext, SyncAttemptContext
 from reeval_python.declare import collect_eval_file, get_body
-from reeval_python.errors import ReevalAssertionError
+from reeval_python.errors import AttemptAborted, ReevalAssertionError
 
 RUNNER_PROTOCOL = 2
 
@@ -30,6 +30,7 @@ class _Connection:
     def __init__(self, writer: asyncio.StreamWriter) -> None:
         self._writer = writer
         self._pending: dict[tuple[str, str], asyncio.Future[dict[str, Any]]] = {}
+        self.aborted: dict[str, AttemptAborted] = {}
 
     def write(self, msg: dict[str, Any]) -> None:
         self._writer.write((json.dumps(msg) + "\n").encode())
@@ -37,8 +38,16 @@ class _Connection:
     async def drain(self) -> None:
         await self._writer.drain()
 
+    def abort(self, key: str, name: str, message: str) -> None:
+        """reeval gave up on the body: its calls in flight and every later one raise."""
+        aborted = self.aborted[key] = AttemptAborted(name, message)
+        for pending in [k for k in self._pending if k[0] == key]:
+            fut = self._pending.pop(pending)
+            if not fut.done():
+                fut.set_exception(aborted)
+
     def complete_reply(self, msg: dict[str, Any]) -> None:
-        attempt = msg.get("attempt")
+        attempt = msg.get("key")
         req_id = msg.get("id")
         if attempt is None or req_id is None:
             return
@@ -48,10 +57,12 @@ class _Connection:
             fut.set_result(msg)
 
     async def request(self, attempt_id: str, req_id: str, call: dict[str, Any]) -> dict[str, Any]:
+        if attempt_id in self.aborted:
+            raise self.aborted[attempt_id]
         key = (attempt_id, req_id)
         fut = asyncio.get_running_loop().create_future()
         self._pending[key] = fut
-        self.write({"id": req_id, "call": call, "attempt": attempt_id})
+        self.write({"id": req_id, "call": call, "key": attempt_id})
         await self.drain()
         return await fut
 
@@ -107,8 +118,16 @@ async def _run_body(conn: _Connection, attempt_id: str, body_id: str) -> None:
             }
     except Exception as exc:  # noqa: BLE001
         error = {"name": type(exc).__name__, "message": str(exc), "stack": traceback.format_exc()}
-    conn.write({"type": "done", "attempt": attempt_id, **({"error": error} if error else {})})
+    conn.write({"type": "done", "key": attempt_id, **({"error": error} if error else {})})
     await conn.drain()
+
+
+def _cancelled_done(conn: _Connection, key: str) -> None:
+    aborted = conn.aborted.get(key) or AttemptAborted(
+        "RunnerError", "the runner stopped this body without reeval aborting it"
+    )
+    error = {"name": aborted.name, "message": str(aborted)}
+    conn.write({"type": "done", "key": key, "error": error})
 
 
 async def serve() -> None:
@@ -134,7 +153,7 @@ async def serve() -> None:
     writer.write((json.dumps(hello) + "\n").encode())
     await writer.drain()
 
-    tasks: set[asyncio.Task[None]] = set()
+    tasks: dict[str, asyncio.Task[None]] = {}
     buf = b""
     while True:
         chunk = await reader.read(65536)
@@ -168,14 +187,27 @@ async def serve() -> None:
                     )
                 await conn.drain()
             elif msg.get("type") == "start":
-                attempt_id = str(msg["attempt"]["id"])
+                key = str(msg["key"])
                 body_id = str(msg["body"])
-                task = asyncio.create_task(_run_body(conn, attempt_id, body_id))
-                tasks.add(task)
-                task.add_done_callback(tasks.discard)
+                task = asyncio.create_task(_run_body(conn, key, body_id))
+                tasks[key] = task
+
+                def finished(task: asyncio.Task[None], key: str = key) -> None:
+                    tasks.pop(key, None)
+                    if task.cancelled():
+                        _cancelled_done(conn, key)
+
+                task.add_done_callback(finished)
             elif msg.get("type") == "abort":
-                for task in list(tasks):
-                    task.cancel()
+                if "key" not in msg:
+                    print(f"reeval sent an abort without a key: {msg}", file=sys.stderr)
+                    continue
+                key = str(msg["key"])
+                name = "TimeoutError" if msg.get("reason") == "timeout" else "AbortError"
+                conn.abort(key, name, str(msg.get("message", "")))
+                aborted = tasks.get(key)
+                if aborted is not None:
+                    aborted.cancel()
             elif "id" in msg and "ok" in msg:
                 conn.complete_reply(msg)
 

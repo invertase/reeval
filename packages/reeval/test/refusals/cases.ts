@@ -1339,6 +1339,41 @@ environment:
   protocol: [
     ['an empty id', request({ op: 'send', prompt: 'hi' }, '')],
     ['an unknown op', request({ op: 'teleport', to: 'mars' })],
+    [
+      'a polled exec with the result it already has',
+      request({
+        op: 'expect',
+        subject: { exec: 'test -f a', result: { exitCode: 1, stdout: '', stderr: '' } },
+        matcher: 'toSucceed',
+        args: [],
+        not: false,
+        soft: false,
+        poll: { timeout: 1000 },
+      }),
+    ],
+    [
+      'a polled call with a pattern the runner answers',
+      request({
+        op: 'expect',
+        subject: { attempt: true },
+        matcher: 'toHaveFile',
+        args: ['ready.txt', { matchedBy: "re.compile('ok')", answers: {} }],
+        not: false,
+        soft: false,
+        poll: { timeout: 1000 },
+      }),
+    ],
+    [
+      'an exec result with a fractional exit code',
+      request({
+        op: 'expect',
+        subject: { exec: 'true', result: { exitCode: 0.5, stdout: '', stderr: '' } },
+        matcher: 'toSucceed',
+        args: [],
+        not: false,
+        soft: false,
+      }),
+    ],
     ['judge without a question', request({ op: 'judge' })],
     ['judge with an empty question', request({ op: 'judge', question: ' ' })],
     [
