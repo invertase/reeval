@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import signal
 import stat
 import struct
@@ -37,9 +38,20 @@ class ShimError(Exception):
         self.code = code
 
 
+PRERELEASES = {"a": "alpha", "b": "beta", "rc": "rc"}
+
+
+def semver(version: str) -> str:
+    """reeval's version for a reeval-python version: 1.0.0b1 is 1.0.0-beta.1."""
+    if m := re.fullmatch(r"(\d+\.\d+\.\d+)(a|b|rc)(\d+)", version):
+        return f"{m[1]}-{PRERELEASES[m[2]]}.{m[3]}"
+    return version
+
+
 def own_version() -> str | None:
+    """The reeval this reeval-python was made for, as reeval spells its version."""
     try:
-        return dist_version("reeval-python")
+        return semver(dist_version("reeval-python"))
     except PackageNotFoundError:
         return None
 

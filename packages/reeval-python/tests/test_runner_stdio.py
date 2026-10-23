@@ -51,7 +51,8 @@ def _refusal(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     base = {k: v for k, v in os.environ.items() if not k.startswith("REEVAL_RUNNER")}
     base["PYTHONPATH"] = str(SRC)
     return subprocess.run(
-        [sys.executable, "-m", "reeval_python"],
+        # The runner itself: without REEVAL_RUNNER, `python -m reeval_python` is `reeval`.
+        [sys.executable, "-c", "from reeval_python.runner import main; main()"],
         env={**base, **env},
         capture_output=True,
         text=True,

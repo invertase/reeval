@@ -25,6 +25,11 @@ on:
     - cron: '41 2 * * *'
   workflow_dispatch:
   workflow_call:
+    inputs:
+      ref:
+        description: The commit to check out (release.yml's republish passes the release tag); empty is the event's own
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -73,6 +78,7 @@ jobs:
       - if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
           fetch-depth: ${{ github.event_name == 'merge_group' && 0 || 2 }}
       - id: scope
@@ -184,7 +190,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # biome ci: lint and format check, without writing, with GitHub annotations.
       - run: pnpm exec biome ci .
@@ -229,17 +237,6 @@ jobs:
           for v in 3.11 3.12 3.13 3.14; do
             UV_PROJECT_ENVIRONMENT=".venv-$v" uv run --locked --python "$v" pytest -q
           done
-      # On a release commit, release.yml publishes this sdist and wheel: the ones built from the
-      # commit these checks ran on.
-      - name: reeval-python (uv build)
-        working-directory: packages/reeval-python
-        run: uv build --out-dir "$RUNNER_TEMP/reeval-python-dist"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: reeval-python-dist
-          path: ${{ runner.temp }}/reeval-python-dist/*
-          if-no-files-found: error
-          retention-days: 7
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
   # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.
@@ -255,7 +252,9 @@ jobs:
         shard: ['1/4', '2/4', '3/4', '4/4']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -297,7 +296,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -364,7 +365,9 @@ jobs:
       FIXTURES: '(^| )(harness|mcp|secrets|egress|compare|assert|judge)/'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -401,7 +404,9 @@ jobs:
       REEVAL_FIXTURE_TIERS: podman
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - name: rootless Podman with the cpu, memory and pids controllers
         run: |
@@ -434,7 +439,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
       - if: needs.changes.outputs.coverage == 'true'
@@ -457,7 +464,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: node scripts/coverage.mjs engine
@@ -477,7 +486,9 @@ jobs:
         npm: ${{ fromJSON(needs.changes.outputs.full == 'true' && '["11", "10.9"]' || '["11"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
         with: { node-version: "${{ matrix.npm == '10.9' && '22' || '' }}" }
       - run: npm install --global npm@${{ matrix.npm }} && npm --version
@@ -517,6 +528,7 @@ jobs:
     uses: ./.github/workflows/extended.yml
     with:
       floor: ${{ github.event_name != 'push' || github.workflow != 'ci' }}
+      ref: ${{ inputs.ref }}
 
   coverage:
     name: coverage
@@ -527,7 +539,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
       - uses: ./.github/actions/setup
       # c8 maps the coverage through dist/ and its source maps, at the paths the test jobs ran.
       - run: pnpm build

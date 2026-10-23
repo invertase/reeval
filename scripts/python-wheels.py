@@ -1,13 +1,18 @@
 """Builds reeval-python's platform wheels: the pure wheel plus each target's reeval binary.
 
     uv run --no-project python scripts/python-wheels.py <pure .whl> <release dir> <out dir>
+    python3 scripts/python-wheels.py check <dist dir> <reeval version>
 
 <release dir> holds the binaries and SHA256SUMS as binary.yml builds them, and must have
-`reeval-<the wheel's version>-<target>` for every target. Each platform wheel is the pure wheel
+`reeval-<the wheel's version, as reeval spells it>-<target>` for every target: reeval-python
+1.0.0b1 is reeval 1.0.0-beta.1. Each platform wheel is the pure wheel
 with `reeval_python/bin/reeval` (`reeval.exe` on Windows) added and its tag changed; the `reeval`
 console script runs that binary. The pure wheel stays the fallback for any other platform, where
 the console script downloads the binary instead. Every wheel, the pure one rewritten in place,
 gets `reeval_python/binaries.json`: each target's sha256 and size, which a download must match.
+
+`check` is release.yml's gate before PyPI: <dist dir> must hold exactly the sdist, the pure wheel
+and every platform wheel of reeval <version>, each wheel recording that version's binaries.
 """
 
 from __future__ import annotations
@@ -34,6 +39,27 @@ TAGS = {
     "windows-x64": "win_amd64",
 }
 MANIFEST = "reeval_python/binaries.json"
+PRERELEASES = {"alpha": "a", "beta": "b", "rc": "rc"}
+
+
+def pep440(version: str) -> str:
+    """reeval-python's version for reeval's: 1.0.0-beta.1 is 1.0.0b1."""
+    if m := re.fullmatch(r"(\d+\.\d+\.\d+)-(alpha|beta|rc)\.(\d+)", version):
+        return f"{m[1]}{PRERELEASES[m[2]]}{m[3]}"
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        sys.exit(
+            f"python-wheels: reeval {version} has no reeval-python version"
+            " (a prerelease must be -alpha.N, -beta.N or -rc.N)"
+        )
+    return version
+
+
+def semver(version: str) -> str:
+    """reeval's version for reeval-python's: 1.0.0b1 is 1.0.0-beta.1."""
+    if m := re.fullmatch(r"(\d+\.\d+\.\d+)(a|b|rc)(\d+)", version):
+        name = next(k for k, v in PRERELEASES.items() if v == m[2])
+        return f"{m[1]}-{name}.{m[3]}"
+    return version
 
 
 def asset(version: str, target: str) -> str:
@@ -75,15 +101,40 @@ def write_wheel(path: Path, entries: dict[str, bytes], dist_info: str, executabl
             os.unlink(partial)
 
 
+def check(dist: Path, version: str) -> None:
+    python = pep440(version)
+    wanted = {f"reeval_python-{python}.tar.gz", f"reeval_python-{python}-py3-none-any.whl"}
+    wanted |= {f"reeval_python-{python}-py3-none-{tag}.whl" for tag in TAGS.values()}
+    found = {p.name for p in dist.iterdir() if p.suffix in (".whl", ".gz")}
+    problems = [f"no {n}" for n in sorted(wanted - found)]
+    problems += [f"{n} isn't reeval-python {python}'s" for n in sorted(found - wanted)]
+    for name in sorted(found & wanted - {f"reeval_python-{python}.tar.gz"}):
+        with zipfile.ZipFile(dist / name) as z:
+            try:
+                manifest = json.loads(z.read(MANIFEST))
+            except KeyError:
+                problems.append(f"{name} has no {MANIFEST}")
+                continue
+        names = {t: b.get("name") for t, b in manifest.get("binaries", {}).items()}
+        if manifest.get("version") != version or names != {t: asset(version, t) for t in TAGS}:
+            problems.append(f"{name} records reeval {manifest.get('version')}'s binaries")
+    if problems:
+        sys.exit(f"python-wheels: {dist} isn't reeval {version}: " + "; ".join(problems))
+    print(f"python-wheels: {len(found)} files, all reeval-python {python} for reeval {version}")
+
+
 def main(argv: list[str] | None = None) -> None:
-    pure, release, out = (Path(a) for a in (sys.argv[1:] if argv is None else argv)[:3])
+    args = sys.argv[1:] if argv is None else argv
+    if args[:1] == ["check"]:
+        return check(Path(args[1]), args[2])
+    pure, release, out = (Path(a) for a in args[:3])
     out.mkdir(parents=True, exist_ok=True)
     sums = parse_sums((release / "SHA256SUMS").read_text())
     with zipfile.ZipFile(pure) as z:
         files = {n: z.read(n) for n in z.namelist()}
     dist_info = next(n.split("/")[0] for n in files if n.endswith(".dist-info/WHEEL"))
     name_version = dist_info.removesuffix(".dist-info")
-    version = name_version.split("-")[1]
+    version = semver(name_version.split("-")[1])
 
     missing = [asset(version, t) for t in TAGS if asset(version, t) not in sums]
     if missing:

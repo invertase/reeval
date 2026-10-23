@@ -2,9 +2,10 @@
 # smoke-tests each on its own OS from an empty directory (scripts/binary-smoke.mjs). It runs
 # *.eval.py with it on Python 3.11 to 3.14 with only uv besides (scripts/binary-python-smoke.mjs),
 # through reeval-python's `reeval` command too, which downloads the binary or finds it in a
-# platform wheel (scripts/python-wheels.py, artifact `reeval-python-wheels`). Then it installs it
-# with scripts/install.sh or install.ps1 from those files. Uploads the binaries and SHA256SUMS as
-# one artifact, `reeval-<version>-binaries`, which release.yml uploads to the release.
+# platform wheel (scripts/python-wheels.py). Then it installs it with scripts/install.sh or
+# install.ps1 from those files. Uploads the binaries and SHA256SUMS as one artifact,
+# `reeval-<version>-binaries`, which release.yml uploads to the release, and reeval-python's sdist
+# and wheels as `reeval-python-dist`, which release.yml publishes to PyPI.
 name: binary
 
 on:
@@ -107,21 +108,23 @@ jobs:
           path: out/
           if-no-files-found: error
           retention-days: 14
-      # reeval-python's pure wheel, and a platform wheel per target that carries its binary.
+      # reeval-python as release.yml publishes it: the sdist, the pure wheel and a platform wheel
+      # per target that carries its binary, every wheel recording the binaries' hashes. They're the
+      # binaries' version (python-wheels.py refuses any other): a release commit already has it.
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: false
-      # The wheels are the binaries' version: python-wheels.py refuses any other.
-      - name: reeval-python wheels
+      - name: reeval-python sdist and wheels
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           (cd packages/reeval-python && uv version --frozen "$VERSION")
-          uv build --wheel --out-dir wheels packages/reeval-python
+          uv build --out-dir wheels packages/reeval-python
           uv run --no-project python scripts/python-wheels.py wheels/*-any.whl out wheels
+          uv run --no-project python scripts/python-wheels.py check wheels "$VERSION"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: reeval-python-wheels
+          name: reeval-python-dist
           path: wheels/
           if-no-files-found: error
           retention-days: 14
@@ -188,7 +191,7 @@ jobs:
       # reeval-python from this commit: the pure wheel, and this target's platform wheel.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: reeval-python-wheels
+          name: reeval-python-dist
           path: wheels
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:

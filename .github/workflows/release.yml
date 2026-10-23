@@ -2,8 +2,9 @@
 # binary of its own version, so both carry one version. release-please keeps one release PR open
 # from Conventional Commits on main; merging it tags vX.Y.Z. Then ci.yml runs on that commit; npm
 # publishes the tarball its packed install job packed, with trusted publishing (OIDC, environment
-# `npm`), and PyPI the sdist and wheel its lint job built, with OIDC, environment `pypi`. The
-# release also gets the standalone binaries and their SHA256SUMS (binary.yml) as assets.
+# `npm`). binary.yml builds the standalone binaries, which go up to the release with their
+# SHA256SUMS, and reeval-python's sdist and wheels, which record those binaries' hashes; once the
+# binaries are up, PyPI gets those, with OIDC, environment `pypi`. A republish builds the tag.
 # Publishing jobs must stay on this push-to-main trigger only (not tag push or `release` events) so
 # GitHub environments that allow deployment from branch `main` still approve the job.
 name: release
@@ -14,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       republish:
-        description: Run full CI on main and publish npm/PyPI from the manifest (tags must already exist)
+        description: Run full CI on the release tag the manifest names, and publish npm/PyPI from it (the tag must exist)
         type: boolean
         default: true
       dry_run:
@@ -105,6 +106,8 @@ jobs:
       contents: read
       actions: read
     uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.republish-gate.outputs.sha || github.sha }}
 
   # Built from the release's tagged commit, whichever ref the run was dispatched on. A push run's
   # commit is the release's (release-please checks it), and the SHA can't resolve to a branch.
@@ -242,11 +245,13 @@ jobs:
           fi
           npm publish --access public "$tgz"
 
+  # After the binaries are on the release, so the pure wheel's download never finds them missing.
   publish-pypi:
     name: publish to PyPI
-    needs: [release-please, republish-gate, test]
+    needs: [release-please, republish-gate, test, binaries, upload-binaries]
     if: |
-      always() && needs.test.result == 'success' && !inputs.dry_run && github.repository == 'invertase/reeval' &&
+      always() && needs.test.result == 'success' && needs.upload-binaries.result == 'success' &&
+      !inputs.dry_run && github.repository == 'invertase/reeval' &&
       (
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release-please.outputs.release_created == 'true') ||
         (github.event_name == 'workflow_dispatch' && needs.republish-gate.outputs.release_created == 'true')
@@ -255,25 +260,26 @@ jobs:
     timeout-minutes: 10
     environment: pypi
     permissions:
+      contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: v${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
+          persist-credentials: false
+          sparse-checkout: scripts/python-wheels.py
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: reeval-python-dist
           path: ${{ runner.temp }}/reeval-python-dist
-      # The release PR sets reeval-python's version with reeval's; a mismatch would ship an SDK
-      # that downloads another reeval.
+      # Every file must be this release's version (1.0.0-beta.1 is reeval-python 1.0.0b1), and every
+      # wheel must record these binaries: a mismatch would ship an SDK that downloads another reeval.
       - name: Check the version
         env:
           DIST: ${{ runner.temp }}/reeval-python-dist
           WANT: ${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
-        run: |
-          set -euo pipefail
-          wheel=$(ls "$DIST"/reeval_python-*.whl)
-          if [ "$(basename "$wheel")" != "reeval_python-${WANT}-py3-none-any.whl" ]; then
-            echo "::error::Built $(basename "$wheel"), but this release is reeval ${WANT}."
-            exit 1
-          fi
+        run: python3 scripts/python-wheels.py check "$DIST" "$WANT"
       # v1.14.3 (aef6c9b): commit SHAs are not published to ghcr.io; the release tag is.
       - uses: pypa/gh-action-pypi-publish@v1.14.3
         with:

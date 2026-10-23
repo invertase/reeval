@@ -28,16 +28,18 @@ def wheels(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
     return module
 
 
-def pure(tmp_path: Path) -> Path:
-    path = tmp_path / "dist" / "reeval_python-1.2.3-py3-none-any.whl"
+def pure(tmp_path: Path, version: str = "1.2.3") -> Path:
+    dist = f"reeval_python-{version}.dist-info"
+    path = tmp_path / "dist" / f"reeval_python-{version}-py3-none-any.whl"
     path.parent.mkdir()
+    (path.parent / f"reeval_python-{version}.tar.gz").write_bytes(b"sdist")
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("reeval_python/__init__.py", "")
-        z.writestr(f"{DIST}/METADATA", "Name: reeval-python\nVersion: 1.2.3\n")
+        z.writestr(f"{dist}/METADATA", f"Name: reeval-python\nVersion: {version}\n")
         z.writestr(
-            f"{DIST}/WHEEL", "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+            f"{dist}/WHEEL", "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
         )
-        z.writestr(f"{DIST}/RECORD", "")
+        z.writestr(f"{dist}/RECORD", "")
     return path
 
 
@@ -65,6 +67,7 @@ def test_a_platform_wheel_per_target_with_an_executable_binary(
     whl = pure(tmp_path)
     wheels.main([str(whl), str(release(tmp_path, wheels)), str(whl.parent)])
     built = sorted(p.name for p in whl.parent.glob("*.whl"))
+    wheels.main(["check", str(whl.parent), "1.2.3"])
     assert len(built) == len(wheels.TAGS) + 1
     assert "reeval_python-1.2.3-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" in built
     with zipfile.ZipFile(whl.parent / "reeval_python-1.2.3-py3-none-win_amd64.whl") as z:
@@ -121,3 +124,60 @@ def test_a_binary_that_does_not_match_sha256sums_is_refused(
     (out / "reeval-1.2.3-linux-arm64").write_bytes(b"tampered")
     with pytest.raises(SystemExit, match="reeval-1.2.3-linux-arm64 doesn't match SHA256SUMS"):
         wheels.main([str(whl), str(out), str(tmp_path / "out")])
+
+
+@pytest.mark.parametrize(
+    ("reeval", "python"),
+    [
+        ("1.2.3", "1.2.3"),
+        ("1.0.0-alpha.2", "1.0.0a2"),
+        ("1.0.0-beta.1", "1.0.0b1"),
+        ("2.0.0-rc.10", "2.0.0rc10"),
+    ],
+)
+def test_versions_map_both_ways_as_the_launcher_maps_them(
+    wheels: ModuleType, reeval: str, python: str
+) -> None:
+    from reeval_python import cli
+
+    assert wheels.pep440(reeval) == python
+    assert wheels.semver(python) == reeval == cli.semver(python)
+
+
+def test_a_version_with_no_python_spelling_is_refused(wheels: ModuleType) -> None:
+    with pytest.raises(SystemExit, match="-alpha.N, -beta.N or -rc.N"):
+        wheels.pep440("1.0.0-nightly.3")
+
+
+def test_a_prerelease_wheel_carries_reevals_prerelease_binaries(
+    tmp_path: Path, wheels: ModuleType
+) -> None:
+    whl = pure(tmp_path, "1.0.0b1")
+    wheels.main([str(whl), str(release(tmp_path, wheels, "1.0.0-beta.1")), str(whl.parent)])
+    with zipfile.ZipFile(whl.parent / "reeval_python-1.0.0b1-py3-none-macosx_13_0_arm64.whl") as z:
+        manifest = json.loads(z.read("reeval_python/binaries.json"))
+    assert manifest["version"] == "1.0.0-beta.1"
+    assert manifest["binaries"]["darwin-arm64"]["name"] == "reeval-1.0.0-beta.1-darwin-arm64"
+    wheels.main(["check", str(whl.parent), "1.0.0-beta.1"])
+
+
+def test_check_holds_every_file_to_the_release(tmp_path: Path, wheels: ModuleType) -> None:
+    whl = pure(tmp_path)
+    wheels.main([str(whl), str(release(tmp_path, wheels)), str(whl.parent)])
+    with pytest.raises(SystemExit, match="no reeval_python-1.2.4-py3-none-win_amd64.whl"):
+        wheels.main(["check", str(whl.parent), "1.2.4"])
+    (whl.parent / "reeval_python-1.2.3-py3-none-musllinux_1_2_aarch64.whl").unlink()
+    with pytest.raises(SystemExit, match="no reeval_python-1.2.3-py3-none-musllinux_1_2_aarch64"):
+        wheels.main(["check", str(whl.parent), "1.2.3"])
+
+
+def test_check_refuses_a_wheel_without_the_binaries_hashes(
+    tmp_path: Path, wheels: ModuleType
+) -> None:
+    whl = pure(tmp_path)
+    plain = whl.read_bytes()
+    wheels.main([str(whl), str(release(tmp_path, wheels)), str(whl.parent)])
+    # The pure wheel as `uv build` makes it, not the one binary.yml rewrote.
+    whl.write_bytes(plain)
+    with pytest.raises(SystemExit, match="py3-none-any.whl has no reeval_python/binaries.json"):
+        wheels.main(["check", str(whl.parent), "1.2.3"])

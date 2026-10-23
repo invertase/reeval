@@ -212,9 +212,15 @@ check(
 for (const f of ['pyproject.toml', 'uv.lock']) renameSync(join(dir, `${f}.off`), join(dir, f))
 const version = reeval(alone, ['--version']).stdout.trim()
 const wheelVersion = basename(wheel).split('-')[1]
+// reeval 1.0.0-beta.1 is reeval-python 1.0.0b1.
+const pep440 = (v) =>
+  v.replace(
+    /-(alpha|beta|rc)\.(\d+)$/,
+    (_, pre, n) => `${{ alpha: 'a', beta: 'b', rc: 'rc' }[pre]}${n}`,
+  )
 check(
   `the wheels are reeval-python ${wheelVersion}, the binary's version`,
-  wheelVersion === version,
+  wheelVersion === pep440(version),
 )
 const download = pathToFileURL(release).href
 const shimCache = join(alone, 'shim-cache')
@@ -297,7 +303,7 @@ if (values['platform-wheel']) {
     'pip-find-links',
     '--find-links',
     dirname(wheel),
-    `reeval-python==${version}`,
+    `reeval-python==${wheelVersion}`,
   )
   const picked = sh(
     links.python,

@@ -335,7 +335,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
 | `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` secret, or `AI_GATEWAY_API_KEY` when a dispatch names `*-gateway` rows, fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi, Codex, fx and Grok Build into the images (Claude Code stays pinned), then, whatever the contract did, checks whether the newest Claude Code adapter still needs reeval's patch (`scripts/drift/claude-code-patch.mjs`) and re-runs the OpenCode provider probe against the newest `@opencode/cli` (`scripts/drift/opencode-providers.mjs`), both key-free; any change to a CLI's output format, the stored conversation, behaviour or the OpenCode provider table fails it, the last with a diff; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another. A manual dispatch with `-f harnesses=<row>,<row>` (e.g. `claude-code-gateway,codex-gateway`, rows outside the default list included) runs only those rows' pinned contract and e2e, and skips the drift leg, the real-tier fixtures and the smoke |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`REEVAL_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
-| `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm, and `binary.yml`'s binaries uploaded to the GitHub release |
+| `release.yml` | release-please on `main`; on a release, `ci.yml` and `binary.yml` on the release commit (the tag, on a republish), then publishing to npm, `binary.yml`'s binaries uploaded to the GitHub release, and then its reeval-python sdist and wheels published to PyPI |
 
 - **Windows and macOS** (in `extended.yml`, so not on PRs without `ci:full`) run `scripts/ci-os.sh`: the unit and plan files (in six shards on
   Windows; one job on macOS), `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
@@ -377,9 +377,14 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   with `include-component-in-tag: false`, as the root package's is so its tags stay `vX.Y.Z`.)
   `release.yml` then runs all of `ci.yml` on that commit and, if it passes,
   publishes the tarball that its `packed install` job packed (with the `@reeval/*` packages bundled in),
-  in the `npm` environment with npm trusted publishing (OIDC, no token), the sdist and wheel
-  its `lint, typecheck and docs` job built to PyPI, in the `pypi` environment, and uploads the
-  binaries `binary.yml` builds, with their `SHA256SUMS`, to the release. A manual dispatch with
+  in the `npm` environment with npm trusted publishing (OIDC, no token). It uploads the binaries
+  `binary.yml` builds, with their `SHA256SUMS`, to the release, and then publishes the
+  reeval-python sdist, pure wheel and seven platform wheels the same `binary.yml` run built to
+  PyPI, in the `pypi` environment: every wheel records those binaries' hashes
+  (`reeval_python/binaries.json`), and `scripts/python-wheels.py check` holds every file to the
+  release's version first. A prerelease is `X.Y.Z-alpha.N`, `-beta.N` or `-rc.N`, which is
+  reeval-python `X.Y.ZaN`, `bN` or `rcN`. A manual dispatch republishes the manifest's version
+  from its tag (`ci.yml` and `binary.yml` take the tag as `ref`), whatever `main` has since;
   `-f dry_run=true` builds and smoke-tests the binaries and lists what it would upload to the
   current release, publishing nothing. The binaries are always built from the release's tagged commit, and a
   release that has its `SHA256SUMS` keeps its binaries unless the dispatch sets `-f replace_binaries=true`.
