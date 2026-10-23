@@ -9,9 +9,9 @@ image docker · cursor · 2 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
   base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
-cost  estimated $0.98–5.05 at prices from prices.json, judge included · 2 of 8 attempts from 2 past runs, the rest rough
-prices prices.json · unpriced — · past 2 runs, 3 attempts
-  evals/cost.eval.ts › greets         cursor:composer-2.5/-/docker          composer-2.5     history ×3  ×2  agent 1516800–2370000 tokens $0.352–0.55  judge 11000–124000 tokens $0.0113–0.105
-  evals/cost.eval.ts › greets         claude-code:claude-sonnet-5/-/docker  claude-sonnet-5  typical     ×2  agent 606000–4040000 tokens $0.234–1.56   judge 11000–124000 tokens $0.0113–0.105
-  evals/cost.eval.ts › fixes the bug  cursor:composer-2.5/-/docker          composer-2.5     typical     ×2  agent 606000–4040000 tokens $0.144–0.96   judge 0–124000 tokens $0–0.105
-  evals/cost.eval.ts › fixes the bug  claude-code:claude-sonnet-5/-/docker  claude-sonnet-5  typical     ×2  agent 606000–4040000 tokens $0.234–1.56   judge 0–124000 tokens $0–0.105
+cost  estimated $0.98–5.05 at prices.json over models.dev list prices, judge included · 2 of 8 attempts from 2 past runs, the rest rough
+prices prices.json over models.dev · unpriced — · past 2 runs, 3 attempts
+  evals/cost.eval.ts › greets         cursor:composer-2.5/-/docker          composer-2.5     judge google/gemini-3.8-flash  history ×3  ×2  agent 1516800–2370000 tokens $0.352–0.55  judge 11000–124000 tokens $0.0113–0.105
+  evals/cost.eval.ts › greets         claude-code:claude-sonnet-5/-/docker  claude-sonnet-5  judge google/gemini-3.8-flash  typical     ×2  agent 606000–4040000 tokens $0.234–1.56   judge 11000–124000 tokens $0.0113–0.105
+  evals/cost.eval.ts › fixes the bug  cursor:composer-2.5/-/docker          composer-2.5     judge google/gemini-3.8-flash  typical     ×2  agent 606000–4040000 tokens $0.144–0.96   judge 0–124000 tokens $0–0.105
+  evals/cost.eval.ts › fixes the bug  claude-code:claude-sonnet-5/-/docker  claude-sonnet-5  judge google/gemini-3.8-flash  typical     ×2  agent 606000–4040000 tokens $0.234–1.56   judge 0–124000 tokens $0–0.105

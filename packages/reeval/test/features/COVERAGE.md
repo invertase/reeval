@@ -37,7 +37,7 @@
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — | — |
 | `limit.compare: false`, or `maxVariants` leaving none: the lone control gates like an eval without compare | — | ✓ 3 | — | — | — | — |
 | `reeval run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — | — |
-| `reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day) or a `REEVAL_PRICES` file, tokens only without prices; the JSON plan's `cost` has each cell's part | ✓ 3 | ✓ 4 | — | — | — | — |
+| `reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part | ✓ 6 | ✓ 5 | — | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 2 | ✓ 1 | — | — | — | — |
 | `evaluate.only`, `.skip`, `.todo` and `.for`; `group.only` | ✓ 5 | ✓ 1 | — | — | — | — |
 | `group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio | ✓ 2 | ✓ 1 | — | — | — | — |

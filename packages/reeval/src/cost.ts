@@ -4,7 +4,7 @@
 // whether to run, never a bill: it ignores subscriptions, negotiated prices and retries, and
 // leaves out of the dollars any model it has no price for.
 import type { RunRecord } from './history/types.ts'
-import type { Price, Prices } from './prices.ts'
+import type { ModelsDev, Price, Prices } from './prices.ts'
 import { quantile } from './stats.ts'
 import type { Cell, HarnessDescriptor, TokenUsage } from './types.ts'
 import { totalTokens } from './usage.ts'
@@ -21,6 +21,8 @@ export type PlanCostCell = {
   cell: string
   /** The model its attempts are priced as; null for the fake agent. */
   model: string | null
+  /** The model its judge calls are priced as; null when it makes none, or for the fake judge. */
+  judgeModel: string | null
   attempts: number
   basis: CostBasis
   /** Past attempts whose tokens it's based on, when `basis` is `history`. */
@@ -44,12 +46,13 @@ export type PlanCost = {
   /** Recorded runs, and attempts in them, whose tokens fed the estimate. */
   pastRuns: number
   pastAttempts: number
-  /** Models with no price in the loaded prices. */
-  unpriced: string[]
-  /** Where the prices came from, or why there are none. Never stored in a record. */
-  prices:
-    | { source: string; fetchedAt: string | null; stale: boolean }
-    | { source: null; why: string }
+  /** Models with no price in the loaded prices, and their tokens, which `usd` leaves out. */
+  unpriced: { model: string; tokens: Range }[]
+  /**
+   * Where the prices came from: models.dev (or why not), under the `REEVAL_PRICES` file's; or why
+   * there are none. Never stored in a record.
+   */
+  prices: { modelsDev: ModelsDev; file: string | null } | { why: string }
   cells: PlanCostCell[]
 }
 
@@ -189,14 +192,10 @@ export function planCost(
   const table = prices.table
   const cells = new Map<string, PlanCostCell>()
   const used = new Map<string, string>()
-  const unpriced = new Set<string>()
-  const priced = (model: string) => {
-    if (!table) return null
-    const price = priceFor(model, table)
-    if (!price) unpriced.add(model)
-    return price
-  }
-  const judgeOf = (id: string): CostPart => {
+  const overlay = prices.table ? prices.overlay : null
+  const priced = (model: string) =>
+    table && ((overlay && priceFor(model, overlay)) ?? priceFor(model, table))
+  const judgeOf = (id: string): { part: CostPart; model: string | null } => {
     const past = history.judges.get(id)
     const calls = past?.length
       ? (quantile(
@@ -205,17 +204,22 @@ export function planCost(
         ) ?? 0)
       : null
     const model = past?.length ? mostCommon(past.flatMap((j) => j.models)) : judgeModel
-    if (calls === 0 || !model || model === 'fake') return { tokens: ZERO, usd: table && ZERO }
+    if (calls === 0 || !model || model === 'fake') {
+      return { part: { tokens: ZERO, usd: table && ZERO }, model: null }
+    }
     const price = priced(model)
     const { low, high } = TYPICAL_JUDGE_CALL
     const call: CostPart = {
       tokens: { low: tokensOf(low), high: tokensOf(high) },
       usd: price && { low: usdOf(low, price), high: usdOf(high, price) },
     }
-    if (calls !== null) return scalePart(call, calls)
+    if (calls !== null) return { part: scalePart(call, calls), model }
     return {
-      tokens: { low: 0, high: call.tokens.high },
-      usd: call.usd && { low: 0, high: call.usd.high },
+      part: {
+        tokens: { low: 0, high: call.tokens.high },
+        usd: call.usd && { low: 0, high: call.usd.high },
+      },
+      model,
     }
   }
   for (const { id, cell, harness } of attempts) {
@@ -240,15 +244,17 @@ export function planCost(
           usd: price && { low: usdOf(low, price), high: usdOf(high, price) },
         }
       }
+      const judge = judgeOf(id)
       c = {
         eval: id,
         cell: cell.key,
         model,
+        judgeModel: judge.model,
         attempts: 0,
         basis,
         samples: basis === 'history' ? (samples?.length ?? 0) : 0,
         agent,
-        judge: judgeOf(id),
+        judge: judge.part,
       }
       cells.set(key, c)
     }
@@ -269,6 +275,16 @@ export function planCost(
     (t, c) => add(add(t, c.agent.usd ? ZERO : c.agent.tokens), c.judge.usd ? ZERO : c.judge.tokens),
     ZERO,
   )
+  const unpriced = new Map<string, Range>()
+  const leftOut = (model: string | null, part: CostPart) => {
+    if (table && model && !part.usd && part.tokens.high > 0) {
+      unpriced.set(model, add(unpriced.get(model) ?? ZERO, part.tokens))
+    }
+  }
+  for (const c of list) {
+    leftOut(c.model, c.agent)
+    leftOut(c.judgeModel, c.judge)
+  }
   const tally: Record<CostBasis, number> = { history: 0, typical: 0, free: 0 }
   for (const c of list) tally[c.basis] += c.attempts
   const usd = addOrNull(agent.usd, judge.usd)
@@ -281,10 +297,10 @@ export function planCost(
     attempts: tally,
     pastRuns: new Set(used.values()).size,
     pastAttempts: used.size,
-    unpriced: [...unpriced].sort(),
-    prices: prices.table
-      ? { source: prices.source, fetchedAt: prices.fetchedAt, stale: prices.stale }
-      : { source: null, why: prices.why },
+    unpriced: [...unpriced]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([model, tokens]) => ({ model, tokens: round(tokens, 0) as Range })),
+    prices: prices.table ? { modelsDev: prices.modelsDev, file: prices.file } : { why: prices.why },
     cells: list.map((c) => ({ ...c, agent: roundPart(c.agent), judge: roundPart(c.judge) })),
   }
 }
@@ -316,35 +332,53 @@ export function formatTokenRange({ low, high }: Range): string {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
- * `models.dev list prices`, `models.dev list prices of 2026-10-20 (offline)` from an old copy, or
- * `prices from prices.json` for a `REEVAL_PRICES` file.
+ * `models.dev list prices`, `models.dev list prices of 2026-10-20 (offline)` from an old copy,
+ * `prices.json over models.dev list prices` with a `REEVAL_PRICES` file, or
+ * `prices.json (models.dev unreachable, …)` when it's the file alone.
  */
-const priceLabel = (p: Extract<PlanCost['prices'], { source: string }>) =>
-  p.fetchedAt === null
-    ? `prices from ${p.source}`
-    : `${p.source} list prices${p.stale ? ` of ${p.fetchedAt.slice(0, 10)} (offline)` : ''}`
+function priceLabel({ modelsDev, file }: { modelsDev: ModelsDev; file: string | null }) {
+  if ('why' in modelsDev) return `${file} (${modelsDev.why})`
+  const list = `models.dev list prices${modelsDev.stale ? ` of ${modelsDev.fetchedAt.slice(0, 10)} (offline)` : ''}`
+  return file ? `${file} over ${list}` : list
+}
+
+/** What a partly priced estimate's dollars cover: `judge only`, `claude-sonnet-5, judge`. */
+function covered(c: PlanCost): string {
+  const agents = [
+    ...new Set(
+      c.cells.filter((x) => x.model && x.agent.usd && x.agent.tokens.high > 0).map((x) => x.model),
+    ),
+  ]
+  const judged = c.cells.some((x) => x.judge.usd && x.judge.tokens.high > 0)
+  if (!agents.length) return 'judge only'
+  return judged ? `${agents.join(', ')}, judge` : `${agents.join(', ')} only`
+}
 
 /**
- * `cost  estimated $3.10–8.40 at models.dev list prices, judge included · from 4 past runs`, or
- * tokens alone without prices; null when every attempt is the fake agent's, which costs nothing.
+ * `cost  estimated $3.10–8.40 at models.dev list prices, judge included · from 4 past runs`; with
+ * models it has no price for, `$0.06 priced (judge only) at …; composer-2.5: 0.3–2.1M tokens, no
+ * list price`; or tokens alone without prices. Null when every attempt is the fake agent's, which
+ * costs nothing.
  */
 export function costLine(c: PlanCost): string | null {
   if (c.tokens.high === 0 && (c.usd === null || c.usd.high === 0)) return null
   const judged = c.judge.tokens.high > 0 ? ', judge included' : ''
   const parts: string[] = []
-  if (c.usd && c.prices.source !== null) {
-    parts.push(`estimated ${formatUsdRange(c.usd)} at ${priceLabel(c.prices)}${judged}`)
-    if (c.unpricedTokens.high > 0) {
-      parts.push(
-        `plus ${formatTokenRange(c.unpricedTokens)} with no list price (${c.unpriced.join(', ')})`,
-      )
+  if (c.usd && !('why' in c.prices)) {
+    const usd = formatUsdRange(c.usd)
+    const label = priceLabel(c.prices)
+    if (c.unpricedTokens.high === 0) {
+      parts.push(`estimated ${usd} at ${label}${judged}`)
+    } else {
+      const left = c.unpriced.map((u) => `${u.model}: ${formatTokenRange(u.tokens)}`).join(', ')
+      parts.push(`${usd} priced (${covered(c)}) at ${label}; ${left}, no list price`)
     }
   } else {
     parts.push(`estimated ${formatTokenRange(c.tokens)}${judged}`)
     parts.push(
-      c.prices.source === null
+      'why' in c.prices
         ? `no prices: ${c.prices.why}`
-        : `no price in ${c.prices.source} for ${c.unpriced.join(', ')}`,
+        : `no list price for ${c.unpriced.map((u) => u.model).join(', ')}`,
     )
   }
   const { history, typical } = c.attempts

@@ -384,10 +384,19 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'plan.cost',
     area: 'Config and selection',
-    name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day) or a `REEVAL_PRICES` file, tokens only without prices; the JSON plan's `cost` has each cell's part",
-    plan: ['cost/no-history', 'cost/history', 'cost/unpriced', 'cost/tokens-only'],
+    name: "`reeval run --dry-run`'s cost estimate: token and USD ranges from each cell's past tokens, else a typical attempt's, with judge calls, priced from models.dev (cached a day, a failure for an hour) under a `REEVAL_PRICES` file, saying what the dollars cover when a model has no price, tokens only without prices; the JSON plan's `cost` has each cell's part",
+    plan: [
+      'cost/no-history',
+      'cost/history',
+      'cost/unpriced',
+      'cost/file-offline',
+      'cost/tokens-only',
+    ],
     tests: [
       'reeval/test/cost.test.ts › says what the range is based on, and where the prices came from',
+      'reeval/test/cost.test.ts › with models it has no price for, says what the dollars cover and what they leave out',
+      'reeval/test/cost.test.ts › a REEVAL_PRICES file lies over models.dev, and stands alone when it is unreachable',
+      'reeval/test/cost.test.ts › a failed fetch is not tried again for an hour',
       'reeval/test/cost.test.ts › offline, an older cache is used and marked stale; with none, there are no prices',
       'reeval/test/cost.test.ts › is null for a model without an exact price, rather than a near one',
     ],

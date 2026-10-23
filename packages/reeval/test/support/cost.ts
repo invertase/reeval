@@ -40,3 +40,31 @@ export function writePastCostRuns(root: string): void {
     writeFileSync(join(dir, `${runId}.json`), `${JSON.stringify(record, null, 2)}\n`)
   }
 }
+
+/** The cost cases' models.dev prices: what a fetch would have cached, minus Cursor's Composer. */
+const MODELS_DEV = {
+  'claude-sonnet-5': [2, 0.2, 2.5, 10],
+  'gemini-3.8-flash': [0.75, 0.075, 0.75, 3.75],
+  'gpt-5.6-luna': [0.2, 0.02, 0.25, 1.2],
+}
+
+/** The cost cases' `XDG_CACHE_HOME`, inside the copied project, so no case fetches models.dev. */
+const COST_CACHE = '.cache'
+
+/** A models.dev cache fetched just now, so the dry run uses it without fetching. */
+export function seedModelsDev(root: string): void {
+  const dir = join(root, COST_CACHE, 'reeval')
+  mkdirSync(dir, { recursive: true })
+  const cached = { fetchedAt: new Date().toISOString(), table: MODELS_DEV }
+  writeFileSync(join(dir, 'models-dev-prices.json'), JSON.stringify(cached))
+}
+
+/** A models.dev fetch that failed just now, so the dry run doesn't try again. */
+export function seedModelsDevFailure(root: string): void {
+  const dir = join(root, COST_CACHE, 'reeval')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, 'models-dev-failed.json'),
+    JSON.stringify({ at: new Date().toISOString() }),
+  )
+}

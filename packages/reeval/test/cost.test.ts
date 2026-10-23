@@ -15,7 +15,7 @@ import {
   priceFor,
   usdOf,
 } from '../src/cost.ts'
-import { loadPrices, type Price } from '../src/prices.ts'
+import { loadPrices, type Price, type Prices } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
 
 const FLASH: Price = [0.75, 0.075, 0.75, 3.75]
@@ -25,9 +25,9 @@ const TABLE: Record<string, Price> = {
 }
 const PRICES = {
   table: TABLE,
-  source: 'models.dev',
-  fetchedAt: '2026-10-23T00:00:00Z',
-  stale: false,
+  overlay: null,
+  file: null,
+  modelsDev: { fetchedAt: '2026-10-23T00:00:00Z', stale: false },
 }
 
 const cell = (harness: string): Cell => ({
@@ -81,6 +81,27 @@ describe('priceFor', () => {
     assert.ok(cost.usd)
   })
 
+  test('a REEVAL_PRICES entry wins over every models.dev id it matches', () => {
+    const cost = planCost(
+      [
+        {
+          id: 'e',
+          cell: cell('fx:anthropic/claude-sonnet-4.5'),
+          harness: { kind: 'fx', model: 'anthropic/claude-sonnet-4.5' },
+        },
+      ],
+      [],
+      null,
+      {
+        ...PRICES,
+        table: { ...TABLE, 'anthropic/claude-sonnet-4.5': [3, 0.3, 3.75, 15] },
+        overlay: { 'claude-sonnet-4.5': [1, 1, 1, 1] },
+        file: 'prices.json',
+      },
+    )
+    assert.deepEqual(cost.usd, { low: 0.303, high: 2.02 })
+  })
+
   test('without prices, the estimate is tokens alone and says why', () => {
     const cost = planCost(
       [
@@ -131,7 +152,7 @@ describe('costLine', () => {
     pastRuns: 0,
     pastAttempts: 0,
     unpriced: [],
-    prices: { source: 'models.dev', fetchedAt: '2026-10-23T00:00:00Z', stale: false },
+    prices: { modelsDev: { fetchedAt: '2026-10-23T00:00:00Z', stale: false }, file: null },
     cells: [],
   }
 
@@ -149,20 +170,62 @@ describe('costLine', () => {
         ...base,
         attempts: { ...base.attempts, history: 2, typical: 4 },
         pastRuns: 1,
-        prices: { ...base.prices, stale: true, fetchedAt: '2026-10-20T08:00:00Z' },
+        prices: { modelsDev: { stale: true, fetchedAt: '2026-10-20T08:00:00Z' }, file: null },
       }),
       'cost  estimated $1.00–4.00 at models.dev list prices of 2026-10-20 (offline), judge included · 2 of 6 attempts from 1 past run, the rest rough',
     )
   })
 
-  test('adds the tokens it could not price, naming the models', () => {
+  test('with models it has no price for, says what the dollars cover and what they leave out', () => {
+    const judgeOnly = {
+      ...base,
+      usd: { low: 0, high: 0.06 },
+      unpricedTokens: { low: 300_000, high: 2_100_000 },
+      unpriced: [{ model: 'composer-2.5', tokens: { low: 300_000, high: 2_100_000 } }],
+      cells: [
+        {
+          eval: 'e',
+          cell: 'cursor:composer-2.5/-/docker',
+          model: 'composer-2.5',
+          judgeModel: 'google/gemini-3.8-flash',
+          attempts: 1,
+          basis: 'typical' as const,
+          samples: 0,
+          agent: { tokens: { low: 300_000, high: 2_100_000 }, usd: null },
+          judge: { tokens: { low: 0, high: 62_000 }, usd: { low: 0, high: 0.06 } },
+        },
+      ],
+    }
+    assert.equal(
+      costLine(judgeOnly),
+      'cost  up to $0.06 priced (judge only) at models.dev list prices; composer-2.5: 0.3–2.1M tokens, no list price · no history, rough',
+    )
+    const sonnet = {
+      ...judgeOnly.cells[0],
+      cell: 'claude-code:claude-sonnet-5/-/docker',
+      model: 'claude-sonnet-5',
+      agent: { tokens: { low: 300_000, high: 2_100_000 }, usd: { low: 0.2, high: 1.2 } },
+      judge: { tokens: { low: 0, high: 62_000 }, usd: null },
+    }
     assert.equal(
       costLine({
-        ...base,
-        unpricedTokens: { low: 600_000, high: 4_000_000 },
-        unpriced: ['my-model'],
+        ...judgeOnly,
+        usd: { low: 0.2, high: 1.2 },
+        unpriced: [{ model: 'my-judge', tokens: { low: 0, high: 62_000 } }, ...judgeOnly.unpriced],
+        cells: [{ ...judgeOnly.cells[0], judge: sonnet.judge }, sonnet],
+        prices: {
+          modelsDev: { why: 'models.dev unreachable, next try in 60m' },
+          file: 'prices.json',
+        },
       }),
-      'cost  estimated $1.00–4.00 at models.dev list prices, judge included · plus 0.6–4.0M tokens with no list price (my-model) · no history, rough',
+      'cost  $0.20–1.20 priced (claude-sonnet-5 only) at prices.json (models.dev unreachable, next try in 60m); my-judge: up to 62k tokens, composer-2.5: 0.3–2.1M tokens, no list price · no history, rough',
+    )
+  })
+
+  test('names a REEVAL_PRICES file over models.dev', () => {
+    assert.equal(
+      costLine({ ...base, prices: { ...base.prices, file: 'prices.json' } }),
+      'cost  estimated $1.00–4.00 at prices.json over models.dev list prices, judge included · no history, rough',
     )
   })
 
@@ -230,25 +293,46 @@ describe('loadPrices', () => {
     return s.source
   }
 
-  test('REEVAL_PRICES=none is tokens only, and a file is used instead of models.dev', async () => {
+  const fetchedAt = (p: Prices) =>
+    p.table && 'fetchedAt' in p.modelsDev ? p.modelsDev.fetchedAt : null
+  const UNREACHABLE = 'models.dev unreachable, next try in 60m'
+
+  test('REEVAL_PRICES=none is tokens only, and a bad file is refused', async () => {
     assert.deepEqual(await loadPrices({ REEVAL_PRICES: 'none' }), {
       table: null,
       why: 'REEVAL_PRICES=none',
     })
     const { dir } = cache()
     const file = join(dir, 'prices.json')
-    writeFileSync(
-      file,
-      JSON.stringify({ 'Composer-2.5': { input: 0.5, cache_read: 0.2, output: 2.5 } }),
-    )
-    const prices = await loadPrices({ REEVAL_PRICES: file })
-    assert.deepEqual(prices.table, { 'composer-2.5': [0.5, 0.2, 0.5, 2.5] })
     for (const cost of [{ input: 0.5 }, { input: '0.5', output: 2 }, { input: -1, output: 2 }]) {
       writeFileSync(file, JSON.stringify({ 'composer-2.5': cost }))
       const bad = await loadPrices({ REEVAL_PRICES: file })
       assert.equal(bad.table, null)
       assert.match('why' in bad ? bad.why : '', /composer-2\.5 needs input and output/)
     }
+  })
+
+  test('a REEVAL_PRICES file lies over models.dev, and stands alone when it is unreachable', async (t) => {
+    const s = await server('answer')
+    t.after(s.stop)
+    const { dir } = cache()
+    const file = join(dir, 'prices.json')
+    writeFileSync(
+      file,
+      JSON.stringify({ 'Composer-2.5': { input: 0.5, cache_read: 0.2, output: 2.5 } }),
+    )
+    const overlay = { 'composer-2.5': [0.5, 0.2, 0.5, 2.5] }
+    const both = await loadPrices({ REEVAL_PRICES: file }, now, s.source)
+    assert.deepEqual(both.table?.['gemini-3.8-flash'], FLASH)
+    assert.deepEqual(both.table && both.overlay, overlay)
+    assert.equal(fetchedAt(both), new Date(now).toISOString())
+    cache()
+    assert.deepEqual(await loadPrices({ REEVAL_PRICES: file }, now, await refused()), {
+      table: {},
+      overlay,
+      file: both.table && both.file,
+      modelsDev: { why: UNREACHABLE },
+    })
   })
 
   const seed = (dir: string, fetchedAt: string, table: unknown = TABLE) => {
@@ -268,9 +352,9 @@ describe('loadPrices', () => {
     assert.equal(s.hits.length, 0)
     assert.deepEqual(prices, {
       table: TABLE,
-      source: 'models.dev',
-      fetchedAt: '2026-10-23T06:00:00Z',
-      stale: false,
+      overlay: null,
+      file: null,
+      modelsDev: { fetchedAt: '2026-10-23T06:00:00Z', stale: false },
     })
   })
 
@@ -278,15 +362,14 @@ describe('loadPrices', () => {
     const s = await server('answer')
     t.after(s.stop)
     const { dir, env } = cache()
-    for (const [fetchedAt, table] of [
+    for (const [at, table] of [
       ['2026-10-23T06:00:00Z', { 'gemini-3.8-flash': 'oops' }],
       ['2026-10-23T06:00:00Z', { 'gemini-3.8-flash': [1, 2] }],
       ['not a date', TABLE],
       ['2099-01-01T00:00:00Z', TABLE],
     ] as const) {
-      seed(dir, fetchedAt, table)
-      const prices = await loadPrices(env, now, s.source)
-      assert.equal('stale' in prices && prices.fetchedAt, new Date(now).toISOString())
+      seed(dir, at, table)
+      assert.equal(fetchedAt(await loadPrices(env, now, s.source)), new Date(now).toISOString())
     }
     assert.equal(s.hits.length, 4)
   })
@@ -296,12 +379,27 @@ describe('loadPrices', () => {
     const { dir, env } = cache()
     seed(dir, '2026-10-01T00:00:00Z')
     const stale = await loadPrices(env, now, source)
-    assert.equal('stale' in stale && stale.stale, true)
-    cache()
-    assert.deepEqual(await loadPrices({}, now, source), {
-      table: null,
-      why: 'models.dev unreachable',
+    assert.deepEqual(stale.table && stale.modelsDev, {
+      fetchedAt: '2026-10-01T00:00:00Z',
+      stale: true,
     })
+    cache()
+    assert.deepEqual(await loadPrices({}, now, source), { table: null, why: UNREACHABLE })
+  })
+
+  test('a failed fetch is not tried again for an hour', async (t) => {
+    cache()
+    assert.deepEqual(await loadPrices({}, now, await refused()), { table: null, why: UNREACHABLE })
+    const s = await server('answer')
+    t.after(s.stop)
+    assert.deepEqual(await loadPrices({}, now + 15 * 60_000, s.source), {
+      table: null,
+      why: 'models.dev unreachable, next try in 45m',
+    })
+    assert.equal(s.hits.length, 0)
+    const later = now + 61 * 60_000
+    assert.equal(fetchedAt(await loadPrices({}, later, s.source)), new Date(later).toISOString())
+    assert.equal(s.hits.length, 1)
   })
 
   test('a host that never answers gives up at the deadline and closes the socket', async (t) => {
@@ -309,10 +407,7 @@ describe('loadPrices', () => {
     t.after(s.stop)
     const { env } = cache()
     const start = Date.now()
-    assert.deepEqual(await loadPrices(env, now, s.source), {
-      table: null,
-      why: 'models.dev unreachable',
-    })
+    assert.deepEqual(await loadPrices(env, now, s.source), { table: null, why: UNREACHABLE })
     assert.ok(Date.now() - start < 2000, 'waited past the deadline')
     assert.equal(s.hits.length, 1)
     await Promise.all(s.closed)

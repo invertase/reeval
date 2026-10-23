@@ -1,9 +1,9 @@
 // List prices for the dry run's cost estimate, fetched when it's shown and never stored in a
 // record: prices change, so reeval keeps no table of its own. models.dev's direct providers, and
 // Vercel AI Gateway's `provider/model` ids, cached on the host for a day, and an older copy when
-// it can't be reached; `REEVAL_PRICES` names a file of your own prices instead, or `none` for
-// tokens only.
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+// it can't be reached; a failed fetch isn't retried for an hour. `REEVAL_PRICES` names a file of
+// your own prices that win over models.dev's, or `none` for tokens only.
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { get as httpGet, type IncomingMessage } from 'node:http'
 import { get as httpsGet } from 'node:https'
 import { join, resolve } from 'node:path'
@@ -17,7 +17,8 @@ const PROVIDERS = ['anthropic', 'openai', 'google', 'xai']
 /** Its ids name the provider (`anthropic/claude-sonnet-4.5`), so they never shadow a direct one. */
 const GATEWAY = 'vercel'
 const FRESH_MS = 24 * 60 * 60_000
-const FETCH_TIMEOUT_MS = 5000
+const RETRY_MS = 60 * 60_000
+const FETCH_TIMEOUT_MS = 2000
 
 /** USD per million tokens: input, cache read, cache write, output. */
 export type Price = readonly [number, number, number, number]
@@ -25,15 +26,18 @@ export type Price = readonly [number, number, number, number]
 /** models.dev's cost fields, which a `REEVAL_PRICES` file uses too. */
 type Cost = { input?: unknown; output?: unknown; cache_read?: unknown; cache_write?: unknown }
 
+/** When models.dev's prices were fetched, and whether that's an older copy for want of a newer. */
+export type ModelsDev = { fetchedAt: string; stale: boolean } | { why: string }
+
 export type Prices =
   | {
+      /** models.dev's; empty when it couldn't be reached and a file supplied prices. */
       table: Record<string, Price>
-      /** `models.dev`, or the `REEVAL_PRICES` file. */
-      source: string
-      /** When models.dev was fetched; null when only a file supplied them. */
-      fetchedAt: string | null
-      /** models.dev couldn't be reached, so this is an older copy. */
-      stale: boolean
+      /** The `REEVAL_PRICES` file's, which win over models.dev's; null without one. */
+      overlay: Record<string, Price> | null
+      /** That file, from the working directory; null without one. */
+      file: string | null
+      modelsDev: ModelsDev
     }
   | { table: null; why: string }
 
@@ -64,6 +68,7 @@ function tableOf(catalog: Catalog): Record<string, Price> {
 
 type Cached = { fetchedAt: string; table: Record<string, Price> }
 const cacheFile = () => join(cacheDir(), 'models-dev-prices.json')
+const failedFile = () => join(cacheDir(), 'models-dev-failed.json')
 
 /** The cached copy, or null when it's missing, unreadable or not one reeval wrote. */
 async function readCached(): Promise<Cached | null> {
@@ -80,13 +85,22 @@ async function readCached(): Promise<Cached | null> {
   }
 }
 
+/** When a fetch last failed; null when none is on record. */
+async function readFailedAt(): Promise<number | null> {
+  try {
+    const at = Date.parse((JSON.parse(await readFile(failedFile(), 'utf8')) as { at: string }).at)
+    return Number.isNaN(at) ? null : at
+  } catch {
+    return null
+  }
+}
+
 /** Best-effort: a cache that can't be written only means fetching again next time. */
-async function writeCached(cached: Cached): Promise<void> {
-  const file = cacheFile()
+async function writeCacheFile(file: string, value: unknown): Promise<void> {
   const tmp = `${file}.${process.pid}`
   try {
     await mkdir(cacheDir(), { recursive: true })
-    await writeFile(tmp, JSON.stringify(cached))
+    await writeFile(tmp, JSON.stringify(value))
     await rename(tmp, file)
   } catch {}
 }
@@ -124,25 +138,35 @@ async function read(res: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
 }
 
+/** models.dev's prices, an older copy, or why there are none. */
 async function modelsDev(
   now: number,
   url: string,
   timeoutMs: number,
-): Promise<Cached & { stale: boolean }> {
+): Promise<{ table: Record<string, Price>; modelsDev: ModelsDev } | { why: string }> {
   const cached = await readCached()
   const age = cached ? now - Date.parse(cached.fetchedAt) : Number.NaN
-  if (cached && age >= 0 && age < FRESH_MS) return { ...cached, stale: false }
-  try {
-    const fresh = {
-      fetchedAt: new Date(now).toISOString(),
-      table: tableOf((await getJson(url, timeoutMs)) as Catalog),
-    }
-    await writeCached(fresh)
-    return { ...fresh, stale: false }
-  } catch (error) {
-    if (cached) return { ...cached, stale: true }
-    throw error
+  if (cached && age >= 0 && age < FRESH_MS) {
+    return { table: cached.table, modelsDev: { fetchedAt: cached.fetchedAt, stale: false } }
   }
+  const failedAt = await readFailedAt()
+  let retryIn = failedAt === null ? 0 : failedAt + RETRY_MS - now
+  if (retryIn <= 0 || retryIn > RETRY_MS) {
+    try {
+      const fetchedAt = new Date(now).toISOString()
+      const table = tableOf((await getJson(url, timeoutMs)) as Catalog)
+      await writeCacheFile(cacheFile(), { fetchedAt, table })
+      await rm(failedFile(), { force: true }).catch(() => {})
+      return { table, modelsDev: { fetchedAt, stale: false } }
+    } catch {
+      await writeCacheFile(failedFile(), { at: new Date(now).toISOString() })
+      retryIn = RETRY_MS
+    }
+  }
+  if (cached) {
+    return { table: cached.table, modelsDev: { fetchedAt: cached.fetchedAt, stale: true } }
+  }
+  return { why: `models.dev unreachable, next try in ${Math.ceil(retryIn / 60_000)}m` }
 }
 
 async function ownPrices(path: string): Promise<Record<string, Price>> {
@@ -164,18 +188,17 @@ export async function loadPrices(
 ): Promise<Prices> {
   const setting = env.REEVAL_PRICES?.trim()
   if (setting === 'none') return { table: null, why: 'REEVAL_PRICES=none' }
+  let overlay: Record<string, Price> | null = null
+  const file = setting ? fromCwd(resolve(setting)) : null
   if (setting) {
-    const file = fromCwd(resolve(setting))
     try {
-      return { table: await ownPrices(setting), source: file, fetchedAt: null, stale: false }
+      overlay = await ownPrices(setting)
     } catch (error) {
       return { table: null, why: `REEVAL_PRICES ${file}: ${(error as Error).message}` }
     }
   }
-  try {
-    const fetched = await modelsDev(now, source.url, source.timeoutMs)
-    return { source: 'models.dev', ...fetched }
-  } catch {
-    return { table: null, why: 'models.dev unreachable' }
-  }
+  const fetched = await modelsDev(now, source.url, source.timeoutMs)
+  if ('table' in fetched) return { ...fetched, overlay, file }
+  if (!overlay) return { table: null, why: fetched.why }
+  return { table: {}, overlay, file, modelsDev: fetched }
 }

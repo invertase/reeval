@@ -147,18 +147,27 @@ const part = (p: CostPart) => `${range(p.tokens)} tokens $${range(p.usd)}`
 function costLines(plan: PlanDocument): string[] {
   const { cost } = plan
   if (!cost) return ['cost  (none in the JSON plan)']
+  const { prices: p } = cost
+  const modelsDev =
+    'why' in p
+      ? ''
+      : 'why' in p.modelsDev
+        ? 'models.dev: —'
+        : `models.dev${p.modelsDev.stale ? ' (stale)' : ''}`
   const prices =
-    cost.prices.source === null
-      ? `no prices: ${cost.prices.why}`
-      : `prices ${cost.prices.source}${cost.prices.stale ? ' (stale)' : ''}`
+    'why' in p
+      ? `no prices: ${p.why}`
+      : `prices ${[p.file, modelsDev].filter(Boolean).join(' over ')}`
+  const unpriced = cost.unpriced.map((u) => `${u.model} ${range(u.tokens)}`).join(', ')
   return [
     costLine(cost) ?? 'cost  (no line)',
-    `${prices} · unpriced ${cost.unpriced.join(', ') || '—'} · past ${cost.pastRuns} runs, ${cost.pastAttempts} attempts`,
+    `${prices} · unpriced ${unpriced || '—'} · past ${cost.pastRuns} runs, ${cost.pastAttempts} attempts`,
     ...table(
       cost.cells.map((c) => [
         `  ${c.eval}`,
         c.cell,
         c.model ?? 'fake',
+        `judge ${c.judgeModel ?? '—'}`,
         `${c.basis}${c.basis === 'history' ? ` ×${c.samples}` : ''}`,
         `×${c.attempts}`,
         `agent ${part(c.agent)}`,
