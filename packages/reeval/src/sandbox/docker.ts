@@ -111,6 +111,7 @@ export async function createDockerSandbox(
       path: URL.canParse(event.url) ? new URL(event.url).pathname : event.url,
       ...(event.responseModel ? { responseModel: event.responseModel } : {}),
       ...(event.responseEffort ? { responseEffort: event.responseEffort } : {}),
+      ...(event.requestHeaders ? { headers: event.requestHeaders } : {}),
     })
     if (model) served.push(model)
   }

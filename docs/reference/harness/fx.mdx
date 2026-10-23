@@ -88,9 +88,9 @@ The adapter refuses to run in a sandbox that can't broker the key.
 | `model` | Runs on | Served model recorded |
 |---|---|---|
 | `gpt-4.1` | An fx configured provider, `openai`, over the Chat Completions API | `gpt-4.1-2025-04-14` |
-| `anthropic/claude-sonnet-5` | fx's `gateway` provider | The model AI Gateway answers with |
+| `anthropic/claude-sonnet-5` | fx's `gateway` provider | The model AI Gateway answers with, else the one each call asked for |
 
-fx sends `max_tokens`, which OpenAI's reasoning models refuse, so a bare id must be a non-reasoning model such as `gpt-4.1`; reasoning models run through AI Gateway. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output, with its reasoning tokens. fx doesn't name the served model over ACP, so the gateway reads it from each response. Session titles are off, since fx writes them with its own model, so the run's model is the only one called.
+fx sends `max_tokens`, which OpenAI's reasoning models refuse, so a bare id must be a non-reasoning model such as `gpt-4.1`; reasoning models run through AI Gateway. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output, with its reasoning tokens. fx doesn't name the served model over ACP, so the gateway reads it from each response; a provider whose stream names none (Gemini's) records the model each call asked AI Gateway for, its `ai-language-model-id` header. Session titles are off, since fx writes them with its own model, so the run's model is the only one called.
 
 ## Settings
 

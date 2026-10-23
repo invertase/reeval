@@ -222,6 +222,23 @@ describe('Vercel AI Gateway routes', () => {
     assert.equal(agent.modelId?.('openai/gpt-5.4-mini'), 'openai/gpt-5.4-mini')
   })
 
+  test("fx's served model is the stream's, else the model its call asked the gateway for", () => {
+    const agent = onVercel({ kind: 'fx', model: 'google/gemini-3.8-flash' } as HarnessDescriptor)
+    const call = { host: 'ai-gateway.vercel.sh', method: 'POST', path: '/v4/ai/language-model' }
+    const asked = { headers: { 'ai-language-model-id': 'google/gemini-3.8-flash' } }
+    assert.equal(agent.servedModel?.({ ...call, ...asked }), 'google/gemini-3.8-flash')
+    assert.equal(
+      agent.servedModel?.({ ...call, ...asked, responseModel: 'google/gemini-3.8-flash-001' }),
+      'google/gemini-3.8-flash-001',
+    )
+    assert.equal(agent.servedModel?.(call), undefined)
+    assert.equal(
+      agent.servedModel?.({ ...call, path: '/coding-agent/v1/models', ...asked }),
+      undefined,
+    )
+    assert.equal(agent.servedModel?.({ ...call, host: 'api.openai.com', ...asked }), undefined)
+  })
+
   test('Goose and pi take Gemini ids as Google models on Vercel, and read the served model', () => {
     const goose = onVercel({ kind: 'goose', model: 'gemini-3-flash' } as HarnessDescriptor)
     assert.equal(goose.credential, 'AI_GATEWAY_API_KEY')

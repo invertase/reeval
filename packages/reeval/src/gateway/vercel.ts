@@ -104,6 +104,18 @@ export const FX_VERCEL_CALL = {
   method: ['POST'],
 } as const satisfies EndpointMatch
 
+/**
+ * fx's served model: the response's when its stream names one, else the model the call asked
+ * the gateway for in `ai-language-model-id`, since a provider's stream (Gemini's) can name none.
+ */
+export const fxServedModel: ModelSpecific['servedModel'] = (request) => {
+  const served = servedOnVercel(request)
+  if (served || request.host !== VERCEL_HOST) return served
+  if (!new RegExp(FX_VERCEL_CALL.path.regex).test(request.path)) return undefined
+  const asked = request.headers?.['ai-language-model-id']
+  return (typeof asked === 'string' ? asked : asked?.[0]) || undefined
+}
+
 /** The model list fx fetches before a turn, and its language-model calls. */
 export const FX_VERCEL_ENDPOINTS = [
   { host: VERCEL_HOST, path: { regex: '^/coding-agent/v1/' }, method: ['GET'] },
@@ -117,7 +129,7 @@ function fx(env: NodeJS.ProcessEnv): VercelRoute {
     authAs: VERCEL_KEY,
     endpoints: FX_VERCEL_ENDPOINTS,
     modelResponses: [FX_VERCEL_CALL],
-    servedModel: servedOnVercel,
+    servedModel: fxServedModel,
     hosts: [VERCEL_HOST],
     modelId: (model) => (model.includes('/') ? model : `openai/${model}`),
   }

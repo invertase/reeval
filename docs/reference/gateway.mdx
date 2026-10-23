@@ -44,7 +44,7 @@ One key serves every harness and model on `vercel()`. The egress gateway swaps i
 | Goose | its `vercel_ai_gateway` provider, a Bearer key | `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/models` | `google/` prefixed unless the id names a provider | Vercel's, from each response |
 | pi | its `vercel-ai-gateway` provider (Anthropic's Messages API), the key in `x-api-key` | `POST /v1/messages` | `google/` prefixed unless the id names a provider | Vercel's, from each response |
 | OpenCode | its `vercel` provider, a Bearer key | `POST /v1/messages`, `POST /v4/ai/messages` | `<provider>/<model>` as written, run as `vercel/<provider>/<model>` | Vercel's, from each response |
-| fx | its AI Gateway provider | `GET /coding-agent/v1/…`, `POST /v<n>/ai/language-model` | `openai/` prefixed unless the id names a provider | Vercel's, from each response |
+| fx | its AI Gateway provider | `GET /coding-agent/v1/…`, `POST /v<n>/ai/language-model` | `openai/` prefixed unless the id names a provider | Vercel's, from each response, else the model each call asked for |
 | Grok Build | a `[model."xai/<id>"]` table on Vercel's Chat Completions API, keyed by `env_key` | `POST /v1/chat/completions` | `xai/` prefixed unless the id names a provider | Vercel's, from each response |
 
 A Vercel project's token from `vercel env pull` (`VERCEL_OIDC_TOKEN`) works when `AI_GATEWAY_API_KEY` isn't set. It lasts about 12 hours, so the plan refuses an expired one before anything runs, and `reeval doctor` fails on it.

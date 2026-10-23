@@ -21,6 +21,7 @@ import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import {
   FX_VERCEL_CALL,
   FX_VERCEL_ENDPOINTS,
+  fxServedModel,
   VERCEL_HOST,
   VERCEL_KEY,
   VERCEL_ROUTES,
@@ -193,6 +194,8 @@ export type ServedModel = (request: {
   responseModel?: string
   /** The reasoning effort the response body said it ran at, on a `modelResponses` endpoint. */
   responseEffort?: string
+  /** The request's headers, as the agent sent them. */
+  headers?: Readonly<Record<string, string | readonly string[] | undefined>>
 }) => string | undefined
 
 /** A Gemini API key's only request: `POST /v1beta/models/<model>:streamGenerateContent`. */
@@ -481,7 +484,7 @@ export function fxForModel(model: string): ModelSpecific {
     credential: VERCEL_KEY,
     endpoints: FX_VERCEL_ENDPOINTS,
     modelResponses: [FX_VERCEL_CALL],
-    servedModel: ({ host, responseModel }) => (host === VERCEL_HOST ? responseModel : undefined),
+    servedModel: fxServedModel,
     hosts: [VERCEL_HOST],
   }
 }
