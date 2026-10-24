@@ -144,6 +144,10 @@ own test runner.
    `reeval` line, run a tiny eval body that emits the golden `runner` lines, match the `record` line.
 3. **Repo gate** — `packages/reeval/test/python-sdk.test.ts` runs `uv sync` + `uv run pytest` when
    `uv` is present; add a sibling gate per language.
+4. **`test/conformance/launcher/`** — the SDK's `reeval` command, which downloads, checks, caches
+   and runs the binary, against a fake release server. Add a runner module in its `runners/`
+   (Python's `runners/python.ts` is the reference) and a row in `ci.yml`'s `launchers` matrix; see
+   its [README](../../../packages/reeval/test/conformance/launcher/README.md).
 
 When TypeScript changes declaration or protocol behaviour, run
 `REEVAL_UPDATE_SNAPSHOTS=1` on `conformance.test.ts`, review the diff, and update every SDK mirror
@@ -176,6 +180,7 @@ Use **Python** as the worked reference (`packages/reeval-python/`, feature fixtu
 | Attempt `c.*` over the socket | `packages/reeval-python/src/reeval_python/context.py` |
 | uv project + project dep | `packages/reeval/test/features/python-sdk/hello/pyproject.toml` (`tomli` import in `lands.eval.py`) |
 | Declare goldens | `packages/reeval-python/tests/test_conformance_declare.py` |
+| `reeval` launcher | `packages/reeval-python/src/reeval_python/cli.py`, held to `test/conformance/launcher/` by `runners/python.ts` |
 | Smoke fixture | `packages/reeval/test/features/python-sdk/hello/` (`lands.eval.py`, `canary.eval.py`) |
 | Plan snapshot | `packages/reeval/test/plan/python/hello/` |
 

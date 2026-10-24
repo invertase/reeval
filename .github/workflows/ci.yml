@@ -72,6 +72,7 @@ jobs:
       studio: ${{ steps.scope.outputs.studio }}
       pack: ${{ steps.scope.outputs.pack }}
       engine: ${{ steps.scope.outputs.engine }}
+      launchers: ${{ steps.scope.outputs.launchers }}
     steps:
       # A PR's merge commit has the base it would merge into as its first parent; a merge group's
       # base is further back.
@@ -86,8 +87,8 @@ jobs:
           ALL: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           BASE: ${{ github.event.merge_group.base_sha || 'HEAD^1' }}
         run: |
-          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL
-          every() { unit=true features=true docker=true studio=true pack=true engine=true; }
+          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL launchers=$ALL
+          every() { unit=true features=true docker=true studio=true pack=true engine=true launchers=true; }
           if [ "$ALL" != true ]; then
             echo "Tier: $PR_TIER"
             while IFS= read -r f; do
@@ -172,6 +173,14 @@ jobs:
                 scripts/third-party*)
                   pack=true ;;
               esac
+              case $f in
+                packages/reeval-python/src/reeval_python/cli.py | \
+                packages/reeval-python/pyproject.toml | \
+                packages/reeval/test/conformance/launcher/* | \
+                packages/sandbox-docker/src/egress/cert.ts | \
+                scripts/ctrl-c.py)
+                  launchers=true ;;
+              esac
             done < <(git diff --name-only "$BASE" HEAD)
           fi
           {
@@ -181,6 +190,7 @@ jobs:
             echo "studio=$studio"
             echo "pack=$pack"
             echo "engine=$engine"
+            echo "launchers=$launchers"
           } | tee -a "$GITHUB_OUTPUT"
 
   # Lint, the build, typecheck, the schema check and the docs checks: each under a minute, so one job.
@@ -471,6 +481,43 @@ jobs:
       - run: pnpm build
       - run: node scripts/coverage.mjs engine
 
+  # Every SDK's `reeval` launcher against the shared cases in test/conformance/launcher/ (its
+  # README), on each OS: download, checksums, cache, offline, overrides, exit codes and Ctrl-C.
+  launchers:
+    name: launcher conformance (${{ matrix.sdk }}, ${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.launchers == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run: { shell: bash }
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: [python]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+      # Builds the suite's stand-in binary.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - if: matrix.sdk == 'python'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          cache-dependency-glob: packages/reeval-python/uv.lock
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - working-directory: packages/reeval
+        run: node --experimental-strip-types --no-warnings test/conformance/launcher/run.ts ${{ matrix.sdk }}
+
   # Installs the tarball with npm 11 (the release job's) and, off PRs, with Node 22's npm 10.9. npm
   # before 11.6 crashed ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which reeval no
   # longer depends on; that leg keeps it that way.
@@ -567,7 +614,7 @@ jobs:
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
-    needs: [changes, checks, unit, features, docker, podman, studio, engine-coverage, pack, extended]
+    needs: [changes, checks, unit, features, docker, podman, studio, engine-coverage, launchers, pack, extended]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

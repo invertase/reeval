@@ -9,6 +9,7 @@ declare/<case>/case.json       the TypeScript eval file, its plan case and that 
 declare/<case>/expected.json   the declaration tree that file records
 context/<case>.ndjson          one attempt, message by message, then its record
 runner.ts                      the TypeScript reference runner the context scripts run under
+launcher/                      the cases every SDK's `reeval` launcher passes (its own README)
 ```
 
 ## declare/

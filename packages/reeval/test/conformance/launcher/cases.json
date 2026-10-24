@@ -1,0 +1,445 @@
+{
+  "version": "9.9.9",
+  "env": { "REEVAL_VERSION": "{version}", "REEVAL_DOWNLOAD": "{base}" },
+  "cases": [
+    {
+      "id": "download-and-run",
+      "about": "An empty cache downloads the host's asset from REEVAL_DOWNLOAD, checks it against SHA256SUMS, caches it executable and runs it",
+      "steps": [
+        {
+          "release": "good",
+          "args": ["exit", "0"],
+          "expect": {
+            "exit": 0,
+            "ran": true,
+            "stderr": ["reeval: downloading {asset}"],
+            "cache": "binary",
+            "downloads": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "unrecorded-version-says-so",
+      "about": "A version the SDK recorded no hashes for is checked against SHA256SUMS alone, and the launcher says so",
+      "steps": [
+        {
+          "release": "good",
+          "expect": { "exit": 0, "ran": true, "stderr": ["SHA256SUMS"], "cache": "binary" }
+        }
+      ]
+    },
+    {
+      "id": "sha256sums-text-mode",
+      "about": "SHA256SUMS in text mode (`<sha256>  <asset>`) is read as well as binary mode",
+      "steps": [{ "release": "good-text", "expect": { "exit": 0, "ran": true, "cache": "binary" } }]
+    },
+    {
+      "id": "checksum-mismatch",
+      "about": "An asset whose sha256 isn't the one SHA256SUMS lists is refused with exit 3, and nothing is cached",
+      "steps": [
+        {
+          "release": "bad-checksum",
+          "expect": {
+            "exit": 3,
+            "ran": false,
+            "stderr": ["{base}/{asset}", "{wrongSha256}"],
+            "cache": "absent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "not-in-sha256sums",
+      "about": "An asset SHA256SUMS doesn't list is refused with exit 3",
+      "steps": [
+        {
+          "release": "unlisted",
+          "expect": {
+            "exit": 3,
+            "ran": false,
+            "stderr": ["SHA256SUMS", "{asset}"],
+            "cache": "absent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https-redirect-followed",
+      "about": "A redirect from https to https is followed (the control for https-to-http-refused)",
+      "https": true,
+      "steps": [
+        { "release": "https-redirect", "expect": { "exit": 0, "ran": true, "cache": "binary" } }
+      ]
+    },
+    {
+      "id": "https-to-http-refused",
+      "about": "A redirect from https to http exits 3 naming where it pointed, without fetching it",
+      "https": true,
+      "steps": [
+        {
+          "release": "https-to-http",
+          "expect": {
+            "exit": 3,
+            "ran": false,
+            "stderr": ["{httpBase}"],
+            "cache": "absent",
+            "httpRequests": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "plain-http-mirror-warns",
+      "about": "An http: REEVAL_DOWNLOAD works, with a warning on stderr",
+      "steps": [
+        {
+          "release": "good",
+          "expect": {
+            "exit": 0,
+            "ran": true,
+            "stderr": ["warning", "REEVAL_DOWNLOAD"],
+            "cache": "binary"
+          }
+        }
+      ]
+    },
+    {
+      "id": "file-url-mirror",
+      "about": "REEVAL_DOWNLOAD can be a file:// URL",
+      "steps": [
+        {
+          "release": "good",
+          "env": { "REEVAL_DOWNLOAD": "{fileBase}" },
+          "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 0 }
+        }
+      ]
+    },
+    {
+      "id": "mirror-trailing-slash",
+      "about": "A trailing slash on REEVAL_DOWNLOAD doesn't double up in the URL",
+      "steps": [
+        {
+          "release": "good",
+          "env": { "REEVAL_DOWNLOAD": "{base}/" },
+          "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 1 }
+        }
+      ]
+    },
+    {
+      "id": "mirror-unreachable",
+      "about": "A download that can't connect exits 3 naming the URL, REEVAL_DOWNLOAD and REEVAL_BINARY",
+      "steps": [
+        {
+          "release": "unreachable",
+          "expect": {
+            "exit": 3,
+            "ran": false,
+            "stderr": ["{base}/", "REEVAL_DOWNLOAD", "REEVAL_BINARY"],
+            "cache": "absent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "mirror-not-found",
+      "about": "A 404 from the mirror exits 3 naming the URL, REEVAL_DOWNLOAD and REEVAL_BINARY",
+      "steps": [
+        {
+          "release": "missing",
+          "expect": {
+            "exit": 3,
+            "ran": false,
+            "stderr": ["{base}/", "REEVAL_DOWNLOAD", "REEVAL_BINARY"],
+            "cache": "absent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "offline-empty-cache",
+      "about": "REEVAL_OFFLINE=1 with nothing cached exits 2 naming the path to pre-seed and REEVAL_BINARY",
+      "steps": [
+        {
+          "release": "unreachable",
+          "env": { "REEVAL_OFFLINE": "1" },
+          "expect": {
+            "exit": 2,
+            "ran": false,
+            "stderr": ["REEVAL_OFFLINE", "{cachePath}", "REEVAL_BINARY"],
+            "cache": "absent"
+          }
+        }
+      ]
+    },
+    {
+      "id": "offline-seeded-cache",
+      "about": "REEVAL_OFFLINE=1 runs a binary pre-seeded at the cache path, for an air gap",
+      "seed": "binary",
+      "steps": [
+        {
+          "release": "unreachable",
+          "env": { "REEVAL_OFFLINE": "1" },
+          "expect": { "exit": 0, "ran": true, "quiet": true, "cache": "binary" }
+        }
+      ]
+    },
+    {
+      "id": "cached-binary-reused",
+      "about": "A binary a first run cached is run again without the network, and without a word on stderr",
+      "steps": [
+        { "release": "good", "expect": { "exit": 0, "ran": true, "downloads": 1 } },
+        {
+          "release": "unreachable",
+          "expect": { "exit": 0, "ran": true, "quiet": true, "cache": "binary" }
+        }
+      ]
+    },
+    {
+      "id": "empty-cached-file-replaced",
+      "about": "An empty file at the cache path is downloaded again, not run",
+      "seed": "empty",
+      "steps": [
+        {
+          "release": "good",
+          "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 1 }
+        }
+      ]
+    },
+    {
+      "id": "partial-download-not-kept",
+      "about": "A download cut short exits 3 and leaves nothing in the cache; the next run downloads it whole",
+      "steps": [
+        {
+          "release": "truncated",
+          "expect": { "exit": 3, "ran": false, "stderr": ["{base}/{asset}"], "cache": "absent" }
+        },
+        {
+          "release": "good",
+          "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 1 }
+        }
+      ]
+    },
+    {
+      "id": "concurrent-first-runs",
+      "about": "Four first runs at once, downloading over each other, all run and leave one whole binary",
+      "steps": [
+        {
+          "release": "slow",
+          "parallel": 4,
+          "expect": { "exit": 0, "ran": true, "cache": "binary" }
+        }
+      ]
+    },
+    {
+      "id": "binary-override",
+      "about": "REEVAL_BINARY runs that binary, without the cache or the network",
+      "steps": [
+        {
+          "release": "unreachable",
+          "env": { "REEVAL_BINARY": "{fake}" },
+          "expect": { "exit": 0, "ran": true, "quiet": true, "cache": "absent" }
+        }
+      ]
+    },
+    {
+      "id": "binary-override-missing",
+      "about": "A REEVAL_BINARY that doesn't exist exits 2 naming it",
+      "steps": [
+        {
+          "release": "unreachable",
+          "env": { "REEVAL_BINARY": "{missing}" },
+          "expect": { "exit": 2, "ran": false, "stderr": ["REEVAL_BINARY", "{missing}"] }
+        }
+      ]
+    },
+    {
+      "id": "binary-override-directory",
+      "about": "A REEVAL_BINARY that's a directory exits 2 naming it",
+      "steps": [
+        {
+          "release": "unreachable",
+          "env": { "REEVAL_BINARY": "{work}" },
+          "expect": { "exit": 2, "ran": false, "stderr": ["REEVAL_BINARY", "{work}"] }
+        }
+      ]
+    },
+    {
+      "id": "binary-override-is-launcher",
+      "about": "A REEVAL_BINARY that is the launcher itself exits 2 instead of starting itself again",
+      "steps": [
+        {
+          "release": "unreachable",
+          "env": { "REEVAL_BINARY": "{launcher}" },
+          "timeout": 20,
+          "expect": { "exit": 2, "ran": false, "stderr": ["REEVAL_BINARY"] }
+        }
+      ]
+    },
+    {
+      "id": "version-override",
+      "about": "REEVAL_VERSION (trimmed, without its v) names the version to download and cache",
+      "version": "9.9.8",
+      "steps": [
+        {
+          "release": "good",
+          "env": { "REEVAL_VERSION": " v9.9.8 " },
+          "expect": {
+            "exit": 0,
+            "ran": true,
+            "stderr": ["reeval: downloading reeval-9.9.8-{target}"],
+            "cache": "binary",
+            "downloads": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "exit-code-passthrough",
+      "about": "The launcher exits with the binary's exit code",
+      "seed": "binary",
+      "steps": [
+        {
+          "release": "unreachable",
+          "args": ["exit", "7"],
+          "expect": { "exit": 7, "ran": true, "quiet": true }
+        }
+      ]
+    },
+    {
+      "id": "arguments-verbatim",
+      "about": "Arguments reach the binary verbatim: spaces, quotes, backslashes, empty, non-ASCII and globs",
+      "seed": "binary",
+      "steps": [
+        {
+          "release": "unreachable",
+          "args": [
+            "run",
+            "two words",
+            "quo\"ted",
+            "back\\slash\\",
+            "",
+            "--flag=a b",
+            "ünïcödé",
+            "*.eval.*",
+            "$HOME",
+            "%PATH%"
+          ],
+          "expect": { "exit": 0, "ran": true, "quiet": true }
+        }
+      ]
+    },
+    {
+      "id": "interpreter-variable-set",
+      "about": "The language's interpreter variable reaches the binary, set by the launcher",
+      "needs": "interpreterEnv",
+      "seed": "binary",
+      "steps": [
+        {
+          "release": "unreachable",
+          "expect": { "exit": 0, "ran": true, "env": { "{interpreterEnv}": "*" } }
+        }
+      ]
+    },
+    {
+      "id": "interpreter-variable-kept",
+      "about": "An interpreter variable that's already set reaches the binary unchanged",
+      "needs": "interpreterEnv",
+      "seed": "binary",
+      "steps": [
+        {
+          "release": "unreachable",
+          "env": { "{interpreterEnv}": "{work}/custom-interpreter" },
+          "expect": {
+            "exit": 0,
+            "ran": true,
+            "env": { "{interpreterEnv}": "{work}/custom-interpreter" }
+          }
+        }
+      ]
+    },
+    {
+      "id": "ctrl-c-reaches-binary",
+      "about": "Ctrl-C as a terminal sends it (the process group on POSIX, the console on Windows) reaches the binary, and the launcher exits with its 130",
+      "seed": "binary",
+      "steps": [
+        {
+          "release": "unreachable",
+          "args": ["wait", "{ready}"],
+          "interrupt": "ctrl-c",
+          "expect": { "exit": 130, "stdout": ["fake-reeval: interrupted"] }
+        }
+      ]
+    },
+    {
+      "id": "sigterm-reaches-binary",
+      "about": "SIGTERM sent to the launcher's pid alone (kill, a CI timeout) reaches the binary",
+      "only": "posix",
+      "seed": "binary",
+      "steps": [
+        {
+          "release": "unreachable",
+          "args": ["wait", "{ready}"],
+          "interrupt": "sigterm",
+          "expect": { "exit": 143, "stdout": ["fake-reeval: terminated"] }
+        }
+      ]
+    },
+    {
+      "id": "recorded-download",
+      "about": "The version the SDK recorded hashes for downloads when the asset matches the record and SHA256SUMS",
+      "record": "match",
+      "steps": [
+        {
+          "release": "good",
+          "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 1 }
+        }
+      ]
+    },
+    {
+      "id": "recorded-sha256sums-disagrees",
+      "about": "SHA256SUMS listing another hash than the SDK recorded exits 3, and nothing is cached",
+      "record": "match",
+      "steps": [
+        {
+          "release": "bad-checksum",
+          "expect": { "exit": 3, "ran": false, "stderr": ["SHA256SUMS"], "cache": "absent" }
+        }
+      ]
+    },
+    {
+      "id": "recorded-asset-mismatch",
+      "about": "An asset that doesn't match the recorded hash exits 3, even when SHA256SUMS agrees with the record",
+      "record": "wrong",
+      "steps": [
+        {
+          "release": "bad-checksum",
+          "expect": { "exit": 3, "ran": false, "stderr": ["{asset}"], "cache": "absent" }
+        }
+      ]
+    },
+    {
+      "id": "recorded-target-missing",
+      "about": "A record for the version with no entry for this target exits 3 naming the target",
+      "record": "no-target",
+      "steps": [
+        {
+          "release": "good",
+          "expect": { "exit": 3, "ran": false, "stderr": ["{target}"], "cache": "absent" }
+        }
+      ]
+    },
+    {
+      "id": "recorded-cache-wrong-size",
+      "about": "A cached file of another size than the recorded one is downloaded again",
+      "record": "match",
+      "seed": "junk",
+      "steps": [
+        {
+          "release": "good",
+          "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 1 }
+        }
+      ]
+    }
+  ]
+}
