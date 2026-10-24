@@ -44,11 +44,10 @@ cp -R "$work/good" "$work/unlisted"
 if ! install "$work/unlisted" "$work/c" && [ ! -e "$work/c/reeval" ]; then pass "refuses a binary SHA256SUMS doesn't list"
 else fail "refuses a binary SHA256SUMS doesn't list: $(cat "$work/out")"; fi
 
-# Past the shebang line and before main's closing brace, a prefix must fail or install.
+# Past the shebang line, a prefix must fail or install.
 size=$(wc -c < "$script" | tr -d ' ')
 first=$(head -n 1 "$script" | wc -c | tr -d ' ')
-last=$(($(grep -n '^}$' "$script" | tail -n 1 | cut -d : -f 1) - 1))
-last=$(head -n "$last" "$script" | wc -c | tr -d ' ')
+last=$size
 silent=
 n=$((first + 1))
 while [ "$n" -le "$last" ]; do

@@ -1,4 +1,5 @@
 #!/bin/sh
+{
 main() {
   # Installs the reeval binary from a GitHub release, checked against the release's SHA256SUMS.
   #
@@ -8,8 +9,9 @@ main() {
   # REEVAL_INSTALL_DIR where to put `reeval` (default ~/.local/bin)
   # REEVAL_DOWNLOAD    where the release's files are, instead of its GitHub release (needs REEVAL_VERSION)
   #
-  # Everything is inside main, which runs on the last line, so a download cut short runs none of
-  # it and, past the first line, fails (scripts/install-test.sh checks every prefix).
+  # Everything is inside main, called inside a group the last line closes, so a download cut
+  # short runs none of it and, past the first line, fails (scripts/install-test.sh checks every
+  # prefix).
   set -eu
 
   REPO=invertase/reeval
@@ -83,3 +85,4 @@ main() {
 }
 
 main "$@"
+}
