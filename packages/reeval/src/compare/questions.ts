@@ -6,10 +6,9 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { generateText, Output } from 'ai'
 import { z } from 'zod'
-import { cannedModel, isFake, providerModel } from '../analysis/model.ts'
+import { cannedModel, hostModel, isFake } from '../analysis/model.ts'
 import type { EngineEval } from '../engine/node.ts'
 import { recordFileName } from '../ids.ts'
-import { judgeRoute } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
 import { transcriptForJudge } from '../judge/transcript.ts'
 import type { PlanRow } from '../plan.ts'
@@ -342,6 +341,7 @@ export function questionRequest(input: {
 async function ask(
   model: QuestionModel,
   gateway: GatewayName | undefined,
+  fallbacks: boolean,
   input: BlindInput,
   maxOutputTokens: number,
   signal?: AbortSignal,
@@ -349,10 +349,7 @@ async function ask(
   const result = await generateText({
     model: isFake(model)
       ? fakeAnswer(model, input.blind)
-      : await providerModel({
-          name: model,
-          route: judgeRoute(model, process.env, 'question model', gateway).kind,
-        }),
+      : await hostModel(model, gateway, 'question model', fallbacks),
     ...questionRequest(input),
     output: Output.object({ schema: voteSchema, name: 'vote' }),
     maxOutputTokens,
@@ -386,6 +383,8 @@ export type AnswerOptions = {
   model: QuestionModel
   /** The gateway a model string goes through; direct when unset. */
   gateway?: GatewayName
+  /** On OpenRouter, whether it may fail the call over to another upstream provider. */
+  fallbacks?: boolean
   pairs: Pair[]
   maxInputTokens: number
   maxOutputTokens: number
@@ -507,6 +506,7 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
       const { pick, reason, resolvedModel } = await ask(
         model,
         options.gateway,
+        !!options.fallbacks,
         input,
         options.maxOutputTokens,
         options.signal,
@@ -621,6 +621,7 @@ export type AttemptAnswerOptions = {
   question: string
   model: QuestionModel
   gateway?: GatewayName
+  fallbacks?: boolean
   attempt: PairAttempt
   maxInputTokens: number
   maxOutputTokens: number
@@ -652,10 +653,7 @@ export async function answerAttempt(
     const result = await generateText({
       model: isFake(model)
         ? fakeAttemptAnswer(model, input.blind)
-        : await providerModel({
-            name: model,
-            route: judgeRoute(model, process.env, 'question model', options.gateway).kind,
-          }),
+        : await hostModel(model, options.gateway, 'question model', !!options.fallbacks),
       ...questionRequest(input),
       output: Output.object({ schema: answerSchema(choices), name: 'answer' }),
       maxOutputTokens: options.maxOutputTokens,
@@ -782,6 +780,8 @@ export type EvalQuestions = {
     question: string
     model: QuestionModel
     gateway?: GatewayName
+    /** On OpenRouter, whether it may fail the call over to another upstream provider. */
+    fallbacks?: boolean
     /** Set on a pairwise question; without it, the question is asked of each attempt. */
     across?: PairFactor | PairFactor[]
     choices?: string[]
@@ -875,6 +875,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
               question: q.question,
               model: q.model,
               ...(q.gateway ? { gateway: q.gateway } : {}),
+              ...(q.fallbacks ? { fallbacks: q.fallbacks } : {}),
               attempt,
               maxInputTokens: options.maxInputTokens,
               maxOutputTokens: options.maxOutputTokens,
@@ -952,6 +953,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
             question: q.question,
             model: q.model,
             ...(q.gateway ? { gateway: q.gateway } : {}),
+            ...(q.fallbacks ? { fallbacks: q.fallbacks } : {}),
             pairs: pairsOf(staged, acrossOf(pairFactors(q.across))),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,

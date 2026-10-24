@@ -1,0 +1,10 @@
+no profile · 2 evals · 3 cells · 3 attempts
+hint: gateway: cursor:composer-2.5 → direct (openrouter can't serve it: Cursor's agent only calls Cursor's own API)
+evals/g.eval.ts › greets  codex:gpt-5.4-mini/-/docker   control  gated  ×1  gateway: codex:gpt-5.4-mini → openrouter · gateway: cursor:composer-2.5 → direct · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing
+                          cursor:composer-2.5/-/docker  control  gated  ×1
+evals/g.eval.ts › pinned  b/-/docker                    control  gated  ×1  gateway: b → direct · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing
+excluded: —
+image docker · codex · 1 evals
+  base  reeval-sandbox:codex-0.1.9  (reeval's image: built when missing or when its base changed)
+image docker · cursor · 2 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

@@ -1,5 +1,9 @@
 // `reeval/gateway`: the gateways a config's `gateway` list names, in preference order.
-import type { DirectGatewayDescriptor, VercelGatewayDescriptor } from './types.ts'
+import type {
+  DirectGatewayDescriptor,
+  OpenRouterGatewayDescriptor,
+  VercelGatewayDescriptor,
+} from './types.ts'
 
 /**
  * Each provider's own key, as a config without `gateway` uses: the harness's own credential
@@ -9,16 +13,29 @@ import type { DirectGatewayDescriptor, VercelGatewayDescriptor } from './types.t
 export const direct = (): DirectGatewayDescriptor => ({ kind: 'direct' })
 
 /**
- * Vercel AI Gateway: one key, `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), for Claude Code and
- * Codex, brokered into the sandbox like a harness's own. A harness it can't serve takes the next
- * gateway in the list.
+ * Vercel AI Gateway: one key, `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), brokered into the
+ * sandbox like a harness's own. A harness it can't serve takes the next gateway in the list.
  */
 export const vercel = (): VercelGatewayDescriptor => ({ kind: 'vercel' })
+
+/**
+ * OpenRouter: one key, `OPENROUTER_API_KEY`, brokered into the sandbox like a harness's own. A
+ * harness it can't serve takes the next gateway in the list. `fallbacks: true` lets OpenRouter
+ * fail over between upstream providers on reeval's own calls; either way each call records the
+ * upstream that served it.
+ */
+export const openrouter = (
+  options: Omit<OpenRouterGatewayDescriptor, 'kind'> = {},
+): OpenRouterGatewayDescriptor => ({
+  kind: 'openrouter',
+  ...(options.fallbacks !== undefined ? { fallbacks: options.fallbacks } : {}),
+})
 
 export type {
   DirectGatewayDescriptor,
   GatewayDescriptor,
   GatewayName,
+  OpenRouterGatewayDescriptor,
   ResolvedGateway,
   VercelGatewayDescriptor,
 } from './types.ts'

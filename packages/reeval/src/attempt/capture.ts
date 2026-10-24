@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { shellQuote } from '@reeval/sandbox-docker/process'
-import { providerModel } from '../analysis/model.ts'
+import { hostModel } from '../analysis/model.ts'
 import {
   allocatePort,
   cacheLabel,
@@ -19,8 +19,8 @@ import { stubPng } from '../capture/stub.ts'
 import { captureUseSpend, runJourney } from '../capture/use.ts'
 import { getRunContext } from '../engine/runtime.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
+import { openRouterFallbacks } from '../gateway/openrouter-models.ts'
 import { sha256 } from '../ids.ts'
-import { judgeRoute } from '../judge/index.ts'
 import { cacheDir } from '../root.ts'
 import type {
   BackgroundHandle,
@@ -253,17 +253,9 @@ async function shot(
       remaining,
       loadModel: async (name) => {
         const { config, profile } = getRunContext()
-        const gateway = resolveModelGateway(
-          name,
-          undefined,
-          gatewayScope(config, profile),
-          'capture model',
-        )
-        const route = judgeRoute(name, process.env, 'capture model', gateway)
-        return providerModel({
-          name,
-          route: route.kind === 'direct' ? 'direct' : 'gateway',
-        })
+        const scope = gatewayScope(config, profile)
+        const gateway = resolveModelGateway(name, undefined, scope, 'capture model')
+        return hostModel(name, gateway, 'capture model', openRouterFallbacks(scope.gateways))
       },
     })
     onMoves(result.moves)

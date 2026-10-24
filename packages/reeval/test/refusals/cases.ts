@@ -78,6 +78,7 @@ const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDesc
   resolveModelGateway(name, pin, { gateways }, 'the judge model')
 const VERCEL: GatewayDescriptor = { kind: 'vercel' }
 const DIRECT: GatewayDescriptor = { kind: 'direct' }
+const OPENROUTER: GatewayDescriptor = { kind: 'openrouter' }
 /** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
 const oidc = (env: NodeJS.ProcessEnv) => () => {
   const problem = vercelCredentialProblem(env, new Date('2026-01-01T12:00:00Z'))
@@ -267,6 +268,10 @@ export const CASES: Record<string, Case[]> = {
     ['opencode without a provider', any(opencode, { model: 'gemini-3.8-flash' })],
     ['opencode with an unknown provider', any(opencode, { model: 'nope/model' })],
     ['opencode with a vercel/ id', any(opencode, { model: 'vercel/anthropic/claude-haiku-4.5' })],
+    [
+      'opencode with an openrouter/ id',
+      any(opencode, { model: 'openrouter/anthropic/claude-haiku-4.5' }),
+    ],
     ['opencode good', any(opencode, { model: 'google/gemini-3.8-flash' })],
     ['goose with a provider', any(goose, { model: 'google/gemini-3.8-flash' })],
     ['goose without a model', any(goose, {})],
@@ -1220,6 +1225,37 @@ environment:
     [
       'route: opencode with an unknown provider on vercel',
       route([VERCEL], opencode({ model: 'nope/m' })),
+    ],
+    [
+      'ts: openrouter with fallbacks',
+      config({ gateway: [{ kind: 'openrouter', fallbacks: true }] }),
+    ],
+    [
+      'ts: openrouter fallbacks not a boolean',
+      config({ gateway: [{ kind: 'openrouter', fallbacks: 'yes' }] }),
+    ],
+    ['ts: openrouter with a typo', config({ gateway: [{ kind: 'openrouter', fallback: true }] })],
+    [
+      'yaml: openrouter with fallbacks',
+      yaml('gateway: [{ openrouter: { fallbacks: true } }, direct]\n'),
+    ],
+    ['route: cursor on openrouter alone', route([OPENROUTER], cursor({ model: 'composer-2.5' }))],
+    ['route: antigravity on openrouter alone', route([OPENROUTER], antigravity({ model: 'm' }))],
+    ['route: fx on openrouter alone', route([OPENROUTER], fx({ model: 'gpt-5.5' }))],
+    ['route: pi on openrouter alone', route([OPENROUTER], pi({ model: 'gemini-3.8-flash' }))],
+    ['route: claude code on openrouter', route([OPENROUTER], claudeCode({ model: 'm' }))],
+    ['route: opencode on openrouter', route([OPENROUTER], opencode({ model: 'anthropic/m' }))],
+    [
+      'route: codex with effort on openrouter',
+      route([OPENROUTER], codex({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: claude code with effort on openrouter alone',
+      route([OPENROUTER], claudeCode({ model: 'm', effort: 'high' })),
+    ],
+    [
+      'route: goose with effort falls through to direct',
+      route([OPENROUTER, DIRECT], goose({ model: 'gemini-3.8-flash', effort: 'high' })),
     ],
     ['oidc: expired', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T00:00:00Z')) })],
     ['oidc: live', oidc({ VERCEL_OIDC_TOKEN: jwt(Date.parse('2026-01-01T13:00:00Z')) })],

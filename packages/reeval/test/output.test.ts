@@ -168,6 +168,30 @@ describe('every layout', () => {
     assert.match(text, /^ {2}\+1 more passed$/m)
   })
 
+  test('the upstream providers a gateway named print under the eval; none when it named none', () => {
+    const g = GOLDENS.find((x) => x.name === 'results')
+    assert.ok(g)
+    const suite = goldenSuite(g)
+    const bare = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
+    assert.doesNotMatch(bare, /served by/, 'canary: no upstream, no line')
+    const e = suite.files[0]?.evals.find((x) => x.cells?.length)
+    const cell = e?.cells?.[0]
+    assert.ok(e && cell)
+    cell.upstreams = [
+      { provider: 'Anthropic', calls: 12 },
+      { provider: 'Amazon Bedrock', calls: 3 },
+    ]
+    cell.judgeUpstreams = [{ provider: 'Typesafe', calls: 2 }]
+    const text = render(suite, null, { color: false, verbose: false, hint: true }).join('\n')
+    assert.match(
+      text,
+      new RegExp(
+        `${e.name}\\n(.*\\n)*? {2}served by Anthropic 12 · Amazon Bedrock 3; judge served by Typesafe 2$`,
+        'm',
+      ),
+    )
+  })
+
   test('a question whose every vote was a tie says so under its heading', () => {
     const g = GOLDENS.find((x) => x.name === 'measure-a-change')
     assert.ok(g)

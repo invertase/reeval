@@ -544,7 +544,7 @@
         "gateway": {
           "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
           "type": "string",
-          "enum": ["direct", "vercel"]
+          "enum": ["direct", "vercel", "openrouter"]
         },
         "model": {
           "type": "string"
@@ -905,10 +905,14 @@
             "$ref": "#/$defs/JudgeArtifactRef"
           }
         },
+        "costUsd": {
+          "description": "What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none.",
+          "type": "number"
+        },
         "gateway": {
           "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
           "type": "string",
-          "enum": ["direct", "vercel"]
+          "enum": ["direct", "vercel", "openrouter"]
         },
         "model": {
           "type": "string"
@@ -926,6 +930,10 @@
         },
         "threshold": {
           "type": "number"
+        },
+        "upstream": {
+          "description": "The upstream provider the gateway says served the call (OpenRouter's); unset when it names none.",
+          "type": "string"
         },
         "verdict": {
           "type": "string",

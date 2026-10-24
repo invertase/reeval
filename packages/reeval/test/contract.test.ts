@@ -360,6 +360,29 @@ export const behaviours: Behaviour[] = [
     },
   },
   {
+    name: 'upstream provider and cost recorded',
+    canary: false,
+    check(ran, row) {
+      const attempts = withTurns(ran.run)
+      assert.ok(attempts.length > 0, 'no turns ran')
+      for (const a of attempts) {
+        if (!row.upstream) {
+          assert.equal(a.upstreams, undefined, `${row.id} records no upstream`)
+          assert.equal(a.reportedCostUsd, undefined, `${row.id} records no reported cost`)
+          continue
+        }
+        assert.ok(
+          a.upstreams?.length && a.upstreams.every((u) => u.provider && u.calls > 0),
+          `${a.key}: upstreams ${JSON.stringify(a.upstreams)}`,
+        )
+        assert.ok(
+          typeof a.reportedCostUsd === 'number' && a.reportedCostUsd > 0,
+          `${a.key}: reportedCostUsd ${a.reportedCostUsd}`,
+        )
+      }
+    },
+  },
+  {
     name: 'nothing silently unreported',
     canary: false,
     check(ran) {

@@ -37,6 +37,13 @@ export const AI_GATEWAY_PROVIDER: GrokProvider = {
   credentialEnv: 'AI_GATEWAY_API_KEY',
   baseUrl: 'https://ai-gateway.vercel.sh/v1',
 }
+
+/** OpenRouter's Chat Completions API, whose model ids name their provider (`x-ai/grok-4.6`). */
+export const OPENROUTER_PROVIDER: GrokProvider = {
+  name: 'OpenRouter',
+  credentialEnv: 'OPENROUTER_API_KEY',
+  baseUrl: 'https://openrouter.ai/api/v1',
+}
 /**
  * Where harness-placed skills go, under Grok's home. The bootstrap gives Grok a private home,
  * `~/.ai-sdk-harness/.harness-bootstrap/grok-build/implementation/home`, so this is under that.
@@ -192,7 +199,8 @@ export function createGrokBuild(
   settings: GrokBuildHarnessSettings,
 ): HarnessV1<GrokBuildBuiltinTools> {
   const credential = settings.provider?.credentialEnv ?? GROK_CREDENTIAL_ENV
-  const keyFor = settings.provider ? `a ${settings.provider.name} key` : 'an xAI API key'
+  const name = settings.provider?.name
+  const keyFor = name ? `${/^[AEIOU]/.test(name) ? 'an' : 'a'} ${name} key` : 'an xAI API key'
   if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[credential]) {
     throw new Error(`Grok Build auth must be an environment object with ${credential} (${keyFor})`)
   }
@@ -213,7 +221,11 @@ export function createGrokBuild(
     env: { ...GROK_QUIET_ENV, [GROK_PLUGIN_DIRS_ENV]: (settings.pluginDirs ?? []).join(':') },
     // Every provider's, not just this one's: the bootstrap is keyed on these names, so the image's
     // bootstrap serves each provider.
-    credentialEnv: [GROK_CREDENTIAL_ENV, AI_GATEWAY_PROVIDER.credentialEnv],
+    credentialEnv: [
+      GROK_CREDENTIAL_ENV,
+      AI_GATEWAY_PROVIDER.credentialEnv,
+      OPENROUTER_PROVIDER.credentialEnv,
+    ],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[credential]
       const placeholder = sandboxEnv?.[credential]

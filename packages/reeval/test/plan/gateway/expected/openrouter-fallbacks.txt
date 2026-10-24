@@ -1,0 +1,34 @@
+profile fallbacks (--profile) · 2 evals · 10 cells · 10 attempts
+hint: gateway: cursor:composer-2.5 → direct (openrouter can't serve it: Cursor's agent only calls Cursor's own API)
+hint: gateway: antigravity:gemini-3.8-flash-low → direct (openrouter can't serve it: Antigravity's CLI only calls Google's API, with a Gemini key, and OpenRouter has no Gemini API)
+hint: gateway: fx:gpt-5.5 → direct (openrouter can't serve it: fx reaches models only on Vercel AI Gateway or OpenAI's API, and no run has checked it on OpenRouter)
+hint: gateway: pi:gemini-3.8-flash → direct (openrouter can't serve it: pi reaches a Gemini model on OpenRouter only through Chat Completions, which no run has checked behaves as it does on Gemini's API; reeval runs pi on its Gemini key)
+evals/g.eval.ts › greets  claude-code:claude-haiku-4-5/-/docker      control  gated  ×1  gateway: claude-code:claude-haiku-4-5 → openrouter · gateway: codex:gpt-5.4-mini → openrouter · gateway: goose:gemini-3.8-flash → openrouter · gateway: opencode:gemini-3.8-flash → openrouter · gateway: grok-build:grok-4.6 → openrouter · gateway: cursor:composer-2.5 → direct · gateway: antigravity:gemini-3.8-flash-low → direct · gateway: fx:gpt-5.5 → direct · gateway: pi:gemini-3.8-flash → direct · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing
+                          codex:gpt-5.4-mini/-/docker                control  gated  ×1
+                          goose:gemini-3.8-flash/-/docker            control  gated  ×1
+                          opencode:gemini-3.8-flash/-/docker         control  gated  ×1
+                          grok-build:grok-4.6/-/docker               control  gated  ×1
+                          cursor:composer-2.5/-/docker               control  gated  ×1
+                          antigravity:gemini-3.8-flash-low/-/docker  control  gated  ×1
+                          fx:gpt-5.5/-/docker                        control  gated  ×1
+                          pi:gemini-3.8-flash/-/docker               control  gated  ×1
+evals/g.eval.ts › pinned  b/-/docker                                 control  gated  ×1  gateway: b → direct · gateway: openrouter() fallbacks on: reeval's own calls may fail over to another upstream provider; the harnesses' calls take OpenRouter's own routing
+excluded: —
+image docker · claude-code · 1 evals
+  base  reeval-sandbox:claude-code-1.0.160-patch.b17cde50  (reeval's image: built when missing or when its base changed)
+image docker · codex · 1 evals
+  base  reeval-sandbox:codex-0.1.9  (reeval's image: built when missing or when its base changed)
+image docker · goose · 1 evals
+  base  reeval-sandbox:goose-0.1.6  (reeval's image: built when missing or when its base changed)
+image docker · opencode · 1 evals
+  base  reeval-sandbox:opencode-0.2.10  (reeval's image: built when missing or when its base changed)
+image docker · grok-build · 1 evals
+  base  reeval-sandbox:grok-build-0.1.5  (reeval's image: built when missing or when its base changed)
+image docker · cursor · 2 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+image docker · antigravity · 1 evals
+  base  reeval-sandbox:antigravity-0.1.12  (reeval's image: built when missing or when its base changed)
+image docker · fx · 1 evals
+  base  reeval-sandbox:fx-0.1.1  (reeval's image: built when missing or when its base changed)
+image docker · pi · 1 evals
+  base  reeval-sandbox:pi-0.2.8  (reeval's image: built when missing or when its base changed)

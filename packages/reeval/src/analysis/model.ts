@@ -5,6 +5,7 @@ import { generateText, type LanguageModel, Output } from 'ai'
 import { analysisModelOf } from '../config.ts'
 import { UsageError } from '../errors.ts'
 import { gatewayScope, resolveModelGateway } from '../gateway/models.ts'
+import { openRouterFallbacks, openRouterLanguageModel } from '../gateway/openrouter-models.ts'
 import {
   checkModelString,
   isFakeJudge,
@@ -19,8 +20,10 @@ import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
 
 export type ResolvedAnalysisModel = {
   name: string
-  route: 'direct' | 'gateway' | 'fake'
+  route: 'direct' | 'gateway' | 'openrouter' | 'fake'
   fake?: FakeAnalysisModel
+  /** On OpenRouter, whether it may fail the call over to another upstream provider. */
+  fallbacks?: boolean
 }
 
 export const isFake = (m: unknown): m is FakeAnalysisModel =>
@@ -141,11 +144,14 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
       `analysis.model in ${config.file} is "${model}", an evaluation model: it scores yes/no questions and can't write an analysis. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
     )
   }
-  const gateway = resolveModelGateway(model, undefined, gatewayScope(config), 'analysis.model')
+  const scope = gatewayScope(config)
+  const gateway = resolveModelGateway(model, undefined, scope, 'analysis.model')
   try {
+    const route = judgeRoute(model, process.env, 'analysis model', gateway).kind
     return {
       name: model,
-      route: judgeRoute(model, process.env, 'analysis model', gateway).kind,
+      route,
+      ...(route === 'openrouter' ? { fallbacks: openRouterFallbacks(scope.gateways) } : {}),
     }
   } catch (error) {
     throw new UsageError(
@@ -213,9 +219,13 @@ async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Prom
   return providerModel(model)
 }
 
-/** The provider's own model for a direct route, or the AI Gateway's by name on vercel. */
+/**
+ * The provider's own model for a direct route, the AI Gateway's by name on vercel, or OpenRouter's
+ * on openrouter.
+ */
 export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
   if (model.route === 'gateway') return model.name
+  if (model.route === 'openrouter') return openRouterLanguageModel(model.name, !!model.fallbacks)
   const provider = model.name.slice(0, model.name.indexOf('/'))
   const id = model.name.slice(provider.length + 1)
   switch (provider) {
@@ -228,6 +238,20 @@ export async function providerModel(model: ResolvedAnalysisModel): Promise<Langu
     default:
       return model.name
   }
+}
+
+/**
+ * The language model `name` is on `gateway`, checked for its key: what the judge's route says,
+ * with `fallbacks` on OpenRouter.
+ */
+export function hostModel(
+  name: string,
+  gateway: GatewayName | undefined,
+  what: string,
+  fallbacks = false,
+): Promise<LanguageModel> {
+  const route = judgeRoute(name, process.env, what, gateway).kind
+  return providerModel({ name, route, ...(route === 'openrouter' ? { fallbacks } : {}) })
 }
 
 export type ModelAnswer = {

@@ -104,6 +104,9 @@ export async function createDockerSandbox(
   const brokeredStatuses: number[] = []
   const servedModel = brokering?.servedModel
   const askedModel = brokering?.askedModel
+  const upstream = brokering?.upstream
+  const upstreams = new Map<string, number>()
+  let cost: number | undefined
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
   const onEvent = (event: EgressEvent) => {
     logEvent?.(event)
@@ -118,12 +121,19 @@ export async function createDockerSandbox(
       ...(event.status !== undefined ? { status: event.status } : {}),
       ...(event.responseModel ? { responseModel: event.responseModel } : {}),
       ...(event.responseEffort ? { responseEffort: event.responseEffort } : {}),
+      ...(event.responseProvider ? { responseProvider: event.responseProvider } : {}),
+      ...(event.responseCost !== undefined ? { responseCost: event.responseCost } : {}),
       ...(event.requestHeaders ? { headers: event.requestHeaders } : {}),
     }
     const model = servedModel?.(request)
     if (model) served.push(model)
     const wanted = askedModel?.(request)
     if (wanted) asked.push(wanted)
+    const by = upstream?.(request)
+    if (by) {
+      upstreams.set(by.provider, (upstreams.get(by.provider) ?? 0) + 1)
+      if (by.costUsd !== undefined) cost = (cost ?? 0) + by.costUsd
+    }
   }
   const started = performance.now()
   const { root, capabilities, memory, swap, cpus, pids } = descriptor
@@ -219,6 +229,10 @@ export async function createDockerSandbox(
       servedRequests: () => [...served],
     }),
     ...(askedModel && { askedModels: () => [...new Set(asked)] }),
+    ...(upstream && {
+      upstreams: () => [...upstreams].map(([provider, calls]) => ({ provider, calls })),
+      reportedCostUsd: () => cost,
+    }),
     ...(brokering && { brokeredStatuses: () => [...brokeredStatuses] }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>

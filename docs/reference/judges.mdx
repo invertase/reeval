@@ -141,9 +141,9 @@ reeval uses no gateway by default. Without a [`gateway` list](/reference/gateway
 | `google/` | `GOOGLE_GENERATIVE_AI_API_KEY` | `@ai-sdk/google` |
 | `openai/` | `OPENAI_API_KEY` | `@ai-sdk/openai` |
 | `typesafe-ai/` | `TYPESAFE_AI_API_KEY` | `@ai-sdk/typesafe-ai` |
-| Any other | None: needs `vercel()` in `gateway` | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+| Any other | None: needs `vercel()` or `openrouter()` in `gateway` | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`; or `@openrouter/ai-sdk-provider`, with `OPENROUTER_API_KEY` |
 
-A judge answers through a decision API, so two routes take only decision models. An `openai/` judge calls OpenAI's Decisions API, which answers with `openai/gpt-6-luna`; a language model such as `openai/gpt-5.5` fails each call. On `vercel()`, a judge must be one of Vercel's decision models, such as `typesafe-ai/jev-1.14.0` or `openai/gpt-6-luna-decisions` (see [Gateways](/reference/gateway#the-judge-analysis-and-captures)). `anthropic/` and `google/` judges take their language models on `direct()`.
+A judge answers through a decision API, so two routes take only decision models. An `openai/` judge calls OpenAI's Decisions API, which answers with `openai/gpt-6-luna`; a language model such as `openai/gpt-5.5` fails each call. On `vercel()`, a judge must be one of Vercel's decision models, such as `typesafe-ai/jev-1.14.0` or `openai/gpt-6-luna-decisions`; on `openrouter()`, one OpenRouter answers on its Decisions API, such as `typesafe/jev-1.14` (see [Gateways](/reference/gateway#the-judge-analysis-and-captures)). On OpenRouter each judgement also records the `upstream` provider that served it and its `costUsd`. `anthropic/` and `google/` judges take their language models on `direct()`.
 
 `analysis.model`, insights and questions route the same way. They need a language model, though, so an evaluation model such as `typesafe-ai/jev-1.14.0` can judge but can't write an analysis.
 
@@ -248,6 +248,7 @@ Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses 
 | A language model as a judge on `vercel()` | `the judge model "anthropic/claude-sonnet-5" is a language model, and Vercel AI Gateway judges only with decision models. …`, as a failed call |
 | No key at call time | `No credentials for judge model "google/gemini-3.8-flash" (provider "google"). Set GOOGLE_GENERATIVE_AI_API_KEY (for direct()), in the environment or .env.local.` |
 | A Gateway key set, but no `vercel()` in `gateway` | `… Set TYPESAFE_AI_API_KEY (for direct()), in the environment or .env.local. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.` |
+| A judge OpenRouter doesn't answer as a decision model, on `openrouter()` | `the judge model "anthropic/claude-haiku-4.5" isn't a decision model OpenRouter answers on its Decisions API (OpenRouter said: …). Use a decision model on openrouter(), such as 'typesafe/jev-1.14'.`, as a failed call |
 | A prefix without a direct route, and no `vercel()` | `evals/a.eval.ts › e: the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. There a judge must be a decision model, such as 'typesafe-ai/jev-1.14.0'.`, at plan time |
 | A key with whitespace or a line break | `ANTHROPIC_API_KEY for judge model "anthropic/claude-sonnet-5" has whitespace or a line break in it at character 7. …` |
 

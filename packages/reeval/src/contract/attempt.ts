@@ -295,6 +295,18 @@ export const verdictSchema = z.strictObject({
     .string()
     .optional()
     .describe('The model id the provider says served the call, when it reports one.'),
+  upstream: z
+    .string()
+    .optional()
+    .describe(
+      "The upstream provider the gateway says served the call (OpenRouter's); unset when it names none.",
+    ),
+  costUsd: z
+    .number()
+    .optional()
+    .describe(
+      "What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none.",
+    ),
 })
 
 export const judgeFailureSchema = z

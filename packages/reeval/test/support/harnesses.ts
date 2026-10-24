@@ -43,13 +43,18 @@ export type HarnessRow = {
     | 'opencode-gateway'
     | 'goose-gateway'
     | 'grok-build-gateway'
+    | 'claude-code-openrouter'
+    | 'codex-openrouter'
+    | 'opencode-openrouter'
+    | 'goose-openrouter'
+    | 'grok-build-openrouter'
   /**
    * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
-   * providers than Google's, and the rows on AI Gateway.
+   * providers than Google's, and the rows on AI Gateway and OpenRouter.
    */
   harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
-  gateway?: 'vercel'
+  gateway?: 'vercel' | 'openrouter'
   /**
    * Why the row is skipped unless `REEVAL_CONTRACT_HARNESSES` names it, such as a key CI doesn't
    * have yet.
@@ -111,6 +116,11 @@ export type HarnessRow = {
    * include; unset when the harness records none.
    */
   askedModel?: RegExp
+  /**
+   * Whether every attempt records the upstream providers that served its calls and what they
+   * cost (`upstreams`, `reportedCostUsd`): true on OpenRouter, whose responses say both.
+   */
+  upstream?: true
 }
 
 export const harnesses: HarnessRow[] = [
@@ -429,6 +439,93 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /grok-4\.6/,
     wireModel: /grok-4\.6/,
+  },
+  {
+    // Claude Code on OpenRouter through `gateway: [openrouter()]`: its base URL at OpenRouter's
+    // Anthropic Messages API, the key as ANTHROPIC_AUTH_TOKEN (a Bearer token), the model dotted.
+    id: 'claude-code-openrouter',
+    harness: 'claude-code',
+    gateway: 'openrouter',
+    model: 'claude-haiku-4-5',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'claude-code',
+    skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /claude-haiku-4[.-]5/,
+    wireModel: /claude-haiku-4[.-]5/,
+    upstream: true,
+  },
+  {
+    // Codex on OpenRouter: a Responses API provider there, the model as openai/<id>.
+    id: 'codex-openrouter',
+    harness: 'codex',
+    gateway: 'openrouter',
+    model: 'gpt-5.6-luna',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'codex',
+    skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /gpt-5\.6-luna/,
+    wireModel: /gpt-5\.6-luna/,
+    upstream: true,
+  },
+  {
+    // OpenCode on OpenRouter: its own openrouter provider, the model as openrouter/<id>.
+    id: 'opencode-openrouter',
+    harness: 'opencode',
+    gateway: 'openrouter',
+    model: 'google/gemini-3.8-flash',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai', 'mcp.exa.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+    upstream: true,
+  },
+  {
+    // Goose on OpenRouter: its openrouter provider (Chat Completions, a Bearer key), the Gemini
+    // id as google/<id>.
+    id: 'goose-openrouter',
+    harness: 'goose',
+    gateway: 'openrouter',
+    model: 'gemini-3.8-flash',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /gemini-3\.8-flash/,
+    wireModel: /gemini-3\.8-flash/,
+    upstream: true,
+  },
+  {
+    // Grok Build on OpenRouter: the model as a [model."x-ai/<id>"] table on OpenRouter's Chat
+    // Completions API, keyed by env_key, so nothing reaches xAI's API.
+    id: 'grok-build-openrouter',
+    harness: 'grok-build',
+    gateway: 'openrouter',
+    model: 'grok-4.6',
+    key: { name: 'OPENROUTER_API_KEY', from: ['OPENROUTER_API_KEY'] },
+    image: 'grok-build',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/grok-build\/implementation\/home\/\.grok\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['openrouter.ai'],
+    apiHost: 'openrouter.ai',
+    tokens: true,
+    servedModel: /grok-4\.6/,
+    wireModel: /grok-4\.6/,
+    upstream: true,
   },
 ]
 

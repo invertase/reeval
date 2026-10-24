@@ -52,6 +52,19 @@ export const AI_GATEWAY_PROVIDER: GooseProvider = {
   header: 'Authorization',
   scheme: 'Bearer',
 }
+
+/**
+ * Goose's built-in OpenRouter provider, an OpenAI-compatible one on `https://openrouter.ai`
+ * whose model ids name their provider (`google/gemini-3-flash`).
+ */
+export const OPENROUTER_PROVIDER: GooseProvider = {
+  name: 'OpenRouter',
+  id: 'openrouter',
+  credentialEnv: 'OPENROUTER_API_KEY',
+  baseUrl: 'https://openrouter.ai',
+  header: 'Authorization',
+  scheme: 'Bearer',
+}
 /**
  * Where harness-placed skills go, under Goose's home. The bootstrap gives Goose a private home,
  * `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`, so this is under that.
@@ -149,7 +162,7 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
   const credential = provider.credentialEnv
   if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[credential]) {
     throw new Error(
-      `Goose auth must be an environment object with ${credential} (a ${provider.name} key)`,
+      `Goose auth must be an environment object with ${credential} (${/^[AEIOU]/.test(provider.name) ? 'an' : 'a'} ${provider.name} key)`,
     )
   }
   const value = (key: string) => (provider.scheme ? `${provider.scheme} ${key}` : key)
@@ -165,7 +178,11 @@ export function createGoose(settings: GooseHarnessSettings): HarnessV1<GooseBuil
     env: gooseEnv(settings),
     // Every provider's, not just this one's: the bootstrap is keyed on these names, so the image's
     // bootstrap serves each provider.
-    credentialEnv: [GEMINI_PROVIDER.credentialEnv, AI_GATEWAY_PROVIDER.credentialEnv],
+    credentialEnv: [
+      GEMINI_PROVIDER.credentialEnv,
+      AI_GATEWAY_PROVIDER.credentialEnv,
+      OPENROUTER_PROVIDER.credentialEnv,
+    ],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[credential]
       const placeholder = sandboxEnv?.[credential]

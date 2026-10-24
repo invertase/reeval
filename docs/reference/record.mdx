@@ -694,6 +694,14 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   The models the harness's successful API calls asked for, when nothing named the one that served them (fx on Vercel AI Gateway with a Gemini model): the agent's word, not the gateway's, so never part of `servedModels`. Absent when there's none.
 </Property>
 
+<Property name="upstreams" type="UpstreamCount[]" optional>
+  The upstream providers a gateway said served the harness's own API calls (OpenRouter's `provider`), each with how many it served, in the order first seen; more than one means the gateway spread or failed the calls over between them. Absent when the gateway names none.
+</Property>
+
+<Property name="reportedCostUsd" type="number" optional>
+  What a gateway said the harness's own API calls cost, in US dollars, summed (OpenRouter's `usage.cost`); absent when it names none.
+</Property>
+
 <Property name="effort" type="string | null">
   The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`); null when the factory left it unset. Fast is not this.
 </Property>
@@ -802,6 +810,14 @@ Also has every field of `FileRef`.
 
 <Property name="gateway" type="string" optional>
   The gateway from the config's `gateway` list the call went through; unset without one.
+</Property>
+
+<Property name="upstream" type="string" optional>
+  The upstream provider the gateway says served the call (OpenRouter's); unset when it names none.
+</Property>
+
+<Property name="costUsd" type="number" optional>
+  What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none.
 </Property>
 
 <Property name="key" type="string">

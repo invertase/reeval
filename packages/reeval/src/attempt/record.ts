@@ -90,6 +90,10 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   a.record.servedModels = sandbox?.servedModels?.() ?? null
   const asked = sandbox?.askedModels?.() ?? []
   if (asked.length) a.record.askedModels = asked
+  const upstreams = sandbox?.upstreams?.() ?? []
+  if (upstreams.length) a.record.upstreams = upstreams
+  const cost = sandbox?.reportedCostUsd?.()
+  if (cost !== undefined) a.record.reportedCostUsd = cost
 }
 
 /** Writes the attempt's record, redacted, and returns what the runner reports. */

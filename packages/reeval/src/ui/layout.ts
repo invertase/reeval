@@ -773,6 +773,38 @@ function slotsFor(insight: EvalInsight | null): Slots {
   }
 }
 
+type Upstreams = NonNullable<CellResult['upstreams']>
+
+/** `Anthropic 12 · Amazon Bedrock 3`: each upstream provider and how many calls it served, summed. */
+function upstreamList(counts: Upstreams): string {
+  const total = new Map<string, number>()
+  for (const u of counts) total.set(u.provider, (total.get(u.provider) ?? 0) + u.calls)
+  return [...total].map(([provider, calls]) => `${provider} ${calls}`).join(' · ')
+}
+
+/**
+ * Which upstream providers a gateway said served each harness's calls and its judge's, a line per
+ * harness, so a run OpenRouter spread over several shows it. None where the gateway named none.
+ */
+function upstreamLines(c: Colors, cells: CellResult[], indent: number): string[] {
+  const by = new Map<string, { agent: Upstreams; judge: Upstreams }>()
+  for (const cell of cells) {
+    if (!cell.upstreams && !cell.judgeUpstreams) continue
+    const seen = by.get(cell.harness) ?? { agent: [], judge: [] }
+    seen.agent.push(...(cell.upstreams ?? []))
+    seen.judge.push(...(cell.judgeUpstreams ?? []))
+    by.set(cell.harness, seen)
+  }
+  return [...by].map(([harness, { agent, judge }]) => {
+    const parts = [
+      ...(agent.length ? [`served by ${upstreamList(agent)}`] : []),
+      ...(judge.length ? [`judge served by ${upstreamList(judge)}`] : []),
+    ]
+    const label = by.size > 1 ? `${harness}  ` : ''
+    return `${' '.repeat(indent)}${c.dim(`${label}${parts.join('; ')}`)}`
+  })
+}
+
 /** One eval's block, laid out as `layout()` says for its job, with its insight's sentences. */
 export function evalBlock(
   c: Colors,
@@ -786,7 +818,12 @@ export function evalBlock(
   const findings = (insight?.findings ?? []).map((f) => `  ${oneLine(f.text)}`)
   if (shape.family) {
     const [head = '', ...rest] = familyBlock(c, e, shape.kind, verbose, slots)
-    return [head, ...answer, ...rest, ...findings]
+    const served = upstreamLines(
+      c,
+      (e.cases ?? []).flatMap((k) => k.cells),
+      2,
+    )
+    return [head, ...answer, ...rest, ...served, ...findings]
   }
   const v = verdict(c, e)
   const name = `${e.group.length ? `${e.group.join(' › ')} › ` : ''}${e.name}`
@@ -795,7 +832,14 @@ export function evalBlock(
   if (e.todo || e.outcome === 'skipped' || !cells.length) return [head]
   const failed = e.outcome !== 'pass'
   const body = cellsBody(c, shape.kind, cells, 2, { failed, verbose, effects: true, slots })
-  return [head, ...answer, ...body, ...findings, ...questionLines(c, e.questions, 2)]
+  return [
+    head,
+    ...answer,
+    ...body,
+    ...upstreamLines(c, cells, 2),
+    ...findings,
+    ...questionLines(c, e.questions, 2),
+  ]
 }
 
 /**

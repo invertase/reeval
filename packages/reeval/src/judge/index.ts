@@ -1,3 +1,4 @@
+import { OPENROUTER_KEY } from '../gateway/openrouter.ts'
 import { VERCEL_KEY, VERCEL_OIDC, vercelCredentialProblem } from '../gateway/vercel.ts'
 import type { JudgeRetry } from '../history/types.ts'
 import { badCharacterAt } from '../redact.ts'
@@ -13,11 +14,19 @@ import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
 
 /** The judge the docs recommend, pinned so a model update never silently moves scores. */
 export const RECOMMENDED_JUDGE_MODEL = 'typesafe-ai/jev-1.14.0'
+/** The same judge as OpenRouter names it. */
+export const OPENROUTER_JUDGE_MODEL = 'typesafe/jev-1.14'
 /** The language model `reeval init` sets as `analysis.model` and the docs recommend for insights. */
 export const RECOMMENDED_ANALYSIS_MODEL = 'google/gemini-3.8-flash'
 export const DEFAULT_THRESHOLD = 0.8
 
 const GATEWAY_KEYS = [VERCEL_KEY, VERCEL_OIDC]
+
+/** Each routing gateway's keys, in the order reeval prefers them. */
+const ROUTED_KEYS: Readonly<Record<Exclude<GatewayName, 'direct'>, readonly string[]>> = {
+  vercel: GATEWAY_KEYS,
+  openrouter: [OPENROUTER_KEY],
+}
 
 /**
  * Providers `direct()` calls, each through its own AI SDK package and key. Any other prefix needs
@@ -30,7 +39,11 @@ export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string; name: 
   'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai', name: 'TypeSafe AI' },
 }
 
-export type JudgeRoute = { kind: 'direct'; provider: string; pkg: string } | { kind: 'gateway' }
+/** A host call's route: its provider's own package, Vercel AI Gateway by name, or OpenRouter's package. */
+export type JudgeRoute =
+  | { kind: 'direct'; provider: string; pkg: string }
+  | { kind: 'gateway' }
+  | { kind: 'openrouter' }
 
 export type { JudgeState } from '../types.ts'
 
@@ -62,21 +75,21 @@ const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 /**
  * Environment variables a model needs on `gateway`, in the order reeval prefers them; any one is
  * enough. On direct, its provider's own key (none for a prefix reeval can't call directly); on
- * vercel, the Gateway's.
+ * another gateway, that gateway's.
  */
 export function judgeCredentials(
   model: string | FakeJudgeModel,
   gateway: GatewayName = 'direct',
 ): string[] {
   if (isFakeJudge(model)) return []
-  if (gateway === 'vercel') return GATEWAY_KEYS
+  if (gateway !== 'direct') return [...ROUTED_KEYS[gateway]]
   const direct = DIRECT_PROVIDERS[providerOf(model)]
   return direct ? [direct.key] : []
 }
 
 /** The keys that would work for a model on `on`: `ANTHROPIC_API_KEY (for direct())`. */
 export function modelKeyOptions(model: string, on: GatewayName = 'direct'): string {
-  if (on === 'vercel') return `${GATEWAY_KEYS.join(' or ')} (for vercel())`
+  if (on !== 'direct') return `${ROUTED_KEYS[on].join(' or ')} (for ${on}())`
   const direct = DIRECT_PROVIDERS[providerOf(model)]
   return direct
     ? `${direct.key} (for direct())`
@@ -85,25 +98,34 @@ export function modelKeyOptions(model: string, on: GatewayName = 'direct'): stri
         .join(', ')} models)`
 }
 
-/** The Vercel credential set in `env`, if any. */
-export const setGatewayKey = (env: NodeJS.ProcessEnv) => GATEWAY_KEYS.find((k) => env[k])
+/** A gateway's credential set in `env`, if any, with the gateway it's for. */
+export function setGatewayKey(
+  env: NodeJS.ProcessEnv,
+): { key: string; gateway: Exclude<GatewayName, 'direct'> } | undefined {
+  for (const [gateway, keys] of Object.entries(ROUTED_KEYS)) {
+    const key = keys.find((k) => env[k])
+    if (key) return { key, gateway: gateway as Exclude<GatewayName, 'direct'> }
+  }
+  return undefined
+}
 
 /**
- * ` AI_GATEWAY_API_KEY is set, but …` when a Vercel credential is set and the model goes direct, so
- * a key that worked before reeval stopped falling back to the Gateway says how to use it.
+ * ` AI_GATEWAY_API_KEY is set, but …` when a gateway's credential is set and the model goes
+ * direct, so the key says how to use it.
  */
 export function unusedGatewayKey(env: NodeJS.ProcessEnv, gateway: GatewayName = 'direct'): string {
   if (gateway !== 'direct') return ''
   const set = setGatewayKey(env)
-  return set
-    ? ` ${set} is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.`
-    : ''
+  if (!set) return ''
+  const name = set.gateway === 'vercel' ? 'Vercel AI Gateway' : 'OpenRouter'
+  return ` ${set.key} is set, but no gateway in the config uses it: add ${set.gateway}() to gateway to call the model through ${name}.`
 }
 
 /**
- * The provider's own package on direct, or the Vercel AI Gateway on vercel. Throws, naming the
- * model, its prefix and the keys that would work, when none is set, when the key it would send
- * has whitespace or a line break in it, or when Vercel's project token has expired.
+ * The provider's own package on direct, the Vercel AI Gateway on vercel, or OpenRouter's package
+ * on openrouter. Throws, naming the model, its prefix and the keys that would work, when none is
+ * set, when the key it would send has whitespace or a line break in it, or when Vercel's project
+ * token has expired.
  */
 export function judgeRoute(
   model: string,
@@ -139,6 +161,7 @@ export function judgeRoute(
       `${key} for ${what} "${model}" has whitespace or a line break in it at character ${at}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
     )
   }
+  if (gateway === 'openrouter') return { kind: 'openrouter' }
   return direct && key === direct.key
     ? { kind: 'direct', provider, pkg: direct.pkg }
     : { kind: 'gateway' }
@@ -157,8 +180,13 @@ export async function runJudge(
 ): Promise<JudgeResult> {
   const { model, threshold } = options
   const gateway = typeof options.gateway === 'object' ? options.gateway.kind : options.gateway
+  const fallbacks =
+    typeof options.gateway === 'object' &&
+    options.gateway.kind === 'openrouter' &&
+    options.gateway.fallbacks === true
   let score: number
   let resolvedModel: string | undefined
+  let billing: { upstream?: string; costUsd?: number } = {}
   let retries: JudgeRetry[] = []
   if (isFakeJudge(model)) {
     score = typeof model.score === 'function' ? model.score(state) : model.score
@@ -169,11 +197,15 @@ export async function runJudge(
     }
     const { scoreWithModel } = await import('./model.ts')
     const scored = await withRetries(
-      () => scoreWithModel(model, question, state, options.providerOptions, signal, gateway),
+      () =>
+        scoreWithModel(model, question, state, options.providerOptions, signal, gateway, fallbacks),
       retry,
       signal,
     )
-    ;({ score, resolvedModel } = scored.value)
+    const { score: scoredAt, resolvedModel: served, ...billed } = scored.value
+    score = scoredAt
+    resolvedModel = served
+    billing = billed
     retries = scored.retries
   }
   const verdict: Verdict = {
@@ -184,6 +216,7 @@ export async function runJudge(
     model: judgeModelName(model),
     ...(resolvedModel ? { resolvedModel } : {}),
     ...(gateway && typeof model === 'string' ? { gateway } : {}),
+    ...billing,
   }
   return { verdict, retries }
 }

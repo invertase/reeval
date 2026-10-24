@@ -67,6 +67,13 @@ export const AI_GATEWAY_PROVIDER: CodexProvider = {
   credentialEnv: 'AI_GATEWAY_API_KEY',
 }
 
+/** OpenRouter's Responses API, whose model ids name their provider (`openai/…`). */
+export const OPENROUTER_PROVIDER: CodexProvider = {
+  name: 'OpenRouter',
+  baseUrl: 'https://openrouter.ai/api/v1',
+  credentialEnv: 'OPENROUTER_API_KEY',
+}
+
 /**
  * The one request Codex sends the key on, `POST /v1/responses`, on its own provider (with
  * WebSockets off, so it's always HTTP). A gateway that enforces it refuses the key anywhere else.
@@ -281,7 +288,7 @@ export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuil
     : undefined
   if (!key) {
     throw new Error(
-      `Codex auth must be an environment object with ${provider.credentialEnv} (a ${provider.name} key)`,
+      `Codex auth must be an environment object with ${provider.credentialEnv} (${/^[AEIOU]/.test(provider.name) ? 'an' : 'a'} ${provider.name} key)`,
     )
   }
   return {

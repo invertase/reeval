@@ -11,6 +11,7 @@ import {
   GOOSE_QUIET_ENV,
   gooseConfig,
   gooseEnv,
+  OPENROUTER_PROVIDER,
 } from '../src/goose-harness.ts'
 import { VERSION } from '../src/version.ts'
 
@@ -87,6 +88,19 @@ test("on Vercel AI Gateway, Goose runs its vercel_ai_gateway provider on Vercel'
   assert.equal(harness.harnessId, 'goose')
 })
 
+test("on OpenRouter, Goose runs its openrouter provider on OpenRouter's key", () => {
+  assert.deepEqual(gooseEnv({ model: 'google/gemini-3-flash', provider: OPENROUTER_PROVIDER }), {
+    ...GOOSE_QUIET_ENV,
+    GOOSE_PROVIDER: 'openrouter',
+    GOOSE_MODEL: 'google/gemini-3-flash',
+  })
+  assert.throws(
+    () =>
+      createGoose({ auth: { AI_GATEWAY_API_KEY: 'k' }, provider: OPENROUTER_PROVIDER, model: 'm' }),
+    /with OPENROUTER_API_KEY \(an OpenRouter key\)/,
+  )
+})
+
 test('the image bakes one bootstrap for every provider and model', async () => {
   const gemini = createGoose({ auth: { [GOOSE_CREDENTIAL_ENV]: 'AIza-k' }, model: 'unused' })
   const vercel = createGoose({
@@ -94,7 +108,13 @@ test('the image bakes one bootstrap for every provider and model', async () => {
     provider: AI_GATEWAY_PROVIDER,
     model: 'google/gemini-3-flash',
   })
+  const openrouter = createGoose({
+    auth: { OPENROUTER_API_KEY: 'sk-or-k' },
+    provider: OPENROUTER_PROVIDER,
+    model: 'google/gemini-3-flash',
+  })
   assert.deepEqual(await vercel.getBootstrap?.({}), await gemini.getBootstrap?.({}))
+  assert.deepEqual(await openrouter.getBootstrap?.({}), await gemini.getBootstrap?.({}))
 })
 
 test("MCP servers are enabled extensions in Goose's config.yaml", () => {

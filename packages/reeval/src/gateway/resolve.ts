@@ -11,7 +11,7 @@ import type {
   HarnessDescriptor,
   ResolvedGateway,
 } from '../types.ts'
-import { VERCEL_REFUSALS, VERCEL_ROUTES, VERCEL_UNPROVEN_EFFORT } from './vercel.ts'
+import { ROUTING_GATEWAYS, type RoutingGatewayName } from './routes.ts'
 
 /** The config's list when it sets none: each provider's own key, as reeval has always run. */
 export const DEFAULT_GATEWAYS: GatewayDescriptor[] = [{ kind: 'direct' }]
@@ -35,21 +35,28 @@ export const GATEWAYS: Readonly<Record<GatewayName, GatewayEntry>> = {
       return undefined
     },
   },
-  vercel: {
+  vercel: routingEntry('vercel'),
+  openrouter: routingEntry('openrouter'),
+}
+
+/** A routing gateway's entry: its route table decides whom it serves, and with what effort. */
+function routingEntry(name: RoutingGatewayName): GatewayEntry {
+  const gateway = ROUTING_GATEWAYS[name]
+  return {
     // A fake agent calls no model, so any gateway serves it.
     cantServe: (h) => {
-      if (h.kind !== 'fake' && !VERCEL_ROUTES[h.kind]) {
+      if (h.kind !== 'fake' && !gateway.routes[h.kind]) {
         return (
-          VERCEL_REFUSALS[h.kind] ?? `reeval doesn't run ${agentName(h)} on Vercel AI Gateway yet`
+          gateway.refusals[h.kind] ?? `reeval doesn't run ${agentName(h)} on ${gateway.name} yet`
         )
       }
       const effort = harnessEffort(h)
-      if (effort !== undefined && h.kind !== 'fake' && VERCEL_UNPROVEN_EFFORT.includes(h.kind)) {
-        return `reeval doesn't send ${agentName(h)}'s effort (${JSON.stringify(effort)}) through Vercel AI Gateway yet: nothing checks the model gets it as its own setting, so drop effort or run ${agentName(h)} on another gateway`
+      if (effort !== undefined && h.kind !== 'fake' && gateway.unprovenEffort.includes(h.kind)) {
+        return `reeval doesn't send ${agentName(h)}'s effort (${JSON.stringify(effort)}) through ${gateway.name} yet: nothing checks the model gets it as its own setting, so drop effort or run ${agentName(h)} on another gateway`
       }
       return undefined
     },
-  },
+  }
 }
 
 /** The `reeval/gateway` helper that makes the gateway `name`, as messages name it. */

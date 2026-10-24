@@ -23,7 +23,7 @@ evaluate(
   {
     harness: [
       opencode({ model: 'anthropic/claude-haiku-4-5' }),
-      opencode({ model: 'openrouter/openai/gpt-5.4-mini', id: 'opencode:openrouter' }),
+      opencode({ model: 'cerebras/gpt-oss-120b', id: 'opencode:cerebras' }),
     ],
     egress: 'deny-all',
   },

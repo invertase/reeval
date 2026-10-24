@@ -99,6 +99,10 @@ export type JudgementRecord = {
   resolvedModel?: string
   /** The gateway from the config's `gateway` list the call went through; unset without one. */
   gateway?: string
+  /** The upstream provider the gateway says served the call (OpenRouter's); unset when it names none. */
+  upstream?: string
+  /** What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none. */
+  costUsd?: number
   /**
    * `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a
    * verdict can be followed across runs (and an edited question starts a new series).
@@ -123,6 +127,9 @@ export type AttemptFiles = {
 }
 
 export type ContextFile = { path: string; sha256: string }
+
+/** An upstream provider behind a gateway, and how many of the attempt's calls it served. */
+export type UpstreamCount = { provider: string; calls: number }
 
 export type AttemptRecord = {
   /** `<eval key> # <cell key>#<n>`: unique in the run. */
@@ -158,6 +165,17 @@ export type AttemptRecord = {
    * gateway's, so never part of `servedModels`. Absent when there's none.
    */
   askedModels?: string[]
+  /**
+   * The upstream providers a gateway said served the harness's own API calls (OpenRouter's
+   * `provider`), each with how many it served, in the order first seen; more than one means the
+   * gateway spread or failed the calls over between them. Absent when the gateway names none.
+   */
+  upstreams?: UpstreamCount[]
+  /**
+   * What a gateway said the harness's own API calls cost, in US dollars, summed (OpenRouter's
+   * `usage.cost`); absent when it names none.
+   */
+  reportedCostUsd?: number
   /**
    * The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`);
    * null when the factory left it unset. Fast is not this.

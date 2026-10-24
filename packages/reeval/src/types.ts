@@ -379,6 +379,10 @@ export type Verdict = {
   resolvedModel?: string
   /** The gateway from the config's `gateway` list the call went through; unset without one. */
   gateway?: GatewayName
+  /** The upstream provider the gateway says served the call (OpenRouter's); unset when it names none. */
+  upstream?: string
+  /** What the gateway says the call cost, in US dollars (OpenRouter's `usage.cost`); unset when it names none. */
+  costUsd?: number
   /** Captures this call sent the judge as file parts, when any. */
   artifacts?: JudgeArtifactRef[]
 }
@@ -387,7 +391,10 @@ export type Verdict = {
  * What `c.judge()` returns when the call failed (the provider's error, after any retries): the attempt fails as a judge error once the eval's body has finished,
  * so the judges and checks after it still run.
  */
-export type JudgeFailure = Omit<Verdict, 'verdict' | 'score' | 'resolvedModel'> & {
+export type JudgeFailure = Omit<
+  Verdict,
+  'verdict' | 'score' | 'resolvedModel' | 'upstream' | 'costUsd'
+> & {
   verdict: 'error'
   score: null
   error: string
@@ -786,9 +793,9 @@ export type GrokBuildHarnessDescriptor = {
 }
 /**
  * A gateway the config lists by name: `direct` is each provider's own key, as without `gateway`;
- * `vercel` is Vercel AI Gateway.
+ * `vercel` is Vercel AI Gateway; `openrouter` is OpenRouter.
  */
-export type GatewayName = 'direct' | 'vercel'
+export type GatewayName = 'direct' | 'vercel' | 'openrouter'
 
 /** Each provider's own key, as without `gateway`: made by `direct()` in `reeval/gateway`. */
 export type DirectGatewayDescriptor = {
@@ -797,14 +804,32 @@ export type DirectGatewayDescriptor = {
 
 /**
  * Vercel AI Gateway, with `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`): made by `vercel()` in
- * `reeval/gateway`. It serves Claude Code, Codex, Goose, pi, OpenCode, fx and Grok Build.
+ * `reeval/gateway`. It serves Claude Code, Codex, Goose, OpenCode, fx and Grok Build.
  */
 export type VercelGatewayDescriptor = {
   kind: 'vercel'
 }
 
+/**
+ * OpenRouter, with `OPENROUTER_API_KEY`: made by `openrouter()` in `reeval/gateway`. It serves
+ * Claude Code, Codex, Goose, OpenCode and Grok Build.
+ */
+export type OpenRouterGatewayDescriptor = {
+  kind: 'openrouter'
+  /**
+   * Let OpenRouter fail over to another upstream provider when the one it picked can't serve a
+   * call. Off by default, so reeval's own calls (the judge, analysis, compare questions and
+   * captures) send `allow_fallbacks: false`. The harnesses' calls take OpenRouter's own routing
+   * either way.
+   */
+  fallbacks?: boolean
+}
+
 /** One entry of the config's `gateway` list. */
-export type GatewayDescriptor = DirectGatewayDescriptor | VercelGatewayDescriptor
+export type GatewayDescriptor =
+  | DirectGatewayDescriptor
+  | VercelGatewayDescriptor
+  | OpenRouterGatewayDescriptor
 
 /**
  * A `gateway` entry as data (`reeval.yaml`): its name, a one-key map from its name to its
@@ -814,6 +839,7 @@ export type GatewayEntryData =
   | GatewayName
   | { direct: Omit<DirectGatewayDescriptor, 'kind'> }
   | { vercel: Omit<VercelGatewayDescriptor, 'kind'> }
+  | { openrouter: Omit<OpenRouterGatewayDescriptor, 'kind'> }
   | GatewayDescriptor
 
 /** A real coding agent, driven through its AI SDK harness adapter. */
@@ -2402,6 +2428,10 @@ export type EvalRecord = {
   servedModels?: string[] | null
   /** See `AttemptRecord.askedModels`. */
   askedModels?: string[]
+  /** See `AttemptRecord.upstreams`. */
+  upstreams?: Array<{ provider: string; calls: number }>
+  /** See `AttemptRecord.reportedCostUsd`. */
+  reportedCostUsd?: number
   /**
    * PNGs from `c.capture()`. Bytes live in a sidecar next to this JSON
    * (`<stem>.artifacts/<name>.png`) so redact never touches them.

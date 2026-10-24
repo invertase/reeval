@@ -28,6 +28,7 @@ export type Sources = {
 const REAL_SUITES: Record<string, string> = {
   e2e: 'reeval/test/e2e-real.test.ts',
   questions: 'reeval/test/questions-real.test.ts',
+  openrouter: 'reeval/test/openrouter-real.test.ts',
 }
 
 type Cell = { count: number; canaries: number }
@@ -142,7 +143,7 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
       const file = suite ? REAL_SUITES[suite] : undefined
       if (rest.length || !title || (suite !== 'contract' && !file))
         problems.push(
-          `${at}: "${ref}" isn't "contract › <behaviour>", "e2e › <title>" or "questions › <title>"`,
+          `${at}: "${ref}" isn't "contract › <behaviour>", "e2e › <title>", "questions › <title>" or "openrouter › <title>"`,
         )
       else if (suite === 'contract' && !behaviour)
         problems.push(`${at}: contract.test.ts has no behaviour "${title}"`)

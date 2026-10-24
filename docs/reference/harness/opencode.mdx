@@ -21,7 +21,7 @@ export default defineConfig({
 ## Options
 
 <Property name="model" type="string">
-  OpenCode's model id, `<provider>/<model>`, such as `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5` or `openrouter/anthropic/claude-haiku-4.5`. The provider, before the first `/`, picks the key: only that provider's key is needed and brokered. A bare id with no provider, or a provider reeval can't broker ([below](#refused-providers)), exits 2 at plan time. Required.
+  OpenCode's model id, `<provider>/<model>`, such as `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5` or `cerebras/gpt-oss-120b`. The provider, before the first `/`, picks the key: only that provider's key is needed and brokered. A bare id with no provider, or a provider reeval can't broker ([below](#refused-providers)), exits 2 at plan time. Required.
 </Property>
 
 <Property name="effort" type="string" optional>
@@ -78,7 +78,6 @@ reeval reads the model's provider's key from the host, passes it to the adapter 
 | `google` | `x-goog-api-key` | `POST generativelanguage.googleapis.com/v1beta/models/<model>:streamGenerateContent` |
 | `anthropic` | `x-api-key` | `POST api.anthropic.com/v1/messages` |
 | `openai` | `Authorization: Bearer` | `POST api.openai.com/v1/responses` |
-| `openrouter` | `Authorization: Bearer` | `POST openrouter.ai/api/v1/chat/completions` |
 
 Each provider's hosts, paths and headers come from running the pinned OpenCode against a mock server, once per provider and model API, and are listed [below](#supported-providers). A request that carries the placeholder anywhere else gets a 403 from the gateway, and the adapter refuses to run in a sandbox that can't broker the key.
 
@@ -102,6 +101,15 @@ gateway: [vercel(), direct()],
 ```
 
 With [`vercel()`](/reference/gateway#vercel-ai-gateway) in the config's `gateway`, OpenCode runs on its own `vercel` provider, as `vercel/<model>`, on `vercel()`'s key. Write the model as its provider's id: a `vercel/…` id would skip the gateway list, so it exits 2 at plan time. On Vercel any `<provider>/<model>` Vercel serves runs; the provider table below gates `direct()` only, where a provider reeval can't run stops the plan with exit 2. `effort` isn't taken on `vercel()` yet: nothing checks the model gets it, so such a cell falls through to the next gateway.
+
+## On OpenRouter
+
+```ts title="reeval.config.ts"
+harness: opencode({ model: 'google/gemini-3.8-flash' }),
+gateway: [openrouter(), direct()],
+```
+
+With [`openrouter()`](/reference/gateway#openrouter) in the config's `gateway`, OpenCode runs on its own `openrouter` provider, as `openrouter/<model>`, on `OPENROUTER_API_KEY`, brokered on `POST openrouter.ai/api/v1/chat/completions`. Write the model as its provider's id: an `openrouter/…` id would skip the gateway list, so it exits 2 at plan time. Each call records the upstream provider OpenRouter says served it, and its cost. `effort` isn't taken on `openrouter()` yet, so such a cell falls through to the next gateway.
 
 ## Amazon Bedrock
 
@@ -253,6 +261,7 @@ Items are flat, not namespaced, so two plugins' subagents or commands with the s
 | A model without a provider (at plan time, exit 2) | `opencode(): an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got "gemini-3.8-flash")` |
 | A provider OpenCode doesn't know, on `direct()` (exit 2) | `evaluate("<eval>") on opencode:<model>: no gateway in the list can serve it (direct: OpenCode has no provider "…" (in "…"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'). Add vercel() to gateway.` |
 | A `vercel/…` model (exit 2) | `opencode(): a vercel/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add vercel() to gateway (got "vercel/anthropic/claude-haiku-4.5")` |
+| An `openrouter/…` model (exit 2) | `opencode(): an openrouter/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add openrouter() to gateway (got "openrouter/anthropic/claude-haiku-4.5")` |
 | A provider reeval refuses, on `direct()` (exit 2) | `… (direct: reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox). …` |
 | A malformed `AWS_REGION` on Bedrock, on `direct()` (exit 2) | `… (direct: AWS_REGION is "…", which isn't one Amazon Bedrock (amazon-bedrock) takes: OpenCode builds its API's host from it, so it must match /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, such as "us-east-1"). …` |
 | No key for the run's providers | `Missing credentials: ANTHROPIC_API_KEY. Set them in the environment or .env.local.` |

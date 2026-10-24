@@ -87,6 +87,13 @@ Code, Codex, Goose, OpenCode, fx and Grok Build on Vercel AI Gateway with one `A
 everything else on its own key; the plan's hint says where each harness fell through. Pin one with
 the factory's or the judge's `gateway: 'vercel'`; a pin never falls back. Default `[direct()]`:
 no gateway, so the judge, analysis and captures take only their provider's own key.
+`gateway: [openrouter(), direct()]` runs Claude Code, Codex, Goose, OpenCode and Grok Build on
+OpenRouter with one `OPENROUTER_API_KEY` (Cursor, Antigravity, fx, pi, and `effort` on any but
+Codex, fall through). Every OpenRouter call records its upstream provider and cost
+(`attempts[].upstreams`, `reportedCostUsd`; a judgement's `upstream`, `costUsd`).
+`openrouter({ fallbacks: true })` lets reeval's own calls (judge, analysis, captures) fail over
+between upstreams; the agents' calls take OpenRouter's routing whatever it says. Write OpenCode
+ids as `anthropic/…`, never `openrouter/…` or `vercel/…`.
 
 ## Judge models and imports
 
@@ -95,9 +102,10 @@ no gateway, so the judge, analysis and captures take only their provider's own k
   and `'openai/gpt-6-luna'` (`OPENAI_API_KEY`; OpenAI's Decisions API takes only its decision
   model, so not `openai/gpt-5.5`), each on its provider's own key. reeval uses no gateway by
   default: `AI_GATEWAY_API_KEY` is read only with `gateway: [vercel()]` in the config (or a judge
-  `gateway: 'vercel'` pin, listed there). As a judge, `vercel()` serves decision models only
-  (Jev, `openai/gpt-6-luna-decisions`), never a language model: pin a language-model judge to
-  `gateway: 'direct'`. Always a provider prefix.
+  `gateway: 'vercel'` pin, listed there), `OPENROUTER_API_KEY` only with `openrouter()`. As a
+  judge, `vercel()` serves decision models only (Jev, `openai/gpt-6-luna-decisions`), and
+  `openrouter()` only those on its Decisions API (`typesafe/jev-1.14`), never a language model:
+  pin a language-model judge to `gateway: 'direct'`. Always a provider prefix.
   With a `gateway` list set, a judge model takes the first listed gateway that serves it, and only
   that gateway's key.
 - Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,

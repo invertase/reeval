@@ -144,6 +144,22 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         ]
         return out.end(parts.map((p) => `data: ${JSON.stringify(p)}\n\n`).join(''))
       }
+      if (req.url === '/chat/completions') {
+        // OpenRouter's Chat Completions stream: each chunk names the upstream provider, and the
+        // last one the call's cost, after content that mentions both inside a JSON string.
+        out.writeHead(200, { 'content-type': 'text/event-stream' })
+        const chunk = (extra: object) =>
+          `data: ${JSON.stringify({ id: 'gen-1', provider: 'Anthropic', model: 'anthropic/claude-haiku-4.5', ...extra })}\n\n`
+        out.write(chunk({ choices: [{ delta: { content: 'say "provider": "x", "cost": 9' } }] }))
+        out.write(`: ${'padding '.repeat(1024)}\n\n`)
+        return setTimeout(
+          () =>
+            out.end(
+              `${chunk({ choices: [], usage: { prompt_tokens: 3, cost: 0.00042, cost_details: {} } })}data: [DONE]\n\n`,
+            ),
+          20,
+        )
+      }
       if (req.url === '/denied') {
         // An error page echoing the key, as a WAF or a debug handler might, compressed unasked.
         const auth = String(req.headers.authorization ?? '')
@@ -1618,6 +1634,30 @@ describe('the model a response names, on a modelResponses endpoint', () => {
     }
   })
 
+  test("a gateway's upstream provider and the call's last cost", async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: '/chat/completions' } }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/chat/completions',
+        headers: { authorization: `Bearer ${PLACEHOLDER}` },
+        body: '{}',
+      })
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.equal(e?.type === 'request' && e.responseModel, 'anthropic/claude-haiku-4.5')
+      assert.equal(e?.type === 'request' && e.responseProvider, 'Anthropic')
+      assert.equal(e?.type === 'request' && e.responseCost, 0.00042)
+    } finally {
+      gw.close()
+    }
+  })
+
   test('twin: off the endpoints, the response is neither read nor its encoding changed', async () => {
     const events: EgressEvent[] = []
     const gw = await startProxy(undefined, {
@@ -1635,6 +1675,7 @@ describe('the model a response names, on a modelResponses endpoint', () => {
       const e = await requestEvent(events)
       assert.equal(e?.type, 'request')
       assert.equal(e?.type === 'request' && e.responseModel, undefined)
+      assert.equal(e?.type === 'request' && e.responseProvider, undefined)
     } finally {
       gw.close()
     }

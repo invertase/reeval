@@ -45,11 +45,11 @@ export default defineConfig({
 | | |
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
-| Credential | `XAI_API_KEY` (an xAI API key), or `vercel()`'s on Vercel AI Gateway |
-| Adapter | `@reeval/harness-grok-build` 0.1.4 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| Credential | `XAI_API_KEY` (an xAI API key), `vercel()`'s on Vercel AI Gateway, or `openrouter()`'s (`OPENROUTER_API_KEY`) on OpenRouter |
+| Adapter | `@reeval/harness-grok-build` 0.1.5 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | Grok Build 1.0.70, from npm's `@xai-official/grok-linux-*`, checked against its sha512 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:grok-build-0.1.4` |
+| Image | `reeval-sandbox:grok-build-0.1.5` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.grok/skills` in Grok's own home (below) |
 | Skills (`placement: 'workspace'`) | `.grok/skills` in the workspace |
@@ -71,6 +71,8 @@ reeval passes `XAI_API_KEY` to the adapter explicitly, and Grok gets a placehold
 The served model comes from each model call's response, which the gateway reads: Grok's ACP server doesn't name it. The adapter refuses to run in a sandbox that can't broker the key.
 
 On a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`, the key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`). Grok's `config.toml` gets a `[model."xai/<model>"]` table on Vercel's Chat Completions API (`base_url = "https://ai-gateway.vercel.sh/v1"`, `env_key = "AI_GATEWAY_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /v1/chat/completions` at `ai-gateway.vercel.sh` only, and reads the served model from each response, in Vercel's name: `spacexai/grok-4.6` where direct records `grok-4.6`, so `reeval compare` across the two shows different served models. Grok also probes the gateway's root, which Vercel redirects to `vercel.com`; that block is expected. `effort` isn't taken on `vercel()` yet, so a cell with it falls through to the next gateway.
+
+On [`openrouter()`](/reference/gateway#openrouter), the key is `OPENROUTER_API_KEY`, and Grok's `config.toml` gets a `[model."x-ai/<model>"]` table on OpenRouter's Chat Completions API (`base_url = "https://openrouter.ai/api/v1"`, `env_key = "OPENROUTER_API_KEY"`), so Grok calls nothing on `api.x.ai`. The gateway brokers the key as a Bearer token on `POST /api/v1/chat/completions` at `openrouter.ai` only, and reads the served model, the upstream provider and the cost from each response. `effort` isn't taken there yet.
 
 ## Settings
 

@@ -87,10 +87,12 @@ export function opencodeModelError(model: unknown): string | undefined {
   if (typeof model !== 'string' || !model) {
     return `needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got ${JSON.stringify(model)})`
   }
-  if (model.startsWith('vercel/')) {
-    return `a vercel/… id would bypass the config's gateway list: write the model as '${model.slice('vercel/'.length)}' and add vercel() to gateway (got ${JSON.stringify(model)})`
+  for (const gateway of ['vercel', 'openrouter']) {
+    if (model.startsWith(`${gateway}/`)) {
+      return `${gateway === 'openrouter' ? 'an' : 'a'} ${gateway}/… id would bypass the config's gateway list: write the model as '${model.slice(gateway.length + 1)}' and add ${gateway}() to gateway (got ${JSON.stringify(model)})`
+    }
   }
-  // The provider table gates direct() only: on Vercel AI Gateway any <provider>/<model> runs.
+  // The provider table gates direct() only: on a gateway any <provider>/<model> runs.
   return splitModel(model)
     ? undefined
     : `an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got ${JSON.stringify(model)})`

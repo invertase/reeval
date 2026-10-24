@@ -71,7 +71,10 @@ export type EgressProxyOptions = {
    * Requests whose response names the model that served them in its body (a `"model"` field, or
    * the `"modelId"` of an AI SDK stream's `response-metadata` part, and a `"reasoning"` object's
    * `"effort"`, as OpenAI's Responses API does): the gateway asks for it
-   * uncompressed and records them as the request's `responseModel` and `responseEffort`.
+   * uncompressed and records them as the request's `responseModel` and `responseEffort`. A
+   * gateway's response may also name the upstream provider that served it (a `"provider"` string)
+   * and what it charged (its last `"cost"` number), recorded as `responseProvider` and
+   * `responseCost`.
    */
   modelResponses?: readonly EndpointMatch[]
   /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
@@ -110,6 +113,10 @@ export type EgressRequestEvent = {
   responseModel?: string
   /** The reasoning effort the response body says it ran at, on a `modelResponses` endpoint. */
   responseEffort?: string
+  /** The upstream provider the response body says served it (OpenRouter's `"provider"`). */
+  responseProvider?: string
+  /** The last `"cost"` the response body names, in the gateway's credits (OpenRouter's US dollars). */
+  responseCost?: number
 }
 
 export type EgressEvent =
@@ -159,6 +166,8 @@ type RequestTracker = {
         | 'reason'
         | 'responseModel'
         | 'responseEffort'
+        | 'responseProvider'
+        | 'responseCost'
       >
     >,
   ): void
@@ -775,22 +784,37 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
    */
   const MODEL_WINDOW = 512 * 1024
 
+  /** How much of a response's end the gateway keeps to find its last `"cost"`. */
+  const COST_TAIL = 4096
+
   /**
-   * Records the first `"model"` or `"modelId"` value in the response body, and the `"effort"` of the
-   * `"reasoning"` object after it, reading alongside its flow. Inside a JSON string the quotes are
-   * escaped, so text that merely mentions them doesn't match.
+   * Records the first `"model"` or `"modelId"` value in the response body, the `"effort"` of the
+   * `"reasoning"` object after it and the first `"provider"` string, within {@link MODEL_WINDOW},
+   * and the last `"cost"` number in the whole body, reading alongside its flow. Inside a JSON
+   * string the quotes are escaped, so text that merely mentions them doesn't match.
    */
   function readModel(up: Readable, t: RequestTracker) {
     let seen = ''
+    let tail = ''
+    let model: RegExpExecArray | null = null
+    let effort: RegExpExecArray | null = null
+    let provider: RegExpExecArray | null = null
     const onData = (chunk: Buffer) => {
-      seen += chunk.toString('utf8')
-      const model = /"model(?:Id)?"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
-      const effort = model
-        ? /"reasoning"\s*:\s*\{[^{}]*?"effort"\s*:\s*"(\w{1,40})"/.exec(seen.slice(model.index))
-        : null
-      if (model) t.set({ responseModel: model[1] })
-      if (effort) t.set({ responseEffort: effort[1] })
-      if (effort || seen.length > MODEL_WINDOW) up.off('data', onData)
+      const text = chunk.toString('utf8')
+      if (seen.length <= MODEL_WINDOW && !(effort && provider)) {
+        seen += text
+        model ??= /"model(?:Id)?"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
+        effort ??= model
+          ? /"reasoning"\s*:\s*\{[^{}]*?"effort"\s*:\s*"(\w{1,40})"/.exec(seen.slice(model.index))
+          : null
+        provider ??= /"provider"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
+        if (model) t.set({ responseModel: model[1] })
+        if (effort) t.set({ responseEffort: effort[1] })
+        if (provider) t.set({ responseProvider: provider[1] })
+      }
+      tail = (tail + text).slice(-COST_TAIL)
+      const cost = [...tail.matchAll(/"cost"\s*:\s*(\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/g)].at(-1)
+      if (cost) t.set({ responseCost: Number(cost[1]) })
     }
     up.on('data', onData)
   }

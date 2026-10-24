@@ -5,7 +5,7 @@ evals/a.eval.ts › opencode only, own id                                       
 evals/a.eval.ts › opencode on a toolchain base, under deny-all                                     cursor:composer-2.5/python/docker:python:3.12-slim        control  gated  ×1  egress "deny-all" + api2.cursor.sh, *.cursor.sh
                                                                                                    opencode:gemini-3.8-flash/python/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + generativelanguage.googleapis.com, mcp.exa.ai
 evals/a.eval.ts › opencode on other providers, under deny-all: their hosts are the automatic ones  opencode:claude-haiku-4-5/-/docker                        control  gated  ×1  egress "deny-all" + api.anthropic.com, mcp.exa.ai
-                                                                                                   opencode:openrouter/-/docker                              control  gated  ×1  egress "deny-all" + openrouter.ai, mcp.exa.ai
+                                                                                                   opencode:cerebras/-/docker                                control  gated  ×1  egress "deny-all" + api.cerebras.ai, mcp.exa.ai
 evals/a.eval.ts › opencode on Bedrock, under deny-all: its region is its hosts                     opencode:global.anthropic.claude-haiku-4-5/-/docker       control  gated  ×1  egress "deny-all" + bedrock-mantle.us-east-1.api.aws, bedrock-runtime.us-east-1.amazonaws.com, mcp.exa.ai
 excluded: —
 image docker · cursor · 1 evals

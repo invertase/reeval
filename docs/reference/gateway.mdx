@@ -1,6 +1,6 @@
 ---
 title: Gateways
-description: The config's gateway list, which gateway each harness's and the judge's model calls go through, pinning one, Vercel AI Gateway, and the errors reeval raises at plan time.
+description: The config's gateway list, which gateway each harness's and the judge's model calls go through, pinning one, Vercel AI Gateway, OpenRouter, and the errors reeval raises at plan time.
 ---
 
 `gateway` lists the routes model calls may take, in the order you prefer them. Each harness, the judge, analysis and captures take the first gateway in the list that can serve them.
@@ -28,6 +28,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
+| `openrouter({ fallbacks })` from `'{{ pkg }}/gateway'` | `openrouter` or `{ openrouter: { fallbacks: true } }` | Claude Code, Codex, Goose, OpenCode, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe/jev-1.14` | `OPENROUTER_API_KEY` |
 
 ## Vercel AI Gateway
 
@@ -49,6 +50,50 @@ One key serves every harness and model on `vercel()`, with judges limited to dec
 pi doesn't run on `vercel()`: its only route there reaches a Gemini model through Anthropic's Messages API, with Anthropic's thinking budget in place of Gemini's thinking level, and it doesn't behave as it does on Gemini's API. With `direct()` after `vercel()`, pi falls through to its Gemini key. `effort` on Goose, OpenCode or Grok Build isn't taken on `vercel()` yet, since nothing checks the model gets it; such a cell falls through too. Claude Code's and Codex's `effort` run there.
 
 A Vercel project's token from `vercel env pull` (`VERCEL_OIDC_TOKEN`) works when `AI_GATEWAY_API_KEY` isn't set. It lasts about 12 hours, so the plan refuses an expired one before anything runs, and `reeval doctor` fails on it.
+
+## OpenRouter
+
+```ts title="reeval.config.ts"
+import { direct, openrouter } from '{{ pkg }}/gateway'
+
+export default defineConfig({
+  harness: claudeCode({ model: 'claude-haiku-4-5' }),
+  gateway: [openrouter(), direct()],
+  judge: { model: 'typesafe/jev-1.14' },
+})
+```
+
+One key, `OPENROUTER_API_KEY`, serves every harness and model on `openrouter()`. The egress gateway swaps it in only on OpenRouter's model paths (`openrouter.ai`), so it never enters the sandbox.
+
+| Harness | How it reaches OpenRouter | Brokered on | Model ids |
+|---|---|---|---|
+| Claude Code | `ANTHROPIC_BASE_URL` at `https://openrouter.ai/api`, the key as `ANTHROPIC_AUTH_TOKEN` (a Bearer token) | `POST /api/v1/messages`, `POST /api/v1/messages/count_tokens` | `anthropic/` prefixed and dotted: `claude-haiku-4-5` runs as `anthropic/claude-haiku-4.5` |
+| Codex | a Responses API provider at OpenRouter in `config.toml` | `POST /api/v1/responses` | `openai/` prefixed |
+| Goose | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions`, `GET /api/v1/models` | `google/` prefixed |
+| OpenCode | its `openrouter` provider, a Bearer key | `POST /api/v1/chat/completions` | `<provider>/<model>` as written, run as `openrouter/<provider>/<model>` |
+| Grok Build | a `[model."x-ai/<id>"]` table on OpenRouter's Chat Completions API, keyed by `env_key` | `POST /api/v1/chat/completions` | `x-ai/` prefixed |
+
+An id that already names a provider (`anthropic/claude-sonnet-4.5`) runs as written. Every response names the served model and the upstream provider that served it, and the gateway reads both, with the call's `usage.cost`.
+
+Cursor, Antigravity, fx and pi don't run on `openrouter()`, and fall through to the next entry. `effort` runs there on Codex only: on Claude Code, Goose, OpenCode or Grok Build, nothing checks the model gets it, so such a cell falls through too.
+
+### Upstream providers and fallbacks
+
+```text title="reeval run"
+pass             fixes the bug
+  …
+  served by Anthropic 12 · Amazon Bedrock 3; judge served by Typesafe 2
+```
+
+OpenRouter can serve one model from several upstream providers. The record keeps which served each call, whatever the setting: `attempts[].upstreams` (each provider and its calls), `attempts[].reportedCostUsd`, and each judgement's `upstream` and `costUsd`. The output prints a line per harness under the eval.
+
+`openrouter({ fallbacks: true })` lets reeval's own calls (the judge, analysis, compare questions and captures) fail over to another upstream when the first one fails; by default they send `allow_fallbacks: false`, so a call fails rather than moves. The plan notes when it's on.
+
+<Warning>
+`fallbacks` covers reeval's own calls only. The harnesses' calls take OpenRouter's own routing, which may fail over, whatever the setting; their `upstreams` show where each went.
+</Warning>
+
+On `openrouter()` a judge must be a decision model, which OpenRouter answers on its Decisions API, such as `typesafe/jev-1.14`. Any other model fails each judge call, naming it.
 
 ## Fallback
 
@@ -84,7 +129,7 @@ gateway: [vercel(), direct()],
 judge: { model: 'anthropic/claude-haiku-4-5', gateway: 'direct' },
 ```
 
-With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
+With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's, `openrouter()` OpenRouter's. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
 
 On `vercel()`, a judge must be a decision model: Vercel AI Gateway serves `typesafe-ai/jev-1.14.0`, `openai/gpt-6-luna-decisions` and its other decision models as judges, and refuses every language model. Analysis, compare questions and captures take language models there as usual.
 
@@ -106,22 +151,26 @@ A profile's `gateway` replaces the config's list for its runs. See [Profiles and
 
 ## In the record
 
-Each cell resolved under a configured `gateway` or a pin records its gateway as `cells[].gateway`, and each judgement its gateway as `judgements[].gateway`. A gateway other than `direct` is part of the cell's fingerprint (`fingerprintParts.gateway`), so `reeval compare` treats a change of gateway as a new measurement; `direct` leaves the fingerprint as it was without the key. See [The record](/reference/record).
+Each cell resolved under a configured `gateway` or a pin records its gateway as `cells[].gateway`, and each judgement its gateway as `judgements[].gateway`. On OpenRouter, each attempt also records `upstreams` and `reportedCostUsd`, and each judgement `upstream` and `costUsd`. A gateway other than `direct` is part of the cell's fingerprint (`fingerprintParts.gateway`), so `reeval compare` treats a change of gateway as a new measurement; `direct` leaves the fingerprint as it was without the key. See [The record](/reference/record).
 
 ## Errors
 
 | Mistake | Message |
 |---|---|
 | An empty list | `gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])` |
-| An unknown gateway | `gateway[0] in reeval.yaml is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel'. Did you mean 'vercel'?` |
+| An unknown gateway | `gateway[0] in reeval.yaml is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel' or 'openrouter'. Did you mean 'vercel'?` |
 | A gateway listed twice | `gateway[1] in reeval.config.ts lists direct a second time. Each gateway is listed once, where you prefer it.` |
 | Settings a gateway doesn't take | `gateway[0] in reeval.yaml isn't a valid vercel(): Unrecognized key: "apikey" (got {"vercel":{"apikey":"x"}})` |
-| A harness pin that isn't a gateway | `cursor({ gateway }) names a gateway in the config's gateway list: 'direct' or 'vercel' (got 3)` |
+| A harness pin that isn't a gateway | `cursor({ gateway }) names a gateway in the config's gateway list: 'direct' or 'vercel' or 'openrouter' (got 3)` |
 | Nothing in the list serves a harness | `evals/a.eval.ts › e on cursor:composer-2.5: no gateway in the list can serve it (vercel: Cursor's agent only calls Cursor's own API). Add direct() to the end of gateway to use Cursor's own key.` |
 | An fx gateway id without `vercel()` | `evals/a.eval.ts › e on fx:m: no gateway in the list can serve it (direct: fx runs a gateway id such as "google/m" only through Vercel AI Gateway). Add vercel() to gateway.` |
 | pi on `vercel()` alone | `evals/a.eval.ts › e on pi:gemini-3.8-flash: no gateway in the list can serve it (vercel: pi reaches a Gemini model on Vercel AI Gateway only through Anthropic's Messages API, …). Add direct() to the end of gateway to use pi's own key.` |
 | `effort` on Goose, OpenCode or Grok Build on `vercel()` alone | `evals/a.eval.ts › e on goose:m[effort=high]: no gateway in the list can serve it (vercel: reeval doesn't send Goose's effort ("high") through Vercel AI Gateway yet: nothing checks the model gets it as its own setting, so drop effort or run Goose on another gateway). …` |
 | An OpenCode provider `direct()` can't run, without `vercel()` | `evals/a.eval.ts › e on opencode:m: no gateway in the list can serve it (direct: OpenCode has no provider "nope" (in "nope/m"); …). Add vercel() to gateway.` |
+| `fallbacks` that isn't a boolean | `gateway[0] in reeval.config.ts isn't a valid openrouter(): Invalid input: expected boolean, received string (got {"kind":"openrouter","fallbacks":"yes"})` |
+| `effort` on Claude Code, Goose, OpenCode or Grok Build on `openrouter()` alone | `evals/a.eval.ts › e on claude-code:m[effort=high]: no gateway in the list can serve it (openrouter: reeval doesn't send Claude Code's effort ("high") through OpenRouter yet: …). Add direct() to the end of gateway to use Claude Code's own key.` |
+| An OpenCode `openrouter/…` id | `opencode(): an openrouter/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add openrouter() to gateway (got "openrouter/anthropic/claude-haiku-4.5")` |
+| A judge OpenRouter doesn't answer as a decision model | `the judge model "anthropic/claude-haiku-4.5" isn't a decision model OpenRouter answers on its Decisions API (OpenRouter said: …). Use a decision model on openrouter(), such as 'typesafe/jev-1.14'.`, on each judge call |
 | An OpenCode `vercel/…` id | `opencode(): a vercel/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add vercel() to gateway (got "vercel/anthropic/claude-haiku-4.5")` |
 | A pin to a gateway that can't serve it | `evals/a.eval.ts › e on cursor:composer-2.5: it pins gateway 'vercel', which can't serve it (Cursor's agent only calls Cursor's own API). A pin never falls back; …` |
 | A pin to a gateway that isn't listed | `evals/a.eval.ts › e on codex:m: it pins gateway 'vercel', which isn't in the gateway list (direct). Add vercel() to gateway, or pin one that's there.` |

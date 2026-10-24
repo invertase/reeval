@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
-import { VERCEL_REFUSALS } from '../src/gateway/vercel.ts'
+import { VERCEL_GATEWAY } from '../src/gateway/vercel.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
@@ -126,6 +126,13 @@ export const cases: PlanCase[] = [
     args: ['--config', 'reeval.vercel.config.ts', '--profile', 'codex-pin'],
   },
   { dir: 'gateway', name: 'vercel-yaml', args: ['--config', 'reeval.vercel.yaml'] },
+  { dir: 'gateway', name: 'openrouter', args: ['--config', 'reeval.openrouter.config.ts'] },
+  {
+    dir: 'gateway',
+    name: 'openrouter-fallbacks',
+    args: ['--config', 'reeval.openrouter.config.ts', '--profile', 'fallbacks'],
+  },
+  { dir: 'gateway', name: 'openrouter-yaml', args: ['--config', 'reeval.openrouter.yaml'] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
@@ -324,7 +331,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
         ['goose:gemini-3.8-flash', { name: 'vercel', skipped: [] }],
         [
           'pi:gemini-3.8-flash',
-          { name: 'direct', skipped: [{ gateway: 'vercel', why: VERCEL_REFUSALS.pi }] },
+          { name: 'direct', skipped: [{ gateway: 'vercel', why: VERCEL_GATEWAY.refusals.pi }] },
         ],
         ['grok-build:grok-4.6', { name: 'vercel', skipped: [] }],
       ],
@@ -346,7 +353,7 @@ evaluate('unknown', async () => {})
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(
         r.stderr,
-        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel'\. Did you mean 'vercel'\?/,
+        /gateway\[0\] in reeval\.config\.ts is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel' or 'openrouter'\. Did you mean 'vercel'\?/,
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')

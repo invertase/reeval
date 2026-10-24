@@ -31,6 +31,7 @@ export {
   createCodex,
   OPENAI_API_URL,
   OPENAI_PROVIDER,
+  OPENROUTER_PROVIDER,
 } from './codex-harness.ts'
 export { type CodexEvent, CodexStreamTranslator, type CodexUsage, toUsage } from './codex-stream.ts'
 export { CODEX_BUILTIN_TOOLS, type CodexBuiltinTools } from './codex-tools.ts'

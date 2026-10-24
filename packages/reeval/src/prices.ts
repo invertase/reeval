@@ -1,6 +1,6 @@
 // List prices for the dry run's cost estimate, fetched when it's shown and never stored in a
 // record: prices change, so reeval keeps no table of its own. models.dev's direct providers, and
-// Vercel AI Gateway's `provider/model` ids, cached on the host for a day, and an older copy when
+// Vercel AI Gateway's and OpenRouter's `provider/model` ids, cached on the host for a day, and an older copy when
 // it can't be reached; a failed fetch isn't retried for an hour. The fetch goes through Node's
 // default agent, so it takes the environment's proxy under `NODE_USE_ENV_PROXY=1`, as the judge's
 // and analysis's `fetch` do. `REEVAL_PRICES` names a file of your own prices that win over
@@ -17,8 +17,11 @@ import { cacheDir } from './root.ts'
 export const MODELS_DEV = 'https://models.dev/api.json'
 /** The providers whose own API a harness or judge calls; the first one wins on a shared id. */
 const PROVIDERS = ['anthropic', 'openai', 'google', 'xai']
-/** Its ids name the provider (`anthropic/claude-sonnet-4.5`), so they never shadow a direct one. */
-const GATEWAY = 'vercel'
+/**
+ * Their ids name the provider (`anthropic/claude-sonnet-4.5`), so they never shadow a direct one;
+ * Vercel's wins on an id both list.
+ */
+const GATEWAYS = ['vercel', 'openrouter']
 const FRESH_MS = 24 * 60 * 60_000
 const RETRY_MS = 60 * 60_000
 const FETCH_TIMEOUT_MS = 2000
@@ -74,7 +77,7 @@ class BadAnswer extends Error {}
 /** The priced models of the providers reeval calls; a malformed entry is skipped. */
 function tableOf(catalog: unknown): Record<string, Price> {
   const table = new Map<string, Price>()
-  for (const provider of [...PROVIDERS, GATEWAY]) {
+  for (const provider of [...PROVIDERS, ...GATEWAYS]) {
     const entry = isObject(catalog) && Object.hasOwn(catalog, provider) ? catalog[provider] : null
     const models = isObject(entry) && isObject(entry.models) ? entry.models : {}
     for (const [id, model] of Object.entries(models)) {

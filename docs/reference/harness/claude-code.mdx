@@ -72,6 +72,8 @@ reeval ships the adapter with one fix, which its image bakes: 1.0.160 never repo
 
 The harness authenticates only with `ANTHROPIC_API_KEY`, passed to the adapter explicitly. A host `AI_GATEWAY_API_KEY`, a Claude subscription login or a keychain entry is never used, so a run can't quietly bill a different account. The one exception is a [`gateway` list](/reference/gateway#vercel-ai-gateway) that resolves the harness to `vercel()`: then its key is `AI_GATEWAY_API_KEY` (else `VERCEL_OIDC_TOKEN`), the CLI's `ANTHROPIC_BASE_URL` is Vercel's host, and only `POST /v1/messages` and `POST /v1/messages/count_tokens` are brokered, on `ai-gateway.vercel.sh`. On that base URL the CLI makes none of its `/api/claude_code/*` calls.
 
+On a gateway list that resolves it to [`openrouter()`](/reference/gateway#openrouter), the key is `OPENROUTER_API_KEY`, sent as `ANTHROPIC_AUTH_TOKEN` (a Bearer token) with `ANTHROPIC_BASE_URL` at `https://openrouter.ai/api`. Only `POST /api/v1/messages` and `POST /api/v1/messages/count_tokens` are brokered, on `openrouter.ai`, and the model runs as OpenRouter's id, `anthropic/` prefixed and dotted (`anthropic/claude-haiku-4.5` for `claude-haiku-4-5`). Each call records the upstream provider OpenRouter says served it, and its cost. `effort` isn't taken there yet, so a cell with it falls through to the next gateway.
+
 The key never enters the container. The gateway swaps it in on the endpoints above, the ones CLI 2.1.281 sends it on, and nowhere else.
 
 A request carrying the placeholder anywhere else gets a 403 and a `warning: the egress gateway refused …` line, so a CLI update that needs a new endpoint fails loudly.

@@ -8,7 +8,8 @@ import {
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
 import type { EndpointMatch } from '@reeval/sandbox-docker'
-import type { AgentKind, ExpectedBlocked, ModelSpecific } from '../harness/agents.ts'
+import type { ModelSpecific } from '../harness/agents.ts'
+import type { GatewayRoute, RoutingGateway } from './routes.ts'
 
 export const VERCEL_HOST = 'ai-gateway.vercel.sh'
 
@@ -16,16 +17,6 @@ export const VERCEL_HOST = 'ai-gateway.vercel.sh'
 export const VERCEL_KEY = 'AI_GATEWAY_API_KEY'
 /** A Vercel project's short-lived token (`vercel env pull`), used when there's no key. */
 export const VERCEL_OIDC = 'VERCEL_OIDC_TOKEN'
-
-/** What a harness on Vercel needs besides its usual catalog entry. */
-export type VercelRoute = ModelSpecific & {
-  /** The variable the adapter takes the key as. */
-  authAs: string
-  /** The model id Vercel serves for the harness's own id. */
-  modelId?: (model: string) => string
-  /** The hosts the agent tries on Vercel and is refused, in place of its catalog entry's. */
-  expectedBlocked?: ExpectedBlocked
-}
 
 /** The host variable the key comes from: `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN`. */
 export const vercelCredential = (env: NodeJS.ProcessEnv = process.env) =>
@@ -80,7 +71,7 @@ export const servedOnVercel: ModelSpecific['servedModel'] = ({
  * the key as `AI_GATEWAY_API_KEY`, and the CLI sends it in `x-api-key` on Anthropic's message
  * paths. On another base URL it makes none of its `/api/claude_code/*` calls.
  */
-function claudeCode(env: NodeJS.ProcessEnv): VercelRoute {
+function claudeCode(env: NodeJS.ProcessEnv): GatewayRoute {
   return {
     credential: vercelCredential(env),
     authAs: VERCEL_KEY,
@@ -90,7 +81,7 @@ function claudeCode(env: NodeJS.ProcessEnv): VercelRoute {
 }
 
 /** Codex on a Responses API provider at Vercel, whose ids name the provider (`openai/…`). */
-function codex(env: NodeJS.ProcessEnv): VercelRoute {
+function codex(env: NodeJS.ProcessEnv): GatewayRoute {
   const endpoints = [onVercel('/v1/responses', 'POST')]
   return {
     credential: vercelCredential(env),
@@ -129,7 +120,7 @@ export const FX_VERCEL_ENDPOINTS = [
 ] as const satisfies readonly EndpointMatch[]
 
 /** fx on its own AI Gateway provider, which takes a gateway id; a bare one is OpenAI's. */
-function fx(env: NodeJS.ProcessEnv): VercelRoute {
+function fx(env: NodeJS.ProcessEnv): GatewayRoute {
   return {
     credential: vercelCredential(env),
     authAs: VERCEL_KEY,
@@ -149,7 +140,7 @@ const googleId = (model: string) => (model.includes('/') ? model : `google/${mod
  * Goose on its `vercel_ai_gateway` provider, an OpenAI-compatible one: Chat Completions, the
  * Responses API for OpenAI's reasoning models, and the model list it fetches each turn.
  */
-function goose(env: NodeJS.ProcessEnv): VercelRoute {
+function goose(env: NodeJS.ProcessEnv): GatewayRoute {
   const calls = [onVercel('/v1/chat/completions', 'POST'), onVercel('/v1/responses', 'POST')]
   return {
     credential: vercelCredential(env),
@@ -167,7 +158,7 @@ function goose(env: NodeJS.ProcessEnv): VercelRoute {
  * CLI sends that provider's key on (harness-opencode's provider table), plus Exa's host for web
  * search.
  */
-function opencode(env: NodeJS.ProcessEnv): VercelRoute {
+function opencode(env: NodeJS.ProcessEnv): GatewayRoute {
   const resolved = resolveOpenCodeProvider('vercel/model')
   if ('error' in resolved) throw new Error(resolved.error)
   const { provider } = resolved
@@ -186,7 +177,7 @@ function opencode(env: NodeJS.ProcessEnv): VercelRoute {
  * Grok Build with the model as a `[model.<id>]` table on Vercel's Chat Completions API, keyed by
  * `env_key`; it then calls nothing on xAI's API.
  */
-function grokBuild(env: NodeJS.ProcessEnv): VercelRoute {
+function grokBuild(env: NodeJS.ProcessEnv): GatewayRoute {
   const endpoints = [onVercel('/v1/chat/completions', 'POST')]
   return {
     credential: vercelCredential(env),
@@ -204,26 +195,22 @@ function grokBuild(env: NodeJS.ProcessEnv): VercelRoute {
   }
 }
 
-/** The harnesses reeval runs on Vercel, and what each needs there. */
-export const VERCEL_ROUTES: Partial<Record<AgentKind, (env: NodeJS.ProcessEnv) => VercelRoute>> = {
-  'claude-code': claudeCode,
-  codex,
-  goose,
-  opencode,
-  fx,
-  'grok-build': grokBuild,
+/** Vercel AI Gateway: the harnesses reeval runs there, and why it doesn't run the rest. */
+export const VERCEL_GATEWAY: RoutingGateway = {
+  name: 'Vercel AI Gateway',
+  routes: {
+    'claude-code': claudeCode,
+    codex,
+    goose,
+    opencode,
+    fx,
+    'grok-build': grokBuild,
+  },
+  refusals: {
+    cursor: "Cursor's agent only calls Cursor's own API",
+    antigravity: "Antigravity's CLI only calls Google's API, with a Gemini key",
+    pi: "pi reaches a Gemini model on Vercel AI Gateway only through Anthropic's Messages API, with Anthropic's thinking budget for Gemini's own thinking level, and doesn't behave as it does on Gemini's API; reeval runs pi on its Gemini key",
+  },
+  // Claude Code's effort goes as on Anthropic's API, and Codex's response names the effort it ran at.
+  unprovenEffort: ['goose', 'opencode', 'grok-build'],
 }
-
-/** Why Vercel can't serve an agent reeval doesn't route there, for the plan's messages. */
-export const VERCEL_REFUSALS: Partial<Record<AgentKind, string>> = {
-  cursor: "Cursor's agent only calls Cursor's own API",
-  antigravity: "Antigravity's CLI only calls Google's API, with a Gemini key",
-  pi: "pi reaches a Gemini model on Vercel AI Gateway only through Anthropic's Messages API, with Anthropic's thinking budget for Gemini's own thinking level, and doesn't behave as it does on Gemini's API; reeval runs pi on its Gemini key",
-}
-
-/**
- * The harnesses on Vercel whose `effort` reaches the model by a path no real run has checked: the
- * plan refuses `effort` with them on `vercel()`. Claude Code's goes as on Anthropic's API, and
- * Codex's response names the effort it ran at.
- */
-export const VERCEL_UNPROVEN_EFFORT: readonly AgentKind[] = ['goose', 'opencode', 'grok-build']
