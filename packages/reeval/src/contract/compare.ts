@@ -27,11 +27,6 @@ export type _SameAsSchema = [
   Assert<Same<keyof z.infer<typeof authoredCompare>, keyof CompareOptions<Environment>>>,
 ]
 
-const MOVED_QUESTIONS =
-  "questions sit beside compare, at the root of the options: { compare: { variants }, questions: [{ question: 'Which is cleaner?', across: 'environment' }] }. A question picks between pairs of attempts only with across; without it, each attempt is asked on its own."
-const MOVED_ACROSS =
-  "across goes on each question, in questions beside compare: questions: [{ question: 'Which is cleaner?', across: 'environment' }]. A question without across is asked of each attempt on its own."
-
 const describe = (value: unknown) => {
   if (Array.isArray(value)) return `a list of ${value.length}`
   if (typeof value === 'object' && value !== null) {
@@ -46,12 +41,6 @@ function explain(where: string) {
     const spec = value as Record<string, unknown>
     if (issue.code === 'unrecognized_keys' && issue.path.length === 0) {
       const key = issue.keys[0] as string
-      if (key === 'questions' || key === 'question') {
-        return `compare.${key} in ${where} has moved: ${MOVED_QUESTIONS}`
-      }
-      if (key === 'across' || key === 'cut' || key === 'cuts') {
-        return `compare.${key} in ${where} has moved: ${MOVED_ACROSS}`
-      }
       return `Unknown compare option "${key}" in ${where}. compare takes ${Object.keys(compareSchema(z.any()).shape).join(', ')}.`
     }
     const [key, index] = issue.path as [string, number?]

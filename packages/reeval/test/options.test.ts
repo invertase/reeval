@@ -884,16 +884,6 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       /Unknown compare option "strategy" in evaluate\("e"\)/,
     ],
     [
-      'questions on compare',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: ['Which?'] } as never }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) has moved: questions sit beside compare, at the root of the options: \{ compare: \{ variants \}, questions: \[\{ question: 'Which is cleaner\?', across: 'environment' \}\] \}\. A question picks between pairs of attempts only with across; without it, each attempt is asked on its own\./,
-    ],
-    [
-      'across on compare',
-      `evaluate('e', { compare: { baseline: a, variants: [b], across: 'harness' } as never }, async () => {})`,
-      /compare\.across in evaluate\("e"\) has moved: across goes on each question, in questions beside compare/,
-    ],
-    [
       'questions as a single string',
       `evaluate('e', { questions: 'Which?' as never }, async () => {})`,
       /questions in evaluate\("e"\) is a list \(got "Which\?"\), e\.g\. questions: \['How did the agent find the failing test\?'\]\./,
