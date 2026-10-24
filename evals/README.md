@@ -99,18 +99,22 @@ is Biome's formatter, because neither arm ran `pnpm format`.
 node evals/contributing/scripts/lockfiles.mjs   # each task's lockfile, for the image's pnpm store
 pnpm reeval image build
 pnpm reeval run contributing                     # Cursor, with CURSOR_API_KEY in .env.local
-pnpm reeval run --config evals/contributing/reeval.oracle.config.ts   # applies each merged change
+pnpm reeval run --config evals/contributing/reeval.oracle.config.ts   # 8 of 8 attempts pass
+pnpm reeval run contributing --config reeval.fake.config.ts         # 8 of 8 attempts miss
 ```
 
 Each attempt starts from the task's parent commit (`git('../..', { ref })`) in an image whose
 pnpm store already holds every task's dependencies, so `pnpm install` takes about 3 seconds
-offline. `reeval.oracle.config.ts` runs a fake agent that applies the merged pull request, so
-every check must pass there.
+offline. The sandbox is Docker under every config, so the oracle and the canary need Docker and
+`lockfiles.mjs` too. `reeval.oracle.config.ts` runs a fake agent that applies the merged pull
+request, so every check must pass there; the fake agent changes nothing, so every check that
+reads its work fails.
 
 `REEVAL_CONTRIBUTING_GUIDES=<branch>` adds a third arm: that branch's changes to the guides,
 applied to each task's starting commit. With #374's "Before you finish" checklist, every check
 passed in 6 of 8 attempts, against 1 of 8 with the guides it replaced. Every one of those
-attempts ran `pnpm format`.
+attempts ran `pnpm format`. The variant places the guides as they were at each task's parent
+commit, all from before #374 merged, so only this arm has the checklist.
 
 ## setup: can an agent set reeval up for someone?
 
