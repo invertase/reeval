@@ -63,7 +63,7 @@ type Case = {
   https?: boolean
   only?: 'posix' | 'windows'
   needs?: 'interpreterEnv'
-  seed?: 'binary' | 'empty' | 'junk'
+  seed?: 'binary' | 'empty' | 'junk' | 'garbage'
   record?: 'match' | 'wrong' | 'no-target'
   steps: Step[]
 }
@@ -335,9 +335,12 @@ async function runCase(c: Case): Promise<string[]> {
   }
   if (c.seed) {
     mkdirSync(dirname(cachePath), { recursive: true })
-    const bytes = { binary, empty: Buffer.alloc(0), junk: Buffer.from('#!/bin/sh\nexit 0\n') }[
-      c.seed
-    ]
+    const bytes = {
+      binary,
+      empty: Buffer.alloc(0),
+      junk: Buffer.from('#!/bin/sh\nexit 0\n'),
+      garbage: Buffer.from('\0\x01 not an executable\n'),
+    }[c.seed]
     writeFileSync(cachePath, bytes)
     chmodSync(cachePath, 0o755)
   }

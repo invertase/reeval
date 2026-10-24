@@ -207,6 +207,22 @@
       ]
     },
     {
+      "id": "cached-binary-wont-run",
+      "about": "A cached file that won't start exits 3 naming it and REEVAL_BINARY, and is removed so the next run downloads it",
+      "seed": "garbage",
+      "steps": [
+        {
+          "release": "unreachable",
+          "expect": {
+            "exit": 3,
+            "ran": false,
+            "stderr": ["{cachePath}", "REEVAL_BINARY"],
+            "cache": "absent"
+          }
+        }
+      ]
+    },
+    {
       "id": "partial-download-not-kept",
       "about": "A download cut short exits 3 and leaves nothing in the cache; the next run downloads it whole",
       "steps": [
