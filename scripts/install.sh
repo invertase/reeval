@@ -39,8 +39,14 @@ main() {
     arch=arm64
   fi
   target=$os-$arch
-  if [ "$os" = linux ] && { [ -f /etc/alpine-release ] || ls /lib/ld-musl-* >/dev/null 2>&1; }; then
-    target=$target-musl
+  # musl only when it's the system's libc: a glibc system can have musl's loader installed too.
+  # getconf, then ldd, says which libc is in use; musl's loader alone decides only without them.
+  if [ "$os" = linux ] && ! getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
+    case $(ldd --version 2>&1 || true) in
+      *musl*) target=$target-musl ;;
+      *GLIBC* | *"GNU libc"*) ;;
+      *) if ls /lib/ld-musl-* >/dev/null 2>&1; then target=$target-musl; fi ;;
+    esac
   fi
   # The default x64 builds need AVX2; the baseline ones run on any x64 CPU.
   if [ "$os" = linux ] && [ "$arch" = x64 ] && ! grep -qw avx2 /proc/cpuinfo 2>/dev/null; then

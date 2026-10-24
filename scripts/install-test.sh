@@ -55,6 +55,32 @@ if ! install "$work/nolib" "$work/i" && [ ! -e "$work/i/reeval" ] && grep -q "ex
   pass "refuses a binary that can't load, with its error"
 else fail "refuses a binary that can't load, with its error: $(cat "$work/out")"; fi
 
+# musl from the libc in use, which these getconf and ldd stand in for: glibc answers
+# GNU_LIBC_VERSION, and musl's ldd names musl.
+if [ "$(uname -s)" = Linux ]; then
+  mkdir -p "$work/targets" "$work/glibc" "$work/musl"
+  for f in "$work"/good/reeval-*; do
+    printf '#!/bin/sh\necho %s\n' "${f##*-"$V"-}" > "$work/targets/${f##*/}"
+  done
+  (cd "$work/targets" && sha256sum reeval-* > SHA256SUMS)
+  printf '#!/bin/sh\necho glibc 2.36\n' > "$work/glibc/getconf"
+  printf '#!/bin/sh\necho "musl libc (x86_64)" >&2; exit 1\n' > "$work/glibc/ldd"
+  printf '#!/bin/sh\nexit 1\n' > "$work/musl/getconf"
+  cp "$work/glibc/ldd" "$work/musl/ldd"
+  chmod +x "$work"/glibc/* "$work"/musl/*
+  PATH="$work/glibc:$PATH" install "$work/targets" "$work/j"
+  case $("$work/j/reeval" --version 2>&1) in
+    *-musl*) fail "picks glibc on a glibc system with musl installed: $(cat "$work/out")" ;;
+    linux-*) pass "picks glibc on a glibc system with musl installed" ;;
+    *) fail "picks glibc on a glibc system with musl installed: $(cat "$work/out")" ;;
+  esac
+  PATH="$work/musl:$PATH" install "$work/targets" "$work/k"
+  case $("$work/k/reeval" --version 2>&1) in
+    linux-*-musl*) pass "picks musl on a musl system" ;;
+    *) fail "picks musl on a musl system: $(cat "$work/out")" ;;
+  esac
+fi
+
 # The newest release with SHA256SUMS, from the GitHub API, which this curl answers from a fixture:
 # a newer release still without binaries, a prerelease, a draft and another component's release.
 mkdir -p "$work/bin"
