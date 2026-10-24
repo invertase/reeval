@@ -1974,7 +1974,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'summary.study-mark',
     area: 'Records and studio',
-    name: "An eval whose cells are all `gate: 'none'` is marked ○ and `not gated` in the run summary when its attempts miss, never ✓ beside 0/n, and counts as `not gated` in the tally, never `pass`",
+    name: "An eval whose cells are all `gate: 'none'` is marked ○ and `not gated` in the run summary when its attempts miss, never ✓ beside 0/n, and reads `not gated` (○) in the tally, `reeval compare` and `reeval history`, never `pass`",
     fixtures: ['output/study'],
     tests: [
       engine('an eval with not-gated cells labels its pass@1 gated; an all-gated one does not'),

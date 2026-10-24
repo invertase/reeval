@@ -539,7 +539,7 @@ evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 
       r.stdout,
       /^not gated {8}no worse\n {2}arm {14}pass\n {2}base {13}1 of 1\n {2}skilled {10}0 of 1 {2}can't tell yet, not by minLift 50\n {4}error {2}the variant is worse$/m,
     )
-    assert.match(r.stdout, /^1 fail · 1 pass$/m)
+    assert.match(r.stdout, /^1 fail · 1 not gated$/m)
   })
 
   test('compare.harness scopes variants; other harnesses run the control only', async () => {

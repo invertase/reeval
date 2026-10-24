@@ -16,7 +16,7 @@ import type { ErrorKind, Outcome } from '../types.ts'
 import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
 import { checksByLabel, checkTries, labelledJudgements } from './judgements.ts'
-import { runOutcome } from './model.ts'
+import { isNotGatedPass, runOutcome } from './model.ts'
 
 /**
  * A variant against its baseline: `better` or `worse` when the stored 95% interval on the
@@ -586,6 +586,20 @@ function worst(outcomes: ResultOutcome[]): ResultOutcome {
 export const isStudy = (cells: readonly Pick<CellResult, 'gated'>[]): boolean =>
   cells.length > 0 && cells.every((c) => !c.gated)
 
+/**
+ * A study's pass: every cell `gate: 'none'`, or on a family every case's with no pooled `minLift`
+ * gating it, so it reads `not gated`, never `pass`.
+ */
+export const isNotGatedResult = (
+  e: Pick<EvalResult, 'outcome' | 'cells' | 'cases' | 'pooled'>,
+): boolean =>
+  e.outcome === 'pass' &&
+  (e.cases
+    ? e.cases.length > 0 &&
+      e.cases.every((k) => isStudy(k.cells)) &&
+      (e.pooled ?? []).every((p) => p.minLift === null)
+    : isStudy(e.cells ?? []))
+
 /** The record's outcome, or `cancelled` when every gated attempt that failed was cancelled. */
 function outcomeOf(e: EvalEntry): ResultOutcome {
   if (e.outcome !== 'fail') return e.outcome
@@ -732,9 +746,8 @@ export function suiteResult(record: RunRecord): SuiteResult {
   const count = (e: EvalEntry) => {
     const o = outcomeOf(e)
     if (o === 'infra_error') tally.infraError++
-    else if (o === 'pass' && isStudy(e.cells.map((c) => ({ gated: c.gate !== 'none' })))) {
-      tally.notGated++
-    } else tally[o]++
+    else if (o === 'pass' && isNotGatedPass(e)) tally.notGated++
+    else tally[o]++
   }
   for (const e of record.evals) {
     const evals = byFile.get(e.file) ?? []

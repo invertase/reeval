@@ -19,7 +19,7 @@ import type {
   EvalResult,
   SuiteResult,
 } from '../view/suite.ts'
-import { cancelledOf, countedOf } from '../view/suite.ts'
+import { cancelledOf, countedOf, isNotGatedResult, isStudy } from '../view/suite.ts'
 
 /** The words an effect prints as, and the only ones a sentence may use for it. */
 export const EFFECT_WORDS: Record<Effect, string> = {
@@ -169,19 +169,20 @@ function caseFact(k: CaseResult): InsightFact {
     path: k.path,
     kind: 'case',
     label: k.label,
-    verdict: verdictOf(k.outcome),
+    verdict: k.outcome === 'pass' && isStudy(k.cells) ? 'not gated' : verdictOf(k.outcome),
     passed: `${passed} of ${counted} tries`,
   }
 }
 
 /** Every fact of the eval, its own node first. */
 export function evalFacts(e: EvalResult): InsightFact[] {
+  const notGated = isNotGatedResult(e)
   const out: InsightFact[] = [
     {
       path: e.path,
       kind: e.family ? 'family' : 'eval',
       name: e.name,
-      verdict: verdictOf(e.outcome),
+      verdict: notGated ? 'not gated' : verdictOf(e.outcome),
       ...(e.cases ? { cases: e.cases.length } : {}),
     },
   ]
@@ -197,7 +198,7 @@ export function evalFacts(e: EvalResult): InsightFact[] {
       kind: 'all cases',
       arm: p.key,
       ...(measured ? { effect: EFFECT_WORDS[p.effect] } : {}),
-      verdict: p.outcome,
+      verdict: notGated ? 'not gated' : p.outcome,
       pairs: p.pairs,
     })
   }
@@ -330,7 +331,7 @@ export async function evalInput(
       file: e.id.split(' › ')[0] ?? '',
       across: e.across,
       family: e.family,
-      verdict: verdictOf(e.outcome),
+      verdict: isNotGatedResult(e) ? 'not gated' : verdictOf(e.outcome),
     },
     prompts,
     judgeQuestions,

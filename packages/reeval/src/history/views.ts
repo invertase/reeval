@@ -3,6 +3,7 @@ import type { Outcome } from '../types.ts'
 import { render } from '../ui/layout.ts'
 import { cellsChanged } from '../view/compare.ts'
 import type { RunInsights } from '../view/insights.ts'
+import { isNotGatedPass } from '../view/model.ts'
 import { suiteResult } from '../view/suite.ts'
 import { warnings } from './state.ts'
 import { OUTCOME_MARK, runTally, stateRows } from './summary.ts'
@@ -84,8 +85,11 @@ const shortSha = (e: HistoryEntry) => (e.git ? e.git.sha.slice(0, 7) : 'no-git')
 
 export type HistoryRow = {
   id: string
-  /** Oldest first, one per run; null when the eval wasn't in that run. */
-  outcomes: Array<Outcome | null>
+  /**
+   * Oldest first, one per run; null when the eval wasn't in that run, and `not_gated` for a
+   * study's pass, which `pass` and `counted` leave out.
+   */
+  outcomes: Array<Outcome | 'not_gated' | null>
   /** Indexes into `outcomes` where the eval's fingerprint changed from the previous run. */
   drift: number[]
   pass: number
@@ -118,9 +122,11 @@ export function history(
       const seen = new Map<string, string>()
       runs.forEach((run, i) => {
         const e = run.evals.find((x) => x.id === id)
-        row.outcomes.push(e?.outcome ?? null)
+        const notGated = e !== undefined && isNotGatedPass(e)
+        row.outcomes.push(notGated ? 'not_gated' : (e?.outcome ?? null))
         if (!e) return
         if (cellsChanged(seen, id, e.cells)) row.drift.push(i)
+        if (notGated) return
         if (e.outcome === 'pass' || e.outcome === 'fail') row.counted++
         if (e.outcome === 'pass') row.pass++
       })
@@ -142,12 +148,18 @@ export function formatHistory({ runs, rows, orphaned }: ReturnType<typeof histor
   const width = Math.max(...rows.map((r) => r.outcomes.length + r.drift.length), 0)
   for (const row of rows) {
     const strip = row.outcomes
-      .map((o, i) => `${row.drift.includes(i) ? '¦' : ''}${o ? OUTCOME_MARK[o] : '·'}`)
+      .map(
+        (o, i) =>
+          `${row.drift.includes(i) ? '¦' : ''}${o === 'not_gated' ? '○' : o ? OUTCOME_MARK[o] : '·'}`,
+      )
       .join('')
     const rate = row.counted ? `${row.pass}/${row.counted}` : '–'
     lines.push(`  ${strip.padEnd(width)}  ${rate.padStart(5)}  ${row.id}`)
   }
-  lines.push('', '✓ pass  ✗ fail  ! infra error  ↓ skipped  · not run  ¦ eval or stack changed')
+  lines.push(
+    '',
+    '✓ pass  ✗ fail  ! infra error  ↓ skipped  ○ not gated  · not run  ¦ eval or stack changed',
+  )
   if (orphaned.length > 0) {
     lines.push(
       '',

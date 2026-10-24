@@ -7,6 +7,7 @@ import { checkLabels, checkTries, commandLine, labelledJudgements } from '../vie
 import {
   evalMarkOutcome,
   harnessLabel,
+  isNotGatedPass,
   isUngatedMiss,
   languageLabel,
   runtimeLabel,
@@ -150,7 +151,8 @@ export function renderSummary(
   const rank = (o: Outcome) => (o === 'fail' || o === 'infra_error' ? 0 : o === 'pass' ? 1 : 2)
   for (const e of [...run.evals].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
     if (e.outcome === 'skipped') continue
-    lines.push('', `### ${OUTCOME_MARK[evalMarkOutcome(e)]} ${e.id}`, '')
+    const mark = isNotGatedPass(e) ? '○' : OUTCOME_MARK[evalMarkOutcome(e)]
+    lines.push('', `### ${mark} ${e.id}${isNotGatedPass(e) ? ' · not gated' : ''}`, '')
     const multi = e.attempts.length > 1
     const inputs = (e.answers ?? []).filter((a) => a.input)
     for (const a of inputs) {

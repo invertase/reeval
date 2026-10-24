@@ -173,7 +173,7 @@ Lift and effort pair each variant with the control, whether you named it or not.
 }
 ```
 
-By default only variant cells decide pass or fail. The control is expected to do worse, so its misses print in its arm row and the check matrix, dim, and never break CI. `gate: 'all'` gates the control too, and `'none'` only reports: the eval reads `not gated`, the tally counts it as `1 not gated` rather than a pass, and it never fails the run.
+By default only variant cells decide pass or fail. The control is expected to do worse, so its misses print in its arm row and the check matrix, dim, and never break CI. `gate: 'all'` gates the control too, and `'none'` only reports: the eval reads `not gated`, the tally counts it as `1 not gated` rather than a pass, and only a pooled `minLift` can fail the run.
 
 ## Gate on pass@1
 
