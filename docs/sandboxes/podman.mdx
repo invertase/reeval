@@ -3,7 +3,7 @@ title: "Run with Podman"
 description: "Run each attempt in one Podman container on your machine."
 ---
 
-## The `podman()` function
+## `podman()`
 
 `podman()` returns a sandbox that the `podman` CLI starts in one container on your machine. `{{ pkg }}/sandbox` exports the function. The `sandbox` option accepts its return value:
 
@@ -20,8 +20,6 @@ export default defineConfig({
 
 The cell key's last segment defaults to `podman`, or `podman:<image>` when `image` or `from` names another image, plus a hash of `install`. The sandbox's images, egress gateway, and records are the Docker sandbox's.
 
-## Host requirements
-
 `podman()` needs a Podman that answers `podman info` as your user. `reeval doctor` reports it on a `podman` line, with the machine's CPUs and memory and the concurrency reeval derives from them. Before a run, reeval checks the same requirements and exits with code 2 when one fails, naming the fix.
 
 - **Podman {{ podman }} or later.** `podman()` needs its rootless bridge network.
@@ -30,9 +28,7 @@ The cell key's last segment defaults to `podman`, or `podman:<image>` when `imag
 
 Podman keeps its own image store. `reeval image build` builds the sandbox images into it, `reeval doctor` reports a missing image as missing in Podman, and `reeval clean --images` prunes reeval's images from each engine that answers.
 
-## Differences from Docker
-
-Each difference is in what the host runs, not in the options, the egress policies, or the record.
+Each difference from `docker()` is in what the host runs, not in the options, the egress policies, or the record.
 
 | Point | `docker()` | `podman()` |
 | :--- | :--- | :--- |

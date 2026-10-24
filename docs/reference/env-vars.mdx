@@ -5,9 +5,11 @@ description: "Every public REEVAL_* variable, provider key, and CI variable reev
 
 Where a flag and a variable set the same thing, the flag takes precedence. `REEVAL_PROFILE` and `REEVAL_CONCURRENCY` then take precedence over the matching config key. A variable already in the environment takes precedence over the `.env.local` file, which takes precedence over the `.env` file, from the config file's directory.
 
-For more information about config keys, see [Options](/reference/options).
+`reeval run` reads `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`, and `REEVAL_HEARTBEAT` before the `.env.local` file and the `.env` file load. For `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, and `REEVAL_OUTPUT_LOGS`, `auto` or no value uses the default, and any other value stops the command.
 
-## Run and config
+Whitespace or a control character in a harness, judge, or `question` credential stops the run. A missing credential for a harness, a judge, or a `question` stops the run. A missing `analysis.model` credential skips insights.
+
+For more information about config keys, see [Options](/reference/options). For more information about harnesses, see [Choose a harness](/harnesses).
 
 ## `REEVAL_PROFILE`
 
@@ -24,10 +26,6 @@ For more information about config keys, see [Options](/reference/options).
 ## `REEVAL_MCP_TOKEN`
 
 `REEVAL_MCP_TOKEN` is the bearer token for `reeval mcp --http` (`--token` takes precedence). Unset, the server requires no token.
-
-## Output
-
-`reeval run` reads the variables in Output before the `.env.local` file and the `.env` file load. For `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, and `REEVAL_OUTPUT_LOGS`, `auto` or no value uses the default, and any other value stops the command.
 
 ## `REEVAL_UI`
 
@@ -49,8 +47,6 @@ For more information about config keys, see [Options](/reference/options).
 
 `REEVAL_HEARTBEAT` is the quiet wait before a still-running line. With no value, the wait is 60 seconds. `0` turns it off. A bare number is seconds, and `ms`, `s`, or `m` names the unit. Another shape stops the command. `agent` forces 0.
 
-## Debugging
-
 ## `REEVAL_DEBUG`
 
 A non-empty `REEVAL_DEBUG` prints worker output, image-prepare lines, egress-gateway lines, and the crash error. With no value, those lines stay hidden.
@@ -63,52 +59,65 @@ A non-empty `REEVAL_RAW_TRANSCRIPT` stores each turn's unnormalised stream parts
 
 A non-empty `REEVAL_NO_REPORT_HINT` hides the `reeval report` hint after a crash or an infra error. `report`, `--json`, `agent` UI, and a detected coding agent with neither `--ui` nor `REEVAL_UI` also hide it.
 
-## Sandbox image
-
 ## `REEVAL_BASE`
 
 `REEVAL_BASE` is the build argument for a `dockerfile` sandbox, passed as the harness sandbox image. The `Dockerfile` file reads `ARG REEVAL_BASE`. A shell value is unused.
 
-## Provider keys
+## `AI_GATEWAY_API_KEY`
 
-Whitespace or a control character in a harness, judge, or compare-question credential stops the run. A missing credential for a harness, a judge, or a compare question stops the run. A missing `analysis.model` credential skips insights.
+`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` calls Vercel AI Gateway for `judge.model` and `analysis.model`. The `provider/model` prefix selects the credential, and every prefix without a direct key set uses the gateway.
 
-For more information about harnesses, see [Choose a harness](/harnesses).
+## `VERCEL_OIDC_TOKEN`
 
-### Judge and analysis credentials
+`VERCEL_OIDC_TOKEN` calls Vercel AI Gateway, as `AI_GATEWAY_API_KEY` does.
 
-The `provider/model` prefix selects the credential for `judge.model` and `analysis.model`. `google` uses `GOOGLE_GENERATIVE_AI_API_KEY` directly, and `typesafe-ai` uses `TYPESAFE_AI_API_KEY` directly, when that key is set. With that key unset, and for every other prefix, `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` calls Vercel AI Gateway. The direct key takes precedence when both are set. A `typesafe-ai` id scores a judge only, and `analysis.model` rejects one.
+## `GOOGLE_GENERATIVE_AI_API_KEY`
 
-### Harness credentials
+`GOOGLE_GENERATIVE_AI_API_KEY` is the credential for the `goose` and `pi` harnesses, and for `opencode` on a `google/` model. A `google/` `judge.model` or `analysis.model` uses it directly when it is set, ahead of `AI_GATEWAY_API_KEY`.
 
-Each harness reads one host credential.
+## `TYPESAFE_AI_API_KEY`
 
-| Harness | Credential |
-| :--- | :--- |
-| `cursor` | `CURSOR_API_KEY` |
-| `claudeCode` | `ANTHROPIC_API_KEY` |
-| `antigravity` | `GEMINI_API_KEY` |
-| `goose` | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| `pi` | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| `codex` | `OPENAI_API_KEY` |
-| `grokBuild` | `XAI_API_KEY` |
-| `opencode` | The model's provider variable |
+A `typesafe-ai/` `judge.model` uses `TYPESAFE_AI_API_KEY` directly when it is set, ahead of `AI_GATEWAY_API_KEY`. A `typesafe-ai` id scores a judge only, and `analysis.model` rejects one.
 
-For `opencode`, `anthropic` reads `ANTHROPIC_API_KEY`, `google` reads `GOOGLE_GENERATIVE_AI_API_KEY`, and `openai` reads `OPENAI_API_KEY`. Any other model provider reads its own variable. For `amazon-bedrock`, `AWS_REGION` defaults to `us-east-1`.
+## `CURSOR_API_KEY`
 
-## CI and terminal
+`CURSOR_API_KEY` is the credential for the `cursor` harness.
+
+## `ANTHROPIC_API_KEY`
+
+`ANTHROPIC_API_KEY` is the credential for the `claudeCode` harness, and for `opencode` on an `anthropic/` model.
+
+## `GEMINI_API_KEY`
+
+`GEMINI_API_KEY` is the credential for the `antigravity` harness.
+
+## `OPENAI_API_KEY`
+
+`OPENAI_API_KEY` is the credential for the `codex` harness, and for `opencode` on an `openai/` model.
+
+## `XAI_API_KEY`
+
+`XAI_API_KEY` is the credential for the `grokBuild` harness.
+
+## `AWS_REGION`
+
+`AWS_REGION` fills the hosts of an `opencode` model on `amazon-bedrock/`. With no value, the region is `us-east-1`. Any other `opencode` provider reads the variable in the [`provider/model` table](/harnesses/opencode#providermodel).
 
 ## `CI`
 
 `CI` other than `false`, including `0`, selects `defaultProfile.ci`, records when `record` is `ci` (the default), refuses `evaluate.only` and `group.only`, and names the author `ci`. No value, or `false`, selects `defaultProfile.local`.
-
-### Output CI variables
 
 A non-empty value other than `false` or `0` on `BUILD_ID`, `BUILD_NUMBER`, `CI`, `CI_APP_ID`, `CI_BUILD_ID`, `CI_BUILD_NUMBER`, `CI_NAME`, `CONTINUOUS_INTEGRATION`, `RUN_ID`, `TEAMCITY_VERSION`, or `GITHUB_ACTIONS` defaults the log order to `grouped` and, when no coding agent is detected, the UI to `plain`.
 
 ## `GITHUB_ACTIONS`
 
 `GITHUB_ACTIONS` with a non-empty value other than `false` or `0` wraps logs in `::group::` blocks, writes an `::error::` annotation on failure, and keeps colour on without a terminal.
+
+On a CI run, `GITHUB_ACTIONS` records the provider `github`. `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, and `GITHUB_RUN_ID` build the run URL. `GITHUB_RUN_ATTEMPT` is the attempt. `GITHUB_REF` and `GITHUB_BASE_REF` fill the pull request. The branch is `GITHUB_HEAD_REF`, then `GITHUB_REF_NAME`. `GITHUB_BASE_REF` is also the default branch with no `origin` HEAD and no local `main` or `master`.
+
+## `GITLAB_CI`
+
+On a CI run, `GITLAB_CI` records the provider `gitlab`. The branch is `CI_COMMIT_REF_NAME` when neither `GITHUB_HEAD_REF` nor `GITHUB_REF_NAME` is set. `CI_JOB_URL` is the job URL. `CI_MERGE_REQUEST_IID` and `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` fill the merge request.
 
 ## `GITHUB_OUTPUT`
 
@@ -129,7 +138,3 @@ A non-empty `FORCE_COLOR` other than `false` or `0` turns colour on. `false` and
 ## `XDG_CACHE_HOME`
 
 `XDG_CACHE_HOME` is the parent of the host cache. With no value, Linux uses the `~/.cache/reeval` directory, macOS uses the `~/Library/Caches/reeval` directory, and Windows uses a `reeval` directory under `LOCALAPPDATA` or under the `~/AppData/Local` directory.
-
-### CI run metadata
-
-On a CI run, `GITHUB_ACTIONS` records the provider `github`, and `GITLAB_CI` records `gitlab`. `GITHUB_SERVER_URL`, `GITHUB_REPOSITORY`, and `GITHUB_RUN_ID` build the run URL. `GITHUB_RUN_ATTEMPT` is the attempt. `GITHUB_REF` and `GITHUB_BASE_REF` fill the pull request. The branch is `GITHUB_HEAD_REF`, then `GITHUB_REF_NAME`, then `CI_COMMIT_REF_NAME`. `CI_JOB_URL` is the job URL. `CI_MERGE_REQUEST_IID` and `CI_MERGE_REQUEST_TARGET_BRANCH_NAME` fill the merge request. `GITHUB_BASE_REF` is also the default branch with no `origin` HEAD and no local `main` or `master`.

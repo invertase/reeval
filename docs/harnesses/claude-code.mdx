@@ -3,7 +3,7 @@ title: "Claude Code harness"
 description: "Look up options, the key, and recorded events for the Claude Code harness."
 ---
 
-## claudeCode
+## `claudeCode()`
 
 `claudeCode()` is the Claude Code harness factory. For more information about the sandbox, see [Choose a sandbox](/sandboxes).
 
@@ -49,7 +49,7 @@ For more information about choosing a harness, see [Choose a harness](/harnesses
 
 For more information about model ids, effort values, and served models, see [Find harness model settings](/harnesses/models).
 
-## Credential
+## `ANTHROPIC_API_KEY`
 
 `claudeCode()` reads `ANTHROPIC_API_KEY` from the environment or the `.env.local` file. A run exits with code 2 when the variable is unset, or when the value contains whitespace or a line break.
 
@@ -66,32 +66,46 @@ When the API rejects the key, the attempt error begins with `The API rejected AN
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
+For more information about the variable, see [`ANTHROPIC_API_KEY`](/reference/env-vars#anthropicapikey).
 
-## Rules and skills
+## `rules`
 
-The Claude Code harness reads rules from the `CLAUDE.md` file in the workspace. The Claude Code harness reads skills from the `.claude/skills` directory in the workspace and from the `~/.claude/skills` directory in the home directory.
+The Claude Code harness reads rules from the `CLAUDE.md` file in the workspace.
 
 For more information about writing rules, see [Add project rules](/environments/rules).
 
+## `skills`
+
+The Claude Code harness reads skills from the `.claude/skills` directory in the workspace and from the `~/.claude/skills` directory in the home directory.
+
 For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-## MCP servers
+## `mcp`
 
 The Claude Code harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes each server in the shape of the `.mcp.json` file: a `stdio` server is `{ type: 'stdio', command, args, env }`, and an `http` or `sse` server is `{ type, url, headers }`.
 
 For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-## Recorded usage and model
+## `usage`
 
-The Claude Code harness records tokens on each turn's `usage`. `usage` is null when the harness reports no tokens. Each turn's `model` is the model id Claude Code reports. The attempt's `servedModels` is null, because the API requests name no model.
+The Claude Code harness records tokens on each turn's `usage`. `usage` is null when the harness reports no tokens.
 
-For more information about the record fields, see [Run record reference](/reference/record).
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
 
-## Web events
+## `servedModels`
 
-The Claude Code harness records `web-search` and `web-fetch` events. A `webSearch` call records `query` and `references`. A `webFetch` or `WebFetch` call records `url`. `ok` is false when the call fails.
+Each turn's `model` is the model id Claude Code reports. The attempt's `servedModels` is null, because the API requests name no model.
 
-The turn's `unreported` list stays empty. `toHaveSearched()` and `toHaveFetched()` read those events.
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
 
-For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
+## `web-search`
+
+The Claude Code harness records `web-search` events. A `webSearch` call records `query` and `references`. `ok` is false when the call fails. The turn's `unreported` list stays empty, so `toHaveSearched()` reads those events.
+
+For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `web-fetch`
+
+The Claude Code harness records `web-fetch` events. A `webFetch` or `WebFetch` call records `url`. `ok` is false when the call fails. The turn's `unreported` list stays empty, so `toHaveFetched()` reads those events.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

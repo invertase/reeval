@@ -3,7 +3,7 @@ title: "OpenCode harness"
 description: "Look up options, the key, and recorded events for the OpenCode harness."
 ---
 
-## opencode
+## `opencode()`
 
 `opencode()` is one harness factory. It runs OpenCode in the sandbox on the provider the model id names, with that provider's key.
 
@@ -48,47 +48,15 @@ For more information about choosing a harness, see [Choose a harness](/harnesses
 
 For more information about model ids and effort values, see [Models and providers for each harness](/harnesses/models).
 
-## Credential
+## `provider/model`
 
-`opencode()` reads the provider's key from the host, under the variable in the `Key` column of the [provider table](#opencode-providers). reeval swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default.
+The harness runs on any provider whose key OpenCode sends in a header on known hosts. The table lists each provider's model id prefix, key variable, header, and hosts.
+
+`opencode()` reads the provider's key from the host, under the variable in the `Key` column. reeval swaps it into the `Header` on each request to the `Hosts`, and refuses it anywhere else. A host with a `{NAME}` placeholder takes that variable from the host too, or the provider's default.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
-
-## Rules and skills
-
-The OpenCode harness reads rules from the `AGENTS.md` file in the workspace. The OpenCode harness reads skills from the `.opencode/skills` directory in the workspace and from the `~/.config/opencode/skills` directory in the home directory, and also from the `.agents/skills` and `.claude/skills` directories in both places.
-
-For more information about writing rules, see [Add project rules](/environments/rules).
-
-For more information about placing skills, see [Give the agent skills](/environments/skills).
-
-## MCP servers
-
-The OpenCode harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2. The servers go in OpenCode's configuration with Code Mode off, so the agent calls their tools directly, and the first prompt waits until every server has connected.
-
-For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
-
-## Recorded usage and model
-
-The OpenCode harness records tokens on each turn's `usage`, as one total for the whole turn. `usage` is null when OpenCode reports none.
-
-OpenCode's stream names no model, so each turn's `model` is the model on the turn's last brokered request. The attempt's `servedModels` comes from the request URL on a `google/` model and from the response body on every other provider, with `[effort=<value>]` when the response names an effort.
-
-For more information about the record fields, see [Run record reference](/reference/record).
-
-## Web events
-
-The OpenCode harness records `web-search` and `web-fetch` events. A web search runs on a hosted MCP server at `mcp.exa.ai`, which needs no key and is one of the harness's automatic egress hosts.
-
-For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
-
-For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
-
-## OpenCode providers
-
-The harness runs on any provider whose key OpenCode sends in a header on known hosts. The table lists each provider's model id prefix, key variable, header, and hosts.
+For more information about every provider variable, see [Environment variables](/reference/env-vars).
 
 [//]: # (generated:opencode-providers)
 
@@ -304,3 +272,45 @@ The harness runs on any provider whose key OpenCode sends in a header on known h
 | Zhipu AI Coding Plan | `zhipuai-coding-plan/…` | `ZHIPU_API_KEY` | `Authorization: Bearer` | `open.bigmodel.cn` |
 
 [//]: # (/generated:opencode-providers)
+
+## `rules`
+
+The OpenCode harness reads rules from the `AGENTS.md` file in the workspace.
+
+For more information about writing rules, see [Add project rules](/environments/rules).
+
+## `skills`
+
+The OpenCode harness reads skills from the `.opencode/skills` directory in the workspace and from the `~/.config/opencode/skills` directory in the home directory, and also from the `.agents/skills` and `.claude/skills` directories in both places.
+
+For more information about placing skills, see [Give the agent skills](/environments/skills).
+
+## `mcp`
+
+The OpenCode harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2. The servers go in OpenCode's configuration with Code Mode off, so the agent calls their tools directly, and the first prompt waits until every server has connected.
+
+For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
+
+## `usage`
+
+The OpenCode harness records tokens on each turn's `usage`, as one total for the whole turn. `usage` is null when OpenCode reports none.
+
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+
+## `servedModels`
+
+OpenCode's stream names no model, so each turn's `model` is the model on the turn's last brokered request. The attempt's `servedModels` comes from the request URL on a `google/` model and from the response body on every other provider, with `[effort=<value>]` when the response names an effort.
+
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
+
+## `web-search`
+
+The OpenCode harness records `web-search` events. A web search runs on a hosted MCP server at `mcp.exa.ai`, which needs no key and is one of the harness's automatic egress hosts.
+
+For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts). For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `web-fetch`
+
+The OpenCode harness records `web-fetch` events.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

@@ -396,10 +396,20 @@ const changed = turn.diff.files.map((file) => file.path)
   Reads a sandbox file, as `c.readFile()` does, and returns the text or `null`.
 </Property>
 
-### `text` and `reasoning`
+### `text`
 
 <Property name="text" type="string" required>
-  The message or the reasoning block.
+  The message.
+</Property>
+
+<Property name="durationMs" type="number | null" required>
+  Wall time until the harness reported the end, or `null` when it reported none.
+</Property>
+
+### `reasoning`
+
+<Property name="text" type="string" required>
+  The reasoning block.
 </Property>
 
 <Property name="durationMs" type="number | null" required>

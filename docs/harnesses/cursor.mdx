@@ -3,7 +3,7 @@ title: "Cursor harness"
 description: "Look up options, the key, and recorded events for the Cursor harness."
 ---
 
-## cursor
+## `cursor()`
 
 `cursor()` is one harness factory. It reports each turn's tokens. For more information about supported sandboxes, see [Sandboxes](/sandboxes).
 
@@ -53,40 +53,52 @@ For more information about choosing a harness, see [Choose a harness](/harnesses
 
 For more information about model ids, effort values, and served models, see [Models and providers for each harness](/harnesses/models).
 
-## Credential
+## `CURSOR_API_KEY`
 
 `cursor()` reads `CURSOR_API_KEY` from the host. reeval exchanges that key for `accessToken` and `refreshToken` at `api2.cursor.sh`, on `POST /auth/exchange_user_api_key`. Requests to `cursor.sh` and `*.cursor.sh` carry those tokens.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
+For more information about the variable, see [`CURSOR_API_KEY`](/reference/env-vars#cursorapikey).
 
-## Rules and skills
+## `rules`
 
-The Cursor harness reads rules from the `AGENTS.md` file in the workspace. The Cursor harness reads skills from the `.cursor/skills` directory in the workspace and from the `~/.agents/skills` directory in the home directory.
+The Cursor harness reads rules from the `AGENTS.md` file in the workspace.
 
 For more information about writing rules, see [Add project rules](/environments/rules).
 
+## `skills`
+
+The Cursor harness reads skills from the `.cursor/skills` directory in the workspace and from the `~/.agents/skills` directory in the home directory.
+
 For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-## MCP servers
+## `mcp`
 
 The Cursor harness accepts MCP servers on `stdio`, `http`, and `sse`. reeval passes a `stdio` server as `command`, `args`, and `env`, and an `http` or `sse` server as `url` and `headers`.
 
 For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-## Recorded usage and model
+## `usage`
 
-The Cursor harness records tokens on each turn's `usage`. `input` excludes cache reads and writes, so the prompt total is `input` plus `cacheRead` plus `cacheWrite`. `reasoning` is part of `output`.
+The Cursor harness records tokens on each turn's `usage`. `input` excludes cache reads and writes, so the prompt total is `input` plus `cacheRead` plus `cacheWrite`. `reasoning` is part of `output`. `usage` is null when the harness reports no tokens.
 
-`usage` is null when the harness reports no tokens. Each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
 
-For more information about the record fields, see [Run record reference](/reference/record).
+## `servedModels`
 
-## Web events
+Each turn's `model` is the served model with its parameters, in the form `model[param=value]`. The attempt's `servedModels` is null, because the API requests name no model.
 
-The Cursor harness records `web-search` and `web-fetch` events. The Cursor SDK's stream leaves web search and web fetch calls out. reeval recovers those calls from the stored conversation.
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
 
-A turn reeval cannot recover lists `web-search` and `web-fetch` on `unreported`. `toHaveSearched()` and `toHaveFetched()` refuse that turn.
+## `web-search`
 
-For more information about those matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
+The Cursor harness records `web-search` events. The Cursor SDK's stream leaves web search calls out, and reeval recovers those calls from the stored conversation. A turn reeval cannot recover lists `web-search` on `unreported`, and `toHaveSearched()` refuses that turn.
+
+For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `web-fetch`
+
+The Cursor harness records `web-fetch` events. The Cursor SDK's stream leaves web fetch calls out, and reeval recovers those calls from the stored conversation. A turn reeval cannot recover lists `web-fetch` on `unreported`, and `toHaveFetched()` refuses that turn.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).
