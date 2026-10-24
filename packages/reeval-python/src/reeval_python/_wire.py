@@ -1057,7 +1057,7 @@ class FxHarnessDescriptor(TypedDict):
     maxConcurrent: NotRequired[float]
     # A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
     # `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-4.1`.
+    # OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
     model: str
     # How long the harness's session may take to become ready (its bootstrap and first session)
     # before the attempt is an infra error, after one retry; default 90s.

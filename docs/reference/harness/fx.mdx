@@ -21,7 +21,7 @@ A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway
 ## Options
 
 <Property name="model" type="string">
-  A Vercel AI Gateway id with its provider, such as `anthropic/claude-sonnet-5`, which runs on AI Gateway through `vercel()` in the config's `gateway`, or a bare OpenAI id, such as `gpt-4.1`, which runs on OpenAI's Chat Completions API. Required.
+  A Vercel AI Gateway id with its provider, such as `anthropic/claude-sonnet-5`, which runs on AI Gateway through `vercel()` in the config's `gateway`, or a bare OpenAI id, such as `gpt-5.5`, which runs on OpenAI's Chat Completions API. Required.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -61,7 +61,7 @@ A gateway id runs only through [`vercel()`](/reference/gateway#vercel-ai-gateway
 | MCP | `mcp.stdio`, `mcp.http` and `mcp.sse`, over ACP |
 | Plugins | Skills and MCP servers ([below](#plugins)) |
 
-Build its image once with `reeval image build` in a project whose config uses `fx()`. `gpt-4.1` passes the harness contract on OpenAI; pin the model you mean to measure.
+Build its image once with `reeval image build` in a project whose config uses `fx()`. `gpt-5.5` passes the harness contract on OpenAI; pin the model you mean to measure.
 
 ## The key and the relay
 
@@ -87,10 +87,10 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 | `model` | Runs on | Served model recorded |
 |---|---|---|
-| `gpt-4.1` | An fx configured provider, `openai`, over the Chat Completions API | `gpt-4.1-2025-04-14` |
+| `gpt-5.5` | An fx configured provider, `openai`, over the Chat Completions API | `gpt-5.5-2026-04-23` |
 | `anthropic/claude-sonnet-5` | fx's `gateway` provider | The model AI Gateway answers with; none when its stream names none, with the model each call asked for in `askedModels` |
 
-fx sends `max_tokens`, which OpenAI's reasoning models refuse, so a bare id must be a non-reasoning model such as `gpt-4.1`; reasoning models run through AI Gateway. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output, with its reasoning tokens. fx doesn't name the served model over ACP, so the gateway reads it from each response; a provider whose stream names none (Gemini's) records no served model, and the attempt's `askedModels` holds the model each successful call asked AI Gateway for, its `ai-language-model-id` header. A turn whose every model call got an HTTP error fails, naming the statuses. Session titles are off, since fx writes them with its own model, so the run's model is the only one called.
+fx sends a configured provider no `reasoning_effort` and no `max_tokens`, so a bare id must be a model that accepts function tools on Chat Completions without `reasoning_effort`, such as `gpt-5.5`. OpenAI refuses them from `gpt-5.6` on unless `reasoning_effort` is `none`, so run those through AI Gateway. Each turn's tokens are fx's ACP `PromptResponse.usage`, the turn's summed input and output, with its reasoning tokens. fx doesn't name the served model over ACP, so the gateway reads it from each response; a provider whose stream names none (Gemini's) records no served model, and the attempt's `askedModels` holds the model each successful call asked AI Gateway for, its `ai-language-model-id` header. A turn whose every model call got an HTTP error fails, naming the statuses. Session titles are off, since fx writes them with its own model, so the run's model is the only one called.
 
 ## Settings
 
@@ -118,7 +118,7 @@ fx has no plugins, no subagents of your own and no commands, so it loads a plugi
 
 | Situation | Message |
 |---|---|
-| No model | `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-4.1' }) (got …)` |
+| No model | `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-5.5' }) (got …)` |
 | A gateway id without `vercel()` in `gateway` (at plan time, exit 2) | `evaluate("<eval>") on fx:<model>: no gateway in the list can serve it (direct: fx runs a gateway id such as "anthropic/claude-sonnet-5" only through Vercel AI Gateway). Add vercel() to gateway.` |
 | No key when the attempt starts | `AI_GATEWAY_API_KEY isn't set, so the fx harness can't authenticate. Set it in the environment or .env.local.` (or `OPENAI_API_KEY`) |
 | The provider refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. …` (or `AI_GATEWAY_API_KEY`) |
