@@ -46,6 +46,15 @@ function Untouched {
 
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'Continue'
+# On Windows the user PATH starts with an unexpanded entry, and is put back as it was at the end.
+$windows = [Environment]::OSVersion.Platform -eq 'Win32NT'
+if ($windows) {
+  $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+  $savedPath = $key.GetValue('Path', $null, 'DoNotExpandEnvironmentNames')
+  $savedKind = if ($null -ne $savedPath) { $key.GetValueKind('Path') }
+  $tool = '%USERPROFILE%\reeval-test-tool'
+  $key.SetValue('Path', (@($tool, $savedPath) | Where-Object { $_ }) -join ';', 'ExpandString')
+}
 try {
   $good = Release (Join-Path $work 'good')
   $err = . Install $good (Join-Path $work 'a')
@@ -53,6 +62,15 @@ try {
   $installed = if (Test-Path $exe) { & $exe --version }
   Check "installs the release's binary" ($null -eq $err -and $installed -eq $Version) "$err $installed"
   Check 'leaves the session as it was' (Untouched)
+  if ($windows) {
+    $raw = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+    Check 'adds its folder to the user PATH, keeping it REG_EXPAND_SZ and its entries unexpanded' (
+      $key.GetValueKind('Path') -eq 'ExpandString' -and
+      $raw.StartsWith("$(Join-Path $work 'a');$tool")) "$($key.GetValueKind('Path')) $raw"
+    $null = . Install $good (Join-Path $work 'a')
+    $again = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+    Check "doesn't add its folder twice" ($again -eq $raw) $again
+  }
 
   $err = . Install (Release (Join-Path $work 'tampered') -Tamper) (Join-Path $work 'b')
   Check "refuses a binary that doesn't match SHA256SUMS" (
@@ -142,5 +160,9 @@ try {
   $failures++
 } finally {
   Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+  if ($windows) {
+    if ($null -eq $savedPath) { $key.DeleteValue('Path', $false) } else { $key.SetValue('Path', $savedPath, $savedKind) }
+    $key.Dispose()
+  }
 }
 if ($failures) { exit 1 }
