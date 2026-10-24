@@ -83,7 +83,8 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   - `variants`: the other environments. Each cell runs that environment alone.
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
   - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it. On a pooled `evaluate.each`, it gates the family's paired lift over the cases, not each case's lift.
-  - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.</Property>
+  - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.
+</Property>
 
 <Property name="runs" type="number">
   Attempts per cell, a whole number of at least 1. **Replaces**. `reeval run --runs n` overrides every level, pins included. Default 1.
