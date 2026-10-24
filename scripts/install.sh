@@ -43,6 +43,19 @@ main() {
     target=$target-musl
   fi
 
+  nl='
+'
+  # list_releases <token>: the API's release list, then its HTTP status on a line of its own. The
+  # token goes to curl on stdin, so it isn't on curl's command line for other users to see.
+  list_releases() {
+    if [ -n "$1" ]; then
+      printf 'Authorization: Bearer %s\n' "$1" |
+        curl -sSL -H @- -w "$nl%{http_code}" "https://api.github.com/repos/$REPO/releases?per_page=30" || true
+    else
+      curl -sSL -w "$nl%{http_code}" "https://api.github.com/repos/$REPO/releases?per_page=30" || true
+    fi
+  }
+
   version=${REEVAL_VERSION:-}
   version=${version#v}
   if [ -z "$version" ]; then
@@ -50,11 +63,20 @@ main() {
     # The newest published reeval release that has its binaries: they upload after the release is
     # created, and the repository's other releases are tagged <component>-v<version>. Each release
     # lists tag_name, draft and prerelease before its assets.
-    set -- -fsSL
-    [ -z "${GITHUB_TOKEN:-}" ] || set -- "$@" -H "Authorization: Bearer $GITHUB_TOKEN"
-    releases=$(curl "$@" "https://api.github.com/repos/$REPO/releases?per_page=30") ||
-      fail "couldn't list the releases of $REPO (set GITHUB_TOKEN if you're rate-limited)"
-    version=$(printf '%s\n' "$releases" |
+    releases=$(list_releases "${GITHUB_TOKEN:-}")
+    status=${releases##*"$nl"}
+    if [ "$status" = 401 ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+      echo "reeval install: the GitHub API refused GITHUB_TOKEN; listing the releases without it" >&2
+      releases=$(list_releases "")
+      status=${releases##*"$nl"}
+    fi
+    case $status in
+      200) ;;
+      403 | 429) fail "the GitHub API rate-limited listing the releases of $REPO; set GITHUB_TOKEN to a token" ;;
+      000) fail "couldn't reach api.github.com to list the releases of $REPO" ;;
+      *) fail "couldn't list the releases of $REPO (HTTP $status from the GitHub API)" ;;
+    esac
+    version=$(printf '%s\n' "${releases%"$nl"*}" |
       grep -oE '"(tag_name|draft|prerelease)": *("[^"]*"|true|false)|"name": *"SHA256SUMS"' |
       awk -F '"' '
         function done() { if (!found && tag ~ /^v[0-9]/ && !skip && sums) { found = 1; print substr(tag, 2); exit } }

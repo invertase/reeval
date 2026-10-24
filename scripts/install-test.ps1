@@ -6,6 +6,11 @@
 param([Parameter(Mandatory)] [string] $Release, [Parameter(Mandatory)] [string] $Version)
 
 $script = Join-Path $PSScriptRoot 'install.ps1'
+# An HTTP error as Invoke-RestMethod throws it, carrying its response's status.
+class HttpError : Exception {
+  [object] $Response
+  HttpError([int] $status) : base("HTTP $status") { $this.Response = [pscustomobject]@{ StatusCode = $status } }
+}
 $work = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
 $name = "reeval-$Version-windows-x64.exe"
 $failures = 0
@@ -64,6 +69,8 @@ try {
   ) | ForEach-Object { [pscustomobject]$_ }
   function Invoke-RestMethod($Uri, $Headers) {
     $script:requests += "$($Headers.Authorization) $Uri"
+    if ($script:refused -and $Headers.Authorization -eq "Bearer $script:refused") { throw [HttpError]::new(401) }
+    if ($script:apiStatus) { throw [HttpError]::new($script:apiStatus) }
     $script:releases
   }
   function Invoke-WebRequest([switch] $UseBasicParsing, $Uri, $OutFile, $Headers) {
@@ -78,6 +85,18 @@ try {
   Check 'sends GITHUB_TOKEN to the GitHub API only' (
     $requests[0] -eq 'Bearer secret-token https://api.github.com/repos/invertase/reeval/releases?per_page=30' -and
     -not ($requests | Select-Object -Skip 1 | Where-Object { $_ -match 'secret' })) ($requests -join '; ')
+  $env:GITHUB_TOKEN = $script:refused = 'stale-token'
+  $err = . Install '' (Join-Path $work 'f') -Latest
+  Check 'lists the releases without a GITHUB_TOKEN the API refuses' (
+    $null -eq $err -and (Test-Path (Join-Path $work 'f/reeval.exe'))) $err
+  $script:refused = $null
+  $script:apiStatus = 403
+  $err = . Install '' (Join-Path $work 'g') -Latest
+  Check 'says when the API rate-limits it' ("$err" -match 'rate-limited') $err
+  $script:apiStatus = 500
+  $err = . Install '' (Join-Path $work 'h') -Latest
+  Check 'names the failure on any other status' ("$err" -match "couldn't list" -and "$err" -notmatch 'rate-limited') $err
+  $script:apiStatus = $null
   $script:releases = @([pscustomobject]@{ tag_name = 'v99.0.0'; draft = $false; prerelease = $false; assets = @() })
   $err = . Install '' (Join-Path $work 'e') -Latest
   Check 'says when no release has binaries yet' ("$err" -match 'has binaries yet') $err

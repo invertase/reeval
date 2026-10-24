@@ -32,10 +32,25 @@
     if ($env:REEVAL_DOWNLOAD) { Fail 'REEVAL_DOWNLOAD needs REEVAL_VERSION' }
     # The newest published reeval release that has its binaries: they upload after the release is
     # created, and the repository's other releases are tagged <component>-v<version>.
+    $api = "https://api.github.com/repos/$repo/releases?per_page=30"
     $headers = @{}
     if ($env:GITHUB_TOKEN) { $headers.Authorization = "Bearer $env:GITHUB_TOKEN" }
-    try { $releases = Invoke-RestMethod -Headers $headers "https://api.github.com/repos/$repo/releases?per_page=30" }
-    catch { Fail "couldn't list the releases of $repo (set GITHUB_TOKEN if you're rate-limited): $_" }
+    $releases = $null
+    foreach ($attempt in 1..2) {
+      try { $releases = Invoke-RestMethod -Headers $headers $api; break }
+      catch {
+        $status = [int]$_.Exception.Response.StatusCode
+        if ($status -eq 401 -and $headers.Authorization) {
+          Write-Host "reeval install: the GitHub API refused GITHUB_TOKEN; listing the releases without it"
+          $headers = @{}
+          continue
+        }
+        if ($status -eq 403 -or $status -eq 429) {
+          Fail "the GitHub API rate-limited listing the releases of $repo; set GITHUB_TOKEN to a token"
+        }
+        Fail "couldn't list the releases of ${repo}: $_"
+      }
+    }
     $tag = $releases |
       Where-Object { $_.tag_name -match '^v\d' -and -not $_.draft -and -not $_.prerelease -and @($_.assets.name) -contains 'SHA256SUMS' } |
       Select-Object -First 1 -ExpandProperty tag_name

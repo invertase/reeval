@@ -72,10 +72,17 @@ JSON
 real_curl=$(command -v curl)
 cat > "$work/bin/curl" <<SH
 #!/bin/sh
-echo "\$*" >> "$work/curl.log"
+header=
+case " \$* " in *" -H @- "*) header=\$(cat) ;; esac
+echo "\$* \$header" >> "$work/curl.log"
 for url; do :; done
 case \$url in
-  https://api.github.com/*) cat "\$RELEASES" ;;
+  https://api.github.com/*)
+    status=200
+    case \$header in *"\${REFUSED:-none}"*) status=401 ;; esac
+    [ -n "\${API_STATUS:-}" ] && status=\$API_STATUS
+    [ "\$status" = 200 ] && cat "\$RELEASES"
+    printf '\n%s' "\$status" ;;
   https://github.com/invertase/reeval/releases/download/v*)
     set -- "\$@"; n=\$#; i=0
     for a; do i=\$((i + 1)); [ \$i -lt \$n ] && set -- "\$@" "\$a"; done
@@ -103,11 +110,22 @@ if ! latest "$work/none.json" "$work/f" && grep -q "has binaries yet" "$work/out
 else fail "says when no release has binaries yet: $(cat "$work/out")"; fi
 : > "$work/curl.log"
 latest "$work/releases.json" "$work/g" GITHUB_TOKEN=secret-token
-if grep -q 'Authorization: Bearer secret-token https://api.github.com/' "$work/curl.log"; then
-  pass "sends GITHUB_TOKEN to the GitHub API"
-else fail "sends GITHUB_TOKEN to the GitHub API: $(cat "$work/curl.log")"; fi
+if grep -q 'api.github.com/.* Authorization: Bearer secret-token$' "$work/curl.log"; then
+  pass "sends GITHUB_TOKEN to the GitHub API, on curl's stdin"
+else fail "sends GITHUB_TOKEN to the GitHub API, on curl's stdin: $(cat "$work/curl.log")"; fi
 if grep -v api.github.com "$work/curl.log" | grep -q secret-token; then fail "sends GITHUB_TOKEN only to the API"
 else pass "sends GITHUB_TOKEN only to the API"; fi
+if latest "$work/releases.json" "$work/h" GITHUB_TOKEN=stale-token REFUSED=stale-token &&
+  [ "$("$work/h/reeval" --version)" = $V ] && grep -q "refused GITHUB_TOKEN" "$work/out"; then
+  pass "lists the releases without a GITHUB_TOKEN the API refuses"
+else fail "lists the releases without a GITHUB_TOKEN the API refuses: $(cat "$work/out")"; fi
+if ! latest "$work/releases.json" "$work/i" API_STATUS=403 && grep -q "rate-limited" "$work/out"; then
+  pass "says when the API rate-limits it"
+else fail "says when the API rate-limits it: $(cat "$work/out")"; fi
+if ! latest "$work/releases.json" "$work/j" API_STATUS=500 && grep -q "HTTP 500" "$work/out" &&
+  ! grep -q "rate-limited" "$work/out"; then
+  pass "names the API's status on any other failure"
+else fail "names the API's status on any other failure: $(cat "$work/out")"; fi
 
 # Past the shebang line, a prefix must fail or install.
 size=$(wc -c < "$script" | tr -d ' ')
