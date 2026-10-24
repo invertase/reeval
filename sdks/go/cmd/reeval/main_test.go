@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,12 +38,17 @@ func mirror(t *testing.T, version string, sums func(name, sum string) string) (s
 	if err := os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte(listing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("REEVAL_DOWNLOAD", "file://"+filepath.ToSlash(dir))
+	t.Setenv("REEVAL_DOWNLOAD", fileURL(dir))
 	t.Setenv("REEVAL_VERSION", version)
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	t.Setenv("REEVAL_BINARY", "")
 	t.Setenv("REEVAL_OFFLINE", "")
 	return dir, name
+}
+
+// fileURL is dir as a file:// URL: file:///C:/x on Windows, where file://C:/x names a host.
+func fileURL(dir string) string {
+	return (&url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(dir), "/")}).String()
 }
 
 func listing(name, sum string) string { return fmt.Sprintf("%s  other\n%s  %s\n", sum, sum, name) }
@@ -107,7 +113,7 @@ func TestOfflineWithNothingCached(t *testing.T) {
 
 func TestDownloadFailureNamesTheWayOut(t *testing.T) {
 	mirror(t, "9.9.9", listing)
-	t.Setenv("REEVAL_DOWNLOAD", "file://"+filepath.ToSlash(t.TempDir()))
+	t.Setenv("REEVAL_DOWNLOAD", fileURL(t.TempDir()))
 	_, err := resolve()
 	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "REEVAL_DOWNLOAD") || !strings.Contains(err.Error(), "REEVAL_BINARY") {
 		t.Fatalf("err = %v", err)
