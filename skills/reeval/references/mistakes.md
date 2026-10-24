@@ -11,7 +11,6 @@ Each row is a mistake, what reeval says and the fix.
 | `compare: { strategy: 'peer' }` | `Unknown compare option "strategy"` | Drop it. Variants already run on their own |
 | `environment` and `compare: { baseline, … }` together | `environment and compare.baseline can't both be set` | Drop `environment`, or drop `baseline` to make it the control |
 | `compare: false` on an eval or group | `compare: false can't be set` | Use a profile's `limit.compare: false` |
-| `compare: { questions: […] }` or `compare: { across }` | `compare.questions … has moved: questions sit beside compare, …` (exit 2) | `questions: [{ question: '…', across: 'environment' }]` beside `compare`; drop `across` to ask each attempt |
 | A question and no language model | `questions "…" (…) needs a language model` (exit 2) | Set `analysis.model`, give the question its own `model`, or set `question: { model }` |
 | `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |

@@ -104,8 +104,7 @@ evaluate('greets in the house style', {
 - `questions` sits beside `compare`, on an eval or a group (never the config or a
   profile), and works without a `compare` too. It's always a list of strings and
   `{ question, across?, choices?, model?, state?, artifacts? }`. An eval's list
-  replaces its group's. `compare.questions` and `compare.across` are refused
-  with the move to make.
+  replaces its group's.
 - **No `across`: asked of each attempt** as it ends with a pass or a fail (infra
   errors and skipped attempts aren't asked), while the run goes on. `choices`
   (two or more) makes the model pick one, with a reason; the result block prints

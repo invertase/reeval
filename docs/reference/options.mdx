@@ -84,7 +84,6 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
   - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it. On a pooled `evaluate.each`, it gates the family's paired lift over the cases, not each case's lift.
   - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.
-  - `questions` and `across` aren't `compare` keys: questions go on the eval or group, as [`questions`](#questions), with `across` on each pairwise entry. `reeval run` exits 2 naming the move.
 </Property>
 
 <Property name="runs" type="number">
