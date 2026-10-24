@@ -1,0 +1,52 @@
+# with-rules-ab
+
+**Shows:** which of two rules files works better. Each arm is the same project with its own
+`rules: file(…)`, a one-line `rules/short.md` and a `rules/detailed.md` that spells out the
+changelog's format. `compare: { baseline: shortRules, variants: [detailedRules] }` runs both, and
+the checks read the changelog the agent wrote.
+
+**Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
+first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code), Docker,
+and `pnpm reeval image build --profile claude-code` once.
+
+**Run:**
+
+```bash
+pnpm eval
+```
+
+**Real or fake agent:** `pnpm eval` runs a fake agent, with no keys or Docker. It copies the
+[`fake-agent/`](./fake-agent) fixture into the workspace to mimic what an agent would produce, so the
+checks have something to check; it doesn't read rules, so both arms get the same files and tie.
+`pnpm eval --profile claude-code` runs the same compare on Claude Code, where the rules land in
+`CLAUDE.md`, and `--profile <name>` on any other agent in [`examples/profiles.ts`](../profiles.ts).
+
+**Copying it out of the repo:** `reeval.config.ts` imports `../profiles.ts`. Copy
+[`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
+one profile you need.
+
+**What to look at:** an arm per rules file. On the fake agent they tie:
+
+```text
+pass             records the change in the changelog
+  arm              pass
+  short-rules      1 of 1
+  detailed-rules   1 of 1  can't tell yet
+```
+
+On a real agent, `pnpm eval --profile claude-code --runs 4` gives each arm four tries, enough for
+a verdict. When the arms differ, the check matrix under them names the check that tells them
+apart.
+
+| File | What it is |
+|---|---|
+| [`with-rules-ab.eval.ts`](./with-rules-ab.eval.ts) | The eval: two arms, each with its own rules, and two checks |
+| [`rules/short.md`](./rules/short.md) | The control's rules: one line |
+| [`rules/detailed.md`](./rules/detailed.md) | The variant's rules: the changelog's format, with an example |
+| [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
+| [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
+| [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
+
+[Two stacks, not a layer](../../docs/guide/compare.mdx#two-stacks-not-a-layer) in the Compare and
+lift guide covers naming both arms, and
+[Write rules and files](../../docs/guide/environments.mdx#write-rules-and-files) covers `rules`.

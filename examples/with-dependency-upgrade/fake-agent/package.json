@@ -1,0 +1,9 @@
+{
+  "type": "module",
+  "imports": {
+    "#strfmt": "./vendor/strfmt-2.0.0/index.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

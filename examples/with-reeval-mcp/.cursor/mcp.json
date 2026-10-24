@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "reeval": {
+      "command": "npx",
+      "args": ["reeval", "mcp", "--config", "${workspaceFolder}/reeval.config.ts"]
+    }
+  }
+}

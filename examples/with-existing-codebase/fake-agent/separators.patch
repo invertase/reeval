@@ -1,0 +1,55 @@
+diff --git a/index.js b/index.js
+index 18bd32b..4bea060 100644
+--- a/index.js
++++ b/index.js
+@@ -171,6 +171,11 @@ export default function camelCase(input, options) {
+ 		input = input.trim();
+ 	}
+ 
++	if (options.separators) {
++		// Extra separators become `-`, which the rest of the conversion already splits on.
++		input = [...input].map(character => options.separators.includes(character) ? '-' : character).join('');
++	}
++
+ 	if (input.length === 0) {
+ 		return '';
+ 	}
+diff --git a/readme.md b/readme.md
+index 20fb3d2..be22c00 100644
+--- a/readme.md
++++ b/readme.md
+@@ -97,6 +97,20 @@ camelCase('foo-BAR', {preserveConsecutiveUppercase: false});
+ //=> 'fooBar'
+ ```
+ 
++##### separators
++
++Type: `string`\
++Default: `''`
++
++Extra characters that separate words, beside space, `-`, `.` and `_`.
++
++```js
++import camelCase from 'camelcase';
++
++camelCase('foo/bar', {separators: '/'});
++//=> 'fooBar'
++```
++
+ ##### capitalizeAfterNumber
+ 
+ Type: `boolean`\
+diff --git a/test.js b/test.js
+index bf7de19..bb41839 100644
+--- a/test.js
++++ b/test.js
+@@ -1117,3 +1117,9 @@ test('invalid input', () => {
+ 		message: /Expected the input to be/v,
+ 	});
+ });
++
++test('separators option', () => {
++	assert.equal(camelCase('foo/bar', {separators: '/'}), 'fooBar');
++	assert.equal(camelCase('a:b/c', {separators: ':/', pascalCase: true}), 'ABC');
++	assert.equal(camelCase('foo/bar'), 'foo/bar');
++});
