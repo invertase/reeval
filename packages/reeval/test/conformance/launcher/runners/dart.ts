@@ -64,6 +64,7 @@ function build(released: Released | null) {
 const runner: Runner = {
   name: 'dart',
   interpreterEnv: 'REEVAL_DART',
+  sidecars: ['.sha256'],
   async setup(work) {
     copy = join(work, 'reeval-dart')
     exe = join(work, windows ? 'reeval.exe' : 'reeval')

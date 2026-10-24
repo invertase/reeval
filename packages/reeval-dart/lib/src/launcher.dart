@@ -91,18 +91,19 @@ Future<String> locateBinary(
   final cached = File(_join([cacheRoot(env), 'bin', v, asset]));
   final recorded = v == released.version;
   final want = recorded ? released.binaries[platform] : null;
-  final size = cached.existsSync() ? cached.lengthSync() : null;
-  if (size != null && size > 0 && (want == null || size == want.size)) {
-    if (_isProgram(cached)) return cached.path;
+  if (cached.existsSync()) {
+    if (await _verified(cached, want)) {
+      if (_isProgram(cached)) return cached.path;
+      _remove(cached);
+      throw LaunchError(
+        _infra,
+        '${cached.path} is not a program this machine can run, so it was '
+        'removed from the cache and the next run downloads it again. Set '
+        'REEVAL_BINARY to a reeval binary to run instead',
+      );
+    }
     _remove(cached);
-    throw LaunchError(
-      _infra,
-      '${cached.path} is not a program this machine can run, so it was '
-      'removed from the cache and the next run downloads it again. Set '
-      'REEVAL_BINARY to a reeval binary to run instead',
-    );
   }
-  if (size != null) _remove(cached);
   if (env['REEVAL_OFFLINE'] == '1') {
     throw LaunchError(
       _usage,
@@ -127,10 +128,10 @@ Future<String> locateBinary(
     );
   }
   final client = base.startsWith('file:') ? null : _client(env);
+  final String expected;
   try {
     final sums = latin1.decode(await _fetch(client, '$base/SHA256SUMS'));
     final listed = _sumFor(sums, asset);
-    final String expected;
     final String source;
     if (want == null) {
       final why = released.version.isEmpty
@@ -173,7 +174,67 @@ Future<String> locateBinary(
     client?.close(force: true);
   }
   await _checkStarts(cached, asset);
+  _markVerified(cached, expected);
   return cached.path;
+}
+
+File _marker(File binary) => File('${binary.path}.sha256');
+
+/// What changes when [binary] is rewritten, even with its mtime set back:
+/// the change time moves on.
+String _identity(File binary) {
+  final stat = binary.statSync();
+  return '${stat.size} ${stat.modified.microsecondsSinceEpoch} '
+      '${stat.changed.microsecondsSinceEpoch}';
+}
+
+/// Records that [binary], as it is now on disk, has sha256 [digest], so later
+/// runs needn't hash it again.
+void _markVerified(File binary, String digest) {
+  try {
+    _marker(binary).writeAsStringSync('$digest ${_identity(binary)}\n');
+  } on FileSystemException {
+    // Without a marker the next run hashes the binary again.
+  }
+}
+
+/// Whether the cached [binary] can run: it hashes to the recorded sha256
+/// ([want]), else to the one its marker holds (taken as read while the file is
+/// unchanged since the marker was written). With neither a record nor a
+/// marker it was put there by hand, as for `REEVAL_OFFLINE`, and runs.
+Future<bool> _verified(File binary, ({String sha256, int size})? want) async {
+  final int size;
+  final String identity;
+  try {
+    size = binary.lengthSync();
+    identity = _identity(binary);
+  } on FileSystemException {
+    return false;
+  }
+  if (size == 0 || (want != null && size != want.size)) return false;
+  var digest = '';
+  var seen = '';
+  try {
+    final line = _marker(binary).readAsStringSync().trim();
+    final space = line.indexOf(' ');
+    if (space > 0) {
+      digest = line.substring(0, space);
+      seen = line.substring(space + 1);
+    }
+  } on FileSystemException {
+    // No marker: the binary is hashed below, if there's a hash to match.
+  }
+  final expected = want?.sha256 ?? (digest.isEmpty ? null : digest);
+  if (expected == null) return true;
+  if (seen == identity && digest == expected) return true;
+  try {
+    final actual = (await sha256.bind(binary.openRead()).first).toString();
+    if (actual != expected) return false;
+  } on FileSystemException {
+    return false;
+  }
+  _markVerified(binary, expected);
+  return true;
 }
 
 /// Writes [bytes] to [cached] whole or not at all, so a crash or a full disk
@@ -283,11 +344,14 @@ bool _isProgram(File file) {
   ].any(starts);
 }
 
-void _remove(File file) {
-  try {
-    if (file.existsSync()) file.deleteSync();
-  } on FileSystemException {
-    // A running binary can't be removed on Windows; the next run tries again.
+/// Removes a cached binary and its marker.
+void _remove(File binary) {
+  for (final file in [binary, _marker(binary)]) {
+    try {
+      if (file.existsSync()) file.deleteSync();
+    } on FileSystemException {
+      // A running binary can't be removed on Windows; the next run tries again.
+    }
   }
 }
 

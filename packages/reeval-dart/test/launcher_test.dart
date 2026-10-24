@@ -67,7 +67,10 @@ void main() {
         p.join(cache, 'reeval', 'bin', packageVersion, asset),
       );
       expect(cached.existsSync(), isTrue);
-      expect(Directory(cached.parent.path).listSync(), hasLength(1));
+      expect(
+        Directory(cached.parent.path).listSync().map((e) => e.path),
+        unorderedEquals([cached.path, '${cached.path}.sha256']),
+      );
     },
   );
 
@@ -228,6 +231,26 @@ void main() {
     });
   });
 
+  test(
+    'a cached binary rewritten since its download is fetched again',
+    () async {
+      publish();
+      final cached = File(
+        p.join(cache, 'reeval', 'bin', packageVersion, asset),
+      );
+      await locateBinary(env);
+      expect(
+        File('${cached.path}.sha256').readAsStringSync(),
+        startsWith(sha256.convert(script.codeUnits).toString()),
+      );
+      final mtime = cached.lastModifiedSync();
+      cached.writeAsStringSync(script.replaceFirst('exit 7', 'exit 8'));
+      cached.setLastModifiedSync(mtime);
+      await locateBinary(env);
+      expect(cached.readAsStringSync(), script);
+    },
+  );
+
   test('a cached file that is no program is removed, with exit 3', () async {
     final cached = File(p.join(cache, 'reeval', 'bin', packageVersion, asset))
       ..createSync(recursive: true)
@@ -330,6 +353,7 @@ void main() {
     expect(await locateBinary(env), cached);
     expect(Directory(p.dirname(cached)).listSync().map((e) => e.path), {
       cached,
+      '$cached.sha256',
       other.path,
     });
   });
