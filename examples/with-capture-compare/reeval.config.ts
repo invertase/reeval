@@ -22,7 +22,7 @@ export default defineConfig({
     },
   }),
   sandbox: fakeSandbox(),
-  // The model that answers compare questions. This fake votes for the side whose diff has the
+  // The model that answers the questions. This fake votes for the side whose diff has the
   // brand blue, without looking at the screenshots; set one that takes images, such as
   // 'anthropic/claude-sonnet-5', for real votes. It writes no insights, so they're off.
   analysis: {

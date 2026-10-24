@@ -116,7 +116,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   - `model`: a `'provider/model'` language model. Without one, the cascaded [`question.model`](#question) answers, else `analysis.model`, else the run's judge model (a profile's over the config's) when it's a language model. `reeval run` exits 2 at plan time when a question has no language model or would get an evaluation model.
   - `state` and `artifacts`: what the model is shown, over the cascaded [`question`](#question) option.
 
-  `--dry-run` names each question, what it shows, and how many attempts or pairs it will ask (assuming every attempt passes its checks). An empty string or list, a value that isn't a list, an unknown entry key and the same question twice are errors. Per-attempt answers land in `evals[].attempts[].answers` and `reeval query attempt_answers`; pairwise ones in `evals[].answers`, `votes` and `question_pairs`.
+  `--dry-run` names each question, what it shows, and how many attempts or pairs it will ask (assuming every attempt passes its checks). An empty list asks none, so an eval can clear its group's. An empty string, a value that isn't a list, an unknown entry key and the same question twice are errors. Per-attempt answers land in `evals[].attempts[].answers` and `reeval query attempt_answers`; pairwise ones in `evals[].answers`, `votes` and `question_pairs`.
 </Property>
 
 <Property name="question" type="{ model?, state?, artifacts? }">

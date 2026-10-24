@@ -108,7 +108,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 |---|---|
 | [`with-capture`](./with-capture) | Judging a screenshot of the agent's page |
 | [`with-capture-journey`](./with-capture-journey) | A screenshot after a vision model drives the page |
-| [`with-capture-compare`](./with-capture-compare) | A compare question about screenshots |
+| [`with-capture-compare`](./with-capture-compare) | A pairwise question about screenshots |
 
 ## Running
 

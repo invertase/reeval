@@ -15,10 +15,10 @@ evaluate(
       variants: [withJsdoc],
       // Only Claude Code runs the variant; Codex runs the control alone.
       harness: ['claude-code:claude-sonnet-5'],
-      // Pairs Claude Code's attempts with Codex's, in the same environment.
-      questions: [{ question: 'Which multiply() is easier to read?', across: 'harness' }],
     },
     environment: math,
+    // Pairs Claude Code's attempts with Codex's, in the same environment.
+    questions: [{ question: 'Which multiply() is easier to read?', across: 'harness' }],
   },
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js.')

@@ -21,7 +21,7 @@ export default defineConfig({
     },
   }),
   sandbox: fakeSandbox(),
-  // The model that answers compare questions. This fake votes for the side whose diff names
+  // The model that answers the questions. This fake votes for the side whose diff names
   // the argument; set a real one, such as 'anthropic/claude-sonnet-5', for real votes. It
   // writes no insights, so they're off.
   analysis: {

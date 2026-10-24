@@ -899,11 +899,6 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       /questions in evaluate\("e"\) is a list \(got "Which\?"\), e\.g\. questions: \['How did the agent find the failing test\?'\]\./,
     ],
     [
-      'an empty list of questions',
-      `evaluate('e', { questions: [] }, async () => {})`,
-      /questions in evaluate\("e"\) is an empty list\. Ask at least one/,
-    ],
-    [
       'choices on a pairwise question',
       `evaluate('e', { compare: { baseline: a, variants: [b] }, questions: [{ question: 'Which?', across: 'environment', choices: ['a', 'b'] }] as never }, async () => {})`,
       /questions "Which\?" in evaluate\("e"\) sets both across and choices\./,

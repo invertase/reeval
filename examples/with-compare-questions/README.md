@@ -2,8 +2,9 @@
 
 **Shows:** asking a model which arm did better when both pass. The agent adds `divide(a, b)`,
 with and without an `errors` skill, and a hidden test checks it throws for a zero divisor. Both
-arms pass, so lift can't tell them apart; `compare.questions` asks which `divide()` says more
-clearly what went wrong, pair by pair. Questions never gate.
+arms pass, so lift can't tell them apart; a question with `across: 'environment'`, in `questions`
+beside `compare`, asks which `divide()` says more clearly what went wrong, pair by pair. Questions
+never gate.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code), Docker,
@@ -61,5 +62,5 @@ math  errors  1      0       1       0     0
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, without and with the skill |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the fake model that answers the question |
 
-The [Compare questions](../../docs/guide/questions.mdx) guide covers picking the model and what
-each side shows.
+The [Questions](../../docs/guide/questions.mdx) guide covers picking the model, what each side
+shows, and questions asked of each attempt on its own.
