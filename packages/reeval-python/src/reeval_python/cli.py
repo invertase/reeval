@@ -246,9 +246,15 @@ def download(version: str, target: str, dest: Path) -> None:
     if base.startswith("http:"):
         print(f"reeval: warning: REEVAL_DOWNLOAD is {base}, which isn't https", file=sys.stderr)
     want = recorded(version, target)
+    own = released()
+    if want is None and own is not None and own.get("version") == version:
+        raise ShimError(
+            f"reeval-python {version} was released with no reeval binary for {target}."
+            " Set REEVAL_BINARY to a reeval binary.",
+            3,
+        )
     listed = parse_sums(_fetch(f"{base}/SHA256SUMS").decode()).get(name)
     if want is None:
-        own = released()
         why = (
             "records no binary hashes"
             if own is None
@@ -345,17 +351,27 @@ def mark_verified(binary: Path, digest: str) -> None:
 
 
 def verified(binary: Path, want: dict[str, Any] | None) -> bool:
-    """Whether the cached `binary` is the one that was checked: unchanged since its marker was
-    written, or (with a recorded hash) hashing to it, which then writes the marker."""
+    """Whether the cached `binary` can run: it hashes to the recorded sha256, else to the one its
+    marker holds (taken as read while the file is unchanged since the marker was written). With
+    neither a record nor a marker, it was put there by hand, as for REEVAL_OFFLINE, and runs."""
     try:
+        size = binary.stat().st_size
         identity = _identity(binary)
+    except OSError:
+        return False
+    if size == 0 or (want is not None and size != want.get("size", size)):
+        return False
+    try:
         digest, _, seen = _marker(binary).read_text().strip().partition(" ")
     except OSError:
-        digest = seen = identity = ""
-    if identity and seen == identity and (want is None or digest == want.get("sha256")):
+        digest = seen = ""
+    expected = want.get("sha256") if want is not None else digest or None
+    if expected is None:
         return True
-    if want is not None and binary.is_file() and sha256(binary) == want.get("sha256"):
-        mark_verified(binary, want["sha256"])
+    if seen == identity and digest == expected:
+        return True
+    if sha256(binary) == expected:
+        mark_verified(binary, expected)
         return True
     return False
 
