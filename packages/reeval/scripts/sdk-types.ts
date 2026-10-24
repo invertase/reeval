@@ -641,7 +641,7 @@ export function go(defs: Map<string, Schema> = definitions()): string {
   ].join('\n')}${blocks.join('\n\n')}\n`
 }
 
-export const GO_OUT = join(pkg, '../../sdks/go/internal/wire/wire_gen.go')
+export const GO_OUT = fileURLToPath(new URL('../../sdks/go/internal/wire/wire_gen.go', pkg))
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const outputs: [string, string][] = [

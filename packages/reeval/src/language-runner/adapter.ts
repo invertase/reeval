@@ -61,6 +61,11 @@ const GO_ADAPTER: RemoteAdapter = {
   load: (file, root) => import('./remote.ts').then((m) => m.collectLanguageFile(file, root)),
   // `go run` in the project, so the runner is the SDK version its go.mod requires.
   runnerCommand: () => [process.env.REEVAL_GO?.trim() || 'go', 'run', GO_RUNNER_PACKAGE],
+  setupHint: [
+    `reeval runs *_eval.go with \`go run ${GO_RUNNER_PACKAGE}\` in the project (REEVAL_GO names`,
+    'another go). Require the github.com/invertase/reeval/sdks/go release made for this reeval in',
+    "the project's go.mod, e.g. `go get -tool github.com/invertase/reeval/sdks/go/cmd/reeval`.",
+  ].join(' '),
 }
 
 /** Every adapter; TypeScript is first and the in-process default. */
