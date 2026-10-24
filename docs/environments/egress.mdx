@@ -98,7 +98,7 @@ A refused request names the host and why it was blocked:
 }
 ```
 
-The `allowed` list is every host the policy let through, your own and the automatic ones; it is `null` under `'allow-all'`. Hosts your harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
+The `allowed` list is every host the policy let through, the `allow` hosts and the automatic ones; it is `null` under `'allow-all'`. Hosts your harness's CLI always tries and never needs, such as its telemetry, are recorded in `expectedBlocked`; other refused requests remain in `blocked`. When you run `npx reeval run -v`, each blocked request also prints a `gateway` line as it happens. For more information, see [Debugging](/results/debugging).
 
 For more information about egress enforcement, see [Core concepts](/core-concepts).
 
