@@ -25,7 +25,7 @@
 | `evaluate.each`: one eval per case, pooled into a family with a pass rate and a paired lift that `minLift` gates; `{ pool: false }` | ✓ 9 | ✓ 3 | ● 1 | — | — | — |
 | `compare.harness` | ✓ 1 | ✓ 1 | — | — | — | — |
 | `compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control | ✓ 1 | ✓ 3 | ● 2 | ● 2 | — | — |
-| `compare.questions`: questions in the plan, answered after the run with pairwise win rates | ✓ 15 | ✓ 4 | — | — | — | ◐ 1 (1 without a canary) |
+| `compare.questions`: questions in the plan, answered after the run with pairwise win rates | ✓ 15 | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
 | Compare questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded | ✓ 5 | ✓ 2 | ● 4 | ● 1 | — | — |
 | `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 3 | — | — | — | — | — |
 | The default-gate hint: printed for an eval whose gated cells run more than once at the default gate, not for a study whose cells are all `gate: 'none'` | ✓ 1 | ✓ 2 | — | — | — | — |
@@ -150,7 +150,7 @@
 | Feature | unit | plan | fake | docker | podman | real |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 4 | — | — | — | — | — |
-| Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time | ✓ 7 | ✓ 2 | — | — | — | — |
+| Model routing for reeval's own calls (judge, analysis, insights, compare questions): `anthropic/*`, `google/*`, `openai/*` and `typesafe-ai/*` call their provider directly when its key is set, which wins over the AI Gateway; any other prefix goes through the Gateway; a missing or malformed key names the model, its prefix and every key that works, at plan time, in `reeval doctor` and at call time | ✓ 8 | ✓ 2 | — | — | — | — |
 | What the judge is given: `judge.state` (task, output, files, diff patterns, contents by path or pattern, transcript, turns, checks) merged key by key from the config to the call; build output, source maps, build info and minified files dropped from its diff | ✓ 8 | — | ● 9 | — | — | — |
 | `c.judge({ artifacts })` sends captures as AI SDK file parts (`true` sends every one); JSON-only calls stay an object | ✓ 3 | — | ● 2 | ● 2 | — | — |
 | A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `state` keys that were on, largest first; reeval sends what `state` selects, uncut | ✓ 4 | — | — | — | — | — |
@@ -197,7 +197,7 @@
 | `reeval run`'s insights: once the exit code is fixed, `analysis.model` classifies and explains each eval into `.reeval/runs/<run>/insights.json` (copied by `reeval record`); `analysis.maxTokens` spends on failures, regressions and compares first and prints the evals it skipped; each eval's input trimmed to its cap and each call's output cap, timeout and one retry, an eval that still fails printing its facts alone; Ctrl-C keeping what finished, and `reeval analyze --insights` finishing what it, a failure or the budget left; the progress line; `--no-insights` and `analysis.insights: false`; classifications cached in `.reeval/analysis/classify/` and read back from the last recorded run | ✓ 22 | ✓ 2 | — | — | — | ◐ 1 (1 without a canary) |
 | A run's notes in `.reeval/analysis/<run>/notes/`: the studio's Analysis tab shows them with the cached `reeval analyze` document | ✓ 1 | — | — | — | — | — |
 | `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 7 | ✓ 1 | ● 10 | ● 11 | — | — |
-| `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 3 | ✓ 1 | ● 2 | ● 4 | — | — |
+| `c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`) | ✓ 5 | ✓ 1 | ● 3 | ● 4 | — | — |
 | `reeval studio` and `reeval studio build` | ✓ 7 | — | — | — | — | ◐ 1 (1 without a canary) |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 4 | — | — | — | — | — |
 | Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 9 | — | — | — | — | — |

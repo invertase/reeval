@@ -734,7 +734,7 @@ async function executeRun(
       concurrency,
       root: config.root,
       historyDir: config.history.dir,
-      questionModel: models?.questionModelLabel(config) ?? null,
+      questionModel: models?.questionModelLabel(config, judge) ?? null,
       insights: await planInsights(config, setup.insights),
       judgeModel,
       ...(setup.dryRun ? { prices: await dryRunPrices(skipped, judgeModel) } : {}),
@@ -828,7 +828,7 @@ async function executeRun(
     for (const row of plan.rows) {
       if (row.plan.skip || !models) continue
       const questions = (row.plan.questions ?? []).map((q) => {
-        const model = models.questionModel(config, q, row.id)
+        const model = models.questionModel(config, q, row.id, judge)
         const gateway = resolveModelGateway(model, undefined, scope, 'the compare question model')
         return {
           question: q.question,

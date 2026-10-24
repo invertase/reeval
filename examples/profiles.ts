@@ -27,8 +27,8 @@ export const profiles = {
   'claude-code': inDocker(claudeCode({ model: 'claude-sonnet-5' }), 'anthropic/claude-sonnet-5'),
   // CURSOR_API_KEY, and GOOGLE_GENERATIVE_AI_API_KEY for the judge
   cursor: inDocker(cursor({ model: 'composer-2.5' }), 'google/gemini-3.8-flash'),
-  // OPENAI_API_KEY, for the agent and the judge
-  codex: inDocker(codex({ model: 'gpt-5.6-luna' }), 'openai/gpt-5.5'),
+  // OPENAI_API_KEY, for the agent and the judge: OpenAI judges with gpt-6-luna, its decision model
+  codex: inDocker(codex({ model: 'gpt-5.6-luna' }), 'openai/gpt-6-luna'),
   // GOOGLE_GENERATIVE_AI_API_KEY, for the agent (its model's provider picks the key) and the judge
   opencode: inDocker(opencode({ model: 'google/gemini-3.8-flash' }), 'google/gemini-3.8-flash'),
   // GOOGLE_GENERATIVE_AI_API_KEY, for the agent and the judge

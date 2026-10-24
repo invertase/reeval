@@ -27,7 +27,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 | Helper | YAML | Serves | Key |
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
-| `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, and any judge or analysis model | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
+| `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build; any analysis, compare-question or capture model; judges that are decision models, such as `typesafe-ai/jev-1.14.0` | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
 
 ## Vercel AI Gateway
 
@@ -35,7 +35,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 AI_GATEWAY_API_KEY=vck_...
 ```
 
-One key serves every harness and model on `vercel()`. The egress gateway swaps it in only on Vercel's model paths (`ai-gateway.vercel.sh`), so it never enters the sandbox, as with any [brokered credential](/concepts/credential-brokering).
+One key serves every harness and model on `vercel()`, with judges limited to decision models ([below](#the-judge-analysis-and-captures)). The egress gateway swaps it in only on Vercel's model paths (`ai-gateway.vercel.sh`), so it never enters the sandbox, as with any [brokered credential](/concepts/credential-brokering).
 
 | Harness | How it reaches Vercel | Brokered on | Model ids | Served model |
 |---|---|---|---|---|
@@ -86,6 +86,12 @@ judge: { model: 'anthropic/claude-haiku-4-5', gateway: 'direct' },
 
 With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
 
+On `vercel()`, a judge must be a decision model: Vercel AI Gateway serves `typesafe-ai/jev-1.14.0`, `openai/gpt-6-luna-decisions` and its other decision models as judges, and refuses every language model. Analysis, compare questions and captures take language models there as usual.
+
+<Warning>
+The plan can't tell a decision model from a language model, so a language-model judge such as `anthropic/claude-haiku-4-5` resolves to `vercel()` when it comes first, and each judge call fails: `the judge model "anthropic/claude-haiku-4-5" is a language model, and Vercel AI Gateway judges only with decision models. …`. Pin such a judge to `direct()`, as above, or judge with Jev.
+</Warning>
+
 Without a list, reeval uses no gateway: the list is `[direct()]`, so a model takes only its provider's own key, as on [Judges](/reference/judges), and a model `direct()` can't serve stops the plan. A set `AI_GATEWAY_API_KEY` is never read until you add `vercel()`; the missing-key message says so.
 
 ## In a profile
@@ -119,7 +125,8 @@ Each cell resolved under a configured `gateway` or a pin records its gateway as 
 | An OpenCode `vercel/…` id | `opencode(): a vercel/… id would bypass the config's gateway list: write the model as 'anthropic/claude-haiku-4.5' and add vercel() to gateway (got "vercel/anthropic/claude-haiku-4.5")` |
 | A pin to a gateway that can't serve it | `evals/a.eval.ts › e on cursor:composer-2.5: it pins gateway 'vercel', which can't serve it (Cursor's agent only calls Cursor's own API). A pin never falls back; …` |
 | A pin to a gateway that isn't listed | `evals/a.eval.ts › e on codex:m: it pins gateway 'vercel', which isn't in the gateway list (direct). Add vercel() to gateway, or pin one that's there.` |
-| A judge model nothing in the list serves | `the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.` |
+| A language-model judge on `vercel()` | `the judge model "anthropic/claude-sonnet-5" is a language model, and Vercel AI Gateway judges only with decision models. Use a decision model on vercel(), such as 'typesafe-ai/jev-1.14.0' or 'openai/gpt-6-luna-decisions', or pin this one to direct() with judge: { gateway: 'direct' } to call it on ANTHROPIC_API_KEY.`, on each judge call |
+| A judge model nothing in the list serves | `the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. There a judge must be a decision model, such as 'typesafe-ai/jev-1.14.0'.` |
 | An expired Vercel project token | `VERCEL_OIDC_TOKEN expired at 2026-01-01T00:00:00.000Z, so vercel() can't authenticate. Run vercel env pull for a new one, or set AI_GATEWAY_API_KEY.` |
 
 ## Related

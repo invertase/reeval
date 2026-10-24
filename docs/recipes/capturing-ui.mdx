@@ -81,7 +81,7 @@ The top-level `wait` runs once, before the first model shot, and a `{ wait }` be
 
 `viewport: 'full-page'` keeps the default window and saves a tall PNG. Anything the model types is plain text, so a typed secret can appear in the PNG and the debug data.
 
-`capture.model` picks the vision model, and cascades like `question`. Without it, reeval uses the analysis model when that model accepts images.
+`capture.model` picks the vision model, and cascades like `question`. Without it, reeval uses `analysis.model`, else the attempt's judge model (a profile's, group's or eval's over the config's), whichever is first a language model. A Gemini model answers clicks in 0–1000 coordinates across the screenshot, so reeval prompts it in that scale and converts its points to CSS pixels.
 
 ## After load
 

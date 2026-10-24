@@ -2,7 +2,7 @@
 // judge's, analysis's, a capture's): its pin, or the first entry that can serve the model.
 import { GATEWAY_NAMES } from '../contract/gateway.ts'
 import { UsageError } from '../errors.ts'
-import { DIRECT_PROVIDERS } from '../judge/index.ts'
+import { DIRECT_PROVIDERS, RECOMMENDED_JUDGE_MODEL } from '../judge/index.ts'
 import type {
   FakeAnalysisModel,
   GatewayDescriptor,
@@ -72,8 +72,13 @@ export function resolveModelGateway(
     skipped.push(`${kind}: ${refused}`)
   }
   const other = GATEWAY_NAMES.find((n) => !listed.includes(n) && !MODEL_GATEWAYS[n](model))
+  // Vercel AI Gateway refuses a language model as a judge, which only a call can tell.
+  const judge =
+    other === 'vercel' && what.includes('judge')
+      ? ` There a judge must be a decision model, such as '${RECOMMENDED_JUDGE_MODEL}'.`
+      : ''
   throw new UsageError(
-    `${on}: no gateway in the list can serve it (${skipped.join('; ')}).${other ? ` Add ${gatewayHelper(other)} to gateway.` : ''}`,
+    `${on}: no gateway in the list can serve it (${skipped.join('; ')}).${other ? ` Add ${gatewayHelper(other)} to gateway.${judge}` : ''}`,
   )
 }
 

@@ -139,7 +139,7 @@ describe('the models reeval calls itself', () => {
     assert.throws(() => route('mistral/large', undefined, scope('direct')), {
       name: 'UsageError',
       message:
-        'judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.',
+        'judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. There a judge must be a decision model, such as \'typesafe-ai/jev-1.14.0\'.',
     })
   })
 

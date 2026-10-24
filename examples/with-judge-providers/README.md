@@ -38,7 +38,7 @@ one profile you need.
 |---|---|
 | `anthropic/` | `ANTHROPIC_API_KEY` |
 | `google/` | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| `openai/` | `OPENAI_API_KEY` |
+| `openai/` | `OPENAI_API_KEY` (its decision model: `openai/gpt-6-luna`) |
 | `typesafe-ai/` | `TYPESAFE_AI_API_KEY` (Jev: see [`with-jev`](../with-jev)) |
 
 | File | What it is |

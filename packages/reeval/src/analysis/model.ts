@@ -13,7 +13,7 @@ import {
   modelKeyOptions,
   unusedGatewayKey,
 } from '../judge/index.ts'
-import type { FakeAnalysisModel, GatewayName, ResolvedConfig } from '../types.ts'
+import type { FakeAnalysisModel, GatewayName, JudgeModel, ResolvedConfig } from '../types.ts'
 import type { Digest } from './digest.ts'
 import { type AnalysisOutput, analysisSchema, SYSTEM_PROMPT } from './schema.ts'
 
@@ -28,52 +28,64 @@ export const isFake = (m: unknown): m is FakeAnalysisModel =>
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-/** `reeval analyze`'s model: `analysis.model`, else the judge's when it's a language model. */
-function defaultModel(config: ResolvedConfig): string | FakeAnalysisModel | undefined {
+/**
+ * The model reeval falls back to for analysis and compare questions: `analysis.model`, else
+ * `judge` when it's a language model. `judge` is the run's judge model (a profile's over the
+ * config's); the config's when none is given.
+ */
+function fallbackModel(
+  config: ResolvedConfig,
+  judge: JudgeModel | undefined = config.judge.model,
+): string | FakeAnalysisModel | undefined {
   const model = analysisModelOf(config)
   if (model !== undefined) return model
-  const judge = config.judge.model
   return typeof judge === 'string' && !isEvaluationModel(judge) ? judge : undefined
 }
 
 /** ` (the judge, typesafe-ai/jev-1.14.0, is an evaluation model: it scores yes/no questions and can't <task>)`, when it is one. */
-function judgeAside(config: ResolvedConfig, task: string): string {
-  const judge = config.judge.model
+function judgeAside(judge: JudgeModel | undefined, task: string): string {
   if (typeof judge !== 'string' && !isFakeJudge(judge)) return ''
   return ` (the judge, ${isFakeJudge(judge) ? 'a fake judge' : judge}, is an evaluation model: it scores yes/no questions and can't ${task})`
 }
 
 /** Which model analyses: `analysis.model`, else the judge's when it's a language model. */
 export function analysisModelName(config: ResolvedConfig): string | FakeAnalysisModel {
-  const model = defaultModel(config)
+  const model = fallbackModel(config)
   if (model !== undefined) return model
   throw new UsageError(
-    `reeval analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}, or run reeval analyze --context to hand the digest to your own coding agent.`,
+    `reeval analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config.judge.model, 'write an analysis')}, or run reeval analyze --context to hand the digest to your own coding agent.`,
   )
 }
 
-/** The plan's name for the model a compare question without its own is answered by; null when none. */
-export function questionModelLabel(config: ResolvedConfig): string | null {
-  const model = defaultModel(config)
+/**
+ * The plan's name for the model a compare question without its own is answered by; null when
+ * none. `judge` is the run's judge model.
+ */
+export function questionModelLabel(
+  config: ResolvedConfig,
+  judge: JudgeModel | undefined = config.judge.model,
+): string | null {
+  const model = fallbackModel(config, judge)
   if (model === undefined) return null
   return isFake(model) ? 'fake' : model
 }
 
 /**
- * The model that answers a compare question: its own, else the analysis model. Throws a
- * UsageError (exit 2) when that's missing or an evaluation model.
+ * The model that answers a compare question: its own, else the fallback, with `judge` the run's
+ * judge model. Throws a UsageError (exit 2) when that's missing or an evaluation model.
  */
 export function questionModel(
   config: ResolvedConfig,
   question: { question: string; model?: string },
   where: string,
+  judge: JudgeModel | undefined = config.judge.model,
 ): string | FakeAnalysisModel {
   if (question.model !== undefined) return question.model
-  const model = defaultModel(config)
+  const model = fallbackModel(config, judge)
   const fix = `give the question its own, { question: '…', model: 'google/gemini-3.8-flash' }, or set question: { model } on its group or eval`
   if (model === undefined) {
     throw new UsageError(
-      `compare.questions "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'pick between two attempts')}, or ${fix}.`,
+      `compare.questions "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(judge, 'pick between two attempts')}, or ${fix}.`,
     )
   }
   if (typeof model === 'string' && isEvaluationModel(model)) {

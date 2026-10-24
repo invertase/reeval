@@ -8,7 +8,7 @@ import {
   resolveWait,
 } from '../src/capture/index.ts'
 import { stubPng } from '../src/capture/stub.ts'
-import { runJourney } from '../src/capture/use.ts'
+import { normalisesPoints, runJourney, scalePoints } from '../src/capture/use.ts'
 import type { CaptureUseAction } from '../src/types.ts'
 
 const window = { width: 1280, height: 720 }
@@ -71,6 +71,101 @@ test('dispatchInput sends CDP Input events and never Runtime.evaluate', async ()
   sent.length = 0
   await dispatchInput(cdp, { type: 'type', text: 'hi' }, window)
   assert.deepEqual(sent, [{ method: 'Input.insertText', params: { text: 'hi' } }])
+})
+
+/** A language model that calls `click` at (x, y), then `done`, and records its system prompts. */
+function clickingModel(x: number, y: number, systems: string[]) {
+  let calls = 0
+  const answer = (toolName: string, input: object) => ({
+    content: [
+      { type: 'tool-call', toolCallId: `c${calls}`, toolName, input: JSON.stringify(input) },
+    ],
+    finishReason: { unified: 'tool-calls', raw: 'tool_use' },
+    usage: {
+      inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 1, text: 1, reasoning: 0 },
+    },
+    warnings: [],
+  })
+  return {
+    specificationVersion: 'v4',
+    provider: 'stub',
+    modelId: 'stub',
+    supportedUrls: {},
+    doGenerate: async (options: { prompt: Array<{ role: string; content: unknown }> }) => {
+      const system = options.prompt.find((m) => m.role === 'system')
+      systems.push(String(system?.content))
+      return calls++ === 0 ? answer('click', { x, y }) : answer('done', {})
+    },
+    doStream: async () => {
+      throw new Error('the stub model does not stream')
+    },
+  }
+}
+
+async function journeyClick(model: string, x: number, y: number) {
+  const clicks: CaptureUseAction[] = []
+  const systems: string[] = []
+  // The journey reads only the PNG's IHDR size; the stub model never decodes it.
+  const shot = stubPng('x', 1, '/', window)
+  shot.writeUInt32BE(window.width, 16)
+  shot.writeUInt32BE(window.height, 20)
+  const session = {
+    window,
+    cdp: { on() {}, send: async () => ({}) },
+    async navigate() {
+      return { loaderId: 'n' }
+    },
+    async wait() {},
+    async screenshot() {
+      return shot
+    },
+    async dispatch(action: CaptureUseAction) {
+      clicks.push(action)
+    },
+  }
+  await runJourney(session, 'http://127.0.0.1/', {
+    wait: { ms: 0 },
+    timeoutMs: 10_000,
+    fullPage: false,
+    instructions: ['Click "Show price"'],
+    use: { model },
+    remaining: () => 10_000,
+    loadModel: async () => clickingModel(x, y, systems),
+  })
+  return { clicks, systems }
+}
+
+test("runJourney scales a Gemini model's 0-1000 point to the screenshot's CSS pixels", async () => {
+  // gemini-3.8-flash's answer for a button centred at (1000, 550) on a 1280x720 page.
+  const gemini = await journeyClick('google/gemini-3.8-flash', 781, 764)
+  assert.deepEqual(gemini.clicks, [{ type: 'click', x: 1000, y: 550 }])
+  assert.match(gemini.systems[0] ?? '', /normalised to 0-1000/)
+  const claude = await journeyClick('anthropic/claude-sonnet-5', 1000, 550)
+  assert.deepEqual(claude.clicks, [{ type: 'click', x: 1000, y: 550 }])
+  assert.match(claude.systems[0] ?? '', /CSS pixels/)
+})
+
+test('scalePoints scales every point of an action and only Gemini ids normalise', () => {
+  const page = { width: 1280, height: 3000 }
+  assert.deepEqual(scalePoints({ type: 'drag', x: 0, y: 500, toX: 1000, toY: 1000 }, page), {
+    type: 'drag',
+    x: 0,
+    y: 1500,
+    toX: 1280,
+    toY: 3000,
+  })
+  assert.deepEqual(scalePoints({ type: 'scroll', x: 500, y: 500, dy: 300 }, page), {
+    type: 'scroll',
+    x: 640,
+    y: 1500,
+    dy: 300,
+  })
+  assert.deepEqual(scalePoints({ type: 'type', text: 'hi' }, page), { type: 'type', text: 'hi' })
+  assert.equal(normalisesPoints('google/gemini-3.8-flash'), true)
+  assert.equal(normalisesPoints('vertex/gemini-3.8-pro'), true)
+  assert.equal(normalisesPoints('anthropic/claude-sonnet-5'), false)
+  assert.equal(normalisesPoints('openai/gpt-5.5'), false)
 })
 
 test('runJourney times out before the saved screenshot', async () => {

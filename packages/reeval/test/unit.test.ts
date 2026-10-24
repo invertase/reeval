@@ -1092,6 +1092,64 @@ test("the judge's state.diff patterns filter its diff and files, the last match 
   assert.ok(inFull.files.includes('added src/app.ts'), 'still listed as changed')
 })
 
+test('a judge model its route answers only with a decision model fails in a sentence of its own', async () => {
+  const realFetch = globalThis.fetch
+  const keys = { OPENAI_API_KEY: 'sk-test', AI_GATEWAY_API_KEY: 'vck-test' }
+  const realKeys = Object.fromEntries(Object.keys(keys).map((k) => [k, process.env[k]]))
+  const refused = (status: number, message: string, code: string | null) =>
+    Response.json(
+      { error: { message, type: 'invalid_request_error', param: null, code } },
+      { status },
+    )
+  globalThis.fetch = async (input) =>
+    String(input).startsWith('https://api.openai.com/')
+      ? refused(
+          404,
+          'The model `gpt-5.5` does not exist or you do not have access to it.',
+          'model_not_found',
+        )
+      : refused(
+          400,
+          "Model 'anthropic/claude-sonnet-5' is a language model, not a decision model. Use the language generation API instead.",
+          null,
+        )
+  Object.assign(process.env, keys)
+  const score = (model: string, gateway: 'direct' | 'vercel') =>
+    scoreWithModel(
+      model,
+      'q?',
+      [{ type: 'text', text: 'x' }],
+      undefined,
+      new AbortController().signal,
+      gateway,
+    )
+  try {
+    await assert.rejects(score('openai/gpt-5.5', 'direct'), {
+      message:
+        "the judge model \"openai/gpt-5.5\" isn't a decision model: reeval's openai/* judges call OpenAI's Decisions API, which answers with 'gpt-6-luna' (OpenAI said: The model `gpt-5.5` does not exist or you do not have access to it.). Use 'openai/gpt-6-luna'.",
+    })
+    // gpt-6-luna is the decision model, so a refusal of it is the key's, in OpenAI's own words.
+    await assert.rejects(score('openai/gpt-6-luna', 'direct'), {
+      message: 'The model `gpt-5.5` does not exist or you do not have access to it.',
+    })
+    await assert.rejects(score('anthropic/claude-sonnet-5', 'vercel'), {
+      message:
+        "the judge model \"anthropic/claude-sonnet-5\" is a language model, and Vercel AI Gateway judges only with decision models. Use a decision model on vercel(), such as 'typesafe-ai/jev-1.14.0' or 'openai/gpt-6-luna-decisions', or pin this one to direct() with judge: { gateway: 'direct' } to call it on ANTHROPIC_API_KEY.",
+    })
+    await assert.rejects(score('mistral/large', 'vercel'), (error: Error) => {
+      assert.match(error.message, /'openai\/gpt-6-luna-decisions'\.$/)
+      assert.equal(isTransient(error), false, 'never retried')
+      return true
+    })
+  } finally {
+    globalThis.fetch = realFetch
+    for (const [k, v] of Object.entries(realKeys)) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+  }
+})
+
 test('TypeSafe Jev takes c.judge artifacts as a multipart image upload', async () => {
   const png = Buffer.from([137, 80, 78, 71])
   const resolved = resolveJudgeArtifacts(['form'], new Map([['form', png]]))

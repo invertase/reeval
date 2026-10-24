@@ -47,27 +47,34 @@ export type CaptureArtifact = {
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-function defaultCaptureModel(): string | undefined {
+const languageModel = (model: unknown) =>
+  typeof model === 'string' && !isEvaluationModel(model) ? model : undefined
+
+/**
+ * `analysis.model`, else the attempt's judge (a profile's, group's or eval's over the config's),
+ * whichever is first a language model.
+ */
+function defaultCaptureModel(a: Attempt): string | undefined {
   try {
-    const { config } = getRunContext()
-    const analysis = config.analysis.model
-    if (typeof analysis === 'string' && !isEvaluationModel(analysis)) return analysis
-    const judge = config.judge.model
-    if (typeof judge === 'string' && !isEvaluationModel(judge)) return judge
+    return languageModel(getRunContext().config.analysis.model) ?? languageModel(a.spec.judge.model)
   } catch {
     return undefined
   }
 }
 
-function resolveUse(resolved: ResolvedCaptureCall, fakeSandbox: boolean): CaptureUse | undefined {
+function resolveUse(
+  a: Attempt,
+  resolved: ResolvedCaptureCall,
+  fakeSandbox: boolean,
+): CaptureUse | undefined {
   if (resolved.fake) return { fake: resolved.fake }
   if (resolved.model) return { model: resolved.model }
   if (!resolved.instructions.length) return undefined
-  const fallback = defaultCaptureModel()
+  const fallback = defaultCaptureModel(a)
   if (fallback) return { model: fallback }
   if (fakeSandbox) return undefined
   throw new Error(
-    'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or analysis.model to a language model that accepts images. Tests pass fakeInstructions from reeval/testing.',
+    'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or set analysis.model or the judge model to a language model that accepts images. Tests pass fakeInstructions from reeval/testing.',
   )
 }
 
@@ -180,7 +187,7 @@ export async function capturePage(
     throw new Error(`nothing listening on port ${resolved.port}`)
   }
   const fake = a.spec.sandbox.kind === 'fake'
-  const use = resolveUse(resolved, fake)
+  const use = resolveUse(a, resolved, fake)
   a.captureNames.add(resolved.name)
   const started = Date.now()
   const remaining = () => Math.max(0, resolved.timeoutMs - (Date.now() - started))

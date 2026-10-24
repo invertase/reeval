@@ -110,7 +110,7 @@ compare: {
   for each side.
   A vote may carry a short `reason` (capped); do not gate on its wording. Their
   model is the entry's `model`, else the cascaded `question.model`, else
-  `analysis.model`, else the judge's when
+  `analysis.model`, else the run's judge (a profile's included) when
   it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2
   at plan time while `--dry-run` still lists them. A profile that leaves only
   the baseline drops them (`questions off (profile …)`). Keep deterministic
