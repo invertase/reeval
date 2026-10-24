@@ -120,7 +120,9 @@ test('trackNetwork quiet waits out a request that starts inside the quiet window
   await sleep(30)
   cdp.emit('Network.loadingFinished', { requestId: 'late' })
   await quiet
-  assert.ok(Date.now() - started >= 190, 'the quiet window restarts when the request ends')
+  // Restarted at the request's end it settles at 190ms, and at 160ms if only its start restarts
+  // the window; timers can fire a millisecond early by Date.now.
+  assert.ok(Date.now() - started >= 180, 'the quiet window restarts when the request ends')
 })
 
 test('trackNetwork quiet holds while more than two requests are in flight', async () => {
