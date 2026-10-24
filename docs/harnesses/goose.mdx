@@ -3,7 +3,7 @@ title: "Goose harness"
 description: "Look up options, the key, and recorded events for the Goose harness."
 ---
 
-## goose
+## `goose()`
 
 `goose()` is the Goose harness factory. For more information about supported sandboxes, see [Sandboxes](/sandboxes).
 
@@ -47,7 +47,7 @@ For more information about choosing a harness, see [Choose a harness](/harnesses
 
 For more information about model ids, effort values, and served models, see [Models and providers for each harness](/harnesses/models).
 
-## Credential
+## `GOOGLE_GENERATIVE_AI_API_KEY`
 
 `goose()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the host. Goose reads that value as `GOOGLE_API_KEY`. The gateway brokers the key in the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` and `GET /v1beta/models` at `generativelanguage.googleapis.com`.
 
@@ -55,21 +55,25 @@ A missing `GOOGLE_GENERATIVE_AI_API_KEY` stops the run with exit code 2 before a
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
+For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/env-vars#googlegenerativeaiapikey).
 
 Goose requests `models.dev` in every session to refresh its model catalogue, and no setting turns that request off. A restricted egress policy refuses `models.dev` and records it on `egress.expectedBlocked`.
 
 For more information about blocked requests, see [Read blocked requests](/environments/egress#read-blocked-requests).
 
-## Rules and skills
+## `rules`
 
-The Goose harness reads rules from the `AGENTS.md` file in the workspace. The Goose harness reads skills from the `.goose/skills` directory, the `.agents/skills` directory, and the `.claude/skills` directory in the workspace. Home skills are in the `.config/goose/skills` directory under the private home directory `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`.
+The Goose harness reads rules from the `AGENTS.md` file in the workspace.
 
 For more information about writing rules, see [Add project rules](/environments/rules).
 
+## `skills`
+
+The Goose harness reads skills from the `.goose/skills` directory, the `.agents/skills` directory, and the `.claude/skills` directory in the workspace. Home skills are in the `.config/goose/skills` directory under the private home directory `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`.
+
 For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-## MCP servers
+## `mcp`
 
 The Goose harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server at plan time with exit code 2.
 
@@ -79,16 +83,26 @@ Goose keys each extension by dropping whitespace, replacing every character outs
 
 For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-## Recorded usage and model
+## `usage`
 
 Goose leaves each turn's `usage` null. The adapter drops the session token count, which covers the last model call and would undercount the turn.
 
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+
+## `servedModels`
+
 Each turn's `model` is the model id from the last brokered `POST /v1beta/models/<model>:streamGenerateContent` request in the turn, or null when that turn made none. The attempt's `servedModels` lists every such id. The session stream names no model.
 
-For more information about the record fields, see [Run record reference](/reference/record).
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
 
-## Web events
+## `web-search`
 
-The Goose harness records neither `web-search` nor `web-fetch` events. Each turn's `unreported` list is empty.
+The Goose harness records no `web-search` events. Each turn's `unreported` list is empty.
 
-For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
+For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `web-fetch`
+
+The Goose harness records no `web-fetch` events. Each turn's `unreported` list is empty.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

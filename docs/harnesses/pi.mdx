@@ -3,7 +3,7 @@ title: "pi harness"
 description: "Look up options, the key, and recorded events for the pi harness."
 ---
 
-## pi
+## `pi()`
 
 `pi()` is one harness factory. It runs pi in the sandbox on a Gemini API key, as one `pi --mode json` process per turn that resumes the session's conversation.
 
@@ -48,25 +48,29 @@ For more information about choosing a harness, see [Choose a harness](/harnesses
 
 For more information about model ids and effort values, see [Models and providers for each harness](/harnesses/models).
 
-## Credential
+## `GOOGLE_GENERATIVE_AI_API_KEY`
 
 `pi()` reads `GOOGLE_GENERATIVE_AI_API_KEY` from the host. In the sandbox, pi sees a placeholder as `GEMINI_API_KEY`, and reeval swaps the real key into the `x-goog-api-key` header on `POST /v1beta/models/<model>:streamGenerateContent` at `generativelanguage.googleapis.com`. reeval refuses the key anywhere else, and that host is the harness's automatic egress host.
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
+For more information about the variable, see [`GOOGLE_GENERATIVE_AI_API_KEY`](/reference/env-vars#googlegenerativeaiapikey).
 
 For more information about the automatic hosts, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
 
-## Rules and skills
+## `rules`
 
-The pi harness reads rules from the `AGENTS.md` file in the workspace. The pi harness reads skills from the `.pi/skills` directory in the workspace, which pi loads because the harness trusts the project, and from the `~/.pi/agent/skills` directory in the home directory.
+The pi harness reads rules from the `AGENTS.md` file in the workspace.
 
 For more information about writing rules, see [Add project rules](/environments/rules).
 
+## `skills`
+
+The pi harness reads skills from the `.pi/skills` directory in the workspace, which pi loads because the harness trusts the project, and from the `~/.pi/agent/skills` directory in the home directory.
+
 For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-## MCP servers
+## `mcp`
 
 The pi harness accepts MCP servers on `stdio` and `http`. reeval refuses an `sse` server, or a server name with characters other than letters, digits, `_`, and `-`, at plan time with exit code 2.
 
@@ -74,16 +78,26 @@ The servers go in pi's `~/.pi/agent/mcp.json` file with direct exposure, so the 
 
 For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-## Recorded usage and model
+## `usage`
 
 The pi harness records tokens for each model call, reasoning tokens included, and each turn's `usage` is their sum. `usage` is null when pi reports none.
 
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+
+## `servedModels`
+
 Each turn's `model` is the model pi names on its first assistant message. The attempt's `servedModels` comes from the brokered request URL, without an effort suffix.
 
-For more information about the record fields, see [Run record reference](/reference/record).
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
 
-## Web events
+## `web-search`
 
-The pi harness records no `web-search` or `web-fetch` events. pi's built-in tools are `bash`, `read`, `write`, and `edit`, so `toHaveSearched` and `toHaveFetched` fail on a pi turn.
+The pi harness records no `web-search` events. pi's built-in tools are `bash`, `read`, `write`, and `edit`, so `toHaveSearched()` fails on a pi turn.
 
-For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
+For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
+
+## `web-fetch`
+
+The pi harness records no `web-fetch` events, so `toHaveFetched()` fails on a pi turn.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

@@ -3,7 +3,7 @@ title: "Codex harness"
 description: "Look up options, the key, and recorded events for the Codex harness."
 ---
 
-## codex
+## `codex()`
 
 `codex()` is one harness factory. It runs OpenAI's Codex CLI as one `codex exec --json` process for each turn, and a later turn resumes the same thread. The turn bypasses approval prompts.
 
@@ -51,7 +51,7 @@ For more information about choosing a harness, see [Choose a harness](/harnesses
 
 For more information about model ids and effort values, see [Find harness model settings](/harnesses/models).
 
-## Credential
+## `OPENAI_API_KEY`
 
 `codex()` reads `OPENAI_API_KEY` from the host. reeval brokers that key on `POST https://api.openai.com/v1/responses` only, over HTTP.
 
@@ -59,36 +59,46 @@ A missing key, or a key with whitespace or a line break, stops the run with exit
 
 For more information about keeping API keys on the host, see [Keep API keys on the host](/environments/secrets#keep-api-keys-on-the-host).
 
-For more information about provider keys, see [Provider keys](/reference/env-vars#provider-keys).
+For more information about the variable, see [`OPENAI_API_KEY`](/reference/env-vars#openaiapikey).
 
-## Rules and skills
+## `rules`
 
 The Codex harness reads rules from the `AGENTS.md` file in the workspace. Codex reads the `~/.codex/AGENTS.md` file before the workspace file.
 
-The Codex harness reads skills from the `.agents/skills` directory in the workspace, from the working directory up to the repo root, and from the `~/.agents/skills` directory in the home directory.
-
 For more information about writing rules, see [Add project rules](/environments/rules).
+
+## `skills`
+
+The Codex harness reads skills from the `.agents/skills` directory in the workspace, from the working directory up to the repo root, and from the `~/.agents/skills` directory in the home directory.
 
 For more information about placing skills, see [Give the agent skills](/environments/skills).
 
-## MCP servers
+## `mcp`
 
 The Codex harness accepts MCP servers on `stdio` and `http`. An `sse` server fails at plan time with exit code 2. reeval writes a `stdio` server as `command`, `args`, and `env`, and an `http` server as `url` and `http_headers`, under `[mcp_servers]` in the `~/.codex/config.toml` file. A call is named `mcp__<server>__<tool>`.
 
 For more information about placing MCP servers, see [Connect MCP servers](/environments/mcp).
 
-## Recorded usage and model
+## `usage`
 
 The Codex harness records one `usage` for the turn. `input` is uncached input, and `cacheRead` and `cacheWrite` hold cached input. `reasoning` is part of `output`. `usage` is null when Codex reports no tokens.
 
+For more information about the token fields, see [`TokenUsage`](/reference/record#tokenusage).
+
+## `servedModels`
+
 The egress gateway reads the served model and effort from the response body. The turn's `model` and the attempt's `servedModels` hold `<model>` or `<model>[effort=<value>]`. `servedEffort` is the effort in that label. `effort` is the factory value, or null when unset.
 
-For more information about the record fields, see [Run record reference](/reference/record).
+For more information about the attempt fields, see [`AttemptRecord`](/reference/record#attemptrecord).
 
-## Web events
+## `web-search`
 
-The Codex harness records `web-search` and `web-fetch` events. A search stores its text on `query`. An `open_page` or `find_in_page` action with a URL is `web-fetch`. Searches and page opens run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
+The Codex harness records `web-search` events. A search stores its text on `query`. Searches run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
 
-For more information about a restricted egress policy, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts).
+For more information about a restricted egress policy, see [Block non-automatic hosts](/environments/egress#block-non-automatic-hosts). For more information about the matcher, see [`toHaveSearched()`](/reference/matchers#tohavesearched).
 
-For more information about the web matchers, see [toHaveSearched](/reference/matchers#tohavesearched).
+## `web-fetch`
+
+The Codex harness records `web-fetch` events. An `open_page` or `find_in_page` action with a URL is `web-fetch`. Page opens run on OpenAI's side, and the transcript keeps each event under a restricted egress policy.
+
+For more information about the matcher, see [`toHaveFetched()`](/reference/matchers#tohavefetched).

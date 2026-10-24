@@ -3,7 +3,7 @@ title: Environment helpers reference
 description: Look up environment fields and helper signatures.
 ---
 
-## Environment fields
+## `EnvironmentSpec`
 
 `defineEnvironment()` and `extend()` take a spec or a callback with `git`, `file`, `directory`, `skill`, `mcp`, and `secret`. Relative host paths passed to those helpers resolve against the calling file. The return is synchronous, and a `Promise` stops the run with exit code 2.
 

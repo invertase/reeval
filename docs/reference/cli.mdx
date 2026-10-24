@@ -5,7 +5,7 @@ description: "Look up every command, flag, and exit code."
 
 The `reeval` command and the `re` command run the same CLI. `-h`, `--help`, and `--version` exit 0.
 
-## Global flags
+## `reeval`
 
 The end of `reeval --help` lists run arguments, the `--config` flag, and the exit code summary.
 
@@ -23,7 +23,7 @@ Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interru
 
 `latest` is the most recent run, and `latest~N` counts N runs back. A run id prefix must match one run. A Git SHA prefix is 4 to 40 hexadecimal characters, matched without regard to case, and names the newest run at that commit. Resolution tries the `latest` forms, then a run id or its prefix, then a Git SHA prefix.
 
-For more information about loading the config file, see [Config discovery](/reference/config#config-discovery).
+For more information about loading the config file, see [`--config`](/reference/config#--config).
 
 For more information about environment variables, see [Environment variables](/reference/env-vars).
 
