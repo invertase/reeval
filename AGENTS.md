@@ -160,10 +160,11 @@ directory that must be real (Docker's build context, jiti's Babel) to
 Run it after changing how reeval finds its files, starts processes or loads TypeScript.
 `--target bun-<os>-<arch>` (with `--outfile`) cross-compiles another platform's binary without
 checking it. `binary.yml` (manual dispatch, `workflow_call`, and PRs that touch the compile path)
-cross-compiles every target on one Linux runner with Bun pinned, smoke-tests each on its own OS
+cross-compiles every target on one Linux runner with Bun pinned (plus the `-baseline` x64 builds,
+which the install scripts pick on a CPU without AVX2), smoke-tests each on its own OS
 with `scripts/binary-smoke.mjs` (nothing installed; Docker on linux-x64, Alpine for musl), installs
 it from those files with `scripts/install.sh` or `scripts/install.ps1` (Windows PowerShell and
-pwsh), and uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact. `release.yml`
+pwsh), which check the binary starts before installing it, and uploads `reeval-<version>-<os>-<arch>` plus `SHA256SUMS` as one artifact. `release.yml`
 calls it for each npm release and uploads that artifact to the GitHub release, which is where the
 install scripts download from (docs: `docs/guide/binary.mdx`).
 

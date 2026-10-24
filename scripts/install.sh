@@ -42,6 +42,10 @@ main() {
   if [ "$os" = linux ] && { [ -f /etc/alpine-release ] || ls /lib/ld-musl-* >/dev/null 2>&1; }; then
     target=$target-musl
   fi
+  # The default x64 builds need AVX2; the baseline ones run on any x64 CPU.
+  if [ "$os" = linux ] && [ "$arch" = x64 ] && ! grep -qw avx2 /proc/cpuinfo 2>/dev/null; then
+    target=$target-baseline
+  fi
 
   nl='
 '
@@ -91,7 +95,8 @@ main() {
   dir=${REEVAL_INSTALL_DIR:-$HOME/.local/bin}
 
   tmp=$(mktemp -d)
-  trap 'rm -rf "$tmp"' EXIT
+  stage=
+  trap 'rm -rf "$tmp"; [ -z "$stage" ] || rm -f "$stage"' EXIT
   echo "reeval install: $name"
   curl -fsL -o "$tmp/SHA256SUMS" "$base/SHA256SUMS" ||
     fail "reeval $version has no binaries ($base/SHA256SUMS)"
@@ -106,10 +111,17 @@ main() {
   fi
   [ "$actual" = "$expected" ] || fail "$name doesn't match SHA256SUMS (got $actual, expected $expected)"
 
-  mkdir -p "$dir"
-  chmod +x "$tmp/$name"
-  mv "$tmp/$name" "$dir/reeval"
-  echo "reeval install: reeval $("$dir/reeval" --version) at $dir/reeval"
+  # Started from the install folder, not $tmp, which can be mounted noexec; the rename into place
+  # is then atomic too.
+  { mkdir -p "$dir" && stage=$(mktemp "$dir/.reeval.XXXXXX"); } 2>/dev/null ||
+    fail "can't write to $dir; set REEVAL_INSTALL_DIR to a folder you can write to, or run with sudo"
+  cat "$tmp/$name" > "$stage"
+  chmod +x "$stage"
+  installed=$("$stage" --version 2>"$tmp/stderr") ||
+    fail "$name doesn't start on this machine (exit $?), so nothing was installed$(sed -n '1s/^/: /p' "$tmp/stderr")"
+  mv "$stage" "$dir/reeval"
+  stage=
+  echo "reeval install: reeval $installed at $dir/reeval"
 
   case ":$PATH:" in
     *":$dir:"*) ;;
