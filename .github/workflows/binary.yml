@@ -24,6 +24,9 @@ on:
       artifact:
         description: The artifact holding the binaries and SHA256SUMS
         value: ${{ jobs.compile.outputs.artifact }}
+      python:
+        description: Whether it built reeval-python's sdist and pure wheel (`reeval-python-dist`); a tag from before its `reeval` command has none
+        value: ${{ jobs.compile.outputs.python }}
   pull_request:
     paths:
       - .github/workflows/binary.yml
@@ -66,11 +69,18 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       artifact: reeval-${{ steps.version.outputs.version }}-binaries
+      python: ${{ steps.python.outputs.built }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ inputs.ref }}
+      # This run's scripts, which a republished tag may predate.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: current
+          sparse-checkout: scripts
       - uses: ./.github/actions/setup
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -110,30 +120,44 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       # reeval-python as release.yml publishes it: the sdist and the pure wheel, both recording the
-      # binaries' hashes, at the binaries' version (python-wheels.py refuses any other; a release
-      # commit already has it). The platform wheels, each carrying its target's binary, aren't
-      # published (about 250 MB a release on PyPI); the smoke installs them.
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      # binaries' hashes, at the binaries' version. A release's commit must already have it
+      # (python-wheels.py check refuses any other); a PR run sets it. The platform wheels, each
+      # carrying its target's binary, aren't published (about 250 MB a release on PyPI); the smoke
+      # installs them. A tag from before reeval-python's `reeval` command builds none.
+      - id: python
+        run: |
+          if grep -q '^reeval = "reeval_python.cli:main"' packages/reeval-python/pyproject.toml; then
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::This commit's reeval-python has no reeval command, so it isn't built."
+            echo "built=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.python.outputs.built == 'true'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: false
       - name: reeval-python sdist and wheels
+        if: steps.python.outputs.built == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          WHEELS: uv run --no-project python scripts/python-wheels.py
+          RELEASE: ${{ inputs.ref }}
+          WHEELS: uv run --no-project python current/scripts/python-wheels.py
         run: |
-          (cd packages/reeval-python && uv version --frozen "$VERSION")
+          if [ -z "$RELEASE" ]; then (cd packages/reeval-python && uv version --frozen "$VERSION"); fi
           $WHEELS manifest out "$VERSION" packages/reeval-python/src/reeval_python
           uv build --out-dir python-dist packages/reeval-python
           $WHEELS check python-dist "$VERSION"
           $WHEELS platform python-dist/*-any.whl out platform-wheels
           $WHEELS check --platform platform-wheels "$VERSION"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: steps.python.outputs.built == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reeval-python-dist
           path: python-dist/
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: steps.python.outputs.built == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: reeval-python-platform-wheels
           path: platform-wheels/
@@ -200,36 +224,39 @@ jobs:
           docker run --rm -v "$PWD:/repo" -w /repo -e BINARY node:22-alpine \
             sh -c 'apk add -q git && node scripts/binary-smoke.mjs "$BINARY"'
       # reeval-python from this commit: the sdist and pure wheel PyPI gets, and this target's
-      # platform wheel.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      # platform wheel, driven by this run's scripts. The baseline targets have no platform wheel.
+      - if: needs.compile.outputs.python == 'true' && matrix.wheel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: reeval-python-dist
           path: wheels
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - if: needs.compile.outputs.python == 'true' && matrix.wheel
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: reeval-python-platform-wheels
           path: platform-wheels
-      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - if: needs.compile.outputs.python == 'true' && matrix.wheel && !matrix.alpine
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: false
       - name: Python evals
-        if: ${{ !matrix.alpine }}
+        if: needs.compile.outputs.python == 'true' && matrix.wheel && !matrix.alpine
         shell: bash
         env:
           BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}${{ matrix.ext }}
           WHEEL: ${{ matrix.wheel }}
         run: |
-          node scripts/binary-python-smoke.mjs "$BINARY" --wheel "$(ls wheels/*-any.whl)" \
+          node current/scripts/binary-python-smoke.mjs "$BINARY" --wheel "$(ls wheels/*-any.whl)" \
             --sdist "$(ls wheels/*.tar.gz)" --platform-wheel "$(ls platform-wheels/*"$WHEEL"*.whl)"
       # musl: uv from Alpine's packages, and Python from uv's musl builds.
       - name: Python evals (Alpine)
-        if: ${{ matrix.alpine }}
+        if: needs.compile.outputs.python == 'true' && matrix.wheel && matrix.alpine
         env:
           BINARY: out/reeval-${{ needs.compile.outputs.version }}-${{ matrix.target }}
           WHEEL: ${{ matrix.wheel }}
         run: |
           docker run --rm -v "$PWD:/repo" -w /repo -e BINARY -e WHEEL node:22-alpine sh -c \
-            'apk add -q git uv && node scripts/binary-python-smoke.mjs "$BINARY" --wheel wheels/*-any.whl \
+            'apk add -q git uv && node current/scripts/binary-python-smoke.mjs "$BINARY" --wheel wheels/*-any.whl \
               --sdist wheels/*.tar.gz --platform-wheel platform-wheels/*"$WHEEL"*.whl'
       - name: install-test.sh
         if: ${{ !matrix.ext && !matrix.baseline }}
