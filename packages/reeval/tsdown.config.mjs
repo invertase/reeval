@@ -124,13 +124,18 @@ const studioLicenses = join(studioApp, 'third-party.json')
 let bundled = []
 
 const appFiles = join(here, 'src/studio/app-files.ts')
+/** A module id as a comparable path: Windows ids can differ in separators and drive-letter case. */
+const samePath = (a, b) =>
+  process.platform === 'win32'
+    ? a.replaceAll('\\', '/').toLowerCase() === b.replaceAll('\\', '/').toLowerCase()
+    : a === b
 const TEXT = new Set(['.html', '.js', '.css', '.svg', '.json', '.txt'])
 
 let inlinedApp = false
 
 /** src/studio/app-files.ts with studio-web's built files in it, text as strings. */
 function studioAppModule() {
-  if (!existsSync(join(studioApp, 'index.html')))
+  if (!existsSync(join(studioApp, 'index.html')) || !existsSync(studioLicenses))
     throw new Error(
       "studio-web isn't built, so reeval would ship without its studio app: run pnpm build from the repo root",
     )
@@ -180,7 +185,7 @@ export default defineConfig({
       load: {
         order: 'pre',
         handler(id) {
-          if (id !== appFiles) return null
+          if (!samePath(id, appFiles)) return null
           this.addWatchFile(join(studioApp, 'index.html'))
           return { code: studioAppModule(), map: null }
         },
@@ -211,8 +216,10 @@ export default defineConfig({
   ],
   hooks: {
     'build:done': ({ chunks }) => {
-      if (!inlinedApp)
+      if (!inlinedApp) {
+        rmSync(dist, { recursive: true, force: true })
         throw new Error(`The build never loaded ${appFiles}, so the studio app isn't in it`)
+      }
       for (const chunk of chunks) {
         const file = relative(dist, join(chunk.outDir, chunk.fileName))
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)

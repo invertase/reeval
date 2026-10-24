@@ -5,7 +5,7 @@ const DATA = /^\/(?:data\/|studio\.json|api\/)/
 
 /**
  * Dev only: serves the studio data routes from `REEVAL_STUDIO_PROJECT` (a reeval project folder) on the
- * Vite origin, through the same Hono app as `reeval studio`. Needs `pnpm --filter reeval build`.
+ * Vite origin, through the same Hono app as `reeval studio`. Needs `pnpm build` from the repo root.
  */
 export function studioDevData(): Plugin {
   return {
