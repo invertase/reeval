@@ -5,7 +5,7 @@
 //   node scripts/bun-compile.mjs --target bun-linux-arm64 --outfile out/reeval-linux-arm64
 //
 // It writes packages/reeval/reeval (gitignored), or --outfile, with reeval's own files embedded
-// (package.json, docker/, bin/, assets/, skills/, dist/studio-app, dist/bridge, jiti's Babel build
+// (package.json, docker/, bin/, assets/, skills/, dist/bridge, jiti's Babel build
 // and the bundled dependencies' versions). For this machine's target it then copies it into an
 // empty directory and runs examples/hello's fake config with it, in a copy with no node_modules,
 // and with Node, and compares them. With Docker running and the sandbox images built, it also
@@ -60,7 +60,7 @@ if (!existsSync(cli)) fail('no dist/cli.js: run pnpm build first')
 
 // What the binary embeds, laid out as in the package; src/root.ts finds it there when compiled.
 const stage = mkdtempSync(join(tmpdir(), 'reeval-bun-stage-'))
-const own = ['package.json', 'docker', 'bin', 'assets', 'skills', 'dist/studio-app', 'dist/bridge']
+const own = ['package.json', 'docker', 'bin', 'assets', 'skills', 'dist/bridge']
 for (const path of own) cpSync(join(pkg, path), join(stage, path), { recursive: true })
 const require = createRequire(join(pkg, 'package.json'))
 const jiti = dirname(require.resolve('jiti/package.json'))
@@ -76,7 +76,7 @@ const versions = Object.fromEntries(
 writeFileSync(join(stage, 'versions.json'), `${JSON.stringify(versions, null, 2)}\n`)
 
 // An --asset directory keeps its path from its parent, so dist/ goes in whole (it's staged with
-// only the studio app and the bridge).
+// only the bridge).
 const assets = [
   'package.json',
   'docker',
@@ -197,7 +197,11 @@ if (docker.status === 0) {
   rmSync(fixture, { recursive: true, force: true })
 } else console.log('skip a Docker attempt: no Docker, or no sandbox images (reeval image build)')
 const copied = existsSync(cache) ? readdirSync(join(cache, 'reeval')).sort() : []
-check('what it copied out of itself', copied.length > 0, copied.join(', '))
+check(
+  'what it copied out of itself',
+  copied.length > 0 && !copied.some((d) => d.startsWith('studio-app')),
+  copied.join(', '),
+)
 
 for (const dir of [withNode, hello, alone]) rmSync(dir, { recursive: true, force: true })
 if (checks.includes(false)) fail('the compiled reeval differs from Node')
