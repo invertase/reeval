@@ -446,7 +446,7 @@ export type AnswerRow = {
   input: string | null
 }
 
-/** One row per compare question, with each cut's win rates in the record's order. */
+/** One row per pairwise question, with each cut's win rates in the record's order. */
 export function answerRows(e: Pick<EvalEntry, 'answers'>): AnswerRow[] {
   return (e.answers ?? []).map((a) => {
     const rates = (cut: string): AnswerRate[] =>
@@ -466,6 +466,54 @@ export function answerRows(e: Pick<EvalEntry, 'answers'>): AnswerRow[] {
       input: a.input?.path ?? null,
     }
   })
+}
+
+/** One attempt's answer to a question asked of it on its own. */
+export type AttemptAnswerItem = {
+  /** The attempt's id, `<cell key>#<n>`. */
+  attempt: string
+  outcome: Outcome
+  choice: string | null
+  text: string
+  error: string | null
+  /** `questions/<n>.json` in the attempt's directory: what the model was sent; null when not kept. */
+  input: string | null
+}
+
+export type AttemptAnswerRow = {
+  question: string
+  /** The model that answered: as served, when the provider said, else as configured. */
+  model: string
+  /** How many attempts picked each choice, in the question's order; null on a free-text question. */
+  choices: Array<{ choice: string; n: number }> | null
+  answers: AttemptAnswerItem[]
+}
+
+/** One row per question asked of each attempt on its own, in first-asked order. */
+export function attemptAnswerRows(e: Pick<EvalEntry, 'attempts'>): AttemptAnswerRow[] {
+  const rows = new Map<string, AttemptAnswerRow>()
+  for (const a of e.attempts) {
+    for (const q of a.answers ?? []) {
+      const row = rows.get(q.question) ?? {
+        question: q.question,
+        model: q.resolvedModel ?? q.model,
+        choices: q.choices ? q.choices.map((choice) => ({ choice, n: 0 })) : null,
+        answers: [],
+      }
+      rows.set(q.question, row)
+      const picked = q.error === undefined && row.choices?.find((c) => c.choice === q.choice)
+      if (picked) picked.n++
+      row.answers.push({
+        attempt: a.id,
+        outcome: a.outcome,
+        choice: q.choice ?? null,
+        text: q.text,
+        error: q.error ?? null,
+        input: q.input?.path ?? null,
+      })
+    }
+  }
+  return [...rows.values()]
 }
 
 /** Whether an eval needs the cells table: several cells, or several runs of one. */

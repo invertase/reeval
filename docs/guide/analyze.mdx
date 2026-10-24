@@ -39,7 +39,7 @@ It explains the latest run against its nearest recorded ancestor, here the cross
 
 reeval computes the facts and the model only explains them. After the checks it caps confidence: not `high` when any citation or command failed, and `low` when a claim was dropped or a command was rejected. The TL;DR is one sentence (what happened, how sure, why, next) and shows that capped value.
 
-An `insufficient` lift or effort verdict isn't measured, so it's never a results line. When the eval's sources changed, the digest says `not comparable` and drops the mixed pass rate. A `compare.questions` answer is in the digest as annotation: it never gates pass, fail or the exit code.
+An `insufficient` lift or effort verdict isn't measured, so it's never a results line. When the eval's sources changed, the digest says `not comparable` and drops the mixed pass rate. A [question](/guide/questions)'s answers are in the digest as annotation: they never gate pass, fail or the exit code.
 
 <Warning>
   A `--tag` that no eval has, or any other rejected verify, drops the action. It isn't printed with `verify: none`.

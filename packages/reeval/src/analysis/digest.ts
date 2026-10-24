@@ -13,6 +13,7 @@ import type { AttemptRecord, CheckTally, EvalEntry, RunRecord } from '../history
 import { sha256 } from '../ids.ts'
 import { EFFECT_MIN_COUNTED } from '../stats.ts'
 import { clip } from '../text.ts'
+import type { AttemptAnswer } from '../types.ts'
 import { formatTokens } from '../usage.ts'
 import { DIGEST_VERSION } from '../view/analysis.ts'
 import { compare } from '../view/compare.ts'
@@ -855,7 +856,7 @@ export async function buildDigestKeepingDropped(
     })
   }
 
-  // Compare questions: win rates by cut, ties, and a failed call. They never gate the run.
+  // Pairwise questions: win rates by cut, ties, and a failed call. They never gate the run.
   for (const r of runs) {
     for (const e of r.record.evals) {
       if (!evalKeys.has(e.key)) continue
@@ -889,6 +890,49 @@ export async function buildDigestKeepingDropped(
             ? { note: 'no pairs to judge: attempts that failed their checks are left out' }
             : {}),
           ...(reasons.length ? { reasons } : {}),
+        })
+      }
+    }
+  }
+
+  // Questions asked of each attempt on its own: each choice's count, or a few answers. Annotation.
+  for (const r of runs) {
+    for (const e of r.record.evals) {
+      if (!evalKeys.has(e.key)) continue
+      const byQuestion = new Map<string, Array<{ attempt: string; answer: AttemptAnswer }>>()
+      for (const a of e.attempts) {
+        for (const q of a.answers ?? []) {
+          byQuestion.set(q.question, [
+            ...(byQuestion.get(q.question) ?? []),
+            { attempt: idOf.get(`${r.record.runId}\0${a.key}`) ?? a.id, answer: q },
+          ])
+        }
+      }
+      for (const [question, asked] of byQuestion) {
+        const first = asked[0]?.answer as AttemptAnswer
+        const answered = asked.filter((x) => x.answer.error === undefined)
+        const failed = asked.find((x) => x.answer.error !== undefined)?.answer.error
+        fact('attempt-question', {
+          run: short.get(r.record.runId),
+          eval: tagOf(e.key),
+          question: clip(question, 120),
+          model: first.resolvedModel ?? first.model,
+          shows: questionShows(first.stateOptions, first.artifacts),
+          asked: asked.length,
+          ...(first.choices
+            ? {
+                choices: first.choices.map((choice) => ({
+                  choice,
+                  n: answered.filter((x) => x.answer.choice === choice).length,
+                })),
+              }
+            : {}),
+          answers: answered.slice(0, 5).map((x) => ({
+            attempt: x.attempt,
+            ...(x.answer.choice !== undefined ? { choice: x.answer.choice } : {}),
+            text: clip(x.answer.text, 300),
+          })),
+          ...(failed ? { error: clip(failed, 200) } : {}),
         })
       }
     }

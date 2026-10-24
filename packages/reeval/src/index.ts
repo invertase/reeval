@@ -18,6 +18,7 @@ export type {
   RunRecord,
 } from './history/types.ts'
 export type {
+  AttemptAnswer,
   AttemptContext,
   BackgroundHandle,
   Budget,
@@ -35,7 +36,6 @@ export type {
   CompareAnswer,
   CompareCut,
   CompareOptions,
-  CompareQuestion,
   ConfigHelpers,
   Diff,
   DirectoryOptions,
@@ -71,6 +71,9 @@ export type {
   Profile,
   ProfileDefaults,
   ProfileLimit,
+  Question,
+  QuestionOptions,
+  QuestionStateOptions,
   ReevalConfig,
   Secret,
   SecretTemplate,

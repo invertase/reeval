@@ -100,14 +100,16 @@ pf/sized.eval.ts › sized › two harnesses  1          0 of 1    1     1      
 pf/sized.eval.ts › sized › other only     0          0 of 1    1     0         skipped: no harness left: profile pr allows fake · …
 ```
 
-With `compare: false`, an eval with compare questions drops them too. A pinned one keeps them:
+With `compare: false`, an eval drops each pairwise question that no longer has pairs to ask, and one that varies the harness too keeps only its harness pairs. A pinned compare keeps them, and a question asked of each attempt always stays:
 
 ```text
 plan  profile off (--profile) · 3 evals · 8 cells · 8 attempts · …
-eval                                    harnesses  variants  runs  attempts  notes
-evals/questions.eval.ts › one question  2          0 of 1    1     2         compare off (profile off) · questions off (profile off)
-evals/questions.eval.ts › pinned        2          1         1     4         pinned: compare
-  question 1/1  Which is shorter? · after the run · shows task, diff · needs a language model: set analysis.model
+eval                                                             harnesses  variants  runs  attempts  notes
+evals/questions.eval.ts › one question                           2          0 of 1    1     2         compare off (profile off) · 1 pairwise question off (profile off)
+evals/questions.eval.ts › two questions, one with its own model  2          0 of 2    1     2         compare off (profile off) · 1 pairwise question off (profile off)
+  question 1/1  Which handles state more cleanly? · after the run · shows task, diff · harness · 1 pair · needs a language model: set analysis.model
+evals/questions.eval.ts › pinned                                 2          1         1     4         pinned: compare
+  question 1/1  Which is shorter? · after the run · shows task, diff · environment · 2 pairs · needs a language model: set analysis.model
 ```
 
 ## pin

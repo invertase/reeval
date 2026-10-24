@@ -60,6 +60,7 @@ npx reeval query failing_attempts --run last
 
 | Name | Columns |
 |---|---|
+| `attempt_answers` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path`, `started_at`, `branch` |
 | `check_discrimination` | `run_id`, `eval_key`, `harness`, `variant`, `cell_key`, `label`, `variant_pass`, `variant_fail`, `variant_not_run`, `control_pass`, `control_fail`, `control_not_run`, `verdict` |
 | `check_rates` | `run_id`, `eval_key`, `cell_key`, `harness`, `environment`, `role`, `label`, `pass`, `fail`, `error`, `not_run`, `rate` |
 | `check_streaks` | `eval_key`, `cell_key`, `label`, `fingerprint`, `branch`, `runs`, `fails`, `streak_runs`, `streak_tries`, `streak_since`, `last_run`, `ended_by` |
@@ -168,6 +169,7 @@ evals/mcp.eval.ts › mcp canary  cursor:composer-2.5/stamped/docker           1
 |---|---|
 | `artifacts` | `run_id`, `attempt_key`, `kind`, `path`, `sha256`, `bytes` |
 | `assertions` | `run_id`, `attempt_key`, `eval_key`, `cell_key`, `seq`, `label`, `labelled`, `matcher`, `status`, `soft`, `message`, `duration_ms` |
+| `attempt_answers_m` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `outcome`, `question`, `choice`, `text`, `error`, `model`, `resolved_model`, `input_path` |
 | `attempt_context` | `run_id`, `attempt_key`, `path`, `sha256`, `runtime`, `declared` |
 | `attempts` | `run_id`, `eval_key`, `cell_key`, `key`, `id`, `n`, `seq`, `started_at`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `image_id`, `turns`, `tools`, `file_edits`, `setup_ms`, `agent_ms`, `checks_ms`, `judge_ms`, `last_text`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `served_model`, `oom_kills`, `reasoning_effort`, `served_reasoning_effort` |
 | `cell_checks` | `run_id`, `eval_key`, `cell_key`, `label`, `pass`, `fail`, `error`, `not_run`, `control_pass`, `control_fail`, `control_error`, `control_not_run`, `verdict` |

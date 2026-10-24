@@ -17,9 +17,10 @@ export const fakeJudge = ({
 
 /**
  * An analysis model for tests: `reeval analyze` gets `output` (or `output(digest)`) back as the
- * model's structured answer, and each compare question's pair gets `vote` (a fixed `'A'`, `'B'` or
- * `'tie'`, `{ winner, reason? }`, a function of the blinded pair, or `{ error }`), through the same
- * parsing and validation as a real one. Insights (in `reeval run` and `reeval analyze --insights`)
+ * model's structured answer, each pairwise question's pair gets `vote` (a fixed `'A'`, `'B'` or
+ * `'tie'`, `{ winner, reason? }`, a function of the blinded pair, or `{ error }`), and each
+ * question asked of one attempt gets `answer` (its text, `{ choice?, text? }`, a function of the
+ * blinded attempt, or `{ error }`), through the same parsing and validation as a real one. Insights (in `reeval run` and `reeval analyze --insights`)
  * get `insights` (or `insights(input)`, called per eval for its classification and its sentences,
  * then once for the headline), through the same validator: an uncited sentence is dropped, and one
  * with a banned word is asked for again, then dropped.
@@ -27,20 +28,24 @@ export const fakeJudge = ({
 export const fakeAnalysis = ({
   output,
   vote,
+  answer,
   insights,
-}: Pick<FakeAnalysisModel, 'output' | 'vote' | 'insights'>): FakeAnalysisModel => ({
+}: Pick<FakeAnalysisModel, 'output' | 'vote' | 'answer' | 'insights'>): FakeAnalysisModel => ({
   kind: 'fake-analysis',
   ...(output !== undefined ? { output } : {}),
   ...(vote !== undefined ? { vote } : {}),
+  ...(answer !== undefined ? { answer } : {}),
   ...(insights !== undefined ? { insights } : {}),
 })
 
 export { DEFAULT_THRESHOLD, RECOMMENDED_JUDGE_MODEL } from './judge/index.ts'
 export type {
   AnalysisConfig,
+  BlindAttempt,
   BlindPair,
   ConfigJudgeOptions,
   FakeAnalysisModel,
+  FakeAnswer,
   FakeInsights,
   FakeInsightsInput,
   FakeJudgeModel,

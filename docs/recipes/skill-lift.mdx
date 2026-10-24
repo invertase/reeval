@@ -194,7 +194,7 @@ Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidenc
 | Skill from git or npm | `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan |
 | A shared starting point | `const withSkill = base.extendEnvironment('with-skill', …)` then `compare: { baseline: base, variants: [withSkill] }`. `compare` does not layer them |
 | Report only | Drop `minLift` and set `compare: { baseline, variants, gate: 'none' }` to see lift without failing anything |
-| Ask which arm did better | `compare: { baseline, variants, questions: ['Which greet.js reads more like our house style?'] }` judges the two arms' diffs pair by pair after the run. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Compare questions](/guide/questions) |
+| Ask which arm did better | `questions: [{ question: 'Which greet.js reads more like our house style?', across: 'environment' }]` beside `compare` judges the two arms' diffs pair by pair after the run. Only attempts that pass their checks are paired, so here, where the control is expected to fail, ask each attempt instead: `questions: ['How did the agent pick its greeting?']`; see [Questions](/guide/questions) |
 | Across runs | `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)) |
 | Did the agent open the skill? | `expect(turn).toHaveCalledSkill('house-greeting')` after `c.send`. That is "opened or loaded", not "followed". Keep the `c.exec` check for the greeting. See [Matchers](/reference/matchers#transcript-matchers) |
 

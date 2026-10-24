@@ -27,8 +27,8 @@ compare a skill, fix a config, read a failure. Read a reference file when the ta
 |---|---|
 | [references/config.md](references/config.md) | Harness factories and their keys, `effort`, judge models, `reeval.yaml`, path rules, where the sandbox comes from, imports, the options cascade |
 | [references/evals.md](references/evals.md) | `evaluate.each` and families, `c.serve`, `c.writeFile` hidden tests, judge `state`, the judge's input size, judge errors, every matcher |
-| [references/capture.md](references/capture.md) | Web UIs: `c.capture()` screenshots, `instructions` journeys, `artifacts` on judges and compare questions |
-| [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labelled checks, `compare.questions`, `skill_files` |
+| [references/capture.md](references/capture.md) | Web UIs: `c.capture()` screenshots, `instructions` journeys, `artifacts` on judges and questions |
+| [references/compare.md](references/compare.md) | `compare` beyond the example below: baselines, gates, lift and effort, labelled checks, `questions`, `skill_files` |
 | [references/environments.md](references/environments.md) | Environments: skills, files, rules, MCP servers, `git()` workspaces, `directory()`, Docker sandboxes, secrets, egress |
 | [references/cli.md](references/cli.md) | The CLI beyond `run`: `query` views, `analyze`, `show`, `compare`, `record`, `studio`, `mcp`, filters, exit codes |
 | [references/mistakes.md](references/mistakes.md) | An error message from reeval you need to map to its fix (the full table) |
@@ -262,8 +262,10 @@ group(
   side each variant's effect reads `can't tell yet`; from four, the block adds an effort table
   (median tools, time, tokens per arm), which often shows a skill's effect first. In a compare,
   prefer `expect.soft` with labels for independent requirements.
-- `compare.questions: ['Which … reads more like our house style?']` asks which side did better,
-  pair by pair, after the run; it never gates and needs a language model. Details, gates,
+- `questions: ['How did the agent pick its greeting?']` beside `compare` asks a model about each
+  attempt as it ends (`choices: ['yes', 'no']` for a pick); an entry with
+  `across: 'environment'` asks which side did better, pair by pair, after the run. Questions
+  never gate and need a language model. Details, gates,
   `minLift` and `reeval query skill_files` (which skill files each attempt opened) are in
   [references/compare.md](references/compare.md).
 

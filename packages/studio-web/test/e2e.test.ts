@@ -294,9 +294,25 @@ describe('studio in a browser', () => {
 
   type Answer = { question: string; votes: unknown[]; error?: string }
 
-  /** Opens each eval with compare answers on the run page; a run without any shows none. */
+  /**
+   * Opens each eval with answers on the run page: per-attempt ones one line each, pairwise ones
+   * per question; a run without pairwise answers shows none.
+   */
   async function readAnswers(page: Page, url: string, runId: string, out: string, label: string) {
     const record = JSON.parse(readFileSync(join(out, 'data/runs', `${runId}.json`), 'utf8'))
+    type Asked = { attempts: Array<{ answers?: Array<{ question: string }> }> }
+    for (const e of record.evals as Array<Asked & { slug: string }>) {
+      const asked = new Set(e.attempts.flatMap((a) => (a.answers ?? []).map((q) => q.question)))
+      if (asked.size === 0) continue
+      await page.goto(`${url}#/runs/${runId}?eval=${e.slug}`)
+      const section = page.locator('[data-attempt-questions]')
+      for (const question of asked) await section.getByText(question, { exact: true }).waitFor()
+      assert.equal(
+        await section.locator('[data-attempt-answer]').count(),
+        e.attempts.flatMap((a) => a.answers ?? []).length,
+        `${label} ${runId} ${e.slug}: one line per attempt answer`,
+      )
+    }
     const answered = record.evals.filter((e: { answers?: Answer[] }) => e.answers?.length)
     if (answered.length === 0) {
       assert.equal(await page.locator('[data-questions]').count(), 0, `${label} ${runId}`)

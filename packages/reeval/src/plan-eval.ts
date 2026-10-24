@@ -104,6 +104,7 @@ function configLevel(config: ResolvedConfig): Resolved {
     judge: config.judge,
     capture: config.capture,
     question: config.question,
+    questions: [],
     timeout: undefined,
     tags: [],
     pin: [],

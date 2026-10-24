@@ -1347,49 +1347,44 @@ export type CompareOptions<E = Environment> = {
   minLift?: number
   /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
   harness?: Array<string | HarnessDescriptor>
-  /**
-   * Asked of pairs of attempts after the run, always a list. They annotate the compare with
-   * win rates and never change pass, fail or the exit code.
-   */
-  questions?: CompareQuestion[]
-  /**
-   * The factor every question varies when pairing, when a question does not name its own
-   * `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of
-   * both, or omitted, asks both pair kinds.
-   */
-  across?: PairFactor | PairFactor[]
 }
 
 /**
- * A question for pairwise judgement: its text, or the text and the `'provider/model'` that
- * answers it. Without a model, the cascaded `question.model` answers, else `analysis.model`, else the
- * judge's when it's a language model.
- * `across` is the factor it varies when pairing; without it (and without a one-factor
- * `compare.across`) both pair kinds run. `state` and `artifacts` choose what each side shows.
+ * A question a language model answers after the attempts: its text, or the text and its options.
+ * With `across`, it picks between two attempts that differ only in that factor, in both orders;
+ * without it, it's asked of each attempt on its own. Without a model, the cascaded
+ * `question.model` answers, else `analysis.model`, else the judge's when it's a language model.
+ * `state` and `artifacts` choose what it's shown of each attempt.
  */
-export type CompareQuestion =
+export type Question =
   | string
   | {
       question: string
       /** `'provider/model'` that answers it, over the cascaded `question.model`. */
       model?: string
-      /** The factor it varies when pairing. */
-      across?: PairFactor
-      /** What each side shows, over the cascaded `question.state`, key by key. */
+      /**
+       * The factor it varies when pairing, or both: `'environment'` holds the harness,
+       * `'harness'` holds the environment. Unset, it's asked of each attempt on its own.
+       */
+      across?: PairFactor | PairFactor[]
+      /** The answers a question asked of each attempt picks from, with a short reason. */
+      choices?: string[]
+      /** What it's shown of each attempt, over the cascaded `question.state`, key by key. */
       state?: QuestionStateOptions
-      /** Each side's own captures, by name; `true` sends all of them. Replaces `question.artifacts`. */
+      /** Each attempt's own captures, by name; `true` sends all of them. Replaces `question.artifacts`. */
       artifacts?: true | string[]
     }
 
 /**
- * What each side of a compare question shows: the keys of `judge.state` but `contents` (the
- * attempts' workspaces are gone when questions are asked). An unset key keeps its default, which
- * is what a question shows with no `state` at all: the task and the diff.
+ * What a question is shown of each attempt: the keys of `judge.state` but `contents` (the
+ * attempts' workspaces are gone when questions are asked). An unset key keeps its default: a
+ * pairwise question shows the task and the diff; one asked of each attempt also shows the final
+ * message and the transcript.
  */
 export type QuestionStateOptions = {
   /** The prompts the attempt was sent, once for both sides when they match. Default true. */
   task?: boolean
-  /** The final message: the agent's own account of its work. Default false. */
+  /** The final message: the agent's own account of its work. Default false in a pair, true per attempt. */
   output?: boolean
   /** `status path` lines for the changed files, under `diff`'s patterns. Default false. */
   files?: boolean
@@ -1401,7 +1396,8 @@ export type QuestionStateOptions = {
   /**
    * The transcript as text lines: `true` is messages and tool calls with tool output clipped,
    * `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each
-   * harness's tools, so a pair of two harnesses isn't blind. Default false.
+   * harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per
+   * attempt.
    */
   transcript?: boolean | 'tools' | 'full'
   /**
@@ -1424,29 +1420,33 @@ export type ResolvedQuestionStateOptions = {
   checks: boolean | string[]
 }
 
-/** Defaults for every compare question: `model` and `artifacts` replaced, `state` merged key by key. */
+/** Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key. */
 export type QuestionOptions = {
   /** `'provider/model'` that answers every question below it without its own `model`. */
   model?: string
-  /** What each side shows. */
+  /** What it's shown of each attempt. */
   state?: QuestionStateOptions
-  /** Each side's own captures, by name; `true` sends all of them. Default none. */
+  /** Each attempt's own captures, by name; `true` sends all of them. Default none. */
   artifacts?: true | string[]
 }
 
 /**
- * A compare question as planned: its text, the model it names itself, if any, the one factor it
- * varies when it doesn't ask both pair kinds, and what each side shows, cascaded, when set.
+ * A question as planned: its text, the model it names itself, if any, the factors it varies when
+ * it's pairwise, its choices, and what it's shown of each attempt, cascaded, when set.
  */
 export type PlannedQuestion = {
+  /** Its place in the eval's `questions`, from 1, kept when a profile drops one before it. */
+  n: number
   question: string
   model?: string
-  across?: PairFactor
+  /** Set on a pairwise question; unset, it's asked of each attempt. */
+  across?: PairFactor | PairFactor[]
+  choices?: string[]
   state?: QuestionStateOptions
   artifacts?: true | string[]
 }
 
-/** A matrix factor a compare question varies when pairing; the others are held. */
+/** A matrix factor a pairwise question varies; the others are held. */
 export type PairFactor = 'environment' | 'harness'
 
 /** Which pairs a vote is over: two environments on one harness, or two harnesses on one environment. */
@@ -1475,7 +1475,7 @@ export type PairVote = {
   artifacts?: { a: string[]; b: string[] }
 }
 
-/** A compare question's answer: every vote, and each side's wins over decided votes per cut. */
+/** A pairwise question's answer: every vote, and each side's wins over decided votes per cut. */
 export type CompareAnswer = {
   question: string
   /** `'provider/model'`, or `fake` for `fakeAnalysis()`. */
@@ -1528,13 +1528,51 @@ export type QuestionCall = {
   error?: string
 }
 
-/** `questions/<n>.json`: every call one compare question made, in pair order. */
+/** `questions/<n>.json`: every call one pairwise question made, in pair order. */
 export type QuestionInput = {
   question: string
   model: string
   stateOptions: ResolvedQuestionStateOptions
   artifacts?: true | string[]
   calls: QuestionCall[]
+}
+
+/** A question asked of one attempt on its own, and the model's answer. Never gates. */
+export type AttemptAnswer = {
+  question: string
+  /** `'provider/model'`, or `fake` for `fakeAnalysis()`. */
+  model: string
+  /** The model id the provider says served the call, when it reports one. */
+  resolvedModel?: string
+  /** What the attempt showed, every key resolved. */
+  stateOptions: ResolvedQuestionStateOptions
+  /** The captures it sent, as asked: `true` for all, or their names. */
+  artifacts?: true | string[]
+  /** The answers it picked from; unset on a free-text question. */
+  choices?: string[]
+  /** One of `choices`; unset on a free-text question and when the call failed. */
+  choice?: string
+  /** The model's answer, or its reason for `choice`; capped, and empty when the call failed. */
+  text: string
+  /** Why there's no answer: the model call failed. Outcomes never change. */
+  error?: string
+  /** `questions/<n>.json` under the attempt's directory: what the model was sent. */
+  input?: FileRef
+}
+
+/** An attempt's `questions/<n>.json`: the call a question asked of it made. */
+export type AttemptQuestionInput = {
+  question: string
+  model: string
+  stateOptions: ResolvedQuestionStateOptions
+  artifacts?: true | string[]
+  choices?: string[]
+  system: string
+  /** The prompt as sent, secrets masked; screenshots follow it as image parts. */
+  prompt: string
+  screenshots?: QuestionScreenshot[]
+  /** Set when the call failed. */
+  error?: string
 }
 
 /** An option a profile's `limit` can narrow, and `pin` can protect. */
@@ -1577,8 +1615,15 @@ type EvalOptionFields = {
   judge?: JudgeOptions
   /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
   capture?: CaptureOptions
-  /** Defaults for every compare question: `model`, and `state` merged key by key, down the cascade. */
+  /** Defaults for every question: `model`, and `state` merged key by key, down the cascade. */
   question?: QuestionOptions
+  /**
+   * What a language model is asked about the attempts, always a list; they never change pass,
+   * fail or the exit code. A question with `across` picks between pairs of attempts once they all
+   * end; one without is asked of each attempt as it ends. Replaces the inherited list, so `[]`
+   * asks none.
+   */
+  questions?: Question[]
   /** Per attempt. */
   timeout?: Duration
   /** Labels for `--tag` and profiles to select by; a group's are added to its evals'. */
@@ -1673,7 +1718,7 @@ export type ProfileDefaults = {
   timeout?: Duration
   /** Screenshot defaults for `c.capture()`, shallow-merged over the config's. */
   capture?: CaptureOptions
-  /** Defaults for every compare question, merged over the config's. */
+  /** Defaults for every question, merged over the config's. */
   question?: QuestionOptions
 }
 
@@ -1711,10 +1756,16 @@ export type FakeAnalysisModel = {
   /** The model's structured answer, or a function of the digest it was given. */
   output?: unknown | ((digest: unknown) => unknown)
   /**
-   * How it answers compare questions: a fixed pick, a function of the blinded pair, or
+   * How it answers pairwise questions: a fixed pick, a function of the blinded pair, or
    * `{ error }` to fail every call. A pick may be `{ winner, reason? }`. Default `'tie'`.
    */
   vote?: FakePick | ((pair: BlindPair) => FakePick) | { error: string }
+  /**
+   * How it answers questions asked of each attempt: a fixed answer, a function of the attempt as
+   * the model sees it, or `{ error }` to fail every call. An answer may be `{ choice?, text? }`.
+   * Default the first of the question's `choices`, with the text `fake answer`.
+   */
+  answer?: FakeAnswer | ((attempt: BlindAttempt) => FakeAnswer) | { error: string }
   /**
    * What insights get back, in `reeval run` and `reeval analyze --insights`: fixed insights, a
    * function of each call's input (`input.call` is `classify` or `insights`, once each per eval,
@@ -1766,19 +1817,30 @@ export type FakeInsights = {
 /** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */
 export type FakeVote = 'A' | 'B' | 'tie'
 
-/** A fake compare-question pick, optionally with a reason. */
+/** A fake pairwise pick, optionally with a reason. */
 export type FakePick = FakeVote | { winner: FakeVote; reason?: string }
 
-/** What a compare question's model is shown: the prompt, and the two sides in slot order. */
+/** A fake per-attempt answer: its text, or a choice and its reason. */
+export type FakeAnswer = string | { choice?: string; text?: string }
+
+/** What a pairwise question's model is shown: the prompt, and the two sides in slot order. */
 export type BlindPair = { question: string; prompt: string; a: BlindSide; b: BlindSide }
+
+/** What a per-attempt question's model is shown: the prompt, its choices, and the attempt. */
+export type BlindAttempt = {
+  question: string
+  prompt: string
+  choices?: string[]
+  attempt: BlindSide
+}
 
 /** A turn of one side, with the keys its question's `state` turned on. */
 export type BlindTurn = { task?: string; output?: string; transcript?: string }
 
 /**
- * One side of a blinded pair: only the keys its question's `state` turned on. With
- * `turns: 'all'`, `task`, `output` and `transcript` are under `turns`; a task both sides share is
- * the pair's prompt's, not either side's.
+ * One side of a blinded pair, or the attempt a per-attempt question is asked of: only the keys
+ * its question's `state` turned on. With `turns: 'all'`, `task`, `output` and `transcript` are
+ * under `turns`; a task both sides of a pair share is the pair's prompt's, not either side's.
  */
 export type BlindSide = BlindTurn & {
   turns?: BlindTurn[]
@@ -1803,7 +1865,7 @@ export type BlindSide = BlindTurn & {
 export type AnalysisConfig = {
   /**
    * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
-   * and compare questions fall back to the judge's when it's a language model.
+   * and questions fall back to the judge's when it's a language model.
    */
   model?: string | FakeAnalysisModel
   /**
@@ -1854,7 +1916,7 @@ export type ReevalConfig = {
    * binary when `c.capture()` runs; it does not change this object.
    */
   capture?: CaptureOptions
-  /** Defaults for every compare question: the model that answers it and what each side shows. Merged down the cascade. */
+  /** Defaults for every question: the model that answers it and what it's shown of each attempt. Merged down the cascade. */
   question?: QuestionOptions
   /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number
@@ -1875,7 +1937,7 @@ export type ReevalConfig = {
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
-  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
+  /** Insights during `reeval run`, `reeval analyze`, and questions without a model. */
   analysis?: AnalysisConfig
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
@@ -1902,15 +1964,17 @@ export type FakeAnalysisData = {
   kind: 'fake-analysis'
   /** The model's structured answer. */
   output?: unknown
-  /** How it answers compare questions: a fixed pick, or `{ error }` to fail every call. */
+  /** How it answers pairwise questions: a fixed pick, or `{ error }` to fail every call. */
   vote?: FakePick | { error: string }
+  /** How it answers questions asked of each attempt: a fixed answer, or `{ error }` to fail every call. */
+  answer?: FakeAnswer | { error: string }
 }
 
 /** `AnalysisConfig` as data: the model by name, or a fake analysis. */
 export type AnalysisConfigData = Omit<AnalysisConfig, 'model'> & {
   /**
    * `'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze`
-   * and compare questions fall back to the judge's when it's a language model.
+   * and questions fall back to the judge's when it's a language model.
    */
   model?: string | FakeAnalysisData
 }
@@ -1948,7 +2012,7 @@ export type ReevalConfigData = Omit<
   judge?: ConfigJudgeData
   /** Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. */
   profiles?: Record<string, ProfileData>
-  /** Insights during `reeval run`, `reeval analyze`, and compare questions without a model. */
+  /** Insights during `reeval run`, `reeval analyze`, and questions without a model. */
   analysis?: AnalysisConfigData
   /**
    * The gateways model calls may go through, in the order you prefer them: each harness takes
@@ -2392,7 +2456,7 @@ export type EvalPlan = {
   variants: { run: number; of: number } | null
   /** Set when the eval compares variant cells. */
   compare?: EvalCompareMeta
-  /** The compare's questions, answered after the run; unset without any, or when a profile dropped them. */
+  /** The eval's questions, answered after its attempts; unset without any, or when a profile dropped them all. */
   questions?: PlannedQuestion[]
   runs: number
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */

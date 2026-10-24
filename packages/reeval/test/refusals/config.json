@@ -13,6 +13,7 @@
   "yaml: a typo in debug": "UsageError: Unknown option \"keepRuns\" in debug in reeval.yaml. Use keep, traceBufferMb.",
   "yaml: defaultProfile null": "UsageError: defaultProfile in reeval.yaml must be an object (got null)",
   "yaml: compare": "UsageError: compare can't be set in reeval.yaml: it would multiply every eval. Put it on the group or eval that asks the question.",
+  "yaml: questions": "UsageError: questions can't be set in reeval.yaml: each is about one eval's task. Put them on the group or eval they ask about; question: { model, state, artifacts } in reeval.yaml sets every question's defaults.",
   "yaml: a literal secret": "UsageError: env.API_KEY in reeval.yaml is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.",
   "yaml: a secret as data": null,
   "yaml: a secret with a typo": "UsageError: env.API_KEY in reeval.yaml: secret() has no \"host\" field. Did you mean \"hosts\"?",

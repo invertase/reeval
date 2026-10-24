@@ -174,55 +174,6 @@
       "required": ["kind", "model"],
       "additionalProperties": false
     },
-    "CompareQuestion": {
-      "description": "A question for pairwise judgement: its text, or the text and the `'provider/model'` that answers it. Without a model, the cascaded `question.model` answers, else `analysis.model`, else the judge's when it's a language model. `across` is the factor it varies when pairing; without it (and without a one-factor `compare.across`) both pair kinds run. `state` and `artifacts` choose what each side shows.",
-      "anyOf": [
-        {
-          "type": "string",
-          "pattern": "\\S"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "across": {
-              "description": "The factor it varies when pairing.",
-              "$ref": "#/$defs/PairFactor"
-            },
-            "artifacts": {
-              "description": "Each side's own captures, by name; `true` sends all of them. Replaces `question.artifacts`.",
-              "anyOf": [
-                {
-                  "type": "boolean",
-                  "const": true
-                },
-                {
-                  "minItems": 1,
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "pattern": "\\S"
-                  }
-                }
-              ]
-            },
-            "model": {
-              "description": "`'provider/model'` that answers it, over the cascaded `question.model`.",
-              "type": "string"
-            },
-            "question": {
-              "type": "string",
-              "pattern": "\\S"
-            },
-            "state": {
-              "description": "What each side shows, over the cascaded `question.state`, key by key.",
-              "$ref": "#/$defs/QuestionStateOptions"
-            }
-          },
-          "required": ["question"],
-          "additionalProperties": false
-        }
-      ]
-    },
     "ConfigJudgeOptions": {
       "description": "The config file is plain data sent to workers, so its judge model can't be an object.",
       "type": "object",
@@ -778,20 +729,6 @@
               "description": "Environments to run side by side against `environment`, the control.",
               "type": "object",
               "properties": {
-                "across": {
-                  "description": "The factor every question varies when pairing, when a question does not name its own `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of both, or omitted, asks both pair kinds.",
-                  "anyOf": [
-                    {
-                      "enum": ["environment", "harness"]
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/$defs/PairFactor"
-                      }
-                    }
-                  ]
-                },
                 "gate": {
                   "description": "Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only).",
                   "enum": ["all", "none", "variants"]
@@ -840,13 +777,6 @@
                 "minLift": {
                   "description": "Lift in points from -1 to 1; a variant cell below it fails.",
                   "type": "number"
-                },
-                "questions": {
-                  "description": "Asked of pairs of attempts after the run, always a list. They annotate the compare with win rates and never change pass, fail or the exit code.",
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/CompareQuestion"
-                  }
                 },
                 "variants": {
                   "description": "Other environments, each planned and run as itself.",
@@ -1021,8 +951,15 @@
               }
             },
             "question": {
-              "description": "Defaults for every compare question: `model`, and `state` merged key by key, down the cascade.",
+              "description": "Defaults for every question: `model`, and `state` merged key by key, down the cascade.",
               "$ref": "#/$defs/QuestionOptions"
+            },
+            "questions": {
+              "description": "What a language model is asked about the attempts, always a list; they never change pass, fail or the exit code. A question with `across` picks between pairs of attempts once they all end; one without is asked of each attempt as it ends. Replaces the inherited list, so `[]` asks none.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Question"
+              }
             },
             "runs": {
               "description": "Attempts per cell.",
@@ -1080,20 +1017,6 @@
               "description": "Environments to run side by side; `baseline` is the control.",
               "type": "object",
               "properties": {
-                "across": {
-                  "description": "The factor every question varies when pairing, when a question does not name its own `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of both, or omitted, asks both pair kinds.",
-                  "anyOf": [
-                    {
-                      "enum": ["environment", "harness"]
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/$defs/PairFactor"
-                      }
-                    }
-                  ]
-                },
                 "baseline": {
                   "description": "The control. Not layered under the variants. Without it, the control is the environment the eval would otherwise run in (the cascaded `environment`), else an empty one named `baseline`.",
                   "$ref": "#/$defs/EnvironmentData"
@@ -1146,13 +1069,6 @@
                 "minLift": {
                   "description": "Lift in points from -1 to 1; a variant cell below it fails.",
                   "type": "number"
-                },
-                "questions": {
-                  "description": "Asked of pairs of attempts after the run, always a list. They annotate the compare with win rates and never change pass, fail or the exit code.",
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/CompareQuestion"
-                  }
                 },
                 "variants": {
                   "description": "Other environments, each planned and run as itself.",
@@ -1323,8 +1239,15 @@
               }
             },
             "question": {
-              "description": "Defaults for every compare question: `model`, and `state` merged key by key, down the cascade.",
+              "description": "Defaults for every question: `model`, and `state` merged key by key, down the cascade.",
               "$ref": "#/$defs/QuestionOptions"
+            },
+            "questions": {
+              "description": "What a language model is asked about the attempts, always a list; they never change pass, fail or the exit code. A question with `across` picks between pairs of attempts once they all end; one without is asked of each attempt as it ends. Replaces the inherited list, so `[]` asks none.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Question"
+              }
             },
             "runs": {
               "description": "Attempts per cell.",
@@ -1541,8 +1464,15 @@
               }
             },
             "question": {
-              "description": "Defaults for every compare question: `model`, and `state` merged key by key, down the cascade.",
+              "description": "Defaults for every question: `model`, and `state` merged key by key, down the cascade.",
               "$ref": "#/$defs/QuestionOptions"
+            },
+            "questions": {
+              "description": "What a language model is asked about the attempts, always a list; they never change pass, fail or the exit code. A question with `across` picks between pairs of attempts once they all end; one without is asked of each attempt as it ends. Replaces the inherited list, so `[]` asks none.",
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Question"
+              }
             },
             "runs": {
               "description": "Attempts per cell.",
@@ -2301,7 +2231,7 @@
       "additionalProperties": false
     },
     "PairFactor": {
-      "description": "A matrix factor a compare question varies when pairing; the others are held.",
+      "description": "A matrix factor a pairwise question varies; the others are held.",
       "type": "string",
       "enum": ["environment", "harness"]
     },
@@ -2727,12 +2657,81 @@
         }
       ]
     },
+    "Question": {
+      "description": "A question a language model answers after the attempts: its text, or the text and its options. With `across`, it picks between two attempts that differ only in that factor, in both orders; without it, it's asked of each attempt on its own. Without a model, the cascaded `question.model` answers, else `analysis.model`, else the judge's when it's a language model. `state` and `artifacts` choose what it's shown of each attempt.",
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "across": {
+              "description": "The factor it varies when pairing, or both: `'environment'` holds the harness, `'harness'` holds the environment. Unset, it's asked of each attempt on its own.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PairFactor"
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/PairFactor"
+                  }
+                }
+              ]
+            },
+            "artifacts": {
+              "description": "Each attempt's own captures, by name; `true` sends all of them. Replaces `question.artifacts`.",
+              "anyOf": [
+                {
+                  "type": "boolean",
+                  "const": true
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              ]
+            },
+            "choices": {
+              "description": "The answers a question asked of each attempt picks from, with a short reason.",
+              "minItems": 2,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            },
+            "model": {
+              "description": "`'provider/model'` that answers it, over the cascaded `question.model`.",
+              "type": "string"
+            },
+            "question": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "state": {
+              "description": "What it's shown of each attempt, over the cascaded `question.state`, key by key.",
+              "$ref": "#/$defs/QuestionStateOptions"
+            }
+          },
+          "required": ["question"],
+          "additionalProperties": false
+        }
+      ]
+    },
     "QuestionOptions": {
-      "description": "Defaults for every compare question: `model` and `artifacts` replaced, `state` merged key by key.",
+      "description": "Defaults for every question: `model` and `artifacts` replaced, `state` merged key by key.",
       "type": "object",
       "properties": {
         "artifacts": {
-          "description": "Each side's own captures, by name; `true` sends all of them. Default none.",
+          "description": "Each attempt's own captures, by name; `true` sends all of them. Default none.",
           "anyOf": [
             {
               "type": "boolean",
@@ -2753,14 +2752,14 @@
           "type": "string"
         },
         "state": {
-          "description": "What each side shows.",
+          "description": "What it's shown of each attempt.",
           "$ref": "#/$defs/QuestionStateOptions"
         }
       },
       "additionalProperties": false
     },
     "QuestionStateOptions": {
-      "description": "What each side of a compare question shows: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default, which is what a question shows with no `state` at all: the task and the diff.",
+      "description": "What a question is shown of each attempt: the keys of `judge.state` but `contents` (the attempts' workspaces are gone when questions are asked). An unset key keeps its default: a pairwise question shows the task and the diff; one asked of each attempt also shows the final message and the transcript.",
       "type": "object",
       "properties": {
         "checks": {
@@ -2799,7 +2798,7 @@
           "type": "boolean"
         },
         "output": {
-          "description": "The final message: the agent's own account of its work. Default false.",
+          "description": "The final message: the agent's own account of its work. Default false in a pair, true per attempt.",
           "type": "boolean"
         },
         "task": {
@@ -2807,7 +2806,7 @@
           "type": "boolean"
         },
         "transcript": {
-          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false.",
+          "description": "The transcript as text lines: `true` is messages and tool calls with tool output clipped, `'tools'` tool calls only, `'full'` adds reasoning and whole tool output. It names each harness's tools, so a pair of two harnesses isn't blind. Default false in a pair, true per attempt.",
           "anyOf": [
             {
               "type": "boolean"

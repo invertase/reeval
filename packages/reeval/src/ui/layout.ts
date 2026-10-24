@@ -12,6 +12,7 @@ import { formatCount, formatSeconds } from '../view/effort.ts'
 import { type EvalInsight, fromModel, type Job, type RunInsights } from '../view/insights.ts'
 import type {
   Across,
+  AttemptQuestionResult,
   CaseResult,
   CellError,
   CellResult,
@@ -567,8 +568,41 @@ function resultsBody(c: Colors, cell: CellResult, indent: number): string[] {
   return table([...items, ...evidence(c, cell, indent)])
 }
 
-function questionLines(c: Colors, questions: QuestionResult[], indent: number): string[] {
+/** Free-text answers shown per question; the rest are in the record. */
+const ANSWERS_SHOWN = 3
+
+function attemptQuestionLines(c: Colors, q: AttemptQuestionResult, indent: number): string[] {
+  const pad = ' '.repeat(indent)
+  const head = `${pad}${c.dim('question')}  ${clip(q.question, 100)}`
+  const failed =
+    q.error === null
+      ? []
+      : [
+          `${pad}  ${c.yellow(`the model call failed on ${q.failed} of ${q.asked}: ${clip(q.error, 200)}`)}`,
+        ]
+  if (q.choices) {
+    const tally = q.choices.map((t) => `${t.choice} ${t.n}`).join(' · ')
+    return [head, `${pad}  ${tally}`, ...failed]
+  }
+  const shown = q.answers.slice(0, ANSWERS_SHOWN)
+  const rows = table(
+    shown.map((a) => ({
+      indent: indent + 2,
+      cells: [a.attempt, clip(a.text.replace(/\s+/g, ' '), 100)],
+    })),
+  )
+  const more = q.answers.length - shown.length
+  const rest = more ? [`${pad}  ${c.dim(`${more} more: reeval query attempt_answers`)}`] : []
+  return [head, ...rows, ...rest, ...failed]
+}
+
+function questionLines(
+  c: Colors,
+  questions: Array<QuestionResult | AttemptQuestionResult>,
+  indent: number,
+): string[] {
   return questions.flatMap((q) => {
+    if (q.kind === 'attempts') return attemptQuestionLines(c, q, indent)
     const pad = ' '.repeat(indent)
     const head = `${pad}${c.dim('question')}  ${clip(q.question, 100)}`
     if (q.votes === 0 && q.error === null) {

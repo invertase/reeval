@@ -1461,6 +1461,39 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'compare/question-attempt',
+    tiers: ['fake'],
+    env: 'asked',
+    canary: /expected 'hi\\n' to be 'bye\\n'/,
+    record: ({ run, runDir }) => {
+      const attempt = run.evals.find((e) => e.name === 'lands')?.attempts[0]
+      const answer = attempt?.answers?.[0]
+      assert.ok(answer, 'lands has an attempt answer')
+      assert.equal(answer.error, undefined, answer.error)
+      assert.deepEqual(answer.stateOptions, {
+        task: true,
+        output: true,
+        files: false,
+        diff: true,
+        transcript: true,
+        turns: 'all',
+        checks: false,
+      })
+      assert.deepEqual(answer.choices, ['yes', 'no'])
+      assert.equal(answer.choice, 'yes')
+      assert.deepEqual(JSON.parse(answer.text), {
+        keys: ['diff', 'turns'],
+        choices: ['yes', 'no'],
+        task: true,
+        reply: true,
+      })
+      assert.match(answer.input?.path ?? '', /\/1\/questions\/1\.json$/)
+      const input = JSON.parse(readFileSync(join(runDir, answer.input?.path ?? ''), 'utf8'))
+      assert.equal(input.question, 'Did it write out.txt?')
+      assert.match(input.prompt, /write out\.txt/)
+    },
+  },
+  {
     dir: 'compare/question-input',
     tiers: ['fake', 'docker'],
     env: 'variant',

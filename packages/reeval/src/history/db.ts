@@ -19,7 +19,7 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 export { toolTarget }
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 13
+const DB_VERSION = 14
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -79,7 +79,14 @@ CREATE TABLE families (
   counted INTEGER, pass_at_1 REAL, lo REAL, hi REAL, method TEXT, outcome TEXT,
   PRIMARY KEY (run_id, family_id, cell_key)
 );
--- Every compare-question vote: a pair of sides (arms within a harness, harnesses across an arm)
+-- Every answer to a question asked of one attempt on its own (one without across): the choice it
+-- picked when the question has choices, its text, or the error when the call failed.
+CREATE TABLE attempt_answers_m (
+  run_id TEXT NOT NULL, eval_key TEXT NOT NULL, cell_key TEXT NOT NULL, attempt_key TEXT NOT NULL,
+  attempt_id TEXT, outcome TEXT, question TEXT NOT NULL, choice TEXT, text TEXT, error TEXT,
+  model TEXT, resolved_model TEXT, input_path TEXT
+);
+-- Every pairwise question's vote: a pair of sides (arms within a harness, harnesses across an arm)
 -- on one run, shown in one order (swapped = 1: b first), and the side picked or 'tie'.
 CREATE TABLE votes (
   run_id TEXT NOT NULL, eval_key TEXT NOT NULL, question TEXT NOT NULL, cut TEXT, held TEXT,
@@ -221,7 +228,12 @@ CREATE VIEW effort AS SELECT * FROM effort_m;
 -- tell them apart. A variant against its control is here too; gating stays variant vs control.
 CREATE VIEW contrasts AS SELECT * FROM contrasts_m;
 
--- Each compare question's pairs of sides, head to head: wins when both orders agree, and splits
+-- Each answer to a question asked of each attempt on its own, with the attempt's outcome: tally
+-- the choices with GROUP BY question, choice.
+CREATE VIEW attempt_answers AS
+  SELECT q.*, r.started_at, r.branch FROM attempt_answers_m q JOIN runs r USING (run_id);
+
+-- Each pairwise question's pairs of sides, head to head: wins when both orders agree, and splits
 -- when the order decided. The pooled win rate counts a split as a win for each side.
 CREATE VIEW question_pairs AS SELECT * FROM question_pairs_m;
 
@@ -332,6 +344,7 @@ export const VIEW_NAMES = [
   'effort',
   'contrasts',
   'question_pairs',
+  'attempt_answers',
   'factor_effects',
   'skill_reads',
   'context_use',
@@ -701,6 +714,24 @@ function insertRun(
           run('INSERT INTO context_reads VALUES (?, ?, ?, ?)', record.runId, a.key, t.line, path)
         }
       }
+      for (const q of a.answers ?? []) {
+        run(
+          `INSERT INTO attempt_answers_m VALUES (${Array(13).fill('?').join(', ')})`,
+          record.runId,
+          e.key,
+          a.cell,
+          a.key,
+          a.id,
+          a.outcome,
+          q.question,
+          q.choice ?? null,
+          q.text,
+          q.error ?? null,
+          q.model,
+          q.resolvedModel ?? null,
+          q.input?.path ?? null,
+        )
+      }
       for (const j of a.judgements) {
         run(
           'INSERT OR IGNORE INTO judgements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
@@ -812,6 +843,7 @@ const DATA_TABLES = [
   'evals',
   'families',
   'family_lift_m',
+  'attempt_answers_m',
   'votes',
   'question_pairs_m',
   'cells',

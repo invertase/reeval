@@ -114,17 +114,15 @@ Jev (`typesafe-ai/jev-1.14.0`, with `TYPESAFE_AI_API_KEY`) takes PNG captures. A
 ## Compare two arms' screenshots
 
 ```ts
-compare: {
-  baseline: plain,
-  variants: [withDesignSystem],
-  questions: [{
-    question: 'Which sign-in page follows the design system more closely?',
-    artifacts: ['sign-in'],
-  }],
-}
+compare: { baseline: plain, variants: [withDesignSystem] },
+questions: [{
+  question: 'Which sign-in page follows the design system more closely?',
+  across: 'environment',
+  artifacts: ['sign-in'],
+}],
 ```
 
-Each attempt calls `c.capture(server, { name: 'sign-in' })`. After the run, the question sends each side's own `sign-in` capture beside its task and diff, labelled only by position (`Attempt A, screenshot 1 of 1`). See [Choose what each side shows](/guide/questions#choose-what-each-side-shows).
+Each attempt calls `c.capture(server, { name: 'sign-in' })`. After the run, the question sends each side's own `sign-in` capture beside its task and diff, labelled only by position (`Attempt A, screenshot 1 of 1`). See [Pick the model and what it sees](/guide/questions#pick-the-model-and-what-it-sees).
 
 ## What you get
 

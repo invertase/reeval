@@ -1,8 +1,8 @@
 // The project `node scripts/corpus/add.ts <name>` records into a new corpus entry: one run that
-// covers what a record can hold (a compare with lift, answered and failed questions, judges that
-// pass and fail, a failed check, an infra error, todo and skipped evals, tool calls and
-// reasoning, labelled and default-labelled assertions), a run that `budget` stops, and a saved
-// analysis.
+// covers what a record can hold (a compare with lift, answered and failed pairwise questions,
+// questions asked of each attempt, judges that pass and fail, a failed check, an infra error,
+// todo and skipped evals, tool calls and reasoning, labelled and default-labelled assertions), a
+// run that `budget` stops, and a saved analysis.
 import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
@@ -29,7 +29,12 @@ export default defineConfig({
   judge: { model: fakeJudge({ score: 0.8 }) },
   analysis: {
     model: fakeAnalysis({
-      // Compare questions favour the attempt whose diff greets with Ahoy; one fails at the model.
+      // Pairwise questions favour the attempt whose diff greets with Ahoy; one fails at the model.
+      // Asked of one attempt, the choice says whether its diff greets with Ahoy.
+      answer: (a) =>
+        a.choices
+          ? { choice: a.attempt.diff?.includes('Ahoy') ? 'yes' : 'no', text: 'From the diff.' }
+          : 'It followed the prompt.',
       vote: (p) => {
         if (p.question.includes('missing name')) throw new Error('Rate limit exceeded (429)')
         return p.a.diff?.includes('Ahoy') === p.b.diff?.includes('Ahoy')

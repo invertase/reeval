@@ -111,11 +111,13 @@ export function renderPlan(plan: PlanDocument, options: { cost?: boolean } = {})
       ])
     })
     for (const q of e.questions ?? []) {
-      const pairs = `${q.pairs} ${q.pairs === 1 ? 'pair' : 'pairs'}`
-      const across = q.across ? `${q.across} · ` : ''
+      const n = (count: number, one: string) => `${count} ${count === 1 ? one : `${one}s`}`
+      const asks = q.across
+        ? `${q.across.join(', ')} · ${n(q.pairs ?? 0, 'pair')}`
+        : `each attempt · ${n(q.attempts ?? 0, 'attempt')}${q.choices ? ` · ${q.choices.join(' / ')}` : ''}`
       rows.push([
         '',
-        `question: ${q.question} · shows ${q.shows.join(', ')} · ${across}${pairs} · ${q.model ?? 'no language model'}`,
+        `question: ${q.question} · shows ${q.shows.join(', ')} · ${asks} · ${q.model ?? 'no language model'}`,
       ])
     }
   }

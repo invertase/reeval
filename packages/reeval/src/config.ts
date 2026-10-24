@@ -564,6 +564,11 @@ export function resolveConfig(
       `compare can't be set in ${file}: it would multiply every eval. Put it on the group or eval that asks the question.`,
     )
   }
+  if ('questions' in user) {
+    throw new UsageError(
+      `questions can't be set in ${file}: each is about one eval's task. Put them on the group or eval they ask about; question: { model, state, artifacts } in ${file} sets every question's defaults.`,
+    )
+  }
   checkOptions(user, file, CONFIG_KEYS)
   const include = user.include ?? defaultIncludeGlobs()
   if (!Array.isArray(include) || include.some((p) => typeof p !== 'string')) {
@@ -847,7 +852,7 @@ function runModelGateway(
 
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
- * plans (default: the config's), the run's judge, the models that answer compare questions,
+ * plans (default: the config's), the run's judge, the models that answer questions,
  * and required config and profile secrets. Insights' model isn't among them: without its key a run
  * prints no insights, and never stops for it.
  */
@@ -857,7 +862,7 @@ export function missingCredentials(
   options: {
     harnesses?: HarnessDescriptor[]
     profile?: ResolvedProfile | null
-    /** The `'provider/model'`s that answer compare questions. */
+    /** The `'provider/model'`s that answer questions. */
     questionModels?: string[]
   } = {},
 ): string[] {
@@ -869,7 +874,7 @@ export function missingCredentials(
     ...(judge !== undefined ? [{ model: judge, what: 'the judge model', judge: true }] : []),
     ...(options.questionModels ?? []).map((model) => ({
       model,
-      what: 'compare questions',
+      what: 'questions',
       judge: false,
     })),
   ]
@@ -891,7 +896,7 @@ export function missingCredentials(
 
 /**
  * Keys the run sends in request headers (the agents' credentials, the run's judge's and the
- * compare questions' models') whose value has
+ * questions' models') whose value has
  * whitespace or a control character in it, with where the first one is: a key pasted from a
  * wrapped terminal line picks up a line break, and the agent then hangs on a request it can't send
  * rather than failing to authenticate.

@@ -123,19 +123,35 @@ export type EvalResult = {
   /** A family's variants against their baseline, pooled over the cases; null on a single eval. */
   pooled: PooledArm[] | null
   /**
-   * Its compare questions' answers. On a family, each question asked of any case, in first-asked
-   * order, with its votes and wins summed over the cases that answered it.
+   * Its questions' answers: the pairwise ones, then those asked of each attempt. On a family,
+   * each question asked of any case, in first-asked order, summed over the cases that answered it.
    */
-  questions: QuestionResult[]
+  questions: Array<QuestionResult | AttemptQuestionResult>
 }
 
-/** A compare question: each side's wins over the pairs the model decided. Never gates. */
+/** A pairwise question: each side's wins over the pairs the model decided. Never gates. */
 export type QuestionResult = {
+  kind: 'pairs'
   question: string
   /** Pairs voted, each counted once per order it was asked in. */
   votes: number
   rates: Array<{ cut: 'within' | 'across'; name: string; wins: number; n: number }>
   /** Why some or all of its votes are missing: the model call failed. */
+  error: string | null
+}
+
+/** A question asked of each attempt on its own: what each one answered. Never gates. */
+export type AttemptQuestionResult = {
+  kind: 'attempts'
+  question: string
+  /** Attempts it was asked of, failed calls included. */
+  asked: number
+  /** How many attempts picked each choice, in the question's order; null on a free-text question. */
+  choices: Array<{ choice: string; n: number }> | null
+  /** Each attempt's answer, in attempt order; failed calls left out. */
+  answers: Array<{ attempt: string; choice: string | null; text: string }>
+  /** Calls that failed, and the first one's error. */
+  failed: number
   error: string | null
 }
 
@@ -486,13 +502,41 @@ function effortDiffers(e: EvalEntry, cell: CellRecord, baseline: CellRecord | un
   return moved(c.verdict) || moved(c.timeVerdict) || moved(c.tokensVerdict)
 }
 
-function questionsOf(e: EvalEntry): QuestionResult[] {
-  return (e.answers ?? []).map((a) => ({
-    question: a.question,
-    votes: a.votes.length,
-    rates: a.rates.map((r) => ({ cut: r.cut, name: r.name, wins: r.wins, n: r.n })),
-    error: a.error ?? null,
-  }))
+function questionsOf(e: EvalEntry): Array<QuestionResult | AttemptQuestionResult> {
+  const pairs = (e.answers ?? []).map(
+    (a): QuestionResult => ({
+      kind: 'pairs',
+      question: a.question,
+      votes: a.votes.length,
+      rates: a.rates.map((r) => ({ cut: r.cut, name: r.name, wins: r.wins, n: r.n })),
+      error: a.error ?? null,
+    }),
+  )
+  const each = new Map<string, AttemptQuestionResult>()
+  for (const a of e.attempts) {
+    for (const q of a.answers ?? []) {
+      const r = each.get(q.question) ?? {
+        kind: 'attempts' as const,
+        question: q.question,
+        asked: 0,
+        choices: q.choices ? q.choices.map((choice) => ({ choice, n: 0 })) : null,
+        answers: [],
+        failed: 0,
+        error: null,
+      }
+      each.set(q.question, r)
+      r.asked++
+      if (q.error !== undefined) {
+        r.failed++
+        r.error ??= q.error
+        continue
+      }
+      const picked = r.choices?.find((c) => c.choice === q.choice)
+      if (picked) picked.n++
+      r.answers.push({ attempt: a.id, choice: q.choice ?? null, text: q.text })
+    }
+  }
+  return [...pairs, ...each.values()]
 }
 
 function effortOf(e: EvalEntry, cell: CellRecord): EffortCounters | null {
@@ -608,17 +652,40 @@ function outcomeOf(e: EvalEntry): ResultOutcome {
   return failed.length && failed.every((a) => a.error?.kind === 'aborted') ? 'cancelled' : 'fail'
 }
 
-/** Each question any case asked, in first-asked order, with votes and wins summed over the cases. */
-function familyQuestions(cases: readonly EvalEntry[]): QuestionResult[] {
-  const out = new Map<string, QuestionResult>()
+/** Each question any case asked, in first-asked order, with its votes or answers summed over the cases. */
+function familyQuestions(
+  cases: readonly EvalEntry[],
+): Array<QuestionResult | AttemptQuestionResult> {
+  const out = new Map<string, QuestionResult | AttemptQuestionResult>()
   for (const q of cases.flatMap(questionsOf)) {
-    const have = out.get(q.question)
+    const key = `${q.kind}\0${q.question}`
+    const have = out.get(key)
     if (!have) {
-      out.set(q.question, { ...q, rates: q.rates.map((r) => ({ ...r })) })
+      out.set(
+        key,
+        q.kind === 'pairs'
+          ? { ...q, rates: q.rates.map((r) => ({ ...r })) }
+          : {
+              ...q,
+              choices: q.choices?.map((c) => ({ ...c })) ?? null,
+              answers: [...q.answers],
+            },
+      )
       continue
     }
-    have.votes += q.votes
     have.error ??= q.error
+    if (have.kind === 'attempts' && q.kind === 'attempts') {
+      have.asked += q.asked
+      have.failed += q.failed
+      have.answers.push(...q.answers)
+      for (const c of q.choices ?? []) {
+        const same = have.choices?.find((x) => x.choice === c.choice)
+        if (same) same.n += c.n
+      }
+      continue
+    }
+    if (have.kind !== 'pairs' || q.kind !== 'pairs') continue
+    have.votes += q.votes
     for (const r of q.rates) {
       const same = have.rates.find((x) => x.cut === r.cut && x.name === r.name)
       if (!same) have.rates.push({ ...r })

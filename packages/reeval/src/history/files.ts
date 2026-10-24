@@ -267,6 +267,7 @@ const refsOf = (e: EvalEntry): FileRef[] =>
     .flatMap((a) => [
       ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
       ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
+      ...(a.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])),
     ])
     .concat((e.answers ?? []).flatMap((q) => (q.input ? [q.input] : [])))
 
@@ -327,6 +328,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     for (const a of e.attempts) {
       a.files = {}
       for (const c of a.checks) delete c.log
+      for (const q of a.answers ?? []) delete q.input
     }
     for (const q of e.answers ?? []) delete q.input
   }

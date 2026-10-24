@@ -832,9 +832,9 @@ evaluate('slow', { runs: 4 }, async (c) => { await c.send('x') })
 describe('common mistakes', { concurrency: 4 }, () => {
   const cases: Array<[string, string, RegExp]> = [
     [
-      'a compare question that shows the model nothing',
-      `group('g', { question: { state: { task: false } } }, () => { evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Q', state: { diff: false } }] } }, async () => {}) })`,
-      /compare\.questions "Q" in evaluate\("g › e"\) shows the model nothing: every state key is off and it sends no artifacts\. Turn on a state key, such as state: \{ diff: true \}, or send artifacts\./,
+      'a question that shows the model nothing',
+      `group('g', { question: { state: { task: false } } }, () => { evaluate('e', { questions: [{ question: 'Q', state: { diff: false, output: false, transcript: false } }] }, async () => {}) })`,
+      /questions "Q" in evaluate\("g › e"\) shows the model nothing: every state key is off and it sends no artifacts\. Turn on a state key, such as state: \{ diff: true \}, or send artifacts\./,
     ],
     [
       'a list of environments',
@@ -884,89 +884,39 @@ evaluate('e', { compare: { baseline: base, variants: [head] } }, async () => {})
       /Unknown compare option "strategy" in evaluate\("e"\)/,
     ],
     [
-      'the singular compare question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: 'Which?' } as never }, async () => {})`,
-      /Unknown compare option "question" in evaluate\("e"\)\. Did you mean "questions"\? It's a list: questions: \['Which handles state more cleanly\?'\]\./,
+      'questions on compare',
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: ['Which?'] } as never }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) has moved: questions sit beside compare, at the root of the options: \{ compare: \{ variants \}, questions: \[\{ question: 'Which is cleaner\?', across: 'environment' \}\] \}\. A question picks between pairs of attempts only with across; without it, each attempt is asked on its own\./,
     ],
     [
-      'compare questions as a single string',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: 'Which?' as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) is a list \(got "Which\?"\), e\.g\. questions: \['Which handles state more cleanly\?'\]\./,
+      'across on compare',
+      `evaluate('e', { compare: { baseline: a, variants: [b], across: 'harness' } as never }, async () => {})`,
+      /compare\.across in evaluate\("e"\) has moved: across goes on each question, in questions beside compare/,
     ],
     [
-      'an empty compare question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [' '] } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) is an empty string\. Ask something, e\.g\. questions: \['Which handles state more cleanly\?'\]\./,
+      'questions as a single string',
+      `evaluate('e', { questions: 'Which?' as never }, async () => {})`,
+      /questions in evaluate\("e"\) is a list \(got "Which\?"\), e\.g\. questions: \['How did the agent find the failing test\?'\]\./,
     ],
     [
-      'an empty list of compare questions',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [] } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) is an empty list\. Ask at least one, e\.g\. questions: \['Which handles state more cleanly\?'\], or leave questions out\./,
+      'an empty list of questions',
+      `evaluate('e', { questions: [] }, async () => {})`,
+      /questions in evaluate\("e"\) is an empty list\. Ask at least one/,
     ],
     [
-      'a compare question that is not a string or an entry',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [42] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\?, across\?, state\?, artifacts\? \} \(got 42\)/,
+      'choices on a pairwise question',
+      `evaluate('e', { compare: { baseline: a, variants: [b] }, questions: [{ question: 'Which?', across: 'environment', choices: ['a', 'b'] }] as never }, async () => {})`,
+      /questions "Which\?" in evaluate\("e"\) sets both across and choices\./,
     ],
     [
-      'a compare question entry with an unknown key',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', judge: 'x' }] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\?, state\?, artifacts\? \} \(got "judge"\)\./,
+      'a pairwise question across environments without a compare',
+      `evaluate('e', { questions: [{ question: 'Which?', across: 'environment' }] }, async () => {})`,
+      /questions "Which\?" in evaluate\("e"\) varies the environment \(across: 'environment'\), but evaluate\("e"\) runs one environment, so it has no pairs to ask\. Add compare: \{ variants: \[\.\.\.\] \}, or leave out across to ask each attempt on its own\./,
     ],
     [
-      'cut on a compare question entry',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', cut: 'within' }] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\?, state\?, artifacts\? \} \(got "cut"\)\. Did you mean "across"\?/,
-    ],
-    [
-      'a compare question across that is not a matrix factor',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', across: 'within' }] as never } }, async () => {})`,
-      /compare\.questions "Which\?" in evaluate\("e"\): across is 'environment' \(vary the environment, same harness\) or 'harness' \(vary the harness, same environment\) \(got "within"\)/,
-    ],
-    [
-      'the old compare cuts option',
-      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: ['within'] } as never }, async () => {})`,
-      /Unknown compare option "cuts" in evaluate\("e"\)\. Did you mean "across"\?/,
-    ],
-    [
-      'the singular compare cut',
-      `evaluate('e', { compare: { baseline: a, variants: [b], cut: 'within' } as never }, async () => {})`,
-      /Unknown compare option "cut" in evaluate\("e"\)\. Did you mean "across"\?/,
-    ],
-    [
-      'an empty compare.across list',
-      `evaluate('e', { compare: { baseline: a, variants: [b], across: [] } }, async () => {})`,
-      /compare\.across in evaluate\("e"\) is 'environment' \(vary the environment, same harness\) or 'harness' \(vary the harness, same environment\), or a list of those \(got a list of 0\)/,
-    ],
-    [
-      'the same compare across factor twice',
-      `evaluate('e', { compare: { baseline: a, variants: [b], across: ['environment', 'environment'] } }, async () => {})`,
-      /compare\.across in evaluate\("e"\) lists "environment" twice/,
-    ],
-    [
-      'compare.across that is not a matrix factor',
-      `evaluate('e', { compare: { baseline: a, variants: [b], across: 'arm' as never } }, async () => {})`,
-      /compare\.across in evaluate\("e"\) is 'environment' \(vary the environment, same harness\) or 'harness' \(vary the harness, same environment\), or a list of those \(got "arm"\)/,
-    ],
-    [
-      'a compare question entry without its question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ model: 'google/gemini-3.8-flash' } as never] } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) has an entry without its question, e\.g\./,
-    ],
-    [
-      'a compare question model without a provider',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', model: 'gemini-3.8-flash' }] } }, async () => {})`,
-      /compare\.questions "Which\?" in evaluate\("e"\): model is a 'provider\/model' string, e\.g\. 'google\/gemini-3\.8-flash' \(got "gemini-3\.8-flash"\)/,
-    ],
-    [
-      'an evaluation model for a compare question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', model: 'typesafe-ai/jev-1.14.0' }] } }, async () => {})`,
-      /compare\.questions "Which\?" in evaluate\("e"\) names typesafe-ai\/jev-1\.14\.0, an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
-    ],
-    [
-      'the same compare question twice',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: ['Which?', { question: 'Which?' }] } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) asks "Which\?" twice/,
+      'a pairwise question across harnesses on one harness',
+      `evaluate('e', { compare: { baseline: a, variants: [b] }, questions: [{ question: 'Which?', across: ['environment', 'harness'] }] }, async () => {})`,
+      /questions "Which\?" in evaluate\("e"\) varies the harness \(across: 'harness'\), but evaluate\("e"\) runs one harness \(fake\), so it has no pairs to ask\. Run it on two or more, harness: \[a, b\], or leave out across to ask each attempt on its own\./,
     ],
     [
       'environment and compare.baseline on the same eval',

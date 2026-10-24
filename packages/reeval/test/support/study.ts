@@ -96,9 +96,11 @@ group(
       baseline: noSkill,
       variants: [currentSkill${options.oneVariant ? '' : ', newSkill'}],
       ${gate}
-      across: 'environment',
-      questions: ['Which sign-in has the better UX?', 'Which follows the library docs more closely?'],
     },
+    questions: [
+      { question: 'Which sign-in has the better UX?', across: 'environment' },
+      { question: 'Which follows the library docs more closely?', across: 'environment' },
+    ],
     runs: ${options.runs ?? 3},
   },
   () => {

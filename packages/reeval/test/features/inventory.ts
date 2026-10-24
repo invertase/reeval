@@ -184,7 +184,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.questions',
     area: 'Config and selection',
-    name: '`compare.questions`: questions in the plan, answered after the run with pairwise win rates',
+    name: '`questions` with `across`: pairwise questions in the plan, answered after the run with win rates',
     plan: [
       'compare/questions',
       'compare/questions-dropped',
@@ -199,8 +199,6 @@ export const inventory: InventoryFeature[] = [
       questions('with a language model the run plans its questions'),
       questions('votes are recorded after the attempts'),
       questions('a question with across: environment records only environment pairs'),
-      questions('compare.across sets the default factor'),
-      questions('a question across overrides compare.across'),
       questions('a vote reason is recorded, shown and left out of pass or fail'),
       questions('a model error is kept on its answer'),
       'reeval/test/results.test.ts › a vote reason is stored, capped and sampled',
@@ -214,7 +212,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.questions.state',
     area: 'Config and selection',
-    name: "Compare questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded",
+    name: "Questions' `state` and `artifacts`, and the `question` option: the model that answers and what each side shows, cascaded",
     plan: ['compare/questions-state', 'compare/questions-model'],
     fixtures: [
       'compare/question-default',
@@ -233,9 +231,23 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.questions.input',
     area: 'Records and studio',
-    name: "`evals[].answers[].input`: what each compare question's model was sent, per pair and order",
+    name: "`evals[].answers[].input`: what each pairwise question's model was sent, per pair and order",
     fixtures: ['compare/question-input'],
     tests: [studio("compare answers: each question's win rates per cut")],
+  },
+  {
+    id: 'questions.attempt',
+    area: 'Config and selection',
+    name: '`questions` without `across`: asked of each attempt as it ends, free text or `choices`, in `evals[].attempts[].answers`',
+    plan: ['compare/questions-attempts', 'compare/questions-one-harness'],
+    fixtures: ['compare/question-attempt'],
+    tests: [
+      questions('a question without across is asked of each attempt, and choices are tallied'),
+      questions(
+        'a free-text question asked of each attempt shows its answers; a failed call is kept',
+      ),
+      options('common mistakes'),
+    ],
   },
   {
     id: 'gate',

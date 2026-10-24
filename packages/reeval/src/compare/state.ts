@@ -6,9 +6,9 @@ import type {
 } from '../types.ts'
 
 /**
- * What each side of a question shows with no `state`: the task and the diff, every turn's
- * prompt. The final message stays out, since a better-written account of the work would win a
- * side-by-side pick on its wording; the changed files repeat what the diff shows.
+ * What each side of a pairwise question shows with no `state`: the task and the diff, every
+ * turn's prompt. The final message stays out, since a better-written account of the work would
+ * win a side-by-side pick on its wording; the changed files repeat what the diff shows.
  */
 export const DEFAULT_QUESTION_STATE: ResolvedQuestionStateOptions = {
   task: true,
@@ -20,14 +20,31 @@ export const DEFAULT_QUESTION_STATE: ResolvedQuestionStateOptions = {
   checks: false,
 }
 
+/**
+ * What a question asked of each attempt on its own shows with no `state`: the task, the diff,
+ * the final message and the transcript. Nothing is weighed against another side, so how the
+ * agent went about the work is the point.
+ */
+export const DEFAULT_ATTEMPT_QUESTION_STATE: ResolvedQuestionStateOptions = {
+  ...DEFAULT_QUESTION_STATE,
+  output: true,
+  transcript: true,
+}
+
 const KEYS = Object.keys(DEFAULT_QUESTION_STATE) as Array<keyof ResolvedQuestionStateOptions>
+
+/** A pairwise question's defaults when `pairwise`, a per-attempt question's otherwise. */
+export const defaultQuestionState = (pairwise: boolean): ResolvedQuestionStateOptions =>
+  pairwise ? DEFAULT_QUESTION_STATE : DEFAULT_ATTEMPT_QUESTION_STATE
 
 /** Every key set, in `DEFAULT_QUESTION_STATE`'s order, so equal selections serialise the same. */
 export function resolveQuestionState(
   state: QuestionStateOptions | undefined,
+  pairwise: boolean,
 ): ResolvedQuestionStateOptions {
+  const defaults = defaultQuestionState(pairwise)
   const out = {} as Record<keyof ResolvedQuestionStateOptions, unknown>
-  for (const key of KEYS) out[key] = state?.[key] ?? DEFAULT_QUESTION_STATE[key]
+  for (const key of KEYS) out[key] = state?.[key] ?? defaults[key]
   return out as ResolvedQuestionStateOptions
 }
 
@@ -66,7 +83,7 @@ const isOff = (value: unknown) => value === false || (Array.isArray(value) && !v
 /** True when the resolved state shows nothing and no captures are sent. */
 export const showsNothing = (q: PlannedQuestion): boolean => {
   if (q.artifacts !== undefined) return false
-  const s = resolveQuestionState(q.state)
+  const s = resolveQuestionState(q.state, q.across !== undefined)
   return KEYS.every((k) => k === 'turns' || isOff(s[k]))
 }
 

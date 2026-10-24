@@ -16,12 +16,12 @@ import type {
   ProfileLimit,
   ReevalConfigData,
 } from '../types.ts'
-import { questionOptionsSchema } from './compare.ts'
 import { environmentDataSchema, sandboxDescriptorSchema } from './environment.ts'
 import { gatewayEntryDataSchema } from './gateway.ts'
 import { harnessDescriptorSchema } from './harness.ts'
 import { configJudgeDataSchema } from './judge.ts'
 import { egressPolicySchema, envVarsSchema, gatePolicySchema } from './plain.ts'
+import { questionOptionsSchema } from './questions.ts'
 import {
   type Assert,
   closest,
@@ -125,7 +125,7 @@ export const profileDefaultsDataSchema = z
       .describe("Screenshot defaults for `c.capture()`, shallow-merged over the config's."),
     question: questionOptionsSchema
       .optional()
-      .describe("Defaults for every compare question, merged over the config's."),
+      .describe("Defaults for every question, merged over the config's."),
   })
   .describe('`ProfileDefaults` as data: the environment without `extend`, and the judge as data.')
 
@@ -187,7 +187,17 @@ export const fakeAnalysisDataSchema = z
       ])
       .optional()
       .describe(
-        'How it answers compare questions: a fixed pick, or `{ error }` to fail every call.',
+        'How it answers pairwise questions: a fixed pick, or `{ error }` to fail every call.',
+      ),
+    answer: z
+      .union([
+        z.string(),
+        z.strictObject({ choice: z.string().optional(), text: z.string().optional() }),
+        failure,
+      ])
+      .optional()
+      .describe(
+        'How it answers questions asked of each attempt: a fixed answer, or `{ error }` to fail every call.',
       ),
   })
   .describe(
@@ -200,7 +210,7 @@ export const analysisConfigDataSchema = z
       .union([z.string(), fakeAnalysisDataSchema])
       .optional()
       .describe(
-        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and compare questions fall back to the judge's when it's a language model.",
+        "`'provider/model'`, e.g. `'google/gemini-3.8-flash'`. Insights use it only; `reeval analyze` and questions fall back to the judge's when it's a language model.",
       ),
     insights: z
       .boolean()
@@ -286,7 +296,7 @@ export const reevalConfigDataSchema = z
     question: questionOptionsSchema
       .optional()
       .describe(
-        'Defaults for every compare question: the model that answers it and what each side shows. Merged down the cascade.',
+        "Defaults for every question: the model that answers it and what it's shown of each attempt. Merged down the cascade.",
       ),
     concurrency: count()
       .optional()
@@ -331,9 +341,7 @@ export const reevalConfigDataSchema = z
       ),
     analysis: analysisConfigDataSchema
       .optional()
-      .describe(
-        'Insights during `reeval run`, `reeval analyze`, and compare questions without a model.',
-      ),
+      .describe('Insights during `reeval run`, `reeval analyze`, and questions without a model.'),
     gateway: z
       .array(gatewayEntryDataSchema)
       .min(1)

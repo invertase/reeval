@@ -1,19 +1,29 @@
-no profile · 3 evals · 12 cells · 16 attempts
+no profile · 5 evals · 20 cells · 24 attempts
 hint: 1 compare runs 2 times per cell; effort can't reach p < 0.05 below 4 vs 4 (runs: 4)
-evals/questions-group.eval.ts › asked by the group › inherits the question  a/base/docker     control          ungated             ×1
-                                                                            a/skilled/docker  variant skilled  gated               ×1
-                                                                            b/base/docker     control          ungated             ×1
-                                                                            b/skilled/docker  variant skilled  gated               ×1
-                                                                            question: Which handles state more cleanly? · shows task, diff · 4 pairs · no language model
-evals/questions-group.eval.ts › asked by the group › also inherits it       a/base/docker     control          ungated             ×2
-                                                                            a/skilled/docker  variant skilled  gated passRate 0.5  ×2
-                                                                            b/base/docker     control          ungated             ×2
-                                                                            b/skilled/docker  variant skilled  gated passRate 0.5  ×2
-                                                                            question: Which handles state more cleanly? · shows task, diff · 8 pairs · no language model
-evals/questions-group.eval.ts › asked by the group › replaces the compare   a/base/docker     control          ungated             ×1
-                                                                            a/terse/docker    variant terse    gated               ×1
-                                                                            b/base/docker     control          ungated             ×1
-                                                                            b/terse/docker    variant terse    gated               ×1
+evals/questions-group.eval.ts › asked by the group › inherits the question   a/base/docker     control          ungated             ×1
+                                                                             a/skilled/docker  variant skilled  gated               ×1
+                                                                             b/base/docker     control          ungated             ×1
+                                                                             b/skilled/docker  variant skilled  gated               ×1
+                                                                             question: Which handles state more cleanly? · shows task, diff · environment · 2 pairs · no language model
+evals/questions-group.eval.ts › asked by the group › also inherits it        a/base/docker     control          ungated             ×2
+                                                                             a/skilled/docker  variant skilled  gated passRate 0.5  ×2
+                                                                             b/base/docker     control          ungated             ×2
+                                                                             b/skilled/docker  variant skilled  gated passRate 0.5  ×2
+                                                                             question: Which handles state more cleanly? · shows task, diff · environment · 4 pairs · no language model
+evals/questions-group.eval.ts › asked by the group › replaces the compare    a/base/docker     control          ungated             ×1
+                                                                             a/terse/docker    variant terse    gated               ×1
+                                                                             b/base/docker     control          ungated             ×1
+                                                                             b/terse/docker    variant terse    gated               ×1
+                                                                             question: Which handles state more cleanly? · shows task, diff · environment · 2 pairs · no language model
+evals/questions-group.eval.ts › asked by the group › replaces the questions  a/base/docker     control          ungated             ×1
+                                                                             a/skilled/docker  variant skilled  gated               ×1
+                                                                             b/base/docker     control          ungated             ×1
+                                                                             b/skilled/docker  variant skilled  gated               ×1
+                                                                             question: What did the agent change? · shows task, output, diff, transcript · each attempt · 4 attempts · no language model
+evals/questions-group.eval.ts › asked by the group › asks none               a/base/docker     control          ungated             ×1
+                                                                             a/skilled/docker  variant skilled  gated               ×1
+                                                                             b/base/docker     control          ungated             ×1
+                                                                             b/skilled/docker  variant skilled  gated               ×1
 excluded: —
-image docker · cursor · 3 evals
+image docker · cursor · 5 evals
   base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)

@@ -211,6 +211,14 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
       `- Judge${labelled ? ` ${cell(label)}` : ''} **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
     )
   }
+  for (const q of a.answers ?? []) {
+    const said = q.error
+      ? `failed: ${clip(cell(q.error), 200)}`
+      : `${q.choice !== undefined ? `**${cell(q.choice)}** ` : ''}${clip(cell(q.text), 300)}`
+    lines.push(
+      `- Question ${cell(`"${clip(q.question, 80)}"`)}: ${said}${q.input ? ` ([what the model saw](${q.input.path}))` : ''}`,
+    )
+  }
   const labels = checkLabels(a)
   a.checks.forEach((c, i) => {
     const label = labels[i]

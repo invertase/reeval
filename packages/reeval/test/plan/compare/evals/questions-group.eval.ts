@@ -1,15 +1,12 @@
 import { evaluate, group } from 'reeval'
 import { base, skilled, terse } from './envs.ts'
 
-// Each eval that keeps the group's compare asks its question; one that replaces compare doesn't.
+// Each eval in the group asks its questions; one that sets its own replaces the list, and [] clears it.
 group(
   'asked by the group',
   {
-    compare: {
-      baseline: base,
-      variants: [skilled],
-      questions: ['Which handles state more cleanly?'],
-    },
+    compare: { baseline: base, variants: [skilled] },
+    questions: [{ question: 'Which handles state more cleanly?', across: 'environment' }],
   },
   () => {
     evaluate('inherits the question', async () => {})
@@ -19,5 +16,11 @@ group(
       { compare: { baseline: base, variants: [terse] } },
       async () => {},
     )
+    evaluate(
+      'replaces the questions',
+      { questions: ['What did the agent change?'] },
+      async () => {},
+    )
+    evaluate('asks none', { questions: [] }, async () => {})
   },
 )
