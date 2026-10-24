@@ -44,7 +44,7 @@ func mirror(t *testing.T, version string, sums func(name, sum string) string) (s
 	return dir, name
 }
 
-func listed(name, sum string) string { return fmt.Sprintf("%s  other\n%s  %s\n", sum, sum, name) }
+func listing(name, sum string) string { return fmt.Sprintf("%s  other\n%s  %s\n", sum, sum, name) }
 
 func code(t *testing.T, err error) int {
 	t.Helper()
@@ -56,7 +56,7 @@ func code(t *testing.T, err error) int {
 }
 
 func TestDownloadsChecksAndCaches(t *testing.T) {
-	_, name := mirror(t, "9.9.9", listed)
+	_, name := mirror(t, "9.9.9", listing)
 	got, err := resolve()
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestReleaseWithoutTheBinary(t *testing.T) {
 }
 
 func TestOfflineWithNothingCached(t *testing.T) {
-	_, name := mirror(t, "9.9.9", listed)
+	_, name := mirror(t, "9.9.9", listing)
 	t.Setenv("REEVAL_OFFLINE", "1")
 	if _, err := resolve(); code(t, err) != exitUsage || !strings.Contains(err.Error(), name) {
 		t.Fatalf("err = %v", err)
@@ -105,7 +105,7 @@ func TestOfflineWithNothingCached(t *testing.T) {
 }
 
 func TestDownloadFailureNamesTheWayOut(t *testing.T) {
-	mirror(t, "9.9.9", listed)
+	mirror(t, "9.9.9", listing)
 	t.Setenv("REEVAL_DOWNLOAD", "file://"+filepath.ToSlash(t.TempDir()))
 	_, err := resolve()
 	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "REEVAL_DOWNLOAD") || !strings.Contains(err.Error(), "REEVAL_BINARY") {
@@ -114,7 +114,7 @@ func TestDownloadFailureNamesTheWayOut(t *testing.T) {
 }
 
 func TestReevalBinaryComesFirst(t *testing.T) {
-	mirror(t, "9.9.9", listed)
+	mirror(t, "9.9.9", listing)
 	own := filepath.Join(t.TempDir(), "reeval")
 	if err := os.WriteFile(own, []byte(fakeBinary), 0o755); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestExecsTheBinary(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the fake binary is a shell script")
 	}
-	mirror(t, "9.9.9", listed)
+	mirror(t, "9.9.9", listing)
 	launcher := filepath.Join(t.TempDir(), "reeval")
 	if out, err := exec.Command("go", "build", "-o", launcher, ".").CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, out)
@@ -165,36 +165,50 @@ func TestExecsTheBinary(t *testing.T) {
 	}
 }
 
-// embed makes this launcher the one released as version, carrying sums.
-func embed(t *testing.T, version string, sums map[string]string) {
+// embed makes this launcher the one released as version, carrying binaries.
+func embed(t *testing.T, version string, binaries map[string]binary) {
 	t.Helper()
-	oldVersion, oldSums := sumsVersion, releaseSums
-	sumsVersion, releaseSums = version, sums
-	t.Cleanup(func() { sumsVersion, releaseSums = oldVersion, oldSums })
+	oldVersion, oldBinaries := sumsVersion, releaseBinaries
+	sumsVersion, releaseBinaries = version, binaries
+	t.Cleanup(func() { sumsVersion, releaseBinaries = oldVersion, oldBinaries })
 }
 
-func fakeSum() string {
+func fake() binary {
 	sum := sha256.Sum256([]byte(fakeBinary))
-	return hex.EncodeToString(sum[:])
+	return binary{hex.EncodeToString(sum[:]), int64(len(fakeBinary))}
 }
 
-func TestReleasedLauncherTrustsOnlyItsOwnSums(t *testing.T) {
-	dir, name := mirror(t, "9.9.9", listed)
-	// The mirror's SHA256SUMS isn't read: it could be as wrong as the binary beside it.
-	if err := os.Remove(filepath.Join(dir, "SHA256SUMS")); err != nil {
-		t.Fatal(err)
-	}
-	embed(t, "9.9.9", map[string]string{name: fakeSum()})
+func TestReleasedLauncherDownloadsItsOwnBinary(t *testing.T) {
+	_, name := mirror(t, "9.9.9", listing)
+	embed(t, "9.9.9", map[string]binary{name: fake()})
 	if _, err := resolve(); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestEmbeddedSumOutranksTheMirrors(t *testing.T) {
-	_, name := mirror(t, "9.9.9", listed)
-	embed(t, "9.9.9", map[string]string{name: strings.Repeat("0", 64)})
+// A SHA256SUMS that doesn't list the binary can't contradict the record.
+func TestRecordStandsWithoutAListing(t *testing.T) {
+	_, name := mirror(t, "9.9.9", func(_, sum string) string { return sum + "  other\n" })
+	embed(t, "9.9.9", map[string]binary{name: fake()})
+	if _, err := resolve(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSHA256SUMSContradictingTheRecord(t *testing.T) {
+	_, name := mirror(t, "9.9.9", func(name, _ string) string { return strings.Repeat("0", 64) + "  " + name + "\n" })
+	embed(t, "9.9.9", map[string]binary{name: fake()})
 	_, err := resolve()
-	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "doesn't match its sha256") {
+	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "The release has changed") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestEmbeddedSumOutranksTheMirrors(t *testing.T) {
+	_, name := mirror(t, "9.9.9", listing)
+	embed(t, "9.9.9", map[string]binary{name: {strings.Repeat("0", 64), int64(len(fakeBinary))}})
+	_, err := resolve()
+	if code(t, err) != exitInfra || !strings.Contains(err.Error(), "The release has changed") {
 		t.Fatalf("err = %v", err)
 	}
 	if found, _ := filepath.Glob(filepath.Join(os.Getenv("XDG_CACHE_HOME"), "reeval", "bin", "9.9.9", "*")); len(found) > 0 {
@@ -203,18 +217,66 @@ func TestEmbeddedSumOutranksTheMirrors(t *testing.T) {
 }
 
 func TestReleasedLauncherWithoutThisTarget(t *testing.T) {
-	mirror(t, "9.9.9", listed)
-	embed(t, "9.9.9", map[string]string{"reeval-9.9.9-plan9-mips": fakeSum()})
-	if _, err := resolve(); code(t, err) != exitInfra || !strings.Contains(err.Error(), "has no binary") {
+	_, name := mirror(t, "9.9.9", listing)
+	embed(t, "9.9.9", map[string]binary{"reeval-9.9.9-plan9-mips": fake()})
+	if _, err := resolve(); code(t, err) != exitInfra || !strings.Contains(err.Error(), "released with no reeval binary "+name) {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 func TestAnotherVersionReadsItsSHA256SUMS(t *testing.T) {
-	mirror(t, "9.9.9", listed)
-	embed(t, "1.0.0", map[string]string{})
+	mirror(t, "9.9.9", listing)
+	embed(t, "1.0.0", map[string]binary{})
 	if _, err := resolve(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// An empty cached file, or one of another size than the record's, is downloaded again.
+func TestCachedFileOfTheWrongSizeIsReplaced(t *testing.T) {
+	for _, junk := range []string{"", "not the binary"} {
+		_, name := mirror(t, "9.9.9", listing)
+		embed(t, "9.9.9", map[string]binary{name: fake()})
+		cached := filepath.Join(os.Getenv("XDG_CACHE_HOME"), "reeval", "bin", "9.9.9", name)
+		if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cached, []byte(junk), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := resolve(); err != nil || got != cached {
+			t.Fatalf("resolve() = %s %v", got, err)
+		}
+		if data, _ := os.ReadFile(cached); string(data) != fakeBinary {
+			t.Errorf("%q wasn't replaced: %q", junk, data)
+		}
+	}
+}
+
+func TestPicksTheTarget(t *testing.T) {
+	for _, c := range []struct {
+		goos, goarch string
+		musl, avx2   bool
+		want         string
+	}{
+		{"linux", "amd64", false, true, "linux-x64"},
+		{"linux", "amd64", false, false, "linux-x64-baseline"},
+		{"linux", "amd64", true, false, "linux-x64-musl-baseline"},
+		{"linux", "arm64", true, false, "linux-arm64-musl"},
+		{"darwin", "amd64", false, false, "darwin-x64"},
+		{"windows", "amd64", false, false, "windows-x64-baseline"},
+		{"windows", "arm64", false, true, "windows-x64"},
+		{"linux", "386", false, false, ""},
+		{"freebsd", "amd64", false, true, ""},
+	} {
+		got, err := pickTarget(c.goos, c.goarch, c.musl, c.avx2)
+		if c.want == "" {
+			if code(t, err) != exitUsage {
+				t.Errorf("%+v: %s %v", c, got, err)
+			}
+		} else if err != nil || got != c.want {
+			t.Errorf("%+v: %s %v, want %s", c, got, err, c.want)
+		}
 	}
 }
 
@@ -273,7 +335,7 @@ func TestRefusesARedirectFromHTTPS(t *testing.T) {
 
 // Launchers in containers that share the cache all have pid 1; goroutines share one pid too.
 func TestConcurrentFirstRunsShareAPid(t *testing.T) {
-	mirror(t, "9.9.9", listed)
+	mirror(t, "9.9.9", listing)
 	var wg sync.WaitGroup
 	errs := make([]error, 8)
 	for i := range errs {
@@ -299,7 +361,7 @@ func TestConcurrentFirstRunsShareAPid(t *testing.T) {
 }
 
 func TestReevalBinaryIsntALauncher(t *testing.T) {
-	mirror(t, "9.9.9", listed)
+	mirror(t, "9.9.9", listing)
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)

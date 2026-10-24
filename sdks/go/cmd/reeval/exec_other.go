@@ -4,7 +4,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -23,8 +22,7 @@ func run(binary string, args, env []string) int {
 		return exit.ExitCode()
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "reeval: can't run %s: %v\n", binary, err)
-		return exitInfra
+		return runFailed(binary, err)
 	}
 	return 0
 }

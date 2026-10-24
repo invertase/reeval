@@ -27,6 +27,8 @@ esac
 if [ "${target%%-*}" = linux ] && ldd --version 2>&1 | grep -qi musl; then
   target=$target-musl
 fi
+# The launcher picks the baseline build on an x64 Linux CPU without AVX2.
+case $target in linux-x64*) grep -qw avx2 /proc/cpuinfo || target=$target-baseline ;; esac
 
 mkdir -p "$work/reeval/sdks"
 cp -R "$repo/sdks/go" "$work/reeval/sdks/go"

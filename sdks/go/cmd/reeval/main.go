@@ -4,10 +4,11 @@
 //	go get -tool github.com/invertase/reeval/sdks/go/cmd/reeval@latest
 //	go tool reeval run
 //
-// The binary for version V and target T is reeval-V-T (.exe on Windows) in the GitHub release
-// vV, and is cached at <cache>/reeval/bin/V/. A released module carries each target's sha256
-// (sums.go), so go.sum pins the binary too; another version is checked against its release's
-// SHA256SUMS. Every language SDK's launcher finds it the same way: REEVAL_BINARY, then the cache,
+// The binary for version V and target T (-baseline on an x64 CPU without AVX2) is reeval-V-T
+// (.exe on Windows) in the GitHub release vV, and is cached at <cache>/reeval/bin/V/. A released
+// module carries each target's sha256 and size (sums.go), so go.sum pins the binary too, and the
+// release's SHA256SUMS must agree; another version is checked against SHA256SUMS alone. Every
+// language SDK's launcher finds it the same way: REEVAL_BINARY, then the cache,
 // then a download, which REEVAL_OFFLINE turns off. REEVAL_VERSION runs another version, and
 // REEVAL_DOWNLOAD names a mirror (https:// or file://).
 package main
@@ -78,6 +79,17 @@ func main() {
 	os.Exit(run(binary, os.Args[1:], env))
 }
 
+// runFailed reports a binary that wouldn't start. A cached one is removed, so the next run
+// downloads it again instead of failing the same way.
+func runFailed(binary string, err error) int {
+	message := fmt.Sprintf("reeval: can't run %s: %v.", binary, err)
+	if os.Getenv("REEVAL_BINARY") == "" && os.Remove(binary) == nil {
+		message += " It's been removed from the cache, so the next run downloads it again."
+	}
+	fmt.Fprintln(os.Stderr, message, "REEVAL_BINARY names a reeval binary to run instead.")
+	return exitInfra
+}
+
 var (
 	release = regexp.MustCompile(`^v(\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?)$`)
 	pseudo  = regexp.MustCompile(`\d{14}-[0-9a-f]{12}$`)
@@ -97,17 +109,40 @@ func version() (string, error) {
 		"tell which reeval to run. Set REEVAL_VERSION, or REEVAL_BINARY to a reeval binary.", v)
 }
 
+// target is this host's release target, detecting only what pickTarget needs.
 func target() (string, error) {
-	arch := map[string]string{"amd64": "x64", "arm64": "arm64"}[runtime.GOARCH]
-	system := map[string]string{"linux": "linux", "darwin": "darwin", "windows": "windows"}[runtime.GOOS]
-	if arch == "" || system == "" || (system == "windows" && arch != "x64") {
+	isMusl := runtime.GOOS == "linux" && musl()
+	hasAVX2 := true
+	if runtime.GOOS == "windows" || (runtime.GOOS == "linux" && runtime.GOARCH == "amd64") {
+		hasAVX2 = avx2()
+	}
+	return pickTarget(runtime.GOOS, runtime.GOARCH, isMusl, hasAVX2)
+}
+
+// pickTarget is the release target for an OS and architecture as Go names them, on musl or not,
+// with AVX2 or not: the default x64 builds need it, the -baseline ones don't.
+func pickTarget(goos, goarch string, musl, avx2 bool) (string, error) {
+	arch := map[string]string{"amd64": "x64", "arm64": "arm64"}[goarch]
+	system := map[string]string{"linux": "linux", "darwin": "darwin", "windows": "windows"}[goos]
+	if arch == "" || system == "" {
 		return "", fail(exitUsage, "there's no reeval binary for %s %s. Set REEVAL_BINARY to one you "+
-			"built, or use the npm package.", runtime.GOOS, runtime.GOARCH)
+			"built, or use the npm package.", goos, goarch)
 	}
-	if system == "linux" && musl() {
-		return "linux-" + arch + "-musl", nil
+	if system == "darwin" {
+		return "darwin-" + arch, nil
 	}
-	return system + "-" + arch, nil
+	// Windows on ARM runs the x64 binary under emulation.
+	found := "windows-x64"
+	if system == "linux" {
+		found = "linux-" + arch
+		if musl {
+			found += "-musl"
+		}
+	}
+	if (system == "windows" || arch == "x64") && !avx2 {
+		found += "-baseline"
+	}
+	return found, nil
 }
 
 // musl is whether the host's programs run on musl. This launcher is static, so it reads the
@@ -195,7 +230,13 @@ func resolve() (string, error) {
 	name := asset(v, t)
 	cached := filepath.Join(cacheDir(), "bin", v, name)
 	if info, err := os.Stat(cached); err == nil && info.Mode().IsRegular() {
-		return cached, nil
+		want, recorded := recordFor(v, name)
+		// An empty file, or one of another size than the record's, is a download cut short or
+		// another build: fetch it again rather than run it.
+		if info.Size() > 0 && (!recorded || info.Size() == want.size) {
+			return cached, nil
+		}
+		os.Remove(cached)
 	}
 	if offline() {
 		return "", fail(exitUsage, "reeval %s isn't in the cache and REEVAL_OFFLINE is set. Put %s at "+
@@ -226,27 +267,63 @@ func checkOverride(override string) (string, error) {
 	return override, nil
 }
 
-// expected is the binary's sha256: this module's own for its release, else the release's
-// SHA256SUMS.
-func expected(base, version, name string) (string, error) {
-	if version == sumsVersion {
-		if sum, ok := releaseSums[name]; ok {
-			return sum, nil
+// binary is a release binary as this module records it.
+type binary struct {
+	sha256 string
+	size   int64
+}
+
+// recordFor is the binary this module was released with, when version is its release's.
+func recordFor(version, name string) (binary, bool) {
+	if version != sumsVersion {
+		return binary{}, false
+	}
+	b, ok := releaseBinaries[name]
+	return b, ok
+}
+
+// listed is name's sha256 in a SHA256SUMS, as sha256sum writes it in text or binary mode.
+func listed(sums []byte, name string) (string, bool) {
+	scanner := bufio.NewScanner(bytes.NewReader(sums))
+	for scanner.Scan() {
+		f := strings.Fields(scanner.Text())
+		if len(f) == 2 && (f[1] == name || f[1] == "*"+name) {
+			return strings.ToLower(f[0]), true
 		}
-		return "", fail(exitInfra, "reeval %s has no binary %s.", version, name)
+	}
+	return "", false
+}
+
+// expected is the binary's sha256: this module's own for its release, which the release's
+// SHA256SUMS must not contradict, else SHA256SUMS alone.
+func expected(base, version, name string) (string, error) {
+	want, recorded := recordFor(version, name)
+	if !recorded && version == sumsVersion {
+		return "", fail(exitInfra, "this github.com/invertase/reeval/sdks/go was released with no reeval "+
+			"binary %s. Set REEVAL_BINARY to a reeval binary.", name)
 	}
 	sums, err := fetch(base + "/SHA256SUMS")
 	if err != nil {
 		return "", err
 	}
-	scanner := bufio.NewScanner(bytes.NewReader(sums))
-	for scanner.Scan() {
-		f := strings.Fields(scanner.Text())
-		if len(f) == 2 && (f[1] == name || f[1] == "*"+name) {
-			return strings.ToLower(f[0]), nil
+	sum, ok := listed(sums, name)
+	if recorded {
+		if ok && sum != want.sha256 {
+			return "", fail(exitInfra, "%s/SHA256SUMS lists %s as %s, but this github.com/invertase/reeval/sdks/go "+
+				"was released with %s. The release has changed; don't run it.", base, name, sum, want.sha256)
 		}
+		return want.sha256, nil
 	}
-	return "", fail(exitInfra, "%s/SHA256SUMS doesn't list %s.", base, name)
+	why := "records no binary hashes"
+	if sumsVersion != "" {
+		why = "was released with reeval " + sumsVersion + ", not " + version
+	}
+	fmt.Fprintf(os.Stderr, "reeval: this github.com/invertase/reeval/sdks/go %s, so %s is checked against "+
+		"%s/SHA256SUMS only\n", why, name, base)
+	if !ok {
+		return "", fail(exitInfra, "%s/SHA256SUMS doesn't list %s.", base, name)
+	}
+	return sum, nil
 }
 
 func download(version, name, dest string) error {
@@ -255,6 +332,9 @@ func download(version, name, dest string) error {
 		base = "https://github.com/" + repo + "/releases/download/v" + version
 	}
 	base = strings.TrimRight(base, "/")
+	if strings.HasPrefix(base, "http:") {
+		fmt.Fprintf(os.Stderr, "reeval: warning: REEVAL_DOWNLOAD is %s, which isn't https\n", base)
+	}
 	want, err := expected(base, version, name)
 	if err != nil {
 		return err
@@ -279,6 +359,9 @@ func download(version, name, dest string) error {
 	}
 	defer os.Remove(partial.Name())
 	_, err = partial.Write(data)
+	if err == nil {
+		err = partial.Sync()
+	}
 	if cerr := partial.Close(); err == nil {
 		err = cerr
 	}
@@ -287,11 +370,29 @@ func download(version, name, dest string) error {
 	}
 	if err == nil {
 		err = os.Rename(partial.Name(), dest)
+		// Windows can't replace a binary another first run has already started.
+		if err != nil && hashes(dest, want) {
+			err = nil
+		}
 	}
 	if err != nil {
 		return fail(exitInfra, "can't write %s: %v", dest, err)
 	}
 	return nil
+}
+
+// hashes is whether the file at path has sha256 sum.
+func hashes(path, sum string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return false
+	}
+	return hex.EncodeToString(h.Sum(nil)) == sum
 }
 
 var client = &http.Client{Timeout: timeout, CheckRedirect: noDowngrade}
