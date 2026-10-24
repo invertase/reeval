@@ -51,9 +51,9 @@ export default defineConfig({
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
 | Adapter | `@reeval/harness-opencode` 0.2.8 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | `@opencode/cli` 2.1.2 |
+| CLI | `@opencode/cli` 2.1.4 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:opencode-0.2.9` |
+| Image | `reeval-sandbox:opencode-0.2.10` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
@@ -265,7 +265,7 @@ Items are flat, not namespaced, so two plugins' subagents or commands with the s
 
 ## Supported providers
 
-Every provider OpenCode 2.1.2 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.1.4 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
@@ -342,7 +342,6 @@ Every provider OpenCode 2.1.2 knows whose key it sends in a header on known host
 | HPC-AI | `hpc-ai/…` | `HPC_AI_API_KEY` | `Authorization: Bearer` | `api.hpc-ai.com` |
 | Hugging Face | `huggingface/…` | `HF_TOKEN` | `Authorization: Bearer` | `router.huggingface.co` |
 | Charm Hyper | `hyper/…` | `HYPER_API_KEY` | `Authorization: Bearer` | `hyper.charm.land` |
-| iFlow | `iflowcn/…` | `IFLOW_API_KEY` | `Authorization: Bearer` | `apis.iflow.cn` |
 | Impossibl | `impossibl/…` | `IMPOSSIBL_API_KEY` | `Authorization: Bearer` | `api.impossibl.com` |
 | Inception | `inception/…` | `INCEPTION_API_KEY` | `Authorization: Bearer` | `api.inceptionlabs.ai` |
 | Inceptron | `inceptron/…` | `INCEPTRON_API_KEY` | `Authorization: Bearer` | `api.inceptron.io` |
@@ -361,9 +360,7 @@ Every provider OpenCode 2.1.2 knows whose key it sends in a header on known host
 | klokintegration.se | `klokintegration/…` | `KLOKINTEGRATION_API_KEY` | `Authorization: Bearer` | `api-gw.klok.ipaas.se` |
 | Kosmik Compute | `kosmik/…` | `KOSMIK_API_KEY` | `Authorization: Bearer` | `api.koscompute.com` |
 | KUAE Cloud Coding Plan | `kuae-cloud-coding-plan/…` | `KUAE_API_KEY` | `Authorization: Bearer` | `coding-plan-endpoint.kuaecloud.net` |
-| Lilac | `lilac/…` | `LILAC_API_KEY` | `Authorization: Bearer` | `api.getlilac.com` |
 | Liquid Inference | `liquid/…` | `LIQUID_API_KEY` | `Authorization: Bearer` | `router.inference.ai.exchange` |
-| Llama | `llama/…` | `LLAMA_API_KEY` | `Authorization: Bearer` | `api.llama.com` |
 | DevPass (LLM Gateway) | `llmgateway/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
 | LLM Gateway | `llmgateway-providers/…` | `LLMGATEWAY_API_KEY` | `Authorization: Bearer` | `api.llmgateway.io` |
 | LLM Tech | `llmtech/…` | `LLMTECH_API_KEY` | `Authorization: Bearer` | `api.llmtech.eu` |
@@ -500,6 +497,7 @@ The providers OpenCode knows whose key the gateway can't swap in, or that can't 
 | GitLab Duo | `gitlab/…` | It runs on a GitLab Duo subscription, through a GitLab login. |
 | Vertex | `google-vertex/…` | It takes a service account (Vertex refuses API keys for most models), not a key in a header. |
 | Infomaniak | `infomaniak/…` | Its API host is per account (INFOMANIAK_PRODUCT_ID), which reeval doesn't pass. |
+| Lilac | `lilac/…` | Every one of its models is deprecated, and OpenCode runs none of them. |
 | LMStudio | `lmstudio/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Lynkr | `lynkr/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Merge Gateway | `merge-gateway/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |
