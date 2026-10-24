@@ -74,6 +74,7 @@ func TestConformancePick(t *testing.T) {
 const runner: Runner = {
   name: 'go',
   interpreterEnv: 'REEVAL_GO',
+  sidecars: ['.sha256'],
   async setup(dir) {
     work = dir
     exe = join(dir, windows ? 'reeval.exe' : 'reeval')

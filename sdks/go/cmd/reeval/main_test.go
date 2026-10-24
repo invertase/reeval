@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 const fakeBinary = "#!/bin/sh\necho \"ran $*\"\nexit 7\n"
@@ -232,9 +233,10 @@ func TestAnotherVersionReadsItsSHA256SUMS(t *testing.T) {
 	}
 }
 
-// An empty cached file, or one of another size than the record's, is downloaded again.
-func TestCachedFileOfTheWrongSizeIsReplaced(t *testing.T) {
-	for _, junk := range []string{"", "not the binary"} {
+// An empty cached file, one of another size than the record's, or one of its size but another
+// sha256, is downloaded again.
+func TestCachedFileThatIsntTheRecordsIsReplaced(t *testing.T) {
+	for _, junk := range []string{"", "not the binary", strings.Repeat("x", len(fakeBinary))} {
 		_, name := mirror(t, "9.9.9", listing)
 		embed(t, "9.9.9", map[string]binary{name: fake()})
 		cached := filepath.Join(os.Getenv("XDG_CACHE_HOME"), "reeval", "bin", "9.9.9", name)
@@ -250,6 +252,36 @@ func TestCachedFileOfTheWrongSizeIsReplaced(t *testing.T) {
 		if data, _ := os.ReadFile(cached); string(data) != fakeBinary {
 			t.Errorf("%q wasn't replaced: %q", junk, data)
 		}
+	}
+}
+
+// A marker beside the cached binary vouches for it while the file is unchanged, and not after.
+func TestMarkerVouchesForAnUnchangedFile(t *testing.T) {
+	mirror(t, "9.9.9", listing)
+	cached, err := resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(marker(cached)); err != nil || !strings.HasPrefix(string(data), fake().sha256+" ") {
+		t.Fatalf("marker: %q %v", data, err)
+	}
+	t.Setenv("REEVAL_OFFLINE", "1")
+	if again, err := resolve(); err != nil || again != cached {
+		t.Fatalf("unchanged: %s %v", again, err)
+	}
+	if err := os.WriteFile(cached, []byte(strings.Repeat("x", len(fakeBinary))), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// File times tick coarsely; a rewrite this soon after the download could keep them.
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(cached, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolve(); code(t, err) != exitUsage {
+		t.Fatalf("rewritten: %v", err)
+	}
+	if _, err := os.Stat(cached); !os.IsNotExist(err) {
+		t.Errorf("the rewritten file is still cached: %v", err)
 	}
 }
 

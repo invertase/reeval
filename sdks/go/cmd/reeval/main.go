@@ -84,6 +84,7 @@ func main() {
 func runFailed(binary string, err error) int {
 	message := fmt.Sprintf("reeval: can't run %s: %v.", binary, err)
 	if os.Getenv("REEVAL_BINARY") == "" && os.Remove(binary) == nil {
+		os.Remove(marker(binary))
 		message += " It's been removed from the cache, so the next run downloads it again."
 	}
 	fmt.Fprintln(os.Stderr, message, "REEVAL_BINARY names a reeval binary to run instead.")
@@ -230,19 +231,58 @@ func resolve() (string, error) {
 	name := asset(v, t)
 	cached := filepath.Join(cacheDir(), "bin", v, name)
 	if info, err := os.Stat(cached); err == nil && info.Mode().IsRegular() {
-		want, recorded := recordFor(v, name)
-		// An empty file, or one of another size than the record's, is a download cut short or
-		// another build: fetch it again rather than run it.
-		if info.Size() > 0 && (!recorded || info.Size() == want.size) {
+		if verified(cached, info, v, name) {
 			return cached, nil
 		}
 		os.Remove(cached)
+		os.Remove(marker(cached))
 	}
 	if offline() {
 		return "", fail(exitUsage, "reeval %s isn't in the cache and REEVAL_OFFLINE is set. Put %s at "+
 			"%s, or set REEVAL_BINARY.", v, name, cached)
 	}
 	return cached, download(v, name, cached)
+}
+
+// verified is whether the cached binary can run. An empty file, or one of another size than the
+// record's, is a download cut short or another build. Otherwise it must hash to the recorded
+// sha256, else to the one its marker holds; the marker's word is taken while the file is
+// unchanged since it was written, so a run doesn't hash the binary each time. With neither a
+// record nor a marker, it was put there by hand, as for REEVAL_OFFLINE, and runs.
+func verified(path string, info os.FileInfo, version, name string) bool {
+	want, recorded := recordFor(version, name)
+	if info.Size() == 0 || (recorded && info.Size() != want.size) {
+		return false
+	}
+	digest, seen := "", ""
+	if data, err := os.ReadFile(marker(path)); err == nil {
+		digest, seen, _ = strings.Cut(strings.TrimSpace(string(data)), " ")
+	}
+	expected := digest
+	if recorded {
+		expected = want.sha256
+	}
+	if expected == "" {
+		return true
+	}
+	if seen == identity(info) && digest == expected {
+		return true
+	}
+	if hashes(path, expected) {
+		markVerified(path, expected)
+		return true
+	}
+	return false
+}
+
+// marker is the file beside a cached binary that records its verified sha256.
+func marker(binary string) string { return binary + ".sha256" }
+
+// markVerified records that the binary, as it is on disk now, has sha256 digest.
+func markVerified(binary, digest string) {
+	if info, err := os.Stat(binary); err == nil {
+		_ = os.WriteFile(marker(binary), []byte(digest+" "+identity(info)+"\n"), 0o644)
+	}
 }
 
 // checkOverride refuses a REEVAL_BINARY that isn't a file, or that is a launcher: this one, or
@@ -378,6 +418,7 @@ func download(version, name, dest string) error {
 	if err != nil {
 		return fail(exitInfra, "can't write %s: %v", dest, err)
 	}
+	markVerified(dest, want)
 	return nil
 }
 
