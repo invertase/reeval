@@ -74,6 +74,7 @@ jobs:
     outputs:
       release_created: ${{ steps.check.outputs.release_created }}
       version: ${{ steps.check.outputs.version }}
+      sha: ${{ steps.check.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,9 +85,12 @@ jobs:
         run: |
           set -euo pipefail
           v=$(jq -r '."."' .release-please-manifest.json)
-          git rev-parse "refs/tags/v${v}^{commit}" >/dev/null
-          echo "release_created=true" >> "$GITHUB_OUTPUT"
-          echo "version=${v}" >> "$GITHUB_OUTPUT"
+          sha=$(git rev-parse "refs/tags/v${v}^{commit}")
+          {
+            echo "release_created=true"
+            echo "version=${v}"
+            echo "sha=${sha}"
+          } >> "$GITHUB_OUTPUT"
 
   test:
     name: test
@@ -102,7 +106,8 @@ jobs:
       actions: read
     uses: ./.github/workflows/ci.yml
 
-  # Built from the release's tag, whichever ref the run was dispatched on.
+  # Built from the release's tagged commit, whichever ref the run was dispatched on. A push run's
+  # commit is the release's (release-please checks it), and the SHA can't resolve to a branch.
   binaries:
     name: binaries
     needs: [release-please, republish-gate, test]
@@ -116,7 +121,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/binary.yml
     with:
-      ref: v${{ needs.release-please.outputs.version || needs.republish-gate.outputs.version }}
+      ref: ${{ needs.republish-gate.outputs.sha || github.sha }}
 
   upload-binaries:
     name: upload binaries
@@ -132,8 +137,10 @@ jobs:
           name: ${{ needs.binaries.outputs.artifact }}
           path: out
       # SHA256SUMS goes up after the binaries, so it never lists binaries the release doesn't have.
-      # A release that has any binaries keeps them unless replace_binaries is set: a rebuild isn't
-      # byte-identical, so replacing them changes their published checksums.
+      # A release with SHA256SUMS keeps its binaries unless replace_binaries is set: a rebuild isn't
+      # byte-identical, so replacing them changes their published checksums. Without SHA256SUMS
+      # (an upload cut short), the binaries it has must match this build's sums, as a re-run of the
+      # failed job's do, and the rest are added.
       - name: Upload to the release
         working-directory: out
         env:
@@ -151,29 +158,50 @@ jobs:
           fi
           sha256sum -c SHA256SUMS
           gh release view "$TAG" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/assets"
+          has() { grep -qxF "$1" "$RUNNER_TEMP/assets"; }
           binaries=(reeval-*)
-          present=()
-          for f in "${binaries[@]}" SHA256SUMS; do
-            if grep -qxF "$f" "$RUNNER_TEMP/assets"; then present+=("$f"); fi
-          done
-          if [ ${#present[@]} -gt 0 ] && [ "$REPLACE" != true ]; then
+          upload=()
+          if [ "$REPLACE" = true ]; then
+            upload=("${binaries[@]}")
+            for f in "${binaries[@]}" SHA256SUMS; do
+              if has "$f"; then echo "$TAG: replace $f"; else echo "$TAG: add $f"; fi
+            done
+          elif has SHA256SUMS; then
             level=error
             [ "$DRY_RUN" = true ] && level=notice
-            echo "::$level::$TAG already has ${present[*]}; dispatch with replace_binaries=true to replace them."
+            echo "::$level::$TAG already has its binaries; dispatch with replace_binaries=true to replace them."
             [ "$DRY_RUN" = true ] && exit 0
             exit 1
+          else
+            mkdir "$RUNNER_TEMP/uploaded"
+            for f in "${binaries[@]}"; do
+              if has "$f"; then
+                gh release download "$TAG" --pattern "$f" --dir "$RUNNER_TEMP/uploaded"
+                want=$(awk -v f="$f" '$2 == f || $2 == "*" f { print $1 }' SHA256SUMS)
+                got=$(sha256sum "$RUNNER_TEMP/uploaded/$f" | cut -d' ' -f1)
+                if [ "$want" != "$got" ]; then
+                  echo "::error::$TAG has a $f that isn't this build's; dispatch with replace_binaries=true to replace the release's binaries."
+                  exit 1
+                fi
+                echo "$TAG: keep $f, the same as this build's"
+              else
+                upload+=("$f")
+                echo "$TAG: add $f"
+              fi
+            done
+            echo "$TAG: add SHA256SUMS"
           fi
-          for f in "${binaries[@]}" SHA256SUMS; do
-            if grep -qxF "$f" "$RUNNER_TEMP/assets"; then echo "$TAG: replace $f"; else echo "$TAG: add $f"; fi
-          done
           if [ "$DRY_RUN" = true ]; then
             echo "::notice::Dry run: nothing uploaded to $TAG"
             exit 0
           fi
-          clobber=()
-          [ "$REPLACE" = true ] && clobber=(--clobber)
-          gh release upload "$TAG" "${binaries[@]}" "${clobber[@]}"
-          gh release upload "$TAG" SHA256SUMS "${clobber[@]}"
+          if [ "$REPLACE" = true ]; then
+            if has SHA256SUMS; then gh release delete-asset "$TAG" SHA256SUMS --yes; fi
+            gh release upload "$TAG" "${upload[@]}" --clobber
+          elif [ ${#upload[@]} -gt 0 ]; then
+            gh release upload "$TAG" "${upload[@]}"
+          fi
+          gh release upload "$TAG" SHA256SUMS
 
   publish:
     name: publish to npm
