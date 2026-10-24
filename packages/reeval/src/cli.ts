@@ -88,6 +88,11 @@ let interrupted = false
 /** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
 let stopCode: number = EXIT.interrupted
 /**
+ * Set once the attempts and questions are done and whether the run stopped is decided, as
+ * live.json turns `finishing`: a signal then cancels nothing, and only means insights don't start.
+ */
+let finishing = false
+/**
  * Set while insights run, after the attempts and the exit code: Ctrl-C or SIGTERM then stops the
  * insights instead of cancelling the run, which has nothing left to cancel.
  */
@@ -376,6 +381,10 @@ async function runCommand(
     stopped = true
     answers = await questions?.answered()
   }
+  // In the same tick as the decision above: once live.json reads `finishing`, a signal is no
+  // longer a cancel.
+  finishing = true
+  live?.phase('finishing')
   const { lockfiles } = await import('./history/state.ts')
   const { writeScratchRun } = await import('./results.ts')
   const run = await writeScratchRun(
@@ -1053,6 +1062,7 @@ async function executeRun(
             process.exit(stopCode)
           }
           interrupted = true
+          if (finishing) return
           questions?.cancel()
           live?.phase('cancelling')
           renderer.onEvent({
@@ -1068,7 +1078,6 @@ async function executeRun(
       },
     })
     cutShort = interrupted
-    live?.phase('finishing')
   } catch (error) {
     live?.remove()
     throw error
