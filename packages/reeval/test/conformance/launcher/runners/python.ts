@@ -58,6 +58,7 @@ const runner: Runner = {
   },
   trust: (caFile) => ({ SSL_CERT_FILE: caFile }),
   async record(released) {
+    if (!pkg) return
     const file = join(pkg, 'binaries.json')
     if (released) writeFileSync(file, JSON.stringify(released))
     else rmSync(file, { force: true })
