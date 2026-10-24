@@ -409,10 +409,18 @@ func download(version, name, dest string) error {
 		err = os.Chmod(partial.Name(), 0o755)
 	}
 	if err == nil {
-		err = os.Rename(partial.Name(), dest)
-		// Windows can't replace a binary another first run has already started.
-		if err != nil && hashes(dest, want) {
-			err = nil
+		// Windows can't replace a file another first run has open: running it, or hashing it
+		// while it lands. Once it hashes right it's this binary; until then, try again.
+		for attempt := 1; ; attempt++ {
+			err = os.Rename(partial.Name(), dest)
+			if err == nil || hashes(dest, want) {
+				err = nil
+				break
+			}
+			if runtime.GOOS != "windows" || attempt == 20 {
+				break
+			}
+			time.Sleep(time.Duration(attempt) * 25 * time.Millisecond)
 		}
 	}
 	if err != nil {
