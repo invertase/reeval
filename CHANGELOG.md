@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0](https://github.com/invertase/reeval/compare/v0.14.0...v0.15.0) (2026-10-24)
+
+
+### Features
+
+* **gateway:** add openrouter() routing gateway ([#547](https://github.com/invertase/reeval/issues/547)) ([0778bbc](https://github.com/invertase/reeval/commit/0778bbc43343c41d0a506df7721c09530aa1eefa))
+
+
+### Bug Fixes
+
+* **cli:** switch out of cancel mode as live.json turns finishing ([#548](https://github.com/invertase/reeval/issues/548)) ([e84168a](https://github.com/invertase/reeval/commit/e84168a1d41959337e0a61f4e2f85a3944f3b0cc))
+
 ## [0.14.0](https://github.com/invertase/reeval/compare/v0.13.0...v0.14.0) (2026-10-24)
 
 
