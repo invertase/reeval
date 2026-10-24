@@ -14,7 +14,7 @@ Create the `evals/sdk.eval.ts` file with the starter, the `setup` command, the A
 
 ```ts title="evals/sdk.eval.ts"
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
-import { cursor } from '{{ pkg }}/harness'
+import { claudeCode } from '{{ pkg }}/harness'
 
 const starter = defineEnvironment('ai-sdk', ({ git, secret }) => ({
   workspace: git('github:vercel/ai', {
@@ -30,7 +30,7 @@ const starter = defineEnvironment('ai-sdk', ({ git, secret }) => ({
 
 evaluate('adds a weather tool with AI SDK', {
   environment: starter,
-  harness: cursor({ model: 'composer-2.5' }),
+  harness: claudeCode({ model: 'claude-sonnet-5' }),
 }, async (c) => {
   await c.send(
     'Add src/weather.ts that exports an AI SDK tool() and does not call it.',
@@ -64,7 +64,7 @@ From the directory that contains the `reeval.config.ts` file, run the `evals/sdk
 npx reeval run sdk
 ```
 
-The run needs an API key for your harness. For more information about that key, see [the harness reference](/harnesses/cursor).
+The run needs an API key for your harness. For more information about that key, see [the harness reference](/harnesses/claude-code).
 
 </Step>
 <Step title="Read the outcome">

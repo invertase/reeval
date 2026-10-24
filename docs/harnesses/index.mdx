@@ -13,14 +13,14 @@ In the `reeval.config.ts` file, pass one factory from the `{{ pkg }}/harness` mo
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { cursor } from '{{ pkg }}/harness'
+import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: cursor({ model: '<model>' }),
+  harness: claudeCode({ model: '<model>' }),
 })
 ```
 
-For more information about the harness's options and key, see [the harness reference](/harnesses/cursor).
+For more information about the harness's options and key, see [the harness reference](/harnesses/claude-code).
 
 ## Set the model and effort
 

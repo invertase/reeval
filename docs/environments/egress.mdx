@@ -40,7 +40,7 @@ npx reeval run --dry-run
 The `notes` column shows each evaluation's policy and its automatic hosts:
 
 ```text
-egress: deny-all + auto: api2.cursor.sh, *.cursor.sh
+egress: deny-all + auto: api.anthropic.com, *.anthropic.com
 ```
 
 An evaluation or group's `egress` option overrides the environment's, which overrides the one in the `reeval.config.ts` file or a profile. A blocked request never fails the attempt on its own. The agent gets a refusal, and your checks decide what that means.
@@ -63,7 +63,7 @@ Pass `withRegistry` as the evaluation's `environment`.
 { environment: withRegistry },
 ```
 
-A plain entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The automatic hosts join the list, so the plan prints `allow registry.npmjs.org, github.com, *.github.com + auto: api2.cursor.sh, *.cursor.sh`.
+A plain entry matches that host only. A `*.` entry matches every subdomain, not the apex domain itself, and never an IP address. The automatic hosts join the list, so the plan prints `allow registry.npmjs.org, github.com, *.github.com + auto: api.anthropic.com, *.anthropic.com`.
 
 ## Read blocked requests
 

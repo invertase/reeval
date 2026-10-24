@@ -32,13 +32,13 @@ npm install -D {{ pkg }}
 Create a project for your harness:
 
 ```bash
-npx reeval init --harness cursor
+npx reeval init --harness claude-code
 ```
 
 The command writes the `reeval.config.ts` and `evals/environments.ts` files and names the key your harness needs. Add the key to the `.env.local` file next to the `reeval.config.ts` file:
 
 ```bash title=".env.local"
-CURSOR_API_KEY=replace-with-your-key
+ANTHROPIC_API_KEY=replace-with-your-key
 ```
 
 Build the image your harness runs in:
@@ -116,7 +116,7 @@ Run the eight attempts:
 npx reeval run shoehorn
 ```
 
-For this example on `composer-2.5`, reeval's output code renders the result instead of copying a terminal capture:
+For this example on `claude-sonnet-5`, reeval's output code renders the result instead of copying a terminal capture:
 
 ```text
 pass             tests build only the request fields they read

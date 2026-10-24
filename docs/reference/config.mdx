@@ -9,11 +9,11 @@ description: "Look up defineConfig, config discovery, and the helpers a config c
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { cursor } from '{{ pkg }}/harness'
+import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
-  harness: cursor({ model: 'composer-2.5' }),
+  harness: claudeCode({ model: 'claude-sonnet-5' }),
   judge: { model: 'google/gemini-3.8-flash' },
   timeout: '15m',
 })
