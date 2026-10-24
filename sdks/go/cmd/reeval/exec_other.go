@@ -10,9 +10,11 @@ import (
 )
 
 // run starts the binary and waits for it, forwarding its exit code. The console sends Ctrl-C
-// to both; the launcher ignores it, so reeval stops its attempts and cleans up before either exits.
+// to both; the launcher swallows it, so reeval stops its attempts and cleans up before either exits.
+// On Windows only Notify keeps Ctrl-C from ending the process: Ignore leaves the default handler,
+// which exits.
 func run(binary string, args, env []string) int {
-	signal.Ignore(os.Interrupt)
+	signal.Notify(make(chan os.Signal, 1), os.Interrupt)
 	cmd := exec.Command(binary, args...)
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
