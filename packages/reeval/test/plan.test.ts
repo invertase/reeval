@@ -21,10 +21,10 @@ const modelsDev = async (dir: string) => {
   seedModelsDev(dir)
 }
 
-export // The Go runner's first `go run` builds the SDK: over a minute on a cold Windows runner.
+// The Go runner's first `go run` builds the SDK: over a minute on a cold Windows runner.
 const GO_BUILD = 300_000
 
-const cases: PlanCase[] = [
+export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
