@@ -66,7 +66,8 @@ export type SuiteResult = {
   errors: string[]
   /**
    * Outcomes counted per block: each family case is one, each eval with no cases is one, and a
-   * family whose pooled gate failed is one more fail. `errors` counts the run's `errors`.
+   * family whose pooled gate failed is one more fail. `errors` counts the run's `errors`, and
+   * `notGated` the passes whose cells are all `gate: 'none'` (studies), which `pass` leaves out.
    */
   tally: SuiteTally
   /** Sorted by path. */
@@ -78,6 +79,7 @@ export type SuiteResult = {
 export type SuiteTally = {
   errors: number
   pass: number
+  notGated: number
   fail: number
   infraError: number
   cancelled: number
@@ -580,6 +582,10 @@ function worst(outcomes: ResultOutcome[]): ResultOutcome {
   return 'pass'
 }
 
+/** A study: every cell `gate: 'none'`, so it passes whatever it saw and never reads `pass`. */
+export const isStudy = (cells: readonly Pick<CellResult, 'gated'>[]): boolean =>
+  cells.length > 0 && cells.every((c) => !c.gated)
+
 /** The record's outcome, or `cancelled` when every gated attempt that failed was cancelled. */
 function outcomeOf(e: EvalEntry): ResultOutcome {
   if (e.outcome !== 'fail') return e.outcome
@@ -717,19 +723,23 @@ export function suiteResult(record: RunRecord): SuiteResult {
   const tally: SuiteTally = {
     errors: errors.length,
     pass: 0,
+    notGated: 0,
     fail: 0,
     infraError: 0,
     cancelled: 0,
     skipped: 0,
   }
-  const count = (o: ResultOutcome) => {
+  const count = (e: EvalEntry) => {
+    const o = outcomeOf(e)
     if (o === 'infra_error') tally.infraError++
-    else tally[o]++
+    else if (o === 'pass' && isStudy(e.cells.map((c) => ({ gated: c.gate !== 'none' })))) {
+      tally.notGated++
+    } else tally[o]++
   }
   for (const e of record.evals) {
     const evals = byFile.get(e.file) ?? []
     byFile.set(e.file, evals)
-    count(outcomeOf(e))
+    count(e)
     const family = e.family && families.get(e.family.id)
     if (!family) {
       evals.push(evalResult(record, e, evals.length))

@@ -66,7 +66,7 @@ describe('suiteResult over the record corpus', () => {
           f.lifts.some((l) => l.outcome === 'fail'),
         ).length
         assert.equal(
-          t.pass + t.fail + t.infraError + t.cancelled + t.skipped,
+          t.pass + t.notGated + t.fail + t.infraError + t.cancelled + t.skipped,
           record.evals.length + gates,
         )
         assert.equal(t.errors, record.errors?.length ?? 0)
@@ -456,6 +456,7 @@ evaluate('writes hello.txt', { compare: { baseline: plain, variants: [bye] } }, 
     assert.deepEqual(s.tally, {
       errors: 0,
       pass: 0,
+      notGated: 0,
       fail: 1,
       infraError: 0,
       cancelled: 0,

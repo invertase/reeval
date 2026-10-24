@@ -287,7 +287,8 @@ reeval analyze           reeval studio          reeval image build      reeval d
 arm, per harness, or both), counts as `N of M`, a variant's effect as `helped`, `made it worse`
 or `can't tell yet`, and failed checks with their messages; `-v` adds intervals. Then the tally
 (`1 fail · 2 pass`; an `error:` outside any eval, such as a stray rejection in an eval file, is
-`1 run error` and fails the run), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
+`1 run error` and fails the run; a study, every cell `gate: 'none'`, is `1 not gated`, never a pass,
+so read its arm rows for what passed), and a `Set analysis.model…` hint while `analysis.model` is unset (the judge's
 model never stands in). With `analysis.model` set, each block gets cited sentences (insights)
 and a headline prints above the tally; they explain the facts and never change a verdict or the
 exit code. `Remarks:` after the tally names evals that need work (a flaky check, too few tries,

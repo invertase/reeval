@@ -2749,6 +2749,27 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'output/study',
+    tiers: ['fake'],
+    env: 'marked',
+    cells: ['plain', 'marked'],
+    lands: { outcome: 'pass', error: { kind: 'assertion', message: /has the marker/ } },
+    landsPass: [],
+    canary: /has the marker: expected (file )?marker\.txt/,
+    args: ['--json'],
+    record: ({ runDir, stdout }) => {
+      const suite = JSON.parse(stdout) as SuiteResult
+      assert.deepEqual(
+        { pass: suite.tally.pass, notGated: suite.tally.notGated, fail: suite.tally.fail },
+        { pass: 0, notGated: 1, fail: 1 },
+      )
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(summary, /^1 fail · 1 not gated · started /m)
+      assert.match(summary, /^not gated {8}lands$/m)
+      assert.doesNotMatch(summary, /\bpass · |· 1 pass\b/)
+    },
+  },
+  {
     dir: 'output/change',
     tiers: ['fake'],
     env: 'marked',

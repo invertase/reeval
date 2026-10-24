@@ -24,7 +24,7 @@ import type {
   ResultOutcome,
   SuiteResult,
 } from '../view/suite.ts'
-import { cancelledOf, countedOf } from '../view/suite.ts'
+import { cancelledOf, countedOf, isStudy } from '../view/suite.ts'
 import { type Colors, colors, type Paint } from './colors.ts'
 import { remarkLines } from './remarks.ts'
 
@@ -177,13 +177,9 @@ const paintOutcome = (c: Colors, o: ResultOutcome): Paint =>
         ? c.yellow
         : c.dim
 
-/** A study (every cell `gate: 'none'`) passes whatever it saw, so it never reads `pass`. */
 function verdict(c: Colors, e: Pick<EvalResult, 'outcome' | 'todo' | 'cells'>): Text {
   if (e.todo) return t('todo', c.dim)
-  const cells = e.cells ?? []
-  if (e.outcome === 'pass' && cells.length && cells.every((x) => !x.gated)) {
-    return t('not gated', c.dim)
-  }
+  if (e.outcome === 'pass' && isStudy(e.cells ?? [])) return t('not gated', c.dim)
   return t(VERDICT[e.outcome], paintOutcome(c, e.outcome))
 }
 
@@ -769,7 +765,7 @@ export function evalBlock(
 }
 
 /**
- * `5 fail · 2 pass · 1 cancelled`: errors outside any eval and fails first, every case counting
+ * `5 fail · 2 pass · 1 not gated · 1 cancelled`: errors outside any eval and fails first, every case counting
  * one, zeros left out.
  */
 export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
@@ -777,6 +773,7 @@ export function tallyLine(c: Colors, tally: SuiteResult['tally']): string {
     tally.errors ? c.red(plural(tally.errors, 'run error')) : '',
     tally.fail ? c.red(`${tally.fail} fail`) : '',
     tally.pass ? c.green(`${tally.pass} pass`) : '',
+    tally.notGated ? c.dim(`${tally.notGated} not gated`) : '',
     tally.infraError ? c.yellow(plural(tally.infraError, 'infra error')) : '',
     tally.cancelled ? c.yellow(`${tally.cancelled} cancelled`) : '',
     tally.skipped ? c.dim(`${tally.skipped} skipped`) : '',
