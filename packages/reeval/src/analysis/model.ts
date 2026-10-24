@@ -29,12 +29,11 @@ export const isFake = (m: unknown): m is FakeAnalysisModel =>
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
 /**
- * The language model reeval falls back to for analysis, compare questions and capture journeys:
- * `analysis.model`, else `judge` when it's a language model. `judge` is the judge that applies
- * where the model is used (a profile's, group's or eval's over the config's); the config's when
- * none is given.
+ * The model reeval falls back to for analysis and compare questions: `analysis.model`, else
+ * `judge` when it's a language model. `judge` is the run's judge model (a profile's over the
+ * config's); the config's when none is given.
  */
-export function fallbackModel(
+function fallbackModel(
   config: ResolvedConfig,
   judge: JudgeModel | undefined = config.judge.model,
 ): string | FakeAnalysisModel | undefined {

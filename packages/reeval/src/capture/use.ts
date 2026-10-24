@@ -122,7 +122,7 @@ export function scalePoints(
 const systemPrompt = (normalised: boolean) =>
   `You drive a web page from screenshots. Call one tool. ${
     normalised
-      ? `Coordinates are normalised to 0-${NORMALISED} on the full-page image: x across its width, y down its height.`
+      ? `Coordinates are normalised to 0-${NORMALISED} on the full-page image: x and toX across its width, y and toY down its height. A scroll's dy is in CSS pixels.`
       : 'Coordinates are CSS pixels on the full-page image.'
   } Call done when the goal is met. Do not mention CDP.`
 

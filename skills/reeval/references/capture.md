@@ -22,8 +22,8 @@ evaluate('builds the sign-in page', async (c) => {
   network to go quiet from that beat, so it covers a click that only fetches) — no
   selectors; the model clicks pixels. `viewport: 'full-page'` is the saved shot (default window + tall PNG).
 - `capture.model` cascades like `question`; the call may override. Default is
-  `analysis.model`, else the attempt's judge model (a profile's included) when it's a
-  language model; never Jev. Gemini's 0–1000 points are scaled to the screenshot. Fixture evals import
+  `analysis.model`, else the attempt's judge model (a profile's, group's or eval's),
+  whichever is first a language model; never Jev. Gemini's 0–1000 points are scaled to the screenshot. Fixture evals import
   `fakeInstructions` from `reeval/testing` and pass it as `instructions`.
   The same `timeout` is the budget: if the event never arrives the capture fails and there
   is no PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.

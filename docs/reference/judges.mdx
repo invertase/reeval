@@ -238,7 +238,7 @@ Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses 
 | A language model as a judge on `vercel()` | `the judge model "anthropic/claude-sonnet-5" is a language model, and Vercel AI Gateway judges only with decision models. …`, as a failed call |
 | No key at call time | `No credentials for judge model "google/gemini-3.8-flash" (provider "google"). Set GOOGLE_GENERATIVE_AI_API_KEY (for direct()), in the environment or .env.local.` |
 | A Gateway key set, but no `vercel()` in `gateway` | `… Set TYPESAFE_AI_API_KEY (for direct()), in the environment or .env.local. AI_GATEWAY_API_KEY is set, but no gateway in the config uses it: add vercel() to gateway to call the model through Vercel AI Gateway.` |
-| A prefix without a direct route, and no `vercel()` | `evals/a.eval.ts › e: the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.`, at plan time |
+| A prefix without a direct route, and no `vercel()` | `evals/a.eval.ts › e: the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. There a judge must be a decision model, such as 'typesafe-ai/jev-1.14.0'.`, at plan time |
 | A key with whitespace or a line break | `ANTHROPIC_API_KEY for judge model "anthropic/claude-sonnet-5" has whitespace or a line break in it at character 7. …` |
 
 ## Related

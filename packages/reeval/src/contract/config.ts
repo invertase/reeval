@@ -66,7 +66,7 @@ export const captureOptionsSchema = z
       .includes('/')
       .optional()
       .describe(
-        'Vision model for `instructions`. Cascades like `question`. Default is the analysis model when that model accepts images; never Jev.',
+        "Vision model for `instructions`. Cascades like `question`. Default is `analysis.model`, else the attempt's judge model, whichever is first a language model; never Jev.",
       ),
   })
   .describe(

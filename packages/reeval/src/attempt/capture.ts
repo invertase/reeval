@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { shellQuote } from '@reeval/sandbox-docker/process'
-import { fallbackModel, providerModel } from '../analysis/model.ts'
+import { providerModel } from '../analysis/model.ts'
 import {
   allocatePort,
   cacheLabel,
@@ -47,15 +47,19 @@ export type CaptureArtifact = {
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-/** `analysis.model`, else the attempt's judge (a profile's, group's or eval's over the config's). */
+const languageModel = (model: unknown) =>
+  typeof model === 'string' && !isEvaluationModel(model) ? model : undefined
+
+/**
+ * `analysis.model`, else the attempt's judge (a profile's, group's or eval's over the config's),
+ * whichever is first a language model.
+ */
 function defaultCaptureModel(a: Attempt): string | undefined {
-  let model: ReturnType<typeof fallbackModel>
   try {
-    model = fallbackModel(getRunContext().config, a.spec.judge.model)
+    return languageModel(getRunContext().config.analysis.model) ?? languageModel(a.spec.judge.model)
   } catch {
     return undefined
   }
-  return typeof model === 'string' && !isEvaluationModel(model) ? model : undefined
 }
 
 function resolveUse(

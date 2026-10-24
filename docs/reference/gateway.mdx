@@ -126,7 +126,7 @@ Each cell resolved under a configured `gateway` or a pin records its gateway as 
 | A pin to a gateway that can't serve it | `evals/a.eval.ts › e on cursor:composer-2.5: it pins gateway 'vercel', which can't serve it (Cursor's agent only calls Cursor's own API). A pin never falls back; …` |
 | A pin to a gateway that isn't listed | `evals/a.eval.ts › e on codex:m: it pins gateway 'vercel', which isn't in the gateway list (direct). Add vercel() to gateway, or pin one that's there.` |
 | A language-model judge on `vercel()` | `the judge model "anthropic/claude-sonnet-5" is a language model, and Vercel AI Gateway judges only with decision models. Use a decision model on vercel(), such as 'typesafe-ai/jev-1.14.0' or 'openai/gpt-6-luna-decisions', or pin this one to direct() with judge: { gateway: 'direct' } to call it on ANTHROPIC_API_KEY.`, on each judge call |
-| A judge model nothing in the list serves | `the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.` |
+| A judge model nothing in the list serves | `the judge model "mistral/large": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. There a judge must be a decision model, such as 'typesafe-ai/jev-1.14.0'.` |
 | An expired Vercel project token | `VERCEL_OIDC_TOKEN expired at 2026-01-01T00:00:00.000Z, so vercel() can't authenticate. Run vercel env pull for a new one, or set AI_GATEWAY_API_KEY.` |
 
 ## Related

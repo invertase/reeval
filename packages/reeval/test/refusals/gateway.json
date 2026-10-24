@@ -44,7 +44,7 @@
   "judge: a pin not a name": "UsageError: judge.gateway in reeval.config.ts names a gateway in the config's gateway list: 'direct' or 'vercel', or is its helper (got \"vercell\")",
   "judge: a helper pin": null,
   "judge: an eval pin not a name": "UsageError: judge.gateway in evals/a.eval.ts › e names a gateway in the config's gateway list: 'direct' or 'vercel', or is its helper (got 3)",
-  "model: mistral on direct alone": "UsageError: the judge model \"mistral/large\": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway.",
+  "model: mistral on direct alone": "UsageError: the judge model \"mistral/large\": no gateway in the list can serve it (direct: reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). Add vercel() to gateway. There a judge must be a decision model, such as 'typesafe-ai/jev-1.14.0'.",
   "model: mistral on vercel then direct": null,
   "model: pinned to vercel, not listed": "UsageError: the judge model \"anthropic/m\" pins gateway 'vercel', which isn't in the gateway list (direct). Add vercel() to gateway, or pin one that's there.",
   "model: mistral pinned to direct": "UsageError: the judge model \"mistral/large\" pins gateway 'direct', which can't serve it (reeval calls only anthropic/*, google/*, openai/*, typesafe-ai/* models on their own keys). A pin never falls back; pin another gateway, or remove the pin to take the first in the list that can."
