@@ -51,6 +51,16 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_RUNNER` | | Not read from your shell: `stdio` in a language runner reeval started, which talks to reeval on its stdin and stdout |
 | `REEVAL_RUNNER_PROTOCOL` | | Not read from your shell: the runner protocol reeval speaks, set beside `REEVAL_RUNNER`. A runner on another protocol stops and names both versions |
 
+## Install scripts
+
+`install.sh` and `install.ps1` ([Standalone binary](/guide/binary)) read these; `reeval` itself doesn't.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `REEVAL_VERSION` | the newest release | The version to install, such as `0.13.0` |
+| `REEVAL_INSTALL_DIR` | `~/.local/bin`, or `%LOCALAPPDATA%\reeval\bin` on Windows | Where `reeval` goes |
+| `REEVAL_DOWNLOAD` | the version's GitHub release | A URL (or `file://` directory) holding the binaries and `SHA256SUMS`; needs `REEVAL_VERSION` |
+
 ## CI and agent detection
 
 | Variable | Effect |

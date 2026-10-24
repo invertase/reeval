@@ -35,7 +35,7 @@ Both scripts read the same environment variables:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/invertase/reeval/main/scripts/install.sh \
-  | REEVAL_VERSION=0.13.0 REEVAL_INSTALL_DIR=/usr/local/bin sh
+  | sudo env REEVAL_VERSION=0.13.0 REEVAL_INSTALL_DIR=/usr/local/bin sh
 ```
 
 ## Downloading by hand
