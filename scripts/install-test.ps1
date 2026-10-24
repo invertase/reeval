@@ -51,6 +51,35 @@ try {
 
   $err = . Install (Release (Join-Path $work 'unlisted') -Unlisted) (Join-Path $work 'c')
   Check "refuses a binary SHA256SUMS doesn't list" ("$err" -match "doesn't list") $err
+
+  # Over HTTP, as from a GitHub release, and run with -File in a shell of its own.
+  $python = (Get-Command python, python3 -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+  $listener.Start()
+  $port = $listener.LocalEndpoint.Port
+  $listener.Stop()
+  $server = Start-Process $python -ArgumentList '-m', 'http.server', $port, '--bind', '127.0.0.1', '--directory', (Join-Path $work 'good') -PassThru
+  try {
+    $up = $false
+    foreach ($i in 1..50) {
+      try { Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:$port/SHA256SUMS" | Out-Null; $up = $true; break }
+      catch { Start-Sleep -Milliseconds 200 }
+    }
+    Check 'serves the release over HTTP' $up
+    $env:REEVAL_VERSION = $Version
+    $env:REEVAL_DOWNLOAD = "http://127.0.0.1:$port"
+    $env:REEVAL_INSTALL_DIR = Join-Path $work 'http'
+    & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $script *> $null
+    $code = $LASTEXITCODE
+    $exe = Join-Path $work 'http/reeval.exe'
+    $installed = if (Test-Path $exe) { & $exe --version }
+    Check 'installs over HTTP with -File' ($code -eq 0 -and $installed -eq $Version) "exit $code, $installed"
+  } finally {
+    Stop-Process $server -ErrorAction SilentlyContinue
+  }
+} catch {
+  Write-Host "FAIL $_"
+  $failures++
 } finally {
   Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
 }
