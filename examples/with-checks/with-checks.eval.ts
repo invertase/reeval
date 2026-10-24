@@ -1,17 +1,14 @@
-import { evaluate, expect } from 'reeval'
+import { defineEnvironment, evaluate, expect } from 'reeval'
 
-// Exits 0 only if greet('Ada') returns "Hello, Ada!".
-const greetsAda = `node -e "import('./greet.js').then((m) =>
-  process.exit((m.greet ?? m.default)('Ada') === 'Hello, Ada!' ? 0 : 1))"`
+// The agent starts from the small package in ./project.
+const math = defineEnvironment('math', ({ directory }) => ({ files: directory('./project') }))
 
-evaluate('creates a tested greet module', async (c) => {
+evaluate('adds a tested multiply function', { environment: math }, async (c) => {
   const turn = await c.send(
-    'Create greet.js exporting greet(name) that returns "Hello, <name>!", and greet.test.js ' +
-      'that tests it with node:test. Add a package.json with "type": "module". No dependencies.',
+    'Add a multiply(a, b) function to src/math.js, with a test in test/math.test.js.',
   )
 
-  await expect(turn).toHaveFile('greet.js', /export/)
-  expect(await c.readFile('package.json')).toMatch(/"type":\s*"module"/)
+  await expect(turn).toHaveFile('src/math.js', /export function multiply/)
+  expect(await c.readFile('test/math.test.js')).toContain('multiply')
   await expect(c.exec('node --test')).toSucceed()
-  await expect(c.exec(greetsAda)).toSucceed()
 })

@@ -46,12 +46,6 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
-  examples/hello:
-    dependencies:
-      reeval:
-        specifier: workspace:*
-        version: link:../../packages/reeval
-
   examples/with-checks:
     dependencies:
       reeval:

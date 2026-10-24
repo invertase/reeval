@@ -40,13 +40,13 @@ const WITH: Record<
 > = {
   'with-checks': {
     profiles: { cursor: { harness: 'cursor:composer-2.5', sandbox: 'docker' } },
-    outcomes: { 'fake/-/fake': ['pass'] },
+    outcomes: { 'fake/math/fake': ['pass'] },
   },
   'with-skill-lift': {
     profiles: { cursor: { harness: 'cursor:composer-2.5', sandbox: 'docker' } },
     outcomes: {
-      'fake/plain/fake': ['fail', 'fail', 'fail', 'fail'],
-      'fake/house-style/fake': ['pass', 'pass', 'pass', 'pass'],
+      'fake/math/fake': ['fail', 'fail', 'fail', 'fail'],
+      'fake/changelog/fake': ['pass', 'pass', 'pass', 'pass'],
     },
   },
 }
@@ -80,34 +80,3 @@ for (const [name, { profiles, outcomes }] of Object.entries(WITH)) {
     assert.deepEqual(ran, outcomes)
   })
 }
-
-test('examples/hello copied out of the repo runs on the fake harness', async () => {
-  const dir = await copyOut('hello')
-
-  const plan = await runCli(dir, [
-    'run',
-    '--config',
-    'reeval.fake.config.ts',
-    '--dry-run',
-    '--json',
-  ])
-  assert.equal(plan.code, 0, plan.stdout + plan.stderr)
-  const files = new Set(JSON.parse(plan.stdout).evals.map((e: { file: string }) => e.file))
-  assert.deepEqual([...files].sort(), [
-    'evals/greetings.eval.ts',
-    'evals/hello.eval.ts',
-    'evals/preferences.eval.ts',
-    'evals/skill.eval.ts',
-  ])
-
-  const run = await runCli(dir, ['run', '--config', 'reeval.fake.config.ts'], {
-    timeoutMs: 180_000,
-  })
-  assert.equal(run.code, 0, run.stdout + run.stderr)
-  const { evals } = readRun(dir)
-  assert.ok(evals.length >= 3, `ran ${evals.length} evals`)
-  assert.ok(
-    evals.every((e) => e.outcome === 'pass'),
-    evals.map((e) => `${e.id}: ${e.outcome}`).join('\n'),
-  )
-})

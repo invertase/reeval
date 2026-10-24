@@ -114,7 +114,7 @@ group(
 )
 ```
 
-With `examples/hello`'s `pr` profile (`limit: { runs: 1, compare: false }`), every other eval drops its variants, and this one keeps its variant and says why:
+With a `pr` profile (`limit: { runs: 1, compare: false }`), every other eval drops its variants, and this one keeps its variant and says why:
 
 ```text
 plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓

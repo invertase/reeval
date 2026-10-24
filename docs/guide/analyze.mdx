@@ -112,7 +112,7 @@ With `analysis.model` set, `reeval run` asks the model what each eval checks and
 | `analysis.maxTokens` | `250000` | Caps one run's insight tokens; failing evals, regressions and compares go first, then passes with a failed try |
 | `analysis.insights`, `--no-insights` | on | Turns them off, for every run or for one |
 
-Insights run to the end, with a progress line on a terminal (`insights 3/11…`). They never change an outcome or the exit code. Past the budget, when an eval's calls fail twice, or after Ctrl-C, those blocks print their facts and one line says why, here from `examples/hello`'s fake config with `analysis.maxTokens: 12000`:
+Insights run to the end, with a progress line on a terminal (`insights 3/11…`). They never change an outcome or the exit code. Past the budget, when an eval's calls fail twice, or after Ctrl-C, those blocks print their facts and one line says why, here from a project of greeting evals on the fake harness with `analysis.maxTokens: 12000`:
 
 ```text
 insights skipped for 4 evals: analysis.maxTokens (12k) reached — raise it in reeval.config.ts, or reeval analyze 20261021T182958Z_a343e84_cursor-agent_bfvz --insights to finish

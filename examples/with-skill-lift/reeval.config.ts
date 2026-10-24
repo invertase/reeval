@@ -1,25 +1,24 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'reeval'
 import { cursor, fakeHarness } from 'reeval/harness'
 import { docker, fakeSandbox } from 'reeval/sandbox'
 
-const packageJson = '{ "type": "module" }\n'
+const solution = (path: string) =>
+  readFileSync(new URL(`./solution/${path}`, import.meta.url), 'utf8')
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that greets in the house style only when the environment gives it a skill,
-  // so the compare shows a lift without keys or Docker.
+  // A scripted agent that writes ./solution's files, and the changelog entry only when it has
+  // the skill, so the compare shows a lift without keys or Docker.
   harness: fakeHarness({
-    files: {
-      'greet.js': "export function greet(name) {\n  return 'Hello, ' + name + '!'\n}\n",
-      'package.json': packageJson,
-    },
-    text: 'I created greet.js.',
+    files: { 'src/math.js': solution('src/math.js') },
+    text: 'I added multiply(a, b) to src/math.js.',
     withSkill: {
       files: {
-        'greet.js': "export function greet(name) {\n  return 'Ahoy, ' + name + '!'\n}\n",
-        'package.json': packageJson,
+        'src/math.js': solution('src/math.js'),
+        'CHANGELOG.md': solution('CHANGELOG.md'),
       },
-      text: 'I created greet.js in the house style.',
+      text: 'I added multiply(a, b) to src/math.js and recorded it in CHANGELOG.md.',
     },
   }),
   sandbox: fakeSandbox(),

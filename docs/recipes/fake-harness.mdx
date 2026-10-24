@@ -59,7 +59,7 @@ export default defineConfig({
 }
 ```
 
-The evals are `examples/hello/evals/hello.eval.ts` and this one, which checks the second scripted turn:
+The evals are the greeting evals and this one, which checks the second scripted turn:
 
 ```ts title="evals/scripted.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -98,7 +98,7 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 
 The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`c.exec`, `toHaveFile`, `c.judge`) run for real against what it wrote.
 
-When a coding agent runs reeval for you, agent output prints the plan, the result blocks and the tally, with no per-attempt lines. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose and the check that tells the arms apart shows its failure:
+When a coding agent runs reeval for you, agent output prints the plan, the result blocks and the tally, with no per-attempt lines. This is a project of greeting evals under its fake config, where the skill compare's control misses on purpose and the check that tells the arms apart shows its failure:
 
 ```bash
 REEVAL_UI=agent npx reeval run --config reeval.fake.config.ts
@@ -350,7 +350,7 @@ Both configs plan the same evals, so `--dry-run` under either shows the same eva
 | A flaky agent | `fakeHarness({ files, flakeRate: 0.3 })` writes nothing in about 30% of attempts, for trying `gate: { passRate }` |
 | Canned tool calls | `tools: [{ tool: 'read', input: {…}, output: '…' }]` adds tool events to every turn, for transcript checks |
 | Only some files | `include: ['evals/hello.eval.ts']` in the fake config leaves out evals that need a real agent or Docker |
-| Profiles | The fake config needs its own `profiles` if you pass `--profile`; `examples/hello/reeval.fake.config.ts` has `smoke` and `nightly` |
+| Profiles | The fake config needs its own `profiles` if you pass `--profile`; give it the same profile names as the real config |
 | Record fake runs | `reeval run --config reeval.fake.config.ts --record` writes history you can open in `reeval studio`, handy for trying the studio or `reeval query` |
 
 ## Next

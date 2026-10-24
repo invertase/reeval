@@ -1,25 +1,20 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'reeval'
 import { cursor, fakeHarness } from 'reeval/harness'
 import { docker, fakeSandbox } from 'reeval/sandbox'
 
+const solution = (path: string) =>
+  readFileSync(new URL(`./solution/${path}`, import.meta.url), 'utf8')
+
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that writes the files the task asks for, so the checks run without keys or
-  // Docker. It always does the task right: swap in a real agent to see the checks catch one.
+  // A scripted agent that writes ./solution's files, so the checks run without keys or Docker.
   harness: fakeHarness({
     files: {
-      'greet.js': "export function greet(name) {\n  return 'Hello, ' + name + '!'\n}\n",
-      'greet.test.js': [
-        "import { test } from 'node:test'",
-        "import assert from 'node:assert/strict'",
-        "import { greet } from './greet.js'",
-        '',
-        "test('greets by name', () => assert.equal(greet('Ada'), 'Hello, Ada!'))",
-        '',
-      ].join('\n'),
-      'package.json': '{ "type": "module" }\n',
+      'src/math.js': solution('src/math.js'),
+      'test/math.test.js': solution('test/math.test.js'),
     },
-    text: 'I created greet.js and greet.test.js.',
+    text: 'I added multiply(a, b) to src/math.js and a test for it.',
   }),
   sandbox: fakeSandbox(),
   profiles: {

@@ -7,7 +7,7 @@
 // It writes packages/reeval/reeval (gitignored), or --outfile, with reeval's own files embedded
 // (package.json, docker/, bin/, assets/, skills/, dist/bridge, jiti's Babel build
 // and the bundled dependencies' versions). For this machine's target it then copies it into an
-// empty directory and runs examples/hello's fake config with it, in a copy with no node_modules,
+// empty directory and runs examples/with-skill-lift with it, in a copy with no node_modules,
 // and with Node, and compares them. With Docker running and the sandbox images built, it also
 // runs one egress fixture in Docker with it. Another --target is only compiled; --no-check skips
 // the checks.
@@ -155,18 +155,17 @@ console.log(`bun ${bun.stdout.trim()}, ${binary}`)
 const version = compiled(alone, ['--version'])
 check('reeval --version', version.stdout.trim() === manifest.version, why(version))
 
-const withNode = project(join(root, 'examples/hello'), true)
-const hello = project(join(root, 'examples/hello'), false)
-const fake = ['--config', 'reeval.fake.config.ts']
-const planNode = node(withNode, ['run', ...fake, '--dry-run', '--json'])
-const planBin = compiled(hello, ['run', ...fake, '--dry-run', '--json'])
+const withNode = project(join(root, 'examples/with-skill-lift'), true)
+const example = project(join(root, 'examples/with-skill-lift'), false)
+const planNode = node(withNode, ['run', '--dry-run', '--json'])
+const planBin = compiled(example, ['run', '--dry-run', '--json'])
 check(
   'the same plan, with no node_modules',
   planBin.status === 0 && JSON.stringify(planned(planBin)) === JSON.stringify(planned(planNode)),
   why(planBin),
 )
-const runNode = node(withNode, ['run', ...fake])
-const runBin = compiled(hello, ['run', ...fake])
+const runNode = node(withNode, ['run'])
+const runBin = compiled(example, ['run'])
 check(
   'the same run',
   outcome(runBin) !== undefined &&
@@ -174,10 +173,10 @@ check(
     outcome(runBin) === outcome(runNode),
   outcome(runBin) ?? (runBin.stdout + runBin.stderr).trim().slice(-600),
 )
-const query = compiled(hello, ['query', 'effort', '--json'])
+const query = compiled(example, ['query', 'effort', '--json'])
 check('reeval query (node:sqlite)', query.status === 0, why(query))
-const site = join(hello, 'site')
-const studio = compiled(hello, ['studio', 'build', '--out', site])
+const site = join(example, 'site')
+const studio = compiled(example, ['studio', 'build', '--out', site])
 check(
   'reeval studio build',
   studio.status === 0 && existsSync(join(site, 'index.html')),
@@ -203,6 +202,6 @@ check(
   copied.join(', '),
 )
 
-for (const dir of [withNode, hello, alone]) rmSync(dir, { recursive: true, force: true })
+for (const dir of [withNode, example, alone]) rmSync(dir, { recursive: true, force: true })
 if (checks.includes(false)) fail('the compiled reeval differs from Node')
 console.log(`bun-compile: ${binary} works on its own`)

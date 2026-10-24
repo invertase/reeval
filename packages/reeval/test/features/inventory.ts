@@ -208,7 +208,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/results.test.ts › compare questions over real-harness runs (real-e2e-pairs)',
       studio("compare answers: each question's win rates per cut"),
     ],
-    real: ['questions › examples/hello --profile questions'],
+    real: ['questions › test/real-agents --profile questions'],
   },
   {
     id: 'compare.questions.state',
@@ -2284,7 +2284,7 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/insights.test.ts › a classification is cached by its key, and read back',
       options('common mistakes'),
     ],
-    real: ['questions › examples/hello --profile questions'],
+    real: ['questions › test/real-agents --profile questions'],
   },
   {
     id: 'analysis.notes',
@@ -2392,7 +2392,7 @@ export const inventory: InventoryFeature[] = [
       'studio-web/test/e2e.test.ts › every run in the record corpus renders',
       "studio-web/test/e2e.test.ts › a compare answer over real harnesses' diffs (real-e2e-pairs)",
     ],
-    real: ['questions › examples/hello --profile questions'],
+    real: ['questions › test/real-agents --profile questions'],
   },
 
   // CLI and runner

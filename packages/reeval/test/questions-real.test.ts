@@ -1,5 +1,5 @@
 // Compare questions and the analyst on a real model, nightly (real.yml's `real agents (Cursor)` job,
-// never on PRs): examples/hello's `questions` profile, under reeval.analysis.config.ts, runs 4 real
+// never on PRs): test/real-agents' `questions` profile, under reeval.analysis.config.ts, runs 4 real
 // attempts on Cursor and pi; google/gemini-3.8-flash answers its question and writes the run's
 // insights. Checks structure only, never the model's wording,
 // and never retries. Skipped unless REEVAL_TEST_REAL=1.
@@ -18,7 +18,7 @@ import type { RunInsights } from '../src/view/insights.ts'
 import { pkgRoot, readRun, runCli, tempDir } from './helpers.ts'
 import { harnesses, reserveAttempts } from './support/harnesses.ts'
 
-const example = join(pkgRoot, '../../examples/hello')
+const example = join(pkgRoot, 'test/real-agents')
 const schema = (name: string) =>
   JSON.parse(readFileSync(join(pkgRoot, 'schema', `${name}.schema.json`), 'utf8')) as ShapeSchema
 
@@ -28,7 +28,7 @@ const skip =
 /** A pair's identity, the same for its two votes. */
 const pairKey = (v: PairVote) => [v.cut, v.harness ?? v.arm, v.run, v.a, v.b].join('\0')
 
-test('examples/hello --profile questions: every pair is voted in both orders; insights are written', {
+test('test/real-agents --profile questions: every pair is voted in both orders; insights are written', {
   skip,
   timeout: 1_800_000,
 }, async (t) => {

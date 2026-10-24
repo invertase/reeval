@@ -65,13 +65,12 @@
       "entry": ["test/**/*.ts"]
     },
     "packages/studio-web": {
-      "entry": ["test/**/*.ts", "scripts/**/*.mjs", "dev-data.ts"]
-    },
-    "examples/hello": {
-      "entry": ["**/*.eval.ts", "reeval*.config.ts", "scan/*.mjs"]
+      "entry": ["test/**/*.ts", "scripts/**/*.mjs", "dev-data.ts"],
+      "ignore": ["scripts/demo/**"]
     },
     "examples/with-*": {
-      "entry": ["*.eval.ts", "reeval*.config.ts"]
+      "entry": ["*.eval.ts", "reeval*.config.ts"],
+      "ignore": ["project/**", "solution/**"]
     }
   },
   "ignoreFiles": ["scripts/third-party.d.mts"]

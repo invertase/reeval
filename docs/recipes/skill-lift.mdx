@@ -80,7 +80,7 @@ export default defineConfig({
 | `gate: { passRate: 0.6 }` | A cell passes at 2 of 3, so one flaky attempt doesn't fail CI |
 | `pin` | Keeps a `pr` profile's `limit` from turning `compare` off or cutting `runs` |
 
-`examples/with-skill-lift` in the reeval repository is this compare on its own, at four runs a side, the fewest that can say `helped`. Its config runs a fake agent that greets in the house style only when it has the skill, so `pnpm eval` there shows a lift with no keys or Docker, and `--profile cursor` runs it on Cursor.
+`examples/with-skill-lift` in the reeval repository is a compare like this at four runs a side, the fewest that can say `helped`. Its skill says every change adds a line to `CHANGELOG.md`, and its config runs a fake agent that writes one only when it has the skill, so `pnpm eval` there shows a lift with no keys or Docker, and `--profile cursor` runs it on Cursor.
 
 ## Run it
 
@@ -95,7 +95,7 @@ eval                                                            harnesses  varia
 evals/skill.eval.ts › house greeting › greets in the house style  1          1         3     6
 ```
 
-This is a real Cursor run of the same eval in `examples/hello` (`--runs 2`, no `minLift`):
+This is a real Cursor run of a house-greeting skill compare (`--runs 2`, no `minLift`):
 
 ```text
 pass             house greeting › greets in the house style
@@ -142,7 +142,7 @@ npx reeval query effort
 npx reeval analyze
 ```
 
-A skill can help without changing the pass rate: the agent gets there with less searching. At four tries a side, the block adds an effort table of each arm's medians. A real Cursor run in `examples/hello`:
+A skill can help without changing the pass rate: the agent gets there with less searching. At four tries a side, the block adds an effort table of each arm's medians. A real Cursor run:
 
 ```text
 pass             house greeting › greets in the house style
@@ -194,7 +194,7 @@ Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidenc
 | Skill from git or npm | `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan |
 | A shared starting point | `const withSkill = base.extendEnvironment('with-skill', …)` then `compare: { baseline: base, variants: [withSkill] }`. `compare` does not layer them |
 | Report only | Drop `minLift` and set `compare: { baseline, variants, gate: 'none' }` to see lift without failing anything |
-| Ask which arm did better | `compare: { baseline, variants, questions: ['Which greet.js reads more like our house style?'] }` judges the two arms' diffs pair by pair after the run, as `examples/hello`'s `skill.eval.ts` does. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Compare questions](/guide/questions) |
+| Ask which arm did better | `compare: { baseline, variants, questions: ['Which greet.js reads more like our house style?'] }` judges the two arms' diffs pair by pair after the run. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Compare questions](/guide/questions) |
 | Across runs | `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)) |
 | Did the agent open the skill? | `expect(turn).toHaveCalledSkill('house-greeting')` after `c.send`. That is "opened or loaded", not "followed". Keep the `c.exec` check for the greeting. See [Matchers](/reference/matchers#transcript-matchers) |
 
