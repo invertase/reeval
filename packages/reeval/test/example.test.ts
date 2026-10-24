@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { cpSync, existsSync, readdirSync } from 'node:fs'
+import { cpSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, symlink } from 'node:fs/promises'
 import { isAbsolute, join, relative } from 'node:path'
 import { test } from 'node:test'
@@ -18,6 +18,10 @@ async function copyOut(name: string): Promise<string> {
     recursive: true,
     filter: (src) => !/[/\\](node_modules|\.reeval)([/\\]|$)/.test(src.slice(from.length)),
   })
+  // The README's way out: the example takes its own copy of the shared profiles.
+  cpSync(join(examples, 'profiles.ts'), join(dir, 'profiles.ts'))
+  const config = join(dir, 'reeval.config.ts')
+  writeFileSync(config, readFileSync(config, 'utf8').replace("'../profiles.ts'", "'./profiles.ts'"))
   await mkdir(join(dir, 'node_modules'))
   await symlink(pkgRoot, join(dir, 'node_modules/reeval'), 'dir')
   // examples/tsconfig.json is for the editor and `pnpm typecheck`; a copy runs without one.
@@ -27,9 +31,23 @@ async function copyOut(name: string): Promise<string> {
 
 type Cell = { key: string; harness: string; sandbox: string }
 
+/** The harness each of `examples/profiles.ts`' profiles plans every cell on, in Docker. */
+const SHARED: Record<string, string> = {
+  'claude-code': 'claude-code:claude-sonnet-5',
+  cursor: 'cursor:composer-2.5',
+  codex: 'codex:gpt-5.6-luna',
+  opencode: 'opencode:gemini-3.8-flash',
+  goose: 'goose:gemini-3.8-flash',
+  pi: 'pi:gemini-3.8-flash',
+  antigravity: 'antigravity:gemini-3.8-flash-medium',
+  fx: 'fx:claude-sonnet-5',
+  'grok-build': 'grok-build:grok-4.6',
+}
+
 /**
- * Each `with-*` example: the harness and sandbox every cell plans under each profile (no profile
- * is the fake trio), and each cell's attempts' outcomes once it has run on the fake harness.
+ * Each `with-*` example: the harness and sandbox every cell plans under each of its own profiles
+ * (no profile is the fake trio; every example also has the shared ones), and each cell's
+ * attempts' outcomes once it has run on the fake harness.
  */
 const WITH: Record<
   string,
@@ -39,17 +57,22 @@ const WITH: Record<
   }
 > = {
   'with-checks': {
-    profiles: { 'claude-code': { harness: 'claude-code:claude-sonnet-5', sandbox: 'docker' } },
+    profiles: {},
     outcomes: { 'fake/math/fake': ['pass'] },
   },
   'with-skill-lift': {
-    profiles: { 'claude-code': { harness: 'claude-code:claude-sonnet-5', sandbox: 'docker' } },
+    profiles: {},
     outcomes: {
       'fake/math/fake': ['fail', 'fail', 'fail', 'fail'],
       'fake/changelog/fake': ['pass', 'pass', 'pass', 'pass'],
     },
   },
 }
+
+test('every shared profile is in the table', async () => {
+  const { profiles } = await import(join(examples, 'profiles.ts'))
+  assert.deepEqual(Object.keys(profiles).sort(), Object.keys(SHARED).sort())
+})
 
 test('every with-* example is in the table', () => {
   const dirs = readdirSync(examples).filter((d) => d.startsWith('with-'))
@@ -59,7 +82,12 @@ test('every with-* example is in the table', () => {
 for (const [name, { profiles, outcomes }] of Object.entries(WITH)) {
   test(`examples/${name} copied out of the repo plans and runs key-free`, async () => {
     const dir = await copyOut(name)
-    const planned = { '': { harness: 'fake', sandbox: 'fake' }, ...profiles }
+    const shared = Object.entries(SHARED).map(([p, harness]) => [p, { harness, sandbox: 'docker' }])
+    const planned = {
+      '': { harness: 'fake', sandbox: 'fake' },
+      ...Object.fromEntries(shared),
+      ...profiles,
+    }
     for (const [profile, want] of Object.entries(planned)) {
       const args = ['run', '--dry-run', '--json', ...(profile ? ['--profile', profile] : [])]
       const plan = await runCli(dir, args)

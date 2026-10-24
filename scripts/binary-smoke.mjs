@@ -16,6 +16,7 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
@@ -47,6 +48,16 @@ function project(dir, name) {
     recursive: true,
     filter: (src) => !/[/\\](node_modules|\.reeval)([/\\]|$)/.test(src.slice(dir.length)),
   })
+  // An example imports the shared ../profiles.ts; a copy takes its own, as the README says.
+  const profiles = join(dir, '../profiles.ts')
+  if (existsSync(profiles)) {
+    cpSync(profiles, join(copy, 'profiles.ts'))
+    const config = join(copy, 'reeval.config.ts')
+    writeFileSync(
+      config,
+      readFileSync(config, 'utf8').replace("'../profiles.ts'", "'./profiles.ts'"),
+    )
+  }
   return copy
 }
 
