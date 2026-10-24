@@ -15,10 +15,10 @@ In the `reeval.config.ts` file, set `analysis.model` to a language model. `reeva
 
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { cursor } from '{{ pkg }}/harness'
+import { claudeCode } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: cursor({ model: 'composer-2.5' }),
+  harness: claudeCode({ model: 'claude-sonnet-5' }),
   analysis: { model: 'google/gemini-3.8-flash' },
 })
 ```

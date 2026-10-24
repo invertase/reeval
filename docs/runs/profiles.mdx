@@ -52,7 +52,7 @@ A profile's `limit` applies after every group and evaluation, and it only narrow
       limit: {
         runs: 1,
         compare: false,
-        harness: ['cursor:composer-2.5'],
+        harness: ['claude-code:claude-sonnet-5'],
       },
 ```
 
@@ -61,7 +61,7 @@ The relevant notes show each cut. reeval skips an evaluation when a profile leav
 ```text
 runs 3 → 1 (profile pr)
 compare off (profile pr)
-skipped: no harness left: profile pr allows cursor:composer-2.5
+skipped: no harness left: profile pr allows claude-code:claude-sonnet-5
 ```
 
 The `--runs` flag replaces every evaluation's `runs` outright, so a profile's `limit.runs` does not apply to it.

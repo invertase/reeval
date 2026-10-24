@@ -35,7 +35,7 @@ jobs:
       - run: npm ci
       - id: reeval
         env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: npx reeval run --profile pr
 ```
 
