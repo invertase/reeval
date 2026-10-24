@@ -21,7 +21,10 @@ const modelsDev = async (dir: string) => {
   seedModelsDev(dir)
 }
 
-export const cases: PlanCase[] = [
+export // The Go runner's first `go run` builds the SDK: over a minute on a cold Windows runner.
+const GO_BUILD = 300_000
+
+const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
@@ -100,11 +103,12 @@ export const cases: PlanCase[] = [
     args: [],
     prepare: (dir) => syncPythonFixtureProject(dir),
   },
-  { dir: 'go', name: 'hello', args: [], prepare: (dir) => useRepoGoSdk(dir) },
+  { dir: 'go', name: 'hello', args: [], prepare: (dir) => useRepoGoSdk(dir), timeoutMs: GO_BUILD },
   {
     dir: 'mixed',
     name: 'python-and-go',
     args: [],
+    timeoutMs: GO_BUILD,
     prepare: (dir) => {
       syncPythonFixtureProject(dir)
       useRepoGoSdk(dir)

@@ -16,6 +16,8 @@ export type PlanCase = {
   cost?: boolean
   /** Seed the copied project before `reeval run --dry-run --json`, e.g. leftover staging. */
   prepare?: (dir: string) => void | Promise<void>
+  /** How long the CLI may go silent; default runCli's. */
+  timeoutMs?: number
 }
 
 /** `reeval run --dry-run --json` in a copy of the case's directory: exit 0 and one JSON document. */
@@ -24,6 +26,7 @@ export async function planJson(c: Omit<PlanCase, 'name'>): Promise<PlanDocument>
   await c.prepare?.(p.dir)
   const r = await runCli(p.dir, ['run', '--dry-run', '--json', ...c.args], {
     ...(c.env ? { env: c.env } : {}),
+    ...(c.timeoutMs ? { timeoutMs: c.timeoutMs } : {}),
   })
   assert.equal(r.code, 0, r.stdout + r.stderr)
   assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')
