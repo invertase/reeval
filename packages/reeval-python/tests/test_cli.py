@@ -8,7 +8,6 @@ import json
 import os
 import signal
 import stat
-import struct
 import subprocess
 import sys
 import textwrap
@@ -81,7 +80,7 @@ def test_downloads_checks_caches_and_runs_the_binary(tmp_path: Path) -> None:
     assert f"downloading {name}" in first.stderr
     assert "checked against" in first.stderr and "SHA256SUMS only" in first.stderr
     cached = tmp_path / "cache" / "reeval" / "bin" / "9.9.9"
-    assert [p.name for p in cached.iterdir()] == [name]
+    assert sorted(p.name for p in cached.iterdir()) == [name, f"{name}.sha256"]
 
     (out / name).unlink()
     again = reeval(tmp_path, "--version", REEVAL_OFFLINE="1")
@@ -114,6 +113,7 @@ def test_the_download_is_held_to_the_hash_the_wheel_was_released_with(
     with pytest.raises(cli.ShimError, match="the sha256 reeval-python 9.9.9 records"):
         cli.resolve()
     (out / name).write_bytes(b"the real binary")
+    monkeypatch.setattr(cli, "check_starts", lambda binary, name: None)
     assert cli.resolve().read_bytes() == b"the real binary"
 
 
@@ -127,7 +127,8 @@ def test_with_a_recorded_hash_the_release_must_agree_with_it(
     assert "SHA256SUMS only" not in capsys.readouterr().err
 
 
-def test_a_cached_binary_of_the_wrong_size_is_downloaded_again(
+@posix
+def test_a_cached_binary_that_changed_is_downloaded_again(
     clean: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     out, name = release(clean)
@@ -138,11 +139,94 @@ def test_a_cached_binary_of_the_wrong_size_is_downloaded_again(
     cached.write_text("truncated")
     assert cli.resolve() == cached
     assert cached.read_text() == FAKE
+    # The same size as the binary checked, but not it, a clock tick later.
+    time.sleep(0.05)
+    cached.write_text(FAKE.replace("fake", "evil"))
+    assert cli.resolve() == cached
+    assert cached.read_text() == FAKE
     cached.write_bytes(b"")
     monkeypatch.setenv("REEVAL_OFFLINE", "1")
     with pytest.raises(cli.ShimError, match="isn't in the cache"):
         cli.resolve()
     assert not cached.exists()
+
+
+@posix
+def test_a_cached_binary_is_trusted_by_its_marker_until_it_changes(
+    clean: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out, name = release(clean)
+    monkeypatch.setenv("REEVAL_VERSION", "9.9.9")
+    monkeypatch.setenv("REEVAL_DOWNLOAD", out.as_uri())
+    cached = cli.resolve()
+    assert cli._marker(cached).read_text().startswith(hashlib.sha256(FAKE.encode()).hexdigest())
+    monkeypatch.setattr(cli, "sha256", lambda path: pytest.fail("hashed a marked binary"))
+    monkeypatch.setenv("REEVAL_OFFLINE", "1")
+    assert cli.resolve() == cached
+    # With no hash recorded for it, a binary changed since its marker can't be checked again.
+    time.sleep(0.05)
+    cached.write_text(FAKE.replace("fake", "evil"))
+    with pytest.raises(cli.ShimError, match="isn't in the cache"):
+        cli.resolve()
+
+
+@posix
+def test_a_download_that_does_not_start_is_reported_and_not_kept(
+    clean: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out, name = release(clean)
+    crash = '#!/bin/sh\necho "Illegal instruction" >&2\nkill -ILL $$\n'
+    (out / name).write_text(crash)
+    (out / "SHA256SUMS").write_text(f"{hashlib.sha256(crash.encode()).hexdigest()}  {name}\n")
+    monkeypatch.setenv("REEVAL_VERSION", "9.9.9")
+    monkeypatch.setenv("REEVAL_DOWNLOAD", out.as_uri())
+    with pytest.raises(cli.ShimError) as error:
+        cli.resolve()
+    assert error.value.code == 3
+    assert f"{name} doesn't start on this machine (killed by SIGILL" in str(error.value)
+    assert not (clean / "cache" / "reeval" / "bin" / "9.9.9" / name).exists()
+
+
+def test_exit_codes_are_described() -> None:
+    assert cli.describe_exit(-4) == "killed by SIGILL"
+    assert cli.describe_exit(0xC000001D) == "an illegal instruction"
+    assert cli.describe_exit(2) == "exit 2"
+
+
+def test_a_download_cut_short_is_a_message_not_a_traceback(
+    clean: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Short:
+        def __enter__(self) -> Short:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            pass
+
+        def read(self) -> bytes:
+            raise cli.http.client.IncompleteRead(b"x" * 5000, 29995000)
+
+    class Opener:
+        def open(self, url: str, timeout: int) -> Short:
+            return Short()
+
+    monkeypatch.setattr(cli.urllib.request, "build_opener", lambda *handlers: Opener())
+    with pytest.raises(cli.ShimError, match="Couldn't download https://x.test/a") as error:
+        cli._fetch("https://x.test/a")
+    assert error.value.code == 3
+
+
+def test_ctrl_c_while_downloading_exits_130_quietly(
+    clean: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def interrupted() -> Path:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "resolve", interrupted)
+    with pytest.raises(SystemExit) as exited:
+        cli.main(["run"])
+    assert exited.value.code == 130
+    assert capsys.readouterr().err == ""
 
 
 @posix
@@ -273,6 +357,7 @@ def test_a_binary_that_will_not_run_is_reported_and_dropped_from_the_cache(
     cached.parent.mkdir(parents=True)
     cached.write_bytes(b"\x7fELF truncated")
     cached.chmod(0o755)
+    cli.mark_verified(cached, hashlib.sha256(b"\x7fELF truncated").hexdigest())
     monkeypatch.setenv("REEVAL_VERSION", "9.9.9")
     with pytest.raises(SystemExit) as exited:
         cli.main(["--version"])
@@ -333,77 +418,78 @@ def test_a_binary_another_run_already_started_is_used(
         cli.store(b"other", dest, hashlib.sha256(b"other").hexdigest())
 
 
-def elf(loader: bytes, wide: bool = True) -> bytes:
-    """A minimal little-endian ELF with one PT_INTERP naming `loader`."""
-    header = struct.Struct("<HHIQQQIHHH" if wide else "<HHIIIIIHHH")
-    entry = struct.Struct("<IIQQQQQQ" if wide else "<IIIIIIII")
-    ident = b"\x7fELF" + bytes([2 if wide else 1, 1, 1]) + bytes(9)
-    phoff = len(ident) + header.size
-    data_at = phoff + entry.size
-    head = header.pack(2, 62, 1, 0, phoff, 0, 0, len(ident) + header.size, entry.size, 1)
-    if wide:
-        ph = entry.pack(3, 4, data_at, 0, 0, len(loader) + 1, len(loader) + 1, 1)
-    else:
-        ph = entry.pack(3, data_at, 0, 0, len(loader) + 1, len(loader) + 1, 4, 1)
-    return ident + head + ph + loader + b"\0"
-
-
-def test_elf_interpreter_reads_the_loader(tmp_path: Path) -> None:
-    for wide in (True, False):
-        path = tmp_path / f"python-{wide}"
-        path.write_bytes(elf(b"/lib/ld-musl-x86_64.so.1", wide))
-        assert cli.elf_interpreter(str(path)) == "/lib/ld-musl-x86_64.so.1"
-    (tmp_path / "script").write_text("#!/bin/sh\n")
-    assert cli.elf_interpreter(str(tmp_path / "script")) is None
-    assert cli.elf_interpreter(str(tmp_path / "missing")) is None
+def commands(answers: dict[str, tuple[int, str] | None]) -> object:
+    """A fake `_command`: each command's exit code and output, by its first word."""
+    return lambda args: answers.get(args[0])
 
 
 @pytest.mark.parametrize(
-    ("loader", "found"),
+    ("getconf", "ldd", "loader", "expected"),
     [
-        (b"/lib/ld-musl-aarch64.so.1", "musl"),
-        (b"/lib64/ld-linux-x86-64.so.2", "glibc"),
-        (None, None),
+        ((0, "glibc 2.41\n"), (0, "ldd (GNU libc) 2.41"), True, False),
+        # Debian's `musl` package puts /lib/ld-musl-*.so.1 on a glibc system.
+        ((1, ""), (0, "ldd (Debian GLIBC 2.36-9) 2.36"), True, False),
+        ((1, ""), (0, "ldd (GNU libc) 2.41"), True, False),
+        ((1, ""), (1, "musl libc (x86_64)\nVersion 1.2.5"), False, True),
+        (None, None, True, True),
+        (None, None, False, False),
     ],
 )
-def test_libc_is_the_interpreters_own(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, loader: bytes | None, found: str | None
+def test_musl_is_decided_as_install_sh_decides_it(
+    monkeypatch: pytest.MonkeyPatch,
+    getconf: tuple[int, str] | None,
+    ldd: tuple[int, str] | None,
+    loader: bool,
+    expected: bool,
 ) -> None:
-    def no_glibc(name: str) -> str:
-        raise ValueError("unrecognized configuration name")
-
-    python = tmp_path / "python"
-    python.write_bytes(elf(loader) if loader else b"static")
-    monkeypatch.setattr(cli.os, "confstr", no_glibc, raising=False)
-    monkeypatch.setattr(cli.sys, "executable", str(python))
-    assert cli.libc() == found
+    monkeypatch.setattr(cli, "_command", commands({"getconf": getconf, "ldd": ldd}))
+    found = [Path("/lib/ld-musl-x86_64.so.1")] if loader else []
+    monkeypatch.setattr(cli.Path, "glob", lambda self, pattern: iter(found))
+    assert cli.musl() is expected
 
 
-def test_glibc_wins_even_when_a_musl_loader_is_installed(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Debian's `musl` package puts /lib/ld-musl-*.so.1 on a glibc system.
-    monkeypatch.setattr(cli.os, "confstr", lambda name: "glibc 2.41", raising=False)
-    monkeypatch.setattr(cli, "elf_interpreter", lambda path: "/lib/ld-musl-x86_64.so.1")
-    assert cli.libc() == "glibc"
-    assert cli.target("linux", "x86_64") == "linux-x64"
+def test_avx2_is_read_from_proc_cpuinfo(monkeypatch: pytest.MonkeyPatch) -> None:
+    cpuinfo = {"text": "flags\t\t: fpu sse4_2 avx avx2 bmi2\n"}
+
+    def read_text(self: Path) -> str:
+        if cpuinfo["text"] is None:
+            raise OSError(2, "No such file")
+        return cpuinfo["text"]
+
+    monkeypatch.setattr(cli.Path, "read_text", read_text)
+    assert cli.avx2("linux")
+    cpuinfo["text"] = "flags\t\t: fpu sse4_2 avx avx512f\n"
+    assert not cli.avx2("linux")
+    cpuinfo["text"] = None  # type: ignore[assignment]
+    assert not cli.avx2("linux")
 
 
 @pytest.mark.parametrize(
-    ("system", "machine", "libc", "expected"),
+    ("system", "machine", "musl", "avx2", "expected"),
     [
-        ("linux", "x86_64", "glibc", "linux-x64"),
-        ("linux", "aarch64", "glibc", "linux-arm64"),
-        ("linux", "x86_64", "musl", "linux-x64-musl"),
-        ("linux", "aarch64", "musl", "linux-arm64-musl"),
-        ("darwin", "arm64", None, "darwin-arm64"),
-        ("darwin", "x86_64", None, "darwin-x64"),
-        ("win32", "AMD64", None, "windows-x64"),
-        ("win32", "ARM64", None, "windows-x64"),
+        ("linux", "x86_64", False, True, "linux-x64"),
+        ("linux", "aarch64", False, False, "linux-arm64"),
+        ("linux", "x86_64", True, True, "linux-x64-musl"),
+        ("linux", "aarch64", True, False, "linux-arm64-musl"),
+        ("linux", "x86_64", False, False, "linux-x64-baseline"),
+        ("linux", "x86_64", True, False, "linux-x64-musl-baseline"),
+        ("darwin", "arm64", False, False, "darwin-arm64"),
+        ("darwin", "x86_64", False, False, "darwin-x64"),
+        ("win32", "AMD64", False, True, "windows-x64"),
+        ("win32", "AMD64", False, False, "windows-x64-baseline"),
+        ("win32", "ARM64", False, True, "windows-x64"),
     ],
 )
 def test_target(
-    monkeypatch: pytest.MonkeyPatch, system: str, machine: str, libc: str | None, expected: str
+    monkeypatch: pytest.MonkeyPatch,
+    system: str,
+    machine: str,
+    musl: bool,
+    avx2: bool,
+    expected: str,
 ) -> None:
-    monkeypatch.setattr(cli, "libc", lambda: libc)
+    monkeypatch.setattr(cli, "musl", lambda: musl)
+    monkeypatch.setattr(cli, "avx2", lambda system: avx2)
     assert target(system, machine) == expected
 
 

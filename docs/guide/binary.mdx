@@ -88,7 +88,7 @@ include: ['evals/**/*.eval.py']
 harness: { kind: cursor, model: composer-2.5 }
 ```
 
-A Python project needs no install script. `reeval-python` has a `reeval` command that runs the binary made for its version, so `uv.lock` pins both. The first time it runs, it downloads that binary from the GitHub release, checks it against the sha256 that reeval-python was released with and caches it in `<cache>/reeval/bin/<version>/`; later runs start from the cache, offline too. A Python project configures reeval with [`reeval.yml`](/reference/config#reevalyaml).
+A Python project needs no install script. `reeval-python` has a `reeval` command that runs the binary made for its version, so `uv.lock` pins both. The first time it runs, it downloads that binary from the GitHub release (the baseline build on an x64 CPU without AVX2, as the install scripts pick), checks it against the sha256 that reeval-python was released with, checks it starts and caches it in `<cache>/reeval/bin/<version>/`; later runs start from the cache, offline too. A Python project configures reeval with [`reeval.yml`](/reference/config#reevalyaml).
 
 <Info>
 The cache keeps every version it downloads (about 85 MB each) until you delete `<cache>/reeval/bin/<version>/`. Windows on ARM runs the x64 binary.

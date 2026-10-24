@@ -1,23 +1,24 @@
 """The `reeval` command: runs the reeval binary made for this reeval-python, with its arguments.
 
-It downloads the binary: for version V and target T it is `reeval-V-T` (`.exe` on Windows) in the
-GitHub release `vV`, cached at `<cache>/reeval/bin/V/`. The released sdist and wheel record each
-target's sha256 and size in `reeval_python/binaries.json`, which the download must match; the
-release's SHA256SUMS must agree too. Every language SDK's launcher downloads the same way. A
-platform wheel (built by scripts/python-wheels.py, not published) carries the binary in
-`reeval_python/bin/` instead.
+It downloads the binary: for version V and target T (`-baseline` on an x64 CPU without AVX2, as
+scripts/install.sh picks) it is `reeval-V-T` (`.exe` on Windows) in the GitHub release `vV`. It's
+cached at `<cache>/reeval/bin/V/` once it starts, beside a marker of the hash it was checked
+against. The released sdist and wheel record each target's sha256 and size in
+`reeval_python/binaries.json`, which the download must match; the release's SHA256SUMS must agree
+too. Every language SDK's launcher downloads the same way. A platform wheel (built by
+scripts/python-wheels.py, not published) carries the binary in `reeval_python/bin/` instead.
 """
 
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
 import platform
 import re
 import signal
 import stat
-import struct
 import subprocess
 import sys
 import tempfile
@@ -87,41 +88,44 @@ def recorded(version: str, target: str) -> dict[str, Any] | None:
     return own.get("binaries", {}).get(target)
 
 
-def elf_interpreter(path: str) -> str | None:
-    """The PT_INTERP of an ELF file (its dynamic loader), or None if it has none or isn't ELF."""
+def _command(args: list[str]) -> tuple[int, str] | None:
+    """The exit code and output (stdout and stderr) of a command, or None if it can't run."""
     try:
-        with open(path, "rb") as f:
-            ident = f.read(16)
-            if ident[:4] != b"\x7fELF" or ident[4] not in (1, 2) or ident[5] not in (1, 2):
-                return None
-            wide, end = ident[4] == 2, "<" if ident[5] == 1 else ">"
-            header = struct.Struct(end + ("HHIQQQIHHH" if wide else "HHIIIIIHHH"))
-            fields = header.unpack(f.read(header.size))
-            phoff, phentsize, phnum = fields[4], fields[8], fields[9]
-            entry = struct.Struct(end + ("IIQQQQ" if wide else "IIIII"))
-            for i in range(phnum):
-                f.seek(phoff + i * phentsize)
-                ph = entry.unpack(f.read(entry.size))
-                if ph[0] == 3:  # PT_INTERP
-                    offset, size = (ph[2], ph[5]) if wide else (ph[1], ph[4])
-                    f.seek(offset)
-                    return f.read(size).rstrip(b"\0").decode(errors="replace")
-    except (OSError, struct.error):
+        done = subprocess.run(
+            args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=10
+        )
+    except (OSError, subprocess.SubprocessError):
         return None
-    return None
+    return done.returncode, done.stdout
 
 
-def libc() -> str | None:
-    """The running interpreter's libc, `glibc` or `musl`, as pip's own tag choice decides it."""
+def musl() -> bool:
+    """Whether musl is the system's libc, by scripts/install.sh's rule: a glibc system can have
+    musl's loader installed too, so getconf, then ldd, decides, and the loader only without them."""
+    getconf = _command(["getconf", "GNU_LIBC_VERSION"])
+    if getconf is not None and getconf[0] == 0:
+        return False
+    ldd = _command(["ldd", "--version"])
+    said = ldd[1] if ldd else ""
+    if "musl" in said:
+        return True
+    if "GLIBC" in said or "GNU libc" in said:
+        return False
+    return any(Path("/lib").glob("ld-musl-*"))
+
+
+def avx2(system: str) -> bool:
+    """Whether the CPU has AVX2, which the default x64 builds need; the baseline ones don't."""
+    if system == "win32":
+        import ctypes
+
+        kernel32: Any = getattr(ctypes, "windll").kernel32  # noqa: B009
+        return bool(kernel32.IsProcessorFeaturePresent(40))  # PF_AVX2_INSTRUCTIONS_AVAILABLE
     try:
-        if os.confstr("CS_GNU_LIBC_VERSION"):
-            return "glibc"
-    except (AttributeError, OSError, ValueError):
-        pass
-    loader = elf_interpreter(sys.executable)
-    if loader is None:
-        return None
-    return "musl" if "musl" in loader else "glibc"
+        cpuinfo = Path("/proc/cpuinfo").read_text()
+    except OSError:
+        return False
+    return re.search(r"\bavx2\b", cpuinfo) is not None
 
 
 def target(system: str = sys.platform, machine: str | None = None) -> str:
@@ -134,15 +138,15 @@ def target(system: str = sys.platform, machine: str | None = None) -> str:
             " Set REEVAL_BINARY to one you built, or use the npm package.",
             2,
         )
-    if os_name == "windows":
-        # Windows on ARM runs the x64 binary under emulation.
-        return "windows-x64"
-    if os_name == "linux":
-        found = libc()
-        musl = found == "musl" if found else Path("/etc/alpine-release").exists()
-        if musl:
-            return f"linux-{arch}-musl"
-    return f"{os_name}-{arch}"
+    if os_name == "darwin":
+        return f"darwin-{arch}"
+    # Windows on ARM runs the x64 binary under emulation.
+    found = "windows-x64" if os_name == "windows" else f"linux-{arch}"
+    if os_name == "linux" and musl():
+        found += "-musl"
+    if (os_name == "windows" or arch == "x64") and not avx2(system):
+        found += "-baseline"
+    return found
 
 
 def asset(version: str, target: str) -> str:
@@ -173,7 +177,7 @@ def _fetch(url: str) -> bytes:
     try:
         with opener.open(url, timeout=TIMEOUT) as response:
             return response.read()
-    except (urllib.error.URLError, OSError) as error:
+    except (urllib.error.URLError, http.client.HTTPException, OSError) as error:
         raise ShimError(
             f"Couldn't download {url}: {getattr(error, 'reason', error)}. REEVAL_DOWNLOAD names"
             " a mirror, and REEVAL_BINARY a binary to run instead.",
@@ -275,6 +279,85 @@ def download(version: str, target: str, dest: Path) -> None:
             f"{base}/{name} doesn't match {source} (got {actual}, expected {expected}).", 3
         )
     store(data, dest, expected)
+    check_starts(dest, name)
+    mark_verified(dest, expected)
+
+
+def describe_exit(code: int) -> str:
+    if code < 0:
+        try:
+            return f"killed by {signal.Signals(-code).name}"
+        except ValueError:
+            return f"killed by signal {-code}"
+    if code == 0xC000001D:  # STATUS_ILLEGAL_INSTRUCTION
+        return "an illegal instruction"
+    return f"exit {code}"
+
+
+def check_starts(binary: Path, name: str) -> None:
+    """Runs `binary --version`, and drops it from the cache unless it starts: a CPU without
+    an instruction the build needs kills it outright, before reeval can say why."""
+    try:
+        done = subprocess.run(
+            [str(binary), "--version"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            timeout=TIMEOUT,
+        )
+    except OSError as error:
+        why = str(error.strerror or error)
+    except subprocess.TimeoutExpired:
+        why = f"no answer to --version in {TIMEOUT}s"
+    else:
+        if done.returncode == 0:
+            return
+        said = done.stderr.strip().splitlines()
+        why = describe_exit(done.returncode) + (f": {said[0]}" if said else "")
+    try:
+        binary.unlink(missing_ok=True)
+    except OSError:
+        pass
+    raise ShimError(
+        f"{name} doesn't start on this machine ({why}), so it wasn't kept."
+        " REEVAL_BINARY names a reeval binary to run instead.",
+        3,
+    )
+
+
+def _marker(binary: Path) -> Path:
+    return binary.with_name(f"{binary.name}.sha256")
+
+
+def _identity(binary: Path) -> str:
+    # ctime too: setting the mtime back after a rewrite moves the ctime on.
+    st = binary.stat()
+    return f"{st.st_size} {st.st_mtime_ns} {st.st_ctime_ns} {st.st_ino}"
+
+
+def mark_verified(binary: Path, digest: str) -> None:
+    """Records that `binary`, as it is now on disk, has sha256 `digest`."""
+    try:
+        _marker(binary).write_text(f"{digest} {_identity(binary)}\n")
+    except OSError:
+        pass
+
+
+def verified(binary: Path, want: dict[str, Any] | None) -> bool:
+    """Whether the cached `binary` is the one that was checked: unchanged since its marker was
+    written, or (with a recorded hash) hashing to it, which then writes the marker."""
+    try:
+        identity = _identity(binary)
+        digest, _, seen = _marker(binary).read_text().strip().partition(" ")
+    except OSError:
+        digest = seen = identity = ""
+    if identity and seen == identity and (want is None or digest == want.get("sha256")):
+        return True
+    if want is not None and binary.is_file() and sha256(binary) == want.get("sha256"):
+        mark_verified(binary, want["sha256"])
+        return True
+    return False
 
 
 def bundled() -> Path:
@@ -336,10 +419,10 @@ def resolve() -> Path:
     cached = cache_dir() / "bin" / version / name
     want = recorded(version, where)
     if cached.is_file():
-        size = cached.stat().st_size
-        if size and (want is None or size == want.get("size", size)):
+        if verified(cached, want):
             return cached
         cached.unlink(missing_ok=True)
+        _marker(cached).unlink(missing_ok=True)
     if os.environ.get("REEVAL_OFFLINE", "") not in ("", "0", "false"):
         raise ShimError(
             f"reeval {version} isn't in the cache and REEVAL_OFFLINE is set."
@@ -375,8 +458,11 @@ def spawn(command: list[str], env: dict[str, str]) -> int:
 def _run_error(binary: Path, error: OSError) -> ShimError:
     message = f"Couldn't run {binary}: {error.strerror or error}."
     if binary.is_relative_to(cache_dir()):
-        binary.unlink(missing_ok=True)
-        message += " It's been removed from the cache, so the next run downloads it again."
+        try:
+            binary.unlink(missing_ok=True)
+            message += " It's been removed from the cache, so the next run downloads it again."
+        except OSError:
+            pass
     return ShimError(f"{message} REEVAL_BINARY names a reeval binary to run instead.", 3)
 
 
@@ -399,3 +485,5 @@ def main(argv: list[str] | None = None) -> None:
     except ShimError as error:
         print(f"reeval: {error}", file=sys.stderr)
         sys.exit(error.code)
+    except KeyboardInterrupt:
+        sys.exit(130)
