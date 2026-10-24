@@ -1,4 +1,4 @@
-// The nightly real-agent checks (real.yml's `real agents (Cursor)` job): `--profile smoke` from
+// The nightly real-agent checks: `--profile smoke` from real.yml's `real agents (Cursor)` job and
 // scripts/real-smoke.sh, and `--profile questions` under reeval.analysis.config.ts from
 // test/questions-real.test.ts.
 import { defineConfig } from 'reeval'

@@ -80,3 +80,38 @@ for (const [name, { profiles, outcomes }] of Object.entries(WITH)) {
     assert.deepEqual(ran, outcomes)
   })
 }
+
+test('test/real-agents plans the nightly smoke and questions profiles', async () => {
+  const dir = join(pkgRoot, 'test/real-agents')
+  const plans = {
+    smoke: ['run', '--dry-run', '--json', '--profile', 'smoke'],
+    questions: [
+      'run',
+      '--dry-run',
+      '--json',
+      '--config',
+      'reeval.analysis.config.ts',
+      '--profile',
+      'questions',
+    ],
+  }
+  const cells: Record<string, string[]> = {}
+  for (const [profile, args] of Object.entries(plans)) {
+    const plan = await runCli(dir, args)
+    assert.equal(plan.code, 0, `${args.join(' ')}\n${plan.stdout}${plan.stderr}`)
+    const evals: { file: string; cells: Cell[] }[] = JSON.parse(plan.stdout).evals
+    cells[profile] = evals.flatMap((e) => e.cells.map((c) => `${e.file} ${c.harness}`)).sort()
+  }
+  assert.deepEqual(cells, {
+    smoke: [
+      'evals/brokering.eval.ts cursor:composer-2.5',
+      'evals/gemini.eval.ts cursor:composer-2.5',
+    ],
+    questions: [
+      'evals/questions.eval.ts cursor:composer-2.5',
+      'evals/questions.eval.ts cursor:composer-2.5',
+      'evals/questions.eval.ts pi:gemini-3.8-flash',
+      'evals/questions.eval.ts pi:gemini-3.8-flash',
+    ],
+  })
+})

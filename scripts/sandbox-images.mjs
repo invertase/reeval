@@ -13,5 +13,10 @@ if (unknown.length) {
 }
 for (const harness of asked.length ? asked : BAKED_HARNESSES) {
   console.log(`Building ${imageFor(harness)}`)
-  await buildImage(console.log, { harness })
+  try {
+    await buildImage(console.log, { harness })
+  } catch (e) {
+    console.error(e instanceof Error ? e.message : String(e))
+    process.exit(1)
+  }
 }

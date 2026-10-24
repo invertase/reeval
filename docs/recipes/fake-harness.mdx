@@ -59,7 +59,7 @@ export default defineConfig({
 }
 ```
 
-The evals are the greeting evals and this one, which checks the second scripted turn:
+The evals are the Guide's [`greet` evals](/guide/first-real-run) and this one, which checks the second scripted turn:
 
 ```ts title="evals/scripted.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -98,7 +98,7 @@ Set analysis.model in reeval.config.ts for answers to what each eval asks.
 
 The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`c.exec`, `toHaveFile`, `c.judge`) run for real against what it wrote.
 
-When a coding agent runs reeval for you, agent output prints the plan, the result blocks and the tally, with no per-attempt lines. This is a project of greeting evals under its fake config, where the skill compare's control misses on purpose and the check that tells the arms apart shows its failure:
+When a coding agent runs reeval for you, agent output prints the plan, the result blocks and the tally, with no per-attempt lines. This is a project of greeting evals on the fake harness, where the skill compare's control misses on purpose and the check that tells the arms apart shows its failure:
 
 ```bash
 REEVAL_UI=agent npx reeval run --config reeval.fake.config.ts

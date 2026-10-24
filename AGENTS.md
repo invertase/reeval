@@ -522,8 +522,9 @@ pnpm reeval run --dry-run          # the plan, without running
 
 2. Put your credentials in the example's `.env.local` (gitignored), such as
    `examples/with-skill-lift/.env.local`: `CURSOR_API_KEY` for the examples' `cursor` profile.
-   The nightly real-agent project, `packages/reeval/test/real-agents`, also needs
-   `GOOGLE_GENERATIVE_AI_API_KEY` (its Gemini checks and analysis model).
+   The nightly real-agent project, `packages/reeval/test/real-agents`, takes its keys from its own
+   `.env.local`: `CURSOR_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` (its Gemini checks and
+   analysis model).
 
 3. Run the example on Cursor:
 
