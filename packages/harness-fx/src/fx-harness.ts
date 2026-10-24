@@ -17,7 +17,7 @@ export const FX_CLI_SHA256 = {
 
 /**
  * Where a model runs: Vercel AI Gateway for a gateway id (`anthropic/claude-sonnet-5`), fx's own
- * provider, or OpenAI's Chat Completions API for a bare OpenAI id (`gpt-4.1`), as an fx
+ * provider, or OpenAI's Chat Completions API for a bare OpenAI id (`gpt-5.5`), as an fx
  * configured provider. Each takes one key, sent as a bearer token.
  */
 export const FX_PROVIDERS = {
@@ -109,7 +109,7 @@ export const FX_GATEWAY_CHAT_PATH = '/v4/ai/language-model'
 export type FxHarnessSettings = {
   /** The model's provider's key only (see {@link FX_PROVIDERS}). The host environment is never read. */
   readonly auth: HarnessV1AuthenticationEnvironment
-  /** A gateway id (`anthropic/claude-sonnet-5`) or a bare OpenAI id (`gpt-4.1`). */
+  /** A gateway id (`anthropic/claude-sonnet-5`) or a bare OpenAI id (`gpt-5.5`). */
   readonly model: string
   /** MCP servers in ACP's `McpServer` shape, keyed by name, passed on `session/new`. */
   readonly mcpServers?: Record<string, Record<string, unknown>>

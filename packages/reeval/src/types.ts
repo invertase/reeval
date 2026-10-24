@@ -725,7 +725,7 @@ export type FxHarnessDescriptor = {
   /**
    * A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with
    * `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on
-   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-4.1`.
+   * OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.
    */
   model: string
   /** Cell id; defaults to `fx:<model>`. */

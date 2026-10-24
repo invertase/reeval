@@ -25,9 +25,10 @@ const agent = new HarnessAgent({
 - **Bootstrap.** Downloads the fx 0.0.14 release for x86_64 or aarch64 Linux, checks its sha256,
   and puts `fx` in a private home under the bootstrap directory.
 - **Model.** A gateway id (`anthropic/claude-sonnet-5`) runs on fx's `gateway` provider with
-  `AI_GATEWAY_API_KEY`. A bare OpenAI id (`gpt-4.1`) runs on an fx configured provider,
-  `openai`, over OpenAI's Chat Completions API with `OPENAI_API_KEY`. fx sends `max_tokens`, which
-  OpenAI's reasoning models refuse, so that route takes the non-reasoning ones.
+  `AI_GATEWAY_API_KEY`. A bare OpenAI id (`gpt-5.5`) runs on an fx configured provider,
+  `openai`, over OpenAI's Chat Completions API with `OPENAI_API_KEY`. fx sends that provider no
+  `reasoning_effort` and no `max_tokens`, so that route needs a model that accepts function tools
+  without `reasoning_effort`: OpenAI refuses them from `gpt-5.6` on unless it is `none`.
 - **Relay.** fx's HTTP client ignores `HTTPS_PROXY`, so `fx-acp` starts a small Node relay on
   `127.0.0.1:47823` and points fx at it (`FX_GATEWAY_BASE_URL`, or the configured provider's
   `base_url`). The relay forwards each request with Node's `fetch`, which honours the sandbox's

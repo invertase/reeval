@@ -125,7 +125,7 @@ export const codex = (options: Options<CodexHarnessDescriptor>): CodexHarnessDes
 /**
  * fx, on Vercel AI Gateway or OpenAI's API: `model` is a gateway id, e.g.
  * `anthropic/claude-sonnet-5`, which needs `vercel()` in the config's gateway list, or a bare
- * OpenAI id, e.g. `gpt-4.1`, run with `OPENAI_API_KEY` on `direct()` or as `openai/<id>` on
+ * OpenAI id, e.g. `gpt-5.5`, run with `OPENAI_API_KEY` on `direct()` or as `openai/<id>` on
  * `vercel()`. `id` names the cell; it defaults to `fx:<model>`.
  */
 export const fx = (options: Options<FxHarnessDescriptor>): FxHarnessDescriptor =>

@@ -35,7 +35,7 @@ export const INIT_HARNESSES: ReadonlyArray<{
   { kind: 'goose', label: 'Goose', factory: 'goose', model: 'gemini-3.8-flash' },
   { kind: 'pi', label: 'pi', factory: 'pi', model: 'gemini-3.8-flash' },
   { kind: 'codex', label: 'Codex', factory: 'codex', model: 'gpt-5.6-luna' },
-  { kind: 'fx', label: 'fx', factory: 'fx', model: 'gpt-4.1' },
+  { kind: 'fx', label: 'fx', factory: 'fx', model: 'gpt-5.5' },
   { kind: 'grok-build', label: 'Grok Build', factory: 'grokBuild', model: 'grok-4.6' },
 ]
 

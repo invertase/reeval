@@ -179,7 +179,7 @@ export const fxHarnessSchema = z
       .string()
       .min(1)
       .describe(
-        "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-4.1`.",
+        "A Vercel AI Gateway model id, `<provider>/<model>`, run on fx's `gateway` provider with `AI_GATEWAY_API_KEY`, e.g. `anthropic/claude-sonnet-5`; or a bare OpenAI model id, run on OpenAI's Chat Completions API with `OPENAI_API_KEY`, e.g. `gpt-5.5`.",
       ),
     id: nonEmpty().optional().describe('Cell id; defaults to `fx:<model>`.'),
     maxConcurrent: maxConcurrent(
@@ -438,7 +438,7 @@ const MODEL: Partial<Record<HarnessDescriptor['kind'], (v: unknown) => string>> 
   codex: (v) =>
     `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got ${got(v)})`,
   fx: (v) =>
-    `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-4.1' }) (got ${got(v)})`,
+    `fx() needs a model: a Vercel AI Gateway id, e.g. fx({ model: 'anthropic/claude-sonnet-5' }), or a bare OpenAI id, e.g. fx({ model: 'gpt-5.5' }) (got ${got(v)})`,
   'grok-build': (v) =>
     `grokBuild() needs an xAI model id, without a provider, since it runs on an xAI API key, e.g. grokBuild({ model: 'grok-4.6' }) (got ${got(v)})`,
 }
