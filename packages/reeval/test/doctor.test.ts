@@ -590,7 +590,7 @@ evaluate('a', async () => {})
     assert.equal(unserved[0]?.status, 'fail')
     assert.match(
       unserved[0]?.summary ?? '',
-      /no gateway in the list can serve it .* Add vercel\(\) to gateway\.$/,
+      /no gateway in the list can serve it .* Add vercel\(\) to gateway\. There a judge must be a decision model, such as 'typesafe-ai\/jev-1\.14\.0'\.$/,
     )
   })
 
