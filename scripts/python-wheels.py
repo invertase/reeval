@@ -4,6 +4,7 @@
     python3 scripts/python-wheels.py check <dist dir> <reeval version>
     uv run --no-project python scripts/python-wheels.py platform <pure .whl> <release dir> <out dir>
     python3 scripts/python-wheels.py check --platform <dir> <reeval version>
+    python3 scripts/python-wheels.py verify <dist dir> <SHA256SUMS>
 
 <release dir> holds the binaries and SHA256SUMS as binary.yml builds them, and must have
 `reeval-<version>-<target>` for every target. reeval-python's version is reeval's in PEP 440:
@@ -12,12 +13,15 @@ reeval 1.0.0-beta.1 is reeval-python 1.0.0b1.
 `manifest` writes `binaries.json` (each target's sha256 and size) into the package before
 `uv build`, so the sdist and the pure wheel both carry it; the `reeval` console script holds a
 download to it. `check` is release.yml's gate before PyPI: <dist dir> must hold exactly that
-sdist and pure wheel, each recording reeval <version>'s binaries.
+sdist and pure wheel, each recording reeval <version>'s binaries. `verify` holds every file's
+recorded hashes to a release's SHA256SUMS, so PyPI never gets a reeval-python whose binaries
+aren't the ones on the release.
 
 `platform` builds a wheel per target from the pure wheel, with the binary added as
 `reeval_python/bin/reeval` (`reeval.exe` on Windows), which the console script runs instead of
 downloading. They are a CI artifact for the smoke, not published: seven binaries a release would
-add about 250 MB to PyPI. `check --platform` holds them to the release the same way.
+add about 250 MB to PyPI. `check --platform` holds them to the release the same way. The baseline
+x64 builds (no AVX2) are recorded but get no platform wheel.
 """
 
 from __future__ import annotations
@@ -45,6 +49,8 @@ TAGS = {
     "darwin-arm64": "macosx_13_0_arm64",
     "windows-x64": "win_amd64",
 }
+# The x64 builds that need no AVX2, which the launcher picks on a CPU without it.
+TARGETS = [*TAGS, "linux-x64-baseline", "linux-x64-musl-baseline", "windows-x64-baseline"]
 MANIFEST = "reeval_python/binaries.json"
 PRERELEASES = {"alpha": "a", "beta": "b", "rc": "rc"}
 
@@ -137,17 +143,38 @@ def check(dist: Path, version: str, platform: bool = False) -> None:
             problems.append(f"{name} has no {MANIFEST}")
             continue
         names = {t: b.get("name") for t, b in manifest.get("binaries", {}).items()}
-        if manifest.get("version") != version or names != {t: asset(version, t) for t in TAGS}:
+        if manifest.get("version") != version or names != {t: asset(version, t) for t in TARGETS}:
             problems.append(f"{name} records reeval {manifest.get('version')}'s binaries")
     if problems:
         sys.exit(f"python-wheels: {dist} isn't reeval {version}: " + "; ".join(problems))
     print(f"python-wheels: {len(found)} files, all reeval-python {python} for reeval {version}")
 
 
+def verify(dist: Path, sums_file: Path) -> None:
+    sums = parse_sums(sums_file.read_text())
+    files = sorted(p for p in dist.iterdir() if p.suffix in (".whl", ".gz"))
+    problems = [] if files else [f"{dist} has no sdist or wheel"]
+    for path in files:
+        manifest = manifest_of(path, path.name)
+        if manifest is None:
+            problems.append(f"{path.name} has no {MANIFEST}")
+            continue
+        for target, binary in sorted(manifest.get("binaries", {}).items()):
+            name = binary.get("name")
+            listed = sums.get(name)
+            if listed is None:
+                problems.append(f"{path.name} records {name} ({target}), which isn't listed")
+            elif listed != binary.get("sha256"):
+                problems.append(f"{path.name} records {name} as {binary.get('sha256')}, not {listed}")
+    if problems:
+        sys.exit(f"python-wheels: {dist} doesn't match {sums_file}: " + "; ".join(problems))
+    print(f"python-wheels: {len(files)} files record the binaries {sums_file} lists")
+
+
 def binaries(release: Path, version: str) -> dict[str, bytes]:
     """Every target's binary of reeval `version`, each matching the release's SHA256SUMS."""
     sums = parse_sums((release / "SHA256SUMS").read_text())
-    missing = [asset(version, t) for t in TAGS if asset(version, t) not in sums]
+    missing = [asset(version, t) for t in TARGETS if asset(version, t) not in sums]
     if missing:
         others = sorted(n for n in sums if n.startswith("reeval-"))
         sys.exit(
@@ -156,7 +183,7 @@ def binaries(release: Path, version: str) -> dict[str, bytes]:
             " same version: set it with `uv version --frozen` before `uv build`."
         )
     found = {}
-    for target in TAGS:
+    for target in TARGETS:
         name = asset(version, target)
         data = (release / name).read_bytes()
         if hashlib.sha256(data).hexdigest() != sums[name]:
@@ -221,6 +248,8 @@ def main(argv: list[str] | None = None) -> None:
             check(Path(dist), version, platform=True)
         case ["check", dist, version]:
             check(Path(dist), version)
+        case ["verify", dist, sums]:
+            verify(Path(dist), Path(sums))
         case ["platform", pure, release, out]:
             platform_wheels(Path(pure), Path(release), Path(out))
         case _:

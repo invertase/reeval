@@ -381,16 +381,21 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   `binary.yml` builds, with their `SHA256SUMS`, to the release, and then publishes the
   reeval-python sdist and pure wheel the same `binary.yml` run built to PyPI, in the `pypi`
   environment. Both record those binaries' hashes (`reeval_python/binaries.json`, which
-  `scripts/python-wheels.py manifest` writes into the package before `uv build`), and
-  `python-wheels.py check` holds them to the release's version first. reeval-python downloads its
-  binary from the release on first run, checks it against those hashes and caches it. Its
+  `scripts/python-wheels.py manifest` writes into the package before `uv build`, baseline builds
+  included). Before publishing, `python-wheels.py check` holds them to the release's version and
+  `python-wheels.py verify` to the `SHA256SUMS` on the release, so PyPI gets reeval-python only
+  when the release's binaries are the ones it records, whether or not this run uploaded them.
+  reeval-python downloads its binary from the release on first run, checks it against those
+  hashes, checks it starts and caches it. Its
   platform wheels, each carrying a binary, are built (`python-wheels.py platform`) and smoke-tested
   but not published, since they'd add about 250 MB a release to PyPI. A prerelease is `X.Y.Z-alpha.N`, `-beta.N` or `-rc.N`, which is
   reeval-python `X.Y.ZaN`, `bN` or `rcN`. A manual dispatch republishes the manifest's version
-  from its tag (`ci.yml` and `binary.yml` take the tag as `ref`), whatever `main` has since;
+  from its tag (`ci.yml` and `binary.yml` take the tag's commit as `ref`, with `binary.yml`'s
+  scripts from the run's own ref), whatever `main` has since;
   `-f dry_run=true` builds and smoke-tests the binaries and lists what it would upload to the
   current release, publishing nothing. The binaries are always built from the release's tagged commit, and a
-  release that has its `SHA256SUMS` keeps its binaries unless the dispatch sets `-f replace_binaries=true`.
+  release that has its `SHA256SUMS` keeps its binaries unless the dispatch sets `-f replace_binaries=true`
+  (one whose `SHA256SUMS` is the build's has nothing to upload).
   If a flake fails it, re-run the failed jobs: an upload cut short keeps the binaries that match
   the run's sums and adds the rest. Provenance is automatic once the repository is public. Don't publish
   by hand, and don't edit versions or `CHANGELOG.md`.

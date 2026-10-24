@@ -35,7 +35,7 @@ def release(tmp_path: Path, wheels: ModuleType, version: str = "1.2.3", skip: st
     out = tmp_path / "release"
     out.mkdir()
     sums = []
-    for target in wheels.TAGS:
+    for target in wheels.TARGETS:
         if target == skip:
             continue
         name = wheels.asset(version, target)
@@ -90,7 +90,44 @@ def test_the_manifest_records_each_targets_hash(tmp_path: Path, wheels: ModuleTy
         "sha256": hashlib.sha256(b"binary for darwin-arm64").hexdigest(),
         "size": len(b"binary for darwin-arm64"),
     }
-    assert set(manifest["binaries"]) == set(wheels.TAGS)
+    assert set(manifest["binaries"]) == set(wheels.TAGS) | {
+        "linux-x64-baseline",
+        "linux-x64-musl-baseline",
+        "windows-x64-baseline",
+    }
+
+
+def test_a_missing_baseline_build_is_refused(tmp_path: Path, wheels: ModuleType) -> None:
+    out = release(tmp_path, wheels, skip="linux-x64-musl-baseline")
+    with pytest.raises(SystemExit, match="no reeval-1.2.3-linux-x64-musl-baseline for"):
+        wheels.main(["manifest", str(out), "1.2.3", str(tmp_path)])
+
+
+def test_verify_holds_the_dist_to_the_releases_sha256sums(
+    tmp_path: Path, wheels: ModuleType, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dist = build(tmp_path, wheels)
+    sums = tmp_path / "release" / "SHA256SUMS"
+    wheels.main(["verify", str(dist), str(sums)])
+    assert "2 files record the binaries" in capsys.readouterr().out
+    # A rebuild uploaded over the release: the published SDK would refuse every download.
+    rebuilt = sums.read_text().replace(
+        hashlib.sha256(b"binary for linux-x64-baseline").hexdigest(), "0" * 64
+    )
+    sums.write_text(rebuilt)
+    with pytest.raises(SystemExit) as refused:
+        wheels.main(["verify", str(dist), str(sums)])
+    message = str(refused.value)
+    assert "reeval_python-1.2.3-py3-none-any.whl records reeval-1.2.3-linux-x64-baseline" in message
+    assert "reeval_python-1.2.3.tar.gz records reeval-1.2.3-linux-x64-baseline" in message
+    assert f"not {'0' * 64}" in message
+    sums.write_text("\n".join(rebuilt.splitlines()[1:]) + "\n")
+    with pytest.raises(SystemExit, match="which isn't listed"):
+        wheels.main(["verify", str(dist), str(sums)])
+    for path in dist.iterdir():
+        path.unlink()
+    with pytest.raises(SystemExit, match="has no sdist or wheel"):
+        wheels.main(["verify", str(dist), str(sums)])
 
 
 def test_binaries_of_another_version_are_refused(tmp_path: Path, wheels: ModuleType) -> None:
