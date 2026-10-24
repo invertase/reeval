@@ -49,6 +49,11 @@ export const cases: PlanCase[] = [
   { dir: 'compare', name: 'questions-across', args: ['evals/questions-across.eval.ts'] },
   { dir: 'compare', name: 'questions-state', args: ['evals/questions-state.eval.ts'] },
   { dir: 'compare', name: 'questions-model', args: ['evals/questions-model.eval.ts'] },
+  {
+    dir: 'compare',
+    name: 'questions-profile-judge',
+    args: ['--profile', 'judged', 'evals/questions.eval.ts'],
+  },
   { dir: 'insights', name: 'insights', args: [] },
   { dir: 'insights', name: 'no-insights', args: ['--no-insights'] },
   {

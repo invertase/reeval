@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { shellQuote } from '@reeval/sandbox-docker/process'
-import { providerModel } from '../analysis/model.ts'
+import { fallbackModel, providerModel } from '../analysis/model.ts'
 import {
   allocatePort,
   cacheLabel,
@@ -47,27 +47,30 @@ export type CaptureArtifact = {
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-function defaultCaptureModel(): string | undefined {
+/** `analysis.model`, else the attempt's judge (a profile's, group's or eval's over the config's). */
+function defaultCaptureModel(a: Attempt): string | undefined {
+  let model: ReturnType<typeof fallbackModel>
   try {
-    const { config } = getRunContext()
-    const analysis = config.analysis.model
-    if (typeof analysis === 'string' && !isEvaluationModel(analysis)) return analysis
-    const judge = config.judge.model
-    if (typeof judge === 'string' && !isEvaluationModel(judge)) return judge
+    model = fallbackModel(getRunContext().config, a.spec.judge.model)
   } catch {
     return undefined
   }
+  return typeof model === 'string' && !isEvaluationModel(model) ? model : undefined
 }
 
-function resolveUse(resolved: ResolvedCaptureCall, fakeSandbox: boolean): CaptureUse | undefined {
+function resolveUse(
+  a: Attempt,
+  resolved: ResolvedCaptureCall,
+  fakeSandbox: boolean,
+): CaptureUse | undefined {
   if (resolved.fake) return { fake: resolved.fake }
   if (resolved.model) return { model: resolved.model }
   if (!resolved.instructions.length) return undefined
-  const fallback = defaultCaptureModel()
+  const fallback = defaultCaptureModel(a)
   if (fallback) return { model: fallback }
   if (fakeSandbox) return undefined
   throw new Error(
-    'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or analysis.model to a language model that accepts images. Tests pass fakeInstructions from reeval/testing.',
+    'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or set analysis.model or the judge model to a language model that accepts images. Tests pass fakeInstructions from reeval/testing.',
   )
 }
 
@@ -180,7 +183,7 @@ export async function capturePage(
     throw new Error(`nothing listening on port ${resolved.port}`)
   }
   const fake = a.spec.sandbox.kind === 'fake'
-  const use = resolveUse(resolved, fake)
+  const use = resolveUse(a, resolved, fake)
   a.captureNames.add(resolved.name)
   const started = Date.now()
   const remaining = () => Math.max(0, resolved.timeoutMs - (Date.now() - started))

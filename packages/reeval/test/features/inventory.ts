@@ -190,6 +190,7 @@ export const inventory: InventoryFeature[] = [
       'compare/questions-dropped',
       'compare/questions-group',
       'compare/questions-across',
+      'compare/questions-profile-judge',
     ],
     tests: [
       questions('--dry-run names the questions with no language model'),
@@ -1708,6 +1709,9 @@ export const inventory: InventoryFeature[] = [
         "anthropic/* and openai/* judges call the provider directly with its key, over the Gateway's",
       ),
       unit('judge strings use the provider package on direct, and the AI Gateway only on vercel'),
+      unit(
+        'a judge model its route answers only with a decision model fails in a sentence of its own',
+      ),
       questions("a question's own model needs its key, and a malformed one exits 2"),
       options(
         'a judge model without its key exits 2 naming the keys that work, before any attempt',
@@ -2326,6 +2330,7 @@ export const inventory: InventoryFeature[] = [
     name: "`c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`)",
     fixtures: [
       'ui/capture-use',
+      'ui/capture-use-judge',
       'ui/capture-full-page',
       'ui/capture-use-click',
       'ui/capture-use-wait',
@@ -2336,6 +2341,8 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/capture.test.ts › resolveCaptureCall accepts full-page and a wait beat',
       'reeval/test/capture-use.test.ts › dispatchInput sends CDP Input events and never Runtime.evaluate',
       'reeval/test/capture-use.test.ts › runJourney times out before the saved screenshot',
+      "reeval/test/capture-use.test.ts › runJourney scales a Gemini model's 0-1000 point to the screenshot's CSS pixels",
+      'reeval/test/capture-use.test.ts › scalePoints scales every point of an action and only Gemini ids normalise',
     ],
   },
   {

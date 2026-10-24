@@ -34,7 +34,7 @@ evals/questions.eval.ts › greets by name  2          1         1     4
 | Field | What it does |
 |---|---|
 | `question` | The question. An entry can also be a plain string |
-| `model` | The model that answers. Default the cascaded `question.model`, else `analysis.model`, else the judge's model when it's a language model; with none, `reeval run` exits 2 at plan time |
+| `model` | The model that answers. Default the cascaded `question.model`, else `analysis.model`, else the run's judge model, a profile's included, when it's a language model; with none, `reeval run` exits 2 at plan time |
 | `across` | The factor you vary when pairing: `'environment'` holds the harness (Auth vs Firebase UI), `'harness'` holds the environment (Cursor vs Antigravity). A list of both, or none, asks both pair kinds |
 | `state` | What each side shows: the judge's keys but `contents`. Default the task and the diff |
 | `artifacts` | Captures each side sends as images: `true` for all, or their names. Default none |

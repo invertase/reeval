@@ -2,7 +2,8 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 const pricing = defineEnvironment('pricing', ({ directory }) => ({ files: directory('./project') }))
 
-// The journey's model: the run's judge doesn't drive it, so it's named here, under every profile.
+// The journey's model, named so the same one clicks under every profile. Without it, each
+// profile's judge would, and fx's (Jev) can't.
 const journey = { model: 'anthropic/claude-sonnet-5' }
 
 evaluate('reveals the price on click', { environment: pricing, capture: journey }, async (c) => {

@@ -2638,6 +2638,20 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'ui/capture-use-judge',
+    tiers: ['fake'],
+    env: 'ui',
+    args: ['--profile', 'vision'],
+    // The plan checks the judge's key; the fake sandbox drives no journey, so it's never sent.
+    hostEnv: { GOOGLE_GENERATIVE_AI_API_KEY: 'fixture-key' },
+    canary: /expected 'artifacts\/journey\.png' to be 'artifacts\/wrong\.png'/,
+    record: ({ run }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.ok(art, 'files.artifacts names the PNG')
+      assert.deepEqual(art.capture?.use, { model: 'google/gemini-3.8-flash', moves: 0 })
+    },
+  },
+  {
     dir: 'ui/capture-full-page',
     tiers: ['fake', 'docker'],
     env: 'ui',
