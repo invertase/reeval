@@ -13,15 +13,15 @@ An attempt is one execution of a cell in a fresh sandbox, and its outcome is pas
 
 ## Cell
 
-A cell is one harness, one environment, and one sandbox of an evaluation. In a compare, the control and each variant are separate cells. For more information about a cell, see [Core concepts](/core-concepts#cell).
+A cell is one harness, one environment, and one sandbox of an evaluation. In a comparison, the control and each variant are separate cells. For more information about a cell, see [Core concepts](/core-concepts#cell).
 
 ## Check
 
 A check is a named assertion on what an attempt produced, from `expect`, `c.exec`, or `c.judge`. For more information about checks, see [Checks](/evals/checks).
 
-## Compare
+## Comparison
 
-A compare runs its control and each variant as separate cells; `compare.baseline` optionally names the control's environment. It measures a variant against the control only when the cells share a harness and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a compare, see [Compare](/evals/compare).
+A comparison runs its control and each variant as separate cells; `compare.baseline` optionally names the control's environment. It measures a variant against the control only when the cells share a harness and sandbox, and reports `helped`, `made it worse`, or `can't tell yet`. For more information about a comparison, see [Compare setups](/evals/compare).
 
 ## Environment
 
@@ -89,11 +89,11 @@ The **history folder** is `.history`. `reeval history` is the pass/fail list ove
 
 ### gate
 
-**Gate** is a cell's `gate`. The **compare gate** is `compare.gate`.
+**Gate** is a cell's `gate`. The **comparison gate** is `compare.gate`.
 
 ### question
 
-A **judge question** is the argument to `c.judge()`. A **compare question** is an entry of `compare.questions`.
+A **judge question** is the argument to `c.judge()`. A **comparison question** is an entry of `compare.questions`.
 
 ### model
 
@@ -101,7 +101,7 @@ The **harness model** is `model`. Separate from it are `judge.model`, `capture.m
 
 ### artifacts
 
-**Judge artifacts** are `artifacts` on `c.judge()` and on a compare question. **Stored artefacts** are `history.artifacts` and `reeval record --artifacts`.
+**Judge artifacts** are `artifacts` on `c.judge()` and on a comparison question. **Stored artefacts** are `history.artifacts` and `reeval record --artifacts`.
 
 ### verdict
 

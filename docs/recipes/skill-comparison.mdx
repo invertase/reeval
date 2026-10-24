@@ -57,7 +57,7 @@ evaluate(
 )
 ```
 
-The prompt doesn't name the skill, so `uses fromPartial` passes only when the skill leads the harness to call `fromPartial`. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect stays `can't tell yet`. For more information about how reeval reaches the effect, see [Compare](/core-concepts#compare).
+The prompt doesn't name the skill, so `uses fromPartial` passes only when the skill leads the harness to call `fromPartial`. `runs: 4` gives each cell four attempts. Below four counted attempts a side, the effect stays `can't tell yet`. For more information about how reeval reaches the effect, see [Comparison](/core-concepts#comparison).
 
 </Step>
 <Step title="Check that the harness loaded the skill">
@@ -77,7 +77,7 @@ For more information about the matcher, see [`toHaveCalledSkill`](/reference/mat
 </Step>
 <Step title="Require a minimum lift">
 
-In the `evals/shoehorn.eval.ts` file, set `minLift` on the compare. `compare.minLift` is the smallest lift you accept, from -1 to 1.
+In the `evals/shoehorn.eval.ts` file, set `minLift` on the comparison. `compare.minLift` is the smallest lift you accept, from -1 to 1.
 
 ```ts title="evals/shoehorn.eval.ts"
 -  { runs: 4, compare: { baseline: plain, variants: [withShoehorn] } },
@@ -168,4 +168,4 @@ The next run keeps the same command. The role guard runs `loaded the skill` on `
 
 ## Next
 
-For more information about every compare key, see [the `compare` option](/reference/options#compare).
+For more information about every `compare` key, see [the `compare` option](/reference/options#compare).

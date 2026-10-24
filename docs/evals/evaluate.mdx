@@ -59,7 +59,7 @@ Name the file the task is about, such as `src/user.test.ts`. Leave out the rule 
 For more information about sending several prompts in one attempt, see [Turns](/evals/turns).
 
 </Step>
-<Step title="Add a compare">
+<Step title="Add a comparison">
 
 In the `evals/shoehorn.eval.ts` file, replace `environment` with `compare` to measure a change:
 
@@ -71,7 +71,7 @@ import { plain, withShoehorn } from './environments.ts'
 
 Each `expect` line is a check. The label, such as `'uses fromPartial'`, names the check's row in the result. For more information about every kind of check, see [Checks](/evals/checks).
 
-For more information about the control, the variant, and the effect, see [Compare](/evals/compare).
+For more information about the control, the variant, and the effect, see [Compare setups](/evals/compare).
 
 </Step>
 <Step title="Verify with the `reeval run --dry-run` command">

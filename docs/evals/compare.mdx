@@ -3,11 +3,11 @@ title: "Compare setups"
 description: "See whether a skill, doc, or MCP server changes what your harness does."
 ---
 
-A compare runs one evaluation on a control without your change and on a variant with it. Both get the same prompt and checks. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a compare appears in a run, see [Core concepts](/core-concepts#compare).
+A comparison runs one evaluation on a control without your change and on a variant with it. Both get the same prompt and checks. reeval reports whether the variant `helped`, `made it worse`, or `can't tell yet`. The change can be a skill, a doc, or a Model Context Protocol (MCP) server. For more information about where a comparison appears in a run, see [Core concepts](/core-concepts#comparison).
 
 This page uses the control `plain` and the variant `with-shoehorn`, which adds Matt Pocock's `migrate-to-shoehorn` skill. For more information about building the control and variant, see [Quick start](/quickstart) or [Environments](/environments).
 
-## Run the compare
+## Run the comparison
 
 In the `evals/shoehorn.eval.ts` file, name the control in `compare.baseline` and the variants in `compare.variants`:
 
@@ -94,7 +94,7 @@ Each harness reads its API key from the `.env.local` file. reeval measures each 
 
 ## Ask which did better
 
-A compare question asks a language model which of two attempts did better. The compare leaves out attempts that failed their checks, so the question needs a check both sides can pass. In the `evals/shoehorn.eval.ts` file, add the question and replace the check with one both sides can pass:
+A comparison question asks a language model which of two attempts did better. The comparison leaves out attempts that failed their checks, so the question needs a check both sides can pass. In the `evals/shoehorn.eval.ts` file, add the question and replace the check with one both sides can pass:
 
 ```ts title="evals/shoehorn.eval.ts"
 compare: {
@@ -112,4 +112,4 @@ Questions never gate. They don't change an outcome or the exit code.
 
 ## Next steps
 
-For more information about every compare key, see [the `compare` option](/reference/options#compare).
+For more information about every `compare` key, see [the `compare` option](/reference/options#compare).

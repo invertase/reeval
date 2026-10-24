@@ -252,7 +252,7 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
 
 ## `question`
 
-`question` is the defaults for every compare question.
+`question` is the defaults for every comparison question.
 
 <Property name="question" type="QuestionOptions" optional>
   reeval refuses a question showing nothing but `turns` and no `artifacts`.
@@ -298,7 +298,7 @@ For more information about screenshots, see [Check an app](/evals/servers#set-th
   Each side's captures as `true` or a non-empty list of non-empty capture names, below a question's own `artifacts`. The default is none.
 </Property>
 
-For more information about compare questions, see [Compare setups](/evals/compare#ask-which-did-better).
+For more information about comparison questions, see [Compare setups](/evals/compare#ask-which-did-better).
 
 ## `timeout`
 
@@ -394,14 +394,14 @@ For more information about brokering a secret, see [Secrets](/environments/secre
 
 ## `analysis`
 
-`analysis` is the language model for insights, `reeval analyze`, and compare questions.
+`analysis` is the language model for insights, `reeval analyze`, and comparison questions.
 
 <Property name="analysis" type="AnalysisConfig" optional>
   The model, insights, token caps, and prompt text.
 </Property>
 
 <Property name="analysis.model" type="string" optional>
-  A `'provider/model'` string; reeval refuses an evaluation model. `reeval analyze` and compare questions fall back to a judge language model.
+  A `'provider/model'` string; reeval refuses an evaluation model. `reeval analyze` and comparison questions fall back to a judge language model.
 </Property>
 
 <Property name="analysis.insights" type="boolean" optional>

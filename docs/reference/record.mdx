@@ -966,7 +966,7 @@ A `StartRetry` is one entry of `AttemptRecord.startRetries`. `error` is `<harnes
 
 ## `CompareAnswer`
 
-`EvalEntry.answers` holds one `CompareAnswer` per compare question. `outcome` and `passRate` do not depend on it. `question`, `model`, and `resolvedModel` identify the question and the model. `votes` holds `PairVote` values, and `rates` holds `wins` out of `n` per `cut` and `name`. `error` is set when the model call fails. `artifacts` is `true` or capture names. `input` is a `FileRef` for the `questions/<n>.json` file. `stateOptions` is the state each side showed.
+`EvalEntry.answers` holds one `CompareAnswer` per comparison question. `outcome` and `passRate` do not depend on it. `question`, `model`, and `resolvedModel` identify the question and the model. `votes` holds `PairVote` values, and `rates` holds `wins` out of `n` per `cut` and `name`. `error` is set when the model call fails. `artifacts` is `true` or capture names. `input` is a `FileRef` for the `questions/<n>.json` file. `stateOptions` is the state each side showed.
 
 For more information about `stateOptions`, see [the `question` option](/reference/options#question).
 
