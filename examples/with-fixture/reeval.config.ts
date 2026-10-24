@@ -12,8 +12,11 @@ export default defineConfig({
   // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker.
   harness: fakeHarness({
-    files: { 'src/summary.js': fakeAgent('src/summary.js') },
-    text: 'I wrote src/summary.js. It prints "3 orders, total 50.00".',
+    files: {
+      'src/csv.js': fakeAgent('src/csv.js'),
+      'test/csv.test.js': fakeAgent('test/csv.test.js'),
+    },
+    text: 'I added stringifyCsv(rows) to src/csv.js, with a round-trip test on data/people.csv.',
   }),
   sandbox: fakeSandbox(),
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own

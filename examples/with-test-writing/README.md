@@ -38,7 +38,7 @@ fail             writes tests that catch a bug
 |---|---|
 | [`with-test-writing.eval.ts`](./with-test-writing.eval.ts) | The eval: the tests pass, then the mutant must fail them |
 | [`project/`](./project) | The package the agent starts from: `src/duration.js`, untested |
-| [`mutants/duration.js`](./mutants/duration.js) | The mutant: only the last unit counts |
+| [`hidden/duration.js`](./hidden/duration.js) | The mutant: only the last unit counts |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: good tests |
 | [`canary/`](./canary) | What the `canary` profile's agent writes instead: a test too weak to catch it |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, the canary, and the real agents from `../profiles.ts` |

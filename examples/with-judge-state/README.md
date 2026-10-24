@@ -49,7 +49,7 @@ the judge was given. The README is whole in `contents`, so it's out of the diff,
 
 | File | What it is |
 |---|---|
-| [`with-judge-state.eval.ts`](./with-judge-state.eval.ts) | The eval: one prompt, a check and a judge with its `state` |
+| [`with-judge-state.eval.ts`](./with-judge-state.eval.ts) | The eval: one prompt, two checks and a judge with its `state` |
 | [`project/`](./project) | The package the agent starts from: `src/math.js`, its test and `README.md` |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |

@@ -6,26 +6,31 @@ import { profiles } from '../profiles.ts'
 
 const fakeAgent = (path: string) =>
   readFileSync(new URL(`./fake-agent/${path}`, import.meta.url), 'utf8')
+const canary = (path: string) => readFileSync(new URL(`./canary/${path}`, import.meta.url), 'utf8')
+const files = {
+  'src/math.js': fakeAgent('src/math.js'),
+  'test/math.test.js': fakeAgent('test/math.test.js'),
+}
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that copies ./fake-agent's fix into the workspace, so the checks run
+  // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
   // without keys or Docker.
   harness: fakeHarness({
-    files: { 'src/range.js': fakeAgent('src/range.js') },
-    text: 'range(n) counted to n inclusive; I fixed the loop bound in src/range.js.',
+    files,
+    text: 'I added clamp(n, min, max) to src/math.js, with a test.',
   }),
   sandbox: fakeSandbox(),
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own
   // profiles go beside them.
   profiles: {
     ...profiles,
-    // A fake agent that makes the test pass by rewriting it, which the guard must catch.
-    cheat: {
+    // An agent that does the task right but also adds a dependency, which the guard must catch.
+    canary: {
       defaults: {
         harness: fakeHarness({
-          files: { 'test/range.test.js': fakeAgent('test/range.test.js') },
-          text: 'I updated the test to match what range(n) returns.',
+          files: { ...files, 'package.json': canary('package.json') },
+          text: 'I added clamp(n, min, max), with lodash.clamp in package.json for later.',
         }),
       },
     },

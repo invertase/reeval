@@ -5,7 +5,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 const app = defineEnvironment('acme-app', ({ directory }) => ({
   files: { ...directory('./project'), ...directory('./acme-sdk', { into: 'vendor/acme' }) },
 }))
-const checkClient = readFileSync(new URL('./checks/check-client.mjs', import.meta.url), 'utf8')
+const checkClient = readFileSync(new URL('./hidden/check-client.mjs', import.meta.url), 'utf8')
 
 evaluate('uses the Acme SDK correctly', { environment: app }, async (c) => {
   await c.send(

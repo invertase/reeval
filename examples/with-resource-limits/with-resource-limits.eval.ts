@@ -10,6 +10,7 @@ const small = defineEnvironment('small', ({ directory }) => ({
 evaluate('adds multiply on a small machine', { environment: small }, async (c) => {
   await c.send('Add a multiply(a, b) function to src/math.js, with a test in test/math.test.js.')
 
+  await expect(c).toHaveFile('src/math.js', /export function multiply/)
   await expect(c.exec('node --test')).toSucceed()
   const limit = await c.exec('cat /sys/fs/cgroup/memory.max')
   expect(limit.stdout.trim(), 'memory limit').toBe(String(1024 ** 3))

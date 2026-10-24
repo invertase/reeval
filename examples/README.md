@@ -20,7 +20,7 @@ Every example takes the real agents in [`profiles.ts`](./profiles.ts) by name: `
 | [`with-checks`](./with-checks) | Deterministic checks on what the agent left behind |
 | [`with-soft-checks`](./with-soft-checks) | Soft checks, so every requirement reports after one fails |
 | [`with-hidden-tests`](./with-hidden-tests) | Grading with a test the agent never saw |
-| [`with-guarded-files`](./with-guarded-files) | Failing an agent that edits the tests to pass them |
+| [`with-guarded-files`](./with-guarded-files) | Failing an agent that changes files it should leave alone |
 | [`with-transcript-matchers`](./with-transcript-matchers) | Checking what the agent did, not only what it left |
 | [`with-web-matchers`](./with-web-matchers) | Checking the agent searched the web and read the docs |
 | [`with-multi-turn`](./with-multi-turn) | A session with a follow-up turn |

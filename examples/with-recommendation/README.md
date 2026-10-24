@@ -2,7 +2,8 @@
 
 **Shows:** whether the agent recommends your product. The evals only ask questions: one open
 question, and `evaluate.each` over three rivals, which pools them into a family. A judge reads each
-answer and says whether it picked Genkit.
+answer and says whether it picked Genkit, which stands in for your product: put your product's
+name in its place in the prompts, judge questions and eval names.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code, which also
@@ -16,7 +17,7 @@ pnpm eval
 
 **Real or fake agent:** `pnpm eval` runs a fake agent and a fake judge with a fixed score, with no
 keys or Docker. There's nothing to build, so the fake agent writes no files: it answers with the
-canned reply in [`reeval.config.ts`](./reeval.config.ts), so the judge has something to read.
+canned reply in [`fake-agent/reply.md`](./fake-agent/reply.md), so the judge has something to read.
 `pnpm eval --profile claude-code` asks Claude Code, with a real judge, and `--profile <name>` any
 other agent in [`examples/profiles.ts`](../profiles.ts). A real agent's answer is the finding: it
 may well recommend something else.
@@ -48,6 +49,7 @@ Last message:
 | File | What it is |
 |---|---|
 | [`with-recommendation.eval.ts`](./with-recommendation.eval.ts) | The evals: an open question and one per rival |
+| [`fake-agent/reply.md`](./fake-agent/reply.md) | The fake agent's answer |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |
 
 The [Check a recommendation](../../docs/recipes/recommendation.mdx) recipe reads a real run's

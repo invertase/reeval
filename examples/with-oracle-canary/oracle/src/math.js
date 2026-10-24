@@ -1,5 +1,7 @@
-export function sum(xs) {
-  let total = 0
-  for (let i = 0; i < xs.length; i++) total += xs[i]
-  return total
+export function add(a, b) {
+  return a + b
+}
+
+export function clamp(n, min, max) {
+  return Math.min(Math.max(n, min), max)
 }

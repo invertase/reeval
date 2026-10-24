@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { sum } from '../src/math.js'
+import { add } from '../src/math.js'
 
-test('sum', () => {
-  assert.equal(sum([1, 2, 3]), 6)
+test('add', () => {
+  assert.equal(add(2, 3), 5)
 })

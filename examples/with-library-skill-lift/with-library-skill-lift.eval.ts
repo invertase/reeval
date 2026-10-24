@@ -1,37 +1,31 @@
-import { readFileSync } from 'node:fs'
 import { defineEnvironment, evaluate, expect } from 'reeval'
 
-// The small package in ./project is the control; the variant adds a published skill, fetched
-// from its repository at a pinned commit.
-const usersApi = defineEnvironment('users-api', ({ directory }) => ({
-  files: directory('./project'),
-}))
-const withSkill = usersApi.extendEnvironment('api-conventions', ({ skill }) => ({
+// The page in ./project is the control; the variant adds Anthropic's published brand-guidelines
+// skill, fetched from its repository at a pinned commit.
+const page = defineEnvironment('page', ({ directory }) => ({ files: directory('./project') }))
+const withSkill = page.extendEnvironment('brand-guidelines', ({ skill }) => ({
   skills: [
-    skill.git('github:invertase/reeval', {
-      ref: 'af7517232dddb419f8241f37bf07670b67e29c7c',
-      path: 'examples/hello/skills',
-      only: ['api-conventions'],
+    skill.git('github:anthropics/skills', {
+      ref: 'dbd4588f9e1033efb41dad4bef2f7947c8993d44',
+      path: 'skills',
+      only: ['brand-guidelines'],
     }),
   ],
 }))
-const conventions = readFileSync(new URL('./checks/conventions.test.js', import.meta.url), 'utf8')
 
 evaluate(
-  'pages the users list by the API conventions',
+  "styles the page in Anthropic's brand",
   // No baseline, so the eval's environment is the control. Four tries a side is the fewest that
   // gives a verdict; the variant passes on 3 of 4 or more.
-  { environment: usersApi, compare: { variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
+  { environment: page, compare: { variants: [withSkill] }, runs: 4, gate: { passRate: 0.75 } },
   async (c) => {
     await c.send(
-      'Add a GET /users handler to src/api.js: listUsers(query) takes the query parameters as ' +
-        'an object of strings, returns { status, body }, and lists src/users.js a page at a ' +
-        'time. Add tests that node --test runs.',
+      "Give index.html Anthropic's look: write styles.css with Anthropic's brand colours and " +
+        'fonts, and link it from index.html.',
     )
 
-    await expect.soft(c.exec('node --test'), 'tests pass').toSucceed()
-    await c.writeFile('test/conventions.test.js', conventions)
-    const run = c.exec('node --test test/conventions.test.js')
-    await expect(run, 'follows the API conventions').toSucceed()
+    await expect.soft(c, 'links styles.css').toHaveFile('index.html', /href="styles\.css"/)
+    await expect.soft(c, 'brand orange').toHaveFile('styles.css', /#d97757/i)
+    await expect(c, 'brand fonts').toHaveFile('styles.css', /Poppins[\s\S]*Lora|Lora[\s\S]*Poppins/)
   },
 )

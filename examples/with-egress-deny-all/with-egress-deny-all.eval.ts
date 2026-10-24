@@ -10,6 +10,7 @@ evaluate('adds multiply with no network', { environment: math, egress: 'deny-all
       'Use no packages from npm.',
   )
 
+  await expect(c).toHaveFile('src/math.js', /export function multiply/)
   await expect(c.exec('node --test')).toSucceed()
   expect((await c.exec('curl -sS https://registry.npmjs.org/')).exitCode, 'offline').not.toBe(0)
 })

@@ -1,8 +1,9 @@
 # with-capture-journey
 
 **Shows:** a screenshot taken after a vision model drives the page. The agent wires up a "Show
-price" button; `c.capture` gets `instructions`, a model clicks the button the way a person would,
-and the judge reads the price in the shot. `capture.model` on the eval names the model that clicks.
+price" button. A check reads the HTML for a click handler; then `c.capture` gets `instructions`,
+a model clicks the button the way a person would, and the judge reads the price in the shot.
+`capture.model` on the eval names the model that clicks.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. `--profile docker` needs Docker and `ANTHROPIC_API_KEY` in `.env.local`, and downloads
@@ -59,7 +60,7 @@ the capture's 32-move cap.
 
 | File | What it is |
 |---|---|
-| [`with-capture-journey.eval.ts`](./with-capture-journey.eval.ts) | The eval: the server, the journey, the screenshot and the judge |
+| [`with-capture-journey.eval.ts`](./with-capture-journey.eval.ts) | The eval: a check, the server, the journey, the screenshot and the judge |
 | [`project/`](./project) | The page the agent starts from: `index.html`, with a dead button, and `server.js` |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, the `docker` profile, and the real agents from `../profiles.ts` |

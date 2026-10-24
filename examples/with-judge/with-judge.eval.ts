@@ -9,6 +9,7 @@ evaluate('adds divide with a helpful error', { environment: math }, async (c) =>
       'that tells the caller what went wrong.',
   )
 
+  await expect(c).toHaveFile('src/math.js', /export function divide/)
   await expect(c.exec('node --test')).toSucceed()
   const verdict = await c.judge(
     'Would the error divide throws when b is 0 tell a caller what they did wrong?',

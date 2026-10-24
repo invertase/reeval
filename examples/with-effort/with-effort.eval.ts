@@ -7,8 +7,8 @@ const withLayout = math.extendEnvironment('project-layout', ({ skill }) => ({
 
 evaluate(
   'adds a tested multiply function',
-  // Effort's rank test needs four tries a side to reach a verdict.
-  { compare: { baseline: math, variants: [withLayout] }, runs: 4 },
+  // Effort's rank test needs four tries a side to reach a verdict; each arm may miss one.
+  { compare: { baseline: math, variants: [withLayout] }, runs: 4, gate: { passRate: 0.75 } },
   async (c) => {
     await c.send('Add a multiply(a, b) function to src/math.js, with a test.')
 

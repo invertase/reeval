@@ -23,8 +23,8 @@ Claude Code, and `--profile <name>` on any other agent in [`examples/profiles.ts
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the result block names each failed requirement by its label, and the rest
-still ran. Here the fake agent's `divide` doesn't throw:
+**What to look at:** the result block. A failed requirement names itself by its label, and the
+rest still ran, here with the fake agent's throw removed:
 
 ```text
 fail             adds a divide function that refuses zero
@@ -35,7 +35,7 @@ fail             adds a divide function that refuses zero
   +2 more passed
 ```
 
-After a run, `pnpm reeval query "SELECT label, pass, fail, rate FROM check_rates"` gives each
+After that run, `pnpm reeval query "SELECT label, pass, fail, rate FROM check_rates"` gives each
 label's rate, which over many runs shows the requirement the agent misses most:
 
 ```text

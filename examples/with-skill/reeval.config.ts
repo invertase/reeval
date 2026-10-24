@@ -9,9 +9,8 @@ const fakeAgent = (path: string) =>
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that reads the skill where it's placed (~/.agents/skills, as Cursor's
-  // agent reads skills) and copies ./fake-agent's files into the workspace, so the checks run
-  // without keys or Docker.
+  // A scripted agent that reads the skill where its layout places skills (~/.agents/skills) and
+  // copies ./fake-agent's files into the workspace, so the checks run without keys or Docker.
   harness: fakeHarness({
     script: [[{ exec: 'cat ~/.agents/skills/jsdoc/SKILL.md' }]],
     files: { 'src/math.js': fakeAgent('src/math.js') },

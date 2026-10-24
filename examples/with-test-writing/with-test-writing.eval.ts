@@ -6,7 +6,7 @@ const duration = defineEnvironment('duration', ({ directory }) => ({
   files: directory('./project'),
 }))
 // src/duration.js with one bug planted: only the last unit counts, so '1h30m' is 30 minutes.
-const mutant = readFileSync(new URL('./mutants/duration.js', import.meta.url), 'utf8')
+const mutant = readFileSync(new URL('./hidden/duration.js', import.meta.url), 'utf8')
 
 evaluate('writes tests that catch a bug', { environment: duration }, async (c) => {
   await c.send('Write tests for src/duration.js in test/duration.test.js.')

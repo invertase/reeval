@@ -7,15 +7,21 @@ import { profiles } from '../profiles.ts'
 const fakeAgent = (path: string) =>
   readFileSync(new URL(`./fake-agent/${path}`, import.meta.url), 'utf8')
 
+// The fake's rules land in AGENTS.md. It writes the changelog as those rules say: the typed
+// entry when they spell out the format, a plain line when they only ask for one.
+const changelog = `if grep -q 'feat' AGENTS.md; then
+  printf '## Unreleased\\n\\n- feat: add multiply(a, b) to src/math.js\\n' > CHANGELOG.md
+else
+  printf '# Changelog\\n\\nAdded multiply(a, b).\\n' > CHANGELOG.md
+fi`
+
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that copies ./fake-agent's files into the workspace, so the checks run
-  // without keys or Docker. It doesn't read rules, so both arms get the same files.
+  // A scripted agent that copies ./fake-agent's files into the workspace and follows its rules
+  // file, so the arms differ without keys or Docker.
   harness: fakeHarness({
-    files: {
-      'src/math.js': fakeAgent('src/math.js'),
-      'CHANGELOG.md': fakeAgent('CHANGELOG.md'),
-    },
+    script: [[{ exec: changelog }]],
+    files: { 'src/math.js': fakeAgent('src/math.js') },
     text: 'I added multiply(a, b) to src/math.js and recorded it in CHANGELOG.md.',
   }),
   sandbox: fakeSandbox(),

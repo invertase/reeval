@@ -15,28 +15,28 @@ and `pnpm reeval image build --profile claude-code` once.
 pnpm eval
 ```
 
-**Real or fake agent:** `pnpm eval` runs a fake agent, with no keys or Docker. It copies the
+**Real or fake agent:** `pnpm eval` runs a fake agent, with no keys or Docker. It writes the
 [`fake-agent/`](./fake-agent) fixture into the workspace to mimic what an agent would produce, so the
-checks have something to check; here it follows the convention only when it has the skill, and
-never reads `docs/`, so the docs arm misses like the control. `pnpm eval --profile claude-code`
-runs the same compare on Claude Code, and `--profile <name>` on any other agent in
-[`examples/profiles.ts`](../profiles.ts).
+checks have something to check. A scripted shell step looks for the convention where an agent
+would, in `docs/errors.md` or the skill's directory, and follows it wherever it finds it.
+`pnpm eval --profile claude-code` runs the same compare on Claude Code, and `--profile <name>` on
+any other agent in [`examples/profiles.ts`](../profiles.ts).
 
 **Copying it out of the repo:** `reeval.config.ts` imports `../profiles.ts`. Copy
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the check matrix has a column per arm. `gate: 'none'` makes the compare a
-study, so the misses don't fail the run:
+**What to look at:** the check matrix has a column per arm. Both variants pass where the
+control misses:
 
 ```text
-not gated        rejects division by zero
+pass             rejects division by zero
   arm                pass
   math               0 of 1
   errors-skill       1 of 1  can't tell yet
-  errors-doc         0 of 1  can't tell yet
+  errors-doc         1 of 1  can't tell yet
   check              math    errors-skill  errors-doc
-  throws RangeError  0 of 1  1 of 1        0 of 1
+  throws RangeError  0 of 1  1 of 1        1 of 1
     expected command to succeed, exit code 1
 ```
 
@@ -50,9 +50,13 @@ pnpm reeval query "SELECT a_environment, b_environment, a_pass, b_pass, points F
 ```text
 a_environment  b_environment  a_pass  b_pass  points
 errors-skill   math           1       0       1
-errors-doc     math           0       0       0
-errors-doc     errors-skill   0       1       -1
+errors-doc     math           1       0       1
+errors-doc     errors-skill   1       1       0
 ```
+
+The last row is the question the compare asks: the doc and the skill tie on this agent, so
+either way of handing it the convention works. On a real agent, `pnpm eval --runs 4` gives each
+arm enough tries for a verdict.
 
 | File | What it is |
 |---|---|
@@ -61,8 +65,8 @@ errors-doc     errors-skill   0       1       -1
 | [`docs/errors.md`](./docs/errors.md) | The same convention as a docs file the variant puts in the workspace |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`hidden/divide.test.js`](./hidden/divide.test.js) | The test the eval writes after the turn, which the agent never sees |
-| [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, without and with the skill |
-| [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
+| [`fake-agent/`](./fake-agent) | What the fake agent writes: `plain/`, or `convention/` when it finds the convention |
+| [`reeval.config.ts`](./reeval.config.ts) | The fake agent and its step that looks for the convention, and the real agents from `../profiles.ts` |
 
 [Two variants against each other](../../docs/guide/compare.mdx#two-variants-against-each-other)
 in the Compare and lift guide covers the check matrix and `contrasts`.

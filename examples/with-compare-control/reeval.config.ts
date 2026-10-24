@@ -9,14 +9,17 @@ const fakeAgent = (path: string) =>
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that copies ./fake-agent's files into the workspace: offset pages without
-  // the skill, cursor pages with it, so the compare shows a difference without keys or Docker.
+  // A scripted agent that copies ./fake-agent's files into the workspace: multiply alone without
+  // the skill, multiply and its test with it, so the compare runs without keys or Docker.
   harness: fakeHarness({
-    files: { 'src/users.js': fakeAgent('without-skill/src/users.js') },
-    text: 'listUsers() now takes { offset, limit } and returns one page.',
+    files: { 'src/math.js': fakeAgent('src/math.js') },
+    text: 'I added multiply(a, b) to src/math.js.',
     withSkill: {
-      files: { 'src/users.js': fakeAgent('with-skill/src/users.js') },
-      text: 'listUsers() now takes { cursor, limit } and returns { data, nextCursor }.',
+      files: {
+        'src/math.js': fakeAgent('src/math.js'),
+        'test/math.test.js': fakeAgent('test/math.test.js'),
+      },
+      text: 'I added multiply(a, b) to src/math.js and its test to test/math.test.js.',
     },
   }),
   sandbox: fakeSandbox(),

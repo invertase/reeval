@@ -3,11 +3,13 @@
 **Shows:** refusing any secret the sandbox would get as its real value. The config sets
 `secrets: { unbrokered: 'error' }`, so a secret without `hosts` stops the run instead of warning.
 The eval's `GITHUB_TOKEN` is brokered to `secret.hosts.github` and `optional`, and the agent writes
-`repo.js`, which reads a repo's description from the GitHub API.
+`repo.js`, which reads a repo's `full_name` from the GitHub API.
 
 **Needs:** Docker, even for the fake agent, and the network; in this repo, run
 `pnpm install && pnpm build` at the root first. `GITHUB_TOKEN` is optional: without it the script
-calls the API unauthenticated. A real agent also needs its key in `.env.local`
+calls the API unauthenticated, which GitHub limits to 60 requests an hour per IP address, so a
+shared or busy network can fail the check with a 403. Set `GITHUB_TOKEN` in `.env.local` to avoid
+that. A real agent also needs its key in `.env.local`
 (`ANTHROPIC_API_KEY` for Claude Code) and `pnpm reeval image build --profile claude-code` once.
 
 **Run:**

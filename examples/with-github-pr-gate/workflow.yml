@@ -2,7 +2,7 @@ name: evals
 
 on:
   pull_request:
-    paths: ['*.eval.ts', 'project/**', 'reeval.config.ts', 'package-lock.json']
+    paths: ['*.eval.ts', 'project/**', 'reeval.config.ts', 'profiles.ts', 'package-lock.json']
 
 permissions:
   contents: read

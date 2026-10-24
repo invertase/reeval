@@ -1,20 +1,18 @@
-import { readFileSync } from 'node:fs'
 import { defineEnvironment, evaluate, expect } from 'reeval'
 
-const users = defineEnvironment('users', ({ directory }) => ({ files: directory('./project') }))
-const withConventions = users.extendEnvironment('api-conventions', ({ skill }) => ({
-  skills: [skill.local('./skills/api-conventions')],
+const math = defineEnvironment('math', ({ directory }) => ({ files: directory('./project') }))
+const withTesting = math.extendEnvironment('testing', ({ skill }) => ({
+  skills: [skill.local('./skills/testing')],
 }))
-const pagesTest = readFileSync(new URL('./hidden/users.test.js', import.meta.url), 'utf8')
 
 evaluate(
-  'pages the user list',
-  // No baseline: the eval's own environment, users, is the control.
-  { environment: users, compare: { variants: [withConventions] } },
+  'tests the new function',
+  // No baseline: the eval's own environment, math, is the control.
+  { environment: math, compare: { variants: [withTesting] } },
   async (c) => {
-    await c.send('Make listUsers() in src/users.js return the users one page at a time.')
+    await c.send('Add a multiply(a, b) function to src/math.js.')
 
-    await c.writeFile('test/users.test.js', pagesTest)
-    await expect(c.exec('node --test'), 'pages by cursor').toSucceed()
+    await expect.soft(c.exec('node --test'), 'tests pass').toSucceed()
+    await expect(c, 'multiply has a test').toHaveFile('test/math.test.js', /multiply\(/)
   },
 )

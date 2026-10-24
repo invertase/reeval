@@ -5,11 +5,12 @@ const math = defineEnvironment('math', ({ directory }) => ({ files: directory('.
 
 // Each judge calls its provider with that provider's own key. Set on the call, they win over
 // any profile's judge.
-const question = 'Is average easy to read, with an empty list handled on purpose?'
+const question = 'Would a new reader follow average, with the empty list handled on purpose?'
 
 evaluate('adds a readable average function', { environment: math }, async (c) => {
   await c.send('Add an average(xs) function to src/math.js. It returns 0 for an empty list.')
 
+  await expect(c).toHaveFile('src/math.js', /export function average/)
   await expect(c.exec('node --test')).toSucceed()
   const claude = await c.judge(question, { model: 'anthropic/claude-sonnet-5' })
   expect.soft(claude, 'Claude agrees').toPass()

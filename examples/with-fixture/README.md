@@ -1,9 +1,9 @@
 # with-fixture
 
-**Shows:** seeding the workspace from files in the example. `directory('./fixture', { glob })`
-copies a small package in without its maintainer notes, `file()` adds one data file, and a string
-adds the `.gitignore`. The agent writes a script that summarises the orders, and the eval runs it
-and checks the data is untouched with `not.toHaveChanged`.
+**Shows:** seeding the workspace from files in the example. `directory('./project', { glob })`
+copies a small CSV package in without its maintainer notes, `file()` adds a sample CSV file, and a
+string adds the `.gitignore`. The agent adds `stringifyCsv(rows)` with a test that round-trips the
+sample, and the eval runs the tests and checks the sample is untouched with `not.toHaveChanged`.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code), Docker,
@@ -35,7 +35,7 @@ pnpm reeval run --dry-run --json
 …
           "files": [
             ".gitignore",
-            "data/orders.csv",
+            "data/people.csv",
             "package.json",
             "src/csv.js",
             "test/csv.test.js"
@@ -45,9 +45,9 @@ pnpm reeval run --dry-run --json
 
 | File | What it is |
 |---|---|
-| [`with-fixture.eval.ts`](./with-fixture.eval.ts) | The eval: the seeded environment, and two checks |
-| [`fixture/`](./fixture) | The package the agent starts from, and the notes the `glob` leaves out |
-| [`data/orders.csv`](./data/orders.csv) | The data file `file()` places at `data/orders.csv` |
+| [`with-fixture.eval.ts`](./with-fixture.eval.ts) | The eval: the seeded environment, and three checks |
+| [`project/`](./project) | The package the agent starts from, and the notes the `glob` leaves out |
+| [`data/people.csv`](./data/people.csv) | The sample `file()` places at `data/people.csv` |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 

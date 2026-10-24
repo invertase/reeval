@@ -13,8 +13,7 @@ const divideTest = readFileSync(new URL('./hidden/divide.test.js', import.meta.u
 
 evaluate(
   'rejects division by zero',
-  // A study: no arm gates, so a variant that misses reports without failing the run.
-  { compare: { baseline: math, variants: [withSkill, withDoc], gate: 'none' } },
+  { compare: { baseline: math, variants: [withSkill, withDoc] } },
   async (c) => {
     await c.send('Add a divide(a, b) function to src/math.js.')
 

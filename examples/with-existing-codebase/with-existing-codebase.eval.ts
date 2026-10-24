@@ -5,7 +5,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 const camelcase = defineEnvironment('camelcase', ({ git }) => ({
   workspace: git('github:sindresorhus/camelcase', { ref: 'v10.0.0', init: true }),
 }))
-const hidden = readFileSync(new URL('./checks/separators.test.js', import.meta.url), 'utf8')
+const hidden = readFileSync(new URL('./hidden/separators.test.js', import.meta.url), 'utf8')
 
 evaluate('adds a separators option', { environment: camelcase }, async (c) => {
   await c.send(

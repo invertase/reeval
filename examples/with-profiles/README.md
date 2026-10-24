@@ -37,14 +37,12 @@ pnpm reeval run --dry-run --profile nightly
 plan  run … · 1 eval · 1 cell · 2 attempts · ~2s serial (~1s at concurrency 4)
 eval                                                     harnesses  variants  runs  attempts  notes
 with-profiles.eval.ts › adds a tested multiply function  1          —         2     2
-…
 plan  run … · profile pr (auto: CI is set) · 1 eval · 1 cell · 1 attempt · ~1s serial · budget 10 attempts ✓
 eval                                                     harnesses  variants  runs  attempts  notes
 with-profiles.eval.ts › adds a tested multiply function  1          —         1     1         runs 2 → 1 (profile pr)
 plan  run … · profile nightly (--profile) · 1 eval · 1 cell · 4 attempts · ~4s serial (~1s at concurrency 4) · budget 2h
 eval                                                     harnesses  variants  runs  attempts  notes
 with-profiles.eval.ts › adds a tested multiply function  1          —         4     4
-…
 ```
 
 The plan line says which profile applied and why, and the notes say what its `limit` changed.

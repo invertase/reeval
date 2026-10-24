@@ -44,7 +44,9 @@ images  1 sandbox image: 1 to build
 
 In the workflow, a failing eval (exit 1) doesn't fail the run step: the compare step decides,
 writing its blocks to the job summary and exiting 1 on a regression. Until the base branch has a
-recorded run to compare with, every eval is new and only a failing one fails the check.
+recorded run to compare with, every eval is new and only a failing one fails the check. To give
+pull requests that base, record runs on your main branch into the history folder and commit them;
+the [Nightly matrix and Pages](../../docs/recipes/nightly-pages.mdx) recipe does it every night.
 
 | File | What it is |
 |---|---|

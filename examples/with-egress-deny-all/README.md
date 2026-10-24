@@ -44,7 +44,7 @@ A refused request doesn't fail the attempt; the checks decide whether it matters
 
 | File | What it is |
 |---|---|
-| [`with-egress-deny-all.eval.ts`](./with-egress-deny-all.eval.ts) | The eval: `egress: 'deny-all'`, one prompt, two checks |
+| [`with-egress-deny-all.eval.ts`](./with-egress-deny-all.eval.ts) | The eval: `egress: 'deny-all'`, one prompt, three checks |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent writes into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The scripted fake agent in Docker, and the real agents from `../profiles.ts` |

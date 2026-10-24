@@ -68,7 +68,7 @@ export const EXAMPLES: Record<string, Example> = {
   'with-checks': { run: { 'fake/math/fake': pass(1) } },
   'with-soft-checks': { run: { 'fake/math/fake': pass(1) } },
   'with-hidden-tests': { run: { 'fake/slugify/fake': pass(1) } },
-  'with-guarded-files': { run: { 'fake/range/fake': pass(1) }, profiles: { cheat: fakePlan } },
+  'with-guarded-files': { run: { 'fake/math/fake': pass(1) }, profiles: { canary: fakePlan } },
   'with-transcript-matchers': { run: { 'fake/math/fake': pass(1) } },
   'with-web-matchers': {
     run: { needs: 'ANTHROPIC_API_KEY, Docker and the network' },
@@ -125,7 +125,10 @@ export const EXAMPLES: Record<string, Example> = {
       },
     },
   },
-  'with-vercel-gateway': { run: { needs: 'AI_GATEWAY_API_KEY' } },
+  'with-vercel-gateway': {
+    run: { 'fake/math/fake': pass(1) },
+    profiles: { vercel: inDocker('claude-code:claude-sonnet-5') },
+  },
   'with-fake-harness': { run: { 'fake/math/fake': pass(1) } },
   'with-oracle-canary': {
     run: { needs: 'Docker' },
@@ -137,7 +140,7 @@ export const EXAMPLES: Record<string, Example> = {
   'with-skill': { run: { 'fake/math/fake': pass(1) } },
   'with-skill-sources': { run: { 'fake/four-sources/fake': pass(1) } },
   'with-rules': { run: { 'fake/math/fake': pass(1) } },
-  'with-fixture': { run: { 'fake/orders/fake': pass(1) } },
+  'with-fixture': { run: { 'fake/csv/fake': pass(1) } },
   'with-git-workspace': { run: { 'fake/reeval-math/fake': pass(1) } },
   'with-setup': { run: { 'fake/users/fake': pass(1) } },
   'with-extend-environment': { run: { 'fake/math-with-docs/fake': pass(1) } },
@@ -146,7 +149,7 @@ export const EXAMPLES: Record<string, Example> = {
   'with-plugin': { run: { 'fake/acme-math/fake': pass(1) } },
 
   // Sandboxes
-  'with-docker-install': { run: { needs: 'Docker' }, ...ownSandbox('docker+0ab0e263') },
+  'with-docker-install': { run: { needs: 'Docker' }, ...ownSandbox('docker+<install>') },
   'with-dockerfile': { run: { needs: 'Docker' }, ...ownSandbox('docker:sqlite') },
   'with-python-image': { run: { needs: 'Docker' }, ...ownSandbox('python') },
   'with-podman': { run: { needs: 'Podman' }, ...ownSandbox('podman') },
@@ -165,22 +168,17 @@ export const EXAMPLES: Record<string, Example> = {
 
   // Compare
   'with-skill-lift': { run: { 'fake/math/fake': fail(4), 'fake/changelog/fake': pass(4) } },
-  'with-compare-control': {
-    run: { 'fake/users/fake': fail(1), 'fake/api-conventions/fake': pass(1) },
-  },
-  'with-min-lift': {
-    run: { 'fake/math/fake': [...fail(4), ...pass(4)], 'fake/jsdoc/fake': pass(8) },
-    exit: 1,
-  },
+  'with-compare-control': { run: { 'fake/math/fake': fail(1), 'fake/testing/fake': pass(1) } },
+  'with-min-lift': { run: { 'fake/math/fake': fail(4), 'fake/jsdoc/fake': pass(4) } },
   'with-two-variants': {
     run: {
       'fake/math/fake': fail(1),
       'fake/errors-skill/fake': pass(1),
-      'fake/errors-doc/fake': fail(1),
+      'fake/errors-doc/fake': pass(1),
     },
   },
   'with-rules-ab': {
-    run: { 'fake/short-rules/fake': pass(1), 'fake/detailed-rules/fake': pass(1) },
+    run: { 'fake/short-rules/fake': fail(1), 'fake/detailed-rules/fake': pass(1) },
   },
   'with-compare-questions': { run: { 'fake/math/fake': pass(1), 'fake/errors/fake': pass(1) } },
   'with-compare-harness': {
@@ -211,7 +209,7 @@ export const EXAMPLES: Record<string, Example> = {
     run: { 'fake/math/fake': pass(2) },
     profiles: { pr: fakePlan, nightly: fakePlan },
   },
-  'with-budget': { run: { 'fake/math/fake': [...pass(2), 'skipped', 'skipped'] }, exit: 1 },
+  'with-budget': { run: { 'fake/math/fake': [...pass(1), 'skipped', 'skipped'] }, exit: 1 },
   'with-tags': { run: { 'fake/math/fake': pass(2) }, profiles: { smoke: fakePlan } },
   'with-history': { run: { 'fake/math/fake': pass(1) } },
   'with-github-pr-gate': {
@@ -221,13 +219,13 @@ export const EXAMPLES: Record<string, Example> = {
   'with-concurrency': { run: { 'fake/math/fake': pass(8) } },
 
   // Results
-  'with-query': { run: { 'fake/math/fake': fail(2), 'fake/changelog/fake': pass(2) } },
+  'with-query': { run: { 'fake/math/fake': fail(4), 'fake/changelog/fake': pass(4) } },
   'with-studio': { run: { 'fake/math/fake': pass(1) } },
   'with-analysis': { run: { 'fake/math/fake': pass(1) } },
   'with-reeval-mcp': { run: { 'fake/math/fake': fail(1) }, exit: 1 },
 
   // Real-world
-  'with-bug-fix': { run: { 'fake/stats/fake': pass(1) }, profiles: { canary: fakePlan } },
+  'with-bug-fix': { run: { 'fake/stats/fake': pass(1) } },
   'with-refactor': { run: { 'fake/records/fake': pass(1) } },
   'with-test-writing': { run: { 'fake/duration/fake': pass(1) }, profiles: { canary: fakePlan } },
   'with-framework-migration': { run: { 'fake/commonjs/fake': pass(1) } },
@@ -235,7 +233,7 @@ export const EXAMPLES: Record<string, Example> = {
   'with-docs-adherence': { run: { 'fake/notes/fake': pass(1) } },
   'with-sdk-usage': { run: { 'fake/acme-app/fake': pass(1) } },
   'with-library-skill-lift': {
-    run: { 'fake/users-api/fake': fail(4), 'fake/api-conventions/fake': pass(4) },
+    run: { 'fake/page/fake': fail(4), 'fake/brand-guidelines/fake': pass(4) },
   },
   'with-recommendation': { run: { 'fake/-/fake': pass(4) } },
   'with-existing-codebase': { run: { 'fake/camelcase/fake': pass(1) } },
@@ -294,7 +292,10 @@ async function planOf(dir: string, profile: string): Promise<{ files: string[]; 
     files: sorted(evals.map((e) => e.file)),
     plan: {
       harness: sorted(cells.map((c) => c.harness)),
-      sandbox: sorted(cells.map((c) => c.sandbox)),
+      // An install layer's sandbox id ends in a hash of its commands.
+      sandbox: sorted(
+        cells.map((c) => c.sandbox.replace(/^docker\+[0-9a-f]+$/, 'docker+<install>')),
+      ),
     },
   }
 }

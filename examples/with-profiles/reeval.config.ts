@@ -20,6 +20,7 @@ export default defineConfig({
   }),
   sandbox: fakeSandbox(),
   runs: 2,
+  gate: { passRate: 0.75 },
   // `pr` is picked whenever CI is set; `nightly` only with --profile nightly.
   defaultProfile: { ci: 'pr' },
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own

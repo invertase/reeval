@@ -1,9 +1,9 @@
 # with-min-lift
 
-**Shows:** failing a run when a variant doesn't clearly help. `minLift: 0` fails a variant cell
-unless the lower bound of its lift's 95% interval is above 0. The agent adds `multiply(a, b)`,
-with and without a `jsdoc` skill: the skill clearly helps the eval that checks for a JSDoc block,
-and makes no difference to the one that runs the tests, which fails.
+**Shows:** failing a variant that doesn't clearly help. `minLift: 0.2` fails the variant cell
+unless the lower bound of its lift's 95% interval is above +20 points. The agent adds
+`multiply(a, b)`, with and without a `jsdoc` skill, and a check looks for its JSDoc block.
+`gate: { passRate: 0.75 }` lets each arm miss one of its four tries.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code), Docker,
@@ -25,32 +25,45 @@ any other agent in [`examples/profiles.ts`](../profiles.ts).
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** the second eval fails, and the run exits 1, although every attempt passed:
+**What to look at:** the skill helps every time, and its interval clears the bar:
 
 ```text
-pass             jsdoc skill › documents the new function
+pass             documents the new function
   arm              pass
   math             0 of 4
   jsdoc            4 of 4  helped
   check            math    jsdoc
   JSDoc block      0 of 4  4 of 4
     expected src/math.js to match /\*\/\s*export function multiply/
-
-fail             jsdoc skill › keeps the tests green
-  arm              pass
-  math             4 of 4
-  jsdoc            4 of 4  not by minLift 0
-…
-1 fail · 1 pass
 ```
 
-Both arms pass the tests every time, so the lift is 0 and its interval reaches below 0. Without
-`minLift`, that eval passes. `compare.gate` picks which cells gate: `'variants'` (the default),
-`'all'` to gate the control too, or `'none'` to only report.
+`pnpm reeval query "SELECT variant, points, lo, hi, min_lift, outcome FROM lift"` has the
+interval: 4 of 4 against 0 of 4 is a lift of +100 points, and at four tries a side the interval
+reaches down to +30.7.
+
+```text
+variant  points  lo     hi  min_lift  outcome
+jsdoc    1       0.307  1   0.2       pass
+```
+
+Raise the bar to `minLift: 0.5` and the same attempts fail the run, which exits 1. Four tries a
+side can't show a lift that sure; more runs narrow the interval:
+
+```text
+fail             documents the new function
+  arm              pass
+  math             0 of 4
+  jsdoc            4 of 4  helped, not by minLift 50
+  …
+1 fail
+```
+
+`compare.gate` picks which cells gate: `'variants'` (the default), `'all'` to gate the control
+too, or `'none'` to only report.
 
 | File | What it is |
 |---|---|
-| [`with-min-lift.eval.ts`](./with-min-lift.eval.ts) | The group's compare with `minLift`, and its two evals |
+| [`with-min-lift.eval.ts`](./with-min-lift.eval.ts) | The eval: the compare with `minLift`, four runs and a pass-rate gate |
 | [`skills/jsdoc/SKILL.md`](./skills/jsdoc/SKILL.md) | The skill under test |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace, without and with the skill |

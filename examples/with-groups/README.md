@@ -1,9 +1,9 @@
 # with-groups
 
 **Shows:** options cascading from a group to its evals. `group('math', { … })` gives every eval
-inside its `environment`, `tags`, `timeout` and `runs`; an eval overrides `runs` and adds a tag of
-its own. `evaluate.skip` keeps an eval declared but unrun, and `evaluate.todo` is a placeholder
-with no body.
+inside its `environment`, `tags`, `timeout`, `runs` and `gate`; an eval overrides `runs` and adds a
+tag of its own. `evaluate.skip` keeps an eval declared but unrun, and `evaluate.todo` is a
+placeholder with no body.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code), Docker,
@@ -35,8 +35,10 @@ with-groups.eval.ts › math › adds subtract  1          —         1     1
 with-groups.eval.ts › math › adds power     —          —         0     0         todo
 ```
 
-Tags are the union of every level, so `pnpm reeval run --tag smoke --dry-run` plans only
-`adds subtract`, and `--tag math` plans both. The run's result block ends:
+`gate: { passRate: 0.5 }` passes a cell when one of its two runs does; without it, the default
+gate needs both, and the plan prints a hint saying so. Tags are the union of every level, so
+`pnpm reeval run --tag smoke --dry-run` plans only `adds subtract`, and `--tag math` plans both.
+The run's result block ends:
 
 ```text
 pass             math › adds multiply
@@ -48,6 +50,7 @@ todo             math › adds power
 | File | What it is |
 |---|---|
 | [`with-groups.eval.ts`](./with-groups.eval.ts) | The group, its options and four evals |
+| [`checks/call.mjs`](./checks/call.mjs) | Prints a `src/math.js` function's result; placed in the sandbox's home, outside the workspace |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |

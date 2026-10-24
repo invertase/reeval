@@ -47,7 +47,7 @@ not ok 2 - a name with a quote in it still matches
 |---|---|
 | [`with-security-fix.eval.ts`](./with-security-fix.eval.ts) | The eval: the fix, the tests, then the hidden exploit |
 | [`project/`](./project) | The package the agent starts from: `src/users.js` and its tests |
-| [`exploits/exploit.test.js`](./exploits/exploit.test.js) | The hidden exploit test |
+| [`hidden/exploit.test.js`](./hidden/exploit.test.js) | The hidden exploit test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: the fix |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 

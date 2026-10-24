@@ -1,8 +1,8 @@
 # with-judge
 
 **Shows:** an LLM judge for the quality a check can't read. The agent adds `divide(a, b)` to a
-small package, a check runs the tests, and `c.judge` asks whether the error for a zero divisor
-would help a caller, passing at `judge.threshold` with `toPass`.
+small package, checks look for it and run the tests, and `c.judge` asks whether the error for a
+zero divisor would help a caller, passing at `judge.threshold` with `toPass`.
 
 **Needs:** nothing for the fake agent; in this repo, run `pnpm install && pnpm build` at the root
 first. A real agent needs its key in `.env.local` (`ANTHROPIC_API_KEY` for Claude Code, which
@@ -36,7 +36,7 @@ the verdict.
 
 | File | What it is |
 |---|---|
-| [`with-judge.eval.ts`](./with-judge.eval.ts) | The eval: one prompt, a check and a judge |
+| [`with-judge.eval.ts`](./with-judge.eval.ts) | The eval: one prompt, two checks and a judge |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |

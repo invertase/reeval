@@ -8,6 +8,7 @@ const journey = { model: 'anthropic/claude-sonnet-5' }
 evaluate('reveals the price on click', { environment: pricing, capture: journey }, async (c) => {
   await c.send('The "Show price" button in index.html does nothing. Make it reveal the price.')
 
+  await expect(c, 'click handler').toHaveFile('index.html', /addEventListener|onclick/)
   const app = await c.serve('node server.js')
   // A vision model clicks the button, as a person would, before the screenshot. Each move sees
   // only the goal and the page, so the goal says when it's met.

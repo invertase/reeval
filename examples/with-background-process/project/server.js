@@ -9,4 +9,4 @@ const server = createServer((req, res) => {
   res.end('not found\n')
 })
 
-server.listen(4100)
+server.listen(process.env.PORT ?? 4100)

@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 import { profiles } from '../profiles.ts'
 
@@ -25,9 +24,6 @@ export default defineConfig({
     ],
   }),
   sandbox: fakeSandbox(),
-  // A fixed score, so the judges run without a key; each profile in ../profiles.ts sets a real
-  // judge.
-  judge: { model: fakeJudge({ score: 0.9 }) },
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own
   // profiles go beside them.
   profiles: { ...profiles },

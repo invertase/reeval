@@ -35,6 +35,8 @@ history.db: 1 runs
 cell_key        first_failed_check
 fake/math/fake  changelog entry
 fake/math/fake  changelog entry
+fake/math/fake  changelog entry
+fake/math/fake  changelog entry
 
 $ pnpm reeval query "SELECT label, verdict FROM check_discrimination"
 label            verdict
@@ -42,8 +44,8 @@ tests pass       both-pass
 changelog entry  discriminates
 
 $ pnpm reeval query "SELECT variant, control_pass_at_1, variant_pass_at_1, points, lo, hi FROM lift"
-variant    control_pass_at_1  variant_pass_at_1  points  lo    hi
-changelog  0                  1                  1       0.07  1
+variant    control_pass_at_1  variant_pass_at_1  points  lo     hi
+changelog  0                  1                  1       0.307  1
 ```
 
 `pnpm reeval query lift` prints every column of a view, `--json` the rows as JSON, and

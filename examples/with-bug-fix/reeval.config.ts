@@ -6,7 +6,6 @@ import { profiles } from '../profiles.ts'
 
 const fakeAgent = (path: string) =>
   readFileSync(new URL(`./fake-agent/${path}`, import.meta.url), 'utf8')
-const canary = (path: string) => readFileSync(new URL(`./canary/${path}`, import.meta.url), 'utf8')
 
 export default defineConfig({
   include: ['*.eval.ts'],
@@ -19,16 +18,5 @@ export default defineConfig({
   sandbox: fakeSandbox(),
   // The real agents: `--profile claude-code`, or any other in ../profiles.ts. An example's own
   // profiles go beside them.
-  profiles: {
-    ...profiles,
-    // An agent that makes npm test pass by changing the test, which the guard must catch.
-    canary: {
-      defaults: {
-        harness: fakeHarness({
-          files: { 'test/stats.test.js': canary('test/stats.test.js') },
-          text: 'I updated the test to match what median() returns.',
-        }),
-      },
-    },
-  },
+  profiles: { ...profiles },
 })

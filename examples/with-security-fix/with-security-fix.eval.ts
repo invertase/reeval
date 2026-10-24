@@ -3,7 +3,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 
 // The agent starts from ./project, where findUser() puts the name straight into its SQL.
 const users = defineEnvironment('users', ({ directory }) => ({ files: directory('./project') }))
-const exploit = readFileSync(new URL('./exploits/exploit.test.js', import.meta.url), 'utf8')
+const exploit = readFileSync(new URL('./hidden/exploit.test.js', import.meta.url), 'utf8')
 
 evaluate('fixes the SQL injection', { environment: users }, async (c) => {
   await c.send('findUser() in src/users.js is open to SQL injection. Fix it.')

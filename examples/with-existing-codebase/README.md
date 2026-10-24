@@ -48,7 +48,7 @@ test:
 | File | What it is |
 |---|---|
 | [`with-existing-codebase.eval.ts`](./with-existing-codebase.eval.ts) | The eval: the pinned repository, the task and three checks |
-| [`checks/separators.test.js`](./checks/separators.test.js) | The hidden test of the new option |
+| [`hidden/separators.test.js`](./hidden/separators.test.js) | The hidden test of the new option |
 | [`fake-agent/`](./fake-agent) | What the fake agent applies to the checkout: `separators.patch` |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 

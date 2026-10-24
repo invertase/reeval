@@ -5,7 +5,8 @@ only way out is HTTP(S) through the gateway, so SSH and database clients get no 
 sets `egress: 'allow-all'`, which keeps the container's network, and the agent writes `banner.sh`,
 which reads github.com's SSH banner over `/dev/tcp`.
 
-**Needs:** Docker, even for the fake agent, and the network; in this repo, run
+**Needs:** Docker, even for the fake agent, and the network, with outbound port 22 open: a
+network that blocks it (many corporate ones do) makes the check fail; in this repo, run
 `pnpm install && pnpm build` at the root first. A real agent also needs its key in `.env.local`
 (`ANTHROPIC_API_KEY` for Claude Code) and `pnpm reeval image build --profile claude-code` once.
 

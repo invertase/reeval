@@ -47,7 +47,7 @@ AcmeError: Acme API answered 503
 |---|---|
 | [`with-sdk-usage.eval.ts`](./with-sdk-usage.eval.ts) | The eval: the task, the check script and a judge |
 | [`acme-sdk/`](./acme-sdk) | The SDK under test, seeded into `vendor/acme`: `index.js` and its `README.md` |
-| [`checks/check-client.mjs`](./checks/check-client.mjs) | The check: `forecast()` against a stand-in API |
+| [`hidden/check-client.mjs`](./hidden/check-client.mjs) | The check: `forecast()` against a stand-in API |
 | [`project/`](./project) | The empty package the agent starts from |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: `src/forecast.js` |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent and judge, and the real agents from `../profiles.ts` |

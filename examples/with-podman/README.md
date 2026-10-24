@@ -45,7 +45,7 @@ reeval: Rootless Podman can't limit a sandbox's cpu, pids: your user's cgroup do
 
 | File | What it is |
 |---|---|
-| [`with-podman.eval.ts`](./with-podman.eval.ts) | The eval: the Podman environment, one prompt, one check |
+| [`with-podman.eval.ts`](./with-podman.eval.ts) | The eval: the Podman environment, one prompt, two checks |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |

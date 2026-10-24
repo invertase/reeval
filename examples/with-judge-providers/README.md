@@ -28,10 +28,10 @@ one profile you need.
 **What to look at:** the judges' lines in `pnpm eval -v`, one per provider.
 
 ```text
-[adds#1 fake] 14:56:22 judge     asking anthropic/claude-sonnet-5: "Is average easy to read, with an empty list handled on purpose?"
-[adds#1 fake] 14:56:23 judge     claude-sonnet-5 · 1s · score 0.95 ≥ 0.8 · pass · reason: P(yes) 0.95 is at or above the 0.8 threshold
-[adds#1 fake] 14:56:23 judge     asking google/gemini-3.8-flash: "Is average easy to read, with an empty list handled on purpose?"
-[adds#1 fake] 14:56:26 judge     gemini-3.8-flash · 3s · score 0.99 ≥ 0.8 · pass · reason: P(yes) 0.99 is at or above the 0.8 threshold
+[adds#1 fake] 15:39:31 judge     asking anthropic/claude-sonnet-5: "Would a new reader follow average, with the empty list handled on purpose?"
+[adds#1 fake] 15:39:32 judge     claude-sonnet-5 · 1s · score 0.93 ≥ 0.8 · pass · reason: P(yes) 0.93 is at or above the 0.8 threshold
+[adds#1 fake] 15:39:32 judge     asking google/gemini-3.8-flash: "Would a new reader follow average, with the empty list handled on purpose?"
+[adds#1 fake] 15:39:34 judge     gemini-3.8-flash · 2s · score 1.00 ≥ 0.8 · pass · reason: P(yes) 1.00 is at or above the 0.8 threshold
 ```
 
 | Prefix | Key |
@@ -43,7 +43,7 @@ one profile you need.
 
 | File | What it is |
 |---|---|
-| [`with-judge-providers.eval.ts`](./with-judge-providers.eval.ts) | The eval: one prompt, a check and two judges |
+| [`with-judge-providers.eval.ts`](./with-judge-providers.eval.ts) | The eval: one prompt, two checks and two judges |
 | [`project/`](./project) | The package the agent starts from: `src/math.js` and its test |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace |
 | [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |

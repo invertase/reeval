@@ -9,21 +9,18 @@ const fakeAgent = (path: string) =>
 
 export default defineConfig({
   include: ['*.eval.ts'],
-  // A scripted agent that copies ./fake-agent/plain's offset-paged handler into the workspace,
-  // and ./fake-agent/skill's cursor-paged one when it has the skill, so the compare shows a lift
-  // without keys or Docker.
+  // A scripted agent that copies ./fake-agent's page into the workspace with plain/'s guessed
+  // colours, or skill/'s brand ones when it has the skill, so the compare shows a lift without
+  // keys or Docker.
   harness: fakeHarness({
-    files: {
-      'src/api.js': fakeAgent('plain/src/api.js'),
-      'test/api.test.js': fakeAgent('plain/test/api.test.js'),
-    },
-    text: 'listUsers pages by page and pageSize, with tests.',
+    files: { 'index.html': fakeAgent('index.html'), 'styles.css': fakeAgent('plain/styles.css') },
+    text: 'styles.css gives the page warm colours and serif body text.',
     withSkill: {
       files: {
-        'src/api.js': fakeAgent('skill/src/api.js'),
-        'test/api.test.js': fakeAgent('skill/test/api.test.js'),
+        'index.html': fakeAgent('index.html'),
+        'styles.css': fakeAgent('skill/styles.css'),
       },
-      text: 'listUsers pages by cursor as { data, nextCursor }, with tests for both errors.',
+      text: "styles.css uses Anthropic's brand colours, Poppins headings and Lora body text.",
     },
   }),
   sandbox: fakeSandbox(),

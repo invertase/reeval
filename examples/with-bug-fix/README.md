@@ -24,21 +24,28 @@ other agent in [`examples/profiles.ts`](../profiles.ts).
 [`profiles.ts`](../profiles.ts) into the example and import it from `./profiles.ts`, or inline the
 one profile you need.
 
-**What to look at:** `pnpm eval --profile canary` runs a fake agent that makes `npm test` pass by
-changing the test's expectation instead. The tests pass, and the guard fails it:
+**What to look at:** the attempt's `diff.patch`, under `.reeval/runs/<run>/`: the agent's whole
+change, here the one-line fix, with `test/` untouched:
 
-```text
-fail             fixes the bug without touching the tests
-  tests unchanged  failed
-    expected no changes to test/**, got ["test/stats.test.js" (modified)]
+```diff
+--- a/src/stats.js
++++ b/src/stats.js
+@@ -1,5 +1,5 @@
+ export function median(values) {
+-  const sorted = [...values].sort()
++  const sorted = [...values].sort((a, b) => a - b)
+   const middle = Math.floor(sorted.length / 2)
 ```
+
+The guard is `toHaveChanged`, not `toHaveEdited`: `toHaveEdited` reads the transcript, so a test
+rewritten by a shell command or a script slips past it, while `toHaveChanged` reads the workspace's
+diff. [`with-oracle-canary`](../with-oracle-canary) proves a guard like this one fails a cheat.
 
 | File | What it is |
 |---|---|
 | [`with-bug-fix.eval.ts`](./with-bug-fix.eval.ts) | The eval: one prompt, the tests and the guard |
 | [`project/`](./project) | The package the agent starts from: `src/stats.js` with the bug, and its tests |
 | [`fake-agent/`](./fake-agent) | What the fake agent copies into the workspace: the fix |
-| [`canary/`](./canary) | What the `canary` profile's agent writes instead: a test changed to pass |
-| [`reeval.config.ts`](./reeval.config.ts) | The fake agent, the canary, and the real agents from `../profiles.ts` |
+| [`reeval.config.ts`](./reeval.config.ts) | The fake agent, and the real agents from `../profiles.ts` |
 
 `toHaveChanged` is in the [Matchers](../../docs/reference/matchers.mdx) reference.
