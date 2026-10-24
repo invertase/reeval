@@ -48,6 +48,7 @@ import {
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
   openCodeEndpoints,
+  openCodeTurnUsage,
 } from '@reeval/harness-opencode'
 import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@reeval/harness-pi'
 import { applyTransformations, hostAllowed, onEndpoint } from '@reeval/sandbox-docker'
@@ -2491,21 +2492,24 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(formatUsage(usage), '19k in (15k cached) · 311 out')
   })
 
-  test('OpenCode: ACP PromptResponse.usage as harness-acp maps it', async () => {
-    const acp = {
-      inputTokens: { total: 33942, cacheRead: 0, cacheWrite: 0 },
-      outputTokens: { total: 117, reasoning: 21 },
-    }
+  test('OpenCode: ACP PromptResponse.usage with its thoughts added to the output', async () => {
+    // test/replay/opencode/skill: inputTokens 4864, outputTokens 1, thoughtTokens 31,
+    // totalTokens 4896, as harness-acp maps it and openCodeTurnUsage adds the thoughts.
+    const acp = openCodeTurnUsage({
+      inputTokens: { total: 4864, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 1, reasoning: 31 },
+      raw: { totalTokens: 4896, inputTokens: 4864, outputTokens: 1, thoughtTokens: 31 },
+    })
     const { usage } = await turnThrough(finishWith(acp))
     assert.deepEqual(usage, {
-      input: 33942,
-      output: 117,
+      input: 4864,
+      output: 32,
       cacheRead: 0,
       cacheWrite: 0,
-      reasoning: 21,
+      reasoning: 31,
     })
     assert.ok(usage)
-    assert.equal(totalTokens(usage), 33942 + 117, 'the reasoning is in the output, counted once')
+    assert.equal(totalTokens(usage), 4896, "OpenCode's own total, reasoning counted once")
   })
 
   test('a harness that reports neither records null for both', async () => {

@@ -71,6 +71,32 @@ test('names a call from its first update, and keeps the usage', () => {
   assert.deepEqual(finish.totalUsage, LAST_CALL)
 })
 
+test("adds the turn's thoughts to its output, which OpenCode reports beside it", () => {
+  // test/replay/opencode/skill's PromptResponse.usage, as harness-acp maps it.
+  const usage = {
+    inputTokens: { total: 4864 },
+    outputTokens: { total: 1, reasoning: 31 },
+    raw: { totalTokens: 4896, inputTokens: 4864, outputTokens: 1, thoughtTokens: 31 },
+  }
+  const out = new OpenCodeStreamTranslator().push({ type: 'finish', totalUsage: usage })
+  assert.deepEqual(out, [
+    {
+      type: 'finish',
+      totalUsage: { ...usage, outputTokens: { total: 32, text: 1, reasoning: 31 } },
+    },
+  ])
+})
+
+test('twin: a total of input and output means the thoughts are already in the output', () => {
+  const usage = {
+    inputTokens: { total: 4864 },
+    outputTokens: { total: 32, reasoning: 31 },
+    raw: { totalTokens: 4896 },
+  }
+  const out = new OpenCodeStreamTranslator().push({ type: 'finish', totalUsage: usage })
+  assert.deepEqual(out, [{ type: 'finish', totalUsage: usage }])
+})
+
 test('twin: without the first update the call keeps its generic name', () => {
   const [, ...rest] = call('b1', 'shell', 'echo hi', { command: 'echo hi' })
   assert.deepEqual(names(turn(rest)), ['acp_tool_b1', 'acp_tool_b1'])
