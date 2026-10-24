@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import {
@@ -562,7 +562,7 @@ describe('loadPrices', () => {
     await new Promise<void>((done) => proxy.listen(0, '127.0.0.1', done))
     t.after(() => new Promise<void>((done) => proxy.close(() => done())))
     const { dir } = cache()
-    const prices = resolve(import.meta.dirname, '../src/prices.ts')
+    const prices = new URL('../src/prices.ts', import.meta.url).href
     const script = `const { loadPrices } = await import(${JSON.stringify(prices)})
 const p = await loadPrices({}, Date.now(), { url: 'http://models.reeval.test/api.json', timeoutMs: 3000 })
 console.log(JSON.stringify(p.table))`
