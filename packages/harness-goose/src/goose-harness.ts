@@ -9,10 +9,10 @@ import { GOOSE_BUILTIN_TOOLS, type GooseBuiltinTools } from './goose-tools.ts'
 
 export const GOOSE_HARNESS_ID = 'goose'
 /** The Goose release the bootstrap installs, checked against its published sha256s. */
-export const GOOSE_CLI_VERSION = '1.55.0'
+export const GOOSE_CLI_VERSION = '1.56.0'
 export const GOOSE_CLI_SHA256 = {
-  x86_64: 'fd3932908328fac850ca7ad2a8289c744e0c2ddaf4c5a2338709fb17a00b3a4c',
-  aarch64: 'ea83f59bb165a3d999dd00edf69a58028747f31e404b96f0153452c6b1651188',
+  x86_64: '225a929b35b5130fb691eafdb50be236f2c0a150019b53973775938f8f19c281',
+  aarch64: '26bcb7d3f55aac485a91d81cbdecd8d90e5af1acadeca6e580b4d58b64a888e4',
 } as const
 /** The credential the adapter uses by default: a Gemini API key, for Goose's `google` provider. */
 export const GOOSE_CREDENTIAL_ENV = 'GOOGLE_API_KEY'

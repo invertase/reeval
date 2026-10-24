@@ -46,10 +46,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; Goose sees it as `GOOGLE_API_KEY`) |
-| Adapter | `@reeval/harness-goose` 0.1.4 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | Goose 1.55.0, from its GitHub release, checked against its sha256 |
+| Adapter | `@reeval/harness-goose` 0.1.5 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | Goose 1.56.0, from its GitHub release, checked against its sha256 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:goose-0.1.4` |
+| Image | `reeval-sandbox:goose-0.1.5` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.config/goose/skills` in Goose's own home (below) |
 | Skills (`placement: 'workspace'`) | `.goose/skills` in the workspace |
@@ -61,7 +61,7 @@ Build its image once with `reeval image build` in a project whose config uses `g
 
 ## The key
 
-reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives it to Goose as `GOOGLE_API_KEY`; the real key never enters the container. The gateway swaps it in on one kind of request, the only one Goose 1.55.0 sends it on:
+reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives it to Goose as `GOOGLE_API_KEY`; the real key never enters the container. The gateway swaps it in on one kind of request, the only one Goose 1.56.0 sends it on:
 
 | Host | Endpoint |
 |---|---|

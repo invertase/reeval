@@ -21,7 +21,7 @@ const agent = new HarnessAgent({
 
 ## How it works
 
-- **Bootstrap.** Downloads the Goose 1.55.0 release for x86_64 or aarch64 Linux, checks its
+- **Bootstrap.** Downloads the Goose 1.56.0 release for x86_64 or aarch64 Linux, checks its
   sha256, and puts `goose` in a private home under the bootstrap directory.
 - **Model.** `model` is `GOOSE_MODEL`, which Goose needs before `session/new`; each turn's model
   is then set as the ACP session's `model` config option.
