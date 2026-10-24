@@ -1,0 +1,559 @@
+{
+  "kind": "reeval-run",
+  "schemaVersion": 1,
+  "runId": "20261024T153259Z_11cc9a6_cursor-agent_bg56",
+  "status": "budget",
+  "startedAt": "2026-10-24T15:32:59.515Z",
+  "endedAt": "2026-10-24T15:33:01.591Z",
+  "durationMs": 2076,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "11cc9a6756ebb0f0a4c29167a440e521da43c6fc",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-10-24T15:32:59+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "ba806126880f"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "reeval": "0.13.0",
+    "node": "22.23.4",
+    "runtime": {
+      "name": "node",
+      "version": "22.23.4"
+    },
+    "language": {
+      "name": "typescript"
+    },
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.5",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.12",
+      "@reeval/harness-opencode": "0.2.10",
+      "@reeval/harness-goose": "0.1.5",
+      "@reeval/harness-pi": "0.2.8",
+      "@reeval/harness-cursor-sdk": "0.1.6",
+      "@ai-sdk/harness-claude-code": "1.0.160-patch.b17cde50",
+      "@reeval/harness-codex": "0.1.8",
+      "@reeval/harness-fx": "0.1.1",
+      "@reeval/harness-grok-build": "0.1.4",
+      "ai": "7.0.145",
+      "@ai-sdk/harness": "1.0.156",
+      "@ai-sdk/anthropic": "4.0.83",
+      "@ai-sdk/google": "4.0.100",
+      "@ai-sdk/openai": "4.0.97",
+      "@ai-sdk/typesafe-ai": "3.0.22"
+    },
+    "harnesses": [
+      {
+        "id": "slow",
+        "kind": "fake",
+        "model": null,
+        "effort": null,
+        "resolvedModels": [],
+        "resolvedEffort": []
+      }
+    ],
+    "judge": {
+      "model": "fake",
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "26284eecb750"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "fake",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "proxy"
+    }
+  ],
+  "profile": {
+    "name": "budget",
+    "reason": "--profile",
+    "defaults": {
+      "runs": 4
+    },
+    "limit": {}
+  },
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 4,
+    "estimateMs": 4000,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "duration": "1s"
+  },
+  "config": {
+    "sandbox": "fake",
+    "environment": "fake",
+    "runs": 1,
+    "judgeModel": "fake",
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 1,
+    "configHash": "b1fb0aed0ccec1a67095fcd191a4674a40d097b8ba302b552d3604d6730c11ee"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 4,
+    "pass": 3,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 1
+  },
+  "evals": [
+    {
+      "id": "evals/slow.eval.ts › takes its time",
+      "key": "evals/slow.eval.ts › takes its time",
+      "slug": "evals-slow-eval-ts-takes-its-time-c5b2d3",
+      "file": "evals/slow.eval.ts",
+      "group": [],
+      "name": "takes its time",
+      "tags": [],
+      "fingerprint": "2671d1dd5fbf02e9dba735ebb3447a0b4c7406f58a415a0b4213d5e09995aa27",
+      "sources": [
+        {
+          "path": "evals/slow.eval.ts",
+          "sha256": "0fb106987d3f59e0f50795c800bc1e36f5dcc7d7fc1980177140bb5c709f9490"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "slow/fake/fake",
+          "harness": "slow",
+          "environment": "fake",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "73641a1f3b0946ac1d285b49f7e38d39720354da18e6524a778a7c45a09f0cd0",
+          "fingerprintParts": {
+            "sources": "945abbe91dc95cdc1ef0c02139bcb1623a3810b3cb40d03ff76d95942e0df406",
+            "harness": "6e991aa1925a0acc84cb3ea7614a33fbc8e11c855a78051675988fba339b216d",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "ad7f61db40269f551086f0d8cdf9b4e0da9dd49e45921eae41df119269f789c2",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+          "harnessKind": "fake",
+          "model": null,
+          "effort": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 4,
+          "pass": 3,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": 1,
+          "outcome": "pass",
+          "checks": [
+            {
+              "label": "toSucceed test -f greet.js",
+              "pass": 3,
+              "fail": 0,
+              "error": 0,
+              "notRun": 0
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#1",
+          "id": "slow/fake/fake#1",
+          "cell": "slow/fake/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-10-24T15:33:00.244Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 467,
+          "turns": [
+            {
+              "prompt": "Write greet.js slowly.",
+              "status": "completed",
+              "startedAt": "2026-10-24T15:33:00.265Z",
+              "durationMs": 404,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 20,
+            "agentMs": 403,
+            "diffMs": 11,
+            "checksMs": 18,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 3
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed test -f greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 19
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f greet.js",
+              "exitCode": 0,
+              "durationMs": 18,
+              "log": {
+                "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/1/checks/1.log",
+                "sha256": "1fc4069593866830dfb56e2441b91dfdf5a18f3135124d950998233f3ff84913",
+                "bytes": 48
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/1/transcript.jsonl",
+              "sha256": "f31ed3a3552bdff1ff762f7e3a5b211edea0a17a13af2ed4c278adc8123d00b9",
+              "bytes": 599
+            },
+            "diff": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/1/diff.patch",
+              "sha256": "fb3d1e9fcf6fe063a831377e2a88ddf95eba7b94c5d3b65b6db08c7a90d19656",
+              "bytes": 124
+            }
+          }
+        },
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#2",
+          "id": "slow/fake/fake#2",
+          "cell": "slow/fake/fake",
+          "n": 2,
+          "seq": 2,
+          "startedAt": "2026-10-24T15:33:00.708Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 439,
+          "turns": [
+            {
+              "prompt": "Write greet.js slowly.",
+              "status": "completed",
+              "startedAt": "2026-10-24T15:33:00.724Z",
+              "durationMs": 404,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 16,
+            "agentMs": 404,
+            "diffMs": 10,
+            "checksMs": 2,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 3
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed test -f greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 2
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f greet.js",
+              "exitCode": 0,
+              "durationMs": 2,
+              "log": {
+                "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/2/checks/1.log",
+                "sha256": "1fc4069593866830dfb56e2441b91dfdf5a18f3135124d950998233f3ff84913",
+                "bytes": 48
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/2/transcript.jsonl",
+              "sha256": "ac9da4c9c51aec2430788cf3a60d022f34d0b2f0246554b6e46f8b029e9ab844",
+              "bytes": 599
+            },
+            "diff": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/2/diff.patch",
+              "sha256": "fb3d1e9fcf6fe063a831377e2a88ddf95eba7b94c5d3b65b6db08c7a90d19656",
+              "bytes": 124
+            }
+          }
+        },
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#3",
+          "id": "slow/fake/fake#3",
+          "cell": "slow/fake/fake",
+          "n": 3,
+          "seq": 3,
+          "startedAt": "2026-10-24T15:33:01.147Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "proxy",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 435,
+          "turns": [
+            {
+              "prompt": "Write greet.js slowly.",
+              "status": "completed",
+              "startedAt": "2026-10-24T15:33:01.159Z",
+              "durationMs": 404,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 11,
+            "agentMs": 403,
+            "diffMs": 10,
+            "checksMs": 2,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": 3
+          },
+          "judgements": [],
+          "assertions": [
+            {
+              "label": "toSucceed test -f greet.js",
+              "labelled": false,
+              "matcher": "toSucceed",
+              "status": "pass",
+              "soft": false,
+              "durationMs": 3
+            }
+          ],
+          "checks": [
+            {
+              "command": "test -f greet.js",
+              "exitCode": 0,
+              "durationMs": 2,
+              "log": {
+                "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/3/checks/1.log",
+                "sha256": "1fc4069593866830dfb56e2441b91dfdf5a18f3135124d950998233f3ff84913",
+                "bytes": 48
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/3/transcript.jsonl",
+              "sha256": "31f19d26236a813dd72fa8aee28291ce40dcea0b13c84854e34e79391497cb75",
+              "bytes": 599
+            },
+            "diff": {
+              "path": "evals-slow-eval-ts-takes-its-time-c5b2d3/slow-fake-fake-51603b/3/diff.patch",
+              "sha256": "fb3d1e9fcf6fe063a831377e2a88ddf95eba7b94c5d3b65b6db08c7a90d19656",
+              "bytes": 124
+            }
+          }
+        },
+        {
+          "key": "evals/slow.eval.ts › takes its time # slow/fake/fake#4",
+          "id": "slow/fake/fake#4",
+          "cell": "slow/fake/fake",
+          "n": 4,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "effort": null,
+          "servedEffort": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 1344,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0,
+            "stalledTools": 0,
+            "maxToolMs": null
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}
