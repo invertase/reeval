@@ -61,6 +61,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_VERSION` | the newest release | The version to install, such as `0.13.0` |
 | `REEVAL_INSTALL_DIR` | `~/.local/bin`, or `%LOCALAPPDATA%\reeval\bin` on Windows | Where `reeval` goes |
 | `REEVAL_DOWNLOAD` | the version's GitHub release | A URL (or `file://` directory) holding the binaries and `SHA256SUMS`; needs `REEVAL_VERSION` |
+| `GITHUB_TOKEN` | none | Sent to the GitHub API when looking up the newest release, which allows 60 requests an hour per IP address without it. A token the API refuses is dropped |
 
 ## CI and agent detection
 

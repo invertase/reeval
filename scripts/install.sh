@@ -8,6 +8,7 @@ main() {
   # REEVAL_VERSION     a version (0.13.0) instead of the newest release
   # REEVAL_INSTALL_DIR where to put `reeval` (default ~/.local/bin)
   # REEVAL_DOWNLOAD    where the release's files are, instead of its GitHub release (needs REEVAL_VERSION)
+  # GITHUB_TOKEN       sent to the GitHub API when it looks up the newest release, if set
   #
   # Everything is inside main, called inside a group the last line closes, so a download cut
   # short runs none of it and, past the first line, fails (scripts/install-test.sh checks every
@@ -42,15 +43,48 @@ main() {
     target=$target-musl
   fi
 
+  nl='
+'
+  # list_releases <token>: the API's release list, then its HTTP status on a line of its own. The
+  # token goes to curl on stdin, so it isn't on curl's command line for other users to see.
+  list_releases() {
+    if [ -n "$1" ]; then
+      printf 'Authorization: Bearer %s\n' "$1" |
+        curl -sSL -H @- -w "$nl%{http_code}" "https://api.github.com/repos/$REPO/releases?per_page=30" || true
+    else
+      curl -sSL -w "$nl%{http_code}" "https://api.github.com/repos/$REPO/releases?per_page=30" || true
+    fi
+  }
+
   version=${REEVAL_VERSION:-}
   version=${version#v}
   if [ -z "$version" ]; then
     [ -z "${REEVAL_DOWNLOAD:-}" ] || fail "REEVAL_DOWNLOAD needs REEVAL_VERSION"
-    # The newest reeval release: the repository's other releases are tagged <component>-v<version>.
-    releases=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=30") ||
-      fail "couldn't list the releases of $REPO"
-    version=$(printf '%s\n' "$releases" | sed -n 's/.*"tag_name": *"v\([0-9][^"]*\)".*/\1/p' | head -n 1)
-    [ -n "$version" ] || fail "no release of $REPO found"
+    # The newest published reeval release that has its binaries: they upload after the release is
+    # created, and the repository's other releases are tagged <component>-v<version>. Each release
+    # lists tag_name, draft and prerelease before its assets.
+    releases=$(list_releases "${GITHUB_TOKEN:-}")
+    status=${releases##*"$nl"}
+    if [ "$status" = 401 ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+      echo "reeval install: the GitHub API refused GITHUB_TOKEN; listing the releases without it" >&2
+      releases=$(list_releases "")
+      status=${releases##*"$nl"}
+    fi
+    case $status in
+      200) ;;
+      403 | 429) fail "the GitHub API rate-limited listing the releases of $REPO; set GITHUB_TOKEN to a token" ;;
+      000) fail "couldn't reach api.github.com to list the releases of $REPO" ;;
+      *) fail "couldn't list the releases of $REPO (HTTP $status from the GitHub API)" ;;
+    esac
+    version=$(printf '%s\n' "${releases%"$nl"*}" |
+      grep -oE '"(tag_name|draft|prerelease)": *("[^"]*"|true|false)|"name": *"SHA256SUMS"' |
+      awk -F '"' '
+        function done() { if (!found && tag ~ /^v[0-9]/ && !skip && sums) { found = 1; print substr(tag, 2); exit } }
+        /"tag_name"/ { done(); tag = $4; skip = 0; sums = 0 }
+        /"(draft|prerelease)": *true/ { skip = 1 }
+        /SHA256SUMS/ { sums = 1 }
+        END { done() }')
+    [ -n "$version" ] || fail "no release of $REPO has binaries yet"
   fi
   base=${REEVAL_DOWNLOAD:-https://github.com/$REPO/releases/download/v$version}
   name=reeval-$version-$target
