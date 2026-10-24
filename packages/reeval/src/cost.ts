@@ -85,8 +85,9 @@ const EFFORT_SUFFIX = /-(none|minimal|low|medium|high|xhigh|max|thinking)$/
 export function priceFor(model: string, table: Record<string, Price>): Price | null {
   let id = model.toLowerCase().replace(/\[.*\]$/, '')
   for (;;) {
-    const price = table[id] ?? table[id.slice(id.lastIndexOf('/') + 1)]
-    if (price) return price
+    const bare = id.slice(id.lastIndexOf('/') + 1)
+    const key = Object.hasOwn(table, id) ? id : Object.hasOwn(table, bare) ? bare : null
+    if (key !== null) return table[key] as Price
     const shorter = id.replace(EFFORT_SUFFIX, '')
     if (shorter === id) return null
     id = shorter
@@ -332,13 +333,16 @@ export function formatTokenRange({ low, high }: Range): string {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
- * `models.dev list prices`, `models.dev list prices of 2026-10-20 (offline)` from an old copy,
- * `prices.json over models.dev list prices` with a `REEVAL_PRICES` file, or
- * `prices.json (models.dev unreachable, …)` when it's the file alone.
+ * `models.dev list prices`, `models.dev list prices of 2026-10-20 (offline)` from an old copy
+ * (`(models.dev answered HTTP 500)` when it was reached), `prices.json over models.dev list
+ * prices` with a `REEVAL_PRICES` file, or `prices.json (models.dev unreachable, …)` when it's the
+ * file alone.
  */
 function priceLabel({ modelsDev, file }: { modelsDev: ModelsDev; file: string | null }) {
-  if ('why' in modelsDev) return `${file} (${modelsDev.why})`
-  const list = `models.dev list prices${modelsDev.stale ? ` of ${modelsDev.fetchedAt.slice(0, 10)} (offline)` : ''}`
+  if (!('fetchedAt' in modelsDev)) return `${file} (${modelsDev.why})`
+  const why =
+    modelsDev.stale && (modelsDev.why === 'unreachable' ? 'offline' : `models.dev ${modelsDev.why}`)
+  const list = `models.dev list prices${why ? ` of ${modelsDev.fetchedAt.slice(0, 10)} (${why})` : ''}`
   return file ? `${file} over ${list}` : list
 }
 

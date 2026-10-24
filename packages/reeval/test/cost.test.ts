@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import {
@@ -15,6 +16,7 @@ import {
   priceFor,
   usdOf,
 } from '../src/cost.ts'
+import { UsageError } from '../src/errors.ts'
 import { loadPrices, type Price, type Prices } from '../src/prices.ts'
 import type { Cell } from '../src/types.ts'
 
@@ -27,7 +29,7 @@ const PRICES = {
   table: TABLE,
   overlay: null,
   file: null,
-  modelsDev: { fetchedAt: '2026-10-23T00:00:00Z', stale: false },
+  modelsDev: { fetchedAt: '2026-10-23T00:00:00Z', stale: false as const },
 }
 
 const cell = (harness: string): Cell => ({
@@ -62,6 +64,13 @@ describe('priceFor', () => {
   test('is null for a model without an exact price, rather than a near one', () => {
     assert.equal(priceFor('my-model', TABLE), null)
     assert.equal(priceFor('gemini-3.8-flash-lite', TABLE), null)
+  })
+
+  test("reads the table's own entries only, so an id like `constructor` is just unpriced", () => {
+    for (const id of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      assert.equal(priceFor(id, TABLE), null)
+      assert.equal(priceFor(`openai/${id}`, TABLE), null)
+    }
   })
 
   test("Cursor's Fast is priced as its own model", () => {
@@ -170,9 +179,22 @@ describe('costLine', () => {
         ...base,
         attempts: { ...base.attempts, history: 2, typical: 4 },
         pastRuns: 1,
-        prices: { modelsDev: { stale: true, fetchedAt: '2026-10-20T08:00:00Z' }, file: null },
+        prices: {
+          modelsDev: { stale: true, fetchedAt: '2026-10-20T08:00:00Z', why: 'unreachable' },
+          file: null,
+        },
       }),
       'cost  estimated $1.00–4.00 at models.dev list prices of 2026-10-20 (offline), judge included · 2 of 6 attempts from 1 past run, the rest rough',
+    )
+    assert.equal(
+      costLine({
+        ...base,
+        prices: {
+          modelsDev: { stale: true, fetchedAt: '2026-10-20T08:00:00Z', why: 'answered HTTP 500' },
+          file: null,
+        },
+      }),
+      'cost  estimated $1.00–4.00 at models.dev list prices of 2026-10-20 (models.dev answered HTTP 500), judge included · no history, rough',
     )
   })
 
@@ -267,15 +289,18 @@ describe('loadPrices', () => {
     openai: { models: { 'no-cost': {}, 'bad-cost': { cost: { input: '1', output: 2 } } } },
   }
 
-  /** A local models.dev: `answer` serves the catalog gzipped, `hang` accepts and never answers. */
-  async function server(mode: 'answer' | 'hang') {
+  /**
+   * A local models.dev: `answer` serves the catalog gzipped (or `body` instead), `hang` accepts
+   * and never answers.
+   */
+  async function server(mode: 'answer' | 'hang', body: Buffer = gzipSync(JSON.stringify(CATALOG))) {
     const hits: number[] = []
     const closed: Promise<void>[] = []
     const srv = createServer((_req, res) => {
       hits.push(Date.now())
       if (mode === 'hang') return
       res.writeHead(200, { 'content-type': 'application/json', 'content-encoding': 'gzip' })
-      res.end(gzipSync(JSON.stringify(CATALOG)))
+      res.end(body)
     })
     srv.on('connection', (socket) => {
       closed.push(new Promise((done) => socket.on('close', () => done())))
@@ -297,19 +322,61 @@ describe('loadPrices', () => {
     p.table && 'fetchedAt' in p.modelsDev ? p.modelsDev.fetchedAt : null
   const UNREACHABLE = 'models.dev unreachable, next try in 60m'
 
-  test('REEVAL_PRICES=none is tokens only, and a bad file is refused', async () => {
+  test('REEVAL_PRICES=none is tokens only, and a bad file is a usage error naming what is wrong', async () => {
     assert.deepEqual(await loadPrices({ REEVAL_PRICES: 'none' }), {
       table: null,
       why: 'REEVAL_PRICES=none',
     })
     const { dir } = cache()
     const file = join(dir, 'prices.json')
-    for (const cost of [{ input: 0.5 }, { input: '0.5', output: 2 }, { input: -1, output: 2 }]) {
-      writeFileSync(file, JSON.stringify({ 'composer-2.5': cost }))
-      const bad = await loadPrices({ REEVAL_PRICES: file })
-      assert.equal(bad.table, null)
-      assert.match('why' in bad ? bad.why : '', /composer-2\.5 needs input and output/)
+    const refused = async (contents: string, message: RegExp) => {
+      writeFileSync(file, contents)
+      await assert.rejects(loadPrices({ REEVAL_PRICES: file }), (error: Error) => {
+        assert.ok(error instanceof UsageError, error.message)
+        assert.match(error.message, /^REEVAL_PRICES .*prices\.json: /)
+        assert.match(error.message, message)
+        return true
+      })
     }
+    for (const cost of [{ input: 0.5 }, { input: '0.5', output: 2 }, { input: -1, output: 2 }, 3]) {
+      await refused(
+        JSON.stringify({ 'composer-2.5': cost }),
+        /composer-2\.5 needs input and output/,
+      )
+    }
+    await refused(
+      JSON.stringify({ 'composer-2.5': { input: 0.5, cacheRead: 0.05, output: 2.5 } }),
+      /composer-2\.5 has cacheRead, which isn't one of input, output, cache_read, cache_write$/,
+    )
+    for (const top of ['[{"input":1,"output":1}]', 'null', '3', '"composer-2.5"']) {
+      await refused(top, /must be a JSON object of prices by model id/)
+    }
+    await refused(
+      JSON.stringify({
+        'Composer-2.5': { input: 1, output: 1 },
+        'composer-2.5': { input: 2, output: 2 },
+      }),
+      /Composer-2\.5 and composer-2\.5 are one model; keep one$/,
+    )
+    await refused('{ "composer-2.5": ', /isn't JSON: /)
+    await assert.rejects(
+      loadPrices({ REEVAL_PRICES: join(dir, 'missing.json') }),
+      /^UsageError: REEVAL_PRICES .*missing\.json: can't be read \(ENOENT\)$/,
+    )
+  })
+
+  test('a REEVAL_PRICES id like `__proto__` is an ordinary model', async (t) => {
+    const s = await server('answer')
+    t.after(s.stop)
+    const { dir } = cache()
+    const file = join(dir, 'prices.json')
+    writeFileSync(file, '{"__proto__":{"input":1,"output":2},"constructor":{"input":3,"output":4}}')
+    const prices = await loadPrices({ REEVAL_PRICES: file }, now, s.source)
+    const overlay = prices.table ? prices.overlay : null
+    assert.ok(overlay)
+    assert.deepEqual(Object.keys(overlay), ['__proto__', 'constructor'])
+    assert.deepEqual(priceFor('__proto__', overlay), [1, 1, 1, 2])
+    assert.deepEqual(priceFor('constructor', overlay), [3, 3, 3, 4])
   })
 
   test('a REEVAL_PRICES file lies over models.dev, and stands alone when it is unreachable', async (t) => {
@@ -382,6 +449,7 @@ describe('loadPrices', () => {
     assert.deepEqual(stale.table && stale.modelsDev, {
       fetchedAt: '2026-10-01T00:00:00Z',
       stale: true,
+      why: 'unreachable',
     })
     cache()
     assert.deepEqual(await loadPrices({}, now, source), { table: null, why: UNREACHABLE })
@@ -425,5 +493,104 @@ describe('loadPrices', () => {
     await s.stop()
     assert.deepEqual((await loadPrices(env, now, await refused())).table, expected)
     assert.equal(s.hits.length, 1)
+  })
+
+  test('an answer without prices is neither cached nor laid over the good copy, and says so', async (t) => {
+    const { dir, env } = cache()
+    seed(dir, '2026-10-01T00:00:00Z')
+    for (const [body, why] of [
+      ['[1,2]', 'answered without prices'],
+      [
+        '{"openrouter":{"models":{"a":{"cost":{"input":1,"output":1}}}}}',
+        'answered without prices',
+      ],
+      ['{"openai":', 'answered with invalid JSON'],
+    ]) {
+      const s = await server('answer', gzipSync(body))
+      t.after(s.stop)
+      rmSync(join(dir, 'reeval', 'models-dev-failed.json'), { force: true })
+      const prices = await loadPrices(env, now, s.source)
+      assert.deepEqual(prices.table, TABLE)
+      assert.deepEqual(prices.table && prices.modelsDev, {
+        fetchedAt: '2026-10-01T00:00:00Z',
+        stale: true,
+        why,
+      })
+      assert.equal(s.hits.length, 1)
+    }
+    cache()
+    const s = await server('answer', gzipSync('[]'))
+    t.after(s.stop)
+    const why = 'models.dev answered without prices, next try in 60m'
+    assert.deepEqual(await loadPrices({}, now, s.source), { table: null, why })
+    assert.deepEqual(await loadPrices({}, now, s.source), { table: null, why })
+    assert.equal(s.hits.length, 1)
+  })
+
+  test('a malformed model entry is skipped, not the whole catalog', async (t) => {
+    const catalog = {
+      ...CATALOG,
+      xai: { models: { a: null, b: 3, c: { cost: null } } },
+      anthropic: null,
+    }
+    const s = await server('answer', gzipSync(JSON.stringify(catalog)))
+    t.after(s.stop)
+    const { env } = cache()
+    assert.deepEqual((await loadPrices(env, now, s.source)).table, {
+      'gemini-3.8-flash': FLASH,
+      'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+    })
+  })
+
+  test('an answer that decompresses past 32 MB is a failed fetch', async (t) => {
+    const s = await server('answer', gzipSync(Buffer.alloc(33 * 1024 * 1024, ' ')))
+    t.after(s.stop)
+    cache()
+    assert.deepEqual(await loadPrices({}, now, { ...s.source, timeoutMs: 5000 }), {
+      table: null,
+      why: 'models.dev answered over 32 MB, next try in 60m',
+    })
+  })
+
+  test('the fetch goes through the environment proxy under NODE_USE_ENV_PROXY=1', async (t) => {
+    const seen: string[] = []
+    const proxy = createServer((req, res) => {
+      seen.push(req.url ?? '')
+      res.writeHead(200, { 'content-encoding': 'gzip' })
+      res.end(gzipSync(JSON.stringify(CATALOG)))
+    })
+    await new Promise<void>((done) => proxy.listen(0, '127.0.0.1', done))
+    t.after(() => new Promise<void>((done) => proxy.close(() => done())))
+    const { dir } = cache()
+    const prices = resolve(import.meta.dirname, '../src/prices.ts')
+    const script = `const { loadPrices } = await import(${JSON.stringify(prices)})
+const p = await loadPrices({}, Date.now(), { url: 'http://models.reeval.test/api.json', timeoutMs: 3000 })
+console.log(JSON.stringify(p.table))`
+    const child = spawn(
+      process.execPath,
+      ['--experimental-strip-types', '--no-warnings', '--input-type=module', '-e', script],
+      {
+        env: {
+          ...process.env,
+          XDG_CACHE_HOME: dir,
+          NODE_USE_ENV_PROXY: '1',
+          HTTP_PROXY: `http://127.0.0.1:${(proxy.address() as AddressInfo).port}`,
+          NO_PROXY: '',
+        },
+      },
+    )
+    let out = ''
+    child.stdout.on('data', (d) => {
+      out += d
+    })
+    child.stderr.on('data', (d) => {
+      out += d
+    })
+    await new Promise((done) => child.on('close', done))
+    assert.deepEqual(seen, ['http://models.reeval.test/api.json'])
+    assert.deepEqual(JSON.parse(out), {
+      'gemini-3.8-flash': FLASH,
+      'anthropic/claude-sonnet-4.5': [3, 3, 3, 15],
+    })
   })
 })
