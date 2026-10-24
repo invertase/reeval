@@ -27,12 +27,7 @@
       "project": ["src/**/*.ts", "test/**/*.{ts,mjs}", "scripts/**/*.ts"],
       "ignore": ["test/fixtures/records/**"],
       "ignoreBinaries": ["uv", "podman"],
-      "ignoreDependencies": [
-        "@ai-sdk/harness-acp",
-        "@ai-sdk/provider",
-        "@ai-sdk/provider-utils",
-        "studio-web"
-      ]
+      "ignoreDependencies": ["@ai-sdk/harness-acp", "@ai-sdk/provider", "studio-web"]
     },
     "packages/harness-*": {
       "entry": ["test/**/*.ts"]

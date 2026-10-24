@@ -544,7 +544,7 @@
         "gateway": {
           "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
           "type": "string",
-          "enum": ["direct", "vercel"]
+          "enum": ["direct", "vercel", "vertex"]
         },
         "model": {
           "type": "string"
@@ -908,7 +908,7 @@
         "gateway": {
           "description": "The gateway from the config's `gateway` list the call went through; unset without one.",
           "type": "string",
-          "enum": ["direct", "vercel"]
+          "enum": ["direct", "vercel", "vertex"]
         },
         "model": {
           "type": "string"

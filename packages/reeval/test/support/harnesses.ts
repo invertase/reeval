@@ -39,6 +39,7 @@ export type HarnessRow = {
     | 'fx'
     | 'fx-gateway'
     | 'claude-code-gateway'
+    | 'claude-code-vertex'
     | 'codex-gateway'
     | 'opencode-gateway'
     | 'goose-gateway'
@@ -49,7 +50,7 @@ export type HarnessRow = {
    */
   harness?: 'opencode' | 'fx' | 'claude-code' | 'codex' | 'goose' | 'pi' | 'grok-build'
   /** `REEVAL_CONTRACT_GATEWAY`: the config's `gateway` list is this gateway alone. */
-  gateway?: 'vercel'
+  gateway?: 'vercel' | 'vertex'
   /**
    * Why the row is skipped unless `REEVAL_CONTRACT_HARNESSES` names it, such as a key CI doesn't
    * have yet.
@@ -348,6 +349,26 @@ export const harnesses: HarnessRow[] = [
     tokens: true,
     servedModel: /claude-haiku-4-5/,
     wireModel: null,
+  },
+  {
+    // Claude Code on Vertex AI through `gateway: [vertex()]`, the project from GOOGLE_CLOUD_PROJECT:
+    // no key at all, a token minted from the host's Application Default Credentials that the
+    // gateway adds to its model calls. The row's "key" is the credentials file, which must stay
+    // out of the container like any key.
+    id: 'claude-code-vertex',
+    harness: 'claude-code',
+    gateway: 'vertex',
+    gated:
+      'not yet passed on the real CLI; name claude-code-vertex in REEVAL_CONTRACT_HARNESSES to run it',
+    model: 'claude-haiku-4-5@20251001',
+    key: { name: 'GOOGLE_APPLICATION_CREDENTIALS', from: ['GOOGLE_APPLICATION_CREDENTIALS'] },
+    image: 'claude-code',
+    skillContext: /^~\/\.claude\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['aiplatform.googleapis.com'],
+    apiHost: 'aiplatform.googleapis.com',
+    tokens: true,
+    servedModel: /claude-haiku-4-5/,
+    wireModel: /claude-haiku-4-5/,
   },
   {
     // Codex on Vercel AI Gateway: a Responses API provider on Vercel, the model as openai/<id>.

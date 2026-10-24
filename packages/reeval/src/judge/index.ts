@@ -1,4 +1,5 @@
 import { VERCEL_KEY, VERCEL_OIDC, vercelCredentialProblem } from '../gateway/vercel.ts'
+import { vertexSettings } from '../gateway/vertex.ts'
 import type { JudgeRetry } from '../history/types.ts'
 import { badCharacterAt } from '../redact.ts'
 import type {
@@ -30,7 +31,10 @@ export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string; name: 
   'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai', name: 'TypeSafe AI' },
 }
 
-export type JudgeRoute = { kind: 'direct'; provider: string; pkg: string } | { kind: 'gateway' }
+export type JudgeRoute =
+  | { kind: 'direct'; provider: string; pkg: string }
+  | { kind: 'gateway' }
+  | { kind: 'vertex' }
 
 export type { JudgeState } from '../types.ts'
 
@@ -62,7 +66,7 @@ const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 /**
  * Environment variables a model needs on `gateway`, in the order reeval prefers them; any one is
  * enough. On direct, its provider's own key (none for a prefix reeval can't call directly); on
- * vercel, the Gateway's.
+ * vercel, the Gateway's; on vertex none, since its token comes from Application Default Credentials.
  */
 export function judgeCredentials(
   model: string | FakeJudgeModel,
@@ -70,6 +74,7 @@ export function judgeCredentials(
 ): string[] {
   if (isFakeJudge(model)) return []
   if (gateway === 'vercel') return GATEWAY_KEYS
+  if (gateway === 'vertex') return []
   const direct = DIRECT_PROVIDERS[providerOf(model)]
   return direct ? [direct.key] : []
 }
@@ -77,6 +82,7 @@ export function judgeCredentials(
 /** The keys that would work for a model on `on`: `ANTHROPIC_API_KEY (for direct())`. */
 export function modelKeyOptions(model: string, on: GatewayName = 'direct'): string {
   if (on === 'vercel') return `${GATEWAY_KEYS.join(' or ')} (for vercel())`
+  if (on === 'vertex') return 'Application Default Credentials (for vertex())'
   const direct = DIRECT_PROVIDERS[providerOf(model)]
   return direct
     ? `${direct.key} (for direct())`
@@ -101,7 +107,8 @@ export function unusedGatewayKey(env: NodeJS.ProcessEnv, gateway: GatewayName = 
 }
 
 /**
- * The provider's own package on direct, or the Vercel AI Gateway on vercel. Throws, naming the
+ * The provider's own package on direct, the Vercel AI Gateway on vercel, or Vertex AI on vertex,
+ * whose token is minted when the model is called. Throws, naming the
  * model, its prefix and the keys that would work, when none is set, when the key it would send
  * has whitespace or a line break in it, or when Vercel's project token has expired.
  */
@@ -111,6 +118,7 @@ export function judgeRoute(
   what = 'judge model',
   gateway: GatewayName = 'direct',
 ): JudgeRoute {
+  if (gateway === 'vertex') return { kind: 'vertex' }
   const provider = providerOf(model)
   const direct = DIRECT_PROVIDERS[provider]
   const keys = judgeCredentials(model, gateway)
@@ -157,6 +165,14 @@ export async function runJudge(
 ): Promise<JudgeResult> {
   const { model, threshold } = options
   const gateway = typeof options.gateway === 'object' ? options.gateway.kind : options.gateway
+  const vertex =
+    gateway === 'vertex'
+      ? vertexSettings(
+          typeof options.gateway === 'object' && options.gateway.kind === 'vertex'
+            ? options.gateway
+            : {},
+        )
+      : undefined
   let score: number
   let resolvedModel: string | undefined
   let retries: JudgeRetry[] = []
@@ -169,7 +185,8 @@ export async function runJudge(
     }
     const { scoreWithModel } = await import('./model.ts')
     const scored = await withRetries(
-      () => scoreWithModel(model, question, state, options.providerOptions, signal, gateway),
+      () =>
+        scoreWithModel(model, question, state, options.providerOptions, signal, gateway, vertex),
       retry,
       signal,
     )

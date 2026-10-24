@@ -22,6 +22,7 @@ import { environmentSandbox, profileSandbox } from './environment.ts'
 import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { resolveGateway, routedHarness } from './gateway/resolve.ts'
 import { VERCEL_KEY, vercelCredentialProblem } from './gateway/vercel.ts'
+import { VERTEX_PROJECT_ENV, vertexSettings } from './gateway/vertex.ts'
 import { credentialOf } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
@@ -53,8 +54,8 @@ type Runtime = NonNullable<Stack['runtime']>
 
 export type Check = {
   /**
-   * The area: runtime, config, docker, image, key, judge, analysis, gateway, egress, gitignore or
-   * env-files.
+   * The area: runtime, config, docker, image, key, judge, analysis, gateway, vertex, egress, gitignore
+   * or env-files.
    */
   id: string
   status: CheckStatus
@@ -87,6 +88,8 @@ export type DoctorDeps = {
   fetch: typeof fetch
   /** The cloud VM or CI runner this machine looks like, as a phrase (`a GitHub Actions runner …`), or null. */
   cloudHost: () => Promise<string | null>
+  /** An access token from Application Default Credentials, as attempts on Vertex AI mint one. */
+  vertexToken: () => Promise<string>
 }
 
 const run = (command: string, args: string[], cwd?: string) =>
@@ -153,6 +156,10 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
     },
     fetch: globalThis.fetch,
     cloudHost: () => cloudHost(env),
+    vertexToken: async () => {
+      const { adcTokenSource } = await import('./gateway/vertex.ts')
+      return (await adcTokenSource()()).token
+    },
   }
 }
 
@@ -657,6 +664,11 @@ export async function checkKeys(
   )
 }
 
+const noKey = (who: string, gateway: GatewayName | undefined) =>
+  gateway === 'vertex'
+    ? `${who}: on vertex(), with a token from Application Default Credentials (the vertex check)`
+    : `${who} needs no key`
+
 /** A model no gateway in the list serves: the plan refuses it, so the check names why. */
 const unservedModel = (id: string, error: unknown, required: boolean): Check => ({
   id,
@@ -709,8 +721,7 @@ export async function checkJudge(
         return unservedModel('judge', error, !profile)
       }
       const keys = judgeCredentials(model, gateway)
-      if (!keys.length)
-        return { id: 'judge', status: 'ok', summary: `${who} needs no key` } as Check
+      if (!keys.length) return { id: 'judge', status: 'ok', summary: noKey(who, gateway) } as Check
       return keyCheck('judge', keys, who, !profile, deps, online, envFile, model as string, gateway)
     }),
   )
@@ -775,7 +786,7 @@ export async function checkAnalysis(
   }
   const keys = judgeCredentials(model, gateway)
   const who = `${model} (analysis.model)`
-  if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: `${who} needs no key` }]
+  if (!keys.length) return [{ id: 'analysis', status: 'ok', summary: noKey(who, gateway) }]
   return [await keyCheck('analysis', keys, who, false, deps, online, envFile, model, gateway)]
 }
 
@@ -818,6 +829,141 @@ export function checkGateways(config: ResolvedConfig, deps: DoctorDeps, envFile:
     } catch (error) {
       checks.push({ id: 'gateway', status: 'fail', summary: (error as Error).message })
     }
+  }
+  return checks
+}
+
+/** Where Application Default Credentials come from on this machine, or null when nowhere. */
+export function adcSource(deps: Pick<DoctorDeps, 'env' | 'platform'>): {
+  summary: string
+  missing?: string
+} | null {
+  const file = deps.env.GOOGLE_APPLICATION_CREDENTIALS
+  if (file) {
+    return existsSync(file)
+      ? { summary: `GOOGLE_APPLICATION_CREDENTIALS (${file})` }
+      : { summary: `GOOGLE_APPLICATION_CREDENTIALS (${file})`, missing: file }
+  }
+  const home = deps.env.HOME ?? deps.env.USERPROFILE
+  const dir =
+    deps.env.CLOUDSDK_CONFIG ??
+    (deps.platform === 'win32'
+      ? deps.env.APPDATA && join(deps.env.APPDATA, 'gcloud')
+      : home && join(home, '.config', 'gcloud'))
+  const gcloud = dir && join(dir, 'application_default_credentials.json')
+  return gcloud && existsSync(gcloud) ? { summary: `gcloud's ${gcloud}` } : null
+}
+
+/**
+ * Each `vertex()` entry's project, and where its access tokens come from. Online, it mints one
+ * and names whose it is: a token the host can't mint fails every attempt on Vertex AI.
+ */
+export async function checkVertex(
+  config: ResolvedConfig,
+  deps: DoctorDeps,
+  online: boolean,
+): Promise<Check[]> {
+  const entries = [
+    ...(config.gatewaySet ? config.gateway.map((g) => ({ g, profile: undefined })) : []),
+    ...Object.entries(config.profiles).flatMap(([name, p]) =>
+      (p.gateway ?? []).map((g) => ({ g, profile: name })),
+    ),
+  ].flatMap(({ g, profile }) => (g.kind === 'vertex' ? [{ entry: g, profile }] : []))
+  if (!entries.length) return []
+  const checks: Check[] = []
+  const projects = new Set<string>()
+  for (const { entry, profile } of entries) {
+    const where = profile ? ` in profile ${profile}` : ''
+    try {
+      const { project, location } = vertexSettings(entry, deps.env)
+      projects.add(project)
+      checks.push({
+        id: 'vertex',
+        status: 'ok',
+        summary: `vertex()${where}: project ${project}${entry.project ? '' : ` (from ${VERTEX_PROJECT_ENV})`}, ${location}`,
+      })
+    } catch (error) {
+      checks.push({
+        id: 'vertex',
+        status: 'fail',
+        summary: `${(error as Error).message}${where}`,
+        fix: `add ${VERTEX_PROJECT_ENV}=<project id> to your environment, or vertex({ project: '<id>' }) to ${config.file}`,
+      })
+    }
+  }
+  const source = adcSource(deps)
+  const login = 'run gcloud auth application-default login, or set GOOGLE_APPLICATION_CREDENTIALS'
+  if (source?.missing) {
+    checks.push({
+      id: 'vertex',
+      status: 'fail',
+      summary: `GOOGLE_APPLICATION_CREDENTIALS names ${source.missing}, which doesn't exist`,
+      fix: 'point GOOGLE_APPLICATION_CREDENTIALS at a credentials file that exists',
+    })
+    return checks
+  }
+  if (!online) {
+    checks.push(
+      source
+        ? { id: 'vertex', status: 'ok', summary: `access tokens from ${source.summary}` }
+        : {
+            id: 'vertex',
+            status: 'warn',
+            summary:
+              'no Application Default Credentials found (fine on a Google Cloud VM, whose metadata server serves them)',
+            fix: login,
+          },
+    )
+    return checks
+  }
+  let token: string
+  try {
+    token = await deps.vertexToken()
+  } catch (error) {
+    checks.push({
+      id: 'vertex',
+      status: 'fail',
+      summary: `Application Default Credentials gave no access token: ${redactSecrets((error as Error).message)}`,
+      fix: login,
+    })
+    return checks
+  }
+  const info = await deps
+    .fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(token)}`)
+    .then(async (r) => (r.ok ? ((await r.json()) as { email?: string }) : {}))
+    .catch(() => ({}) as { email?: string })
+  checks.push({
+    id: 'vertex',
+    status: 'ok',
+    summary: `access token minted${info.email ? ` for ${info.email}` : ''}${source ? ` from ${source.summary}` : ''}`,
+  })
+  for (const project of projects) {
+    const response = await deps
+      .fetch(
+        `https://serviceusage.googleapis.com/v1/projects/${encodeURIComponent(project)}/services/aiplatform.googleapis.com`,
+        { headers: { authorization: `Bearer ${token}` } },
+      )
+      .catch(() => undefined)
+    const state = response?.ok
+      ? ((await response.json().catch(() => ({}))) as { state?: string }).state
+      : undefined
+    checks.push(
+      state === 'ENABLED'
+        ? { id: 'vertex', status: 'ok', summary: `Vertex AI API enabled in ${project}` }
+        : state
+          ? {
+              id: 'vertex',
+              status: 'fail',
+              summary: `Vertex AI API not enabled in ${project}`,
+              fix: `run gcloud services enable aiplatform.googleapis.com --project ${project}`,
+            }
+          : {
+              id: 'vertex',
+              status: 'warn',
+              summary: `couldn't read whether the Vertex AI API is enabled in ${project}${response ? ` (HTTP ${response.status})` : ''}`,
+              fix: `check that the account can use aiplatform.googleapis.com in ${project}`,
+            },
+    )
   }
   return checks
 }
@@ -1038,6 +1184,7 @@ export async function doctor(
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...(await checkAnalysis(config, deps, online, envFile)))
     checks.push(...checkGateways(config, deps, envFile))
+    checks.push(...(await checkVertex(config, deps, online)))
     const cloud = configuredEgress(config).some(isDirect) ? await deps.cloudHost() : null
     checks.push(...checkEgress(config, cloud))
     checks.push(await checkGitignore(config.root, deps))

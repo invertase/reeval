@@ -18,6 +18,7 @@ import { UsageError } from '../../src/errors.ts'
 import { resolveModelGateway } from '../../src/gateway/models.ts'
 import { resolveGateway } from '../../src/gateway/resolve.ts'
 import { vercelCredentialProblem } from '../../src/gateway/vercel.ts'
+import { vertexSettings } from '../../src/gateway/vertex.ts'
 import {
   antigravity,
   claudeCode,
@@ -77,11 +78,15 @@ const model = (name: string, pin: GatewayName | undefined, gateways: GatewayDesc
   resolveModelGateway(name, pin, { gateways }, 'the judge model')
 const VERCEL: GatewayDescriptor = { kind: 'vercel' }
 const DIRECT: GatewayDescriptor = { kind: 'direct' }
+const VERTEX: GatewayDescriptor = { kind: 'vertex' }
 /** What the plan says of Vercel's credentials, at noon on 1 January 2026. */
 const oidc = (env: NodeJS.ProcessEnv) => () => {
   const problem = vercelCredentialProblem(env, new Date('2026-01-01T12:00:00Z'))
   if (problem) throw new UsageError(problem)
 }
+/** What the plan takes from a `vertex()` entry, with these host variables. */
+const vertexEntry = (entry: { project?: string }, env: NodeJS.ProcessEnv) => () =>
+  vertexSettings(entry, env)
 const jwt = (expiresMs: number) =>
   `e30.${Buffer.from(JSON.stringify({ exp: expiresMs / 1000 })).toString('base64url')}.sig`
 
@@ -1247,6 +1252,48 @@ environment:
     ['model: mistral on vercel then direct', model('mistral/large', undefined, [VERCEL, DIRECT])],
     ['model: pinned to vercel, not listed', model('anthropic/m', 'vercel', [DIRECT])],
     ['model: mistral pinned to direct', model('mistral/large', 'direct', [VERCEL, DIRECT])],
+    [
+      'ts: vertex with settings',
+      config({
+        gateway: [
+          {
+            kind: 'vertex',
+            project: 'p',
+            location: 'us-east5',
+            regions: { anthropic: 'us-east5' },
+          },
+        ],
+      }),
+    ],
+    ['ts: vertex with a typo', config({ gateway: [{ kind: 'vertex', projet: 'p' }] })],
+    [
+      'ts: vertex with an unknown publisher',
+      config({ gateway: [{ kind: 'vertex', regions: { openai: 'us-east5' } }] }),
+    ],
+    [
+      'ts: vertex with a region not one',
+      config({ gateway: [{ kind: 'vertex', location: 'US East' }] }),
+    ],
+    [
+      'yaml: vertex with settings',
+      yaml('gateway: [{ vertex: { project: p, regions: { anthropic: us-east5 } } }, direct]\n'),
+    ],
+    ['route: codex on vertex alone', route([VERTEX], codex({ model: 'm' }))],
+    ['route: cursor on vertex alone', route([VERTEX], cursor({ model: 'composer-2.5' }))],
+    ['route: claude code on vertex alone', route([VERTEX], claudeCode({ model: 'm' }))],
+    ['route: goose on vertex alone', route([VERTEX], goose({ model: 'gemini-3.8-flash' }))],
+    ['vertex: no project', vertexEntry({}, {})],
+    [
+      'vertex: the project from GOOGLE_CLOUD_PROJECT',
+      vertexEntry({}, { GOOGLE_CLOUD_PROJECT: 'p' }),
+    ],
+    [
+      'route: claude code on vertex then direct',
+      route([VERTEX, DIRECT], claudeCode({ model: 'm' })),
+    ],
+    ['model: anthropic on vertex alone', model('anthropic/m', undefined, [VERTEX])],
+    ['model: google on vertex alone', model('google/m', undefined, [VERTEX])],
+    ['model: openai on vertex alone', model('openai/m', undefined, [VERTEX])],
   ],
   declaration: [
     ['not a list', tree({ type: 'eval' })],

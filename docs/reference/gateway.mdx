@@ -28,6 +28,7 @@ The default is `[direct()]`: every harness calls its own provider with its own k
 |---|---|---|---|
 | `direct()` from `'{{ pkg }}/gateway'` | `direct` or `{ direct: {} }` | every harness; judge and analysis models whose provider reeval calls directly (`anthropic/*`, `google/*`, `openai/*`, `typesafe-ai/*`) | each harness's or provider's own, such as `CURSOR_API_KEY` |
 | `vercel()` from `'{{ pkg }}/gateway'` | `vercel` or `{ vercel: {} }` | Claude Code, Codex, Goose, OpenCode, fx, Grok Build, and any judge or analysis model | `AI_GATEWAY_API_KEY`, else `VERCEL_OIDC_TOKEN` |
+| `vertex({ project?, location?, regions? })` from `'{{ pkg }}/gateway'` | `vertex` or `{ vertex: { project: p } }` | Claude Code ([below](#vertex-ai)); `google/*` and `anthropic/*` judge and analysis models | Application Default Credentials |
 
 ## Vercel AI Gateway
 
@@ -49,6 +50,27 @@ One key serves every harness and model on `vercel()`. The egress gateway swaps i
 pi doesn't run on `vercel()`: its only route there reaches a Gemini model through Anthropic's Messages API, with Anthropic's thinking budget in place of Gemini's thinking level, and it doesn't behave as it does on Gemini's API. With `direct()` after `vercel()`, pi falls through to its Gemini key. `effort` on Goose, OpenCode or Grok Build isn't taken on `vercel()` yet, since nothing checks the model gets it; such a cell falls through too. Claude Code's and Codex's `effort` run there.
 
 A Vercel project's token from `vercel env pull` (`VERCEL_OIDC_TOKEN`) works when `AI_GATEWAY_API_KEY` isn't set. It lasts about 12 hours, so the plan refuses an expired one before anything runs, and `reeval doctor` fails on it.
+
+## Vertex AI
+
+```ts title="reeval.config.ts"
+gateway: [
+  vertex({ project: 'my-project', regions: { anthropic: 'us-east5' } }),
+  direct(),
+],
+```
+
+`vertex()` takes the Google Cloud project the calls are billed to (`project`, default `GOOGLE_CLOUD_PROJECT`), the region they're made in (`location`, default `global`), and a region per publisher where it differs (`regions`, keyed `anthropic`, `google` or `xai`). The plan checks the shape, and stops with exit 2 when neither `project` nor `GOOGLE_CLOUD_PROJECT` names a project.
+
+There's no key. reeval mints a Google Cloud access token on the host from Application Default Credentials (`gcloud auth application-default login`, or a credentials file in `GOOGLE_APPLICATION_CREDENTIALS`), and the egress gateway adds it to the agent's model calls only. The token never enters the sandbox, and reeval swaps in a fresh one five minutes before each expires. An attempt whose first token can't be minted fails as an infrastructure error.
+
+| Harness | How it reaches Vertex | Brokered on | Model ids | Served model |
+|---|---|---|---|---|
+| Claude Code | `CLAUDE_CODE_USE_VERTEX`, with `ANTHROPIC_VERTEX_PROJECT_ID` and `CLOUD_ML_REGION` from the entry, and `CLAUDE_CODE_SKIP_VERTEX_AUTH` | `POST /v1/projects/<project>/locations/<region>/publishers/anthropic/models/<id>:streamRawPredict` (and `:rawPredict`) on the region's host | Vertex's, e.g. `claude-haiku-4-5@20251001`; an `anthropic/` prefix is dropped | from each call's path |
+
+Every other harness falls through to the next gateway in the list, and the plan's hint says so. Cursor and Codex never can: Cursor's agent calls only Cursor's API, and Codex only OpenAI's Responses API.
+
+The judge, `analysis.model`, captures and compare's questions call `google/*` and `anthropic/*` models on Vertex too, from the host with the same token, in the publisher's region (`claude-haiku-4-5@20251001` keeps Vertex's id after the prefix). Other prefixes fall through. `reeval doctor` checks each entry's project and where its credentials come from; with `--online` it mints a token, names its account and checks the Vertex AI API is enabled in the project.
 
 ## Fallback
 
@@ -84,7 +106,7 @@ gateway: [vercel(), direct()],
 judge: { model: 'anthropic/claude-haiku-4-5', gateway: 'direct' },
 ```
 
-With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
+With a `gateway` list set, the judge's, `analysis.model`'s and captures' models take the first entry that can serve them, and only that gateway's key: `direct()` uses the provider's own key, `vercel()` Vercel's, and `vertex()` a token from Application Default Credentials. The judge also takes a `gateway` pin, in the config, a profile, a group, an eval or `c.judge()`; a judge model nothing in the list can serve stops the plan with exit 2.
 
 Without a list, reeval uses no gateway: the list is `[direct()]`, so a model takes only its provider's own key, as on [Judges](/reference/judges), and a model `direct()` can't serve stops the plan. A set `AI_GATEWAY_API_KEY` is never read until you add `vercel()`; the missing-key message says so.
 
@@ -107,7 +129,7 @@ Each cell resolved under a configured `gateway` or a pin records its gateway as 
 | Mistake | Message |
 |---|---|
 | An empty list | `gateway in reeval.config.ts must be a list of gateways in the order you prefer them, e.g. gateway: [direct()] (got [])` |
-| An unknown gateway | `gateway[0] in reeval.yaml is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel'. Did you mean 'vercel'?` |
+| An unknown gateway | `gateway[0] in reeval.yaml is "vercell", which isn't a gateway reeval knows: 'direct' or 'vercel' or 'vertex'. Did you mean 'vercel'?` |
 | A gateway listed twice | `gateway[1] in reeval.config.ts lists direct a second time. Each gateway is listed once, where you prefer it.` |
 | Settings a gateway doesn't take | `gateway[0] in reeval.yaml isn't a valid vercel(): Unrecognized key: "apikey" (got {"vercel":{"apikey":"x"}})` |
 | A harness pin that isn't a gateway | `cursor({ gateway }) names a gateway in the config's gateway list: 'direct' or 'vercel' (got 3)` |

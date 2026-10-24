@@ -1,18 +1,21 @@
 import { experimental_decide as decide } from 'ai'
 import { debugTrace } from '../debug/attempt.ts'
+import { type VertexSettings, vertexDecisionModel, vertexSettings } from '../gateway/vertex.ts'
 import type { GatewayName, JudgeModel, JudgeOptions } from '../types.ts'
 import { type JudgeState, judgeRoute } from './index.ts'
 
 type DecisionModel = Parameters<typeof decide>[0]['model']
 
-/** See `judgeRoute`: the provider's own package on direct, the AI Gateway on vercel. */
+/** See `judgeRoute`: the provider's own package on direct, the AI Gateway on vercel, Vertex AI on vertex. */
 async function resolveModel(
   model: Exclude<JudgeModel, { kind: 'fake-judge' }>,
   gateway: GatewayName | undefined,
+  vertex: VertexSettings | undefined,
 ): Promise<DecisionModel> {
   if (typeof model !== 'string') return model as DecisionModel
   const route = judgeRoute(model, process.env, 'judge model', gateway)
   if (route.kind === 'gateway') return model
+  if (route.kind === 'vertex') return vertexDecisionModel(model, vertex ?? vertexSettings())
   const id = model.slice(route.provider.length + 1)
   switch (route.provider) {
     case 'anthropic':
@@ -33,9 +36,10 @@ export async function scoreWithModel(
   providerOptions: JudgeOptions['providerOptions'],
   signal: AbortSignal,
   gateway?: GatewayName,
+  vertex?: VertexSettings,
 ): Promise<{ score: number; resolvedModel: string | undefined }> {
   const result = await decide({
-    model: await resolveModel(model, gateway),
+    model: await resolveModel(model, gateway, vertex),
     state,
     questions: { answer: { type: 'boolean', instructions: question } },
     providerOptions,

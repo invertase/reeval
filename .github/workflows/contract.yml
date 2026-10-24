@@ -30,6 +30,8 @@ on:
 
 permissions:
   contents: read
+  # Google's workload identity federation, for the Vertex rows' Application Default Credentials.
+  id-token: write
 
 jobs:
   contract:
@@ -58,11 +60,22 @@ jobs:
       XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
       # The *-gateway rows, when REEVAL_CONTRACT_HARNESSES names them.
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+      # The gated *-vertex rows: vertex() takes the project from GOOGLE_CLOUD_PROJECT, and the
+      # token from the credentials file the auth step writes.
+      GOOGLE_CLOUD_PROJECT: ${{ vars.GOOGLE_CLOUD_PROJECT }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
+      # Sets GOOGLE_APPLICATION_CREDENTIALS to a short-lived federated credentials file.
+      - if: env.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
       - if: inputs.versions == 'latest'
