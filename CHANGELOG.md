@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.14.0](https://github.com/invertase/reeval/compare/v0.13.0...v0.14.0) (2026-10-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* move questions to the eval's root and ask them of each attempt ([#543](https://github.com/invertase/reeval/issues/543))
+* **gateway:** vercel() for Claude Code and Codex, and gateway-routed judges ([#503](https://github.com/invertase/reeval/issues/503))
+* **egress:** default to 'proxy', which sends everything through the egress gateway ([#501](https://github.com/invertase/reeval/issues/501))
+
+### Features
+
+* **checks:** retry c.exec on a non-zero exit with retries and interval ([#542](https://github.com/invertase/reeval/issues/542)) ([311cd92](https://github.com/invertase/reeval/commit/311cd92eb7b0afc68413cefbe58eedebace6a58d))
+* **cli:** estimate cost as a range in reeval run --dry-run ([#519](https://github.com/invertase/reeval/issues/519)) ([4e18100](https://github.com/invertase/reeval/commit/4e181008384fa8b6ceaf991d2e657e51699c5dc0))
+* **egress:** default to 'proxy', which sends everything through the egress gateway ([#501](https://github.com/invertase/reeval/issues/501)) ([0cc02cb](https://github.com/invertase/reeval/commit/0cc02cbd66d5092b4072346e474728db3cd52f9b))
+* **gateway:** add the gateway list with direct(), plan-time resolution and pins ([#502](https://github.com/invertase/reeval/issues/502)) ([22e4d5a](https://github.com/invertase/reeval/commit/22e4d5abcb6a918082562956bf58573c57e73a80))
+* **gateway:** run Goose, OpenCode, fx and Grok Build on Vercel AI Gateway ([#504](https://github.com/invertase/reeval/issues/504)) ([4d89bed](https://github.com/invertase/reeval/commit/4d89bed31ec5c35e8d2a086679381220ef1ca012))
+* **gateway:** vercel() for Claude Code and Codex, and gateway-routed judges ([#503](https://github.com/invertase/reeval/issues/503)) ([9128d66](https://github.com/invertase/reeval/commit/9128d6620a18ef8c9864aca285c44d2e124c4598))
+* **language-runner:** add a record call for checks made in the eval's own language ([#511](https://github.com/invertase/reeval/issues/511)) ([c0dfacf](https://github.com/invertase/reeval/commit/c0dfacf39af022ed3d3292d63f3c7a14c244c585))
+* move questions to the eval's root and ask them of each attempt ([#543](https://github.com/invertase/reeval/issues/543)) ([c5f0ab7](https://github.com/invertase/reeval/commit/c5f0ab7cfecc035b4d04f14514390371dea34ef8))
+
+
+### Bug Fixes
+
+* **engine:** keep a worker up until the main process has its last message ([#524](https://github.com/invertase/reeval/issues/524)) ([cfa2fd5](https://github.com/invertase/reeval/commit/cfa2fd569c391f8b9242217959278b5bc4da1eff))
+* **install:** detect musl from the libc in use ([#522](https://github.com/invertase/reeval/issues/522)) ([d9990e1](https://github.com/invertase/reeval/commit/d9990e1b7e625b339cfd3201438748bf55954e77))
+* **install:** keep the user PATH REG_EXPAND_SZ on Windows ([#523](https://github.com/invertase/reeval/issues/523)) ([a12473b](https://github.com/invertase/reeval/commit/a12473bac68bec6d1be5630a18a88ece25046e7d))
+* **judge:** explain decision-model refusals, follow the attempt's judge in captures and scale Gemini clicks ([#544](https://github.com/invertase/reeval/issues/544)) ([d2f9bc9](https://github.com/invertase/reeval/commit/d2f9bc9e5a2308a42c7eac2ae6e4f259d3add5d1))
+* **language-runner:** keep a remote body's checks in its attempt record ([#507](https://github.com/invertase/reeval/issues/507)) ([9f094e0](https://github.com/invertase/reeval/commit/9f094e0241ba2ee19fab0f9d12248833de63c8f8))
+* **python:** name the wire types' schema sources with POSIX paths on every host ([#528](https://github.com/invertase/reeval/issues/528)) ([eee7c3d](https://github.com/invertase/reeval/commit/eee7c3d305a1cf3058e2f1299157646433214942))
+* **ui:** count a study as not gated, never pass ([#541](https://github.com/invertase/reeval/issues/541)) ([c2442eb](https://github.com/invertase/reeval/commit/c2442eb247898c0f8b2d4552bafa6519a6c98b9f))
+* **usage:** count reasoning tokens once, as part of output ([#525](https://github.com/invertase/reeval/issues/525)) ([4029d3d](https://github.com/invertase/reeval/commit/4029d3d6cbe5e4bf7672153a563716b04ffb2771))
+
 ## [0.13.0](https://github.com/invertase/reeval/compare/v0.12.0...v0.13.0) (2026-10-23)
 
 
