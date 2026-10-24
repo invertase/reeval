@@ -232,6 +232,8 @@ expected command to succeed, exit code 1
 
 Anything else throws `toSucceed() expects run.exec(...)`.
 
+`toSucceed` checks the exit code it's given once. For a command that can fail on a transient, such as a test that calls a model, give `c.exec` its `retries`: `expect(c.exec(cmd, { retries: 2 })).toSucceed()` passes when any try exits 0, and its message on a failure is the last try's. See [Retrying a command](/reference/attempt-context#retrying-a-command).
+
 ## toPass
 
 ```ts

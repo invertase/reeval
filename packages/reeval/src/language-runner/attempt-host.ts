@@ -53,7 +53,11 @@ async function perform(
         handles.set(handleId, handle)
         return { result: { handle: handleId } }
       }
-      const result = await c.exec(call.command)
+      const { retries, interval } = call
+      const result = await c.exec(call.command, {
+        ...(retries === undefined ? {} : { retries }),
+        ...(interval === undefined ? {} : { interval }),
+      })
       return { result }
     }
     case 'kill':

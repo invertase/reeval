@@ -285,6 +285,7 @@
           }
         },
         "checks": {
+          "description": "Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.",
           "type": "array",
           "items": {
             "type": "object",
@@ -300,6 +301,17 @@
               },
               "log": {
                 "$ref": "#/$defs/FileRef"
+              },
+              "retries": {
+                "description": "The `retries` it was given, when more than 0: it could run `retries + 1` times.",
+                "type": "number"
+              },
+              "tries": {
+                "description": "Every try, in order, when it was given `retries`; its log has each try's output.",
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/ExecTry"
+                }
               }
             },
             "required": ["command", "durationMs", "exitCode"]
@@ -1384,6 +1396,19 @@
         "tags",
         "todo"
       ]
+    },
+    "ExecTry": {
+      "description": "One run of a `c.exec` command that had `retries`.",
+      "type": "object",
+      "properties": {
+        "durationMs": {
+          "type": "number"
+        },
+        "exitCode": {
+          "type": "number"
+        }
+      },
+      "required": ["durationMs", "exitCode"]
     },
     "FamilyEffort": {
       "description": "The variant's effort against the control's, paired by case.",

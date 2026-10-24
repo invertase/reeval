@@ -85,14 +85,19 @@ class AttemptCallSend(TypedDict):
     prompt: str
 
 
-# `c.exec(command, { background? })`: a command in the sandbox. Replies with its exit code and
-# output, or with a handle when it runs in the background.
+# `c.exec(command, { background?, retries?, interval? })`: a command in the sandbox. Replies
+# with its exit code and output (the last try, with `retries`), or with a handle when it runs in
+# the background.
 class AttemptCallExec(TypedDict):
     # Leave it running and reply with its handle, not its output.
     background: NotRequired[bool]
     # A shell command, run in the workspace.
     command: str
+    # Milliseconds to wait before each extra try. Default 1000.
+    interval: NotRequired[float]
     op: Literal["exec"]
+    # Extra tries after a non-zero exit, a whole number from 0. Default 0.
+    retries: NotRequired[int]
 
 
 # `c.serve(command, port?)`: a background process and its port.

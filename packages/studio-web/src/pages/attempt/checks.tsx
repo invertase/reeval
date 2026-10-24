@@ -7,7 +7,7 @@ import {
   TerminalSquare,
 } from 'lucide-react'
 import { useState } from 'react'
-import { type AttemptRecord, formatDuration, type RunRecord } from 'reeval/view'
+import { type AttemptRecord, checkTries, formatDuration, type RunRecord } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { EmptyState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +23,7 @@ function Check({
   index: number
 }) {
   const ok = check.exitCode === 0
+  const tries = checkTries(check)
   const [open, setOpen] = useState(!ok)
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
@@ -37,6 +38,11 @@ function Check({
         <TerminalSquare className="size-4 text-muted-foreground" />
         <span className="text-xs text-muted-foreground">#{index + 1}</span>
         <code className="min-w-0 flex-1 truncate font-mono text-sm">{check.command}</code>
+        {tries ? (
+          <span className="text-xs text-muted-foreground" data-tries>
+            {tries}
+          </span>
+        ) : null}
         <Badge
           variant="outline"
           className={ok ? 'border-pass/30 text-pass' : 'border-fail/30 text-fail'}

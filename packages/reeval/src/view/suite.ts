@@ -15,7 +15,7 @@ import { EFFECT_MIN_COUNTED, liftInterval, round3 } from '../stats.ts'
 import type { ErrorKind, Outcome } from '../types.ts'
 import { cellEffort, cellSamples, contrastEffort, type EffortVerdict } from './effort.ts'
 import { caseLabel } from './family.ts'
-import { labelledJudgements } from './judgements.ts'
+import { checksByLabel, checkTries, labelledJudgements } from './judgements.ts'
 import { runOutcome } from './model.ts'
 
 /**
@@ -221,6 +221,12 @@ export type CheckResult = {
   effect: Effect | null
   /** Set when the check is a judge verdict. */
   judge: JudgeResult | null
+  /**
+   * A `toSucceed` check whose `c.exec` had `retries` and needed them: on one counted attempt how
+   * it ended (`passed on try 2 of 3`, `failed all 3 tries`), on several how many retried. Unset
+   * when none did.
+   */
+  retried?: string
 }
 
 /**
@@ -392,6 +398,17 @@ function checksOf(
         .map((j) => j.judgement),
     )
     const first = judged[0]
+    const notes = attempts.flatMap((a) => {
+      const check = checksByLabel(a).get(k.label)
+      const note = check && checkTries(check)
+      return note ? [note] : []
+    })
+    const retried =
+      attempts.length === 1
+        ? notes[0]
+        : notes.length
+          ? `retried in ${notes.length} of ${attempts.length} attempts`
+          : undefined
     return {
       path: `${base}/checks/${factSegment(k.label)}`,
       label: k.label,
@@ -415,6 +432,7 @@ function checksOf(
             scores: judged.map((j) => j.score),
           }
         : null,
+      ...(retried ? { retried } : {}),
     }
   })
 }

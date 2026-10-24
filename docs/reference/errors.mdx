@@ -258,7 +258,9 @@ A plugin `build` runs in preflight, like an `install` layer: a failing command f
 | `c.judge() state.checks names a command this attempt hasn't run: "npm tset"` | Name the command exactly as you passed it to `c.exec`, after running it. |
 | `c.judge() on gives the output, but state.output is false` | Drop `output: false`, or drop `on`. |
 | `expected file greet.js to exist` | The agent didn't create it. Check the transcript. |
-| `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. |
+| `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. A check that fails on a transient (a dropped model stream in the code under test) is still a failed check, not an infra error: give its `c.exec` [`retries`](/reference/attempt-context#retrying-a-command). |
+| `c.exec()'s retries must be a whole number, from 0 (got -1)` | Pass a whole number of extra tries. `interval` is 0 or more milliseconds. |
+| `c.exec()'s retries: can't be used with background: true, whose exit reeval doesn't wait for: drop one of them (got 2)` | Retry a foreground command; a background one has no exit to retry on. |
 | `expect(…).toSucceed() wasn't awaited. …` | Write `await expect(…)`. The eval fails even when the check passes. |
 | `judge score 0.40 is below 0.8 for "…" (…)` | The judge said no. Read its input in the attempt's `judge-input.json`. |
 | `Network is unreachable`, `connection refused` or `could not resolve host` in a check or the transcript, with nothing in the record's `egress.contacted` or `blocked` | Under the default, `'proxy'`, only HTTP(S) through the egress gateway leaves the sandbox, so raw TCP, UDP, SSH and database drivers get no connection. Set `egress: 'allow-all'` on the eval, or point the client at `HTTPS_PROXY`. The run's `proxy-only-egress` remark names the eval. See [Egress](/reference/egress#connections-that-never-reach-the-gateway). |

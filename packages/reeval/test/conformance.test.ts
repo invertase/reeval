@@ -283,7 +283,11 @@ describe('context goldens', () => {
           error,
           assertions,
           judgements: judgements.map(({ key: _, ...j }) => j),
-          checks: checks.map(({ command, exitCode }) => ({ command, exitCode })),
+          checks: checks.map(({ command, exitCode, retries, tries }) => ({
+            command,
+            exitCode,
+            ...(retries ? { retries, tries: tries?.map((t) => ({ exitCode: t.exitCode })) } : {}),
+          })),
         },
       })
       answered.set(

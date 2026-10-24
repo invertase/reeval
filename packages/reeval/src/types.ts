@@ -71,6 +71,17 @@ export type WebEventType = 'web-search' | 'web-fetch'
 
 export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 
+/** How `c.exec` reruns a command that exits non-zero, for a check that can fail on a transient. */
+export type ExecRetry = {
+  /** Extra tries after a non-zero exit, a whole number from 0. Default 0. */
+  retries?: number
+  /** Milliseconds to wait before each extra try. Default 1000. */
+  interval?: number
+}
+
+/** One run of a `c.exec` command that had `retries`. */
+export type ExecTry = { exitCode: number; durationMs: number }
+
 /** Live tab size for `c.capture()`. Default 1280×720 when the call and cascade omit `viewport`. */
 export type CaptureWindow = {
   /** In CSS pixels. */
@@ -217,7 +228,7 @@ export type TurnData = {
 
 export type Turn = TurnData & {
   /** Runs in the eval's sandbox. Same as `c.exec`. */
-  exec(command: string): Promise<ExecResult>
+  exec(command: string, options?: ExecRetry): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
 }
 
@@ -394,9 +405,16 @@ export type AttemptContext = {
    * `options.artifacts` is a list of `c.capture()` handles or names, or `true` for all of them.
    */
   judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
-  exec(command: string): Promise<ExecResult>
+  /**
+   * Runs `command` in the sandbox. With `retries`, a non-zero exit runs it again, up to that
+   * many extra times, `interval` ms apart; it resolves with the last try.
+   */
+  exec(command: string, options?: ExecRetry & { background?: false }): Promise<ExecResult>
   exec(command: string, options: { background: true }): Promise<BackgroundHandle>
-  exec(command: string, options?: { background?: boolean }): Promise<ExecResult | BackgroundHandle>
+  exec(
+    command: string,
+    options?: ExecRetry & { background?: boolean },
+  ): Promise<ExecResult | BackgroundHandle>
   /**
    * Starts `command` in the background and returns its port. A given `port` is used; omit it
    * and reeval allocates one. Sets `PORT` so a bash string can use `$PORT`.
@@ -2289,7 +2307,15 @@ export type EvalRecord = {
   turns: TurnRecord[]
   /** Workspace changes over the whole eval. */
   diff: Diff | null
-  checks: Array<{ command: string; durationMs: number } & ExecResult>
+  /** Each foreground `c.exec`: its last try's output, and `durationMs` over all its tries. */
+  checks: Array<
+    { command: string; durationMs: number } & ExecResult & {
+        /** The `retries` it was given, when more than 0. */
+        retries?: number
+        /** Every try, in order, when it was given `retries`. */
+        tries?: Array<ExecResult & { durationMs: number }>
+      }
+  >
   /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
   /** With `retries` when transient provider errors were retried on the way to the verdict. */

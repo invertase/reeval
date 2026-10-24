@@ -2,11 +2,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { pkgRoot, runCli } from './helpers.ts'
 import { EXAMPLES, exampleDirs, examples, SHARED } from './support/examples.ts'
 
 test('every shared profile is in the table', async () => {
-  const { profiles } = await import(join(examples, 'profiles.ts'))
+  const { profiles } = await import(pathToFileURL(join(examples, 'profiles.ts')).href)
   assert.deepEqual(Object.keys(profiles).sort(), Object.keys(SHARED).sort())
 })
 

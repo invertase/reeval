@@ -1,0 +1,58 @@
+{
+  "kind": "reeval-insights",
+  "schemaVersion": 1,
+  "runId": "20261024T153227Z_10ab026_cursor-agent_s9jw",
+  "model": "none",
+  "promptVersion": "none",
+  "factsHash": "sha256:32372a721933ba5df57c62e2802ed87f81618ccc3aa08f95f3788e75bcdba7e9",
+  "createdAt": "2026-10-24T15:32:59.080Z",
+  "usage": {
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "costUsd": null
+  },
+  "headline": null,
+  "evals": [],
+  "remarks": [
+    {
+      "id": "faf8bd289fb52c86d261daef1d135dd19f0f9911a053c7e8fc4f8593645fe48b",
+      "evalId": "evals%2Fcases.eval.ts › greets %25s",
+      "kind": "too-few-tries",
+      "severity": "suggestion",
+      "text": "With-house-greeting on fake passed 1 of 1 try and plain 0 of 1: too few tries to tell whether the difference holds.",
+      "evidence": [
+        "evals%2Fcases.eval.ts › greets %25s/Ada/fake+with-house-greeting+docker",
+        "evals%2Fcases.eval.ts › greets %25s/Ada/fake+plain+docker"
+      ],
+      "fix": {
+        "at": "source:evals/cases.eval.ts#L11",
+        "edit": "set runs: 4 or more, so each side counts at least 4 tries"
+      },
+      "origin": "deterministic",
+      "firstSeenRun": "20261024T153227Z_10ab026_cursor-agent_s9jw",
+      "printed": false
+    },
+    {
+      "id": "4f023638b990e22850c2b781aeadb7866f8347069c90003c4b809e558b8c2fe3",
+      "evalId": "evals%2Fskill.eval.ts › house greeting › greets in the house style",
+      "kind": "too-few-tries",
+      "severity": "suggestion",
+      "text": "With-house-greeting on fake passed 1 of 1 try and plain 0 of 1: too few tries to tell whether the difference holds.",
+      "evidence": [
+        "evals%2Fskill.eval.ts › house greeting › greets in the house style/fake+with-house-greeting+docker",
+        "evals%2Fskill.eval.ts › house greeting › greets in the house style/fake+plain+docker"
+      ],
+      "fix": {
+        "at": "source:evals/skill.eval.ts#L25",
+        "edit": "set runs: 4 or more, so each side counts at least 4 tries"
+      },
+      "origin": "deterministic",
+      "firstSeenRun": "20261024T153227Z_10ab026_cursor-agent_s9jw",
+      "printed": false
+    }
+  ],
+  "validation": {
+    "dropped": 0,
+    "regenerated": 0
+  }
+}

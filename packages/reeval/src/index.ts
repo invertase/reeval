@@ -50,6 +50,7 @@ export type {
   EvalFn,
   EvalOptions,
   ExecResult,
+  ExecRetry,
   GroupOptions,
   HarnessData,
   HarnessEdit,

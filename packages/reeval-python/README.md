@@ -110,6 +110,12 @@ async def lands(c: AttemptContext) -> None:
     await expect(await c.exec("python greet.py")).to_succeed()
 ```
 
+`c.exec(cmd, retries=2, interval=2)` runs a command that exits non-zero again, up to 2 more
+times, 2 seconds apart (`interval` is seconds or a timedelta, one second by default), and returns
+the last try. Use it for a check that can fail on a transient, such as a test that calls a model:
+`expect(c.exec("pytest -q tests/hidden", retries=2)).to_succeed()`. Any non-zero exit retries,
+and the record and output say `passed on try 2 of 3`.
+
 `expect.poll` retries a matcher until it passes, every `interval` until `timeout` (one second by
 default). Hand it a function that returns one `c.read_file(…)` or `c.exec(…)`, and reeval reads or
 runs it again on each try; it works the same in both kinds of body. Check the output with the

@@ -8,6 +8,7 @@ import type {
   EgressRecord,
   EnvironmentRecord,
   EvalCompareMeta,
+  ExecTry,
   FileChange,
   JudgeArtifactRef,
   McpStartup,
@@ -215,7 +216,20 @@ export type AttemptRecord = {
   judgements: JudgementRecord[]
   /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
   startRetries?: StartRetry[]
-  checks: Array<{ command: string; exitCode: number; durationMs: number; log?: FileRef }>
+  /**
+   * Each foreground `c.exec`: its last try's exit code, and `durationMs` over all its tries. With
+   * `retries`, `tries` has each try's `{ exitCode, durationMs }` and the log each try's output.
+   */
+  checks: Array<{
+    command: string
+    exitCode: number
+    durationMs: number
+    log?: FileRef
+    /** The `retries` it was given, when more than 0: it could run `retries + 1` times. */
+    retries?: number
+    /** Every try, in order, when it was given `retries`; its log has each try's output. */
+    tries?: ExecTry[]
+  }>
   /** Every `expect` and `expect.soft` matcher call that settled, in call order; unset with none. */
   assertions?: AssertionRecord[]
   /** Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`. */

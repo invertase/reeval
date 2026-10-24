@@ -296,6 +296,35 @@ export function checkLabels(
   })
 }
 
+/**
+ * Each `toSucceed` label's `c.exec` check, by position, when the attempt's `toSucceed` assertions
+ * are exactly as many as its checks; empty otherwise.
+ */
+export function checksByLabel<C>(
+  a: { checks: readonly C[] } & Pick<AttemptRecord, 'assertions'>,
+): Map<string, C> {
+  const succeeds = (a.assertions ?? []).filter((x) => /(^|\.)toSucceed$/.test(x.matcher))
+  if (succeeds.length !== a.checks.length) return new Map()
+  return new Map(succeeds.map((x, i) => [x.label, a.checks[i] as C]))
+}
+
+/**
+ * How a `c.exec` given `retries` ended: `passed on try 2 of 3`, `failed all 3 tries`, or null
+ * when it had none or passed on its first try.
+ */
+export function triesNote(exitCode: number, tried: number, of: number): string | null {
+  if (of <= 1 || (exitCode === 0 && tried <= 1)) return null
+  if (exitCode === 0) return `passed on try ${tried} of ${of}`
+  return tried >= of ? `failed all ${of} tries` : `failed on try ${tried} of ${of}`
+}
+
+/** {@link triesNote} for a recorded check. */
+export const checkTries = (c: {
+  exitCode: number
+  retries?: number
+  tries?: readonly unknown[]
+}) => (c.retries && c.tries ? triesNote(c.exitCode, c.tries.length, c.retries + 1) : null)
+
 /** A check's command on one line: the first non-empty line, clipped; its log has the rest. */
 export function commandLine(command: string, max = 80): string {
   const lines = command

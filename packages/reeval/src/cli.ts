@@ -350,7 +350,7 @@ async function runCommand(
     if (setup.resume === undefined) await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
-  const { engineRun, plan, sandboxVersions, budgetReached, live, questions } = executed
+  const { engineRun, plan, sandboxVersions, budgetReached, cutShort, live, questions } = executed
   invocation.unhandledErrors = engineRun.unhandledErrors
   const engines = [
     ...new Set(plan?.sandboxes.flatMap((s) => (s.kind === 'docker' ? [s.engine ?? 'docker'] : []))),
@@ -365,7 +365,7 @@ async function runCommand(
     return EXIT.ok
   }
 
-  const stopped = interrupted || engineRun.cancelled
+  const stopped = cutShort || engineRun.cancelled
   // Asked of attempts that have all finished; a cancelled run answers nothing.
   const answers = questions && !stopped ? await questions.settle() : undefined
   const { lockfiles } = await import('./history/state.ts')
@@ -969,6 +969,8 @@ async function executeRun(
     budgetTimer.unref()
   }
   let engineRun: EngineRun
+  // A signal once the engine has returned finds no attempt left to cancel: the run isn't cut short.
+  let cutShort = false
   try {
     engineRun = await runEngine({
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
@@ -1035,6 +1037,7 @@ async function executeRun(
         process.on('SIGTERM', onSignal)
       },
     })
+    cutShort = interrupted
     live?.phase('finishing')
   } catch (error) {
     live?.remove()
@@ -1062,6 +1065,7 @@ async function executeRun(
     plan,
     sandboxVersions,
     budgetReached: () => reached,
+    cutShort,
     live,
     questions,
   }

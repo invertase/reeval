@@ -2378,6 +2378,33 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'assert/exec-retries',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    canary: /flaky passes: expected command to succeed, exit code 1\n--- stderr ---\ntransient/,
+    record: ({ run, runDir, stdout }) => {
+      const check = (name: string) => run.evals.find((e) => e.name === name)?.attempts[0]?.checks[0]
+      const lands = check('lands')
+      assert.equal(lands?.exitCode, 0)
+      assert.equal(lands?.retries, 2)
+      assert.deepEqual(
+        lands?.tries?.map((t) => t.exitCode),
+        [1, 0],
+      )
+      assert.ok(lands?.log)
+      const log = readFileSync(join(runDir, lands.log.path), 'utf8')
+      assert.match(log, /^exit 0, passed on try 2 of 3$/m)
+      assert.match(log, /^try 1 of 3: exit 1 after .+\n--- stdout\n--- stderr\ntransient$/m)
+      const canary = check('canary')
+      assert.equal(canary?.exitCode, 1)
+      assert.equal(canary?.retries, undefined, 'a check without retries records no tries')
+      assert.equal(canary?.tries, undefined)
+      assert.match(blockOf(stdout, 'lands'), /^ {2}flaky passes +passed on try 2 of 3$/m)
+      const summary = readFileSync(join(runDir, 'summary.md'), 'utf8')
+      assert.match(summary, /- Check flaky passes exit 0 \(passed on try 2 of 3\): `test -f/)
+    },
+  },
+  {
     dir: 'assert/called-skill',
     tiers: ['fake'],
     env: 'plain',

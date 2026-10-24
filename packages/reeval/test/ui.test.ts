@@ -7,6 +7,7 @@ import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
 import type { EvalResult, Progress, ReevalEvent } from '../src/ui/events.ts'
+import { progressLine } from '../src/ui/format.ts'
 import { NO_MODEL_HINT } from '../src/ui/layout.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
@@ -466,6 +467,22 @@ test('browser-download names the binary, version, size and cache', () => {
     agent,
     /downloading chrome-headless-shell 140\.0\.7339\.185 128\.0 MB \/ 274\.0 MB → ~\/\.cache\/reeval/,
   )
+})
+
+test('a check with retries says which try it ended on', () => {
+  const line = (exitCode: number, tried?: number, tries?: number) =>
+    progressLine(colors(false), {
+      kind: 'check-end',
+      command: 'npm test',
+      exitCode,
+      ms: 2000,
+      ...(tried === undefined ? {} : { try: tried, tries }),
+    })
+  assert.equal(line(0), '$ npm test  exit 0 2s')
+  assert.equal(line(0, 1, 3), '$ npm test  exit 0 2s', 'a first-try pass needs no note')
+  assert.equal(line(0, 2, 3), '$ npm test  exit 0 2s · passed on try 2 of 3')
+  assert.equal(line(1, 3, 3), '$ npm test  exit 1 2s · failed all 3 tries')
+  assert.equal(line(1, 2, 3), '$ npm test  exit 1 2s · failed on try 2 of 3')
 })
 
 describe('insights progress', () => {

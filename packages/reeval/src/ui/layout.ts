@@ -274,16 +274,24 @@ function evidence(c: Colors, cell: CellResult, indent: number, more = true): Ite
     })
     const assertion = assertionOf(k)
     if (assertion) items.push({ indent: indent + 2, free: t(assertion, c.dim) })
+    if (k.retried) items.push({ indent: indent + 2, free: t(k.retried, c.dim) })
   }
   for (const err of cell.errors) {
     items.push({ indent, cells: [errorKind(err), t(errorText(err), c.dim)] })
   }
-  const passed = cell.checks.filter((k) => !failing(k)).length
+  items.push(...retriedItems(c, cell, indent))
+  const passed = cell.checks.filter((k) => !failing(k) && !k.retried).length
   if (more && passed && items.length) {
     items.push({ indent, free: t(`+${passed} more passed`, c.dim) })
   }
   return items
 }
+
+/** Passing checks that needed their `c.exec` retries: `npm test  passed on try 2 of 3`. */
+const retriedItems = (c: Colors, cell: CellResult, indent: number): Item[] =>
+  cell.checks
+    .filter((k) => !failing(k) && k.retried)
+    .map((k) => ({ indent, cells: [checkLabel(k.label), t(k.retried ?? '', c.dim)] }))
 
 /** A control with no environment of its own is the baseline the variants change. */
 const armOf = (cell: CellResult) =>
@@ -555,7 +563,7 @@ function cellsBody(
 
 /** A single eval with one cell: its tries, and on anything but a clean pass, the evidence. */
 function resultsBody(c: Colors, cell: CellResult, indent: number): string[] {
-  if (clean(cell)) return []
+  if (clean(cell)) return table(retriedItems(c, cell, indent))
   const items: Item[] = []
   if (cell.attempts > 1) {
     items.push({ indent, cells: [plural(cell.attempts, 'try', 'tries'), cellCount(cell)] })
