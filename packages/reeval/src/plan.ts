@@ -1,10 +1,13 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
 import { acrossOf, type PairAttempt, pairsOf, plannedSides } from './compare/pairs.ts'
 import { questionShows, resolveQuestionState } from './compare/state.ts'
+import { type CostedAttempt, type PlanCost, planCost } from './cost.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { fallbackHint } from './gateway/resolve.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
+import type { RunRecord } from './history/types.ts'
+import type { Prices } from './prices.ts'
 import { clip, formatDuration } from './text.ts'
 import type {
   Budget,
@@ -33,7 +36,7 @@ import { EFFORT_ALPHA, EFFORT_MIN_RUNS } from './view/effort.ts'
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
 const DEFAULT_FAKE_MS = 1000
 const DEFAULT_SANDBOX_SETUP_MS = 30_000
-/** The most recent runs whose durations feed the estimate. */
+/** The most recent runs whose durations and tokens feed the estimates. */
 const HISTORY_RUNS = 30
 
 export type PlanRow = {
@@ -53,6 +56,8 @@ export type RunPlan = {
   attempts: number
   /** Serial: every attempt one after another. */
   estimateMs: number
+  /** Agent and judge tokens, and their cost when there are prices; only for `--dry-run`. */
+  cost?: PlanCost
   concurrency: number
   budget: Budget
   warnings: string[]
@@ -84,8 +89,7 @@ const median = (values: number[]) => {
 }
 
 /** Attempt durations from the latest recorded and scratch runs, by eval and harness. */
-export async function historyDurations(root: string, historyDir: string) {
-  const records = await recentRecords([historyDir, scratchDir(root)], HISTORY_RUNS)
+function historyDurations(records: RunRecord[]) {
   const byEval = new Map<string, number[]>()
   const byHarness = new Map<string, number[]>()
   const push = (map: Map<string, number[]>, key: string, ms: number) =>
@@ -120,9 +124,15 @@ export async function buildPlan(options: {
   historyDir: string
   questionModel?: string | null
   insights?: PlanInsights | null
+  /** The run's judge model, `fake` for a fake judge; null or unset when there's none. */
+  judgeModel?: string | null
+  /** Prices for the cost estimate, which only `--dry-run` shows; unset leaves it out. */
+  prices?: Prices
 }): Promise<RunPlan> {
   const { planned } = options
-  const estimate = await historyDurations(options.root, options.historyDir)
+  const records = await recentRecords([options.historyDir, scratchDir(options.root)], HISTORY_RUNS)
+  const estimate = historyDurations(records)
+  const costed: CostedAttempt[] = []
   const rows = new Map<string, PlanRow>()
   const cells = new Set<string>()
   const warnings = new Set<string>()
@@ -155,6 +165,7 @@ export async function buildPlan(options: {
     attempts++
     cells.add(`${id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind, attempt.sandbox.kind)
+    costed.push({ id, cell: attempt.cell, harness: attempt.harness })
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
     harnesses.add(attempt.cell.harness)
@@ -193,6 +204,9 @@ export async function buildPlan(options: {
     cells: cells.size,
     attempts,
     estimateMs,
+    ...(options.prices
+      ? { cost: planCost(costed, records, options.judgeModel ?? null, options.prices) }
+      : {}),
     concurrency: options.concurrency,
     budget: options.budget,
     warnings: [...warnings],
@@ -465,6 +479,8 @@ export type PlanDocument = {
   budget: { attempts: number | null; duration: Duration | null; fits: boolean }
   concurrency: number
   estimateMs: number
+  /** What the run should cost: token and USD ranges, how they were reached, and each cell's part. */
+  cost?: PlanCost
   warnings: string[]
   /** Sandboxes that run as root or with capabilities added back, one per level that set them. */
   sandboxWarnings: SandboxWarning[]
@@ -548,6 +564,7 @@ export function planDocument(
     },
     concurrency: plan.concurrency,
     estimateMs: plan.estimateMs,
+    ...(plan.cost ? { cost: plan.cost } : {}),
     warnings: plan.warnings,
     sandboxWarnings: plan.sandboxWarnings,
     hints: plan.hints,

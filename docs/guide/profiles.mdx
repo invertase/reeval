@@ -104,6 +104,18 @@ hint: 18 evals run more than once with the default gate, so every attempt must p
 
 `--dry-run --json` prints the same plan as one JSON document, with every cell.
 
+## Check what it costs
+
+```text
+plan  profile pr (--profile) · 26 evals · 27 cells · 27 attempts · ~5m 37s serial (~1m 24s at concurrency 4) · budget 20 attempts ✗
+…
+cost  estimated $1–15 at prices.json over models.dev list prices, judge included · no history, rough
+```
+
+The plan ends with a cost range, agent and judge together. Cells that ran before are estimated from their past tokens, the rest from a typical coding attempt, so the range is wide until there's history.
+
+Prices come from models.dev when the plan prints, with your own file in `REEVAL_PRICES` over them (Cursor's models need one). A model with no price shows as tokens, and the dollars say what they cover. It's an estimate, not your bill: see [the cost estimate](/reference/cli/run#the-cost-estimate).
+
 ## Cap a run with a budget
 
 ```bash

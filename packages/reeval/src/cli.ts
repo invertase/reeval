@@ -18,6 +18,7 @@ import {
   parseDuration,
   requireConfig,
   resolveConcurrency,
+  runJudgeModel,
   selectProfile,
   UsageError,
 } from './config.ts'
@@ -30,7 +31,7 @@ import { gatewayScope, resolveModelGateway } from './gateway/models.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
-import { unusedGatewayKey } from './judge/index.ts'
+import { judgeModelName, unusedGatewayKey } from './judge/index.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, plannedSandboxes } from './options.ts'
 import type { RunPlan } from './plan.ts'
@@ -184,6 +185,15 @@ async function run(argv: string[]): Promise<number> {
   if (command === 'clean') return cleanCommand(values, configPath)
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run reeval --help.`)
   return runCommand(values, configPath, filters)
+}
+
+/** The dry run's prices, fetched only when a planned attempt or the judge has anything to price. */
+async function dryRunPrices(planned: PlannedItem[], judgeModel: string | null) {
+  const { needsPrices } = await import('./cost.ts')
+  const harnesses = planned.filter((p) => !p.attempt.plan.skip).map((p) => p.attempt.harness)
+  if (!needsPrices(harnesses, judgeModel)) return { table: null, why: 'nothing to price' }
+  const { loadPrices } = await import('./prices.ts')
+  return loadPrices()
 }
 
 /** Asks a yes/no question on the terminal; anything but y or yes is no. */
@@ -715,6 +725,8 @@ async function executeRun(
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
     const asks = skipped.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
     const models = asks ? await import('./analysis/model.ts') : undefined
+    const judge = runJudgeModel(config, profile)
+    const judgeModel = judge === undefined ? null : judgeModelName(judge)
     plan = await buildPlan({
       planned: skipped,
       profile,
@@ -724,6 +736,8 @@ async function executeRun(
       historyDir: config.history.dir,
       questionModel: models?.questionModelLabel(config) ?? null,
       insights: await planInsights(config, setup.insights),
+      judgeModel,
+      ...(setup.dryRun ? { prices: await dryRunPrices(skipped, judgeModel) } : {}),
     })
     plan.runId = runId
     if (plan.insights) {
@@ -788,6 +802,9 @@ async function executeRun(
         const names = down.map((e) => engineSpec(e).name).join(' and ')
         lines.push(`images  not checked: ${names} ${down.length === 1 ? 'is' : 'are'} not running`)
       }
+      const { costLine } = await import('./cost.ts')
+      const cost = plan.cost && costLine(plan.cost)
+      if (cost) lines.push(cost)
     }
     if (setup.dryRun && plan.insights) {
       const { formatTokens } = await import('./usage.ts')

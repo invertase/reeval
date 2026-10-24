@@ -39,6 +39,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `REEVAL_HEARTBEAT` | | Plain mode's "still running" line after silence, e.g. `30s`. Default `60s`; `0` turns it off |
 | `REEVAL_DEBUG` | | `1` streams the hidden engine's output and the Docker sandbox and image-build logs to stderr, and prints stacks for unexpected errors |
 | `REEVAL_MCP_TOKEN` | `--token` | `reeval mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |
+| `REEVAL_PRICES` | | `reeval run --dry-run`'s cost estimate: a JSON file of USD per million tokens by model id, whose prices win over [models.dev](https://models.dev)'s, or `none` for tokens only and no fetch. A relative path is from the working directory; a field other than `input`, `output`, `cache_read` and `cache_write` exits 2. See [the cost estimate](/reference/cli/run#the-cost-estimate) |
 | `REEVAL_NO_REPORT_HINT` | | `1` hides the line suggesting `reeval report` after an infra error or a crash |
 | `REEVAL_RAW_TRANSCRIPT` | | `1` also writes the harness's unnormalised stream to `transcript.raw.jsonl` |
 | `REEVAL_CAPTURE_BROWSER` | | `0` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. Same as `capture: { browser: false }` |

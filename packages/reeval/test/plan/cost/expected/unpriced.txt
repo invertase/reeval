@@ -1,0 +1,18 @@
+no profile · 2 evals · 6 cells · 6 attempts
+evals/cost.eval.ts › greets         cursor:my-model/-/docker           control  gated  ×1
+                                    cursor:gpt-5.6-luna-high/-/docker  control  gated  ×1
+                                    fake/-/docker                      control  gated  ×1
+evals/cost.eval.ts › fixes the bug  cursor:my-model/-/docker           control  gated  ×1
+                                    cursor:gpt-5.6-luna-high/-/docker  control  gated  ×1
+                                    fake/-/docker                      control  gated  ×1
+excluded: —
+image docker · cursor · 2 evals
+  base  reeval-sandbox:cursor-0.1.6  (reeval's image: built when missing or when its base changed)
+cost  $0.02–0.17 priced (gpt-5.6-luna-high only) at prices.json over models.dev list prices; my-model: 0.6–4.1M tokens, typesafe-ai/jev: up to 372k tokens, no list price · no history, rough
+prices prices.json over models.dev · unpriced my-model 606000–4040000, typesafe-ai/jev 0–372000 · past 0 runs, 0 attempts
+  evals/cost.eval.ts › greets         cursor:my-model/-/docker           my-model           judge typesafe-ai/jev  typical  ×1  agent 303000–2020000 tokens $—             judge 0–62000 tokens $—
+  evals/cost.eval.ts › greets         cursor:gpt-5.6-luna-high/-/docker  gpt-5.6-luna-high  judge typesafe-ai/jev  typical  ×1  agent 303000–2020000 tokens $0.0123–0.082  judge 0–62000 tokens $—
+  evals/cost.eval.ts › greets         fake/-/docker                      fake               judge typesafe-ai/jev  free     ×1  agent 0–0 tokens $0–0                      judge 0–62000 tokens $—
+  evals/cost.eval.ts › fixes the bug  cursor:my-model/-/docker           my-model           judge typesafe-ai/jev  typical  ×1  agent 303000–2020000 tokens $—             judge 0–62000 tokens $—
+  evals/cost.eval.ts › fixes the bug  cursor:gpt-5.6-luna-high/-/docker  gpt-5.6-luna-high  judge typesafe-ai/jev  typical  ×1  agent 303000–2020000 tokens $0.0123–0.082  judge 0–62000 tokens $—
+  evals/cost.eval.ts › fixes the bug  fake/-/docker                      fake               judge typesafe-ai/jev  free     ×1  agent 0–0 tokens $0–0                      judge 0–62000 tokens $—

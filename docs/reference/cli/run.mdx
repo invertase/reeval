@@ -18,7 +18,7 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
                               (parts of one kind OR; a name and a cell key are one kind)
   --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
                               default: defaultProfile.ci in CI, else defaultProfile.local)
-  --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
+  --dry-run                   Print the plan (evals, cells, attempts, time and cost) and exit 0;
                               with --json, as one JSON document (every cell, and what's excluded)
   --json                      Print the run's results (suiteResult from reeval/view) as one JSON
                               document on stdout when it ends; progress goes to stderr
@@ -93,6 +93,39 @@ images  4 sandbox images: 1 ready, 3 to build
   + python · cursor                     to build: from python:3.12-slim, on python:3.12-slim (f77ac9e44ae9)
   …
 ```
+
+## The cost estimate
+
+```text
+cost  estimated $1.20–9.00 at prices.json over models.dev list prices, judge included · no history, rough
+cost  $0.77–6.12 priced (claude-sonnet-5, gpt-5.6-luna, judge) at models.dev list prices; composer-2.5: 1–13M tokens, no list price · no history, rough
+cost  estimated 5–38M tokens, judge included · no prices: models.dev unreachable, next try in 60m · no history, rough
+```
+
+`--dry-run` ends its plan with what the run should cost: tokens, priced in USD where it has a price for the model. It's an estimate for deciding whether to run, not your bill: subscriptions and included usage, negotiated prices and re-runs aren't in it.
+
+| Part | Where its tokens come from |
+|---|---|
+| Agent | The same eval and cell's counted attempts in the last 30 runs (recorded and scratch), else the same eval on that harness: their middle half, never narrower than −20% / +25% of the median. With neither, a typical coding attempt: 300k–2M prompt tokens, mostly cached, and 3–20k out |
+| Judge | As many calls an attempt as the eval's past attempts made, on their model, else 0–1 calls on the run's `judge.model`; 5–60k tokens in and 0.5–2k out a call |
+
+When some models have no price, the line doesn't add up to a total: it says what the dollars cover (`priced (judge only)`, `priced (claude-sonnet-5, judge)`) and lists each unpriced model's tokens. Reasoning tokens are priced as the output they're part of.
+
+<Warning>
+Without history, judge calls are priced on the run's `judge.model`, even for an eval or group that sets its own. Once the eval has run, its past judge calls set the model.
+</Warning>
+
+reeval keeps no prices of its own, and never writes one to a record. The dry run looks them up as it prints:
+
+- **[models.dev](https://models.dev)**, by default: the Anthropic, OpenAI, Google and xAI list prices, and Vercel AI Gateway's `provider/model` ids, cached for a day in reeval's host cache directory. The request sends nothing about your project, gives up after 2 seconds or 32 MB, and goes through `HTTPS_PROXY` when `NODE_USE_ENV_PROXY=1` is set, as the judge's calls do; a failure isn't retried for an hour. Offline, or when models.dev answers without prices, it uses an older copy and says so (`models.dev list prices of 2026-10-20 (offline)`, `(models.dev answered HTTP 500)`); with none, the line is tokens only.
+- **Your own**, with `REEVAL_PRICES=prices.json`: USD per million tokens by model id, in models.dev's field names (`input`, `output`, `cache_read`, `cache_write`), over models.dev's. A relative path is from the working directory. Any other field, ids that differ only in case, or a file that isn't such an object stops the dry run with exit 2. A model in the file takes its price from there, and every other from models.dev. Cursor's models aren't on models.dev, so this is how they get a price. When models.dev can't be reached, the file's prices are used alone. `REEVAL_PRICES=none` is tokens only, and fetches nothing.
+- **Model ids** match as written (`anthropic/claude-sonnet-4.5`) or without the `provider/` prefix, case-insensitively and without a trailing effort (`gemini-3.8-flash-medium`), and Cursor's `params: { fast: 'true' }` looks up `composer-2.5-fast`. The fake agent and judge cost nothing, and compare questions and insights, cents, aren't counted.
+
+```json title="prices.json"
+{ "composer-2.5": { "input": 0.5, "cache_read": 0.2, "output": 2.5 } }
+```
+
+`--dry-run --json` has the detail under `cost`: `tokens` and `usd` as `{ low, high }` (`usd` null without prices), `agent` and `judge` each with `tokens` and `usd`, `unpricedTokens`, `attempts` by basis (`history`, `typical`, `free`), `pastRuns`, `pastAttempts`, `unpriced` (each model with no price and its `tokens`), `prices` (`modelsDev`, with `fetchedAt`, `stale` and, when stale, `why` the fetch failed, or only `why` there's no copy; and the `REEVAL_PRICES` `file`; or `why` there are no prices), and `cells`, each with its `model`, `judgeModel`, `basis`, `samples`, `attempts`, `agent` and `judge`.
 
 ## Results as JSON
 

@@ -13,6 +13,12 @@ import { syncPythonFixtureProject } from './support/python-fixture.ts'
 
 /** The plan as on a host without Docker, whose image stages name the tags they'd build. */
 const NO_DOCKER = { DOCKER_HOST: 'unix:///nonexistent/reeval-plan.sock' }
+/** The cost cases' Composer price, over a models.dev cache in the project, so none fetches it. */
+const PRICES = { REEVAL_PRICES: 'prices.json', XDG_CACHE_HOME: '.cache' }
+const modelsDev = async (dir: string) => {
+  const { seedModelsDev } = await import('./support/cost.ts')
+  seedModelsDev(dir)
+}
 
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
@@ -183,6 +189,39 @@ export const cases: PlanCase[] = [
     name: 'empty-control',
     args: ['--config', 'reeval.empty.config.ts', 'evals/empty.eval.ts'],
   },
+  { dir: 'cost', name: 'no-history', args: [], cost: true, env: PRICES, prepare: modelsDev },
+  {
+    dir: 'cost',
+    name: 'history',
+    args: [],
+    cost: true,
+    env: PRICES,
+    async prepare(dir) {
+      await modelsDev(dir)
+      const { writePastCostRuns } = await import('./support/cost.ts')
+      writePastCostRuns(dir)
+    },
+  },
+  {
+    dir: 'cost',
+    name: 'unpriced',
+    args: ['--config', 'reeval.unpriced.config.ts'],
+    cost: true,
+    env: PRICES,
+    prepare: modelsDev,
+  },
+  {
+    dir: 'cost',
+    name: 'file-offline',
+    args: [],
+    cost: true,
+    env: PRICES,
+    async prepare(dir) {
+      const { seedModelsDevFailure } = await import('./support/cost.ts')
+      seedModelsDevFailure(dir)
+    },
+  },
+  { dir: 'cost', name: 'tokens-only', args: [], cost: true },
   {
     dir: 'resume',
     name: 'stopped-staging',
@@ -203,7 +242,10 @@ const CLIS = availableParallelism()
 describe('plan snapshots', { concurrency: CLIS }, () => {
   for (const c of cases) {
     test(`${c.dir}: ${c.name}`, async () => {
-      matchFile(`plan/${c.dir}/expected/${c.name}.txt`, renderPlan(await planJson(c)))
+      matchFile(
+        `plan/${c.dir}/expected/${c.name}.txt`,
+        renderPlan(await planJson(c), { cost: c.cost ?? false }),
+      )
     })
   }
 })
@@ -218,6 +260,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'budget',
       'concurrency',
       'estimateMs',
+      'cost',
       'warnings',
       'sandboxWarnings',
       'hints',
