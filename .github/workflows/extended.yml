@@ -51,6 +51,11 @@ jobs:
             packages/reeval-python/uv.lock
             packages/reeval/test/features/python-sdk/hello/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdks/go/go.mod
+          # The SDK has no dependencies, so there's no go.sum to key a cache on.
+          cache: false
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
         working-directory: packages/reeval
         run: |
@@ -98,6 +103,11 @@ jobs:
             packages/reeval-python/uv.lock
             packages/reeval/test/features/python-sdk/hello/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdks/go/go.mod
+          # The SDK has no dependencies, so there's no go.sum to key a cache on.
+          cache: false
       - if: matrix.part == 'tiers'
         run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and reeval's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
       - run: scripts/ci-os.sh ${{ matrix.part }}
@@ -125,6 +135,11 @@ jobs:
             packages/reeval-python/uv.lock
             packages/reeval/test/features/python-sdk/hello/uv.lock
           save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: sdks/go/go.mod
+          # The SDK has no dependencies, so there's no go.sum to key a cache on.
+          cache: false
       - if: matrix.part == 'tiers'
         run: echo "::notice title=No Docker tier on macOS::GitHub's macOS runners have no Docker. The docker jobs run the Docker tier on Linux."
       - run: scripts/ci-os.sh ${{ matrix.part }}
