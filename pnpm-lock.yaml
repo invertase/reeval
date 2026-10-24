@@ -52,6 +52,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/reeval
 
+  examples/with-checks:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
+  examples/with-skill-lift:
+    dependencies:
+      reeval:
+        specifier: workspace:*
+        version: link:../../packages/reeval
+
   packages/harness-antigravity:
     dependencies:
       '@ai-sdk/harness':

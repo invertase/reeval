@@ -16,8 +16,7 @@
   "scripts": {
     "reeval": "reeval",
     "eval": "reeval run",
-    "eval:fake": "reeval run --config reeval.fake.config.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "eval:fake": "reeval run --config reeval.fake.config.ts"
   },
   "dependencies": {
     "reeval": "workspace:*"

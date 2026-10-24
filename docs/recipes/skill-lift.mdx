@@ -80,6 +80,8 @@ export default defineConfig({
 | `gate: { passRate: 0.6 }` | A cell passes at 2 of 3, so one flaky attempt doesn't fail CI |
 | `pin` | Keeps a `pr` profile's `limit` from turning `compare` off or cutting `runs` |
 
+`examples/with-skill-lift` in the reeval repository is this compare at its smallest. Its config runs a fake agent that greets in the house style only when it has the skill, so `pnpm eval` there shows a lift with no keys or Docker, and `--profile cursor` runs it on Cursor.
+
 ## Run it
 
 ```bash

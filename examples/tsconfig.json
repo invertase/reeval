@@ -13,5 +13,6 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["*.ts", "evals"]
+  "include": ["**/*.ts"],
+  "exclude": ["**/node_modules", "**/.reeval"]
 }

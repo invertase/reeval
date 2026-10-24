@@ -69,6 +69,9 @@
     },
     "examples/hello": {
       "entry": ["**/*.eval.ts", "reeval*.config.ts", "scan/*.mjs"]
+    },
+    "examples/with-*": {
+      "entry": ["*.eval.ts", "reeval*.config.ts"]
     }
   },
   "ignoreFiles": ["scripts/third-party.d.mts"]

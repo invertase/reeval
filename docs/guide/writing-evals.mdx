@@ -28,6 +28,8 @@ group('greet module', () => {
 
 It has three parts: a prompt, deterministic checks, and a question for the judge.
 
+`examples/with-checks` in the reeval repository is the checks on their own, with `c.readFile` and a behaviour check added. It runs on a fake agent with no keys or Docker: `pnpm eval` there.
+
 ## Name evals with groups
 
 ```ts title="evals/hello.eval.ts"
