@@ -26,7 +26,7 @@ type Variant = {
 }
 type Probed = { name?: string; env?: string[]; variants?: Variant[]; skipped?: string }
 export type Probe = Record<string, Probed | Request[]>
-export type Catalog = Record<string, { models: Record<string, unknown> }>
+export type Catalog = Record<string, { models: Record<string, { status?: string }> }>
 export type Table = { supported: OpenCodeProvider[]; refused: RefusedOpenCodeProvider[] }
 
 /**
@@ -42,7 +42,7 @@ const REASONS: Record<string, string> = {
 }
 
 /** The reason for a provider the probe saw fail, from what it said or where it sent the key. */
-function reasonFor(id: string, p: Probed, version: string): string | undefined {
+function reasonFor(id: string, p: Probed, catalog: Catalog): string | undefined {
   if (REASONS[id]) return REASONS[id]
   const errors = (p.variants ?? []).map((v) => v.error).join('\n')
   const requests = (p.variants ?? []).flatMap((v) => v.requests)
@@ -73,8 +73,17 @@ function reasonFor(id: string, p: Probed, version: string): string | undefined {
   if (requests.some((r) => r.key.includes('body'))) {
     return 'OpenCode sends its key in the request body, which the gateway only swaps in headers'
   }
+  const models = Object.values(catalog[id]?.models ?? {})
+  if (
+    !requests.length &&
+    /Model unavailable/.test(errors) &&
+    models.length &&
+    models.every((m) => m.status === 'deprecated')
+  ) {
+    return 'every one of its models is deprecated, and OpenCode runs none of them'
+  }
   if (!requests.length) {
-    return `OpenCode ${version} sends it no request with a key (${errors.split('\n').at(-1)?.slice(0, 120)})`
+    return `OpenCode sends it no request with a key (${errors.split('\n').at(-1)?.slice(0, 120)})`
   }
   return undefined
 }
@@ -106,7 +115,7 @@ const byEndpoint = (a: OpenCodeProvider['endpoints'][number], b: typeof a) =>
   )
 
 /** The table a probe gives: each provider supported, with where its key goes, or refused. */
-export function buildTable(probe: Probe, catalog: Catalog, version = OPENCODE_CLI_VERSION): Table {
+export function buildTable(probe: Probe, catalog: Catalog): Table {
   const supported: OpenCodeProvider[] = []
   const refused: RefusedOpenCodeProvider[] = []
   const ids = Object.keys(probe)
@@ -125,7 +134,7 @@ export function buildTable(probe: Probe, catalog: Catalog, version = OPENCODE_CL
       })
       continue
     }
-    const why = reasonFor(id, p, version)
+    const why = reasonFor(id, p, catalog)
     if (why) {
       refused.push({ id, name, why })
       continue

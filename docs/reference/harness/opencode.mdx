@@ -497,7 +497,7 @@ The providers OpenCode knows whose key the gateway can't swap in, or that can't 
 | GitLab Duo | `gitlab/…` | It runs on a GitLab Duo subscription, through a GitLab login. |
 | Vertex | `google-vertex/…` | It takes a service account (Vertex refuses API keys for most models), not a key in a header. |
 | Infomaniak | `infomaniak/…` | Its API host is per account (INFOMANIAK_PRODUCT_ID), which reeval doesn't pass. |
-| Lilac | `lilac/…` | OpenCode 2.1.4 sends it no request with a key (Error: Model unavailable: lilac/zai-org/glm-5.2). |
+| Lilac | `lilac/…` | Every one of its models is deprecated, and OpenCode runs none of them. |
 | LMStudio | `lmstudio/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Lynkr | `lynkr/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Merge Gateway | `merge-gateway/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |

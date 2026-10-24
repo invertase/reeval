@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { buildTable } from '../scripts/provider-table.ts'
 import { OPENCODE_CLI_VERSION } from '../src/opencode-harness.ts'
 import { PROBED_VERSION } from '../src/opencode-provider-table.ts'
 import {
@@ -145,6 +146,7 @@ test('a model that can’t run says why: no provider, an unknown one, or one ree
     azure: /Azure \(azure\): its API host is per account \(AZURE_RESOURCE_NAME\)/,
     lmstudio: /LMStudio \(lmstudio\): it runs on your machine/,
     perplexity: /Perplexity \(perplexity\): none of its models can call tools/,
+    lilac: /Lilac \(lilac\): every one of its models is deprecated/,
   }
   for (const [id, why] of Object.entries(refused)) {
     assert.match(error(`${id}/m`), why, id)
@@ -152,6 +154,27 @@ test('a model that can’t run says why: no provider, an unknown one, or one ree
   }
   assert.equal(error('google/gemini-3.8-flash'), '')
   assert.throws(() => openCodeProvider('nope/m'), /OpenCode has no provider "nope"/)
+})
+
+test("a refusal's reason names no OpenCode version, so a bump alone doesn't move it", () => {
+  for (const p of REFUSED_OPENCODE_PROVIDERS) assert.doesNotMatch(p.why, /\d+\.\d+\.\d+/, p.id)
+  const failed = (error: string) => ({
+    name: 'P',
+    env: ['P_API_KEY'],
+    variants: [{ variant: 'v', model: 'm', exit: 1, error, requests: [] }],
+  })
+  const probe = { gone: failed('Error: Model unavailable: gone/m'), quiet: failed('Error: boom') }
+  const catalog = {
+    gone: { models: { m: { status: 'deprecated' }, n: { status: 'deprecated' } } },
+    quiet: { models: { m: {} } },
+  }
+  assert.deepEqual(
+    buildTable(probe, catalog).refused.map((p) => [p.id, p.why]),
+    [
+      ['gone', 'every one of its models is deprecated, and OpenCode runs none of them'],
+      ['quiet', 'OpenCode sends it no request with a key (Error: boom)'],
+    ],
+  )
 })
 
 test('the gateway swaps the key into each header the provider uses, on each of its hosts', () => {

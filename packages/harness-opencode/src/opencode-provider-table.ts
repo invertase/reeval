@@ -2173,7 +2173,7 @@ export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
   {
     id: 'lilac',
     name: 'Lilac',
-    why: 'OpenCode 2.1.4 sends it no request with a key (Error: Model unavailable: lilac/zai-org/glm-5.2)',
+    why: 'every one of its models is deprecated, and OpenCode runs none of them',
   },
   {
     id: 'lmstudio',
