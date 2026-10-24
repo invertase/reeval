@@ -55,7 +55,8 @@ run.
 {"t":"done"}
 ```
 
-- Collecting, the worker loads the file and sends `collected` (or `load-error`) and `done`. Running, it collects again, asks for each selected attempt's lease with `request`, sends
+- Collecting, the worker loads the file and sends `collected` (or `load-error`) and `done`.
+  Running, it collects again, asks for each selected attempt's lease with `request`, sends
   `ready` once every one has asked (or finished without one), and runs each when it gets its
   `grant`.
 - `cancel` (main → worker) aborts every attempt. A worker whose channel closes cancels too, lets
@@ -124,3 +125,4 @@ to a message shows up in review with its snapshot.
 |---|---|
 | 1 | Node's structured-clone (`advanced`) serialization |
 | 2 | JSON serialization; every message JSON-clean |
+| 3 | The main process closes the channel after `done`, and the worker exits when it closes |
