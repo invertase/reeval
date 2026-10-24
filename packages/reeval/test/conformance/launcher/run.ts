@@ -63,7 +63,7 @@ type Case = {
   https?: boolean
   only?: 'posix' | 'windows'
   needs?: 'interpreterEnv'
-  seed?: 'binary' | 'empty' | 'junk' | 'garbage'
+  seed?: 'binary' | 'empty' | 'junk' | 'tampered' | 'garbage'
   record?: 'match' | 'wrong' | 'no-target'
   steps: Step[]
 }
@@ -127,10 +127,20 @@ before(async () => {
 })
 
 after(async () => {
-  await runner.record?.(null)
-  await server?.close()
-  rmSync(tmp, { recursive: true, force: true, maxRetries: 5 })
+  // A launcher that won't build must not leave the server holding the process open.
+  try {
+    await runner.record?.(null)
+  } finally {
+    await server?.close()
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5 })
+  }
 })
+
+/** A script that exits 0 without a word, padded to the released binary's size. */
+function tampered(): Buffer {
+  const script = Buffer.from('#!/bin/sh\nexit 0\n#')
+  return Buffer.concat([script, Buffer.alloc(binary.length - script.length, 'x')])
+}
 
 function released(version: string, kind: Case['record']): Released | null {
   if (!kind) return null
@@ -339,6 +349,7 @@ async function runCase(c: Case): Promise<string[]> {
       binary,
       empty: Buffer.alloc(0),
       junk: Buffer.from('#!/bin/sh\nexit 0\n'),
+      tampered: tampered(),
       garbage: Buffer.from('\0\x01 not an executable\n'),
     }[c.seed]
     writeFileSync(cachePath, bytes)

@@ -456,6 +456,18 @@
           "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 1 }
         }
       ]
+    },
+    {
+      "id": "recorded-cache-wrong-hash",
+      "about": "A cached file of the recorded size but another sha256 is downloaded again, not run",
+      "record": "match",
+      "seed": "tampered",
+      "steps": [
+        {
+          "release": "good",
+          "expect": { "exit": 0, "ran": true, "cache": "binary", "downloads": 1 }
+        }
+      ]
     }
   ]
 }
