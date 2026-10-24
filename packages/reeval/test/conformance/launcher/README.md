@@ -50,7 +50,7 @@ from the top-level `env`, and no other `REEVAL_*` variable. Its steps run in ord
 | Field | Meaning |
 |---|---|
 | `version` | The version the case downloads (default the top-level `version`) |
-| `seed` | A file put at the cache path first: the `binary`, an `empty` file, `junk` (a script of another size) or `garbage` (not an executable) |
+| `seed` | A file put at the cache path first: the `binary`, an `empty` file, `junk` (a script of another size), `tampered` (that script padded to the binary's size) or `garbage` (not an executable) |
 | `record` | The hashes the launcher holds as released with: `match`, `wrong` or `no-target` (for this host's target) |
 | `https` | Serve the release over HTTPS, with the runner's `trust` environment |
 | `only`, `needs` | Run on `posix` or `windows` only; skip unless the runner has `interpreterEnv` |
