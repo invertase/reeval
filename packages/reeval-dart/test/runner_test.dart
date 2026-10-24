@@ -135,7 +135,7 @@ void main() {
     expect(errorOf(sent.last), {
       'name': 'AssertionError',
       'message': startsWith('Expected: empty'),
-      'stack': contains('evals/x.eval.dart:9:'),
+      'stack': contains('${p.join('evals', 'x.eval.dart')}:9:'),
     });
   });
 
