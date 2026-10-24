@@ -123,6 +123,7 @@ def test_with_a_recorded_hash_the_release_must_agree_with_it(
     out, name = release(clean)
     record(monkeypatch, "9.9.9", FAKE.encode())
     monkeypatch.setenv("REEVAL_DOWNLOAD", out.as_uri())
+    monkeypatch.setattr(cli, "check_starts", lambda binary, name: None)
     assert cli.resolve().read_text() == FAKE
     assert "SHA256SUMS only" not in capsys.readouterr().err
 
@@ -268,6 +269,7 @@ def test_an_http_mirror_works_with_a_warning(
     release(clean)
     monkeypatch.setenv("REEVAL_VERSION", "9.9.9")
     monkeypatch.setenv("REEVAL_DOWNLOAD", server)
+    monkeypatch.setattr(cli, "check_starts", lambda binary, name: None)
     assert cli.resolve().read_text() == FAKE
     assert "which isn't https" in capsys.readouterr().err
 
