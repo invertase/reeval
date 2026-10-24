@@ -21,14 +21,18 @@ main process                                  worker: reeval __worker, cwd = pro
   value followed by a newline. Every message is a JSON object with a string `t`; nothing in one
   may be a value JSON can't carry (`undefined`, a function, a `Map`, `NaN`, a class instance), and
   a key JSON would drop isn't sent.
-- Messages in each direction arrive in order. A worker's last messages can arrive after its
-  `exit`; the main process waits up to a second for them.
+- Messages in each direction arrive in order. `done` is a worker's last message. The main
+  process closes the channel when it has it, and the worker exits once its channel closes, so
+  nothing it sent can be lost with it: Bun closes a child's channel when the child exits, and on
+  Windows drops messages still in the pipe. A worker still running three seconds after the main
+  process closed its channel is killed. A worker that dies early may have its last messages
+  arrive after its `exit`; the main process waits up to a second for them.
 
 ## Handshake
 
 ```jsonc
 // worker → main, before anything else
-{"t":"hello","protocol":2}
+{"t":"hello","protocol":3}
 // main → worker, once the protocol matches
 {"t":"init","run":{…RunContext},"file":"/abs/evals/greet.eval.ts","select":null}
 ```
@@ -51,8 +55,8 @@ run.
 {"t":"done"}
 ```
 
-- Collecting, the worker loads the file, sends `collected` (or `load-error`) and `done`, and
-  exits. Running, it collects again, asks for each selected attempt's lease with `request`, sends
+- Collecting, the worker loads the file and sends `collected` (or `load-error`) and `done`.
+  Running, it collects again, asks for each selected attempt's lease with `request`, sends
   `ready` once every one has asked (or finished without one), and runs each when it gets its
   `grant`.
 - `cancel` (main → worker) aborts every attempt. A worker whose channel closes cancels too, lets
@@ -121,3 +125,4 @@ to a message shows up in review with its snapshot.
 |---|---|
 | 1 | Node's structured-clone (`advanced`) serialization |
 | 2 | JSON serialization; every message JSON-clean |
+| 3 | The main process closes the channel after `done`, and the worker exits when it closes |
