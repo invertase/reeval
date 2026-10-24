@@ -3233,8 +3233,10 @@ test('every feature fixture is in the table, with one check and a canary', () =>
     .sort()
   assert.deepEqual(dirs, features.map((f) => f.dir).sort())
   for (const dir of dirs) {
-    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => /\.eval\.(ts|py)$/.test(f))
-    const ext = evals.some((f) => f.endsWith('.eval.py')) ? '.eval.py' : '.eval.ts'
+    const evals = readdirSync(join(root, dir, 'evals')).filter((f) =>
+      /(\.eval\.(ts|py)|_eval\.go)$/.test(f),
+    )
+    const ext = ['.eval.py', '_eval.go'].find((e) => evals.some((f) => f.endsWith(e))) ?? '.eval.ts'
     assert.deepEqual(evals.sort(), [`canary${ext}`, `lands${ext}`].sort(), dir)
     assert.ok(existsSync(join(root, dir, 'reeval.config.ts')), dir)
   }
